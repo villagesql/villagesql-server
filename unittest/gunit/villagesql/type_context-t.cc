@@ -205,6 +205,12 @@ class TypeContextTest : public ::testing::Test {
     villagesql::test_set_lower_case_table_names(0);
     system_charset_info = &my_charset_utf8mb4_0900_ai_ci;
   }
+
+  static villagesql::TypeContext make_context(
+      const villagesql::TypeContextKey &key,
+      const villagesql::TypeDescriptor *descriptor) {
+    return villagesql::TypeContext(key, descriptor);
+  }
 };
 
 TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
@@ -214,7 +220,7 @@ TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
   villagesql::TypeContextKey key("COMPLEX", "test_ext", "1.0.0");
-  villagesql::TypeContext ctx(key, &desc);
+  villagesql::TypeContext ctx = make_context(key, &desc);
 
   EXPECT_EQ(ctx.persisted_length(), 16);
   EXPECT_EQ(ctx.max_decode_buffer_length(), 256);
@@ -233,7 +239,7 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
   villagesql::TypeParameters params("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
-  villagesql::TypeContext ctx(key, &desc);
+  villagesql::TypeContext ctx = make_context(key, &desc);
 
   // resolve_params_ok computes: dimension * 4, dimension * 32
   EXPECT_EQ(ctx.persisted_length(), 1536 * 4);
@@ -253,7 +259,7 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
   villagesql::TypeParameters params("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
-  villagesql::TypeContext ctx(key, &desc);
+  villagesql::TypeContext ctx = make_context(key, &desc);
 
   // resolve_params_fail returns error, so we fall back to descriptor values
   EXPECT_EQ(ctx.persisted_length(), -1);
@@ -273,7 +279,7 @@ TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
   // No parameters — should use descriptor values directly, not call
   // resolve_params (which would fail)
   villagesql::TypeContextKey key("VVECTOR", "test_ext", "1.0.0");
-  villagesql::TypeContext ctx(key, &desc);
+  villagesql::TypeContext ctx = make_context(key, &desc);
 
   EXPECT_EQ(ctx.persisted_length(), -1);
   EXPECT_EQ(ctx.max_decode_buffer_length(), 0);

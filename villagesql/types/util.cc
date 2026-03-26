@@ -223,12 +223,11 @@ bool ResolveTypeToContext(const LEX_STRING &extension_name,
   result = vclient.type_contexts().acquire_or_create(type_context_key, mem_root,
                                                      type_descriptor);
   if (result == nullptr) {
-    // nullptr means OOM (SQL error already set) or init() failure (only logged
-    // to error log). Set the SQL error if not already set.
+    // nullptr means OOM (SQL error already set) or TypeContext initialization
+    // failure (only logged to error log). Set the SQL error if not already set.
     if (!current_thd->is_error()) {
       villagesql_error(
-          "Type '%s' has an intrinsic default that failed to encode; "
-          "check the error log for details",
+          "Type '%s' failed to initialize; check the error log for details",
           MYF(0), type_descriptor->qualified_base_name().c_str());
     }
     return true;

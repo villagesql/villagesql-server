@@ -57,9 +57,15 @@ bool TypeContext::init_intrinsic_default() {
   // default. Variable-length types with no resolved size skip this entirely.
   //
   // Sources tried in order:
-  // 1. intrinsic_default_fn: user-supplied function producing binary directly.
-  // 2. (patch2) intrinsic_default_str: encode a user-supplied string.
+  // 1. intrinsic_default_fn: user-supplied VDF producing binary directly.
+  // 2. intrinsic_default_str: encode a user-supplied string literal.
+  //    TODO(villagesql-beta): implement source 2 (next patch).
   // 3. encode(""): encode the empty string.
+  //
+  // Variable-length types with no resolved parameters have persisted_length_ <=
+  // 0, meaning no fixed storage size is known. Skip pre-encoding a default:
+  // there is no buffer size to target, and such types require parameters before
+  // use.
   if (persisted_length_ <= 0) return false;
 
   const size_t storage_size = static_cast<size_t>(persisted_length_);
@@ -79,13 +85,12 @@ bool TypeContext::init_intrinsic_default() {
       intrinsic_default_size_ = encoded_length;
       return false;
     }
-    LogVSQL(ERROR_LEVEL,
-            "intrinsic_default for type '%s' failed to encode: %s",
+    LogVSQL(ERROR_LEVEL, "intrinsic_default for type '%s' failed to encode: %s",
             qualified_name_.c_str(), error_msg);
     return true;
   }
 
-  // Source 3: encode("").
+  // Source 3: encode(""). (Source 2 will be added in the next patch.)
   if (!encode_op_.has_value()) {
     LogVSQL(ERROR_LEVEL,
             "intrinsic_default for type '%s': no encode function available",
@@ -93,6 +98,8 @@ bool TypeContext::init_intrinsic_default() {
     return true;
   }
 
+  // TODO(villagesql-beta): consolidate this encode call with TypeEncoder to
+  // avoid duplicating the vdf/fn dispatch logic.
   const EncodeOp &op = encode_op_.value();
   if (op.vdf() != nullptr) {
     SpecialVdfCall<CustomResult, StringArg> vdf_call(op.vdf());
@@ -100,8 +107,8 @@ bool TypeContext::init_intrinsic_default() {
     vdf_call.init(TypeParameterSlice(params.count(), params.key_data(),
                                      params.value_data()),
                   NoInitData{});
-    auto r = vdf_call.invoke(StringSlice("", 0),
-                             pointer_cast<uchar *>(buffer.data()), storage_size);
+    auto r = vdf_call.invoke(
+        StringSlice("", 0), pointer_cast<uchar *>(buffer.data()), storage_size);
     if (r && *r == storage_size) {
       intrinsic_default_buffer_ = std::move(buffer);
       intrinsic_default_size_ = *r;
