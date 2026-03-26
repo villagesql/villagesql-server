@@ -227,13 +227,8 @@ class SystemTableMap {
     // we want to simulate missing refcount protection)
     DBUG_EXECUTE_IF("skip_victionary_refcount", return it->second.get(););
 
-    // Make a heap-allocated copy of the shared_ptr (increments refcount)
-    auto *ref_holder = new std::shared_ptr<EntryType>(it->second);
-
-    // Register cleanup callback to delete the copy (decrements refcount)
-    if (cleanup_scope.register_cleanup(&release_shared_ptr_ref, ref_holder)) {
-      // Failed to register cleanup - delete the holder to avoid leak
-      delete ref_holder;
+    // Register shared_ptr to release the ref when the MEM_ROOT clears
+    if (cleanup_scope.register_cleanup(it->second)) {
       return nullptr;
     }
 
@@ -306,10 +301,8 @@ class SystemTableMap {
     // we want to simulate missing refcount protection)
     DBUG_EXECUTE_IF("skip_victionary_refcount", return it->second.get(););
 
-    // Acquire the entry (existing or newly created)
-    auto *ref_holder = new std::shared_ptr<EntryType>(it->second);
-    if (cleanup_scope.register_cleanup(&release_shared_ptr_ref, ref_holder)) {
-      delete ref_holder;
+    // Register shared_ptr to release the ref when the MEM_ROOT clears
+    if (cleanup_scope.register_cleanup(it->second)) {
       return nullptr;
     }
 
@@ -600,13 +593,6 @@ class SystemTableMap {
 
   // Pointer to parent's lock for assertions
   mysql_rwlock_t *m_parent_lock;
-
-  // Cleanup callback for releasing shared_ptr references.
-  // Called by MEM_ROOT when it is cleared; deletes the heap-allocated
-  // shared_ptr copy, which decrements the reference count.
-  static void release_shared_ptr_ref(void *arg) {
-    delete static_cast<std::shared_ptr<EntryType> *>(arg);
-  }
 
   // Helpers to assert that lock is held (checked during debug mode)
   // Assert that write lock is held

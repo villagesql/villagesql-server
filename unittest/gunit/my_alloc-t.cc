@@ -258,27 +258,26 @@ TEST_F(MyAllocTest, ArrayAllocInitialization) {
   // alloc.ArrayAlloc<std::unique_ptr<int>>(3, std::make_unique<int>(123));
 }
 
-// Test cleanup callback mechanism
+// Test cleanup callback mechanism using RAII types (shared_ptr refcount as
+// a proxy for whether the destructor ran).
 TEST_F(MyAllocTest, CleanupCallbacksRunOnClear) {
   MEM_ROOT alloc(PSI_NOT_INSTRUMENTED, 512);
 
-  int counter = 0;
-  auto increment = [](void *arg) { ++*static_cast<int *>(arg); };
+  auto resource = std::make_shared<int>(42);
 
-  // Register several callbacks
-  EXPECT_FALSE(alloc.register_cleanup(increment, &counter));
-  EXPECT_FALSE(alloc.register_cleanup(increment, &counter));
-  EXPECT_FALSE(alloc.register_cleanup(increment, &counter));
+  // Register several references; each copy increments the refcount.
+  EXPECT_FALSE(alloc.register_cleanup(resource));
+  EXPECT_FALSE(alloc.register_cleanup(resource));
+  EXPECT_FALSE(alloc.register_cleanup(resource));
+  EXPECT_EQ(4, resource.use_count());  // original + 3 held by MEM_ROOT
 
-  EXPECT_EQ(0, counter);
-
-  // Clear should run all callbacks
+  // Clear should destroy all registered copies.
   alloc.Clear();
-  EXPECT_EQ(3, counter);
+  EXPECT_EQ(1, resource.use_count());  // only the original remains
 
-  // Calling Clear again should not run callbacks again (they were cleared)
+  // Calling Clear again should not decrement further.
   alloc.Clear();
-  EXPECT_EQ(3, counter);
+  EXPECT_EQ(1, resource.use_count());
 }
 
 TEST_F(MyAllocTest, CleanupCallbacksRunOnClearForReuse) {
@@ -287,34 +286,33 @@ TEST_F(MyAllocTest, CleanupCallbacksRunOnClearForReuse) {
   // Allocate something so ClearForReuse has a block to keep
   (void)alloc.Alloc(100);
 
-  int counter = 0;
-  auto increment = [](void *arg) { ++*static_cast<int *>(arg); };
-
-  EXPECT_FALSE(alloc.register_cleanup(increment, &counter));
-  EXPECT_FALSE(alloc.register_cleanup(increment, &counter));
-
-  EXPECT_EQ(0, counter);
+  auto resource = std::make_shared<int>(42);
+  EXPECT_FALSE(alloc.register_cleanup(resource));
+  EXPECT_FALSE(alloc.register_cleanup(resource));
+  EXPECT_EQ(3, resource.use_count());
 
   alloc.ClearForReuse();
-  EXPECT_EQ(2, counter);
+  EXPECT_EQ(1, resource.use_count());
 
   // Callbacks should not run again
   alloc.ClearForReuse();
-  EXPECT_EQ(2, counter);
+  EXPECT_EQ(1, resource.use_count());
 }
 
 TEST_F(MyAllocTest, CleanupCallbacksRunInLIFOOrder) {
   MEM_ROOT alloc(PSI_NOT_INSTRUMENTED, 512);
 
   std::string order;
-  auto append_a = [](void *arg) { *static_cast<std::string *>(arg) += "A"; };
-  auto append_b = [](void *arg) { *static_cast<std::string *>(arg) += "B"; };
-  auto append_c = [](void *arg) { *static_cast<std::string *>(arg) += "C"; };
 
-  // Register in order A, B, C
-  EXPECT_FALSE(alloc.register_cleanup(append_a, &order));
-  EXPECT_FALSE(alloc.register_cleanup(append_b, &order));
-  EXPECT_FALSE(alloc.register_cleanup(append_c, &order));
+  struct AppendOnDestroy {
+    std::string *dest;
+    char ch;
+    ~AppendOnDestroy() { *dest += ch; }
+  };
+
+  EXPECT_FALSE(alloc.register_cleanup(AppendOnDestroy{&order, 'A'}));
+  EXPECT_FALSE(alloc.register_cleanup(AppendOnDestroy{&order, 'B'}));
+  EXPECT_FALSE(alloc.register_cleanup(AppendOnDestroy{&order, 'C'}));
 
   alloc.Clear();
 
@@ -325,35 +323,33 @@ TEST_F(MyAllocTest, CleanupCallbacksRunInLIFOOrder) {
 TEST_F(MyAllocTest, CleanupCallbacksTransferOnMove) {
   MEM_ROOT alloc1(PSI_NOT_INSTRUMENTED, 512);
 
-  int counter = 0;
-  auto increment = [](void *arg) { ++*static_cast<int *>(arg); };
+  auto resource = std::make_shared<int>(42);
+  EXPECT_FALSE(alloc1.register_cleanup(resource));
+  EXPECT_EQ(2, resource.use_count());
 
-  EXPECT_FALSE(alloc1.register_cleanup(increment, &counter));
-
-  // Move to alloc2
+  // Move to alloc2; the registered ref transfers with it.
   MEM_ROOT alloc2(std::move(alloc1));
 
-  // Clearing alloc1 should not run the callback (it was moved)
+  // Clearing alloc1 should not release the ref (it was moved out).
   alloc1.Clear();
-  EXPECT_EQ(0, counter);
+  EXPECT_EQ(2, resource.use_count());
 
-  // Clearing alloc2 should run the callback
+  // Clearing alloc2 should release the ref.
   alloc2.Clear();
-  EXPECT_EQ(1, counter);
+  EXPECT_EQ(1, resource.use_count());
 }
 
 TEST_F(MyAllocTest, CleanupCallbacksRunOnDestruction) {
-  int counter = 0;
-  auto increment = [](void *arg) { ++*static_cast<int *>(arg); };
+  auto resource = std::make_shared<int>(42);
 
   {
     MEM_ROOT alloc(PSI_NOT_INSTRUMENTED, 512);
-    EXPECT_FALSE(alloc.register_cleanup(increment, &counter));
-    EXPECT_EQ(0, counter);
-    // Destructor runs here
+    EXPECT_FALSE(alloc.register_cleanup(resource));
+    EXPECT_EQ(2, resource.use_count());
+    // Destructor runs here, releasing the registered ref.
   }
 
-  EXPECT_EQ(1, counter);
+  EXPECT_EQ(1, resource.use_count());
 }
 
 }  // namespace my_alloc_unittest

@@ -177,14 +177,13 @@ void MEM_ROOT::Clear() {
   // Already cleared, or memset() to zero, so just ignore.
   if (m_current_block == nullptr) return;
 
-  // Run cleanup callbacks in LIFO order while memory is still valid.
-  // The callbacks themselves are allocated on this MEM_ROOT, so we just
-  // need to walk the list and call each one.
-  for (CleanupCallback *cb = m_cleanup_callbacks; cb != nullptr;
-       cb = cb->next) {
-    cb->fn(cb->arg);
+  // Walk the cleanup list in LIFO order, calling cleanup on each node.  The
+  // nodes are allocated in this MEM_ROOT, so do this before freeing the
+  // blocks.
+  for (CleanupLink *node = m_cleanup_list; node != nullptr; node = node->next) {
+    node->fn(node);
   }
-  m_cleanup_callbacks = nullptr;
+  m_cleanup_list = nullptr;
 
   Block *start = m_current_block;
 
@@ -208,12 +207,13 @@ void MEM_ROOT::ClearForReuse() {
   // Already cleared, or memset() to zero, so just ignore.
   if (m_current_block == nullptr) return;
 
-  // Run cleanup callbacks in LIFO order while memory is still valid.
-  for (CleanupCallback *cb = m_cleanup_callbacks; cb != nullptr;
-       cb = cb->next) {
-    cb->fn(cb->arg);
+  // Walk the cleanup list in LIFO order, calling cleanup on each node.  The
+  // nodes are allocated in this MEM_ROOT, so do this before freeing the
+  // blocks.
+  for (CleanupLink *node = m_cleanup_list; node != nullptr; node = node->next) {
+    node->fn(node);
   }
-  m_cleanup_callbacks = nullptr;
+  m_cleanup_list = nullptr;
 
   // Keep the last block, which is usually the biggest one.
   m_current_free_start = pointer_cast<char *>(m_current_block) +

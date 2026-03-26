@@ -88,12 +88,11 @@ struct MEM_ROOT {
     char *end{nullptr};   /** One byte past the end; used for Contains(). */
   };
 
-  // Cleanup callback node, allocated on the MEM_ROOT itself.
-  // Forms a singly-linked list of callbacks to run before memory is freed.
-  struct CleanupCallback {
-    void (*fn)(void *);    /** Function to call. */
-    void *arg;             /** Argument to pass to fn. */
-    CleanupCallback *next; /** Next callback in the list. */
+  // Link for the RAII cleanup list. Each CleanupNode<T> begins with one of
+  // these so the list can be walked without knowing T.
+  struct CleanupLink {
+    void (*fn)(CleanupLink *); /** Function to call; receives this. */
+    CleanupLink *next;         /** Next link in the list. */
   };
 
  public:
@@ -121,13 +120,13 @@ struct MEM_ROOT {
         m_error_for_capacity_exceeded(other.m_error_for_capacity_exceeded),
         m_error_handler(other.m_error_handler),
         m_psi_key(other.m_psi_key),
-        m_cleanup_callbacks(other.m_cleanup_callbacks) {
+        m_cleanup_list(other.m_cleanup_list) {
     other.m_current_block = nullptr;
     other.m_allocated_size = 0;
     other.m_block_size = m_orig_block_size;
     other.m_current_free_start = &s_dummy_target;
     other.m_current_free_end = &s_dummy_target;
-    other.m_cleanup_callbacks = nullptr;
+    other.m_cleanup_list = nullptr;
   }
 
   MEM_ROOT &operator=(const MEM_ROOT &) = delete;
@@ -289,27 +288,30 @@ struct MEM_ROOT {
   }
 
   /**
-   * Register a cleanup callback to be called when this MEM_ROOT is cleared.
-   * Callbacks are called in reverse order of registration (LIFO), before the
-   * memory is freed. This is useful for releasing external resources (like
-   * reference counts) that are associated with objects allocated on this
-   * MEM_ROOT.
+   * Take ownership of an RAII object, ensuring its destructor runs when this
+   * MEM_ROOT is cleared. The object is copied or moved into MEM_ROOT-allocated
+   * memory. For example, passing a std::shared_ptr keeps the reference alive
+   * for the lifetime of the MEM_ROOT.
    *
-   * The callback structure is allocated on this MEM_ROOT, so there's no need
-   * to free it separately.
-   *
-   * @param fn   The function to call. Must not be nullptr.
-   * @param arg  The argument to pass to fn. May be nullptr.
-   * @return     false on success, true if allocation failed.
+   * @param value  The object to register; copied or moved into MEM_ROOT-owned
+   *               memory.
+   * @return       false on success, true if allocation failed.
    */
-  bool register_cleanup(void (*fn)(void *), void *arg) {
-    assert(fn != nullptr);
-    auto *cb = static_cast<CleanupCallback *>(Alloc(sizeof(CleanupCallback)));
-    if (cb == nullptr) return true;
-    cb->fn = fn;
-    cb->arg = arg;
-    cb->next = m_cleanup_callbacks;
-    m_cleanup_callbacks = cb;
+  template <class T>
+  bool register_cleanup(T value) {
+    struct CleanupNode {
+      CleanupLink link;
+      T obj;
+    };
+    auto *node = static_cast<CleanupNode *>(Alloc(sizeof(CleanupNode)));
+    if (node == nullptr) return true;
+
+    new (&node->obj) T(std::move(value));
+    node->link.fn = [](CleanupLink *link) {
+      std::destroy_at(&reinterpret_cast<CleanupNode *>(link)->obj);
+    };
+    node->link.next = m_cleanup_list;
+    m_cleanup_list = &node->link;
     return false;
   }
 
@@ -453,9 +455,11 @@ struct MEM_ROOT {
 
   PSI_memory_key m_psi_key = 0;
 
-  /** Head of the cleanup callback list. Callbacks run before memory is freed.
+  /**
+   * Head of the cleanup list. Owned RAII objects are destroyed before memory
+   * is freed, in LIFO order.
    */
-  CleanupCallback *m_cleanup_callbacks = nullptr;
+  CleanupLink *m_cleanup_list = nullptr;
 };
 
 /**
