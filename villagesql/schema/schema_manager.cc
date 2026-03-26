@@ -515,7 +515,7 @@ bool install_villagesql_schema(THD *thd) {
   const char **query_ptr;
   for (query_ptr = &::villagesql_schema[0]; *query_ptr != nullptr;
        query_ptr++) {
-    if (ignore_error_and_execute(thd, *query_ptr)) {
+    if (execute_statement(thd, *query_ptr)) {
       LogVSQL(ERROR_LEVEL, "Failed to execute villagesql schema command: %s",
               *query_ptr);
       return true;
@@ -749,7 +749,7 @@ bool SchemaManagerStatus::write_villagesql_version(THD *thd,
            version_str.c_str());
 
   // Execute the query - return true on failure, false on success
-  if (ignore_error_and_execute(thd, query)) {
+  if (execute_statement(thd, query)) {
     LogVSQL(ERROR_LEVEL, "Failed to update schema version to \"%s\"",
             version_str.c_str());
     return true;

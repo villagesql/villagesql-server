@@ -16,6 +16,7 @@
 
 #include "villagesql/schema/upgrade.h"
 
+#include "mysqld_error.h"
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/systable/helpers.h"
@@ -27,11 +28,12 @@ bool upgrade_villagesql_from_0_0_1_to_0_0_3(THD *thd) {
   // Add type_parameters column to custom_columns table
   LogVSQL(INFORMATION_LEVEL,
           "Upgrading custom_columns: adding type_parameters column");
-  return ignore_error_and_execute(
+  return execute_statement_ignore_errors(
       thd,
       "ALTER TABLE villagesql.custom_columns "
       "ADD COLUMN type_parameters JSON NOT NULL "
-      "COMMENT 'Type instantiation parameters as JSON'");
+      "COMMENT 'Type instantiation parameters as JSON'",
+      {ER_DUP_FIELDNAME});
 }
 
 }  // namespace upgrade

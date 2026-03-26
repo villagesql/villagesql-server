@@ -17,6 +17,7 @@
 #ifndef VILLAGESQL_SCHEMA_SYSTABLE_HELPERS_H_
 #define VILLAGESQL_SCHEMA_SYSTABLE_HELPERS_H_
 
+#include <initializer_list>
 #include <string>
 
 struct CHARSET_INFO;
@@ -61,8 +62,15 @@ void read_unsigned_field(Field *f, unsigned int &out);
 void read_bigint_field(Field *f, long long &out);
 void read_tinyint_unsigned_field(Field *f, unsigned char &out);
 
-// Helper function to execute SQL and ignore certain errors
-bool ignore_error_and_execute(THD *thd, const char *query);
+// Execute a statement; log failures at ERROR_LEVEL. Return true on failure.
+bool execute_statement(THD *thd, const char *query);
+
+// Execute a statement; silently suppress errors whose code appears in
+// ignored_errors (logs at INFORMATION_LEVEL and returns false for those).
+// Any other failure is logged at ERROR_LEVEL and returns true.
+bool execute_statement_ignore_errors(
+    THD *thd, const char *query,
+    std::initializer_list<unsigned int> ignored_errors);
 
 // Helper function to execute a query and check if it returns any rows
 bool query_has_rows(THD *thd, const char *query);

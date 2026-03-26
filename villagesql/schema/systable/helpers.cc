@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <initializer_list>
 #include <string>
 #include "lex_string.h"
 #include "mysql/strings/m_ctype.h"
@@ -65,14 +66,42 @@ void read_tinyint_unsigned_field(Field *f, unsigned char &out) {
   }
 }
 
-bool ignore_error_and_execute(THD *thd, const char *query) {
+bool execute_statement(THD *thd, const char *query) {
   Ed_connection con(thd);
   LEX_STRING str;
   str.str = const_cast<char *>(query);
   str.length = strlen(query);
 
-  // Execute the query - return true on failure, false on success
-  return con.execute_direct(str);
+  if (con.execute_direct(str)) {
+    LogVSQL(ERROR_LEVEL, "Statement failed: %s — %s", query,
+            con.get_last_error());
+    return true;
+  }
+  return false;
+}
+
+bool execute_statement_ignore_errors(
+    THD *thd, const char *query,
+    std::initializer_list<unsigned int> ignored_errors) {
+  Ed_connection con(thd);
+  LEX_STRING str;
+  str.str = const_cast<char *>(query);
+  str.length = strlen(query);
+
+  if (con.execute_direct(str)) {
+    unsigned int err = con.get_last_errno();
+    for (unsigned int code : ignored_errors) {
+      if (err == code) {
+        LogVSQL(INFORMATION_LEVEL, "Statement error ignored (errno=%u): %s",
+                err, query);
+        return false;
+      }
+    }
+    LogVSQL(ERROR_LEVEL, "Statement failed: %s — %s", query,
+            con.get_last_error());
+    return true;
+  }
+  return false;
 }
 
 bool query_has_rows(THD *thd, const char *query) {
