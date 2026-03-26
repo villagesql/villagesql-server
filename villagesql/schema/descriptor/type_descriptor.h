@@ -198,6 +198,17 @@ class TypeDescriptor {
     intrinsic_default_fn_ = std::move(fn);
   }
 
+  // Returns the intrinsic default string literal, or nullopt if not set.
+  const std::optional<std::string> &intrinsic_default_str() const {
+    return intrinsic_default_str_;
+  }
+
+  // Set the intrinsic default string literal after construction (used during
+  // type registration).
+  void set_intrinsic_default_str(std::string str) {
+    intrinsic_default_str_ = std::move(str);
+  }
+
   // Returns the storage interface for this type, or nullopt if the type does
   // not manage its own column storage.
   const std::optional<StorageInterface> &storage_intf() const {
@@ -222,6 +233,7 @@ class TypeDescriptor {
   std::optional<ResolveParamsFunction> resolve_params_fn_;
 
   std::optional<IntrinsicDefaultFunction> intrinsic_default_fn_;
+  std::optional<std::string> intrinsic_default_str_;
 
   // Storage interface provided by the extension for managing column storage.
   // Empty if the type uses default InnoDB column storage.

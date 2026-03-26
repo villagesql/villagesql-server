@@ -32,11 +32,7 @@ struct MEM_ROOT;
 // Forward declaration for test access to the private TypeContext constructor.
 namespace villagesql_unittest {
 class TypeContextTest;
-<<<<<<< HEAD
 }  // namespace villagesql_unittest
-=======
-}
->>>>>>> b40ff46b2d7 (review comments)
 
 namespace villagesql {
 
@@ -296,8 +292,14 @@ class TypeContext {
   size_t intrinsic_default_size() const { return intrinsic_default_size_; }
 
  private:
-  // Pre-encode the intrinsic default value. Called once by the constructor.
-  // Returns true on failure. Sources tried in order: (1) intrinsic_default_fn,
+  friend struct TableTraits<TypeContext>;
+  friend class villagesql_unittest::TypeContextTest;
+
+  TypeContext(const TypeContextKey &key, const TypeDescriptor *descriptor);
+
+  // Pre-encode the intrinsic default value. Called once by
+  // TableTraits<TypeContext>::create() after construction. Returns true on
+  // failure. Sources tried in order: (1) intrinsic_default_fn,
   // (2) intrinsic_default_str, (3) encode(""). Skipped for variable-length
   // types where persisted_length_ <= 0 (no storage size known yet — these
   // types require parameters before use).
@@ -331,7 +333,6 @@ class TypeContext {
   // Empty if the type has no intrinsic_default_fn or encoding failed.
   std::vector<unsigned char> intrinsic_default_buffer_;
   size_t intrinsic_default_size_{0};
-  bool intrinsic_default_failed_{false};
 };
 
 // TableTraits specialization for TypeContext
@@ -347,8 +348,10 @@ struct TableTraits<TypeContext> {
   static std::shared_ptr<TypeContext> create(const TypeContextKey &key,
                                              const TypeDescriptor *descriptor) {
     if (!descriptor) return std::shared_ptr<TypeContext>();
-    auto tc = std::make_shared<TypeContext>(key, descriptor);
-    if (tc->intrinsic_default_failed_) return std::shared_ptr<TypeContext>();
+    // Use new directly: make_shared constructs via the allocator which doesn't
+    // have friend access to the private constructor.
+    std::shared_ptr<TypeContext> tc(new TypeContext(key, descriptor));
+    if (tc->init_intrinsic_default()) return std::shared_ptr<TypeContext>();
     return tc;
   }
 };

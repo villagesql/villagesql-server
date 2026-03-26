@@ -1162,6 +1162,9 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
     if (intrinsic_default_vdf != nullptr)
       descriptor.set_intrinsic_default_fn(
           IntrinsicDefaultFunction(intrinsic_default_vdf));
+    else if (td->intrinsic_default_str != nullptr)
+      descriptor.set_intrinsic_default_str(
+          std::string(td->intrinsic_default_str));
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

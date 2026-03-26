@@ -98,6 +98,7 @@ class TypeBuilder {
         int_to_params_vdf_name_(nullptr),
         resolve_params_vdf_name_(nullptr),
         intrinsic_default_vdf_name_(nullptr),
+        intrinsic_default_str_(nullptr),
         storage_intf_{},
         params_init_fn_(nullptr) {}
 
@@ -156,6 +157,11 @@ class TypeBuilder {
     return *this;
   }
 
+  constexpr TypeBuilder &intrinsic_default_str(const char *str) {
+    intrinsic_default_str_ = str;
+    return *this;
+  }
+
   constexpr TypeBuilder &int_to_params(const char *vdf_name) {
     int_to_params_vdf_name_ = vdf_name;
     return *this;
@@ -192,7 +198,8 @@ class TypeBuilder {
         compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr ||
         int_to_params_vdf_name_ != nullptr ||
         resolve_params_vdf_name_ != nullptr ||
-        intrinsic_default_vdf_name_ != nullptr || storage_intf_.version != 0;
+        intrinsic_default_vdf_name_ != nullptr ||
+        intrinsic_default_str_ != nullptr || storage_intf_.version != 0;
     const vef_protocol_t protocol = needs_v2 ? VEF_PROTOCOL_2 : VEF_PROTOCOL_1;
     TypeDescriptor desc{};
     desc.storage_intf = storage_intf_;
@@ -212,6 +219,7 @@ class TypeBuilder {
         int_to_params_vdf_name_,
         resolve_params_vdf_name_,
         intrinsic_default_vdf_name_,
+        intrinsic_default_str_,
         storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
     };
     desc.params_init_fn = params_init_fn_;
@@ -233,6 +241,7 @@ class TypeBuilder {
   const char *int_to_params_vdf_name_;
   const char *resolve_params_vdf_name_;
   const char *intrinsic_default_vdf_name_;
+  const char *intrinsic_default_str_;
   vef_type_storage_intf_t storage_intf_;
   void (*params_init_fn_)();
 };

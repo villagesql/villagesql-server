@@ -639,6 +639,13 @@ typedef struct {
   // string would get processed and validated by the from_string function.
   const char *intrinsic_default_vdf_name;
 
+  // OPTIONAL: A string literal to encode as the intrinsic default value.
+  // The server runs the type's encode function on this string to produce the
+  // binary default. Ignored if intrinsic_default_vdf_name is set. NULL means
+  // no string default is provided; the server falls back to encode("").
+  // Only used when protocol >= VEF_PROTOCOL_2.
+  const char *intrinsic_default_str;
+
   // OPTIONAL: Storage interface. Set to a non-NULL pointer if columns of this
   // type are stored by the extension. The pointed-to struct must remain valid
   // for the lifetime of the extension. The server reads storage_intf->version

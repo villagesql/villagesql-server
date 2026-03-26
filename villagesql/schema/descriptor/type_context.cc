@@ -49,8 +49,6 @@ TypeContext::TypeContext(const TypeContextKey &key,
     hash_op_.emplace(*descriptor_->hash_fn(), key_.parameters());
 
   resolve_cached_values();
-
-  intrinsic_default_failed_ = init_intrinsic_default();
 }
 
 bool TypeContext::init_intrinsic_default() {
@@ -68,6 +66,7 @@ bool TypeContext::init_intrinsic_default() {
   // there is no buffer size to target, and such types require parameters before
   // use.
   if (persisted_length_ <= 0) return false;
+
   const size_t storage_size = static_cast<size_t>(persisted_length_);
   std::vector<unsigned char> buffer(storage_size);
   size_t encoded_length = 0;
@@ -96,7 +95,6 @@ bool TypeContext::init_intrinsic_default() {
       descriptor_->intrinsic_default_str().has_value()
           ? *descriptor_->intrinsic_default_str()
           : std::string();
-
 
   if (!encode_op_.has_value()) {
     LogVSQL(ERROR_LEVEL,

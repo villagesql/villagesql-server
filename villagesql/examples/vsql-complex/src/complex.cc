@@ -134,20 +134,6 @@ void ReturnComplex(const Complex &cx, vef_vdf_result_t *result) {
   result->actual_len = kComplexSize;
 }
 
-// Implicit default for COMPLEX: writes (0,0) into the buffer.
-// Called when INSERT IGNORE / UPDATE IGNORE assigns NULL to a NOT NULL column.
-bool complex_default(villagesql::Span<unsigned char> buffer, size_t *length,
-                     char * /*error_msg*/) {
-  if (buffer.size() < kComplexSize) {
-    *length = 0;
-    return true;
-  }
-  Complex cx{0.0, 0.0};
-  store_complex(buffer.data(), cx);
-  *length = kComplexSize;
-  return false;
-}
-
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
 // STRING -> COMPLEX
 bool complex_from_string(std::string_view from,
@@ -437,7 +423,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .encode("COMPLEX::from_string")
                   .decode("COMPLEX::to_string")
                   .compare("COMPLEX::compare")
-                  .intrinsic_default("complex_intrinsic_default")
+                  .intrinsic_default_str("(0,0)")
                   .build())
         // COMPLEX2 type without canonicalization (preserves -0.0)
         // Requires custom hash that canonicalizes -0 to +0 before hashing
@@ -448,7 +434,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .decode("COMPLEX2::to_string")
                   .compare("COMPLEX2::compare")
                   .hash("COMPLEX2::hash")
-                  .intrinsic_default("complex2_intrinsic_default")
+                  .intrinsic_default_str("(0,0)")
                   .build())
         // Type conversion functions (also serve as encode/decode VDFs)
         .func(make_type_encode<&complex_from_string>("COMPLEX::from_string",
@@ -509,8 +495,4 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
-                  .build())
-        .func(make_intrinsic_default<&complex_default>(
-            "complex_intrinsic_default", COMPLEX))
-        .func(make_intrinsic_default<&complex_default>(
-            "complex2_intrinsic_default", COMPLEX2)))
+                  .build()))

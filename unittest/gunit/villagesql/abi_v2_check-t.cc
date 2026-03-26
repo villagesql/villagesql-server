@@ -52,9 +52,10 @@
 //   const char *int_to_params_vdf_name;             // +96  (protocol >= 2)
 //   const char *resolve_params_vdf_name;            // +104 (protocol >= 2)
 //   const char *intrinsic_default_vdf_name;         // +112 (protocol >= 2)
-//   vef_type_storage_intf_t *storage_intf;          // +120 (protocol >= 2)
+//   const char *intrinsic_default_str;              // +120 (protocol >= 2)
+//   vef_type_storage_intf_t *storage_intf;          // +128 (protocol >= 2)
 // ---------------------------------------------------------------------------
-static_assert(sizeof(vef_type_desc_t) == 128,
+static_assert(sizeof(vef_type_desc_t) == 136,
               "ABI v2 break: vef_type_desc_t size changed");
 static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 64,
               "ABI v2 break: vef_type_desc_t::encode_vdf_name offset changed");
@@ -73,7 +74,10 @@ static_assert(
 static_assert(
     offsetof(vef_type_desc_t, intrinsic_default_vdf_name) == 112,
     "ABI v2 break: vef_type_desc_t::intrinsic_default_vdf_name offset changed");
-static_assert(offsetof(vef_type_desc_t, storage_intf) == 120,
+static_assert(
+    offsetof(vef_type_desc_t, intrinsic_default_str) == 120,
+    "ABI v2 break: vef_type_desc_t::intrinsic_default_str offset changed");
+static_assert(offsetof(vef_type_desc_t, storage_intf) == 128,
               "ABI v2 break: vef_type_desc_t::storage_intf offset changed");
 
 // ---------------------------------------------------------------------------
