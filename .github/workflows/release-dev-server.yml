@@ -2,7 +2,7 @@ name: Release Dev Server
 
 # Triggered by version tags (e.g. 0.0.3, 0.0.3-dev) or manually.
 # Builds the dev-server package for all three target platforms, runs the
-# integration tests on each, then creates a GitHub Release with the tarballs.
+# integration tests on each, then attaches the tarballs to an existing GitHub Release.
 #
 # Runner requirements:
 #   - [self-hosted, linux, x86_64]    - existing CI runner
@@ -18,10 +18,6 @@ on:
       tag:
         description: 'Existing tag to build a release for (e.g. 0.0.3)'
         required: true
-      draft:
-        description: 'Create as a draft release (useful for testing)'
-        type: boolean
-        default: false
 
 jobs:
   build-package:
@@ -96,8 +92,8 @@ jobs:
           name: devserver-${{ matrix.platform }}
           path: ${{ env.OUTPUT_DIR }}/*.tar.gz
 
-  create-release:
-    name: Create GitHub Release
+  attach-release-artifacts:
+    name: Attach Release Artifacts
     needs: build-package
     runs-on: ubuntu-latest
     permissions:
@@ -120,46 +116,10 @@ jobs:
           merge-multiple: true
           path: packages/
 
-      - name: Create release
+      - name: Attach artifacts to release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cat > notes.md << 'EOF'
-          VillageSQL development server ${{ steps.tag.outputs.tag }}.
-
-          See QUICKSTART.md (included in each tarball) for setup instructions.
-
-          ## Platforms
-
-          | File | Platform |
-          |------|----------|
-          | `villagesql-dev-server-${{ steps.tag.outputs.tag }}-linux-x86_64.tar.gz` | Linux x86_64 |
-          | `villagesql-dev-server-${{ steps.tag.outputs.tag }}-linux-aarch64.tar.gz` | Linux arm64 |
-          | `villagesql-dev-server-${{ steps.tag.outputs.tag }}-macos-arm64.tar.gz` | macOS Apple Silicon |
-
-          ## Quick Start
-
-          ```bash
-          tar xzf villagesql-dev-server-${{ steps.tag.outputs.tag }}-<platform>.tar.gz
-          cd villagesql-dev-server-${{ steps.tag.outputs.tag }}-<platform>/
-          ./villagesql init
-          ./villagesql start
-          ./villagesql connect
-          ```
-          EOF
-
-          DRAFT_FLAG=""
-          if [ "${{ inputs.draft }}" = "true" ]; then
-            DRAFT_FLAG="--draft"
-          fi
-
           TAG="${{ steps.tag.outputs.tag }}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" packages/*.tar.gz --clobber
-          else
-            gh release create "$TAG" packages/*.tar.gz \
-              --title "VillageSQL Dev Server $TAG" \
-              --notes-file notes.md \
-              $DRAFT_FLAG
-          fi
+          gh release upload "$TAG" packages/*.tar.gz --clobber
