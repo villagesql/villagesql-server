@@ -154,7 +154,12 @@ jobs:
             DRAFT_FLAG="--draft"
           fi
 
-          gh release create "${{ steps.tag.outputs.tag }}" packages/*.tar.gz \
-            --title "VillageSQL Dev Server ${{ steps.tag.outputs.tag }}" \
-            --notes-file notes.md \
-            $DRAFT_FLAG
+          TAG="${{ steps.tag.outputs.tag }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" packages/*.tar.gz --clobber
+          else
+            gh release create "$TAG" packages/*.tar.gz \
+              --title "VillageSQL Dev Server $TAG" \
+              --notes-file notes.md \
+              $DRAFT_FLAG
+          fi
