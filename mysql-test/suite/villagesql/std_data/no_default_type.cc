@@ -19,34 +19,41 @@
 
 #include <villagesql/extension.h>
 
-#include <cstring>
 #include <cstddef>
+#include <cstring>
+#include <string_view>
 
 static const int64_t kLen = 4;
 
-// Encode: only accepts "(N)" format. Empty string and other invalid inputs fail.
-bool no_default_encode(unsigned char *buffer, size_t buffer_size,
-                       const char *from, size_t from_len, size_t *length) {
+// Encode: only accepts "(N)" format. Empty string and other invalid inputs
+// fail.
+bool no_default_encode(std::string_view from,
+                       villagesql::Span<unsigned char> buffer, size_t *length) {
   unsigned int nn = 0;
   char tmp[64];
-  size_t copy = from_len < sizeof(tmp) - 1 ? from_len : sizeof(tmp) - 1;
-  memcpy(tmp, from, copy);
+  size_t copy = from.size() < sizeof(tmp) - 1 ? from.size() : sizeof(tmp) - 1;
+  memcpy(tmp, from.data(), copy);
   tmp[copy] = '\0';
   if (sscanf(tmp, "(%u)", &nn) != 1) return true;
-  if (buffer_size < static_cast<size_t>(kLen)) return true;
+  if (buffer.size() < static_cast<size_t>(kLen)) return true;
   buffer[0] = static_cast<unsigned char>(nn);
   buffer[1] = buffer[2] = buffer[3] = 0;
   *length = static_cast<size_t>(kLen);
   return false;
 }
 
-bool no_default_decode(const unsigned char *buffer, size_t buffer_size,
-                       char *out, size_t out_size, size_t *out_len) {
-  if (buffer_size < static_cast<size_t>(kLen)) return true;
-  int written = snprintf(out, out_size, "(%u)", buffer[0]);
+bool no_default_decode(villagesql::Span<const unsigned char> buffer,
+                       villagesql::Span<char> out, size_t *out_len) {
+  if (buffer.size() < static_cast<size_t>(kLen)) return true;
+  int written = snprintf(out.data(), out.size(), "(%u)", buffer[0]);
   if (written < 0) return true;
   *out_len = static_cast<size_t>(written);
   return false;
+}
+
+int no_default_compare(villagesql::Span<const unsigned char>,
+                       villagesql::Span<const unsigned char>) {
+  return 0;
 }
 
 using namespace villagesql::extension_builder;
@@ -57,6 +64,13 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(make_type("NO_DEFAULT_TYPE")
                   .persisted_length(kLen)
                   .max_decode_buffer_length(16)
-                  .encode(&no_default_encode)
-                  .decode(&no_default_decode)
-                  .build()))
+                  .encode("no_default_encode")
+                  .decode("no_default_decode")
+                  .compare("no_default_compare")
+                  .build())
+        .func(make_type_encode<&no_default_encode>("no_default_encode",
+                                                   "NO_DEFAULT_TYPE"))
+        .func(make_type_decode<&no_default_decode>("no_default_decode",
+                                                   "NO_DEFAULT_TYPE"))
+        .func(make_type_compare<&no_default_compare>("no_default_compare",
+                                                     "NO_DEFAULT_TYPE")))

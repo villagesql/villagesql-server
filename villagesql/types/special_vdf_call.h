@@ -147,7 +147,7 @@ struct IntResult {
   using init_t = NoInitData;
 };
 struct StringResult {
-  using init_t = NoInitData;
+  using init_t = TypeParameterSlice;
 };
 struct CustomResult {
   using init_t = TypeParameterSlice;
@@ -240,6 +240,8 @@ class SpecialVdfCall {
     result.str_buf = out_buf;
     result.max_str_len = max_len;
     result.alt_str_buf = &alt_str_buf_;
+    result.type_params = {result_init_.count, result_init_.keys,
+                          result_init_.values};
     fd_->vdf(&ctx_, &vdf_args_, &result);
     if (result.type != VEF_RESULT_VALUE) {
       if (error_msg_[0] == '\0')

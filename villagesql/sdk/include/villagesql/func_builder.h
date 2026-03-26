@@ -375,31 +375,28 @@ using TypeHashWithParamsFunc = size_t (*)(const P &,
 
 // Extension author signature for intrinsic_default.
 // Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
-// INSERT IGNORE or UPDATE IGNORE). Writes the encoded default value into
-// 'buffer' and sets '*length' to bytes written.
-// Returns false on success, true on error (writes to error_msg).
-using IntrinsicDefaultFunc = bool (*)(villagesql::Span<unsigned char> buffer,
-                                      size_t *length, char *error_msg);
+// INSERT IGNORE or UPDATE IGNORE). Returns the string representation of the
+// default value (e.g. "(0,0)" for COMPLEX). The server encodes this string
+// using the type's encode function to produce the binary default.
+// Returns nullptr on error (writes to error_msg).
+using IntrinsicDefaultFunc = const char *(*)(char *error_msg);
 template <typename P>
-using IntrinsicDefaultWithParamsFunc =
-    bool (*)(const P &, villagesql::Span<unsigned char> buffer, size_t *length,
-             char *error_msg);
+using IntrinsicDefaultWithParamsFunc = const char *(*)(const P &,
+                                                       char *error_msg);
 
 // IntrinsicDefaultWrapper: wraps IntrinsicDefaultFunc into a VDF.
-// VDF signature: () -> CUSTOM.
+// VDF signature: () -> STRING.
 template <auto Func>
 struct IntrinsicDefaultWrapper {
   static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t * /*args*/,
                      vef_vdf_result_t *result) {
-    size_t length = 0;
-    villagesql::Span<unsigned char> buffer(result->bin_buf,
-                                           result->max_bin_len);
-    bool failed = Func(buffer, &length, result->error_msg);
-    if (failed) {
+    const char *str = Func(result->error_msg);
+    if (str == nullptr) {
       result->type = VEF_RESULT_ERROR;
       return;
     }
-    result->actual_len = length;
+    *result->alt_str_buf = const_cast<char *>(str);
+    result->actual_len = strlen(str);
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -607,8 +604,8 @@ struct TypeDecodeWithCacheVdfWrapper {
   }
 };
 
-// IntrinsicDefaultWithCacheWrapper: wraps bool Func(const P&,
-// Span<unsigned char>, size_t*, char*). VDF signature: () -> CUSTOM.
+// IntrinsicDefaultWithCacheWrapper: wraps const char* Func(const P&, char*).
+// VDF signature: () -> STRING.
 // P is deduced from Func's first parameter. The TypeParamsCache for P must
 // have been bound via .params<P, &parse_fn>() in the type builder.
 template <auto Func>
@@ -619,15 +616,13 @@ struct IntrinsicDefaultWithCacheWrapper {
   static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t * /*args*/,
                      vef_vdf_result_t *result) {
     const P &p = type_params_cache_for<P>().get(result->type_params);
-    size_t length = 0;
-    villagesql::Span<unsigned char> buffer(result->bin_buf,
-                                           result->max_bin_len);
-    bool failed = Func(p, buffer, &length, result->error_msg);
-    if (failed) {
+    const char *str = Func(p, result->error_msg);
+    if (str == nullptr) {
       result->type = VEF_RESULT_ERROR;
       return;
     }
-    result->actual_len = length;
+    *result->alt_str_buf = const_cast<char *>(str);
+    result->actual_len = strlen(str);
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -1143,13 +1138,14 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
 }
 
 // Entry point for intrinsic_default functions:
-//   make_intrinsic_default<&my_func>("my_func", "MY_TYPE")
+//   make_intrinsic_default<&my_func>("my_func")
+// my_func returns const char* (string representation of the default value).
+// The server encodes this string to produce the binary default.
 // If my_func's first parameter is const P&, the cache is used automatically
 // (parse function must be bound via .params<P, &parse_fn>() in the type
 // builder).
 template <auto Func>
-constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
-                                                   const char *type_name) {
+constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name) {
   FuncWithMetadata meta{};
   if constexpr (std::is_same_v<decltype(Func), IntrinsicDefaultFunc>) {
     meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
@@ -1158,9 +1154,9 @@ constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
     meta.check_params_cache_bound = &is_params_cache_bound<
         typename IntrinsicDefaultWithCacheWrapper<Func>::P>;
   }
-  meta.return_type = to_vef_type(type_name);
+  meta.return_type = to_vef_type(STRING);
   meta.num_params = 0;
-  meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
+  meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
   return StaticFuncDesc<0>(name, meta);
 }
 

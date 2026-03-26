@@ -147,12 +147,12 @@ class IntrinsicDefaultFunction {
     assert(vdf != nullptr);
   }
 
-  // Produces the binary encoding of the type's intrinsic default value.
-  // type_params provides resolved type parameters so variable-size types can
-  // compute the correct output. buffer_size is the allocated buffer size.
-  // Returns false on success, true on error (writes to error_msg).
-  bool invoke(const vef_type_params_t &type_params, unsigned char *buffer,
-              size_t buffer_size, size_t *length, char *error_msg) const;
+  // Returns the string representation of the type's intrinsic default value.
+  // type_params provides resolved type parameters for variable-size types.
+  // On success, writes the string to *result and returns false.
+  // On failure, writes to error_msg and returns true.
+  bool invoke(const vef_type_params_t &type_params, std::string *result,
+              char *error_msg) const;
 
  private:
   const vef_func_desc_t *vdf_{nullptr};

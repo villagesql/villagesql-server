@@ -57,7 +57,7 @@ bool TypeContext::init_intrinsic_default() {
   // default. Variable-length types with no resolved size skip this entirely.
   //
   // Sources tried in order:
-  // 1. intrinsic_default_fn: user-supplied VDF producing binary directly.
+  // 1. intrinsic_default_fn VDF: returns a string, which the server encodes.
   // 2. intrinsic_default_str: encode the extension-supplied string literal.
   // 3. encode(""): encode the empty string.
   //
@@ -71,30 +71,25 @@ bool TypeContext::init_intrinsic_default() {
   std::vector<unsigned char> buffer(storage_size);
   size_t encoded_length = 0;
 
-  // Source 1: intrinsic_default_fn.
+  // Sources 1, 2, and 3 all produce a string that is then encoded.
+  // Source 1 calls the intrinsic_default VDF to get the string.
+  // Source 2 uses the extension-supplied literal.
+  // Source 3 falls back to the empty string.
+  std::string input_str;
   if (descriptor_->intrinsic_default_fn().has_value()) {
     const auto &params = parameters();
     vef_type_params_t tp = {params.count(), params.key_data(),
                             params.value_data()};
     char error_msg[VEF_MAX_ERROR_LEN] = {};
-    bool failed = descriptor_->intrinsic_default_fn()->invoke(
-        tp, buffer.data(), storage_size, &encoded_length, error_msg);
-    if (!failed && encoded_length == storage_size) {
-      intrinsic_default_buffer_ = std::move(buffer);
-      intrinsic_default_size_ = encoded_length;
-      return false;
+    if (descriptor_->intrinsic_default_fn()->invoke(tp, &input_str,
+                                                    error_msg)) {
+      LogVSQL(ERROR_LEVEL, "intrinsic_default for type '%s' failed: %s",
+              qualified_name_.c_str(), error_msg);
+      return true;
     }
-    LogVSQL(ERROR_LEVEL, "intrinsic_default for type '%s' failed to encode: %s",
-            qualified_name_.c_str(), error_msg);
-    return true;
+  } else if (descriptor_->intrinsic_default_str().has_value()) {
+    input_str = *descriptor_->intrinsic_default_str();
   }
-
-  // Sources 2 and 3: encode a string. Source 2 uses the extension-supplied
-  // literal; Source 3 falls back to the empty string.
-  const std::string &input_str =
-      descriptor_->intrinsic_default_str().has_value()
-          ? *descriptor_->intrinsic_default_str()
-          : std::string();
 
   if (!encode_op_.has_value()) {
     LogVSQL(ERROR_LEVEL,

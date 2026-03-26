@@ -85,18 +85,21 @@ bool ResolveParamsFunction::invoke(const std::string &params_str,
 }
 
 bool IntrinsicDefaultFunction::invoke(const vef_type_params_t &type_params,
-                                      unsigned char *buffer, size_t buffer_size,
-                                      size_t *length, char *error_msg) const {
-  SpecialVdfCall<CustomResult> call(vdf_);
+                                      std::string *result,
+                                      char *error_msg) const {
+  char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
+  SpecialVdfCall<StringResult> call(vdf_);
   call.init(TypeParameterSlice(type_params.count, type_params.keys,
                                type_params.values));
-  auto r = call.invoke(buffer, buffer_size);
+  auto r = call.invoke(str_buffer, sizeof(str_buffer));
   if (!r) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
     return true;
   }
 
-  *length = *r;
+  const char *result_data =
+      call.alt_str_buf() != nullptr ? call.alt_str_buf() : str_buffer;
+  *result = std::string(result_data, *r);
   return false;
 }
 

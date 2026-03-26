@@ -1099,7 +1099,7 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         }
         if (validate_type_vdf_signature(
                 intrinsic_default_vdf, "intrinsic_default", td->name, 0,
-                nullptr, nullptr, VEF_TYPE_CUSTOM, td->name, extension_name)) {
+                nullptr, nullptr, VEF_TYPE_STRING, nullptr, extension_name)) {
           return true;
         }
       }

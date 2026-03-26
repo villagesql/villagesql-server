@@ -38,7 +38,7 @@ TypeDecoder::TypeDecoder(const TypeContext &tc, MEM_ROOT &mem_root)
   if (op.vdf() != nullptr) {
     vdf_call_.emplace(op.vdf());
     const auto &params = op.parameters();
-    vdf_call_->init(NoInitData{},
+    vdf_call_->init(TypeParameterSlice{},
                     TypeParameterSlice(params.count(), params.key_data(),
                                        params.value_data()));
   } else {
