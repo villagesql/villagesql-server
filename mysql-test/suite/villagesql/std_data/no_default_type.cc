@@ -19,12 +19,13 @@
 
 #include <villagesql/extension.h>
 
-#include <cstring>
 #include <cstddef>
+#include <cstring>
 
 static const int64_t kLen = 4;
 
-// Encode: only accepts "(N)" format. Empty string and other invalid inputs fail.
+// Encode: only accepts "(N)" format. Empty string and other invalid inputs
+// fail.
 bool no_default_encode(unsigned char *buffer, size_t buffer_size,
                        const char *from, size_t from_len, size_t *length) {
   unsigned int nn = 0;
@@ -57,12 +58,11 @@ int no_default_compare(const unsigned char *, size_t, const unsigned char *,
 using namespace villagesql::extension_builder;
 using namespace villagesql::type_builder;
 
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
-        .type(make_type("NO_DEFAULT_TYPE")
-                  .persisted_length(kLen)
-                  .max_decode_buffer_length(16)
-                  .encode(&no_default_encode)
-                  .decode(&no_default_decode)
-                  .compare(&no_default_compare)
-                  .build()))
+VEF_GENERATE_ENTRY_POINTS(make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
+                              .type(make_type("NO_DEFAULT_TYPE")
+                                        .persisted_length(kLen)
+                                        .max_decode_buffer_length(16)
+                                        .encode(&no_default_encode)
+                                        .decode(&no_default_decode)
+                                        .compare(&no_default_compare)
+                                        .build()))
