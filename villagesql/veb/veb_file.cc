@@ -45,6 +45,7 @@
 #include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/config_vars.h"
 #include "villagesql/veb/sql_extension.h"
 
 #include <archive.h>
@@ -624,7 +625,7 @@ bool load_installed_extensions(THD *thd) {
       ExtensionRegistration registration;
       std::string load_error;
       if (load_vef_extension(so_path, extension_name, registration,
-                             VEF_PROTOCOL_2, load_error)) {
+                             VEF_PROTOCOL_3, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -640,6 +641,14 @@ bool load_installed_extensions(THD *thd) {
       if (register_funcs_from_extension(*thd, extension_name, expected_version,
                                         registration)) {
         LogVSQL(ERROR_LEVEL, "Failed to register VDFs for extension '%s'",
+                extension_name.c_str());
+        return true;
+      }
+
+      if (villagesql::services::register_config_vars_from_extension(
+              extension_name, registration)) {
+        LogVSQL(ERROR_LEVEL,
+                "Failed to register config vars for extension '%s'",
                 extension_name.c_str());
         return true;
       }

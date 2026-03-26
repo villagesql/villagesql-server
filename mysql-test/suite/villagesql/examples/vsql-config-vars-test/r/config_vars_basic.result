@@ -1,0 +1,48 @@
+# Install extension
+INSTALL EXTENSION vsql_config_vars_test;
+# Verify defaults
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+100
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+default_label
+SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
+Variable_name	Value
+vsql_config_vars_test.label	default_label
+vsql_config_vars_test.max_items	100
+# Change both variables
+SET GLOBAL vsql_config_vars_test.max_items = 42;
+SET GLOBAL vsql_config_vars_test.label = 'hello';
+# Verify changes took effect
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+42
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+hello
+SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
+Variable_name	Value
+vsql_config_vars_test.label	hello
+vsql_config_vars_test.max_items	42
+# Persist one variable so it survives restart
+SET PERSIST vsql_config_vars_test.max_items = 99;
+# Restart server (extension is reinstated from villagesql.extensions)
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# Persisted variable should have survived restart
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+99
+# Non-persisted variable should be back to default
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+default_label
+# Clean up persisted value
+RESET PERSIST vsql_config_vars_test.max_items;
+# Uninstall extension
+UNINSTALL EXTENSION vsql_config_vars_test;
+# Variables should no longer exist
+SELECT @@global.vsql_config_vars_test.max_items;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.max_items'
+SELECT @@global.vsql_config_vars_test.label;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.label'

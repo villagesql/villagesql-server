@@ -1,0 +1,47 @@
+# Test config variable registration for vsql_config_vars_test extension.
+# Covers: default values, SET GLOBAL, SET PERSIST, restart persistence,
+# and cleanup on UNINSTALL EXTENSION.
+
+--echo # Install extension
+INSTALL EXTENSION vsql_config_vars_test;
+
+--echo # Verify defaults
+SELECT @@global.vsql_config_vars_test.max_items;
+SELECT @@global.vsql_config_vars_test.label;
+SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
+
+--echo # Change both variables
+SET GLOBAL vsql_config_vars_test.max_items = 42;
+SET GLOBAL vsql_config_vars_test.label = 'hello';
+
+--echo # Verify changes took effect
+SELECT @@global.vsql_config_vars_test.max_items;
+SELECT @@global.vsql_config_vars_test.label;
+SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
+
+--echo # Persist one variable so it survives restart
+SET PERSIST vsql_config_vars_test.max_items = 99;
+
+--echo # Restart server (extension is reinstated from villagesql.extensions)
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # Persisted variable should have survived restart
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # Non-persisted variable should be back to default
+SELECT @@global.vsql_config_vars_test.label;
+
+--echo # Clean up persisted value
+RESET PERSIST vsql_config_vars_test.max_items;
+
+--echo # Uninstall extension
+UNINSTALL EXTENSION vsql_config_vars_test;
+
+--echo # Variables should no longer exist
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_config_vars_test.max_items;
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_config_vars_test.label;

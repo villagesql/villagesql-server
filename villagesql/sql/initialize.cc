@@ -25,6 +25,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/config_vars.h"
 #include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
@@ -185,6 +186,7 @@ void deinit_extension_infrastructure() {
       LogVSQL(INFORMATION_LEVEL, "Unloading extension '%s' version '%s'",
               desc->extension_name().c_str(),
               desc->extension_version().c_str());
+      services::unregister_config_vars_from_extension(desc->extension_name());
       veb::unload_vef_extension(desc->registration());
     }
   }

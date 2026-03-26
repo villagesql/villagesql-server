@@ -167,6 +167,13 @@ typedef enum : unsigned int {
                    // + Replace vef_vdf_args_t.values_v1 flat array with
                    //   vef_vdf_args_t.values pointer array (allows
                    //   vef_invalue_t to grow in future protocol versions).
+  VEF_PROTOCOL_3,  // Under development, not stable. Adds:
+                   // + Extension config variables (vef_config_var_desc_t):
+                   //   server registers these as MySQL component system
+                   //   variables on the extension's behalf.
+                   // + Query lifecycle hooks (vef_query_hook_desc_t):
+                   //   pre-parse, post-parse, post-execute,
+                   //   connect, disconnect.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -694,6 +701,66 @@ typedef struct {
   const vef_type_storage_intf_t *storage_intf;
 } vef_type_desc_t;
 
+// Config Variables
+//
+// Extensions declare configuration variables here. The server registers them
+// as MySQL component system variables on the extension's behalf at load time,
+// and unregisters them at unload time.
+//
+// Variables are accessible in SQL as:
+//   SELECT @@global.extension_name.variable_name
+//   SET GLOBAL extension_name.variable_name = value
+//
+// The value_ptr must point to a global in the extension .so that remains valid
+// for the lifetime of the extension. MySQL writes directly to this storage when
+// the user sets the variable.
+
+typedef enum : int {
+  VEF_VAR_BOOL = 0,
+  VEF_VAR_INT = 1,
+  VEF_VAR_DOUBLE = 2,
+  VEF_VAR_STR = 3,
+} vef_var_type_t;
+
+typedef struct {
+  vef_protocol_t protocol;
+
+  // Variable name (without extension prefix). Encoded using UTF-8.
+  const char *name;
+
+  // Description shown in metadata tables (e.g., INFORMATION_SCHEMA).
+  const char *comment;
+
+  vef_var_type_t type;
+
+  // Pointer to storage in the extension .so. Must remain valid for the
+  // lifetime of the extension. Cast according to type:
+  //   VEF_VAR_BOOL:   bool*
+  //   VEF_VAR_INT:    long long*
+  //   VEF_VAR_DOUBLE: double*
+  //   VEF_VAR_STR:    char**
+  void *value_ptr;
+
+  union {
+    struct {
+      double def_val;
+      double min_val;
+      double max_val;
+    } dbl;
+    struct {
+      long long def_val;
+      long long min_val;
+      long long max_val;
+    } integer;
+    struct {
+      bool def_val;
+    } boolean;
+    struct {
+      const char *def_val;
+    } str;
+  };
+} vef_config_var_desc_t;
+
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -713,6 +780,10 @@ typedef struct {
 
   unsigned int type_count;
   vef_type_desc_t **types;
+
+  // protocol >= VEF_PROTOCOL_3
+  unsigned int config_var_count;
+  vef_config_var_desc_t **config_vars;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the
