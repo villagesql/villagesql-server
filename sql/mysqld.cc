@@ -1247,6 +1247,7 @@ bool opt_no_monitor = false;
 #endif
 
 long opt_upgrade_mode = UPGRADE_AUTO;
+bool opt_villagesql_allow_unsafe_dev_upgrade = false;
 long opt_check_table_funs = CHECK_TABLE_FUN_ABORT;
 bool opt_initialize = false;
 bool opt_skip_replica_start = false;  ///< If set, slave is not autostarted
@@ -10955,6 +10956,13 @@ struct my_option my_long_options[] = {
      "server if required; FORCE to force upgrade server.",
      &opt_upgrade_mode, &opt_upgrade_mode, &upgrade_mode_typelib, GET_ENUM,
      REQUIRED_ARG, UPGRADE_AUTO, 0, 0, nullptr, 0, nullptr},
+    {"villagesql-allow-unsafe-dev-upgrade", 0,
+     "Allow upgrading a database initialized with a development build "
+     "(one whose VillageSQL version has a pre-release suffix, e.g. '-dev'). "
+     "Upgrading from a dev build is disallowed by default.",
+     &opt_villagesql_allow_unsafe_dev_upgrade,
+     &opt_villagesql_allow_unsafe_dev_upgrade, nullptr, GET_BOOL, NO_ARG, 0, 0,
+     0, nullptr, 0, nullptr},
 
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};

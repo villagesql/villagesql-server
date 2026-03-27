@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -174,6 +175,7 @@ extern bool opt_verbose;
 extern MYSQL_PLUGIN_IMPORT std::atomic<int32>
     connection_events_loop_aborted_flag;
 extern long opt_upgrade_mode;
+extern bool opt_villagesql_allow_unsafe_dev_upgrade;
 extern long opt_check_table_funs;
 extern bool opt_initialize;
 extern bool opt_safe_user_create;
