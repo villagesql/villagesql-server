@@ -299,19 +299,18 @@ struct MEM_ROOT {
    */
   template <class T>
   bool register_cleanup(T value) {
-    struct CleanupNode {
-      CleanupLink link;
+    struct CleanupNode : CleanupLink {
       T obj;
     };
     auto *node = static_cast<CleanupNode *>(Alloc(sizeof(CleanupNode)));
     if (node == nullptr) return true;
 
     new (&node->obj) T(std::move(value));
-    node->link.fn = [](CleanupLink *link) {
-      std::destroy_at(&reinterpret_cast<CleanupNode *>(link)->obj);
+    node->fn = [](CleanupLink *link) {
+      std::destroy_at(&static_cast<CleanupNode *>(link)->obj);
     };
-    node->link.next = m_cleanup_list;
-    m_cleanup_list = &node->link;
+    node->next = m_cleanup_list;
+    m_cleanup_list = node;
     return false;
   }
 
