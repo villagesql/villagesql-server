@@ -173,6 +173,8 @@ typedef enum : unsigned int {
                    // + get_variable/set_variable function pointers added to
                    //   vef_register_arg_t: thread-safe access to MySQL
                    //   component system variables from any extension VDF.
+                   // + vef_context_t gains read_keyring function pointer for
+                   //   reading secrets from the MySQL keyring component.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -195,11 +197,38 @@ typedef struct {
 
 // Context passed to all function calls (prerun, vdf, postrun)
 //
-typedef struct {
+typedef struct vef_context_t {
   // protocol version being used
   vef_protocol_t protocol;
 
-  // We foresee adding logger or distributed trace information in this context
+  // protocol >= VEF_PROTOCOL_2
+  //
+  // Read a secret from the MySQL keyring component.
+  //
+  // data_id:    identifier for the secret.
+  // auth_id:    owner of the secret, or NULL for internal keys.
+  // buf:        caller-provided buffer to receive the secret bytes.
+  // buf_len:    size of buf in bytes.
+  // out_len:    set to the actual number of bytes written on success.
+  //
+  // Returns false on success, true on error (including key not found).
+  bool (*read_keyring)(struct vef_context_t *ctx, const char *data_id,
+                       const char *auth_id, unsigned char *buf, size_t buf_len,
+                       size_t *out_len);
+
+  // protocol >= VEF_PROTOCOL_2
+  //
+  // Write a secret to the MySQL keyring component.
+  //
+  // data_id:    identifier for the secret.
+  // auth_id:    owner of the secret, or NULL for internal keys.
+  // data:       secret bytes to store.
+  // data_len:   length of data in bytes.
+  //
+  // Returns false on success, true on error.
+  bool (*write_keyring)(struct vef_context_t *ctx, const char *data_id,
+                        const char *auth_id, const unsigned char *data,
+                        size_t data_len);
 } vef_context_t;
 
 // Function pointer types for system variable access, passed to extensions

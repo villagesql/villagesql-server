@@ -1,0 +1,7 @@
+{
+  "name": "vsql_keyring_reader",
+  "version": "0.0.1",
+  "description": "VillageSQL extension for reading secrets from the MySQL keyring",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

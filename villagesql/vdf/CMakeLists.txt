@@ -25,3 +25,4 @@ TARGET_LINK_LIBRARIES(villagesql_vdf PRIVATE extra::rapidjson)
 
 ADD_DEPENDENCIES(villagesql_vdf GenError)
 ADD_DEPENDENCIES(villagesql_vdf GenServerSource)
+ADD_DEPENDENCIES(villagesql_vdf villagesql_services)
