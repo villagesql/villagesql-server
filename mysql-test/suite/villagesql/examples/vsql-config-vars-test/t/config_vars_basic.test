@@ -37,6 +37,24 @@ SELECT @@global.vsql_config_vars_test.label;
 --echo # Clean up persisted value
 RESET PERSIST vsql_config_vars_test.max_items;
 
+--echo # Read own variable via get_variable VDF
+SELECT vsql_config_vars_test.get_variable('vsql_config_vars_test', 'max_items');
+SELECT vsql_config_vars_test.get_variable('vsql_config_vars_test', 'label');
+
+--echo # Read a built-in MySQL variable via get_variable
+SELECT vsql_config_vars_test.get_variable('mysql_server', 'max_connections') > 0;
+
+--echo # Set own variable via set_variable VDF (GLOBAL)
+SELECT vsql_config_vars_test.set_variable('vsql_config_vars_test', 'max_items', 'GLOBAL', '77');
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # Set own variable via set_variable VDF (PERSIST)
+SELECT vsql_config_vars_test.set_variable('vsql_config_vars_test', 'max_items', 'PERSIST', '55');
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # Clean up persisted value (if set_variable PERSIST succeeded)
+RESET PERSIST vsql_config_vars_test.max_items;
+
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_config_vars_test;
 

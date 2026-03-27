@@ -19,6 +19,7 @@
 
 #include <string>
 
+#include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
@@ -34,6 +35,11 @@ bool register_config_vars_from_extension(
 // Unregister config variables that belong to the given extension.
 // Called when an extension is uninstalled.
 void unregister_config_vars_from_extension(const std::string &extension_name);
+
+// Construct a vef_context_t for the given protocol version. For protocol >= 3,
+// get_variable and set_variable are wired up to the thread-safe implementations
+// in config_vars.cc.
+vef_context_t make_vef_context(vef_protocol_t protocol);
 
 }  // namespace services
 }  // namespace villagesql

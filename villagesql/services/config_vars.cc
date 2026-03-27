@@ -16,6 +16,7 @@
 
 #include "villagesql/services/config_vars.h"
 
+#include <cstdlib>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -23,6 +24,8 @@
 #include "my_sys.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
+#include "mysql/components/services/mysql_string.h"
+#include "mysql/components/services/mysql_system_variable.h"
 #include "mysql/service_plugin_registry.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -33,14 +36,121 @@ namespace services {
 namespace {
 
 // A registered config variable together with the extension it belongs to, so
-// we can unregister it on extension uninstall.
+// we can unregister it on extension uninstall, and with its type so
+// set_variable can dispatch to the correct MySQL update service.
 struct RegisteredConfigVar {
   std::string extension_name;
   std::string var_name;
+  vef_var_type_t type;
 };
 
 std::mutex g_config_vars_mutex;
 std::vector<RegisteredConfigVar> g_config_vars;
+
+// Implements vef_context_t::get_variable. Wraps the MySQL component
+// sys_variable_register service, which handles locking internally.
+bool vef_get_variable_impl(vef_context_t * /*ctx*/, const char *component_name,
+                           const char *name, void **val, size_t *val_len) {
+  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
+  if (registry == nullptr) return true;
+
+  my_service<SERVICE_TYPE(component_sys_variable_register)> svc(
+      "component_sys_variable_register", registry);
+  bool result = true;
+  if (svc.is_valid()) {
+    result = svc->get_variable(component_name, name, val, val_len);
+  }
+  mysql_plugin_registry_release(registry);
+  return result;
+}
+
+// Implements vef_context_t::set_variable. Looks up the variable type and
+// dispatches to the appropriate MySQL update service. String and bool variables
+// go through mysql_system_variable_update_string; integer variables go through
+// mysql_system_variable_update_integer (set_signed). All services handle
+// locking and support GLOBAL, PERSIST, and PERSIST_ONLY scopes.
+bool vef_set_variable_impl(vef_context_t * /*ctx*/, const char *component_name,
+                           const char *name, const char *scope,
+                           const char *val) {
+  if (val == nullptr) return true;
+
+  // Look up the variable type so we can pick the right update service.
+  vef_var_type_t var_type = VEF_VAR_STR;
+  {
+    std::lock_guard<std::mutex> lock(g_config_vars_mutex);
+    bool found = false;
+    for (const RegisteredConfigVar &v : g_config_vars) {
+      if (v.extension_name == component_name && v.var_name == name) {
+        var_type = v.type;
+        found = true;
+        break;
+      }
+    }
+    if (!found) return true;
+  }
+
+  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
+  if (registry == nullptr) return true;
+
+  bool result = true;
+
+  if (var_type == VEF_VAR_INT) {
+    my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
+        "mysql_string_factory", registry);
+    my_service<SERVICE_TYPE(mysql_string_converter)> str_conv(
+        "mysql_string_converter", registry);
+    my_service<SERVICE_TYPE(mysql_system_variable_update_integer)> update_svc(
+        "mysql_system_variable_update_integer", registry);
+
+    if (str_factory.is_valid() && str_conv.is_valid() &&
+        update_svc.is_valid()) {
+      my_h_string h_base = nullptr;
+      my_h_string h_name = nullptr;
+
+      if (!str_conv->convert_from_buffer(&h_base, component_name,
+                                         strlen(component_name), "utf8mb3") &&
+          !str_conv->convert_from_buffer(&h_name, name, strlen(name),
+                                         "utf8mb3")) {
+        result = update_svc->set_signed(nullptr, scope, h_base, h_name,
+                                        strtoll(val, nullptr, 10));
+      }
+
+      if (h_base) str_factory->destroy(h_base);
+      if (h_name) str_factory->destroy(h_name);
+    }
+  } else {
+    // VEF_VAR_STR, VEF_VAR_BOOL, VEF_VAR_DOUBLE all go through string update.
+    my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
+        "mysql_string_factory", registry);
+    my_service<SERVICE_TYPE(mysql_string_converter)> str_conv(
+        "mysql_string_converter", registry);
+    my_service<SERVICE_TYPE(mysql_system_variable_update_string)> update_svc(
+        "mysql_system_variable_update_string", registry);
+
+    if (str_factory.is_valid() && str_conv.is_valid() &&
+        update_svc.is_valid()) {
+      my_h_string h_base = nullptr;
+      my_h_string h_name = nullptr;
+      my_h_string h_value = nullptr;
+
+      if (!str_conv->convert_from_buffer(&h_base, component_name,
+                                         strlen(component_name), "utf8mb3") &&
+          !str_conv->convert_from_buffer(&h_name, name, strlen(name),
+                                         "utf8mb3") &&
+          !str_conv->convert_from_buffer(&h_value, val, strlen(val),
+                                         "utf8mb3")) {
+        result = update_svc->set(nullptr, scope, h_base, h_name, h_value);
+      }
+
+      if (h_base) str_factory->destroy(h_base);
+      if (h_name) str_factory->destroy(h_name);
+      if (h_value) str_factory->destroy(h_value);
+    }
+  }
+
+  mysql_plugin_registry_release(registry);
+  return result;
+}
 
 }  // namespace
 
@@ -144,7 +254,7 @@ bool register_config_vars_from_extension(
 
     {
       std::lock_guard<std::mutex> lock(g_config_vars_mutex);
-      g_config_vars.push_back({extension_name, std::string(v->name)});
+      g_config_vars.push_back({extension_name, std::string(v->name), v->type});
     }
 
     LogVSQL(INFORMATION_LEVEL, "Registered config var '%s' for extension '%s'",
@@ -184,6 +294,16 @@ void unregister_config_vars_from_extension(const std::string &extension_name) {
   }
 
   mysql_plugin_registry_release(registry);
+}
+
+vef_context_t make_vef_context(vef_protocol_t protocol) {
+  vef_context_t ctx{};
+  ctx.protocol = protocol;
+  if (protocol >= VEF_PROTOCOL_3) {
+    ctx.get_variable = vef_get_variable_impl;
+    ctx.set_variable = vef_set_variable_impl;
+  }
+  return ctx;
 }
 
 }  // namespace services
