@@ -280,13 +280,6 @@ class TypeContext {
     return descriptor_->storage_intf();
   }
 
-  // Pre-encode the intrinsic default value. Must be called once after
-  // construction (called by TableTraits<TypeContext>::create()). Returns true
-  // on failure. Sources tried in order: (1) intrinsic_default_fn, (2)
-  // encode(""). Skipped for variable-length types where persisted_length_ <= 0
-  // (no storage size known yet — these types are not used bare without params).
-  bool init_intrinsic_default();
-
   // Get cached intrinsic default buffer. Always valid —
   // init_intrinsic_default() guarantees this is populated, and
   // TableTraits::create() returns nullptr on failure.
