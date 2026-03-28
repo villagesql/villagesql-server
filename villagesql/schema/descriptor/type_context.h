@@ -214,13 +214,6 @@ class TypeContext {
  public:
   using key_type = TypeContextKey;
 
-  // Construct a TypeContext by using:
-  // - the TypeContextKey, which has a TypeDescriptorKey and TypeParameters
-  // - the TypeDescriptor from the victionary, which must have been obtained
-  //   under the victionary lock and not via acquire.
-  // Note: this must be constructed under the victionary lock
-  TypeContext(const TypeContextKey &key, const TypeDescriptor *descriptor);
-
   TypeContext() = delete;
 
   // Disable copy
