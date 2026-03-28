@@ -32,7 +32,11 @@ struct MEM_ROOT;
 // Forward declaration for test access to the private TypeContext constructor.
 namespace villagesql_unittest {
 class TypeContextTest;
+<<<<<<< HEAD
 }  // namespace villagesql_unittest
+=======
+}
+>>>>>>> b40ff46b2d7 (review comments)
 
 namespace villagesql {
 
