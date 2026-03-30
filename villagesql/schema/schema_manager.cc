@@ -601,6 +601,12 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
               "Upgrading from a development version (%s); "
               "--villagesql-allow-unsafe-dev-upgrade was specified.",
               current_villagesql_version.to_string().c_str());
+    } else if (opt_villagesql_allow_unsafe_dev_upgrade) {
+      LogVSQL(ERROR_LEVEL,
+              "--villagesql-allow-unsafe-dev-upgrade specified, but current "
+              "version (%s) is not a development version.",
+              current_villagesql_version.to_string().c_str());
+      return true;
     }
 
     LogVSQL(SYSTEM_LEVEL, "Schema upgrade started from version %s to %s",
@@ -636,10 +642,9 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
     LogVSQL(SYSTEM_LEVEL, "Schema upgrade to version %s completed",
             target_villagesql_version.to_string().c_str());
   } else if (opt_villagesql_allow_unsafe_dev_upgrade) {
-    LogVSQL(
-        ERROR_LEVEL,
-        "--villagesql-allow-unsafe-dev-upgrade was specified but no upgrade "
-        "from a development version is being performed.");
+    LogVSQL(ERROR_LEVEL,
+            "--villagesql-allow-unsafe-dev-upgrade specified, but no upgrade "
+            "is being performed.");
     return true;
   }
 
