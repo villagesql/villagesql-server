@@ -1,11 +1,8 @@
-# Test Aggregate VDFs
 call mtr.add_suppression("Orphaned expansion directory found but not removed");
 # restart: --veb-dir=MYSQLTEST_VARDIR/veb
 Creating extension agg_vdf_ext using SDK...
 Created agg_vdf_ext.veb
-# Install extension with aggregate VDFs
 INSTALL EXTENSION agg_vdf_ext;
-# Create test data
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
 val INT,
@@ -17,9 +14,6 @@ INSERT INTO t1 VALUES
 (3, 30, 'B'),
 (4, 40, 'B'),
 (5, 50, 'B');
-#
-# Basic aggregate with GROUP BY
-#
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category
@@ -27,23 +21,14 @@ ORDER BY category;
 category	total
 A	30
 B	120
-#
-# Whole-table aggregate (no GROUP BY)
-#
 SELECT agg_vdf_ext.vdf_sum(val) AS total FROM t1;
 total
 150
-#
-# Aggregate on empty table
-#
 CREATE TABLE t_empty (id INT PRIMARY KEY, val INT);
 SELECT agg_vdf_ext.vdf_sum(val) AS total FROM t_empty;
 total
 NULL
 DROP TABLE t_empty;
-#
-# Multiple aggregate VDFs in one query
-#
 SELECT category,
 agg_vdf_ext.vdf_sum(val) AS total,
 agg_vdf_ext.vdf_count(val) AS cnt
@@ -53,9 +38,6 @@ ORDER BY category;
 category	total	cnt
 A	30	2
 B	120	3
-#
-# Mixed scalar and aggregate VDFs
-#
 SELECT category,
 agg_vdf_ext.vdf_sum(val) AS total,
 agg_vdf_ext.simple_double(MIN(val)) AS doubled_min
@@ -65,9 +47,6 @@ ORDER BY category;
 category	total	doubled_min
 A	30	20
 B	120	60
-#
-# HAVING clause with aggregate VDF
-#
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category
@@ -75,9 +54,6 @@ HAVING agg_vdf_ext.vdf_sum(val) > 50
 ORDER BY category;
 category	total
 B	120
-#
-# ORDER BY aggregate VDF
-#
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category
@@ -85,9 +61,6 @@ ORDER BY agg_vdf_ext.vdf_sum(val) DESC;
 category	total
 B	120
 A	30
-#
-# NULL handling: some NULLs in aggregated column
-#
 CREATE TABLE t_nulls (
 id INT PRIMARY KEY,
 val INT,
@@ -108,9 +81,6 @@ ORDER BY category;
 category	total	cnt
 A	40	2
 B	NULL	0
-#
-# NULL handling: all NULLs in a group (vdf_sum returns NULL, vdf_count returns 0)
-#
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t_nulls
 WHERE category = 'B'
@@ -118,18 +88,12 @@ GROUP BY category;
 category	total
 B	NULL
 DROP TABLE t_nulls;
-#
-# Subquery with aggregate VDF
-#
 SELECT * FROM t1
 WHERE val > (SELECT agg_vdf_ext.vdf_sum(val) / 5 FROM t1)
 ORDER BY id;
 id	val	category
 4	40	B
 5	50	B
-#
-# Window function with aggregate VDF (not supported for UDF aggregates)
-#
 SELECT id, val, category,
 agg_vdf_ext.vdf_sum(val) OVER (PARTITION BY category) AS category_total
 FROM t1
@@ -137,9 +101,6 @@ ORDER BY id;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OVER (PARTITION BY category) AS category_total
 FROM t1
 ORDER BY id' at line 2
-#
-# Unqualified aggregate VDF call
-#
 SELECT category, vdf_sum(val) AS total
 FROM t1
 GROUP BY category
@@ -147,7 +108,6 @@ ORDER BY category;
 category	total
 A	30
 B	120
-# Cleanup
 DROP TABLE t1;
 UNINSTALL EXTENSION agg_vdf_ext;
 include/rpl/deprecated/show_binlog_events.inc

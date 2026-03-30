@@ -14,7 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Test extension that sets clear but not add on a VDF.
+// Test extension that sets clear but not accumulate on a VDF.
 // This should be rejected at extension registration time.
 //
 // Uses VEF_GENERATE_REGISTRATION to get the registration helper, then patches
@@ -37,6 +37,9 @@ VEF_GENERATE_REGISTRATION(make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
                                         .param(INT)
                                         .build()))
 
+// Override vef_register to patch the descriptor after the builder runs.
+// The builder's compile-time check prevents setting clear without accumulate,
+// so we must bypass it to test that the server rejects this at load time.
 extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {
   auto *reg = _vef_do_register(arg);
   if (reg->funcs != nullptr && reg->func_count > 0) {

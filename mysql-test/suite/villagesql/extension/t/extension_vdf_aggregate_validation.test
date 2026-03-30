@@ -1,5 +1,5 @@
 # Test aggregate VDF registration validation
-# Verifies that extensions with mismatched clear/add callbacks are rejected.
+# Verifies that extensions with mismatched clear/accumulate callbacks are rejected.
 
 --echo # Test Aggregate VDF Registration Validation
 
@@ -9,13 +9,13 @@
 
 call mtr.add_suppression("Orphaned expansion directory found but not removed");
 call mtr.add_suppression("Failed to load VEF extension");
-call mtr.add_suppression("Aggregate VDF.*must provide both clear and add");
+call mtr.add_suppression("Aggregate VDF.*must provide both clear and accumulate");
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --let $restart_parameters = restart: --veb-dir=$veb_dir
 --source include/restart_mysqld.inc
 
 --echo #
---echo # Test: add set but clear missing (should fail)
+--echo # Test: accumulate set but clear missing (should fail)
 --echo #
 --let $extension_name = agg_add_only
 --let $extension_version = 1.0.0
@@ -29,7 +29,7 @@ INSTALL EXTENSION agg_add_only;
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_add_only';
 
 --echo #
---echo # Test: clear set but add missing (should fail)
+--echo # Test: clear set but accumulate missing (should fail)
 --echo #
 --let $extension_name = agg_clear_only
 --let $extension_version = 1.0.0

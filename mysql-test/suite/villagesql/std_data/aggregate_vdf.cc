@@ -22,9 +22,7 @@
 
 #include <cstring>
 
-// =============================================================================
 // Accumulator state, allocated in prerun, freed in postrun.
-// =============================================================================
 
 struct SumState {
   long long total;
@@ -35,9 +33,7 @@ struct CountState {
   long long count;
 };
 
-// =============================================================================
 // vdf_sum: aggregate that sums INT values, returns NULL for empty groups
-// =============================================================================
 
 void vdf_sum_prerun(vef_context_t *ctx, vef_prerun_args_t *args,
                     vef_prerun_result_t *result) {
@@ -57,8 +53,8 @@ void vdf_sum_clear(vef_context_t *ctx, vef_vdf_args_t *args) {
   state->has_value = false;
 }
 
-void vdf_sum_add(vef_context_t *ctx, vef_vdf_args_t *args,
-                 vef_vdf_result_t *result) {
+void vdf_sum_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
+                        vef_vdf_result_t *result) {
   auto *state = static_cast<SumState *>(args->user_data);
   vef_invalue_t val = villagesql::func_builder::get_invalue(ctx, args, 0);
   if (!val.is_null) {
@@ -79,9 +75,7 @@ void vdf_sum_result_impl(vef_context_t *ctx, vef_vdf_args_t *args,
   out->type = VEF_RESULT_VALUE;
 }
 
-// =============================================================================
 // vdf_count: aggregate that counts non-NULL INT values
-// =============================================================================
 
 void vdf_count_prerun(vef_context_t *ctx, vef_prerun_args_t *args,
                       vef_prerun_result_t *result) {
@@ -100,8 +94,8 @@ void vdf_count_clear(vef_context_t *ctx, vef_vdf_args_t *args) {
   state->count = 0;
 }
 
-void vdf_count_add(vef_context_t *ctx, vef_vdf_args_t *args,
-                   vef_vdf_result_t *result) {
+void vdf_count_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
+                          vef_vdf_result_t *result) {
   auto *state = static_cast<CountState *>(args->user_data);
   vef_invalue_t val = villagesql::func_builder::get_invalue(ctx, args, 0);
   if (!val.is_null) {
@@ -116,23 +110,14 @@ void vdf_count_result_impl(vef_context_t *ctx, vef_vdf_args_t *args,
   out->type = VEF_RESULT_VALUE;
 }
 
-// =============================================================================
-// simple_double: scalar function that doubles an INT value (for mixed testing)
-// =============================================================================
-
-void simple_double_impl(vef_context_t *ctx, vef_invalue_t *input,
-                        vef_vdf_result_t *out) {
-  if (input->is_null) {
-    out->type = VEF_RESULT_NULL;
+// Scalar function that doubles an INT value (for mixed testing)
+void simple_double_impl(villagesql::IntArg input, villagesql::IntResult out) {
+  if (input.is_null()) {
+    out.set_null();
     return;
   }
-  out->int_value = input->int_value * 2;
-  out->type = VEF_RESULT_VALUE;
+  out.set(input.value() * 2);
 }
-
-// =============================================================================
-// Extension registration
-// =============================================================================
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
@@ -140,7 +125,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(INT)
                   .param(INT)
                   .clear<&vdf_sum_clear>()
-                  .add<&vdf_sum_add>()
+                  .accumulate<&vdf_sum_accumulate>()
                   .prerun<&vdf_sum_prerun>()
                   .postrun<&vdf_sum_postrun>()
                   .build())
@@ -148,7 +133,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(INT)
                   .param(INT)
                   .clear<&vdf_count_clear>()
-                  .add<&vdf_count_add>()
+                  .accumulate<&vdf_count_accumulate>()
                   .prerun<&vdf_count_prerun>()
                   .postrun<&vdf_count_postrun>()
                   .build())

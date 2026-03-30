@@ -513,8 +513,9 @@ typedef void (*vef_vdf_clear_func_t)(vef_context_t *ctx, vef_vdf_args_t *args);
 // and updates its accumulator in args->user_data. If an error occurs during
 // accumulation, write the message to result->error_msg and set
 // result->type = VEF_RESULT_ERROR.
-typedef void (*vef_vdf_add_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
-                                   vef_vdf_result_t *result);
+typedef void (*vef_vdf_accumulate_func_t)(vef_context_t *ctx,
+                                          vef_vdf_args_t *args,
+                                          vef_vdf_result_t *result);
 
 // =============================================================================
 // Function and Type Descriptors
@@ -545,11 +546,20 @@ typedef struct {
   bool deterministic;
 
   // OPTIONAL: Set both to non-NULL to make this function an aggregate.
-  // When set, the main `vdf` callback becomes the "result" function, called
-  // once per group after all rows have been accumulated.
+  //
+  // Aggregate VDFs use three callbacks:
+  //   1. clear       – resets accumulator state at the start of each group
+  //   2. accumulate  – called once per row to fold it into the accumulator
+  //   3. vdf (above) – becomes the "result" function, called once per group
+  //                    after all rows have been accumulated; it reads the
+  //                    final accumulator state and writes the output value
+  //
+  // State is managed via user_data in vef_vdf_args_t, typically allocated in
+  // prerun and freed in postrun.
+  //
   // It is an error to set exactly one of these; both must be present or absent.
   vef_vdf_clear_func_t clear;
-  vef_vdf_add_func_t add;
+  vef_vdf_accumulate_func_t accumulate;
 } vef_func_desc_t;
 
 // =============================================================================

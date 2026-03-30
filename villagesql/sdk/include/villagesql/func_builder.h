@@ -106,7 +106,7 @@ constexpr vef_type_t to_vef_type(const char *name);
 
 // Non-constexpr function used to trigger compile errors when build() detects
 // invalid configuration during constant evaluation.
-void aggregate_must_set_both_clear_and_add();
+void aggregate_must_set_both_clear_and_accumulate();
 
 // =============================================================================
 // FuncWithMetadata
@@ -120,7 +120,7 @@ struct FuncWithMetadata {
         prerun(nullptr),
         postrun(nullptr),
         clear(nullptr),
-        add(nullptr),
+        accumulate(nullptr),
         return_type{},
         param_types{},
         num_params(0),
@@ -132,7 +132,7 @@ struct FuncWithMetadata {
   vef_prerun_func_t prerun;
   vef_postrun_func_t postrun;
   vef_vdf_clear_func_t clear;
-  vef_vdf_add_func_t add;
+  vef_vdf_accumulate_func_t accumulate;
   vef_type_t return_type;
   std::array<vef_type_t, kMaxParams> param_types;
   size_t num_params;
@@ -833,7 +833,7 @@ struct StaticFuncDesc {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   vef_vdf_clear_func_t clear_;
-  vef_vdf_add_func_t add_;
+  vef_vdf_accumulate_func_t accumulate_;
   size_t buffer_size_;
   bool deterministic_;
   bool (*check_params_cache_bound_)();
@@ -846,7 +846,7 @@ struct StaticFuncDesc {
         prerun_(meta.prerun),
         postrun_(meta.postrun),
         clear_(meta.clear),
-        add_(meta.add),
+        accumulate_(meta.accumulate),
         buffer_size_(meta.buffer_size),
         deterministic_(meta.deterministic),
         check_params_cache_bound_(meta.check_params_cache_bound) {
@@ -864,7 +864,7 @@ struct StaticFuncDesc {
   constexpr vef_prerun_func_t prerun() const { return prerun_; }
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr vef_vdf_clear_func_t clear() const { return clear_; }
-  constexpr vef_vdf_add_func_t add() const { return add_; }
+  constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr bool deterministic() const { return deterministic_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
@@ -900,7 +900,7 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   desc.buffer_size = func_data.buffer_size();
   desc.deterministic = func_data.deterministic();
   desc.clear = func_data.clear();
-  desc.add = func_data.add();
+  desc.accumulate = func_data.accumulate();
 
   return &desc;
 }
@@ -1006,7 +1006,7 @@ struct FuncBuilder {
         prerun_(nullptr),
         postrun_(nullptr),
         clear_(nullptr),
-        add_(nullptr),
+        accumulate_(nullptr),
         deterministic_(false) {}
 
   const char *name_;
@@ -1016,7 +1016,7 @@ struct FuncBuilder {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   vef_vdf_clear_func_t clear_;
-  vef_vdf_add_func_t add_;
+  vef_vdf_accumulate_func_t accumulate_;
   bool deterministic_;
 
   constexpr FuncBuilder<Func, NumParams> &returns(const char *t) {
@@ -1032,7 +1032,7 @@ struct FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.clear_ = clear_;
-    next.add_ = add_;
+    next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
@@ -1070,10 +1070,10 @@ struct FuncBuilder {
     return copy;
   }
 
-  template <vef_vdf_add_func_t Hook>
-  constexpr FuncBuilder<Func, NumParams> add() const {
+  template <vef_vdf_accumulate_func_t Hook>
+  constexpr FuncBuilder<Func, NumParams> accumulate() const {
     FuncBuilder<Func, NumParams> copy = *this;
-    copy.add_ = Hook;
+    copy.accumulate_ = Hook;
     return copy;
   }
 
@@ -1081,12 +1081,12 @@ struct FuncBuilder {
   constexpr StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
-    // Catch mismatched clear/add at compile time. build() is evaluated in a
-    // constexpr context by VEF_GENERATE_ENTRY_POINTS, so reaching a
+    // Catch mismatched clear/accumulate at compile time. build() is evaluated
+    // in a constexpr context by VEF_GENERATE_ENTRY_POINTS, so reaching a
     // non-constexpr call produces a compile error. Also validated at
     // registration time as a safety net.
-    if ((clear_ == nullptr) != (add_ == nullptr)) {
-      aggregate_must_set_both_clear_and_add();
+    if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
+      aggregate_must_set_both_clear_and_accumulate();
     }
 
     using AllParams = typename FuncParamTypes<decltype(Func)>::type;
@@ -1104,7 +1104,7 @@ struct FuncBuilder {
     meta.prerun = prerun_;
     meta.postrun = postrun_;
     meta.clear = clear_;
-    meta.add = add_;
+    meta.accumulate = accumulate_;
     meta.return_type = to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;

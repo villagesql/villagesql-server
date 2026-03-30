@@ -184,7 +184,7 @@ void vdf_handler::add(bool *null_value) {
   result.type = VEF_RESULT_VALUE;
   m_error_msg[0] = '\0';
   result.error_msg = m_error_msg;
-  m_udf->vdf_func_desc->add(&m_context, &m_vdf_args, &result);
+  m_udf->vdf_func_desc->accumulate(&m_context, &m_vdf_args, &result);
   if (result.type == VEF_RESULT_ERROR) {
     push_warning_printf(current_thd, Sql_condition::SL_WARNING, ER_UDF_ERROR,
                         "VDF error in function '%s': %s", m_udf->name.str,

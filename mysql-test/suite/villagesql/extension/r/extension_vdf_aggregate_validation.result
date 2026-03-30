@@ -1,10 +1,10 @@
 # Test Aggregate VDF Registration Validation
 call mtr.add_suppression("Orphaned expansion directory found but not removed");
 call mtr.add_suppression("Failed to load VEF extension");
-call mtr.add_suppression("Aggregate VDF.*must provide both clear and add");
+call mtr.add_suppression("Aggregate VDF.*must provide both clear and accumulate");
 # restart: --veb-dir=MYSQLTEST_VARDIR/veb
 #
-# Test: add set but clear missing (should fail)
+# Test: accumulate set but clear missing (should fail)
 #
 Creating extension agg_add_only using SDK...
 Created agg_add_only.veb
@@ -15,7 +15,7 @@ SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_a
 COUNT(*)
 0
 #
-# Test: clear set but add missing (should fail)
+# Test: clear set but accumulate missing (should fail)
 #
 Creating extension agg_clear_only using SDK...
 Created agg_clear_only.veb

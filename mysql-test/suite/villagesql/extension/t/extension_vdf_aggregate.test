@@ -1,8 +1,6 @@
 # Test aggregate VDF functions
-# Verifies that VDFs registered with clear/add callbacks work as aggregate
-# functions with GROUP BY, HAVING, window functions, etc.
-
---echo # Test Aggregate VDFs
+# Verifies that VDFs registered with clear/accumulate callbacks work as
+# aggregate functions with GROUP BY, HAVING, window functions, etc.
 
 # Setup VEB directory for testing
 --let $veb_dir = $MYSQLTEST_VARDIR/veb
@@ -20,10 +18,8 @@ call mtr.add_suppression("Orphaned expansion directory found but not removed");
 --let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf.cc
 --source include/villagesql/create_extension_sdk.inc
 
---echo # Install extension with aggregate VDFs
 INSTALL EXTENSION agg_vdf_ext;
 
---echo # Create test data
 CREATE TABLE t1 (
   id INT PRIMARY KEY,
   val INT,
@@ -37,29 +33,21 @@ INSERT INTO t1 VALUES
   (4, 40, 'B'),
   (5, 50, 'B');
 
---echo #
---echo # Basic aggregate with GROUP BY
---echo #
+# Basic aggregate with GROUP BY
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category
 ORDER BY category;
 
---echo #
---echo # Whole-table aggregate (no GROUP BY)
---echo #
+# Whole-table aggregate (no GROUP BY)
 SELECT agg_vdf_ext.vdf_sum(val) AS total FROM t1;
 
---echo #
---echo # Aggregate on empty table
---echo #
+# Aggregate on empty table
 CREATE TABLE t_empty (id INT PRIMARY KEY, val INT);
 SELECT agg_vdf_ext.vdf_sum(val) AS total FROM t_empty;
 DROP TABLE t_empty;
 
---echo #
---echo # Multiple aggregate VDFs in one query
---echo #
+# Multiple aggregate VDFs in one query
 SELECT category,
   agg_vdf_ext.vdf_sum(val) AS total,
   agg_vdf_ext.vdf_count(val) AS cnt
@@ -67,9 +55,7 @@ FROM t1
 GROUP BY category
 ORDER BY category;
 
---echo #
---echo # Mixed scalar and aggregate VDFs
---echo #
+# Mixed scalar and aggregate VDFs
 SELECT category,
   agg_vdf_ext.vdf_sum(val) AS total,
   agg_vdf_ext.simple_double(MIN(val)) AS doubled_min
@@ -77,26 +63,20 @@ FROM t1
 GROUP BY category
 ORDER BY category;
 
---echo #
---echo # HAVING clause with aggregate VDF
---echo #
+# HAVING clause with aggregate VDF
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category
 HAVING agg_vdf_ext.vdf_sum(val) > 50
 ORDER BY category;
 
---echo #
---echo # ORDER BY aggregate VDF
---echo #
+# ORDER BY aggregate VDF
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category
 ORDER BY agg_vdf_ext.vdf_sum(val) DESC;
 
---echo #
---echo # NULL handling: some NULLs in aggregated column
---echo #
+# NULL handling: some NULLs in aggregated column
 CREATE TABLE t_nulls (
   id INT PRIMARY KEY,
   val INT,
@@ -117,9 +97,7 @@ FROM t_nulls
 GROUP BY category
 ORDER BY category;
 
---echo #
---echo # NULL handling: all NULLs in a group (vdf_sum returns NULL, vdf_count returns 0)
---echo #
+# NULL handling: all NULLs in a group (vdf_sum returns NULL, vdf_count returns 0)
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t_nulls
 WHERE category = 'B'
@@ -127,31 +105,25 @@ GROUP BY category;
 
 DROP TABLE t_nulls;
 
---echo #
---echo # Subquery with aggregate VDF
---echo #
+# Subquery with aggregate VDF
 SELECT * FROM t1
 WHERE val > (SELECT agg_vdf_ext.vdf_sum(val) / 5 FROM t1)
 ORDER BY id;
 
---echo #
---echo # Window function with aggregate VDF (not supported for UDF aggregates)
---echo #
+# Window function with aggregate VDF (not supported for UDF aggregates)
 --error ER_PARSE_ERROR
 SELECT id, val, category,
   agg_vdf_ext.vdf_sum(val) OVER (PARTITION BY category) AS category_total
 FROM t1
 ORDER BY id;
 
---echo #
---echo # Unqualified aggregate VDF call
---echo #
+# Unqualified aggregate VDF call
 SELECT category, vdf_sum(val) AS total
 FROM t1
 GROUP BY category
 ORDER BY category;
 
---echo # Cleanup
+# Cleanup
 DROP TABLE t1;
 
 UNINSTALL EXTENSION agg_vdf_ext;

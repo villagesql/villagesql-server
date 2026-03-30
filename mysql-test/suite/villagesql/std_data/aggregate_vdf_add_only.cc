@@ -14,17 +14,17 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Test extension that sets add but not clear on a VDF.
+// Test extension that sets accumulate but not clear on a VDF.
 // This should be rejected at extension registration time.
 //
 // Uses VEF_GENERATE_REGISTRATION to get the registration helper, then patches
-// the func descriptor to set only add (bypassing the builder's compile-time
-// check).
+// the func descriptor to set only accumulate (bypassing the builder's
+// compile-time check).
 
 #include <villagesql/extension.h>
 
-void dummy_add(vef_context_t *ctx, vef_vdf_args_t *args,
-               vef_vdf_result_t *result) {}
+void dummy_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
+                      vef_vdf_result_t *result) {}
 
 void dummy_result(vef_context_t *ctx, vef_vdf_args_t *args,
                   vef_vdf_result_t *out) {
@@ -38,10 +38,13 @@ VEF_GENERATE_REGISTRATION(make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
                                         .param(INT)
                                         .build()))
 
+// Override vef_register to patch the descriptor after the builder runs.
+// The builder's compile-time check prevents setting accumulate without clear,
+// so we must bypass it to test that the server rejects this at load time.
 extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {
   auto *reg = _vef_do_register(arg);
   if (reg->funcs != nullptr && reg->func_count > 0) {
-    reg->funcs[0]->add = &dummy_add;
+    reg->funcs[0]->accumulate = &dummy_accumulate;
   }
   return reg;
 }

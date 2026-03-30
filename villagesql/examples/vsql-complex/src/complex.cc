@@ -411,6 +411,62 @@ void complex_conjugate_impl(vef_context_t *ctx, vef_invalue_t *in,
   ReturnComplex(Complex{cx->re, -cx->im}, out);
 }
 
+// Aggregate: complex_sum(COMPLEX) -> COMPLEX
+// Sums complex values component-wise. Returns NULL for empty groups.
+
+struct ComplexSumState {
+  Complex total;
+  bool has_value;
+};
+
+void complex_sum_prerun(vef_context_t *ctx, vef_prerun_args_t *args,
+                        vef_prerun_result_t *result) {
+  result->user_data = new ComplexSumState{{0.0, 0.0}, false};
+  result->type = VEF_RESULT_VALUE;
+}
+
+void complex_sum_postrun(vef_context_t *ctx, vef_postrun_args_t *args,
+                         vef_postrun_result_t *result) {
+  delete static_cast<ComplexSumState *>(args->user_data);
+}
+
+void complex_sum_clear(vef_context_t *ctx, vef_vdf_args_t *args) {
+  auto *state = static_cast<ComplexSumState *>(args->user_data);
+  state->total = {0.0, 0.0};
+  state->has_value = false;
+}
+
+void complex_sum_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
+                            vef_vdf_result_t *result) {
+  auto *state = static_cast<ComplexSumState *>(args->user_data);
+  vef_invalue_t val = villagesql::func_builder::get_invalue(ctx, args, 0);
+  if (!val.is_null) {
+    auto cx = TryLoadFromInValue(&val);
+    if (!cx.has_value()) {
+      ReturnError("argument malformed", result);
+      return;
+    }
+    state->total.re += cx->re;
+    state->total.im += cx->im;
+    state->has_value = true;
+  }
+}
+
+void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
+                        vef_vdf_result_t *out) {
+  auto *state = static_cast<ComplexSumState *>(args->user_data);
+  if (!state->has_value) {
+    out->type = VEF_RESULT_NULL;
+    return;
+  }
+  if (out->max_bin_len < kComplexSize) {
+    ReturnError("response buffer too small", out);
+    return;
+  }
+  state->total.canonicalize();
+  ReturnComplex(state->total, out);
+}
+
 // Type name NTTPs — required for auto-generating VDF names like
 // "COMPLEX::from_string" without macros. Each make_type<kName>() call uses
 // the pointer identity of kName to key independent static name buffers, so
@@ -499,4 +555,13 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
+                  .build())
+        // Aggregate functions
+        .func(make_func<&complex_sum_result>("complex_sum")
+                  .returns(COMPLEX)
+                  .param(COMPLEX)
+                  .clear<&complex_sum_clear>()
+                  .accumulate<&complex_sum_accumulate>()
+                  .prerun<&complex_sum_prerun>()
+                  .postrun<&complex_sum_postrun>()
                   .build()))
