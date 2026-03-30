@@ -415,20 +415,9 @@ void complex_conjugate_impl(vef_context_t *ctx, vef_invalue_t *in,
 // Sums complex values component-wise. Returns NULL for empty groups.
 
 struct ComplexSumState {
-  Complex total;
-  bool has_value;
+  Complex total{0.0, 0.0};
+  bool has_value = false;
 };
-
-void complex_sum_prerun(vef_context_t *ctx, vef_prerun_args_t *args,
-                        vef_prerun_result_t *result) {
-  result->user_data = new ComplexSumState{{0.0, 0.0}, false};
-  result->type = VEF_RESULT_VALUE;
-}
-
-void complex_sum_postrun(vef_context_t *ctx, vef_postrun_args_t *args,
-                         vef_postrun_result_t *result) {
-  delete static_cast<ComplexSumState *>(args->user_data);
-}
 
 void complex_sum_clear(vef_context_t *ctx, vef_vdf_args_t *args) {
   auto *state = static_cast<ComplexSumState *>(args->user_data);
@@ -560,8 +549,7 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_func<&complex_sum_result>("complex_sum")
                   .returns(COMPLEX)
                   .param(COMPLEX)
+                  .state<ComplexSumState>()
                   .clear<&complex_sum_clear>()
                   .accumulate<&complex_sum_accumulate>()
-                  .prerun<&complex_sum_prerun>()
-                  .postrun<&complex_sum_postrun>()
                   .build()))

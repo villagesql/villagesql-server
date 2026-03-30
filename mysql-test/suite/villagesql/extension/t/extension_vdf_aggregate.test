@@ -123,6 +123,48 @@ FROM t1
 GROUP BY category
 ORDER BY category;
 
+# vdf_concat: string aggregate with GROUP BY
+SELECT category, agg_vdf_ext.vdf_concat(category) AS names
+FROM t1
+GROUP BY category
+ORDER BY category;
+
+# vdf_concat: whole-table
+SELECT agg_vdf_ext.vdf_concat(category) AS all_cats FROM t1;
+
+# vdf_concat: empty table
+CREATE TABLE t_empty_str (id INT PRIMARY KEY, name VARCHAR(20));
+SELECT agg_vdf_ext.vdf_concat(name) AS result FROM t_empty_str;
+DROP TABLE t_empty_str;
+
+# vdf_max: raw ABI aggregate with GROUP BY
+SELECT category, agg_vdf_ext.vdf_max(val) AS max_val
+FROM t1
+GROUP BY category
+ORDER BY category;
+
+# vdf_max: whole-table
+SELECT agg_vdf_ext.vdf_max(val) AS max_val FROM t1;
+
+# vdf_max with NULLs
+CREATE TABLE t_nulls2 (id INT PRIMARY KEY, val INT, category VARCHAR(20));
+INSERT INTO t_nulls2 VALUES (1, 10, 'A'), (2, NULL, 'A'), (3, NULL, 'B');
+SELECT category, agg_vdf_ext.vdf_max(val) AS max_val
+FROM t_nulls2
+GROUP BY category
+ORDER BY category;
+DROP TABLE t_nulls2;
+
+# All four aggregates in one query
+SELECT category,
+  agg_vdf_ext.vdf_sum(val) AS total,
+  agg_vdf_ext.vdf_count(val) AS cnt,
+  agg_vdf_ext.vdf_max(val) AS max_val,
+  agg_vdf_ext.vdf_concat(category) AS cats
+FROM t1
+GROUP BY category
+ORDER BY category;
+
 # Cleanup
 DROP TABLE t1;
 
