@@ -1,4 +1,8 @@
-![VillageSQL Logo](https://villagesql.com/assets/logo-light.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://villagesql.com/assets/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://villagesql.com/assets/logo-light.svg">
+  <img alt="VillageSQL Logo" src="https://villagesql.com/assets/logo-light.svg">
+</picture>
 
 # VillageSQL Server
 
