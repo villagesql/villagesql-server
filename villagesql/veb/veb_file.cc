@@ -949,6 +949,7 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
                 type_name.c_str(), extension_name.c_str());
         return true;
       }
+      // TODO(villagesql-beta): Refactor this for less code duplication.
       if (td->encode_vdf_name != nullptr) {
         if (validate_type_method_vdf_name(td->encode_vdf_name, td->name,
                                           "encode_vdf_name", extension_name)) {
