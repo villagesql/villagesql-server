@@ -18,11 +18,11 @@
 // "WRONGTYPE::from_string". The :: prefix does not match the type name, so
 // INSTALL EXTENSION must fail.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstring>
 
-bool mytype_encode(std::string_view from, villagesql::Span<unsigned char> buf,
+bool mytype_encode(std::string_view from, vsql::Span<unsigned char> buf,
                    size_t *length) {
   if (buf.size() < 4) return true;
   size_t to_copy = from.size() < buf.size() ? from.size() : buf.size();
@@ -31,8 +31,8 @@ bool mytype_encode(std::string_view from, villagesql::Span<unsigned char> buf,
   return false;
 }
 
-bool mytype_decode(villagesql::Span<const unsigned char> data,
-                   villagesql::Span<char> out, size_t *out_len) {
+bool mytype_decode(vsql::Span<const unsigned char> data,
+                   vsql::Span<char> out, size_t *out_len) {
   if (data.size() == 0) return true;
   size_t to_copy = data.size() < out.size() ? data.size() : out.size();
   memcpy(out.data(), data.data(), to_copy);
@@ -40,8 +40,8 @@ bool mytype_decode(villagesql::Span<const unsigned char> data,
   return false;
 }
 
-int mytype_compare(villagesql::Span<const unsigned char> a,
-                   villagesql::Span<const unsigned char> b) {
+int mytype_compare(vsql::Span<const unsigned char> a,
+                   vsql::Span<const unsigned char> b) {
   size_t min_len = a.size() < b.size() ? a.size() : b.size();
   int r = memcmp(a.data(), b.data(), min_len);
   if (r != 0) return r;

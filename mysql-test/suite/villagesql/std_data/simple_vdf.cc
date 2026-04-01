@@ -17,34 +17,27 @@
 // Simple test UDFs for extension testing.
 // Provides basic integer and string returning functions.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstring>
 
+using namespace vsql;
+
 // Returns a constant integer value (42)
-void simple_int_func_impl(vef_context_t *ctx, vef_vdf_result_t *out) {
-  out->int_value = 42;
-  out->type = VEF_RESULT_VALUE;
-}
+void simple_int_func_impl(IntResult out) { out.set(42); }
 
 // Returns a constant string value ("Hello from UDF")
-void simple_string_func_impl(vef_context_t *ctx, vef_vdf_result_t *out) {
+void simple_string_func_impl(StringResult out) {
   const char *msg = "Hello from UDF";
   size_t len = strlen(msg);
-  memcpy(out->str_buf, msg, len);
-  out->actual_len = len;
-  out->type = VEF_RESULT_VALUE;
+  auto buf = out.buffer();
+  memcpy(buf.data(), msg, len);
+  out.set_length(len);
 }
 
 // Returns the length of the input string
-void simple_test_impl(vef_context_t *ctx, vef_invalue_t *input,
-                      vef_vdf_result_t *out) {
-  if (input->is_null) {
-    out->int_value = 0;
-  } else {
-    out->int_value = static_cast<long long>(input->str_len);
-  }
-  out->type = VEF_RESULT_VALUE;
+void simple_test_impl(StringArg input, IntResult out) {
+  out.set(input.is_null() ? 0 : static_cast<long long>(input.value().size()));
 }
 
 VEF_GENERATE_ENTRY_POINTS(

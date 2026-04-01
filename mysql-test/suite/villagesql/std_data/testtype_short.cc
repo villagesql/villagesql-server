@@ -17,57 +17,52 @@
 // TESTTYPE implementation with short precision (%.6g format)
 // Stores two doubles (real and imaginary) as 16 bytes.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstdio>
 #include <cstring>
+#include <string_view>
 
 static const size_t kTestTypeLen = 16;
 
-bool encode_testtype(unsigned char *buffer, size_t buffer_size,
-                     const char *from, size_t from_len, size_t *length) {
+bool encode_testtype(std::string_view from, vsql::Span<unsigned char> to,
+                     size_t *length) {
   double real = 0, imag = 0;
   char temp[256];
-  size_t copy_len = from_len < sizeof(temp) - 1 ? from_len : sizeof(temp) - 1;
-  memcpy(temp, from, copy_len);
+  size_t copy_len =
+      from.size() < sizeof(temp) - 1 ? from.size() : sizeof(temp) - 1;
+  memcpy(temp, from.data(), copy_len);
   temp[copy_len] = '\0';
   sscanf(temp, " ( %lf , %lf )", &real, &imag);
-  memcpy(buffer, &real, 8);
-  memcpy(buffer + 8, &imag, 8);
+  memcpy(to.data(), &real, 8);
+  memcpy(to.data() + 8, &imag, 8);
   *length = kTestTypeLen;
   return false;
 }
 
-bool decode_testtype_short(const unsigned char *buffer, size_t buffer_size,
-                           char *to, size_t to_buffer_size, size_t *to_length) {
+bool decode_testtype_short(vsql::Span<const unsigned char> from,
+                           vsql::Span<char> to, size_t *to_length) {
   double real, imag;
-  memcpy(&real, buffer, 8);
-  memcpy(&imag, buffer + 8, 8);
-  *to_length = snprintf(to, to_buffer_size, "(%.6g,%.6g)", real, imag);
+  memcpy(&real, from.data(), 8);
+  memcpy(&imag, from.data() + 8, 8);
+  *to_length = snprintf(to.data(), to.size(), "(%.6g,%.6g)", real, imag);
   return false;
 }
 
-int cmp_testtype(const unsigned char *data1, size_t len1,
-                 const unsigned char *data2, size_t len2) {
-  return memcmp(data1, data2, kTestTypeLen);
+int cmp_testtype(vsql::Span<const unsigned char> a,
+                 vsql::Span<const unsigned char> b) {
+  return memcmp(a.data(), b.data(), kTestTypeLen);
 }
 
-using namespace villagesql::extension_builder;
-using namespace villagesql::func_builder;
-using namespace villagesql::type_builder;
+static constexpr const char kTestTypeName[] = "TESTTYPE";
 
-constexpr const char *TESTTYPE = "TESTTYPE";
+constexpr auto TESTTYPE = vsql::make_type<kTestTypeName>()
+                              .persisted_length(kTestTypeLen)
+                              .max_decode_buffer_length(64)
+                              .from_string<&encode_testtype>()
+                              .to_string<&decode_testtype_short>()
+                              .compare<&cmp_testtype>()
+                              .build();
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
-        .type(make_type(TESTTYPE)
-                  .persisted_length(kTestTypeLen)
-                  .max_decode_buffer_length(64)
-                  .encode(&encode_testtype)
-                  .decode(&decode_testtype_short)
-                  .compare(&cmp_testtype)
-                  .build())
-        .func(make_func("testtype_from_string")
-                  .from_string<&encode_testtype>(TESTTYPE))
-        .func(make_func("testtype_to_string")
-                  .to_string<&decode_testtype_short>(TESTTYPE)))
+    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest").type(TESTTYPE))

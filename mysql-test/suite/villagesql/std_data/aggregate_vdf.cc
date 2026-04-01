@@ -38,13 +38,12 @@
 // Also includes simple_double(INT) -> INT as a scalar VDF for testing mixed
 // scalar/aggregate queries.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <optional>
 #include <string>
 
-using villagesql::IntArg;
-using villagesql::IntResult;
+using namespace vsql;
 
 // vdf_sum: aggregate that sums INT values, returns NULL for empty groups.
 // State is optional<long long> — nullopt means no non-NULL values seen.
@@ -82,7 +81,7 @@ using ConcatState = std::optional<std::string>;
 
 void vdf_concat_clear(ConcatState &state) { state = std::nullopt; }
 
-void vdf_concat_accumulate(ConcatState &state, villagesql::StringArg val) {
+void vdf_concat_accumulate(ConcatState &state, StringArg val) {
   if (!val.is_null()) {
     if (state.has_value()) {
       state->append(",");

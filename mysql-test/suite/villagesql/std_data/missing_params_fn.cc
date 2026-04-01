@@ -36,23 +36,23 @@ struct FakeParams {
 // will route through the params cache. .params<FakeParams,
 // &FakeParams::parse>() is intentionally omitted from the type builder below.
 bool faketype_encode(const FakeParams &, std::string_view from,
-                     villagesql::Span<unsigned char> buf, size_t *length) {
+                     vsql::Span<unsigned char> buf, size_t *length) {
   size_t n = from.size() < buf.size() ? from.size() : buf.size();
   memcpy(buf.data(), from.data(), n);
   *length = n;
   return false;
 }
 
-bool faketype_decode(villagesql::Span<const unsigned char> data,
-                     villagesql::Span<char> out, size_t *out_len) {
+bool faketype_decode(vsql::Span<const unsigned char> data,
+                     vsql::Span<char> out, size_t *out_len) {
   size_t n = data.size() < out.size() ? data.size() : out.size();
   memcpy(out.data(), data.data(), n);
   *out_len = n;
   return false;
 }
 
-int faketype_compare(villagesql::Span<const unsigned char> a,
-                     villagesql::Span<const unsigned char> b) {
+int faketype_compare(vsql::Span<const unsigned char> a,
+                     vsql::Span<const unsigned char> b) {
   size_t n = a.size() < b.size() ? a.size() : b.size();
   int r = memcmp(a.data(), b.data(), n);
   if (r != 0) return r;

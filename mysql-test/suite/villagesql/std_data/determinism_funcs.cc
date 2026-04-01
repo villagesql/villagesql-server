@@ -17,28 +17,26 @@
 // Test extension with one deterministic VDF and one non-deterministic VDF.
 // Used to verify that only deterministic VDFs are allowed in CHECK constraints.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
+
+using namespace vsql;
 
 // Returns val + 1. Declared deterministic.
-void deterministic_inc_impl(vef_context_t *ctx, vef_invalue_t *val,
-                            vef_vdf_result_t *out) {
-  if (val->is_null) {
-    out->type = VEF_RESULT_NULL;
+void deterministic_inc_impl(IntArg val, IntResult out) {
+  if (val.is_null()) {
+    out.set_null();
     return;
   }
-  out->int_value = val->int_value + 1;
-  out->type = VEF_RESULT_VALUE;
+  out.set(val.value() + 1);
 }
 
 // Returns val * 2. Not declared deterministic.
-void nondeterministic_func_impl(vef_context_t *ctx, vef_invalue_t *val,
-                                vef_vdf_result_t *out) {
-  if (val->is_null) {
-    out->type = VEF_RESULT_NULL;
+void nondeterministic_func_impl(IntArg val, IntResult out) {
+  if (val.is_null()) {
+    out.set_null();
     return;
   }
-  out->int_value = val->int_value * 2;
-  out->type = VEF_RESULT_VALUE;
+  out.set(val.value() * 2);
 }
 
 VEF_GENERATE_ENTRY_POINTS(

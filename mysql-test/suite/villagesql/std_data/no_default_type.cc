@@ -28,7 +28,7 @@ static const int64_t kLen = 4;
 // Encode: only accepts "(N)" format. Empty string and other invalid inputs
 // fail.
 bool no_default_encode(std::string_view from,
-                       villagesql::Span<unsigned char> buffer, size_t *length) {
+                       vsql::Span<unsigned char> buffer, size_t *length) {
   unsigned int nn = 0;
   char tmp[64];
   size_t copy = from.size() < sizeof(tmp) - 1 ? from.size() : sizeof(tmp) - 1;
@@ -42,8 +42,8 @@ bool no_default_encode(std::string_view from,
   return false;
 }
 
-bool no_default_decode(villagesql::Span<const unsigned char> buffer,
-                       villagesql::Span<char> out, size_t *out_len) {
+bool no_default_decode(vsql::Span<const unsigned char> buffer,
+                       vsql::Span<char> out, size_t *out_len) {
   if (buffer.size() < static_cast<size_t>(kLen)) return true;
   int written = snprintf(out.data(), out.size(), "(%u)", buffer[0]);
   if (written < 0) return true;
@@ -51,8 +51,8 @@ bool no_default_decode(villagesql::Span<const unsigned char> buffer,
   return false;
 }
 
-int no_default_compare(villagesql::Span<const unsigned char>,
-                       villagesql::Span<const unsigned char>) {
+int no_default_compare(vsql::Span<const unsigned char>,
+                       vsql::Span<const unsigned char>) {
   return 0;
 }
 

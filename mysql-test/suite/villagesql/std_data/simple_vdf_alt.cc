@@ -18,23 +18,22 @@
 // Used to test ambiguous function name resolution when multiple extensions
 // provide the same function name.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstring>
 
+using namespace vsql;
+
 // Returns a different constant integer value (99)
-void simple_int_func_impl(vef_context_t *ctx, vef_vdf_result_t *out) {
-  out->int_value = 99;
-  out->type = VEF_RESULT_VALUE;
-}
+void simple_int_func_impl(IntResult out) { out.set(99); }
 
 // Returns a different constant string value
-void alt_string_func_impl(vef_context_t *ctx, vef_vdf_result_t *out) {
+void alt_string_func_impl(StringResult out) {
   const char *msg = "Hello from alt extension";
   size_t len = strlen(msg);
-  memcpy(out->str_buf, msg, len);
-  out->actual_len = len;
-  out->type = VEF_RESULT_VALUE;
+  auto buf = out.buffer();
+  memcpy(buf.data(), msg, len);
+  out.set_length(len);
 }
 
 VEF_GENERATE_ENTRY_POINTS(
