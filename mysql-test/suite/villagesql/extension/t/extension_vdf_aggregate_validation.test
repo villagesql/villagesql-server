@@ -1,8 +1,6 @@
 # Test aggregate VDF registration validation
 # Verifies that extensions with mismatched clear/accumulate callbacks are rejected.
 
---echo # Test Aggregate VDF Registration Validation
-
 # Setup VEB directory for testing
 --let $veb_dir = $MYSQLTEST_VARDIR/veb
 --exec mkdir -p $veb_dir
@@ -14,23 +12,18 @@ call mtr.add_suppression("Aggregate VDF.*must provide both clear and accumulate"
 --let $restart_parameters = restart: --veb-dir=$veb_dir
 --source include/restart_mysqld.inc
 
---echo #
---echo # Test: accumulate set but clear missing (should fail)
---echo #
---let $extension_name = agg_add_only
+# Test: accumulate set but clear missing (should fail)
+--let $extension_name = agg_accumulate_only
 --let $extension_version = 1.0.0
---let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf_add_only.cc
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf_accumulate_only.cc
 --source include/villagesql/create_extension_sdk.inc
 
 --error ER_VILLAGESQL_GENERIC_ERROR
-INSTALL EXTENSION agg_add_only;
+INSTALL EXTENSION agg_accumulate_only;
 
---echo # Verify extension was NOT installed
-SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_add_only';
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_accumulate_only';
 
---echo #
---echo # Test: clear set but accumulate missing (should fail)
---echo #
+# Test: clear set but accumulate missing (should fail)
 --let $extension_name = agg_clear_only
 --let $extension_version = 1.0.0
 --let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf_clear_only.cc
@@ -39,5 +32,4 @@ SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_a
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION agg_clear_only;
 
---echo # Verify extension was NOT installed
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_clear_only';

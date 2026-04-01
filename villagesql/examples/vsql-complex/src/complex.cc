@@ -414,15 +414,11 @@ void complex_conjugate_impl(vef_context_t *ctx, vef_invalue_t *in,
 // Aggregate: complex_sum(COMPLEX) -> COMPLEX
 // Sums complex values component-wise. Returns NULL for empty groups.
 
-struct ComplexSumState {
-  Complex total{0.0, 0.0};
-  bool has_value = false;
-};
+using ComplexSumState = std::optional<Complex>;
 
 void complex_sum_clear(vef_context_t *ctx, vef_vdf_args_t *args) {
   auto *state = static_cast<ComplexSumState *>(args->user_data);
-  state->total = {0.0, 0.0};
-  state->has_value = false;
+  *state = std::nullopt;
 }
 
 void complex_sum_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
@@ -435,16 +431,17 @@ void complex_sum_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
       ReturnError("argument malformed", result);
       return;
     }
-    state->total.re += cx->re;
-    state->total.im += cx->im;
-    state->has_value = true;
+    Complex total = state->value_or(Complex{0.0, 0.0});
+    total.re += cx->re;
+    total.im += cx->im;
+    *state = total;
   }
 }
 
 void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
                         vef_vdf_result_t *out) {
   auto *state = static_cast<ComplexSumState *>(args->user_data);
-  if (!state->has_value) {
+  if (!state->has_value()) {
     out->type = VEF_RESULT_NULL;
     return;
   }
@@ -452,8 +449,9 @@ void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
     ReturnError("response buffer too small", out);
     return;
   }
-  state->total.canonicalize();
-  ReturnComplex(state->total, out);
+  Complex total = state->value();
+  total.canonicalize();
+  ReturnComplex(total, out);
 }
 
 // Type name NTTPs — required for auto-generating VDF names like

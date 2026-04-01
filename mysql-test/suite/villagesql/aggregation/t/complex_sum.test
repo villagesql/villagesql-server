@@ -1,0 +1,57 @@
+# Test complex_sum aggregate VDF on COMPLEX custom type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE complex_test (
+  id INT PRIMARY KEY,
+  value vsql_complex.COMPLEX,
+  category VARCHAR(20)
+);
+
+INSERT INTO complex_test VALUES
+  (1, '(1.0, 2.0)', 'A'),
+  (2, '(3.0, 4.0)', 'A'),
+  (3, '(10.0, 20.0)', 'B'),
+  (4, '(5.0, 1.0)', 'B'),
+  (5, '(0.5, 0.5)', 'B');
+
+# Sum with GROUP BY
+SELECT category, vsql_complex.complex_sum(value) AS total
+FROM complex_test
+GROUP BY category
+ORDER BY category;
+
+# Whole-table sum
+SELECT vsql_complex.complex_sum(value) AS total
+FROM complex_test;
+
+# Sum on empty table
+CREATE TABLE complex_empty (id INT PRIMARY KEY, value vsql_complex.COMPLEX);
+SELECT vsql_complex.complex_sum(value) AS total
+FROM complex_empty;
+DROP TABLE complex_empty;
+
+# Sum with NULLs
+CREATE TABLE complex_nulls (
+  id INT PRIMARY KEY,
+  value vsql_complex.COMPLEX,
+  category VARCHAR(20)
+);
+INSERT INTO complex_nulls VALUES
+  (1, '(1.0, 2.0)', 'A'),
+  (2, NULL, 'A'),
+  (3, '(3.0, 4.0)', 'A'),
+  (4, NULL, 'B'),
+  (5, NULL, 'B');
+
+SELECT category, vsql_complex.complex_sum(value) AS total
+FROM complex_nulls
+GROUP BY category
+ORDER BY category;
+
+DROP TABLE complex_nulls;
+
+# Cleanup
+DROP TABLE complex_test;
+
+--source include/villagesql/uninstall_complex_extension.inc
