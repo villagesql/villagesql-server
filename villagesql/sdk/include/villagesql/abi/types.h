@@ -185,7 +185,7 @@ typedef struct {
   unsigned int patch;
 
   // Owned by whoever owns this struct.
-  unsigned char *extra;
+  const char *extra;
 } vef_version_t;
 
 // Context passed to all function calls (prerun, vdf, postrun)

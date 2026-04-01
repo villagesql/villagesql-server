@@ -24,12 +24,15 @@ namespace villagesql {
 namespace detail {
 
 // SDK version reported to the server during vef_register(). Matches the
-// VillageSQL server version this SDK was built from. The extra (pre-release)
-// field is not set here because vef_version_t::extra is a non-const pointer
-// that cannot be initialised in a constexpr context.
+// VillageSQL server version this SDK was built from.
+#if @VSQL_HAS_PRE_RELEASE@
 constexpr vef_version_t kSdkVersion = {
     @VSQL_MAJOR_VERSION@, @VSQL_MINOR_VERSION@, @VSQL_PATCH_VERSION@,
-    nullptr};
+    "@VSQL_PRE_RELEASE_VERSION@"};
+#else
+constexpr vef_version_t kSdkVersion = {
+    @VSQL_MAJOR_VERSION@, @VSQL_MINOR_VERSION@, @VSQL_PATCH_VERSION@, nullptr};
+#endif
 
 }  // namespace detail
 }  // namespace villagesql
