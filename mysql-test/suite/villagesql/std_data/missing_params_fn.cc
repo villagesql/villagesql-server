@@ -16,7 +16,7 @@
 // Test extension: parameterized encode VDF registered without .params<>().
 // vef_register should fail immediately rather than crashing on first VDF call.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstddef>
 #include <cstring>
@@ -59,24 +59,19 @@ int faketype_compare(villagesql::Span<const unsigned char> a,
   return static_cast<int>(a.size()) - static_cast<int>(b.size());
 }
 
-using namespace villagesql::extension_builder;
-using namespace villagesql::func_builder;
-using namespace villagesql::type_builder;
-
-constexpr const char *FAKETYPE = "FAKETYPE";
+static constexpr const char kFakeTypeName[] = "FAKETYPE";
 
 // .params<FakeParams, &FakeParams::parse>() is deliberately omitted so that
 // the params cache is never bound. vef_register should detect this and fail.
+constexpr auto FAKETYPE = vsql::make_type<kFakeTypeName>()
+                              .persisted_length(64)
+                              .max_decode_buffer_length(64)
+                              .from_string<&faketype_encode>()
+                              .to_string<&faketype_decode>()
+                              .compare<&faketype_compare>()
+                              .build();
+
+using namespace vsql;
+
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
-        .type(make_type(FAKETYPE)
-                  .persisted_length(64)
-                  .max_decode_buffer_length(64)
-                  .encode("faketype_encode")
-                  .decode("faketype_decode")
-                  .compare("faketype_compare")
-                  .build())
-        .func(make_type_encode<&faketype_encode>("faketype_encode", FAKETYPE))
-        .func(make_type_decode<&faketype_decode>("faketype_decode", FAKETYPE))
-        .func(make_type_compare<&faketype_compare>("faketype_compare",
-                                                   FAKETYPE)))
+    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest").type(FAKETYPE))

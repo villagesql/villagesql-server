@@ -78,6 +78,24 @@ struct ExtensionBuilder {
         name_, version_, funcs_, new_types, new_min};
   }
 
+  // Add a type object that carries embedded SQL-callable VDFs (e.g. the
+  // vsql::TypeObject<EFT> produced by vsql::make_type().build()). The type
+  // descriptor and its embedded VDFs are both registered in one call.
+  // Selected by overload resolution when the argument has an embedded_funcs
+  // member (preferred over the TypeDescriptor overload as an exact match).
+  template <typename TypeObj,
+            typename = decltype(std::declval<TypeObj>().embedded_funcs)>
+  constexpr auto type(const TypeObj &t) const {
+    auto new_types = std::tuple_cat(types_, std::make_tuple(t.descriptor));
+    auto new_funcs = std::tuple_cat(funcs_, t.embedded_funcs);
+    const vef_protocol_t new_min =
+        t.descriptor.vef_desc.protocol > min_protocol_
+            ? t.descriptor.vef_desc.protocol
+            : min_protocol_;
+    return ExtensionBuilder<decltype(new_funcs), decltype(new_types)>{
+        name_, version_, new_funcs, new_types, new_min};
+  }
+
   // This is here only for testing, please don't depend on it.
   // Require a minimum VEF protocol version from the server.
   // If the server offers a lower protocol, registration will fail with an
@@ -146,6 +164,25 @@ void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
    ...);
 }
 
+// Calls init_name() on any func that has it (auto-named VDFs from the ::vsql
+// API). Must be called before vef_fill_func_ptrs() so that name buffers are
+// populated before materialize_func_desc reads them.
+template <typename T, typename = void>
+struct has_init_name : std::false_type {};
+template <typename T>
+struct has_init_name<
+    T, std::void_t<decltype(std::declval<const T &>().init_name())>>
+    : std::true_type {};
+
+template <typename Ext, size_t... Is>
+void vef_init_auto_names(const Ext &e, std::index_sequence<Is...>) {
+  auto init_one = [](const auto &f) {
+    using F = std::decay_t<decltype(f)>;
+    if constexpr (has_init_name<F>::value) f.init_name();
+  };
+  (init_one(e.template func_at<Is>()), ...);
+}
+
 // Returns the name of the first VDF that requires a bound params cache but
 // whose cache was not bound (i.e., .params<P, &parse_fn>() was omitted from
 // the type builder). Must be called after vef_init_type_params().
@@ -185,6 +222,7 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   static vef_type_desc_t *type_ptrs[TypeCount > 0 ? TypeCount : 1];
 
   if constexpr (FuncCount > 0) {
+    vef_init_auto_names(ext, std::make_index_sequence<FuncCount>{});
     vef_fill_func_ptrs(func_ptrs, ext, std::make_index_sequence<FuncCount>{});
   }
   if constexpr (TypeCount > 0) {

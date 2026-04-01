@@ -17,9 +17,9 @@
 // Test extension that requires VEF_PROTOCOL_2.
 // Used to verify that extensions can reject servers offering a lower protocol.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
-using namespace villagesql::extension_builder;
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(make_extension(VEF_EXTENSION_NAME, "7.7.7-devtest")
                               .test_only_require_protocol(VEF_PROTOCOL_2))

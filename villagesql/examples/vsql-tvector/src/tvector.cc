@@ -31,7 +31,7 @@
 // TVECTOR(3) with float stores 12 bytes (3 * 4). With double, 24 bytes (3 * 8).
 // Text format: "[1.0,2.0,3.0]" (comma-separated values in brackets)
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cinttypes>
 #include <cstddef>
@@ -333,30 +333,25 @@ void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
   out.set(sum);
 }
 
-constexpr const char *TVECTOR = "TVECTOR";
+static constexpr const char kTVectorTypeName[] = "TVECTOR";
+
+constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
+                             .persisted_length(-1)
+                             .max_decode_buffer_length(16)
+                             .params<TVectorParams, &TVectorParams::parse>()
+                             .int_to_params<&tvector_int_to_params>()
+                             .resolve_params<&tvector_resolve_params>()
+                             .from_string<&tvector_from_string>()
+                             .to_string<&tvector_to_string>()
+                             .compare<&tvector_compare>()
+                             .intrinsic_default_vdf("tvector_intrinsic_default")
+                             .build();
+
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension("vsql_tvector", "0.0.1")
-        .type(make_type(TVECTOR)
-                  .persisted_length(-1)
-                  .max_decode_buffer_length(16)
-                  .params<TVectorParams, &TVectorParams::parse>()
-                  .encode("tvector_from_string")
-                  .decode("tvector_to_string")
-                  .compare("tvector_compare")
-                  .int_to_params("tvector_int_to_params")
-                  .resolve_params("tvector_resolve_params")
-                  .intrinsic_default("tvector_intrinsic_default")
-                  .build())
-        .func(make_type_encode<&tvector_from_string>("tvector_from_string",
-                                                     TVECTOR))
-        .func(make_type_decode<&tvector_to_string>("tvector_to_string",
-                                                   TVECTOR))
-        .func(make_type_compare<&tvector_compare>("tvector_compare", TVECTOR))
-        .func(
-            make_int_to_params<&tvector_int_to_params>("tvector_int_to_params"))
-        .func(make_resolve_params<&tvector_resolve_params>(
-            "tvector_resolve_params"))
+        .type(TVECTOR)
         .func(make_intrinsic_default<&tvector_default>(
             "tvector_intrinsic_default", TVECTOR))
         .func(make_func<&tvector_dot_product>("tvector_dot_product")

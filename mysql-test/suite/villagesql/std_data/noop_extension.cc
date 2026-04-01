@@ -18,8 +18,8 @@
 // Used for testing extension installation/uninstallation without any
 // functions or types.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
-using namespace villagesql::extension_builder;
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest"))

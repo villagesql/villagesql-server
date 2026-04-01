@@ -17,7 +17,7 @@
 // and an encode function that rejects empty string. Used to verify that
 // CREATE TABLE fails when a type has no valid intrinsic default.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstddef>
 #include <cstring>
@@ -56,21 +56,17 @@ int no_default_compare(villagesql::Span<const unsigned char>,
   return 0;
 }
 
-using namespace villagesql::extension_builder;
-using namespace villagesql::type_builder;
+static constexpr const char kNoDefaultTypeName[] = "NO_DEFAULT_TYPE";
+
+constexpr auto NO_DEFAULT_TYPE = vsql::make_type<kNoDefaultTypeName>()
+                                     .persisted_length(kLen)
+                                     .max_decode_buffer_length(16)
+                                     .from_string<&no_default_encode>()
+                                     .to_string<&no_default_decode>()
+                                     .compare<&no_default_compare>()
+                                     .build();
+
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
-        .type(make_type("NO_DEFAULT_TYPE")
-                  .persisted_length(kLen)
-                  .max_decode_buffer_length(16)
-                  .encode("no_default_encode")
-                  .decode("no_default_decode")
-                  .compare("no_default_compare")
-                  .build())
-        .func(make_type_encode<&no_default_encode>("no_default_encode",
-                                                   "NO_DEFAULT_TYPE"))
-        .func(make_type_decode<&no_default_decode>("no_default_decode",
-                                                   "NO_DEFAULT_TYPE"))
-        .func(make_type_compare<&no_default_compare>("no_default_compare",
-                                                     "NO_DEFAULT_TYPE")))
+    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest").type(NO_DEFAULT_TYPE))

@@ -24,9 +24,9 @@
 // Minimal VEF extension that deliberately registers a name different from
 // the VEB package name. Used for testing extension name mismatch validation.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
-using namespace villagesql::extension_builder;
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(make_extension("wrong_registered_name",
                                          "0.0.1-devtest"))

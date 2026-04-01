@@ -58,6 +58,7 @@ add_custom_target(sdk ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/lib/cmake/VillageSQLExtensionFramework"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include/villagesql/abi"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include-dev/villagesql/abi"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include-dev/villagesql/vsql"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/template/src"
 
   # Copy villagesql_config script and make executable
@@ -93,12 +94,16 @@ add_custom_target(sdk ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_params_cache.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql.h"
     "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/"
   COMMAND ${CMAKE_COMMAND} -E copy
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/storage.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/types.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/abi/"
+  COMMAND ${CMAKE_COMMAND} -E copy
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/type_builder.h"
+    "${SDK_STAGING_DIR}/include-dev/villagesql/vsql/"
 
   # Copy template project
   COMMAND ${CMAKE_COMMAND} -E copy

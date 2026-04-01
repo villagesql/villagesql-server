@@ -6,7 +6,7 @@ Created missing_params_fn.veb
 # Attempt to install extension with parameterized VDF but no parse function
 # (should fail: vef_register detects unbound params cache)
 INSTALL EXTENSION missing_params_fn;
-ERROR HY000: Failed to load VEF extension 'missing_params_fn': vef_register returned an error: VDF 'faketype_encode' uses a parameterized type cache but no .params<P, &parse_fn>() was registered for that params type; add .params<P, &parse_fn>() to the type builder
+ERROR HY000: Failed to load VEF extension 'missing_params_fn': vef_register returned an error: VDF 'FAKETYPE::from_string' uses a parameterized type cache but no .params<P, &parse_fn>() was registered for that params type; add .params<P, &parse_fn>() to the type builder
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION

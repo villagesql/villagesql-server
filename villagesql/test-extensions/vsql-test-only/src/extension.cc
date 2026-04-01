@@ -51,7 +51,7 @@
 //                 Any other input is rejected by encode with an assert-style
 //                 error, so tests cannot silently pass unexpected values.
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cassert>
 #include <cstddef>
@@ -170,29 +170,23 @@ static void test_result_kind(villagesql::StringArg input,
   out.set(42);
 }
 
-constexpr const char *FAULT_BLOB = "FAULT_BLOB";
+static constexpr const char kFaultBlobTypeName[] = "FAULT_BLOB";
+
+constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
+                                .persisted_length(kFaultBlobSize)
+                                .max_decode_buffer_length(kFaultBlobSize)
+                                .from_string<&fault_blob_encode>()
+                                .to_string<&fault_blob_decode>()
+                                .compare<&fault_blob_compare>()
+                                .build();
+
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension("vsql_test_only", "0.0.1")
-
         // FAULT_BLOB type: behaviour controlled by
         // "OK"/"DECODE_FAIL"/"ENCODE_FAIL" prefix
-        .type(make_type(FAULT_BLOB)
-                  .persisted_length(kFaultBlobSize)
-                  .max_decode_buffer_length(kFaultBlobSize)
-                  .encode("fault_blob_encode")
-                  .decode("fault_blob_decode")
-                  .compare("fault_blob_compare")
-                  .build())
-
-        // Type operation VDFs for FAULT_BLOB
-        .func(make_type_encode<&fault_blob_encode>("fault_blob_encode",
-                                                   FAULT_BLOB))
-        .func(make_type_decode<&fault_blob_decode>("fault_blob_decode",
-                                                   FAULT_BLOB))
-        .func(make_type_compare<&fault_blob_compare>("fault_blob_compare",
-                                                     FAULT_BLOB))
-
+        .type(FAULT_BLOB)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)

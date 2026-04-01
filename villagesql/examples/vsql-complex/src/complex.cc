@@ -26,7 +26,7 @@
 // The COMPLEX type stores complex numbers as two IEEE 754 doubles (16 bytes).
 // Format: "(real,imaginary)" e.g., "(3.14,2.71)"
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cassert>
 #include <cmath>
@@ -411,46 +411,50 @@ void complex_conjugate_impl(vef_context_t *ctx, vef_invalue_t *in,
   ReturnComplex(Complex{cx->re, -cx->im}, out);
 }
 
-constexpr const char *COMPLEX = "COMPLEX";
-constexpr const char *COMPLEX2 = "COMPLEX2";
+// Type name NTTPs — required for auto-generating VDF names like
+// "COMPLEX::from_string" without macros. Each make_type<kName>() call uses
+// the pointer identity of kName to key independent static name buffers, so
+// two types sharing a function pointer (e.g. complex_to_string) still get
+// separate "COMPLEX::to_string" and "COMPLEX2::to_string" buffers.
+static constexpr const char kComplexTypeName[] = "COMPLEX";
+static constexpr const char kComplex2TypeName[] = "COMPLEX2";
+
+// Type objects: encode/decode/compare/hash VDFs are embedded with
+// auto-generated names ("COMPLEX::from_string" etc.) — no manual string
+// matching required.
+constexpr auto COMPLEX =
+    vsql::make_type<kComplexTypeName>()
+        .persisted_length(kComplexSize)
+        .max_decode_buffer_length(64)
+        .from_string<&complex_from_string>()  // auto: "COMPLEX::from_string"
+        .to_string<&complex_to_string>()      // auto: "COMPLEX::to_string"
+        .compare<&complex_compare>()          // auto: "COMPLEX::compare"
+        .intrinsic_default_str("(0,0)")
+        .build();
+
+// COMPLEX2 has a custom hash (to canonicalize -0 before hashing)
+constexpr auto COMPLEX2 =
+    vsql::make_type<kComplex2TypeName>()
+        .persisted_length(kComplexSize)
+        .max_decode_buffer_length(64)
+        .from_string<&complex2_from_string>()  // auto: "COMPLEX2::from_string"
+        .to_string<&complex_to_string>()       // auto: "COMPLEX2::to_string"
+                                               // (separate buffer)
+        .compare<&complex_compare>()           // auto: "COMPLEX2::compare"
+        .hash<&complex2_hash>()                // auto: "COMPLEX2::hash"
+        .intrinsic_default_str("(0,0)")
+        .build();
+
+using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension("vsql_complex", "0.0.1")
-        // COMPLEX type with canonicalization (normalizes -0.0 to +0.0)
-        .type(make_type(COMPLEX)
-                  .persisted_length(kComplexSize)
-                  .max_decode_buffer_length(64)
-                  .encode("COMPLEX::from_string")
-                  .decode("COMPLEX::to_string")
-                  .compare("COMPLEX::compare")
-                  .intrinsic_default_str("(0,0)")
-                  .build())
-        // COMPLEX2 type without canonicalization (preserves -0.0)
-        // Requires custom hash that canonicalizes -0 to +0 before hashing
-        .type(make_type(COMPLEX2)
-                  .persisted_length(kComplexSize)
-                  .max_decode_buffer_length(64)
-                  .encode("COMPLEX2::from_string")
-                  .decode("COMPLEX2::to_string")
-                  .compare("COMPLEX2::compare")
-                  .hash("COMPLEX2::hash")
-                  .intrinsic_default_str("(0,0)")
-                  .build())
-        // Type conversion functions (also serve as encode/decode VDFs)
-        .func(make_type_encode<&complex_from_string>("COMPLEX::from_string",
-                                                     COMPLEX))
-        .func(make_type_decode<&complex_to_string>("COMPLEX::to_string",
-                                                   COMPLEX))
-        .func(make_type_encode<&complex2_from_string>("COMPLEX2::from_string",
-                                                      COMPLEX2))
-        .func(make_type_decode<&complex_to_string>("COMPLEX2::to_string",
-                                                   COMPLEX2))
-        // Compare and hash VDFs
-        .func(make_type_compare<&complex_compare>("COMPLEX::compare", COMPLEX))
-        .func(make_type_compare<&complex_compare>("COMPLEX2::compare",
-                                                  COMPLEX2))
-        .func(make_type_hash<&complex2_hash>("COMPLEX2::hash", COMPLEX2))
-        // Arithmetic functions
+         // COMPLEX type with canonicalization (normalizes -0.0 to +0.0)
+         .type(COMPLEX)
+         // COMPLEX2 type without canonicalization (preserves -0.0)
+         // Requires custom hash that canonicalizes -0 to +0 before hashing
+         .type(COMPLEX2)
+         // Arithmetic functions
         .func(make_func<&complex_add_impl>("complex_add")
                   .returns(COMPLEX)
                   .param(COMPLEX)
