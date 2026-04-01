@@ -61,10 +61,6 @@
 // Two types sharing the same function pointer still get independent VDF name
 // buffers because the (the kMyTypeName pointer value) differs per type.
 //
-// To use a non-SQL-callable operation (v1 ABI direct function pointer, faster),
-// pass the raw ABI function pointer instead:
-//   .from_string(raw_abi_encode_func_ptr)
-//
 // The resulting TypeObject converts implicitly to const char* so it can be
 // passed directly to .returns() and .param() on FuncBuilder:
 //
