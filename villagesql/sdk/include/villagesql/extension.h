@@ -128,6 +128,63 @@
 // you find that you need to use prerun or postrun functions, please come talk
 // to us so we can understand your use case.
 //
+//
+// AGGREGATE FUNCTIONS
+// -------------------
+//
+// Aggregate VDFs (like SQL SUM, COUNT, etc.) accumulate state across rows
+// within each GROUP BY group, then return a final result per group.
+//
+// The recommended approach uses .state<T>() with typed callbacks. Define a
+// state type, then write clear, accumulate, and result functions using C++
+// types:
+//
+//   using SumState = std::optional<long long>;
+//
+//   void my_clear(SumState &s)       { s = std::nullopt; }
+//   void my_acc(SumState &s, IntArg v) {
+//     if (!v.is_null()) s = s.value_or(0) + v.value();
+//   }
+//   std::optional<long long> my_result(const SumState &s) { return s; }
+//
+//   make_func<&my_result>("my_sum")
+//       .returns(INT)
+//       .param(INT)
+//       .state<SumState>()
+//       .clear<&my_clear>()
+//       .accumulate<&my_acc>()
+//       .build()
+//
+// How it works:
+//   - .state<T>() generates prerun (allocates T via value-initialization) and
+//     postrun (deletes T) automatically. T is stored in user_data.
+//   - .clear<&fn>() wraps void(State&) -> vef_vdf_clear_func_t
+//   - .accumulate<&fn>() wraps void(State&, TypedArgs...) ->
+//     vef_vdf_accumulate_func_t. TypedArgs are deduced from the function
+//     signature (IntArg, StringArg, etc.).
+//   - The result function (make_func template parameter) can return T directly
+//     (never NULL) or std::optional<T> (nullopt -> SQL NULL).
+//
+// For results that are never NULL (e.g., COUNT), use a plain state type:
+//
+//   using CountState = long long;
+//   void count_clear(CountState &s) { s = 0; }
+//   void count_acc(CountState &s, IntArg v) { if (!v.is_null()) s++; }
+//   long long count_result(const CountState &s) { return s; }
+//
+// You can also use the raw ABI directly for full control:
+//
+//   make_func<&raw_result>("my_agg")
+//       .returns(INT).param(INT)
+//       .prerun<&my_prerun>()      // void(ctx, prerun_args, prerun_result)
+//       .postrun<&my_postrun>()    // void(ctx, postrun_args, postrun_result)
+//       .clear<&my_clear>()        // void(ctx, vdf_args)
+//       .accumulate<&my_acc>()     // void(ctx, vdf_args, vdf_result)
+//       .build()
+//
+// See aggregate_vdf.cc in the test suite for complete examples of both styles.
+//
+//
 // DEFINING TYPES
 // --------------
 //

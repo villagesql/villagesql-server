@@ -5007,7 +5007,7 @@ void udf_handler::clear() {
 void udf_handler::add(bool *null_value) {
   assert(is_initialized());
   if (m_vdf) {
-    m_vdf->add(null_value);
+    m_vdf->accumulate(null_value);
     return;
   }
   if (get_arguments()) {

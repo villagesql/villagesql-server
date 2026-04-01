@@ -500,8 +500,14 @@ typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
                                    vef_postrun_result_t *result);
 
 // =============================================================================
-// Aggregate Function Callbacks
+// Aggregate Functions
 // =============================================================================
+//
+// When a VDF is registered as an aggregate (by setting both clear and
+// accumulate), the main `vdf` function pointer changes role: instead of being
+// called per row, it becomes the "result" function called once per group after
+// all rows have been accumulated. It should read the final state from
+// args->user_data and write the group's output value.
 
 // Reset aggregate state for a new group.
 // Called once at the start of each group. The extension should reset any
@@ -530,7 +536,9 @@ typedef struct {
 
   vef_signature_t *signature;
 
-  // Main function pointer (called for each row)
+  // Main function pointer. For scalar VDFs this is called once per row. For
+  // aggregates (clear and accumulate both set), this becomes the result
+  // function, called once per group to produce the final output value.
   vef_vdf_func_t vdf;
 
   // Optional functions (called once per statement execution)

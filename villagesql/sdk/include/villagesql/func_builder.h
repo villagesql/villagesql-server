@@ -105,9 +105,13 @@ constexpr const char *REAL = "REAL";
 // Forward declaration for internal helper (defined at end of file)
 constexpr vef_type_t to_vef_type(const char *name);
 
-// Non-constexpr function used to trigger compile errors when build() detects
-// invalid configuration during constant evaluation.
-void aggregate_must_set_both_clear_and_accumulate();
+// Deliberately unimplemented function used to produce a compile error. When
+// build() runs in a constexpr context (as it does inside VEF_GENERATE_ENTRY_POINTS),
+// calling a non-constexpr function is ill-formed. So if the aggregate
+// configuration is invalid (e.g., clear set without accumulate), the build()
+// method calls this function, which forces a compile error with a name that
+// explains what went wrong.
+void config_error__aggregate_must_set_both_clear_and_accumulate();
 
 // Auto-generated prerun/postrun for aggregate state management.
 // Use with .state<T>() on FuncBuilder to avoid writing boilerplate
@@ -1268,7 +1272,7 @@ struct FuncBuilder {
     // non-constexpr call produces a compile error. Also validated at
     // registration time as a safety net.
     if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
-      aggregate_must_set_both_clear_and_accumulate();
+      config_error__aggregate_must_set_both_clear_and_accumulate();
     }
 
     using AllParams = typename FuncParamTypes<decltype(Func)>::type;

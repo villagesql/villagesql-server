@@ -178,7 +178,7 @@ void vdf_handler::clear() {
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
-void vdf_handler::add(bool *null_value) {
+void vdf_handler::accumulate(bool *null_value) {
   marshal_args();
   vef_vdf_result_t result{};
   result.type = VEF_RESULT_VALUE;
