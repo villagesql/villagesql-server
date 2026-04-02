@@ -1159,12 +1159,21 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         std::move(hash_fn), std::move(int_to_params_fn),
         std::move(resolve_params_fn), std::move(storage_intf_fns));
 
-    if (intrinsic_default_vdf != nullptr)
+    if (intrinsic_default_vdf != nullptr) {
+      if (td->intrinsic_default_str != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' specifies both "
+                "intrinsic_default_vdf_name and intrinsic_default_str; "
+                "only one may be set",
+                type_name.c_str(), extension_name.c_str());
+        return true;
+      }
       descriptor.set_intrinsic_default_fn(
           IntrinsicDefaultFunction(intrinsic_default_vdf));
-    else if (td->intrinsic_default_str != nullptr)
+    } else if (td->intrinsic_default_str != nullptr) {
       descriptor.set_intrinsic_default_str(
           std::string(td->intrinsic_default_str));
+    }
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

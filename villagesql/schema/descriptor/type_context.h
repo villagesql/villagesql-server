@@ -295,6 +295,8 @@ class TypeContext {
   friend struct TableTraits<TypeContext>;
   friend class villagesql_unittest::TypeContextTest;
 
+  // Construct a TypeContext. Use TableTraits<TypeContext>::create() instead.
+  // The TypeDescriptor must have been obtained under the victionary lock.
   TypeContext(const TypeContextKey &key, const TypeDescriptor *descriptor);
 
   // Pre-encode the intrinsic default value. Called once by
