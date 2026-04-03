@@ -266,7 +266,6 @@ void dtype_print(const dtype_t *type) {
       fputs(" DATA_NOT_NULL", stderr);
     }
   }
-
   if (type->extended_storage) {
     fputs(" Extended Storage", stderr);
   }

@@ -489,7 +489,6 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
             << "InnoDB: Custom column allocate and fetch failed";
       }
     }
-
     dfield_set_data(dfield, field, len);
 
     if (rec_offs_nth_extern(index, offsets, i)) {

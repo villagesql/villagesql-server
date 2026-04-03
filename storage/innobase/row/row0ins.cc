@@ -2607,7 +2607,6 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
         dict_index_is_online_ddl(index)) {
       row_log_table_insert(insert_rec, entry, index, offsets);
     }
-
     mtr.commit();
 
     if (big_rec != nullptr) {

@@ -78,7 +78,6 @@ introduced where a call to log_free_check() is bypassed. */
   bool online;
 
   ut_ad(index->is_clustered());
-
   ut_ad(node->trx.in_rollback);
 
   using villagesql::innodb::Custom_column;
@@ -86,7 +85,6 @@ introduced where a call to log_free_check() is bypassed. */
   if (err != DB_SUCCESS) {
     return err;
   }
-
   mtr_start(&mtr);
 
   dict_disable_redo_if_temporary(index->table, &mtr);

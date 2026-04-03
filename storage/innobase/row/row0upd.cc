@@ -2994,7 +2994,6 @@ func_exit:
   err = btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(btr_cur),
                                        btr_cur_get_rec(btr_cur), index, offsets,
                                        thr, node->row, mtr);
-
   if (err == DB_SUCCESS && referenced) {
     /* NOTE that the following call loses the position of pcur ! */
 

@@ -139,7 +139,7 @@ enum dd_column_keys {
   DD_INSTANT_VERSION_DROPPED,
   /** Column physical position on row when it was created */
   DD_INSTANT_PHYSICAL_POS,
-  /** Exteneded storage reference, if stored in column storage */
+  /** Extended storage reference, if stored in column storage */
   DD_EXTENDED_STORAGE_REF,
   /** Sentinel */
   DD_COLUMN__LAST
