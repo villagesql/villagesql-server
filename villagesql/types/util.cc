@@ -1177,10 +1177,11 @@ static bool insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
   return false;
 }
 
-bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
-                                  const char *table_name,
-                                  List<Create_field> &create_fields) {
-  assert(!is_tmp_prefix(table_name));
+bool PrepareTmpTableCustomColumns(
+    THD *thd, const char *db, const char *table_name,
+    List<Create_field> &create_fields,
+    [[maybe_unused]] const HA_CREATE_INFO *create_info) {
+  assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
   List_iterator_fast<Create_field> it(create_fields);
   Create_field *cdef;
   while ((cdef = it++) != nullptr) {
@@ -1194,7 +1195,7 @@ bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
 
 bool AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
                                      List<Create_field> &create_fields) {
-  assert(!is_tmp_prefix(table->s->table_name.str));
+  assert(table->s->tmp_table != NO_TMP_TABLE);
   List_iterator_fast<Create_field> it(create_fields);
   Create_field *cdef;
   for (uint i = 0; i < table->s->fields && (cdef = it++); i++) {

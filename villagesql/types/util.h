@@ -73,7 +73,8 @@ extern bool ResolveTypeToContext(const LEX_STRING &extension_name,
 // Returns true on error (e.g. extension uninstalled concurrently).
 extern bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
                                          const char *table_name,
-                                         List<Create_field> &create_fields);
+                                         List<Create_field> &create_fields,
+                                         const HA_CREATE_INFO *create_info);
 
 // Copy custom type contexts from Create_field list to corresponding Fields in
 // a temporary TABLE, and update session metadata with shared_ptr-owned entries

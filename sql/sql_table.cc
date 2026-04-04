@@ -9200,8 +9200,8 @@ static bool create_table_impl(
     villagesql::PrepareAlterCustomFields(thd, alter_info->create_list);
   } else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
     // User facing temporary table.
-    if (villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
-                                                 alter_info->create_list))
+    if (villagesql::PrepareTmpTableCustomColumns(
+            thd, db, table_name, alter_info->create_list, create_info))
       return true;
   }
 
