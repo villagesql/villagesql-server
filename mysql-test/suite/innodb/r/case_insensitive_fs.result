@@ -35,6 +35,7 @@ mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppr
 test/t1	Single	DEFAULT	0	1	1	Dynamic	MYSQL_TMP_DIR/Known_Dir/test/t1.ibd
 ts1	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/Known_Dir/ts1.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -46,6 +47,7 @@ mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATA
 test/t1	TABLESPACE	InnoDB	NORMAL	test/t1	MYSQL_TMP_DIR/Known_Dir/test/t1.ibd
 ts1	TABLESPACE	InnoDB	NORMAL	ts1	MYSQL_TMP_DIR/Known_Dir/ts1.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 # Create an inplicit tablespace using UPPER case for a MIXED case folder.
@@ -80,6 +82,7 @@ ts1	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/Known_Dir/ts1.ibd
 ts2	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/KNOWN_DIR/ts2.ibd
 ts3	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/known_dir/ts3.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -95,6 +98,7 @@ ts1	TABLESPACE	InnoDB	NORMAL	ts1	MYSQL_TMP_DIR/Known_Dir/ts1.ibd
 ts2	TABLESPACE	InnoDB	NORMAL	ts2	MYSQL_TMP_DIR/KNOWN_DIR/ts2.ibd
 ts3	TABLESPACE	InnoDB	NORMAL	ts3	MYSQL_TMP_DIR/known_dir/ts3.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 #

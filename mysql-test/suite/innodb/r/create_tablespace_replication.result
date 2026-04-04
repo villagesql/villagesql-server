@@ -20,6 +20,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s_1	161	4	Dynamic	0	General
 test/t2	s_1	161	4	Dynamic	0	General
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 VALUES ( 11);
@@ -42,6 +43,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s_1	161	4	Dynamic	0	General
 test/t2	s_1	161	4	Dynamic	0	General
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 USE test;
@@ -72,6 +74,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # connection master

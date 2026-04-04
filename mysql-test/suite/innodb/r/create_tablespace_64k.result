@@ -65,6 +65,7 @@ mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
 s_64k	General	DEFAULT	0	1	1	Any	s_64k.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -75,6 +76,7 @@ mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_g
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
 s_64k	TABLESPACE	InnoDB	NORMAL	s_64k	MYSQLD_DATADIR/s_64k.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 #
@@ -154,6 +156,7 @@ mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
 s_64k	General	DEFAULT	0	1	1	Any	s_64k.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -164,6 +167,7 @@ mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_g
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
 s_64k	TABLESPACE	InnoDB	NORMAL	s_64k	MYSQLD_DATADIR/s_64k.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -176,6 +180,7 @@ test/t_com_in_64k	s_64k	129	5	Compact	0	General
 test/t_dyn_in_64k	s_64k	161	5	Dynamic	0	General
 test/t_red_in_64k	s_64k	128	5	Redundant	0	General
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/

@@ -10,6 +10,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	14	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO tab SET
@@ -59,6 +60,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	1	4	Compact	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE tab DISCARD TABLESPACE;
@@ -86,6 +88,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SET GLOBAL innodb_default_row_format=COMPACT;
@@ -109,6 +112,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE tab ROW_FORMAT=COMPACT;
@@ -120,6 +124,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	1	5	Compact	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT * FROM tab;
@@ -134,6 +139,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	41	5	Compressed	8192	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT * FROM tab;
@@ -148,6 +154,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE tab;

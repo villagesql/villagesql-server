@@ -138,6 +138,7 @@ SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME not like 'sys\/%'
 NAME
 villagesql/extensions
 villagesql/custom_columns
+villagesql/custom_sp_params
 villagesql/properties
 mtr/test_suppressions
 mtr/asserted_test_suppressions
@@ -337,6 +338,7 @@ SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME not like 'sys\/%'
 NAME
 villagesql/extensions
 villagesql/custom_columns
+villagesql/custom_sp_params
 villagesql/properties
 mtr/test_suppressions
 mtr/asserted_test_suppressions
@@ -365,6 +367,7 @@ SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME not like 'sys\/%'
 NAME
 villagesql/extensions
 villagesql/custom_columns
+villagesql/custom_sp_params
 villagesql/properties
 mtr/test_suppressions
 mtr/asserted_test_suppressions
@@ -404,6 +407,7 @@ SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME not like 'sys\/%'
 NAME
 villagesql/extensions
 villagesql/custom_columns
+villagesql/custom_sp_params
 villagesql/properties
 mtr/test_suppressions
 mtr/asserted_test_suppressions
@@ -443,6 +447,7 @@ SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME not like 'sys\/%'
 NAME
 villagesql/extensions
 villagesql/custom_columns
+villagesql/custom_sp_params
 villagesql/properties
 mtr/test_suppressions
 mtr/asserted_test_suppressions

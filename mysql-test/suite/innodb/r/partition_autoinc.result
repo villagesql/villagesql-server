@@ -63,6 +63,7 @@ LOWER(path)
 ./test/t1#p#p5.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -108,6 +109,7 @@ LOWER(path)
 ./test/t1#p#p7.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -212,6 +214,7 @@ LOWER(path)
 ./test/t1#p#p3.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -249,6 +252,7 @@ LOWER(path)
 ./test/t1#p#p1.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SELECT MAX(id) AS `Expect 6` FROM t1;
@@ -288,6 +292,7 @@ LOWER(path)
 ./test/t1#p#p3.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 ALTER TABLE t1 ALGORITHM = INPLACE, DROP PARTITION p0;
@@ -308,6 +313,7 @@ LOWER(path)
 ./test/t1#p#p3.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -355,6 +361,7 @@ LOWER(path)
 ./test/t1#p#p1.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -416,6 +423,7 @@ LOWER(path)
 ./test/t1#p#p5.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -456,6 +464,7 @@ LOWER(path)
 ./test/t1#p#p7.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -531,6 +540,7 @@ LOWER(path)
 ./test/t1#p#p5.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -575,6 +585,7 @@ LOWER(path)
 ./test/t1#p#p1.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 # restart
@@ -659,6 +670,7 @@ LOWER(path)
 ./test/t1#p#p3.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -721,6 +733,7 @@ LOWER(path)
 ./test/t1#p#p32.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -788,6 +801,7 @@ LOWER(path)
 ./test/t1#p#p32.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -886,6 +900,7 @@ LOWER(path)
 ./test/tp.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE tp;
@@ -938,6 +953,7 @@ LOWER(path)
 ./test/tp.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE tp;
@@ -1057,6 +1073,7 @@ LOWER(path)
 ./test/t1#p#p3#sp#sp31.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -1131,6 +1148,7 @@ LOWER(path)
 ./test/t1#p#p2#sp#sp21.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -1208,6 +1226,7 @@ LOWER(path)
 ./test/t1#p#p22#sp#sp221.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;
@@ -1256,6 +1275,7 @@ LOWER(path)
 ./test/t1#p#p22#sp#sp221.ibd
 ./test/tr.ibd
 ./villagesql/custom_columns.ibd
+./villagesql/custom_sp_params.ibd
 ./villagesql/extensions.ibd
 ./villagesql/properties.ibd
 SHOW CREATE TABLE t1;

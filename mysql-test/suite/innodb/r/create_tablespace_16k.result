@@ -45,6 +45,7 @@ s_2k	General	DEFAULT	2048	1	1	Compressed	s_2k.ibd
 s_4k	General	DEFAULT	4096	1	1	Compressed	s_4k.ibd
 s_8k	General	DEFAULT	8192	1	1	Compressed	s_8k.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -59,6 +60,7 @@ s_2k	TABLESPACE	InnoDB	NORMAL	s_2k	MYSQLD_DATADIR/s_2k.ibd
 s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 s_8k	TABLESPACE	InnoDB	NORMAL	s_8k	MYSQLD_DATADIR/s_8k.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 #
@@ -402,6 +404,7 @@ s_4k	General	DEFAULT	4096	1	1	Compressed	s_4k.ibd
 s_8k	General	DEFAULT	8192	1	1	Compressed	s_8k.ibd
 s_missing	General	DEFAULT	0	1	1	Any	delete_me.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -417,6 +420,7 @@ s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 s_8k	TABLESPACE	InnoDB	NORMAL	s_8k	MYSQLD_DATADIR/s_8k.ibd
 s_missing	TABLESPACE	InnoDB	NORMAL	s_missing	MYSQLD_DATADIR/delete_me.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -454,6 +458,7 @@ test/t_zip8k_in_8k_as	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_from_1k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_like	s_8k	169	5	Compressed	8192	General
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/
@@ -485,6 +490,7 @@ s_4k	General	DEFAULT	4096	1	1	Compressed	s_4k.ibd
 s_8k	General	DEFAULT	8192	1	1	Compressed	s_8k.ibd
 s_missing	General	DEFAULT	0	0	0	Any	delete_me.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -499,6 +505,7 @@ s_2k	TABLESPACE	InnoDB	NORMAL	s_2k	MYSQLD_DATADIR/s_2k.ibd
 s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 s_8k	TABLESPACE	InnoDB	NORMAL	s_8k	MYSQLD_DATADIR/s_8k.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -536,6 +543,7 @@ test/t_zip8k_in_8k_as	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_from_1k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_like	s_8k	169	5	Compressed	8192	General
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/
@@ -639,6 +647,7 @@ test/t_zip4k_as_remote	Single	DEFAULT	4096	1	1	Compressed	MYSQL_TMP_DIR/test/t_z
 test/t_zip8k_as_file_per_table	Single	DEFAULT	8192	1	1	Compressed	MYSQLD_DATADIR/test/t_zip8k_as_file_per_table.ibd
 test/t_zip8k_as_remote	Single	DEFAULT	8192	1	1	Compressed	MYSQL_TMP_DIR/test/t_zip8k_as_remote.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -663,6 +672,7 @@ test/t_zip4k_as_remote	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_as_remote	MYSQL_TMP
 test/t_zip8k_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip8k_as_file_per_table	MYSQLD_DATADIR/test/t_zip8k_as_file_per_table.ibd
 test/t_zip8k_as_remote	TABLESPACE	InnoDB	NORMAL	test/t_zip8k_as_remote	MYSQL_TMP_DIR/test/t_zip8k_as_remote.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -682,6 +692,7 @@ test/t_zip4k_as_remote	test/t_zip4k_as_remote	103	5	Compressed	4096	Single
 test/t_zip8k_as_file_per_table	test/t_zip8k_as_file_per_table	41	5	Compressed	8192	Single
 test/t_zip8k_as_remote	test/t_zip8k_as_remote	105	5	Compressed	8192	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # MYSQLD_DATADIR/
@@ -980,6 +991,7 @@ s_4k	General	DEFAULT	4096	1	1	Compressed	s_4k.ibd
 s_8k	General	DEFAULT	8192	1	1	Compressed	s_8k.ibd
 test/t_zip16k_as_file_per_table	Single	DEFAULT	DEFAULT	1	1	Compressed	MYSQLD_DATADIR/test/t_zip16k_as_file_per_table.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -995,6 +1007,7 @@ s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 s_8k	TABLESPACE	InnoDB	NORMAL	s_8k	MYSQLD_DATADIR/s_8k.ibd
 test/t_zip16k_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip16k_as_file_per_table	MYSQLD_DATADIR/test/t_zip16k_as_file_per_table.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -1013,6 +1026,7 @@ test/t_zip4k_remote_in_s_4k	s_4k	167	5	Compressed	4096	General
 test/t_zip8k_in_s_8k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_remote_in_s_8k	s_8k	169	5	Compressed	8192	General
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # MYSQLD_DATADIR/
@@ -1173,6 +1187,7 @@ test/t_zip2k_to_file_per_table	Single	DEFAULT	2048	1	1	Compressed	MYSQLD_DATADIR
 test/t_zip4k_to_file_per_table	Single	DEFAULT	4096	1	1	Compressed	MYSQLD_DATADIR/test/t_zip4k_to_file_per_table.ibd
 test/t_zip8k_to_file_per_table	Single	DEFAULT	8192	1	1	Compressed	MYSQLD_DATADIR/test/t_zip8k_to_file_per_table.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -1192,6 +1207,7 @@ test/t_zip2k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip2k_to_file_per
 test/t_zip4k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_to_file_per_table	MYSQLD_DATADIR/test/t_zip4k_to_file_per_table.ibd
 test/t_zip8k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip8k_to_file_per_table	MYSQLD_DATADIR/test/t_zip8k_to_file_per_table.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -1210,6 +1226,7 @@ test/t_zip4k_to_file_per_table	test/t_zip4k_to_file_per_table	39	5	Compressed	40
 test/t_zip8k_remote_in_s_8k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_to_file_per_table	test/t_zip8k_to_file_per_table	41	5	Compressed	8192	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 CHECK TABLE `t_zip1k_to_file_per_table`;
@@ -1264,6 +1281,7 @@ test/t_zip2k_to_file_per_table	Single	DEFAULT	2048	1	1	Compressed	MYSQLD_DATADIR
 test/t_zip4k_to_file_per_table	Single	DEFAULT	4096	1	1	Compressed	MYSQLD_DATADIR/test/t_zip4k_to_file_per_table.ibd
 test/t_zip8k_to_file_per_table	Single	DEFAULT	8192	1	1	Compressed	MYSQLD_DATADIR/test/t_zip8k_to_file_per_table.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.files ===
@@ -1282,6 +1300,7 @@ test/t_zip2k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip2k_to_file_per
 test/t_zip4k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_to_file_per_table	MYSQLD_DATADIR/test/t_zip4k_to_file_per_table.ibd
 test/t_zip8k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip8k_to_file_per_table	MYSQLD_DATADIR/test/t_zip8k_to_file_per_table.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -1295,6 +1314,7 @@ test/t_zip2k_to_file_per_table	test/t_zip2k_to_file_per_table	37	5	Compressed	20
 test/t_zip4k_to_file_per_table	test/t_zip4k_to_file_per_table	39	5	Compressed	4096	Single
 test/t_zip8k_to_file_per_table	test/t_zip8k_to_file_per_table	41	5	Compressed	8192	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE `t_zip1k_to_file_per_table`;
