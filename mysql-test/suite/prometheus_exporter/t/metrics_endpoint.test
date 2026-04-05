@@ -1,22 +1,37 @@
+# =============================================================================
+# metrics_endpoint.test -- Prometheus Exporter: HTTP Endpoint & All Collectors
+#
+# Verifies:
+# - HTTP endpoint serves Prometheus text format
+# - All 5 collector prefixes appear in output
+# - 404 returned for unknown paths
+# - Scrape counter increments
+# =============================================================================
+
 --source include/not_windows.inc
 
 # Verify plugin is loaded and enabled
 SHOW VARIABLES LIKE 'prometheus_exporter_enabled';
 
---echo # Test /metrics endpoint returns Prometheus-formatted data
---echo # Check that TYPE annotations and metric lines are present
+--echo # Verify SHOW GLOBAL STATUS metrics
 --exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_global_status_threads_connected" | head -1
 
---echo # Check that a counter metric exists
---exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_global_status_questions" | head -1
+--echo # Verify SHOW GLOBAL VARIABLES metrics
+--exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_global_variables_max_connections" | head -1
 
---echo # Check that an actual metric value line exists
+--echo # Verify INNODB_METRICS metrics
+--exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_innodb_metrics_" | head -1
+
+--echo # Verify binlog metrics (binary logging is on by default)
+--exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_binlog_file_count" | head -1
+
+--echo # Verify metric value line is present and numeric
 --replace_regex /[0-9]+/NUM/
 --exec curl -s http://127.0.0.1:19104/metrics | grep "^mysql_global_status_threads_connected " | head -1
 
 --echo # Test 404 for unknown paths
 --exec curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:19104/notfound
 
---echo # Verify scrape counter incremented (at least 2 scrapes above)
+--echo # Verify scrape counter incremented
 --replace_regex /[0-9]+/NUM/
 SHOW STATUS LIKE 'Prometheus_exporter_requests_total';

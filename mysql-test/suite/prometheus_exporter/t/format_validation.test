@@ -1,0 +1,80 @@
+# =============================================================================
+# format_validation.test -- Validates Prometheus exposition format correctness
+#
+# Uses a perl block to fetch /metrics and validate:
+# - Every # TYPE line has a valid type (counter, gauge, untyped)
+# - Every # TYPE line is followed by a metric line with matching name
+# - Metric names match [a-z_][a-z0-9_]*
+# - Numeric metric values are well-formed
+# - String-valued variables metrics are accepted (info-style gauges)
+# =============================================================================
+
+--source include/not_windows.inc
+
+--echo # Fetching and validating /metrics output format
+
+--perl
+use strict;
+use warnings;
+
+my $output = `curl -s http://127.0.0.1:19109/metrics`;
+my @lines = split /\n/, $output;
+my $errors = 0;
+my $metrics_count = 0;
+my $expect_metric_name = undef;
+
+for (my $i = 0; $i < scalar @lines; $i++) {
+  my $line = $lines[$i];
+
+  # Skip empty lines
+  next if $line =~ /^\s*$/;
+
+  # Check # TYPE lines
+  if ($line =~ /^# TYPE /) {
+    if ($line =~ /^# TYPE ([a-z_][a-z0-9_]*) (counter|gauge|untyped)$/) {
+      $expect_metric_name = $1;
+    } else {
+      print "FORMAT ERROR: invalid TYPE line: $line\n";
+      $errors++;
+      $expect_metric_name = undef;
+    }
+    next;
+  }
+
+  # Skip other comment lines
+  next if $line =~ /^#/;
+
+  # Metric value line
+  if ($line =~ /^([a-z_][a-z0-9_]*) (.+)$/) {
+    my ($name, $value) = ($1, $2);
+    $metrics_count++;
+
+    # Check name matches expected from TYPE line
+    if (defined $expect_metric_name && $name ne $expect_metric_name) {
+      print "FORMAT ERROR: expected metric '$expect_metric_name' but got '$name'\n";
+      $errors++;
+    }
+    $expect_metric_name = undef;
+
+    # Check value is numeric (string-valued variables metrics are allowed)
+    unless ($value =~ /^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) {
+      # Global variables and some status metrics export string values
+      unless ($name =~ /^mysql_global_variables_/ || $name =~ /_time$/) {
+        print "FORMAT ERROR: non-numeric value '$value' for metric '$name'\n";
+        $errors++;
+      }
+    }
+  } else {
+    print "FORMAT ERROR: unrecognized line: $line\n";
+    $errors++;
+  }
+}
+
+if ($errors == 0 && $metrics_count > 0) {
+  print "OK: format validation passed\n";
+} elsif ($metrics_count == 0) {
+  print "ERROR: no metrics found in output\n";
+} else {
+  print "FAIL: $errors format errors found in $metrics_count metrics\n";
+}
+EOF

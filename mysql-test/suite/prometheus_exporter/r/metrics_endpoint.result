@@ -1,16 +1,19 @@
 SHOW VARIABLES LIKE 'prometheus_exporter_enabled';
 Variable_name	Value
 prometheus_exporter_enabled	ON
-# Test /metrics endpoint returns Prometheus-formatted data
-# Check that TYPE annotations and metric lines are present
+# Verify SHOW GLOBAL STATUS metrics
 # TYPE mysql_global_status_threads_connected gauge
-# Check that a counter metric exists
-# TYPE mysql_global_status_questions untyped
-# Check that an actual metric value line exists
+# Verify SHOW GLOBAL VARIABLES metrics
+# TYPE mysql_global_variables_max_connections gauge
+# Verify INNODB_METRICS metrics
+# TYPE mysql_innodb_metrics_lock_deadlocks counter
+# Verify binlog metrics (binary logging is on by default)
+# TYPE mysql_binlog_file_count gauge
+# Verify metric value line is present and numeric
 mysql_global_status_threads_connected NUM
 # Test 404 for unknown paths
 404
-# Verify scrape counter incremented (at least 2 scrapes above)
+# Verify scrape counter incremented
 SHOW STATUS LIKE 'Prometheus_exporter_requests_total';
 Variable_name	Value
 Prometheus_exporter_requests_total	NUM

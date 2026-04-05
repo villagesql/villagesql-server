@@ -1,3 +1,13 @@
+# =============================================================================
+# basic.test -- Prometheus Exporter Plugin: Install/Uninstall Lifecycle
+#
+# Verifies:
+# - Plugin can be dynamically installed and uninstalled
+# - System variables (enabled, port, bind_address) are registered
+# - Status variables (requests_total, errors_total, scrape_duration) exist
+# - Default values are correct (enabled=OFF, port=9104, bind=0.0.0.0)
+# =============================================================================
+
 --source include/not_windows.inc
 
 # Check that plugin is available
@@ -14,10 +24,10 @@ enable_query_log;
 --replace_result $PROMETHEUS_EXPORTER_PLUGIN PROMETHEUS_EXPORTER_PLUGIN
 eval INSTALL PLUGIN prometheus_exporter SONAME '$PROMETHEUS_EXPORTER_PLUGIN';
 
---echo # Verify system variables exist
+--echo # Verify system variables exist with correct defaults
 SHOW VARIABLES LIKE 'prometheus_exporter%';
 
---echo # Verify status variables exist
+--echo # Verify status variables exist (all zero when disabled)
 SHOW STATUS LIKE 'Prometheus_exporter%';
 
 --echo # Uninstall plugin
