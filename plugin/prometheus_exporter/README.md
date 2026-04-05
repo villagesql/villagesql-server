@@ -16,9 +16,9 @@ Prometheus text exposition format, and returns them over HTTP.
 ┌─────────────────────────────────────────────────────┐
 │                  VillageSQL Server                   │
 │                                                     │
-│  ┌──────────────���───────────────────────────────┐   │
+│  ┌──────────────────────────────────────────────┐   │
 │  │         prometheus_exporter plugin            │   │
-│  │                                              ��   │
+│  │                                               │   │
 │  │  ┌──────────────┐    ┌────────────────────┐  │   │
 │  │  │ HTTP Listener │    │  collect_metrics()  │  │   │
 │  │  │  (poll loop) │───>│                    │  │   │
@@ -26,8 +26,8 @@ Prometheus text exposition format, and returns them over HTTP.
 │  │  └──────────────┘    │        │           │  │   │
 │  │                      │  ┌─────▼─────────┐ │  │   │
 │  │                      │  │ SHOW GLOBAL   │ │  │   │
-│  │                      │  │ STATUS        │ │  ��   │
-│  │                      │  ├─────────────���─┤ │  │   │
+│  │                      │  │ STATUS        │ │  │   │
+│  │                      │  ├───────────────┤ │  │   │
 │  │                      │  │ SHOW GLOBAL   │ │  │   │
 │  │                      │  │ VARIABLES     │ │  │   │
 │  │                      │  ├───────────────┤ │  │   │
@@ -38,17 +38,17 @@ Prometheus text exposition format, and returns them over HTTP.
 │  │                      │  ├───────────────┤ │  │   │
 │  │                      │  │ SHOW BINARY   │ │  │   │
 │  │                      │  │ LOGS          │ │  │   │
-│  │                      │  └─────────────���─┘ │  │   │
-│  │                      └─────────���──────────┘  │   │
+│  │                      │  └───────────────┘ │  │   │
+│  │                      └────────────────────┘  │   │
 │  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────���───────────────┘
+└─────────────────────────────────────────────────────┘
          ▲
          │ HTTP GET /metrics (every 15-60s)
          │
     ┌────┴─────┐
     │Prometheus│
     │  Server  │
-    └──────���───┘
+    └──────────┘
 ```
 
 Key design choice: the plugin executes standard SQL queries via the
@@ -64,7 +64,7 @@ server restart to change).
 |----------|------|---------|-------------|
 | `prometheus_exporter_enabled` | BOOL | OFF | Enable the HTTP metrics endpoint |
 | `prometheus_exporter_port` | UINT | 9104 | TCP port to listen on (1024-65535) |
-| `prometheus_exporter_bind_address` | STRING | 0.0.0.0 | IP address to bind to |
+| `prometheus_exporter_bind_address` | STRING | 127.0.0.1 | IP address to bind to |
 
 ## Usage
 

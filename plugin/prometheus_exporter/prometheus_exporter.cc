@@ -77,8 +77,8 @@ static MYSQL_SYSVAR_STR(bind_address, prom_bind_address,
                          PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG |
                              PLUGIN_VAR_MEMALLOC,
                          "Bind address for the Prometheus exporter HTTP "
-                         "endpoint. Default 0.0.0.0.",
-                         nullptr, nullptr, "0.0.0.0");
+                         "endpoint. Default 127.0.0.1.",
+                         nullptr, nullptr, "127.0.0.1");
 
 static SYS_VAR *prom_system_vars[] = {
     MYSQL_SYSVAR(enabled),
@@ -203,9 +203,8 @@ static int prom_end_row(void *ctx) {
 
   // Try to parse as a number; skip non-numeric values (ON/OFF etc.)
   char *end = nullptr;
-  double val = strtod(mc->current_value.c_str(), &end);
-  if (end == mc->current_value.c_str()) return 0;  // not numeric
-  (void)val;  // we use the string representation directly
+  strtod(mc->current_value.c_str(), &end);
+  if (end == mc->current_value.c_str() || *end != '\0') return 0;
 
   // Build the Prometheus metric name: prefix + lowercase(mysql_name)
   std::string prom_name = mc->prefix;
@@ -258,6 +257,8 @@ static void prom_handle_ok(void *, uint, uint, ulonglong, ulonglong,
 static void prom_handle_error(void *ctx, uint, const char *, const char *) {
   auto *mc = static_cast<MetricsCollectorCtx *>(ctx);
   mc->error = true;
+  if (g_ctx != nullptr)
+    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static void prom_shutdown(void *, int) {}
@@ -352,6 +353,8 @@ static int innodb_get_string(void *ctx, const char *value, size_t length,
 static void innodb_handle_error(void *ctx, uint, const char *, const char *) {
   auto *mc = static_cast<InnodbMetricsCtx *>(ctx);
   mc->error = true;
+  if (g_ctx != nullptr)
+    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static const struct st_command_service_cbs innodb_cbs = {
@@ -482,7 +485,7 @@ static int replica_end_row(void *ctx) {
       // Check if numeric
       char *end = nullptr;
       strtod(val.c_str(), &end);
-      if (end == val.c_str()) continue;  // not numeric, skip
+      if (end == val.c_str() || *end != '\0') continue;  // not numeric, skip
       value_str = val;
     }
 
@@ -501,6 +504,8 @@ static int replica_end_row(void *ctx) {
 static void replica_handle_error(void *ctx, uint, const char *, const char *) {
   auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
   rc->error = true;
+  if (g_ctx != nullptr)
+    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static const struct st_command_service_cbs replica_cbs = {
@@ -569,7 +574,7 @@ static int binlog_end_row(void *ctx) {
   if (!bc->current_size.empty()) {
     char *end = nullptr;
     long long sz = strtoll(bc->current_size.c_str(), &end, 10);
-    if (end != bc->current_size.c_str()) {
+    if (end != bc->current_size.c_str() && *end == '\0') {
       bc->total_size += sz;
     }
   }
@@ -605,6 +610,8 @@ static void binlog_handle_ok(void *ctx, uint, uint, ulonglong, ulonglong,
 static void binlog_handle_error(void *ctx, uint, const char *, const char *) {
   auto *bc = static_cast<BinlogCtx *>(ctx);
   bc->error = true;
+  if (g_ctx != nullptr)
+    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static const struct st_command_service_cbs binlog_cbs = {
@@ -702,8 +709,12 @@ static std::string collect_metrics() {
 
   // Switch to root security context
   MYSQL_SECURITY_CONTEXT sc;
-  thd_get_security_context(srv_session_info_get_thd(session), &sc);
-  security_context_lookup(sc, "root", "localhost", "127.0.0.1", "");
+  if (thd_get_security_context(srv_session_info_get_thd(session), &sc) ||
+      security_context_lookup(sc, "root", "localhost", "127.0.0.1", "")) {
+    srv_session_close(session);
+    srv_session_deinit_thread();
+    return "# Failed to set security context\n";
+  }
 
   std::string output;
   collect_global_status(session, output);
@@ -774,6 +785,12 @@ static void *prometheus_listener_thread(void *arg) {
     int client_fd = accept(ctx->listen_fd, nullptr, nullptr);
     if (client_fd < 0) continue;
 
+    // Set receive timeout to avoid blocking indefinitely on slow clients
+    struct timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
     // Read HTTP request
     char buf[4096];
     ssize_t n = read(client_fd, buf, sizeof(buf) - 1);
@@ -783,7 +800,9 @@ static void *prometheus_listener_thread(void *arg) {
     }
     buf[n] = '\0';
 
-    if (strncmp(buf, "GET /metrics", 12) == 0) {
+    if (strncmp(buf, "GET /metrics", 12) == 0 &&
+        (buf[12] == ' ' || buf[12] == '?' || buf[12] == '\r' ||
+         buf[12] == '\0')) {
       ctx->requests_total.fetch_add(1, std::memory_order_relaxed);
 
       auto start = std::chrono::steady_clock::now();

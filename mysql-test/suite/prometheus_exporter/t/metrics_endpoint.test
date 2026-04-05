@@ -3,7 +3,7 @@
 #
 # Verifies:
 # - HTTP endpoint serves Prometheus text format
-# - All 5 collector prefixes appear in output
+# - 4 of 5 collector prefixes appear in output (replica not testable without replica setup)
 # - 404 returned for unknown paths
 # - Scrape counter increments
 # =============================================================================

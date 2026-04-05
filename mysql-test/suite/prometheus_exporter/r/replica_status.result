@@ -1,5 +1,4 @@
 # On a non-replica server, no mysql_replica_ metrics should appear
 0
-0
 # But other metrics should still be present
 # TYPE mysql_global_status_uptime gauge

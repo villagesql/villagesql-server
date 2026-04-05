@@ -2,7 +2,7 @@
 # TYPE mysql_innodb_metrics_lock_deadlocks counter
 # TYPE mysql_innodb_metrics_lock_deadlock_false_positives counter
 # TYPE mysql_innodb_metrics_lock_deadlock_rounds counter
-# Verify a known counter type metric exists
+# Verify a known gauge type metric exists (buffer_pool_reads is status_counter in InnoDB)
 # TYPE mysql_innodb_metrics_buffer_pool_reads gauge
 # Verify a known gauge type metric exists (buffer_pool_size is 'value' type in InnoDB)
 # TYPE mysql_innodb_metrics_buffer_pool_size gauge
