@@ -43,6 +43,7 @@
 #include <chrono>
 #include <cstring>
 #include <string>
+#include <vector>
 
 // -----------------------------------------------------------------------
 // Logging service references
@@ -396,6 +397,153 @@ static void collect_innodb_metrics(MYSQL_SESSION session, std::string &output) {
 }
 
 // -----------------------------------------------------------------------
+// SHOW REPLICA STATUS collection (column-name-aware parsing)
+// -----------------------------------------------------------------------
+
+struct ReplicaStatusCtx {
+  std::string *output;
+  std::vector<std::string> col_names;
+  std::vector<std::string> col_values;
+  int col_index;
+  bool has_row;
+  bool error;
+};
+
+static int replica_start_result_metadata(void *ctx, uint num_cols, uint,
+                                         const CHARSET_INFO *) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  rc->col_names.clear();
+  rc->col_names.reserve(num_cols);
+  return 0;
+}
+
+static int replica_field_metadata(void *ctx, struct st_send_field *field,
+                                  const CHARSET_INFO *) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  rc->col_names.push_back(field->col_name);
+  return 0;
+}
+
+static int replica_start_row(void *ctx) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  rc->col_values.clear();
+  rc->col_values.resize(rc->col_names.size());
+  rc->col_index = 0;
+  rc->has_row = true;
+  return 0;
+}
+
+static int replica_get_string(void *ctx, const char *value, size_t length,
+                              const CHARSET_INFO *) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  if (rc->col_index < static_cast<int>(rc->col_values.size())) {
+    rc->col_values[rc->col_index].assign(value, length);
+  }
+  rc->col_index++;
+  return 0;
+}
+
+struct ReplicaWantedField {
+  const char *col_name;
+  const char *metric_name;
+  bool is_bool;
+};
+
+static const ReplicaWantedField replica_wanted_fields[] = {
+    {"Seconds_Behind_Source", "mysql_replica_seconds_behind_source", false},
+    {"Replica_IO_Running", "mysql_replica_io_running", true},
+    {"Replica_SQL_Running", "mysql_replica_sql_running", true},
+    {"Relay_Log_Space", "mysql_replica_relay_log_space", false},
+    {"Exec_Source_Log_Pos", "mysql_replica_exec_source_log_pos", false},
+    {"Read_Source_Log_Pos", "mysql_replica_read_source_log_pos", false},
+};
+
+static int replica_end_row(void *ctx) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+
+  for (const auto &wanted : replica_wanted_fields) {
+    // Find column index by name
+    int idx = -1;
+    for (int i = 0; i < static_cast<int>(rc->col_names.size()); ++i) {
+      if (rc->col_names[i] == wanted.col_name) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx < 0 || idx >= static_cast<int>(rc->col_values.size())) continue;
+
+    const std::string &val = rc->col_values[idx];
+    if (val.empty()) continue;
+
+    std::string value_str;
+    if (wanted.is_bool) {
+      value_str = (val == "Yes") ? "1" : "0";
+    } else {
+      // Check if numeric
+      char *end = nullptr;
+      strtod(val.c_str(), &end);
+      if (end == val.c_str()) continue;  // not numeric, skip
+      value_str = val;
+    }
+
+    *rc->output += "# TYPE ";
+    *rc->output += wanted.metric_name;
+    *rc->output += " gauge\n";
+    *rc->output += wanted.metric_name;
+    *rc->output += ' ';
+    *rc->output += value_str;
+    *rc->output += '\n';
+  }
+
+  return 0;
+}
+
+static void replica_handle_error(void *ctx, uint, const char *, const char *) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  rc->error = true;
+}
+
+static const struct st_command_service_cbs replica_cbs = {
+    replica_start_result_metadata,
+    replica_field_metadata,
+    prom_end_result_metadata,
+    replica_start_row,
+    replica_end_row,
+    prom_abort_row,
+    prom_get_client_capabilities,
+    prom_get_null,
+    prom_get_integer,
+    prom_get_longlong,
+    prom_get_decimal,
+    prom_get_double,
+    prom_get_date,
+    prom_get_time,
+    prom_get_datetime,
+    replica_get_string,
+    prom_handle_ok,
+    replica_handle_error,
+    prom_shutdown,
+    nullptr,  // connection_alive
+};
+
+static void collect_replica_status(MYSQL_SESSION session, std::string &output) {
+  ReplicaStatusCtx rc;
+  rc.output = &output;
+  rc.col_index = 0;
+  rc.has_row = false;
+  rc.error = false;
+
+  COM_DATA cmd;
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.com_query.query = "SHOW REPLICA STATUS";
+  cmd.com_query.length = strlen(cmd.com_query.query);
+
+  command_service_run_command(session, COM_QUERY, &cmd,
+                             &my_charset_utf8mb3_general_ci, &replica_cbs,
+                             CS_TEXT_REPRESENTATION, &rc);
+}
+
+// -----------------------------------------------------------------------
 // Generic name/value query collection
 // -----------------------------------------------------------------------
 
@@ -456,6 +604,7 @@ static std::string collect_metrics() {
   collect_global_status(session, output);
   collect_global_variables(session, output);
   collect_innodb_metrics(session, output);
+  collect_replica_status(session, output);
 
   srv_session_close(session);
   srv_session_deinit_thread();
