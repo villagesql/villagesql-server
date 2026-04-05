@@ -156,28 +156,24 @@ static bool is_gauge(const char *name) {
 }
 
 // -----------------------------------------------------------------------
-// Prometheus metric name conversion
-// -----------------------------------------------------------------------
-
-static std::string to_prometheus_name(const char *mysql_name) {
-  std::string result = "mysql_global_status_";
-  for (const char *p = mysql_name; *p != '\0'; ++p) {
-    result += static_cast<char>(tolower(static_cast<unsigned char>(*p)));
-  }
-  return result;
-}
-
-// -----------------------------------------------------------------------
 // Metrics collection via srv_session + command_service
 // -----------------------------------------------------------------------
 
+typedef const char *(*type_fn_t)(const char *name);
+
 struct MetricsCollectorCtx {
-  std::string output;
+  std::string *output;
+  std::string prefix;
+  type_fn_t type_fn;
   std::string current_name;
   std::string current_value;
   int col_index;
   bool error;
 };
+
+static const char *global_status_type(const char *name) {
+  return is_gauge(name) ? "gauge" : "untyped";
+}
 
 static int prom_start_result_metadata(void *, uint, uint,
                                       const CHARSET_INFO *) {
@@ -210,18 +206,22 @@ static int prom_end_row(void *ctx) {
   if (end == mc->current_value.c_str()) return 0;  // not numeric
   (void)val;  // we use the string representation directly
 
-  std::string prom_name = to_prometheus_name(mc->current_name.c_str());
-  const char *type_str = is_gauge(mc->current_name.c_str()) ? "gauge" : "untyped";
+  // Build the Prometheus metric name: prefix + lowercase(mysql_name)
+  std::string prom_name = mc->prefix;
+  for (const char *p = mc->current_name.c_str(); *p != '\0'; ++p) {
+    prom_name += static_cast<char>(tolower(static_cast<unsigned char>(*p)));
+  }
+  const char *type_str = mc->type_fn(mc->current_name.c_str());
 
-  mc->output += "# TYPE ";
-  mc->output += prom_name;
-  mc->output += ' ';
-  mc->output += type_str;
-  mc->output += '\n';
-  mc->output += prom_name;
-  mc->output += ' ';
-  mc->output += mc->current_value;
-  mc->output += '\n';
+  *mc->output += "# TYPE ";
+  *mc->output += prom_name;
+  *mc->output += ' ';
+  *mc->output += type_str;
+  *mc->output += '\n';
+  *mc->output += prom_name;
+  *mc->output += ' ';
+  *mc->output += mc->current_value;
+  *mc->output += '\n';
 
   return 0;
 }
@@ -284,6 +284,31 @@ static const struct st_command_service_cbs prom_cbs = {
     nullptr,  // connection_alive
 };
 
+static void collect_name_value_query(MYSQL_SESSION session,
+                                     std::string &output, const char *query,
+                                     const char *prefix, type_fn_t type_fn) {
+  MetricsCollectorCtx mc;
+  mc.output = &output;
+  mc.prefix = prefix;
+  mc.type_fn = type_fn;
+  mc.col_index = 0;
+  mc.error = false;
+
+  COM_DATA cmd;
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.com_query.query = query;
+  cmd.com_query.length = strlen(query);
+
+  command_service_run_command(session, COM_QUERY, &cmd,
+                             &my_charset_utf8mb3_general_ci, &prom_cbs,
+                             CS_TEXT_REPRESENTATION, &mc);
+}
+
+static void collect_global_status(MYSQL_SESSION session, std::string &output) {
+  collect_name_value_query(session, output, "SHOW GLOBAL STATUS",
+                           "mysql_global_status_", global_status_type);
+}
+
 static std::string collect_metrics() {
   if (!srv_session_server_is_available()) {
     return "# Server not available\n";
@@ -304,27 +329,13 @@ static std::string collect_metrics() {
   thd_get_security_context(srv_session_info_get_thd(session), &sc);
   security_context_lookup(sc, "root", "localhost", "127.0.0.1", "");
 
-  MetricsCollectorCtx mc;
-  mc.col_index = 0;
-  mc.error = false;
-
-  COM_DATA cmd;
-  memset(&cmd, 0, sizeof(cmd));
-  cmd.com_query.query = "SHOW GLOBAL STATUS";
-  cmd.com_query.length = strlen(cmd.com_query.query);
-
-  command_service_run_command(session, COM_QUERY, &cmd,
-                             &my_charset_utf8mb3_general_ci, &prom_cbs,
-                             CS_TEXT_REPRESENTATION, &mc);
+  std::string output;
+  collect_global_status(session, output);
 
   srv_session_close(session);
   srv_session_deinit_thread();
 
-  if (mc.error) {
-    return "# Error collecting metrics\n";
-  }
-
-  return mc.output;
+  return output;
 }
 
 // -----------------------------------------------------------------------
