@@ -309,6 +309,14 @@ static void collect_global_status(MYSQL_SESSION session, std::string &output) {
                            "mysql_global_status_", global_status_type);
 }
 
+static const char *global_variables_type(const char *) { return "gauge"; }
+
+static void collect_global_variables(MYSQL_SESSION session,
+                                     std::string &output) {
+  collect_name_value_query(session, output, "SHOW GLOBAL VARIABLES",
+                           "mysql_global_variables_", global_variables_type);
+}
+
 static std::string collect_metrics() {
   if (!srv_session_server_is_available()) {
     return "# Server not available\n";
@@ -331,6 +339,7 @@ static std::string collect_metrics() {
 
   std::string output;
   collect_global_status(session, output);
+  collect_global_variables(session, output);
 
   srv_session_close(session);
   srv_session_deinit_thread();

@@ -1,0 +1,6 @@
+# Verify mysql_global_variables_ metrics are present
+# TYPE mysql_global_variables_max_connections gauge
+# Verify a buffer pool size variable is exported
+# TYPE mysql_global_variables_innodb_buffer_pool_size gauge
+# Verify the value is numeric
+mysql_global_variables_max_connections NUM

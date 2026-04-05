@@ -1,0 +1,11 @@
+--source include/not_windows.inc
+
+--echo # Verify mysql_global_variables_ metrics are present
+--exec curl -s http://127.0.0.1:19105/metrics | grep "^# TYPE mysql_global_variables_max_connections gauge" | head -1
+
+--echo # Verify a buffer pool size variable is exported
+--exec curl -s http://127.0.0.1:19105/metrics | grep "^# TYPE mysql_global_variables_innodb_buffer_pool_size gauge" | head -1
+
+--echo # Verify the value is numeric
+--replace_regex /[0-9]+/NUM/
+--exec curl -s http://127.0.0.1:19105/metrics | grep "^mysql_global_variables_max_connections " | head -1
