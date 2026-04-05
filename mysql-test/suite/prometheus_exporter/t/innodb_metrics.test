@@ -1,0 +1,10 @@
+--source include/not_windows.inc
+
+--echo # Verify InnoDB metrics are present
+--exec curl -s http://127.0.0.1:19106/metrics | grep "^# TYPE mysql_innodb_metrics_" | head -3
+
+--echo # Verify a known counter type metric exists
+--exec curl -s http://127.0.0.1:19106/metrics | grep "^# TYPE mysql_innodb_metrics_buffer_pool_reads " | head -1
+
+--echo # Verify a known gauge type metric exists (buffer_pool_size is 'value' type in InnoDB)
+--exec curl -s http://127.0.0.1:19106/metrics | grep "^# TYPE mysql_innodb_metrics_buffer_pool_size " | head -1

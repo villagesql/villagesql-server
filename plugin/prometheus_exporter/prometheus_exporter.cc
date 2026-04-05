@@ -284,6 +284,121 @@ static const struct st_command_service_cbs prom_cbs = {
     nullptr,  // connection_alive
 };
 
+// -----------------------------------------------------------------------
+// InnoDB metrics collection (4-column result set)
+// -----------------------------------------------------------------------
+
+struct InnodbMetricsCtx {
+  std::string *output;
+  std::string current_name;
+  std::string current_type;
+  std::string current_count;
+  int col_index;
+  bool error;
+};
+
+static int innodb_start_row(void *ctx) {
+  auto *mc = static_cast<InnodbMetricsCtx *>(ctx);
+  mc->col_index = 0;
+  mc->current_name.clear();
+  mc->current_type.clear();
+  mc->current_count.clear();
+  return 0;
+}
+
+static int innodb_end_row(void *ctx) {
+  auto *mc = static_cast<InnodbMetricsCtx *>(ctx);
+
+  if (mc->current_name.empty() || mc->current_count.empty()) return 0;
+
+  // Map InnoDB TYPE to Prometheus type: "counter" -> counter, else gauge
+  const char *prom_type =
+      (mc->current_type == "counter") ? "counter" : "gauge";
+
+  // Build metric name: mysql_innodb_metrics_ + lowercase(name)
+  std::string prom_name = "mysql_innodb_metrics_";
+  for (const char *p = mc->current_name.c_str(); *p != '\0'; ++p) {
+    prom_name += static_cast<char>(tolower(static_cast<unsigned char>(*p)));
+  }
+
+  *mc->output += "# TYPE ";
+  *mc->output += prom_name;
+  *mc->output += ' ';
+  *mc->output += prom_type;
+  *mc->output += '\n';
+  *mc->output += prom_name;
+  *mc->output += ' ';
+  *mc->output += mc->current_count;
+  *mc->output += '\n';
+
+  return 0;
+}
+
+static int innodb_get_string(void *ctx, const char *value, size_t length,
+                             const CHARSET_INFO *) {
+  auto *mc = static_cast<InnodbMetricsCtx *>(ctx);
+  if (mc->col_index == 0) {
+    mc->current_name.assign(value, length);
+  } else if (mc->col_index == 2) {
+    mc->current_type.assign(value, length);
+  } else if (mc->col_index == 3) {
+    mc->current_count.assign(value, length);
+  }
+  mc->col_index++;
+  return 0;
+}
+
+static void innodb_handle_error(void *ctx, uint, const char *, const char *) {
+  auto *mc = static_cast<InnodbMetricsCtx *>(ctx);
+  mc->error = true;
+}
+
+static const struct st_command_service_cbs innodb_cbs = {
+    prom_start_result_metadata,
+    prom_field_metadata,
+    prom_end_result_metadata,
+    innodb_start_row,
+    innodb_end_row,
+    prom_abort_row,
+    prom_get_client_capabilities,
+    prom_get_null,
+    prom_get_integer,
+    prom_get_longlong,
+    prom_get_decimal,
+    prom_get_double,
+    prom_get_date,
+    prom_get_time,
+    prom_get_datetime,
+    innodb_get_string,
+    prom_handle_ok,
+    innodb_handle_error,
+    prom_shutdown,
+    nullptr,  // connection_alive
+};
+
+static void collect_innodb_metrics(MYSQL_SESSION session, std::string &output) {
+  InnodbMetricsCtx mc;
+  mc.output = &output;
+  mc.col_index = 0;
+  mc.error = false;
+
+  COM_DATA cmd;
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.com_query.query =
+      "SELECT NAME, SUBSYSTEM, TYPE, COUNT "
+      "FROM information_schema.INNODB_METRICS "
+      "WHERE STATUS='enabled'";
+  cmd.com_query.length = strlen(cmd.com_query.query);
+
+  command_service_run_command(session, COM_QUERY, &cmd,
+                             &my_charset_utf8mb3_general_ci, &innodb_cbs,
+                             CS_TEXT_REPRESENTATION, &mc);
+}
+
+// -----------------------------------------------------------------------
+// Generic name/value query collection
+// -----------------------------------------------------------------------
+
 static void collect_name_value_query(MYSQL_SESSION session,
                                      std::string &output, const char *query,
                                      const char *prefix, type_fn_t type_fn) {
@@ -340,6 +455,7 @@ static std::string collect_metrics() {
   std::string output;
   collect_global_status(session, output);
   collect_global_variables(session, output);
+  collect_innodb_metrics(session, output);
 
   srv_session_close(session);
   srv_session_deinit_thread();
