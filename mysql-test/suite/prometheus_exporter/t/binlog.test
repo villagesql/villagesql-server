@@ -1,0 +1,11 @@
+--source include/not_windows.inc
+
+--echo # Verify binlog metrics are present
+--exec curl -s http://127.0.0.1:19108/metrics | grep "^# TYPE mysql_binlog_file_count gauge" | head -1
+
+--echo # Verify binlog size metric
+--exec curl -s http://127.0.0.1:19108/metrics | grep "^# TYPE mysql_binlog_size_bytes_total gauge" | head -1
+
+--echo # Verify values are numeric
+--replace_regex /[0-9]+/NUM/
+--exec curl -s http://127.0.0.1:19108/metrics | grep "^mysql_binlog_file_count " | head -1

@@ -544,6 +544,111 @@ static void collect_replica_status(MYSQL_SESSION session, std::string &output) {
 }
 
 // -----------------------------------------------------------------------
+// SHOW BINARY LOGS collection
+// -----------------------------------------------------------------------
+
+struct BinlogCtx {
+  std::string *output;
+  int col_index;
+  int file_count;
+  long long total_size;
+  std::string current_size;
+  bool error;
+};
+
+static int binlog_start_row(void *ctx) {
+  auto *bc = static_cast<BinlogCtx *>(ctx);
+  bc->col_index = 0;
+  bc->current_size.clear();
+  return 0;
+}
+
+static int binlog_end_row(void *ctx) {
+  auto *bc = static_cast<BinlogCtx *>(ctx);
+  bc->file_count++;
+  if (!bc->current_size.empty()) {
+    char *end = nullptr;
+    long long sz = strtoll(bc->current_size.c_str(), &end, 10);
+    if (end != bc->current_size.c_str()) {
+      bc->total_size += sz;
+    }
+  }
+  return 0;
+}
+
+static int binlog_get_string(void *ctx, const char *value, size_t length,
+                             const CHARSET_INFO *) {
+  auto *bc = static_cast<BinlogCtx *>(ctx);
+  if (bc->col_index == 1) {
+    bc->current_size.assign(value, length);
+  }
+  bc->col_index++;
+  return 0;
+}
+
+static void binlog_handle_ok(void *ctx, uint, uint, ulonglong, ulonglong,
+                             const char *) {
+  auto *bc = static_cast<BinlogCtx *>(ctx);
+  if (bc->file_count > 0) {
+    *bc->output += "# TYPE mysql_binlog_file_count gauge\n";
+    *bc->output += "mysql_binlog_file_count ";
+    *bc->output += std::to_string(bc->file_count);
+    *bc->output += '\n';
+
+    *bc->output += "# TYPE mysql_binlog_size_bytes_total gauge\n";
+    *bc->output += "mysql_binlog_size_bytes_total ";
+    *bc->output += std::to_string(bc->total_size);
+    *bc->output += '\n';
+  }
+}
+
+static void binlog_handle_error(void *ctx, uint, const char *, const char *) {
+  auto *bc = static_cast<BinlogCtx *>(ctx);
+  bc->error = true;
+}
+
+static const struct st_command_service_cbs binlog_cbs = {
+    prom_start_result_metadata,
+    prom_field_metadata,
+    prom_end_result_metadata,
+    binlog_start_row,
+    binlog_end_row,
+    prom_abort_row,
+    prom_get_client_capabilities,
+    prom_get_null,
+    prom_get_integer,
+    prom_get_longlong,
+    prom_get_decimal,
+    prom_get_double,
+    prom_get_date,
+    prom_get_time,
+    prom_get_datetime,
+    binlog_get_string,
+    binlog_handle_ok,
+    binlog_handle_error,
+    prom_shutdown,
+    nullptr,  // connection_alive
+};
+
+static void collect_binlog(MYSQL_SESSION session, std::string &output) {
+  BinlogCtx bc;
+  bc.output = &output;
+  bc.col_index = 0;
+  bc.file_count = 0;
+  bc.total_size = 0;
+  bc.error = false;
+
+  COM_DATA cmd;
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.com_query.query = "SHOW BINARY LOGS";
+  cmd.com_query.length = strlen(cmd.com_query.query);
+
+  command_service_run_command(session, COM_QUERY, &cmd,
+                             &my_charset_utf8mb3_general_ci, &binlog_cbs,
+                             CS_TEXT_REPRESENTATION, &bc);
+}
+
+// -----------------------------------------------------------------------
 // Generic name/value query collection
 // -----------------------------------------------------------------------
 
@@ -605,6 +710,7 @@ static std::string collect_metrics() {
   collect_global_variables(session, output);
   collect_innodb_metrics(session, output);
   collect_replica_status(session, output);
+  collect_binlog(session, output);
 
   srv_session_close(session);
   srv_session_deinit_thread();

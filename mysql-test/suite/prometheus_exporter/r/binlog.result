@@ -1,0 +1,6 @@
+# Verify binlog metrics are present
+# TYPE mysql_binlog_file_count gauge
+# Verify binlog size metric
+# TYPE mysql_binlog_size_bytes_total gauge
+# Verify values are numeric
+mysql_binlog_file_count NUM
