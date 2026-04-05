@@ -1,0 +1,16 @@
+# Install prometheus_exporter plugin
+INSTALL PLUGIN prometheus_exporter SONAME 'PROMETHEUS_EXPORTER_PLUGIN';
+# Verify system variables exist
+SHOW VARIABLES LIKE 'prometheus_exporter%';
+Variable_name	Value
+prometheus_exporter_bind_address	0.0.0.0
+prometheus_exporter_enabled	OFF
+prometheus_exporter_port	9104
+# Verify status variables exist
+SHOW STATUS LIKE 'Prometheus_exporter%';
+Variable_name	Value
+Prometheus_exporter_errors_total	0
+Prometheus_exporter_requests_total	0
+Prometheus_exporter_scrape_duration_microseconds	0
+# Uninstall plugin
+UNINSTALL PLUGIN prometheus_exporter;

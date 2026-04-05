@@ -1,0 +1,16 @@
+SHOW VARIABLES LIKE 'prometheus_exporter_enabled';
+Variable_name	Value
+prometheus_exporter_enabled	ON
+# Test /metrics endpoint returns Prometheus-formatted data
+# Check that TYPE annotations and metric lines are present
+# TYPE mysql_global_status_threads_connected gauge
+# Check that a counter metric exists
+# TYPE mysql_global_status_questions untyped
+# Check that an actual metric value line exists
+mysql_global_status_threads_connected NUM
+# Test 404 for unknown paths
+404
+# Verify scrape counter incremented (at least 2 scrapes above)
+SHOW STATUS LIKE 'Prometheus_exporter_requests_total';
+Variable_name	Value
+Prometheus_exporter_requests_total	NUM

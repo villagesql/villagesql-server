@@ -1,0 +1,24 @@
+--source include/not_windows.inc
+
+# Check that plugin is available
+disable_query_log;
+if (`SELECT @@have_dynamic_loading != 'YES'`) {
+  --skip prometheus_exporter plugin requires dynamic loading
+}
+if (!$PROMETHEUS_EXPORTER_PLUGIN) {
+  --skip prometheus_exporter plugin requires the environment variable \$PROMETHEUS_EXPORTER_PLUGIN to be set (normally done by mtr)
+}
+enable_query_log;
+
+--echo # Install prometheus_exporter plugin
+--replace_result $PROMETHEUS_EXPORTER_PLUGIN PROMETHEUS_EXPORTER_PLUGIN
+eval INSTALL PLUGIN prometheus_exporter SONAME '$PROMETHEUS_EXPORTER_PLUGIN';
+
+--echo # Verify system variables exist
+SHOW VARIABLES LIKE 'prometheus_exporter%';
+
+--echo # Verify status variables exist
+SHOW STATUS LIKE 'Prometheus_exporter%';
+
+--echo # Uninstall plugin
+UNINSTALL PLUGIN prometheus_exporter;

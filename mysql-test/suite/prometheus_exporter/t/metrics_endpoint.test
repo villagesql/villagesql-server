@@ -1,0 +1,22 @@
+--source include/not_windows.inc
+
+# Verify plugin is loaded and enabled
+SHOW VARIABLES LIKE 'prometheus_exporter_enabled';
+
+--echo # Test /metrics endpoint returns Prometheus-formatted data
+--echo # Check that TYPE annotations and metric lines are present
+--exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_global_status_threads_connected" | head -1
+
+--echo # Check that a counter metric exists
+--exec curl -s http://127.0.0.1:19104/metrics | grep "^# TYPE mysql_global_status_questions" | head -1
+
+--echo # Check that an actual metric value line exists
+--replace_regex /[0-9]+/NUM/
+--exec curl -s http://127.0.0.1:19104/metrics | grep "^mysql_global_status_threads_connected " | head -1
+
+--echo # Test 404 for unknown paths
+--exec curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:19104/notfound
+
+--echo # Verify scrape counter incremented (at least 2 scrapes above)
+--replace_regex /[0-9]+/NUM/
+SHOW STATUS LIKE 'Prometheus_exporter_requests_total';
