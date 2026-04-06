@@ -44,6 +44,11 @@
 
 namespace villagesql {
 
+Metadata_modifier::AlterGuard::~AlterGuard() {
+  ClearAlterCustomFields(thd_);
+  if (armed_) rollback(thd_);
+}
+
 static constexpr const char *error_uninitialized_name =
     "Uninitialized DB name or Table Name found while verifying custom columns";
 static constexpr const char *error_uninitialized_victionary =

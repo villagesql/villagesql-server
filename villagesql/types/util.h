@@ -106,16 +106,6 @@ extern void PrepareAlterCustomFields(THD *thd,
 // Clear thd->villagesql_alter_custom_fields.
 extern void ClearAlterCustomFields(THD *thd);
 
-// RAII guard that clears villagesql_alter_custom_fields on scope exit.
-class AlterCustomFieldsGuard {
- public:
-  explicit AlterCustomFieldsGuard(THD *thd) : thd_(thd) {}
-  ~AlterCustomFieldsGuard() { ClearAlterCustomFields(thd_); }
-
- private:
-  THD *thd_;
-};
-
 // Check if any column in a create_list has a custom type.
 // Used to determine if we need to regenerate the CREATE TABLE statement
 // for binlogging (to ensure fully qualified type names are used).

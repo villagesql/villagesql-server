@@ -127,6 +127,22 @@ class Metadata_modifier {
   // Rollback all modifications before storing to the victionary system tables.
   static void rollback(THD *thd);
 
+  // RAII guard for ALTER TABLE: clears villagesql_alter_custom_fields on all
+  // exit paths, and rolls back victionary modifications unless disarm() is
+  // called after a successful store().
+  class AlterGuard {
+   public:
+    explicit AlterGuard(THD *thd) : thd_(thd) {}
+    AlterGuard(const AlterGuard &) = delete;
+    AlterGuard &operator=(const AlterGuard &) = delete;
+    ~AlterGuard();
+    void disarm() { armed_ = false; }
+
+   private:
+    THD *thd_;
+    bool armed_ = true;
+  };
+
   // Acquire an X (exclusive) MDL lock on an extension with the specified
   // duration. Normalizes the extension name before acquiring the lock.
   // Returns false on success, true on error.

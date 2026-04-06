@@ -17099,8 +17099,10 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                                    alter_info)) {
     return true;
   }
-  // VillageSQL: The guard ensures the vector is cleared on all exit paths.
-  villagesql::AlterCustomFieldsGuard alter_custom_fields_guard(thd);
+  // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
+  // rolls back victionary modifications unless disarmed after a successful
+  // store().
+  villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
 
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
@@ -18454,6 +18456,8 @@ end_inplace_noop:
   if (atomic_replace && (villagesql::Metadata_modifier::store(thd) ||
                          trans_commit_stmt(thd) || trans_commit_implicit(thd)))
     goto err_with_mdl;
+  // VillageSQL: ALTER succeeded; skip victionary rollback on guard destruction.
+  vsql_alter_guard.disarm();
 
   if ((new_db_type->flags & HTON_SUPPORTS_ATOMIC_DDL) && new_db_type->post_ddl)
     new_db_type->post_ddl(thd);
