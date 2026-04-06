@@ -105,12 +105,11 @@ struct ColumnEntry {
   std::string extension_name;
   std::string extension_version;
   std::string type_name;
-  std::string
-      type_parameters;  // Canonical "k=v,k=v,..." string (empty if none)
+  std::string type_parameters = "{}";  // JSON-serialized TypeParameters
 
   // Full constructor with all fields
   ColumnEntry(ColumnKey key, std::string ext_name, std::string ext_version,
-              std::string t_name, std::string type_params = "")
+              std::string t_name, std::string type_params = "{}")
       : extension_name(std::move(ext_name)),
         extension_version(std::move(ext_version)),
         type_name(std::move(t_name)),

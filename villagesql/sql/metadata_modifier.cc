@@ -904,11 +904,23 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
       any_custom = true;
     }
 
-    // TODO(villagesql): persist function return type (m_return_type_context_ref
-    // is added in a follow-up patch with function return type support).
+    // TODO(villagesql-beta): persist function return type
+    // (m_return_type_context_ref is added in a follow-up patch with function
+    // return type support).
+
+    // Verify that only sp_params has uncommitted entries for this THD. This
+    // matters because write_all_uncommitted_entries() only opens
+    // custom_sp_params — if another table had pending entries it would fail.
+    assert(!vclient.columns().has_uncommitted(thd));
+    assert(!vclient.properties().has_uncommitted(thd));
+    assert(!vclient.extensions().has_uncommitted(thd));
   }
   if (!any_custom) return false;
 
+  // Only open custom_sp_params. write_all_uncommitted_entries() checks each
+  // table's uncommitted map for this THD before touching any open TABLE*, so
+  // other system tables (columns, properties, extensions) are skipped safely
+  // because no entries were marked for them on this code path.
   Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
                             SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
                             MDL_SHARED_WRITE);
