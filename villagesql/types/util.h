@@ -90,13 +90,6 @@ extern void RemoveTmpTableMetadata(THD *thd, const std::string &db,
                                    const std::string &table_name);
 extern void RemoveTmpTableMetadata(THD *thd, TABLE *table);
 
-// Copy custom type contexts from Create_field list to corresponding Fields in
-// an ALTER TABLE #sql-xxx rebuild table. Unlike
-// AnnotateCustomColumnsInTmpTable, does not acquire a new TypeContext reference
-// — the context pointer is copied directly since the rebuild table's lifetime
-// is bounded by the ALTER TABLE.
-extern void AnnotateAlterTableCustomColumns(THD *thd, TABLE *table);
-
 // Populate thd->villagesql_alter_custom_fields with pointers to custom-typed
 // Create_fields from create_list. Called from create_table_impl after
 // mysql_prepare_alter_table has finalized the create_list.

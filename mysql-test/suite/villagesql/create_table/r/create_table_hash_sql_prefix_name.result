@@ -1,0 +1,8 @@
+CREATE TABLE `#sql1` (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO `#sql1` VALUES (1, '(1.0,2.0)');
+INSERT INTO `#sql1` VALUES (2, '(3.0,4.0)');
+SELECT * FROM `#sql1` ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+DROP TABLE `#sql1`;

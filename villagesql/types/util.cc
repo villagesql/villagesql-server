@@ -56,10 +56,16 @@
 
 namespace villagesql {
 
-// Returns true if table_name is an ALTER TABLE #sql-xxx rebuild table.
-static bool is_tmp_prefix(const char *table_name) {
-  return table_name != nullptr &&
-         strncmp(table_name, tmp_file_prefix, tmp_file_prefix_length) == 0;
+// Returns true if this is an ALTER TABLE #sql-xxx rebuild table. Requires both
+// the INTERNAL_TMP_TABLE flag AND the #sql name prefix — the flag alone is too
+// broad (DD system tables are also opened as INTERNAL_TMP_TABLE), and the name
+// prefix alone is too broad (users can create tables named #sql... with
+// backtick quoting).
+static bool is_alter_rebuild_table(const TABLE_SHARE &share) {
+  return share.tmp_table == INTERNAL_TMP_TABLE &&
+         share.table_name.str != nullptr &&
+         strncmp(share.table_name.str, tmp_file_prefix,
+                 tmp_file_prefix_length) == 0;
 }
 
 static const char *ER_INCOMPARABLE_TYPES =
@@ -99,7 +105,7 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
 
   // For ALTER TABLE #sql-xxx rebuild tables, inject from the session map
   // instead of the victionary.
-  if (is_tmp_prefix(share.table_name.str)) {
+  if (is_alter_rebuild_table(share)) {
     if (!thd->villagesql_alter_custom_fields.empty()) {
       auto it = thd->villagesql_alter_custom_fields.find(field->field_name);
       if (it != thd->villagesql_alter_custom_fields.end()) {
@@ -1220,19 +1226,6 @@ void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
   RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
 
-void AnnotateAlterTableCustomColumns(THD *thd, TABLE *table) {
-  assert(is_tmp_prefix(table->s->table_name.str));
-  if (!thd || !table) return;
-  if (thd->villagesql_alter_custom_fields.empty()) return;
-  for (uint i = 0; i < table->s->fields; i++) {
-    Field *field = table->field[i];
-    auto it = thd->villagesql_alter_custom_fields.find(field->field_name);
-    if (it == thd->villagesql_alter_custom_fields.end()) continue;
-    field->set_type_context(it->second);
-    assert(static_cast<int64_t>(field->field_length) ==
-           it->second->persisted_length());
-  }
-}
 
 void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
   thd->villagesql_alter_custom_fields.clear();

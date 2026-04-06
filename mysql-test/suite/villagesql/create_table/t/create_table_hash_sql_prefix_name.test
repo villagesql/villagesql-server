@@ -1,0 +1,24 @@
+# Test that a user table with a #sql-prefixed name (valid via backtick quoting)
+# correctly gets custom type context injected.
+#
+# Previously, MaybeInjectCustomType used only a name-prefix check (#sql) to
+# identify ALTER TABLE rebuild tables and return early, skipping the victionary
+# lookup. This incorrectly fired for user tables named `#sql...`, causing the
+# custom type context to be missing and values to display as raw bytes.
+#
+# The fix requires both the #sql name prefix AND INTERNAL_TMP_TABLE to skip
+# the victionary lookup.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE `#sql1` (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO `#sql1` VALUES (1, '(1.0,2.0)');
+INSERT INTO `#sql1` VALUES (2, '(3.0,4.0)');
+
+# With the bug, val would display as raw bytes instead of decoded (x,y) form.
+SELECT * FROM `#sql1` ORDER BY id;
+
+DROP TABLE `#sql1`;
+
+--source include/villagesql/uninstall_complex_extension.inc
