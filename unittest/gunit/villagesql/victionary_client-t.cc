@@ -2102,4 +2102,165 @@ TEST_F(VictionaryClientTest, AcquireOrCreateWithParameters) {
   }
 }
 
+// ===== SpParamEntry / sp_params() Tests =====
+
+// Test SpParamEntry basic construction and defaults
+TEST_F(VictionaryClientTest, SpParamEntryBasics) {
+  SpParamKey key("mydb", "my_proc", "param1");
+  SpParamEntry entry(key, "test_ext", "1.0", "VECTOR", "{}");
+
+  EXPECT_EQ(entry.db_name(), "mydb");
+  EXPECT_EQ(entry.sp_name(), "my_proc");
+  EXPECT_EQ(entry.param_name(), "param1");
+  EXPECT_EQ(entry.extension_name, "test_ext");
+  EXPECT_EQ(entry.extension_version, "1.0");
+  EXPECT_EQ(entry.type_name, "VECTOR");
+  EXPECT_EQ(entry.type_parameters, "{}");
+}
+
+// Test SpParamEntry default type_parameters is "{}"
+TEST_F(VictionaryClientTest, SpParamEntryDefaultTypeParameters) {
+  SpParamKey key("mydb", "my_proc", "param1");
+  SpParamEntry entry(key, "test_ext", "1.0", "VECTOR");
+  EXPECT_EQ(entry.type_parameters, "{}");
+
+  // Default-constructed entry also has "{}"
+  SpParamEntry default_entry;
+  EXPECT_EQ(default_entry.type_parameters, "{}");
+}
+
+// Test SpParamKey normalization
+TEST_F(VictionaryClientTest, SpParamKeyNormalization) {
+  int original_setting = lower_case_table_names;
+  test_set_lower_case_table_names(1);
+
+  SpParamKey key1("MyDB", "MyProc", "MyParam");
+  SpParamKey key2("mydb", "myproc", "myparam");
+
+  // With lower_case_table_names=1 both should produce the same key
+  EXPECT_EQ(key1.str(), key2.str());
+
+  test_set_lower_case_table_names(original_setting);
+}
+
+// Test sp_params insert, commit, and lookup
+TEST_F(VictionaryClientTest, SpParamInsertAndLookup) {
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA01);
+
+  SpParamKey key("testdb", "test_proc", "p1");
+  SpParamEntry entry(key, "test_ext", "1.0", "VECTOR", "{\"dim\":\"3\"}");
+
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->sp_params().MarkForInsertion(*fake_thd, std::move(entry)));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    const SpParamEntry *result = client_->sp_params().get_committed(key);
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->extension_name, "test_ext");
+    EXPECT_EQ(result->type_name, "VECTOR");
+    EXPECT_EQ(result->type_parameters, "{\"dim\":\"3\"}");
+  }
+}
+
+// Test sp_params prefix query finds all params for a stored procedure
+TEST_F(VictionaryClientTest, SpParamPrefixQuery) {
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA02);
+
+  SpParamEntry p1(SpParamKey("db1", "proc1", "param1"), "ext1", "1.0", "VECTOR");
+  SpParamEntry p2(SpParamKey("db1", "proc1", "param2"), "ext1", "1.0", "VECTOR");
+  SpParamEntry p3(SpParamKey("db1", "proc2", "param1"), "ext1", "1.0", "VECTOR");
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->sp_params().MarkForInsertion(*fake_thd, std::move(p1));
+    client_->sp_params().MarkForInsertion(*fake_thd, std::move(p2));
+    client_->sp_params().MarkForInsertion(*fake_thd, std::move(p3));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    auto results = client_->sp_params().get_prefix_committed(
+        SpParamKeyPrefix("db1", "proc1"));
+    EXPECT_EQ(results.size(), 2);
+
+    auto all = client_->sp_params().get_prefix_committed(
+        SpParamKeyPrefix("db1", "proc2"));
+    EXPECT_EQ(all.size(), 1);
+  }
+}
+
+// Test sp_params delete by key
+TEST_F(VictionaryClientTest, SpParamDelete) {
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA03);
+
+  SpParamKey key("db1", "proc1", "param1");
+  SpParamEntry entry(key, "ext1", "1.0", "VECTOR");
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->sp_params().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  THD *fake_thd2 = reinterpret_cast<THD *>(0xAA04);
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->sp_params().MarkForDeletion(*fake_thd2, key));
+  }
+  client_->commit_all_tables(fake_thd2);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->sp_params().get_committed(key), nullptr);
+  }
+}
+
+// Test sp_params rollback discards pending entries
+TEST_F(VictionaryClientTest, SpParamRollback) {
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA05);
+
+  SpParamKey key("db1", "proc1", "param1");
+  SpParamEntry entry(key, "ext1", "1.0", "VECTOR");
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->sp_params().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->rollback_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->sp_params().get_committed(key), nullptr);
+  }
+}
+
+// Test the invariant that persisting SP params does not leave uncommitted
+// entries on other system tables. This mirrors the assert in
+// PersistCustomSpParams() in metadata_modifier.cc.
+TEST_F(VictionaryClientTest, SpParamOnlyHasUncommittedOnSpParams) {
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA06);
+
+  SpParamEntry entry(SpParamKey("db1", "proc1", "param1"), "ext1", "1.0",
+                     "VECTOR");
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->sp_params().MarkForInsertion(*fake_thd, std::move(entry));
+
+    // Verify only sp_params has uncommitted entries — the invariant relied upon
+    // in PersistCustomSpParams() which only opens custom_sp_params.
+    EXPECT_TRUE(client_->sp_params().has_uncommitted(fake_thd));
+    EXPECT_FALSE(client_->columns().has_uncommitted(fake_thd));
+    EXPECT_FALSE(client_->properties().has_uncommitted(fake_thd));
+    EXPECT_FALSE(client_->extensions().has_uncommitted(fake_thd));
+  }
+
+  client_->rollback_all_tables(fake_thd);
+}
+
 }  // namespace villagesql_unittest
