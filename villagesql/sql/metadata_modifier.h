@@ -224,10 +224,11 @@ class Metadata_modifier {
 template <typename TableContainer>
 bool Metadata_modifier::process_drop(THD *thd, bool drop_temporary,
                                      const TableContainer &tables) {
-  // TODO(villagesql-beta): Extension MDL for temp table.
-  if (drop_temporary) {
-    return false;
-  }
+  // Temporary tables are never passed here; they go into tmp_trans_tables /
+  // tmp_non_trans_tables in Drop_tables_ctx, which is a separate code path.
+  // Extension uninstall is already blocked for temp tables by the
+  // shared_ptr<TypeContext> held in TmpMetadata for the session lifetime.
+  assert(!drop_temporary);
 
   Metadata_modifier custom_columns;
   for (auto *table : tables) {
