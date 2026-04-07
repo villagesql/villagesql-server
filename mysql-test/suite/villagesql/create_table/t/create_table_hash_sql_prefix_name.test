@@ -16,6 +16,8 @@ CREATE TABLE `#sql1` (id INT PRIMARY KEY, val COMPLEX);
 INSERT INTO `#sql1` VALUES (1, '(1.0,2.0)');
 INSERT INTO `#sql1` VALUES (2, '(3.0,4.0)');
 
+SHOW CREATE TABLE `#sql1`;
+
 # With the bug, val would display as raw bytes instead of decoded (x,y) form.
 SELECT * FROM `#sql1` ORDER BY id;
 

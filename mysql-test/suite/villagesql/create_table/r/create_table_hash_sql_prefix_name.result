@@ -1,6 +1,13 @@
 CREATE TABLE `#sql1` (id INT PRIMARY KEY, val COMPLEX);
 INSERT INTO `#sql1` VALUES (1, '(1.0,2.0)');
 INSERT INTO `#sql1` VALUES (2, '(3.0,4.0)');
+SHOW CREATE TABLE `#sql1`;
+Table	Create Table
+#sql1	CREATE TABLE `#sql1` (
+  `id` int NOT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM `#sql1` ORDER BY id;
 id	val
 1	(1,2)
