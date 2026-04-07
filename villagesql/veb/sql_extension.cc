@@ -183,7 +183,7 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   }
 
   villagesql::veb::ExtensionRegistration registration;
-  vef_protocol_t server_protocol = VEF_PROTOCOL_3;
+  vef_protocol_t server_protocol = VEF_PROTOCOL_2;
 #ifndef NDEBUG
   {
     auto it = thd->user_vars.find("vef_debug_protocol_override");

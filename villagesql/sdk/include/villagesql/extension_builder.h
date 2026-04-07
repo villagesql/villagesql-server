@@ -102,8 +102,9 @@ struct ExtensionBuilder {
         t.descriptor.vef_desc.protocol > min_protocol_
             ? t.descriptor.vef_desc.protocol
             : min_protocol_;
-    return ExtensionBuilder<decltype(new_funcs), decltype(new_types)>{
-        name_, version_, new_funcs, new_types, new_min};
+    return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
+                            ConfigVarTuple>{
+        name_, version_, new_funcs, new_types, config_vars_, new_min};
   }
 
   // This is here only for testing, please don't depend on it.
@@ -283,7 +284,7 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
     }
   }
 
-  reg.protocol = VEF_PROTOCOL_3;
+  reg.protocol = VEF_PROTOCOL_2;
   reg.error_msg = nullptr;
   reg.extension_name = ext.name().data();
   reg.extension_version = ext.version().data();

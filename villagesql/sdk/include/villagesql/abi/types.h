@@ -167,13 +167,11 @@ typedef enum : unsigned int {
                    // + Replace vef_vdf_args_t.values_v1 flat array with
                    //   vef_vdf_args_t.values pointer array (allows
                    //   vef_invalue_t to grow in future protocol versions).
-  VEF_PROTOCOL_3,  // Under development, not stable. Adds:
                    // + Extension config variables (vef_config_var_desc_t):
                    //   server registers these as MySQL component system
                    //   variables on the extension's behalf.
-                   // + Query lifecycle hooks (vef_query_hook_desc_t):
-                   //   pre-parse, post-parse, post-execute,
-                   //   connect, disconnect.
+                   // + get_variable/set_variable added to vef_context_t:
+                   //   thread-safe access to MySQL component system variables.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -196,7 +194,7 @@ typedef struct {
 
 // Context passed to all function calls (prerun, vdf, postrun)
 //
-// protocol >= VEF_PROTOCOL_3: get_variable and set_variable are available.
+// protocol >= VEF_PROTOCOL_2: get_variable and set_variable are available.
 // Both wrap the MySQL component_sys_variable_register service and are
 // thread-safe. Use "mysql_server" as component_name to access built-in MySQL
 // system variables (e.g., wait_timeout).
@@ -803,7 +801,7 @@ typedef struct {
   unsigned int type_count;
   vef_type_desc_t **types;
 
-  // protocol >= VEF_PROTOCOL_3
+  // protocol >= VEF_PROTOCOL_2
   unsigned int config_var_count;
   vef_config_var_desc_t **config_vars;
 } vef_registration_t;

@@ -625,7 +625,7 @@ bool load_installed_extensions(THD *thd) {
       ExtensionRegistration registration;
       std::string load_error;
       if (load_vef_extension(so_path, extension_name, registration,
-                             VEF_PROTOCOL_3, load_error)) {
+                             VEF_PROTOCOL_2, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;

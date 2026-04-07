@@ -158,7 +158,7 @@ bool register_config_vars_from_extension(
     const std::string &extension_name,
     const veb::ExtensionRegistration &ext_reg) {
   const vef_registration_t *reg = ext_reg.registration;
-  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_3 ||
+  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_2 ||
       reg->config_var_count == 0) {
     return false;
   }
@@ -299,7 +299,7 @@ void unregister_config_vars_from_extension(const std::string &extension_name) {
 vef_context_t make_vef_context(vef_protocol_t protocol) {
   vef_context_t ctx{};
   ctx.protocol = protocol;
-  if (protocol >= VEF_PROTOCOL_3) {
+  if (protocol >= VEF_PROTOCOL_2) {
     ctx.get_variable = vef_get_variable_impl;
     ctx.set_variable = vef_set_variable_impl;
   }
