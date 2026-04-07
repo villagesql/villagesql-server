@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -206,6 +207,10 @@ enum dberr_t {
   DB_DATA_NOT_SORTED,
   /** The record size is too big for LOAD BULK DATA operation. */
   DB_BULK_TOO_BIG_RECORD,
+
+  // TODO(villagesql-rebase): check this enum value for conflict.
+  // VillageSQL error code for InnoDB
+  DB_VILLAGE_ERROR = 500,
 
   /* The following are partial failure codes */
 

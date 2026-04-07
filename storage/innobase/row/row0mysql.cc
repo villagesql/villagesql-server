@@ -678,7 +678,7 @@ handle_new_error:
         break;
       }
       [[fallthrough]];
-    case DB_ERROR:
+    case DB_VILLAGE_ERROR:
     case DB_DUPLICATE_KEY:
     case DB_FOREIGN_DUPLICATE_KEY:
     case DB_TOO_BIG_RECORD:

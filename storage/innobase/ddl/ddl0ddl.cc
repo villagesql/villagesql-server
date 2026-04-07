@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2005, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -217,6 +218,15 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
       }
     } else {
       name = table->get_col_name(ifield->m_col_no);
+      dict_col_t *col = table->get_col(ifield->m_col_no);
+      if (col->stored_by_extn()) {
+        trx->error_state = DB_VILLAGE_ERROR;
+        trx_set_detailed_error(
+            trx,
+            "InnoDB: Indexing for types with column storage is not"
+            " supported.");
+        return nullptr;
+      }
     }
 
     index->add_field(name, ifield->m_prefix_len, ifield->m_is_ascending);

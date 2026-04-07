@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1994, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -488,6 +489,8 @@ const char *ut_strerr(dberr_t num) {
       return "Data is not sorted.";
     case DB_BULK_TOO_BIG_RECORD:
       return "Row is too big for LOAD BULK DATA operation.";
+    case DB_VILLAGE_ERROR:
+      return "VillageSQL: Error in custom type operation.";
     case DB_ERROR_UNSET:;
       /* Fall through. */
 

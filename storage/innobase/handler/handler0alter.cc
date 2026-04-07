@@ -110,6 +110,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0new.h"
 #include "ut0stage.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/include/error.h"
 
 /* For supporting Native InnoDB Partitioning. */
 #include "ha_innopart.h"
@@ -424,7 +425,12 @@ static UNIV_COLD void my_error_innodb(
     case DB_TABLESPACE_EXISTS:
       my_error(ER_TABLESPACE_EXISTS, MYF(0), table);
       break;
-
+    case DB_VILLAGE_ERROR:
+      villagesql_error(
+          "InnoDB: Custom type operation failed. See server"
+          " error log for details.",
+          MYF(0));
+      break;
 #ifdef UNIV_DEBUG
     case DB_SUCCESS:
     case DB_DUPLICATE_KEY:
@@ -1280,6 +1286,12 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
   if (ha_alter_info->handler_flags & Alter_inplace_info::ADD_SPATIAL_INDEX) {
     ha_alter_info->unsupported_reason =
         innobase_get_err_msg(ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS);
+    online = false;
+  }
+
+  // Extended custom column storage holds DML operations during table rebuild.
+  // TODO(villagesql): Enable online row logging for column storage.
+  if (m_prebuilt->table->has_extended_storage) {
     online = false;
   }
 
@@ -5144,6 +5156,10 @@ error_handling:
       break;
     case DB_UNSUPPORTED:
       my_error(ER_TABLE_CANT_HANDLE_SPKEYS, MYF(0));
+      break;
+    case DB_VILLAGE_ERROR:
+      ut_ad(ctx->trx->error_state == DB_VILLAGE_ERROR);
+      villagesql_error("%s", MYF(0), ctx->trx->detailed_error);
       break;
     default:
       my_error_innodb(error, table_name, user_table->flags);

@@ -199,6 +199,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0test.h"
 #include "ut0ut.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/util.h"
 #else
 #include <typelib.h>
@@ -2277,6 +2278,14 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
     case DB_IO_NO_PUNCH_HOLE_FS:
     case DB_IO_NO_PUNCH_HOLE_TABLESPACE:
       return HA_ERR_UNSUPPORTED;
+    case DB_VILLAGE_ERROR:
+      if (thd) {
+        villagesql_error(
+            "InnoDB: Custom type operation failed. See server"
+            " error log for details.",
+            MYF(0));
+      }
+      return HA_ERR_GENERIC;
   }
 }
 
@@ -12357,6 +12366,16 @@ inline int create_index(
     Field *field = form->field[key_part->field->field_index()];
     if (field == nullptr) ut_error;
 
+    // TODO(villagesql-indexing): Support indexing for types with column store.
+    if (field->has_type_context() &&
+        field->get_type_context()->storage_intf()) {
+      villagesql_error(
+          "InnoDB: Indexing for types with column storage is not supported.",
+          MYF(0));
+      error = ER_VILLAGESQL_GENERIC_ERROR;
+      goto do_cleanup;
+    }
+
     const char *field_name = key_part->field->field_name;
     if (handler != nullptr && handler->is_intrinsic()) {
       ut_ad(!innobase_is_v_fld(key_part->field));
@@ -12436,6 +12455,7 @@ inline int create_index(
     dd_table_close(new_table, nullptr, nullptr, false);
   }
 
+do_cleanup:
   if (error && handler != nullptr) {
     priv->unregister_table_handler(table_name);
   }
