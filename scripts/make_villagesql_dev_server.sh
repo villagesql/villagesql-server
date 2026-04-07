@@ -7,44 +7,21 @@ set -e  # Exit on error
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/vsql_script_utils.sh"
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PWD}"
 STAGING_DIR="${TMPDIR:-/tmp}/villagesql_dev_staging_$$"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Helper functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $*"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $*"
-}
-
-log_step() {
-    echo -e "${BLUE}==>${NC} $*"
-}
-
-die() {
-    log_error "$*"
-    exit 1
-}
+# _EXT_CLONES_DIR is set in step 2.5 if BUILD_BUNDLED_EXTENSIONS=1, so that
+# the extension source clones survive long enough for test_extension_vebs.sh.
+_EXT_CLONES_DIR=""
 
 cleanup() {
     if [[ -d "$STAGING_DIR" ]]; then
         log_info "Cleaning up staging directory..."
         rm -rf "$STAGING_DIR"
     fi
+    [[ -n "$_EXT_CLONES_DIR" ]] && rm -rf "$_EXT_CLONES_DIR"
 }
 
 trap cleanup EXIT
@@ -64,28 +41,8 @@ fi
 # Create build directory if it doesn't exist
 mkdir -p "$BUILD_DIR"
 
-# Read version information
-VSQL_VERSION_FILE="$SOURCE_DIR/VSQL_VERSION"
-if [[ ! -f "$VSQL_VERSION_FILE" ]]; then
-    die "VSQL_VERSION file not found at $VSQL_VERSION_FILE"
-fi
-
-# Parse version
-VSQL_MAJOR=$(grep "^VSQL_MAJOR_VERSION=" "$VSQL_VERSION_FILE" | cut -d'=' -f2)
-VSQL_MINOR=$(grep "^VSQL_MINOR_VERSION=" "$VSQL_VERSION_FILE" | cut -d'=' -f2)
-VSQL_PATCH=$(grep "^VSQL_PATCH_VERSION=" "$VSQL_VERSION_FILE" | cut -d'=' -f2)
-VSQL_PRE=$(grep "^VSQL_PRE_RELEASE_VERSION=" "$VSQL_VERSION_FILE" | cut -d'=' -f2)
-
-VSQL_VERSION="${VSQL_MAJOR}.${VSQL_MINOR}.${VSQL_PATCH}"
-if [[ -n "$VSQL_PRE" ]]; then
-    VSQL_VERSION="${VSQL_VERSION}-${VSQL_PRE}"
-fi
-
-# Get platform info
-PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
-# Use "macos" to match MySQL's naming convention (uname returns "darwin" on macOS)
-[[ "$PLATFORM" == "darwin" ]] && PLATFORM="macos"
-ARCH="$(uname -m)"
+vsql_parse_version "$SOURCE_DIR"
+vsql_platform_info
 
 PACKAGE_NAME="villagesql-dev-server-${VSQL_VERSION}-${PLATFORM}-${ARCH}"
 TARBALL_NAME="${PACKAGE_NAME}.tar.gz"
@@ -97,6 +54,9 @@ log_info "Output Directory: $OUTPUT_DIR"
 log_info "Package includes:"
 log_info "  - Server and client binaries"
 log_info "  - Example VEB files (vsql_simple, vsql_complex)"
+if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
+    log_info "  - Bundled extensions (from villagesql/dev_server/bundled_extensions.txt)"
+fi
 log_info "  - mysql-test framework with VillageSQL tests"
 log_info "  - Support files and SQL scripts"
 echo ""
@@ -141,6 +101,33 @@ log_info "Build complete"
 # Verify mysqld was built (CMake places it in runtime_output_directory before install)
 if [[ ! -x "$BUILD_DIR/runtime_output_directory/mysqld" ]]; then
     die "mysqld not found in $BUILD_DIR/runtime_output_directory/ after build"
+fi
+
+# Step 2.5: Build and test bundled extensions (optional, enabled via BUILD_BUNDLED_EXTENSIONS=1)
+# TODO(villagesql): Extract build_server.sh and package_dev_server.sh as separate
+# scripts so that CI can run build → test → package as discrete steps rather than
+# embedding the test between two halves of this monolithic script.
+if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
+    log_step "Step 2.5: Building bundled extensions..."
+    SDK_STAGING_DIR="$BUILD_DIR/villagesql-extension-sdk-${VSQL_VERSION}"
+    [[ -d "$SDK_STAGING_DIR" ]] || die "SDK staging directory not found: $SDK_STAGING_DIR"
+
+    # Keep sources in a temp dir so test_extension_vebs.sh can read mysql-test/
+    # directories after build_bundled_extensions.sh exits.
+    _EXT_CLONES_DIR="$(mktemp -d)"
+    EXTENSION_CLONES_DIR="$_EXT_CLONES_DIR" \
+        "$SOURCE_DIR/scripts/build_bundled_extensions.sh" \
+            "$SDK_STAGING_DIR" \
+            "$BUILD_DIR/veb_output_directory"
+    log_info "Bundled extensions built"
+
+    log_step "Step 2.5: Testing bundled extensions..."
+    "$SOURCE_DIR/scripts/test_extension_vebs.sh" \
+        "$BUILD_DIR" \
+        "$_EXT_CLONES_DIR"
+    log_info "Bundled extensions tested"
+else
+    log_info "Skipping bundled extensions (set BUILD_BUNDLED_EXTENSIONS=1 to include)"
 fi
 
 # Create staging directory
