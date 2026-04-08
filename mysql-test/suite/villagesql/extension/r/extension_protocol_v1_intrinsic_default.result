@@ -1,0 +1,17 @@
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension protocol_v1_intrinsic_default using SDK...
+Created protocol_v1_intrinsic_default.veb
+INSTALL EXTENSION protocol_v1_intrinsic_default;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val V1_REGTEST NOT NULL
+);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/v1_regtest.dat' IGNORE INTO TABLE t1;
+Warnings:
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val' at row 1
+# Intrinsic default should be 8 asterisks (from encode("")), not "V1_BUG**"
+SELECT * FROM t1;
+id	val
+1	********
+DROP TABLE t1;
+UNINSTALL EXTENSION protocol_v1_intrinsic_default;

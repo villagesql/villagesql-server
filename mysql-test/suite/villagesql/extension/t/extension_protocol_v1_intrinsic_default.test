@@ -1,0 +1,46 @@
+# Regression test for issue #202: server must not read intrinsic_default_str
+# from protocol-1 type descriptors.
+#
+# The test extension registers a protocol-1 type with intrinsic_default_str
+# set to the sentinel "V1_BUG".  A correct server ignores this field for
+# protocol-1 types, so the intrinsic default comes from encode("") which
+# produces 8 asterisks.  The buggy code reads the sentinel and produces
+# encode("V1_BUG") = "V1_BUG**" instead.
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = protocol_v1_intrinsic_default
+--let $extension_version = 0.0.1
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/protocol_v1_intrinsic_default.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION protocol_v1_intrinsic_default;
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val V1_REGTEST NOT NULL
+);
+
+# Use LOAD DATA IGNORE with a NULL value to trigger the intrinsic default
+# path for the NOT NULL column.
+--write_file $MYSQLTEST_VARDIR/tmp/v1_regtest.dat
+1	\N
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/v1_regtest.dat' IGNORE INTO TABLE t1
+
+# With the bug:   val = 'V1_BUG**' (sentinel was read)
+# Without the bug: val = '********' (encode("") fallback)
+--echo # Intrinsic default should be 8 asterisks (from encode("")), not "V1_BUG**"
+SELECT * FROM t1;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/v1_regtest.dat
+
+UNINSTALL EXTENSION protocol_v1_intrinsic_default;
