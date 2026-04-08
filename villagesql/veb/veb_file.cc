@@ -1376,7 +1376,9 @@ bool load_vef_extension(const std::string &so_path,
   vef_register_arg_t register_arg = {
       max_protocol,
       {MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, MYSQL_VERSION_PATCH, nullptr},
-      {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr}};
+      {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr},
+      villagesql::services::get_variable,
+      villagesql::services::set_variable};
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {

@@ -47,10 +47,10 @@ struct RegisteredConfigVar {
 std::mutex g_config_vars_mutex;
 std::vector<RegisteredConfigVar> g_config_vars;
 
-// Implements vef_context_t::get_variable. Wraps the MySQL component
-// sys_variable_register service, which handles locking internally.
-bool vef_get_variable_impl(vef_context_t * /*ctx*/, const char *component_name,
-                           const char *name, void **val, size_t *val_len) {
+}  // namespace
+
+bool get_variable(const char *component_name, const char *name, void **val,
+                  size_t *val_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return true;
 
@@ -64,14 +64,13 @@ bool vef_get_variable_impl(vef_context_t * /*ctx*/, const char *component_name,
   return result;
 }
 
-// Implements vef_context_t::set_variable. Looks up the variable type and
-// dispatches to the appropriate MySQL update service. String and bool variables
-// go through mysql_system_variable_update_string; integer variables go through
+// Dispatches to the appropriate MySQL update service based on the registered
+// variable type. String and bool variables go through
+// mysql_system_variable_update_string; integer variables go through
 // mysql_system_variable_update_integer (set_signed). All services handle
 // locking and support GLOBAL, PERSIST, and PERSIST_ONLY scopes.
-bool vef_set_variable_impl(vef_context_t * /*ctx*/, const char *component_name,
-                           const char *name, const char *scope,
-                           const char *val) {
+bool set_variable(const char *component_name, const char *name,
+                  const char *scope, const char *val) {
   if (val == nullptr) return true;
 
   // Look up the variable type so we can pick the right update service.
@@ -151,8 +150,6 @@ bool vef_set_variable_impl(vef_context_t * /*ctx*/, const char *component_name,
   mysql_plugin_registry_release(registry);
   return result;
 }
-
-}  // namespace
 
 bool register_config_vars_from_extension(
     const std::string &extension_name,
@@ -299,16 +296,6 @@ void unregister_config_vars_from_extension(const std::string &extension_name) {
   }
 
   mysql_plugin_registry_release(registry);
-}
-
-vef_context_t make_vef_context(vef_protocol_t protocol) {
-  vef_context_t ctx{};
-  ctx.protocol = protocol;
-  if (protocol >= VEF_PROTOCOL_2) {
-    ctx.get_variable = vef_get_variable_impl;
-    ctx.set_variable = vef_set_variable_impl;
-  }
-  return ctx;
 }
 
 }  // namespace services

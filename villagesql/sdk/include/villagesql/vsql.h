@@ -106,7 +106,8 @@ namespace vsql {
 using villagesql::extension_builder::make_extension;
 using villagesql::func_builder::make_func;
 
-// Re-export config variable builder functions
+// Re-export sys_var namespace for system variable access
+namespace sys_var = villagesql::sys_var;
 using villagesql::config_var_builder::make_config_var_bool;
 using villagesql::config_var_builder::make_config_var_double;
 using villagesql::config_var_builder::make_config_var_int;

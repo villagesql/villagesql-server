@@ -36,10 +36,12 @@ bool register_config_vars_from_extension(
 // Called when an extension is uninstalled.
 void unregister_config_vars_from_extension(const std::string &extension_name);
 
-// Construct a vef_context_t for the given protocol version. For protocol >= 2,
-// get_variable and set_variable are wired up to the thread-safe implementations
-// in config_vars.cc.
-vef_context_t make_vef_context(vef_protocol_t protocol);
+// Implementations of the system variable access functions passed to extensions
+// via vef_register_arg_t.
+bool get_variable(const char *component_name, const char *name, void **val,
+                  size_t *val_len);
+bool set_variable(const char *component_name, const char *name,
+                  const char *scope, const char *val);
 
 }  // namespace services
 }  // namespace villagesql

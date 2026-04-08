@@ -26,7 +26,6 @@
 #include "sql/sql_udf.h"
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
-#include "villagesql/services/config_vars.h"
 #include "villagesql/types/util.h"
 
 namespace villagesql {
@@ -83,7 +82,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     if (!m_result_buffer) return true;
   }
 
-  m_context = villagesql::services::make_vef_context(m_udf->vdf_protocol);
+  m_context.protocol = m_udf->vdf_protocol;
   m_vdf_args.user_data = nullptr;
   m_vdf_args.value_count = static_cast<int>(arg_count);
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {

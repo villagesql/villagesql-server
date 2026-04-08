@@ -170,8 +170,9 @@ typedef enum : unsigned int {
                    // + Extension config variables (vef_config_var_desc_t):
                    //   server registers these as MySQL component system
                    //   variables on the extension's behalf.
-                   // + get_variable/set_variable added to vef_context_t:
-                   //   thread-safe access to MySQL component system variables.
+                   // + get_variable/set_variable function pointers added to
+                   //   vef_register_arg_t: thread-safe access to MySQL
+                   //   component system variables from any extension VDF.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -194,34 +195,34 @@ typedef struct {
 
 // Context passed to all function calls (prerun, vdf, postrun)
 //
-// protocol >= VEF_PROTOCOL_2: get_variable and set_variable are available.
-// Both wrap the MySQL component_sys_variable_register service and are
-// thread-safe. Use "mysql_server" as component_name to access built-in MySQL
-// system variables (e.g., wait_timeout).
-//
-typedef struct vef_context_t {
+typedef struct {
   // protocol version being used
   vef_protocol_t protocol;
 
-  // Get the global value of a system variable.
-  // component_name: the extension name (e.g. "vsql_slow_query_log") or
-  //                 "mysql_server" for built-in MySQL variables.
-  // name:           variable name without the component prefix.
-  // val:            on input, a buffer to hold the value; on output, a pointer
-  //                 to the value.
-  // val_len:        on input, the buffer size; on output, the length copied.
-  // Returns false on success, true on error.
-  bool (*get_variable)(struct vef_context_t *ctx, const char *component_name,
-                       const char *name, void **val, size_t *val_len);
-
-  // Set the value of a system variable.
-  // component_name and name identify the variable (same as get_variable).
-  // scope: "GLOBAL", "PERSIST", or "PERSIST_ONLY"; NULL defaults to GLOBAL.
-  // val:   new value as a string (e.g. "42", "true", "mystring").
-  // Returns false on success, true on error.
-  bool (*set_variable)(struct vef_context_t *ctx, const char *component_name,
-                       const char *name, const char *scope, const char *val);
+  // We foresee adding logger or distributed trace information in this context
 } vef_context_t;
+
+// Function pointer types for system variable access, passed to extensions
+// via vef_register_arg_t. Use "mysql_server" as component_name to access
+// built-in MySQL variables (e.g., max_connections).
+//
+// get_variable: get the global value of a system variable.
+//   component_name: extension name or "mysql_server" for built-in variables.
+//   name:           variable name without the component prefix.
+//   val:            on input, a buffer; on output, a pointer to the value.
+//   val_len:        on input, buffer size; on output, length copied.
+//   Returns false on success, true on error.
+//
+// set_variable: set the value of a system variable.
+//   scope: "GLOBAL", "PERSIST", or "PERSIST_ONLY"; NULL defaults to GLOBAL.
+//   val:   new value as a string (e.g. "42", "true", "hello").
+//   Returns false on success, true on error.
+typedef bool (*vef_get_variable_fn)(const char *component_name,
+                                    const char *name, void **val,
+                                    size_t *val_len);
+typedef bool (*vef_set_variable_fn)(const char *component_name,
+                                    const char *name, const char *scope,
+                                    const char *val);
 
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
@@ -229,6 +230,10 @@ typedef struct {
 
   vef_version_t mysql_version;
   vef_version_t vef_version;
+
+  // protocol >= VEF_PROTOCOL_2
+  vef_get_variable_fn get_variable;
+  vef_set_variable_fn set_variable;
 } vef_register_arg_t;
 
 typedef struct {

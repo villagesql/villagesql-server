@@ -32,10 +32,10 @@
 #include <utility>
 
 #include <villagesql/func_builder.h>
-#include <villagesql/vsql/config_var_builder.h>
 #include <villagesql/sdk_version.h>
 #include <villagesql/storage_builder.h>
 #include <villagesql/type_builder.h>
+#include <villagesql/vsql/config_var_builder.h>
 
 namespace villagesql {
 namespace extension_builder {
@@ -81,11 +81,13 @@ struct ExtensionBuilder {
         name_, version_, funcs_, new_types, config_vars_, new_min};
   }
 
-  // Add a config variable.
+  // Add a config variable. Config variables require at least VEF_PROTOCOL_2.
   constexpr auto config_var(const ConfigVarDescriptor &cv) const {
     auto new_cvs = std::tuple_cat(config_vars_, std::make_tuple(cv));
+    const vef_protocol_t new_min =
+        VEF_PROTOCOL_2 > min_protocol_ ? VEF_PROTOCOL_2 : min_protocol_;
     return ExtensionBuilder<FuncTuple, TypeTuple, decltype(new_cvs)>{
-        name_, version_, funcs_, types_, new_cvs, min_protocol_};
+        name_, version_, funcs_, types_, new_cvs, new_min};
   }
 
   // Add a type object that carries embedded SQL-callable VDFs (e.g. the
@@ -103,8 +105,8 @@ struct ExtensionBuilder {
             ? t.descriptor.vef_desc.protocol
             : min_protocol_;
     return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
-                            ConfigVarTuple>{
-        name_, version_, new_funcs, new_types, config_vars_, new_min};
+                            ConfigVarTuple>{name_,     version_,     new_funcs,
+                                            new_types, config_vars_, new_min};
   }
 
   // This is here only for testing, please don't depend on it.
@@ -238,6 +240,12 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
                                       bool &initialized,
                                       vef_register_arg_t *arg, const Ext &ext) {
   if (initialized) return &reg;
+
+  // Capture server-provided function pointers for protocol >= 2.
+  if (arg->protocol >= VEF_PROTOCOL_2) {
+    villagesql::sys_var::g_get_variable = arg->get_variable;
+    villagesql::sys_var::g_set_variable = arg->set_variable;
+  }
 
   if (arg->protocol < ext.min_protocol()) {
     static char error_buf[128];

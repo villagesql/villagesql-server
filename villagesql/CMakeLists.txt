@@ -239,8 +239,8 @@ IF(NOT WITHOUT_SERVER)
   )
 
   ExternalProject_Add(vsql_config_vars_test_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-config-vars-test
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-config-vars-test-build
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-config-vars-test
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-config-vars-test-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
     CMAKE_ARGS
       "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
@@ -255,7 +255,7 @@ IF(NOT WITHOUT_SERVER)
   add_custom_target(copy_vsql_config_vars_test_veb
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
     COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-config-vars-test-build/vsql_config_vars_test.veb
+      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-config-vars-test-build/vsql_config_vars_test.veb
       ${CMAKE_BINARY_DIR}/veb_output_directory/
     DEPENDS vsql_config_vars_test_extension
     COMMENT "Copying vsql_config_vars_test.veb to veb_output_directory"

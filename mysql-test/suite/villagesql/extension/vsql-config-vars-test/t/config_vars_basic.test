@@ -37,23 +37,16 @@ SELECT @@global.vsql_config_vars_test.label;
 --echo # Clean up persisted value
 RESET PERSIST vsql_config_vars_test.max_items;
 
---echo # Read own variable via get_variable VDF
-SELECT vsql_config_vars_test.get_variable('vsql_config_vars_test', 'max_items');
-SELECT vsql_config_vars_test.get_variable('vsql_config_vars_test', 'label');
+--echo # Read max_items via VDF (reads storage global directly)
+SELECT vsql_config_vars_test.read_max_items();
 
---echo # Read a built-in MySQL variable via get_variable
-SELECT vsql_config_vars_test.get_variable('mysql_server', 'max_connections') > 0;
-
---echo # Set own variable via set_variable VDF (GLOBAL)
-SELECT vsql_config_vars_test.set_variable('vsql_config_vars_test', 'max_items', 'GLOBAL', '77');
+--echo # Write max_items via VDF (goes through set_variable for locking/validation)
+SELECT vsql_config_vars_test.write_max_items(42);
 SELECT @@global.vsql_config_vars_test.max_items;
 
---echo # Set own variable via set_variable VDF (PERSIST)
-SELECT vsql_config_vars_test.set_variable('vsql_config_vars_test', 'max_items', 'PERSIST', '55');
+--echo # write_max_items clamps to the declared range (0..1000000) with a warning
+SELECT vsql_config_vars_test.write_max_items(9999999);
 SELECT @@global.vsql_config_vars_test.max_items;
-
---echo # Clean up persisted value (if set_variable PERSIST succeeded)
-RESET PERSIST vsql_config_vars_test.max_items;
 
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_config_vars_test;
