@@ -376,8 +376,8 @@ using TypeHashWithParamsFunc = size_t (*)(const P &,
 // Extension author signature for intrinsic_default.
 // Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
 // INSERT IGNORE or UPDATE IGNORE). Returns the string representation of the
-// default value (e.g. "(0,0)" for COMPLEX). The server encodes this string
-// using the type's encode function to produce the binary default.
+// default value (e.g. "(0,0)" for COMPLEX). The server converts this string
+// using the type's from_string function to produce the binary default.
 // Returns nullptr on error (writes to error_msg).
 using IntrinsicDefaultFunc = const char *(*)(char *error_msg);
 template <typename P>

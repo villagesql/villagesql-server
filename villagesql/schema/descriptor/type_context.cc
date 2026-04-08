@@ -57,7 +57,7 @@ bool TypeContext::init_intrinsic_default() {
   // default. Variable-length types with no resolved size skip this entirely.
   //
   // Sources tried in order:
-  // 1. intrinsic_default_fn VDF: returns a string, which the server encodes.
+  // 1. intrinsic_default_fn VDF: returns a string, which the server converts.
   // 2. intrinsic_default_str: encode the extension-supplied string literal.
   // 3. encode(""): encode the empty string.
   //
@@ -71,7 +71,7 @@ bool TypeContext::init_intrinsic_default() {
   std::vector<unsigned char> buffer(storage_size);
   size_t encoded_length = 0;
 
-  // Sources 1, 2, and 3 all produce a string that is then encoded.
+  // Sources 1, 2, and 3 all produce a string that is then converted.
   // Source 1 calls the intrinsic_default VDF to get the string.
   // Source 2 uses the extension-supplied literal.
   // Source 3 falls back to the empty string.

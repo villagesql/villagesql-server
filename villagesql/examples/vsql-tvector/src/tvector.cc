@@ -288,7 +288,7 @@ int tvector_compare(const TVectorParams &p,
 }
 
 // Implicit default for TVECTOR: returns "[0,0,...,0]" with p.dimension zeros.
-// The server encodes this string using the type's encode function.
+// The server converts this string using the type's from_string function.
 const char *tvector_default(const TVectorParams &p, char * /*error_msg*/) {
   static thread_local std::string buf;
   buf = "[";
