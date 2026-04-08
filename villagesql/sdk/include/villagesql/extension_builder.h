@@ -31,8 +31,8 @@
 #include <tuple>
 #include <utility>
 
-#include <villagesql/config_var_builder.h>
 #include <villagesql/func_builder.h>
+#include <villagesql/vsql/config_var_builder.h>
 #include <villagesql/sdk_version.h>
 #include <villagesql/storage_builder.h>
 #include <villagesql/type_builder.h>

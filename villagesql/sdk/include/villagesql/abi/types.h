@@ -731,10 +731,6 @@ typedef struct {
 //   SELECT @@global.extension_name.variable_name
 //   SET GLOBAL extension_name.variable_name = value
 //
-// The value_ptr must point to a global in the extension .so that remains valid
-// for the lifetime of the extension. MySQL writes directly to this storage when
-// the user sets the variable.
-
 typedef enum : int {
   VEF_VAR_BOOL = 0,
   VEF_VAR_INT = 1,
@@ -754,28 +750,28 @@ typedef struct {
   vef_var_type_t type;
 
   // Pointer to storage in the extension .so. Must remain valid for the
-  // lifetime of the extension. Cast according to type:
-  //   VEF_VAR_BOOL:   bool*
-  //   VEF_VAR_INT:    long long*
-  //   VEF_VAR_DOUBLE: double*
-  //   VEF_VAR_STR:    char**
-  void *value_ptr;
-
+  // lifetime of the extension. MySQL writes directly to this storage when
+  // the user sets the variable. Use the typed field in the union below
+  // matching the declared type.
   union {
     struct {
+      double *value_ptr;
       double def_val;
       double min_val;
       double max_val;
     } dbl;
     struct {
+      long long *value_ptr;
       long long def_val;
       long long min_val;
       long long max_val;
     } integer;
     struct {
+      bool *value_ptr;
       bool def_val;
     } boolean;
     struct {
+      char **value_ptr;
       const char *def_val;
     } str;
   };

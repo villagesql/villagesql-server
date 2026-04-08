@@ -92,6 +92,9 @@
 // New object-based type builder
 #include <villagesql/vsql/type_builder.h>
 
+// Config variable builder
+#include <villagesql/vsql/config_var_builder.h>
+
 // Bring the new vsql API into scope alongside the existing villagesql names.
 // After `using namespace vsql`, make_type() comes from ::vsql, while
 // make_func() and make_extension() continue to come from
@@ -102,6 +105,12 @@ namespace vsql {
 // so that `using namespace vsql` is sufficient for a complete extension.
 using villagesql::extension_builder::make_extension;
 using villagesql::func_builder::make_func;
+
+// Re-export config variable builder functions
+using villagesql::config_var_builder::make_config_var_bool;
+using villagesql::config_var_builder::make_config_var_double;
+using villagesql::config_var_builder::make_config_var_int;
+using villagesql::config_var_builder::make_config_var_str;
 
 // Re-export typed argument/result wrappers
 using villagesql::CustomArg;

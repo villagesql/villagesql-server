@@ -193,6 +193,7 @@ bool register_config_vars_from_extension(
 
     int flags = PLUGIN_VAR_RQCMDARG;
     void *check_arg = nullptr;
+    void *value_ptr = nullptr;
 
     // Build the type-specific check_arg struct on the stack. The service
     // copies the values it needs before register_variable returns.
@@ -212,6 +213,7 @@ bool register_config_vars_from_extension(
         flags |= PLUGIN_VAR_BOOL;
         bool_arg.def_val = v->boolean.def_val;
         check_arg = &bool_arg;
+        value_ptr = v->boolean.value_ptr;
         break;
       case VEF_VAR_INT:
         flags |= PLUGIN_VAR_LONGLONG;
@@ -220,6 +222,7 @@ bool register_config_vars_from_extension(
         int_arg.max_val = static_cast<longlong>(v->integer.max_val);
         int_arg.blk_sz = 0;
         check_arg = &int_arg;
+        value_ptr = v->integer.value_ptr;
         break;
       case VEF_VAR_DOUBLE:
         // TODO(villagesql-beta): component_sys_variable_register does not
@@ -232,6 +235,7 @@ bool register_config_vars_from_extension(
         dbl_arg.max_val = v->dbl.max_val;
         dbl_arg.blk_sz = 0;
         check_arg = &dbl_arg;
+        value_ptr = v->dbl.value_ptr;
         break;
       case VEF_VAR_STR:
         // PLUGIN_VAR_MEMALLOC tells the server to copy the string on SET,
@@ -239,12 +243,13 @@ bool register_config_vars_from_extension(
         flags |= PLUGIN_VAR_STR | PLUGIN_VAR_MEMALLOC;
         str_arg.def_val = const_cast<char *>(v->str.def_val);
         check_arg = &str_arg;
+        value_ptr = v->str.value_ptr;
         break;
     }
 
     if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
                                    v->comment ? v->comment : "", nullptr,
-                                   nullptr, check_arg, v->value_ptr)) {
+                                   nullptr, check_arg, value_ptr)) {
       LogVSQL(ERROR_LEVEL,
               "Failed to register config var '%s' for extension '%s'", v->name,
               extension_name.c_str());
