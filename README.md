@@ -240,6 +240,7 @@ When building from source, VillageSQL Server includes two built-in extensions:
 > - [**`vsql_ai`**](https://github.com/villagesql/vsql-ai): AI prompting via SQL functions
 > - [**`vsql_crypto`**](https://github.com/villagesql/vsql-crypto): Cryptographic functions
 > - [**`vsql_network_address`**](https://github.com/villagesql/vsql-network-address): IPv4, IPv6, and MAC address types
+> - [**`vsql_http`**](https://github.com/villagesql/vsql-http): HTTP client functions (`http_get`, `http_post`, and more)
 >
 > These can be built from their repositories and installed by copying the `.veb` files to your VEF directory.
 
