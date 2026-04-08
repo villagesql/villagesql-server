@@ -23,22 +23,23 @@ INSTALL EXTENSION test_veb_ext;
 # Verify version 1.2.3 was read from manifest (not hardcoded as 0.0.1)
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
-# Verify expansion directory structure exists: _expanded/{name}/{sha256}/
---let $veb_dir = `SELECT @@veb_dir`
+# Verify expansion cache directory structure exists:
+#   {datadir}/.veb_expansion_cache/{name}/{sha256}/
+let MYSQLD_DATADIR= `SELECT @@datadir`;
 
-# Check that _expanded directory exists
---file_exists $veb_dir/_expanded
+# Check that .veb_expansion_cache directory exists
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache
 
 # Check that extension directory exists
---file_exists $veb_dir/_expanded/test_veb_ext
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/test_veb_ext
 
 # Find the SHA256 subdirectory (we don't know the exact hash, but there should be exactly one)
 --perl
 use strict;
 use File::Find;
 
-my $veb_dir = $ENV{'MYSQLTEST_VARDIR'} . "/veb";
-my $ext_dir = "$veb_dir/_expanded/test_veb_ext";
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/test_veb_ext";
 
 # Find all subdirectories (should be exactly one SHA256 hash)
 opendir(my $dh, $ext_dir) or die "Cannot open $ext_dir: $!";
@@ -74,10 +75,10 @@ if (! -f $so_file) {
     die "Expected test_veb_ext.so at: $so_file";
 }
 
-print "Verified expansion directory structure: _expanded/test_veb_ext/<SHA256>/\n";
-print "Manifest exists at: <VEBDIR>/_expanded/test_veb_ext/<SHA256>/manifest.json\n";
-print "Lib directory exists at: <VEBDIR>/_expanded/test_veb_ext/<SHA256>/lib/\n";
-print "Shared library exists at: <VEBDIR>/_expanded/test_veb_ext/<SHA256>/lib/test_veb_ext.so\n";
+print "Verified expansion cache structure: .veb_expansion_cache/test_veb_ext/<SHA256>/\n";
+print "Manifest exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/manifest.json\n";
+print "Lib directory exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/\n";
+print "Shared library exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/test_veb_ext.so\n";
 EOF
 
 # Uninstall the extension (cleanup)

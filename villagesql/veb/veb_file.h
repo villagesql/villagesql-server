@@ -29,7 +29,6 @@ namespace veb {
 
 // Get full path to a file/directory within veb_dir
 // e.g., get_veb_path("foo.veb") → "/usr/local/mysql/lib/veb/foo.veb"
-// e.g., get_veb_path("_expanded") → "/usr/local/mysql/lib/veb/_expanded"
 // Returns empty string on error
 std::string get_veb_path(const std::string &filename);
 
@@ -45,17 +44,18 @@ bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex);
 // On success, version is populated with the extension version
 bool load_veb_manifest(const std::string &name, std::string &version);
 
-// Expand VEB archive to directory: {veb_dir}/_expanded/{name}/{sha256}/
+// Expand VEB archive to directory:
+//   {datadir}/.veb_expansion_cache/{name}/{sha256}/
 //
 // Directory structure created:
-//   _expanded/
+//   .veb_expansion_cache/
 //     my_extension/
 //       abc123def.../        (SHA256 of my_extension.veb)
 //         manifest.json
 //         lib/
 //           my_extension.so
 //
-// If _expanded/{name}/{sha256}/ already exists, skips extraction
+// If .veb_expansion_cache/{name}/{sha256}/ already exists, skips extraction
 // Returns false on success, true on error
 // On success, expanded_path contains full path and sha256_hash contains hash
 bool expand_veb_to_directory(const std::string &name,
@@ -67,14 +67,14 @@ bool expand_veb_to_directory(const std::string &name,
 // For each extension:
 //   - Validates the .veb file exists
 //   - Validates manifest.json version matches database
-//   - Does NOT re-expand archive
+//   - Re-expands archive if .so is missing from expansion cache
 //   - Does NOT execute SQL
 // After loading all extensions, calls cleanup_orphaned_expansion_directories()
 // Returns false on success, true on error
 bool load_installed_extensions(THD *thd);
 
 // Remove orphaned expansion directories
-// Scans _expanded/{name}/ subdirectories for each extension
+// Scans .veb_expansion_cache/{name}/ subdirectories for each extension
 // Removes SHA256 subdirectories if the extension is not in installed_extensions
 // set
 // Called during startup loading
@@ -129,8 +129,9 @@ bool load_vef_extension(const std::string &so_path,
 void unload_vef_extension(const ExtensionRegistration &registration);
 
 // Get the path to the .so file for an extension
-// Uses the convention: _expanded/{name}/{sha256}/lib/{name}.so
-// Returns empty string if path cannot be constructed
+// Uses the convention:
+// {datadir}/.veb_expansion_cache/{name}/{sha256}/lib/{name}.so Returns empty
+// string if path cannot be constructed
 std::string get_extension_so_path(const std::string &extension_name,
                                   const std::string &sha256);
 

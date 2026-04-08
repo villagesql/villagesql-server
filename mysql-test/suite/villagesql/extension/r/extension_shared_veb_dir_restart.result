@@ -1,0 +1,28 @@
+#
+# Initialize two fresh datadirs
+#
+#
+# Phase 1: Start with data2, install extension
+#
+INSTALL EXTENSION vsql_complex;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_complex	0.0.1
+#
+# Phase 2: Switch to data1 (no extensions installed)
+#
+# data1 has no extensions
+SELECT COUNT(*) AS extension_count FROM INFORMATION_SCHEMA.EXTENSIONS;
+extension_count
+0
+#
+# Phase 3: Switch back to data2 — server should start successfully
+#
+# Extension should still be loaded
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_complex	0.0.1
+#
+# Cleanup
+#
+UNINSTALL EXTENSION vsql_complex;

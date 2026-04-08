@@ -34,6 +34,7 @@
 #include "sql/auth/auth_common.h"
 #include "sql/field.h"
 #include "sql/iterators/row_iterator.h"
+#include "sql/mysqld.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
 #include "sql/sql_executor.h"
@@ -62,30 +63,37 @@
 namespace villagesql {
 namespace veb {
 
+static std::string get_expansion_cache_base_path() {
+  char path_buf[FN_REFLEN];
+  fn_format(path_buf, ".veb_expansion_cache", mysql_real_data_home, "", 0);
+  return std::string(path_buf);
+}
+
 std::string get_extension_so_path(const std::string &extension_name,
                                   const std::string &sha256) {
-  // Construct path: _expanded/{name}/{sha256}/lib/{name}.so
-  std::string expanded_base = get_veb_path("_expanded");
+  // Construct path:
+  // {datadir}/.veb_expansion_cache/{name}/{sha256}/lib/{name}.so
+  std::string expanded_base = get_expansion_cache_base_path();
   if (expanded_base.empty()) {
     return "";
   }
 
   char path_buf[FN_REFLEN];
 
-  // _expanded/{name}/
+  // .veb_expansion_cache/{name}/
   fn_format(path_buf, extension_name.c_str(), expanded_base.c_str(), "", 0);
   std::string name_dir(path_buf);
 
-  // _expanded/{name}/{sha256}/
+  // .veb_expansion_cache/{name}/{sha256}/
   fn_format(path_buf, sha256.c_str(), name_dir.c_str(), "", 0);
   std::string sha_dir(path_buf);
 
-  // _expanded/{name}/{sha256}/lib/
+  // .veb_expansion_cache/{name}/{sha256}/lib/
   fn_format(path_buf, "lib", sha_dir.c_str(), "", 0);
   std::string lib_dir(path_buf);
 
   // TODO(villagesql-windows): should be .dll on windows.
-  // _expanded/{name}/{sha256}/lib/{name}.so
+  // .veb_expansion_cache/{name}/{sha256}/lib/{name}.so
   std::string so_filename = extension_name + ".so";
   fn_format(path_buf, so_filename.c_str(), lib_dir.c_str(), "", 0);
 
@@ -313,8 +321,8 @@ bool expand_veb_to_directory(const std::string &name,
     return true;
   }
 
-  // Construct expansion path: _expanded/{name}/{sha256}/
-  std::string base_path = get_veb_path("_expanded");
+  // Construct expansion path: {datadir}/.veb_expansion_cache/{name}/{sha256}/
+  std::string base_path = get_expansion_cache_base_path();
 
   char name_dir_buf[FN_REFLEN];
   fn_format(name_dir_buf, name.c_str(), base_path.c_str(), "", 0);
@@ -336,17 +344,19 @@ bool expand_veb_to_directory(const std::string &name,
     return false;  // Already expanded, success
   }
 
-  // Create directory structure: _expanded/, _expanded/{name}/,
-  // _expanded/{name}/{sha256}/ Create _expanded/ if needed
+  // Create directory structure: .veb_expansion_cache/,
+  // .veb_expansion_cache/{name}/, .veb_expansion_cache/{name}/{sha256}/ Create
+  // .veb_expansion_cache/ if needed
   if (!my_stat(base_path.c_str(), &dir_stat, MYF(0))) {
     if (my_mkdir(base_path.c_str(), 0755, MYF(0)) != 0) {
-      villagesql_error("Failed to create _expanded directory", MYF(0));
+      villagesql_error("Failed to create .veb_expansion_cache directory",
+                       MYF(0));
       return true;
     }
-    LogVSQL(INFORMATION_LEVEL, "Created _expanded directory");
+    LogVSQL(INFORMATION_LEVEL, "Created .veb_expansion_cache directory");
   }
 
-  // Create _expanded/{name}/ if needed
+  // Create .veb_expansion_cache/{name}/ if needed
   if (!my_stat(name_dir.c_str(), &dir_stat, MYF(0))) {
     if (my_mkdir(name_dir.c_str(), 0755, MYF(0)) != 0) {
       villagesql_error("Failed to create extension directory for '%s'", MYF(0),
@@ -356,7 +366,7 @@ bool expand_veb_to_directory(const std::string &name,
     LogVSQL(INFORMATION_LEVEL, "Created directory: %s", name_dir.c_str());
   }
 
-  // Create _expanded/{name}/{sha256}/
+  // Create .veb_expansion_cache/{name}/{sha256}/
   if (my_mkdir(expanded_path.c_str(), 0755, MYF(0)) != 0) {
     villagesql_error("Failed to create SHA256 expansion directory", MYF(0));
     return true;
@@ -621,6 +631,30 @@ bool load_installed_extensions(THD *thd) {
         return true;
       }
 
+      // Re-expand VEB if the .so is missing from the expansion cache
+      MY_STAT so_stat;
+      if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) {
+        LogVSQL(INFORMATION_LEVEL,
+                "Extension '%s' .so not found at '%s', re-expanding from VEB",
+                extension_name.c_str(), so_path.c_str());
+        std::string expanded_path;
+        std::string reexpand_sha256;
+        if (expand_veb_to_directory(extension_name, expanded_path,
+                                    reexpand_sha256)) {
+          LogVSQL(ERROR_LEVEL, "Failed to re-expand VEB for extension '%s'",
+                  extension_name.c_str());
+          return true;
+        }
+        if (reexpand_sha256 != sha256) {
+          LogVSQL(ERROR_LEVEL,
+                  "Extension '%s' VEB file has changed: database has SHA256 "
+                  "'%s', current VEB has '%s'",
+                  extension_name.c_str(), sha256.c_str(),
+                  reexpand_sha256.c_str());
+          return true;
+        }
+      }
+
       ExtensionRegistration registration;
       std::string load_error;
       if (load_vef_extension(so_path, extension_name, registration,
@@ -673,20 +707,20 @@ void cleanup_orphaned_expansion_directories(
     const std::set<std::string> &installed_extensions) {
   LogVSQL(INFORMATION_LEVEL, "Cleaning up orphaned expansion directories");
 
-  std::string expanded_base_path = get_veb_path("_expanded");
+  std::string expanded_base_path = get_expansion_cache_base_path();
 
-  // Check if _expanded directory exists
+  // Check if .veb_expansion_cache directory exists
   MY_STAT expanded_stat;
   if (!my_stat(expanded_base_path.c_str(), &expanded_stat, MYF(0)) ||
       !MY_S_ISDIR(expanded_stat.st_mode)) {
-    LogVSQL(INFORMATION_LEVEL, "No _expanded directory found");
+    LogVSQL(INFORMATION_LEVEL, "No .veb_expansion_cache directory found");
     return;
   }
 
-  // Open _expanded directory
+  // Open .veb_expansion_cache directory
   DIR *expanded_dir = opendir(expanded_base_path.c_str());
   if (!expanded_dir) {
-    LogVSQL(WARNING_LEVEL, "Failed to open _expanded directory");
+    LogVSQL(WARNING_LEVEL, "Failed to open .veb_expansion_cache directory");
     return;
   }
 

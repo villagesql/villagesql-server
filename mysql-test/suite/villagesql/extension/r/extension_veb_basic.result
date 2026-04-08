@@ -6,10 +6,10 @@ INSTALL EXTENSION test_veb_ext;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
 test_veb_ext	1.2.3
-Verified expansion directory structure: _expanded/test_veb_ext/<SHA256>/
-Manifest exists at: <VEBDIR>/_expanded/test_veb_ext/<SHA256>/manifest.json
-Lib directory exists at: <VEBDIR>/_expanded/test_veb_ext/<SHA256>/lib/
-Shared library exists at: <VEBDIR>/_expanded/test_veb_ext/<SHA256>/lib/test_veb_ext.so
+Verified expansion cache structure: .veb_expansion_cache/test_veb_ext/<SHA256>/
+Manifest exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/manifest.json
+Lib directory exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/
+Shared library exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/test_veb_ext.so
 UNINSTALL EXTENSION test_veb_ext;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION

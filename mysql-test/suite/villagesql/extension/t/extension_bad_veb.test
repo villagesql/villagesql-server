@@ -278,8 +278,9 @@ INSTALL EXTENSION symlink_relative;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 # Verify no expansion directory was left behind
+let MYSQLD_DATADIR= `SELECT @@datadir`;
 --error 1
---file_exists $veb_dir/_expanded/symlink_relative
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/symlink_relative
 
 --echo # Test 2: Symlink with absolute path pointing outside
 --let $extension_name = symlink_absolute
@@ -294,7 +295,7 @@ SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 # Verify no expansion directory was left behind
 --error 1
---file_exists $veb_dir/_expanded/symlink_absolute
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/symlink_absolute
 
 --echo # Test 3: Deep directory traversal with many ../
 --let $extension_name = deep_traversal

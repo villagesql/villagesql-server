@@ -1,10 +1,12 @@
 # Test that server refuses to start when an extension's .so file is missing
+# and the .veb file is also unavailable for re-expansion.
 #
 # This test verifies that the server REFUSES to start when an installed
-# extension's .so file is deleted from _expanded. This prevents crashes
+# extension's .so file is deleted from the expansion cache AND the .veb
+# source is also missing (preventing re-expansion). This prevents crashes
 # when accessing tables with custom types.
 #
-# Recovery is tested by restoring the .so file and restarting.
+# Recovery is tested by restoring the files and restarting.
 
 --let $veb_dir = $MYSQLTEST_VARDIR/veb
 --exec mkdir -p $veb_dir
@@ -33,11 +35,12 @@ CREATE TABLE test_missing_so (id INT PRIMARY KEY, c COMPLEX);
 INSERT INTO test_missing_so VALUES (1, '(1.5,2.5)');
 SELECT id, c FROM test_missing_so ORDER BY id;
 
-# Move the .so file away to simulate corruption (we'll restore it later)
+# Move the .so file away AND the .veb file to prevent re-expansion
+let MYSQLD_DATADIR= `SELECT @@datadir`;
 --perl
 use strict;
-my $veb_dir = $ENV{'MYSQLTEST_VARDIR'} . "/veb";
-my $ext_dir = "$veb_dir/_expanded/vsql_complex";
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
 opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
 my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
 closedir($dh);
@@ -48,7 +51,12 @@ closedir($dh);
 my $so_path = "$lib_dir/$so_files[0]";
 my $backup_path = "$lib_dir/$so_files[0].bak";
 rename($so_path, $backup_path) or die "Can't move $so_path to $backup_path: $!";
-print "Moved .so file away from expansion directory\n";
+print "Moved .so file away from expansion cache\n";
+my $veb_dir = $ENV{'MYSQLTEST_VARDIR'} . "/veb";
+my $veb_path = "$veb_dir/vsql_complex.veb";
+my $veb_backup = "$veb_dir/vsql_complex.veb.bak";
+rename($veb_path, $veb_backup) or die "Can't move $veb_path to $veb_backup: $!";
+print "Moved .veb file away to prevent re-expansion\n";
 EOF
 
 --echo # Restarting server - should fail due to missing .so
@@ -75,11 +83,11 @@ let SEARCH_FILE= $MYSQLTEST_VARDIR/log/my_restart.err;
 let SEARCH_PATTERN= Extension loading failed;
 --source include/search_pattern.inc
 
-# Restore the .so file
+# Restore the .so and .veb files
 --perl
 use strict;
-my $veb_dir = $ENV{'MYSQLTEST_VARDIR'} . "/veb";
-my $ext_dir = "$veb_dir/_expanded/vsql_complex";
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
 opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
 my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
 closedir($dh);
@@ -91,7 +99,12 @@ my $backup_path = "$lib_dir/$bak_files[0]";
 my $so_path = $backup_path;
 $so_path =~ s/\.bak$//;
 rename($backup_path, $so_path) or die "Can't restore $backup_path to $so_path: $!";
-print "Restored .so file to expansion directory\n";
+print "Restored .so file to expansion cache\n";
+my $veb_dir = $ENV{'MYSQLTEST_VARDIR'} . "/veb";
+my $veb_backup = "$veb_dir/vsql_complex.veb.bak";
+my $veb_path = "$veb_dir/vsql_complex.veb";
+rename($veb_backup, $veb_path) or die "Can't restore $veb_backup to $veb_path: $!";
+print "Restored .veb file\n";
 EOF
 
 # Restart - server should now load successfully

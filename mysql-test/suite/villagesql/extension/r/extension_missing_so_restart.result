@@ -16,11 +16,13 @@ INSERT INTO test_missing_so VALUES (1, '(1.5,2.5)');
 SELECT id, c FROM test_missing_so ORDER BY id;
 id	c
 1	(1.5,2.5)
-Moved .so file away from expansion directory
+Moved .so file away from expansion cache
+Moved .veb file away to prevent re-expansion
 # Restarting server - should fail due to missing .so
 # Server correctly refused to start
 Pattern "Extension loading failed" found
-Restored .so file to expansion directory
+Restored .so file to expansion cache
+Restored .veb file
 # restart: --veb-dir=MYSQLTEST_VARDIR/veb
 # Server started after restoring .so file
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;

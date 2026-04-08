@@ -1,0 +1,116 @@
+# Test that switching datadirs with a shared veb_dir doesn't break extensions.
+# The expansion cache (.veb_expansion_cache/) lives inside each datadir, so
+# orphan cleanup in one datadir cannot affect another.
+#
+# See: https://github.com/villagesql/villagesql-server/issues/199
+
+# Set up a shared VEB directory
+--let $veb_dir = $MYSQLTEST_VARDIR/veb_shared
+--exec mkdir -p $veb_dir
+
+--let $default_veb_dir = `SELECT @@veb_dir`
+--exec cp $default_veb_dir/vsql_complex.veb $veb_dir/
+
+# Suppress expected error messages
+--disable_query_log
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+call mtr.add_suppression("Failed to load extension");
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("Extension loading failed");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("dlopen");
+call mtr.add_suppression("no such file");
+call mtr.add_suppression("Aborting");
+call mtr.add_suppression("cannot open shared object");
+--enable_query_log
+
+# Prepare paths
+let BASEDIR= `select @@basedir`;
+let DDIR1=$MYSQL_TMP_DIR/shared_veb_data1;
+let DDIR2=$MYSQL_TMP_DIR/shared_veb_data2;
+let MYSQLD_LOG=$MYSQL_TMP_DIR/shared_veb_restart.log;
+let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --tls-version= --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR;
+let BOOTSTRAP_SQL=$MYSQL_TMP_DIR/shared_veb_bootstrap.sql;
+
+write_file $BOOTSTRAP_SQL;
+CREATE DATABASE test;
+EOF
+
+--echo #
+--echo # Initialize two fresh datadirs
+--echo #
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR1 --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 > $MYSQLD_LOG 2>&1
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR2 --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 >> $MYSQLD_LOG 2>&1
+
+--echo #
+--echo # Phase 1: Start with data2, install extension
+--echo #
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec echo "restart:--datadir=$DDIR2 --veb-dir=$veb_dir" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+INSTALL EXTENSION vsql_complex;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo #
+--echo # Phase 2: Switch to data1 (no extensions installed)
+--echo #
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec echo "restart:--datadir=$DDIR1 --veb-dir=$veb_dir" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # data1 has no extensions
+SELECT COUNT(*) AS extension_count FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo #
+--echo # Phase 3: Switch back to data2 — server should start successfully
+--echo #
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+# Capture error output in case of failure
+--error 0,1
+--remove_file $MYSQLTEST_VARDIR/log/shared_veb_restart_err.log
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec echo "restart:--datadir=$DDIR2 --veb-dir=$veb_dir" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # Extension should still be loaded
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+UNINSTALL EXTENSION vsql_complex;
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--force-rmdir $DDIR1
+--force-rmdir $DDIR2
+--force-rmdir $veb_dir
+--remove_file $BOOTSTRAP_SQL
+--error 0,1
+--remove_file $MYSQLD_LOG
+--error 0,1
+--remove_file $MYSQLTEST_VARDIR/log/shared_veb_restart_err.log
+
+# Restart with original datadir
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc

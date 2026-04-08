@@ -21,11 +21,12 @@ INSTALL EXTENSION startup_test_ext;
 # Verify it's installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
-# Create an orphan directory (simulating a leftover from an uninstalled extension)
---exec mkdir -p $veb_dir/_expanded/orphan_ext/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+# Create an orphan directory in the expansion cache (simulating a leftover from an uninstalled extension)
+let MYSQLD_DATADIR= `SELECT @@datadir`;
+--exec mkdir -p $MYSQLD_DATADIR/.veb_expansion_cache/orphan_ext/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 # Verify orphan directory exists before restart
---file_exists $veb_dir/_expanded/orphan_ext/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/orphan_ext/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 --source include/villagesql/binlog_check_end.inc
 
