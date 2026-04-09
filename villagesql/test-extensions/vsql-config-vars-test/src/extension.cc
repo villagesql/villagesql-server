@@ -30,8 +30,6 @@
 //   write_max_items() - writes via sys_var::set() so MySQL applies locking,
 //                       validation, and PERSIST support
 
-#include <cstdio>
-
 #include <villagesql/vsql.h>
 
 using namespace vsql;
@@ -57,10 +55,10 @@ void write_max_items_impl(IntArg value, IntResult out) {
     out.set(1);
     return;
   }
-  char buf[32];
-  snprintf(buf, sizeof(buf), "%lld", value.value());
-  out.set(sys_var::set("vsql_config_vars_test", "max_items", nullptr, buf) ? 1
-                                                                           : 0);
+  out.set(
+      sys_var::set("vsql_config_vars_test", "max_items", nullptr, value.value())
+          ? 1
+          : 0);
 }
 
 VEF_GENERATE_ENTRY_POINTS(

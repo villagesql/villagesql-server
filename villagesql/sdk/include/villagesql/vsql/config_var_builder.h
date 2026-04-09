@@ -32,6 +32,8 @@
 //   SELECT @@global.myext.threshold_ms
 //   SET GLOBAL myext.threshold_ms = 500;
 
+#include <cstdio>
+
 #include <villagesql/abi/types.h>
 
 namespace villagesql {
@@ -121,6 +123,13 @@ inline bool set(const char *component_name, const char *name, const char *scope,
                 const char *val) {
   if (g_set_variable == nullptr) return true;
   return g_set_variable(component_name, name, scope, val);
+}
+
+inline bool set(const char *component_name, const char *name, const char *scope,
+                long long val) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%lld", val);
+  return set(component_name, name, scope, buf);
 }
 
 }  // namespace sys_var
