@@ -36,8 +36,8 @@
 
 using namespace vsql;
 
-static long long g_max_items = 100;
-static char *g_label = nullptr;
+static long long g_max_items;
+static char *g_label;
 
 // Returns the current value of max_items by reading the storage global
 // directly. Safe for INT variables — no locking required.
