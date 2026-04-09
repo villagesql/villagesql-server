@@ -44,7 +44,14 @@ static char *g_label;
 void read_max_items_impl(IntResult out) { out.set(g_max_items); }
 
 // Sets max_items via sys_var::set so MySQL handles locking, range validation,
-// and PERSIST support. The storage global is updated by MySQL on success.
+// and persistence. The storage global is updated by MySQL on success.
+//
+// scope controls persistence:
+//   nullptr        - update running value only (GLOBAL), not persisted
+//   "PERSIST"      - update running value AND write to mysqld-auto.cnf
+//                    (survives restart)
+//   "PERSIST_ONLY" - write to mysqld-auto.cnf only, running value unchanged
+//                    (takes effect on next restart)
 void write_max_items_impl(IntArg value, IntResult out) {
   if (value.is_null()) {
     out.set(1);
