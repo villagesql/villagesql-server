@@ -802,7 +802,7 @@ bool FTS::Parser::doc_tokenize(doc_id_t doc_id, fts_doc_t *doc,
       break;
     }
 
-    key_buffer->deep_copy(FTS_NUM_FIELDS_SORT, cur_len);
+    ut_a(!key_buffer->deep_copy(FTS_NUM_FIELDS_SORT, cur_len));
 
     if (parser != nullptr) {
       UT_LIST_REMOVE(t_ctx->m_token_list, fts_token);

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -113,10 +114,12 @@ struct Key_sort_buffer : private ut::Non_copyable {
            m_buffer_size - 1;
   }
 
-  /** Deep copy the field data starting from the back.
+  /** Deep copy the field data starting from the back. Extended storage columns
+  are skipped; the caller must handle them via fetch_for_bulk_ddl.
   @param[in] n_fields           Number of fields to copy.
-  @param[in] data_size          Size in bytes of the data to copy. */
-  void deep_copy(size_t n_fields, size_t data_size) noexcept;
+  @param[in] data_size          Size in bytes of the data to copy.
+  @return true if any extended storage columns were skipped, false otherwise. */
+  bool deep_copy(size_t n_fields, size_t data_size) noexcept;
 
   /** Compare two merge data tuples.
   @param[in] lhs                Fields to compare on the LHS

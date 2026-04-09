@@ -32,6 +32,7 @@ struct dict_table_t;
 struct dict_col_t;
 struct dict_index_t;
 struct dict_field_t;
+struct dfield_t;
 struct dtuple_t;
 struct upd_t;
 
@@ -153,6 +154,16 @@ class Custom_column {
                         const dtuple_t *index_entry, ulint *offsets,
                         mem_heap_t **heap);
 
+  // Inserts extended column data into the column store before bulk-load record
+  // conversion. Updates each extended field in the tuple with the REF in-place.
+  // @param table The table being inserted into.
+  // @param trx_id The transaction ID of the insert.
+  // @param tuple The clustered index tuple
+  // @param no_redo True for bulk-load: skips redo logging for column store mtr.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t insert_direct(dict_table_t *table, trx_id_t trx_id,
+                               dtuple_t *tuple, bool no_redo);
+
   // Updates extended column data for an updated row.
   // Marks the old data as deleted and inserts the new data.
   // @param table The table being updated.
@@ -244,6 +255,20 @@ class Custom_column {
   static dberr_t allocate_fetch(const dict_table_t *table,
                                 const dict_col_t *col, const byte *&data,
                                 ulint &data_len, mem_heap_t *heap);
+
+  // Materialize extended storage columns during DDL bulk operations.
+  // @param new_index  Destination clustered index.
+  // @param old_index  Source clustered index; nullptr if not applicable.
+  // @param col_map    Mapping from old column numbers to new ones; nullptr if
+  //                   the old and new tables are identical.
+  // @param n_fields   Number of fields in the tuple.
+  // @param fields     Array of dfield_t representing the tuple.
+  // @param heap       Memory heap used to allocate fetched data.
+  // @return DB_SUCCESS on success; otherwise, an error code.
+  static dberr_t fetch_for_bulk_ddl(const dict_index_t *new_index,
+                                    const dict_index_t *old_index,
+                                    const ulint *col_map, size_t n_fields,
+                                    dfield_t *fields, mem_heap_t *heap);
 
  private:
   std::shared_ptr<const TypeContext> type_context_;

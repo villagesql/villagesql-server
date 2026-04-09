@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2014, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -38,6 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ibuf0ibuf.h"
 #include "lob0lob.h"
 #include "log0chkp.h"
+#include "villagesql/custom_column.h"
 
 namespace ddl {
 /** Innodb B-tree index fill factor for bulk load. */
@@ -484,6 +486,16 @@ dberr_t Page_load::insert(const dtuple_t *tuple, const big_rec_t *big_rec,
                           size_t rec_size) noexcept {
   IF_ENABLED("ddl_btree_build_insert_return_interrupt", return DB_INTERRUPTED;)
 
+  if (m_index->is_clustered()) {
+    // Insert extended column data before record conversion so that
+    // rec_convert_dtuple_to_rec writes the REF directly into the record.
+    // const_cast is safe: insert_direct mutates only the extended ref bytes.
+    auto err = villagesql::innodb::Custom_column::insert_direct(
+        m_index->table, m_trx_id, const_cast<dtuple_t *>(tuple), true);
+    if (err != DB_SUCCESS) {
+      return err;
+    }
+  }
   /* Convert tuple to record. */
   auto rec_mem = static_cast<byte *>(mem_heap_alloc(m_heap, rec_size));
 

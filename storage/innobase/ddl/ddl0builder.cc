@@ -44,6 +44,7 @@ Created 2020-11-01 by Sunny Bains. */
 #include "row0ext.h"
 #include "row0vers.h"
 #include "ut0stage.h"
+#include "villagesql/custom_column.h"
 
 namespace ddl {
 
@@ -1051,6 +1052,9 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
 
   doc_id_t write_doc_id{};
 
+  const dict_index_t *old_index =
+      m_index->is_clustered() ? m_ctx.m_old_table->first_index() : nullptr;
+
   for (;;) {
     // clang-format off
     DBUG_EXECUTE_IF(
@@ -1118,7 +1122,17 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
       return DB_OVERFLOW;
     }
 
-    key_buffer->deep_copy(ctx.m_n_fields, ctx.m_data_size);
+    bool has_extended = key_buffer->deep_copy(ctx.m_n_fields, ctx.m_data_size);
+
+    if (has_extended) {
+      using villagesql::innodb::Custom_column;
+      auto err = Custom_column::fetch_for_bulk_ddl(
+          key_buffer->m_index, old_index, m_ctx.m_col_map, ctx.m_n_fields,
+          key_buffer->back(), key_buffer->heap());
+      if (err != DB_SUCCESS) {
+        return err;
+      }
+    }
 
     /* Note row added and all fields copied. */
     ctx.m_n_fields = 0;

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -83,14 +84,21 @@ Key_sort_buffer::Key_sort_buffer(dict_index_t *index, size_t size) noexcept
   m_heap = mem_heap_create(1024, UT_LOCATION_HERE);
 }
 
-void Key_sort_buffer::deep_copy(size_t n_fields, size_t data_size) noexcept {
+bool Key_sort_buffer::deep_copy(size_t n_fields, size_t data_size) noexcept {
   auto field = m_dtuples[m_n_tuples++];
+  bool has_extended = false;
 
   do {
-    dfield_dup(field++, m_heap);
+    if (field->is_extended()) {
+      has_extended = true;
+    } else {
+      dfield_dup(field, m_heap);
+    }
+    field++;
   } while (--n_fields > 0);
 
   m_total_size += data_size;
+  return has_extended;
 }
 
 void Key_sort_buffer::clear() noexcept {

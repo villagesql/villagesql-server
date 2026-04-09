@@ -491,6 +491,49 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
   return DB_SUCCESS;
 }
 
+dberr_t Custom_column::insert_direct(dict_table_t *table, trx_id_t trx_id,
+                                     dtuple_t *tuple, bool no_redo) {
+  if (!table->has_extended_storage) {
+    return DB_SUCCESS;
+  }
+
+  dict_index_t *index = table->first_index();
+  ut_a(index->is_clustered());
+
+  const dfield_t *pk_field = dtuple_get_nth_field(tuple, 0);
+
+  for (uint32_t i = 0; i < tuple->n_fields; i++) {
+    dfield_t *field = dtuple_get_nth_field(tuple, i);
+    if (!field->is_extended() || dfield_is_null(field)) {
+      continue;
+    }
+
+    dict_col_t *col = index->get_field(i)->col;
+    ut_a(col->stored_by_extn());
+
+    if (!no_redo) {
+      log_free_check();
+    }
+    mtr_t mtr;
+    mtr_start(&mtr);
+    if (no_redo) {
+      mtr.set_log_mode(MTR_LOG_NO_REDO);
+    }
+
+    Custom_column::Ref ref_val = Custom_column::EMPTY_REF;
+    auto err =
+        insert_in_column_store(col, &mtr, trx_id, field, pk_field, ref_val);
+    mtr_commit(&mtr);
+
+    if (err != DB_SUCCESS) {
+      log_extended_error("Insert", nullptr, index, i);
+      return err;
+    }
+    field->set_extended_ref(ref_val);
+  }
+  return DB_SUCCESS;
+}
+
 static dberr_t mark_in_column_store(dict_col_t *col, mtr_t *mtr,
                                     trx_id_t trx_id, Custom_column::Ref ref,
                                     bool del_mark) {
@@ -928,6 +971,69 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   memcpy(dest, col_data.data, col_data.length);
 
   mtr_commit(&mtr);
+  return DB_SUCCESS;
+}
+
+dberr_t Custom_column::fetch_for_bulk_ddl(const dict_index_t *new_index,
+                                          const dict_index_t *old_index,
+                                          const ulint *col_map, size_t n_fields,
+                                          dfield_t *fields, mem_heap_t *heap) {
+  ut_a(old_index != nullptr);
+
+  // No col_map: old and new tables are the same. Position i is valid in both
+  // old and new index; fetch each extended field at its current position.
+  if (col_map == nullptr) {
+    for (uint32_t i = 0; i < n_fields; i++) {
+      if (!fields[i].is_extended()) continue;
+      auto *data = static_cast<const byte *>(dfield_get_data(&fields[i]));
+      ulint len = dfield_get_len(&fields[i]);
+      auto err = allocate_fetch(old_index->table, old_index->get_field(i)->col,
+                                data, len, heap);
+      if (err != DB_SUCCESS) {
+        ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+            << "InnoDB: DDL rebuild: Custom column allocate and fetch failed";
+        return err;
+      }
+      dfield_set_data(&fields[i], data, len);
+    }
+    return DB_SUCCESS;
+  }
+
+  // col_map is set: columns may have moved positions. Iterate old user columns,
+  // find extended ones, map to new index position, and fetch.
+  const dict_table_t *old_table = old_index->table;
+  const ulint n_old_user_cols = old_table->n_cols - DATA_N_SYS_COLS;
+
+  for (ulint old_col_ind = 0; old_col_ind < n_old_user_cols; old_col_ind++) {
+    const ulint new_col_ind = col_map[old_col_ind];
+    if (new_col_ind == ULINT_UNDEFINED) continue;
+
+    const dict_col_t *old_col = old_table->get_col(old_col_ind);
+    if (!old_col->stored_by_extn()) continue;
+
+    // Locate the field position in the new index for this column.
+    uint32_t new_field_pos = UINT32_MAX;
+    for (uint32_t i = 0; i < n_fields; i++) {
+      if (new_index->get_field(i)->col->ind == new_col_ind) {
+        new_field_pos = i;
+        break;
+      }
+    }
+    ut_a(new_field_pos != UINT32_MAX);
+
+    auto *data =
+        static_cast<const byte *>(dfield_get_data(&fields[new_field_pos]));
+    ulint len = dfield_get_len(&fields[new_field_pos]);
+
+    auto err = allocate_fetch(old_table, old_col, data, len, heap);
+    if (err != DB_SUCCESS) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: DDL rebuild: Custom column allocate and fetch failed";
+      return err;
+    }
+    dfield_set_data(&fields[new_field_pos], data, len);
+  }
+
   return DB_SUCCESS;
 }
 
