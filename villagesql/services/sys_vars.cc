@@ -14,7 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "villagesql/services/config_vars.h"
+#include "villagesql/services/sys_vars.h"
 
 #include <cstdlib>
 #include <mutex>
@@ -35,17 +35,17 @@ namespace services {
 
 namespace {
 
-// A registered config variable together with the extension it belongs to, so
+// A registered system variable together with the extension it belongs to, so
 // we can unregister it on extension uninstall, and with its type so
 // set_variable can dispatch to the correct MySQL update service.
-struct RegisteredConfigVar {
+struct RegisteredSysVar {
   std::string extension_name;
   std::string var_name;
   vef_var_type_t type;
 };
 
-std::mutex g_config_vars_mutex;
-std::vector<RegisteredConfigVar> g_config_vars;
+std::mutex g_sys_vars_mutex;
+std::vector<RegisteredSysVar> g_sys_vars;
 
 }  // namespace
 
@@ -76,9 +76,9 @@ bool set_variable(const char *component_name, const char *name,
   // Look up the variable type so we can pick the right update service.
   vef_var_type_t var_type = VEF_VAR_STR;
   {
-    std::lock_guard<std::mutex> lock(g_config_vars_mutex);
+    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
     bool found = false;
-    for (const RegisteredConfigVar &v : g_config_vars) {
+    for (const RegisteredSysVar &v : g_sys_vars) {
       if (v.extension_name == component_name && v.var_name == name) {
         var_type = v.type;
         found = true;
@@ -151,19 +151,19 @@ bool set_variable(const char *component_name, const char *name,
   return result;
 }
 
-bool register_config_vars_from_extension(
+bool register_sys_vars_from_extension(
     const std::string &extension_name,
     const veb::ExtensionRegistration &ext_reg) {
   const vef_registration_t *reg = ext_reg.registration;
   if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_2 ||
-      reg->config_var_count == 0) {
+      reg->sys_var_count == 0) {
     return false;
   }
 
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) {
     LogVSQL(ERROR_LEVEL,
-            "register_config_vars_from_extension: failed to acquire registry");
+            "register_sys_vars_from_extension: failed to acquire registry");
     return true;
   }
 
@@ -171,18 +171,18 @@ bool register_config_vars_from_extension(
       "component_sys_variable_register", registry);
   if (!reg_svc.is_valid()) {
     LogVSQL(ERROR_LEVEL,
-            "register_config_vars_from_extension: "
+            "register_sys_vars_from_extension: "
             "component_sys_variable_register service unavailable");
     mysql_plugin_registry_release(registry);
     return true;
   }
 
   bool error = false;
-  for (unsigned int i = 0; i < reg->config_var_count; i++) {
-    vef_config_var_desc_t *v = reg->config_vars[i];
+  for (unsigned int i = 0; i < reg->sys_var_count; i++) {
+    vef_sys_var_desc_t *v = reg->sys_vars[i];
     if (v == nullptr || v->name == nullptr) {
       LogVSQL(ERROR_LEVEL,
-              "Extension '%s' has NULL config var descriptor at index %u",
+              "Extension '%s' has NULL system variable descriptor at index %u",
               extension_name.c_str(), i);
       error = true;
       break;
@@ -247,19 +247,18 @@ bool register_config_vars_from_extension(
     if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
                                    v->comment ? v->comment : "", nullptr,
                                    nullptr, check_arg, value_ptr)) {
-      LogVSQL(ERROR_LEVEL,
-              "Failed to register config var '%s' for extension '%s'", v->name,
-              extension_name.c_str());
+      LogVSQL(ERROR_LEVEL, "Failed to register system variable '%s' for extension '%s'",
+              v->name, extension_name.c_str());
       error = true;
       break;
     }
 
     {
-      std::lock_guard<std::mutex> lock(g_config_vars_mutex);
-      g_config_vars.push_back({extension_name, std::string(v->name), v->type});
+      std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+      g_sys_vars.push_back({extension_name, std::string(v->name), v->type});
     }
 
-    LogVSQL(INFORMATION_LEVEL, "Registered config var '%s' for extension '%s'",
+    LogVSQL(INFORMATION_LEVEL, "Registered system variable '%s' for extension '%s'",
             v->name, extension_name.c_str());
   }
 
@@ -267,19 +266,19 @@ bool register_config_vars_from_extension(
   return error;
 }
 
-void unregister_config_vars_from_extension(const std::string &extension_name) {
+void unregister_sys_vars_from_extension(const std::string &extension_name) {
   std::vector<std::string> var_names;
   {
-    std::lock_guard<std::mutex> lock(g_config_vars_mutex);
-    auto it = std::remove_if(g_config_vars.begin(), g_config_vars.end(),
-                             [&](const RegisteredConfigVar &v) {
+    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+    auto it = std::remove_if(g_sys_vars.begin(), g_sys_vars.end(),
+                             [&](const RegisteredSysVar &v) {
                                if (v.extension_name == extension_name) {
                                  var_names.push_back(v.var_name);
                                  return true;
                                }
                                return false;
                              });
-    g_config_vars.erase(it, g_config_vars.end());
+    g_sys_vars.erase(it, g_sys_vars.end());
   }
 
   if (var_names.empty()) return;

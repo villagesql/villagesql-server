@@ -18,6 +18,7 @@
 TARGET_SOURCES(sql_main PRIVATE
   $<TARGET_OBJECTS:villagesql_common>
   $<TARGET_OBJECTS:villagesql_schema>
+  $<TARGET_OBJECTS:villagesql_services>
   $<TARGET_OBJECTS:villagesql_sql>
   $<TARGET_OBJECTS:villagesql_system_views>
   $<TARGET_OBJECTS:villagesql_types>
@@ -25,6 +26,7 @@ TARGET_SOURCES(sql_main PRIVATE
 )
 ADD_DEPENDENCIES(sql_main villagesql_common)
 ADD_DEPENDENCIES(sql_main villagesql_schema)
+ADD_DEPENDENCIES(sql_main villagesql_services)
 ADD_DEPENDENCIES(sql_main villagesql_sql)
 ADD_DEPENDENCIES(sql_main villagesql_system_views)
 ADD_DEPENDENCIES(sql_main villagesql_types)

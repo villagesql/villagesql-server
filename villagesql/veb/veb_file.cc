@@ -45,7 +45,7 @@
 #include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
-#include "villagesql/services/config_vars.h"
+#include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/sql_extension.h"
 
 #include <archive.h>
@@ -645,7 +645,7 @@ bool load_installed_extensions(THD *thd) {
         return true;
       }
 
-      if (villagesql::services::register_config_vars_from_extension(
+      if (villagesql::services::register_sys_vars_from_extension(
               extension_name, registration)) {
         LogVSQL(ERROR_LEVEL,
                 "Failed to register config vars for extension '%s'",

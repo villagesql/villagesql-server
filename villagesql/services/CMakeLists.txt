@@ -14,7 +14,7 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_SERVICES_SOURCES
-  config_vars.cc
+  sys_vars.cc
 )
 
 # Object library for compilation into sql_main (avoids circular dependencies)

@@ -167,7 +167,7 @@ typedef enum : unsigned int {
                    // + Replace vef_vdf_args_t.values_v1 flat array with
                    //   vef_vdf_args_t.values pointer array (allows
                    //   vef_invalue_t to grow in future protocol versions).
-                   // + Extension config variables (vef_config_var_desc_t):
+                   // + Extension system variables (vef_sys_var_desc_t):
                    //   server registers these as MySQL component system
                    //   variables on the extension's behalf.
                    // + get_variable/set_variable function pointers added to
@@ -780,7 +780,7 @@ typedef struct {
       const char *def_val;
     } str;
   };
-} vef_config_var_desc_t;
+} vef_sys_var_desc_t;
 
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
@@ -803,8 +803,8 @@ typedef struct {
   vef_type_desc_t **types;
 
   // protocol >= VEF_PROTOCOL_2
-  unsigned int config_var_count;
-  vef_config_var_desc_t **config_vars;
+  unsigned int sys_var_count;
+  vef_sys_var_desc_t **sys_vars;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the

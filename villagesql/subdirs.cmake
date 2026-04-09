@@ -18,6 +18,7 @@
 # Kept here so the listing lives alongside the villagesql source tree.
 ADD_SUBDIRECTORY(../villagesql/common ${CMAKE_CURRENT_BINARY_DIR}/villagesql/common)
 ADD_SUBDIRECTORY(../villagesql/schema ${CMAKE_CURRENT_BINARY_DIR}/villagesql/schema)
+ADD_SUBDIRECTORY(../villagesql/services ${CMAKE_CURRENT_BINARY_DIR}/villagesql/services)
 ADD_SUBDIRECTORY(../villagesql/sql ${CMAKE_CURRENT_BINARY_DIR}/villagesql/sql)
 ADD_SUBDIRECTORY(../villagesql/system_views ${CMAKE_CURRENT_BINARY_DIR}/villagesql/system_views)
 ADD_SUBDIRECTORY(../villagesql/types ${CMAKE_CURRENT_BINARY_DIR}/villagesql/types)

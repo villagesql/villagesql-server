@@ -92,8 +92,8 @@
 // New object-based type builder
 #include <villagesql/vsql/type_builder.h>
 
-// Config variable builder
-#include <villagesql/vsql/config_var_builder.h>
+// System variable builder
+#include <villagesql/vsql/sys_var_builder.h>
 
 // Bring the new vsql API into scope alongside the existing villagesql names.
 // After `using namespace vsql`, make_type() comes from ::vsql, while
@@ -108,10 +108,10 @@ using villagesql::func_builder::make_func;
 
 // Re-export sys_var namespace for system variable access
 namespace sys_var = villagesql::sys_var;
-using villagesql::config_var_builder::make_config_var_bool;
-using villagesql::config_var_builder::make_config_var_double;
-using villagesql::config_var_builder::make_config_var_int;
-using villagesql::config_var_builder::make_config_var_str;
+using villagesql::sys_var_builder::make_sys_var_bool;
+using villagesql::sys_var_builder::make_sys_var_double;
+using villagesql::sys_var_builder::make_sys_var_int;
+using villagesql::sys_var_builder::make_sys_var_str;
 
 // Re-export typed argument/result wrappers
 using villagesql::CustomArg;

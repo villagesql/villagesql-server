@@ -63,12 +63,11 @@ void write_max_items_impl(IntArg value, IntResult out) {
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension("vsql_config_vars_test", "0.0.1")
-        .config_var(make_config_var_int("max_items",
-                                        "Maximum number of items to process",
-                                        &g_max_items, 100, 0, 1000000))
-        .config_var(make_config_var_str("label",
-                                        "A label string for this extension",
-                                        &g_label, "default_label"))
+        .sys_var(make_sys_var_int("max_items",
+                                  "Maximum number of items to process",
+                                  &g_max_items, 100, 0, 1000000))
+        .sys_var(make_sys_var_str("label", "A label string for this extension",
+                                  &g_label, "default_label"))
         .func(make_func<&read_max_items_impl>("read_max_items")
                   .returns(INT)
                   .build())

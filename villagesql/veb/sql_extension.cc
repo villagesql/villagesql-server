@@ -51,7 +51,7 @@
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/extensions.h"
 #include "villagesql/schema/victionary_client.h"
-#include "villagesql/services/config_vars.h"
+#include "villagesql/services/sys_vars.h"
 #include "villagesql/sql/metadata_modifier.h"
 #include "villagesql/veb/veb_file.h"
 
@@ -222,10 +222,10 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
                        extension_name.c_str());
       mark_success = false;
 
-    } else if (villagesql::services::register_config_vars_from_extension(
+    } else if (villagesql::services::register_sys_vars_from_extension(
                    extension_name, registration)) {
-      villagesql_error("Failed to register config vars for extension '%s'",
-                       MYF(0), extension_name.c_str());
+      villagesql_error("Failed to register system variables for extension '%s'", MYF(0),
+                       extension_name.c_str());
       mark_success = false;
 
     } else if (victionary.extension_descriptors().MarkForInsertion(
@@ -511,7 +511,7 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
   }
 
   if (to_unregister.has_value()) {
-    villagesql::services::unregister_config_vars_from_extension(extension_name);
+    villagesql::services::unregister_sys_vars_from_extension(extension_name);
     villagesql::veb::unload_vef_extension(*to_unregister);
   }
 
