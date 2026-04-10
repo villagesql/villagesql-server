@@ -5,8 +5,7 @@
 # - Every # TYPE line has a valid type (counter, gauge, untyped)
 # - Every # TYPE line is followed by a metric line with matching name
 # - Metric names match [a-z_][a-z0-9_]*
-# - Numeric metric values are well-formed
-# - String-valued variables metrics are accepted (info-style gauges)
+# - Every metric value is numeric or NaN/+Inf/-Inf per Prometheus spec
 # =============================================================================
 
 --source include/not_windows.inc
@@ -60,13 +59,10 @@ for (my $i = 0; $i < scalar @lines; $i++) {
     }
     $expect_metric_name = undef;
 
-    # Check value is numeric (string-valued variables metrics are allowed)
-    unless ($value =~ /^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) {
-      # Global variables and some status metrics export string values
-      unless ($name =~ /^mysql_global_variables_/ || $name =~ /_time$/) {
-        print "FORMAT ERROR: non-numeric value '$value' for metric '$name'\n";
-        $errors++;
-      }
+    # Check value is numeric (Prometheus exposition format: numeric or NaN/Inf)
+    unless ($value =~ /^(-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?|NaN|\+Inf|-Inf)$/) {
+      print "FORMAT ERROR: non-numeric value '$value' for metric '$name'\n";
+      $errors++;
     }
   } else {
     print "FORMAT ERROR: unrecognized line: $line\n";

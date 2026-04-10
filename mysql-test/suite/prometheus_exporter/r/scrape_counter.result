@@ -1,0 +1,23 @@
+# Capture baseline counter
+SELECT VARIABLE_VALUE INTO @before FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Prometheus_exporter_requests_total';
+# Issue exactly 3 scrapes
+# Capture counter after scrapes
+SELECT VARIABLE_VALUE INTO @after FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Prometheus_exporter_requests_total';
+# Assert delta is exactly 3
+SELECT (@after - @before) = 3 AS counter_delta_is_three;
+counter_delta_is_three
+1
+# Also verify scrape_duration_microseconds is now > 0
+SELECT VARIABLE_VALUE > 0 AS scrape_duration_is_positive
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Prometheus_exporter_scrape_duration_microseconds';
+scrape_duration_is_positive
+1
+# And verify errors_total is still 0 (no errors on successful scrapes)
+SELECT VARIABLE_VALUE = 0 AS errors_total_is_zero
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Prometheus_exporter_errors_total';
+errors_total_is_zero
+1

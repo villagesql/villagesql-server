@@ -1,0 +1,35 @@
+# =============================================================================
+# scrape_counter.test -- Verify the requests_total counter actually increments
+#
+# Captures the counter before and after a specific number of curl requests
+# and asserts the exact delta. Catches regressions where the counter is
+# silently not incremented.
+# =============================================================================
+
+--source include/not_windows.inc
+
+--echo # Capture baseline counter
+SELECT VARIABLE_VALUE INTO @before FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Prometheus_exporter_requests_total';
+
+--echo # Issue exactly 3 scrapes
+--exec curl -s http://127.0.0.1:19110/metrics > /dev/null
+--exec curl -s http://127.0.0.1:19110/metrics > /dev/null
+--exec curl -s http://127.0.0.1:19110/metrics > /dev/null
+
+--echo # Capture counter after scrapes
+SELECT VARIABLE_VALUE INTO @after FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Prometheus_exporter_requests_total';
+
+--echo # Assert delta is exactly 3
+SELECT (@after - @before) = 3 AS counter_delta_is_three;
+
+--echo # Also verify scrape_duration_microseconds is now > 0
+SELECT VARIABLE_VALUE > 0 AS scrape_duration_is_positive
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Prometheus_exporter_scrape_duration_microseconds';
+
+--echo # And verify errors_total is still 0 (no errors on successful scrapes)
+SELECT VARIABLE_VALUE = 0 AS errors_total_is_zero
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Prometheus_exporter_errors_total';
