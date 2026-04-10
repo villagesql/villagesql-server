@@ -307,6 +307,8 @@ TEST_F(MyAllocTest, CleanupCallbacksRunInLIFOOrder) {
   struct AppendOnDestroy {
     std::string *dest;
     char ch;
+    AppendOnDestroy(std::string *d, char c) : dest(d), ch(c) {}
+    AppendOnDestroy(const AppendOnDestroy &) = default;
     ~AppendOnDestroy() { *dest += ch; }
   };
 

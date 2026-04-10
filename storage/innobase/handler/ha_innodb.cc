@@ -5415,6 +5415,8 @@ static PSI_metric_info_v1 data_metrics[] = {
 
 // clang-format on
 
+void vef_storage_api_wrapper_init();
+
 static PSI_meter_info_v1 inno_meter[] = {
     {"mysql.inno", "MySql InnoDB metrics", 10, 0, 0, inno_metrics,
      std::size(inno_metrics)},
@@ -5428,8 +5430,6 @@ static PSI_meter_info_v1 inno_meter[] = {
 @param[in,out]  p       InnoDB handlerton
 @return error code
 @retval 0 on success */
-void vef_storage_api_wrapper_init();
-
 static int innodb_init(void *p) {
   DBUG_TRACE;
 
