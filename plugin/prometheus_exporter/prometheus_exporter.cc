@@ -39,7 +39,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <sys/eventfd.h>
+
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstring>
 #include <string>
@@ -88,26 +91,32 @@ static SYS_VAR *prom_system_vars[] = {
 };
 
 // -----------------------------------------------------------------------
+// Module-scope counters
+// -----------------------------------------------------------------------
+
+// Module-scope counters. Lifetime independent of the context so that
+// SHOW STATUS callbacks can safely read them even during plugin
+// install/uninstall races.
+static std::atomic<uint64_t> g_requests_total{0};
+static std::atomic<uint64_t> g_errors_total{0};
+static std::atomic<uint64_t> g_last_scrape_duration_us{0};
+
+// -----------------------------------------------------------------------
 // Plugin context
 // -----------------------------------------------------------------------
 
 struct PrometheusContext {
   my_thread_handle listener_thread;
   int listen_fd;
+  int wakeup_fd;
   std::atomic<bool> shutdown_requested;
   void *plugin_ref;
 
-  std::atomic<uint64_t> requests_total;
-  std::atomic<uint64_t> errors_total;
-  std::atomic<uint64_t> last_scrape_duration_us;
-
   PrometheusContext()
       : listen_fd(-1),
+        wakeup_fd(-1),
         shutdown_requested(false),
-        plugin_ref(nullptr),
-        requests_total(0),
-        errors_total(0),
-        last_scrape_duration_us(0) {}
+        plugin_ref(nullptr) {}
 };
 
 static PrometheusContext *g_ctx = nullptr;
@@ -257,8 +266,7 @@ static void prom_handle_ok(void *, uint, uint, ulonglong, ulonglong,
 static void prom_handle_error(void *ctx, uint, const char *, const char *) {
   auto *mc = static_cast<MetricsCollectorCtx *>(ctx);
   mc->error = true;
-  if (g_ctx != nullptr)
-    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
+  g_errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static void prom_shutdown(void *, int) {}
@@ -353,8 +361,7 @@ static int innodb_get_string(void *ctx, const char *value, size_t length,
 static void innodb_handle_error(void *ctx, uint, const char *, const char *) {
   auto *mc = static_cast<InnodbMetricsCtx *>(ctx);
   mc->error = true;
-  if (g_ctx != nullptr)
-    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
+  g_errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static const struct st_command_service_cbs innodb_cbs = {
@@ -504,8 +511,7 @@ static int replica_end_row(void *ctx) {
 static void replica_handle_error(void *ctx, uint, const char *, const char *) {
   auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
   rc->error = true;
-  if (g_ctx != nullptr)
-    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
+  g_errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static const struct st_command_service_cbs replica_cbs = {
@@ -610,8 +616,7 @@ static void binlog_handle_ok(void *ctx, uint, uint, ulonglong, ulonglong,
 static void binlog_handle_error(void *ctx, uint, const char *, const char *) {
   auto *bc = static_cast<BinlogCtx *>(ctx);
   bc->error = true;
-  if (g_ctx != nullptr)
-    g_ctx->errors_total.fetch_add(1, std::memory_order_relaxed);
+  g_errors_total.fetch_add(1, std::memory_order_relaxed);
 }
 
 static const struct st_command_service_cbs binlog_cbs = {
@@ -734,6 +739,10 @@ static std::string collect_metrics() {
 // -----------------------------------------------------------------------
 
 static int setup_listen_socket(const char *bind_addr, unsigned int port) {
+  if (bind_addr == nullptr || *bind_addr == '\0') {
+    return -1;
+  }
+
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) return -1;
 
@@ -774,16 +783,32 @@ static void write_full(int fd, const char *buf, size_t len) {
 static void *prometheus_listener_thread(void *arg) {
   auto *ctx = static_cast<PrometheusContext *>(arg);
 
-  while (!ctx->shutdown_requested.load(std::memory_order_relaxed)) {
-    struct pollfd pfd;
-    pfd.fd = ctx->listen_fd;
-    pfd.events = POLLIN;
+  while (!ctx->shutdown_requested.load(std::memory_order_acquire)) {
+    struct pollfd pfds[2];
+    pfds[0].fd = ctx->listen_fd;
+    pfds[0].events = POLLIN;
+    pfds[0].revents = 0;
+    pfds[1].fd = ctx->wakeup_fd;
+    pfds[1].events = POLLIN;
+    pfds[1].revents = 0;
 
-    int ret = poll(&pfd, 1, 1000);
-    if (ret <= 0) continue;
+    int ret = poll(pfds, 2, -1);  // block until wakeup or new connection
+    if (ret < 0) {
+      if (errno == EINTR) continue;
+      break;  // fatal poll error
+    }
+
+    // Check wakeup fd first
+    if (pfds[1].revents & POLLIN) break;
+    if (!(pfds[0].revents & POLLIN)) continue;
 
     int client_fd = accept(ctx->listen_fd, nullptr, nullptr);
-    if (client_fd < 0) continue;
+    if (client_fd < 0) {
+      if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ||
+          errno == ECONNABORTED)
+        continue;
+      break;  // fatal accept error
+    }
 
     // Set receive timeout to avoid blocking indefinitely on slow clients
     struct timeval tv;
@@ -803,13 +828,13 @@ static void *prometheus_listener_thread(void *arg) {
     if (strncmp(buf, "GET /metrics", 12) == 0 &&
         (buf[12] == ' ' || buf[12] == '?' || buf[12] == '\r' ||
          buf[12] == '\0')) {
-      ctx->requests_total.fetch_add(1, std::memory_order_relaxed);
+      g_requests_total.fetch_add(1, std::memory_order_relaxed);
 
       auto start = std::chrono::steady_clock::now();
       std::string body = collect_metrics();
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::steady_clock::now() - start);
-      ctx->last_scrape_duration_us.store(
+      g_last_scrape_duration_us.store(
           static_cast<uint64_t>(elapsed.count()), std::memory_order_relaxed);
 
       std::string response =
@@ -854,16 +879,29 @@ static int prometheus_exporter_init(void *p) {
   }
 
   g_ctx = new (std::nothrow) PrometheusContext();
-  if (g_ctx == nullptr) return 1;
+  if (g_ctx == nullptr) {
+    deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
+    return 1;
+  }
   g_ctx->plugin_ref = p;
 
   g_ctx->listen_fd = setup_listen_socket(prom_bind_address, prom_port);
   if (g_ctx->listen_fd < 0) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Prometheus exporter: failed to bind to %s:%u",
-                 prom_bind_address, prom_port);
+                 prom_bind_address ? prom_bind_address : "(null)", prom_port);
     delete g_ctx;
     g_ctx = nullptr;
+    deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
+    return 1;
+  }
+
+  g_ctx->wakeup_fd = eventfd(0, EFD_CLOEXEC);
+  if (g_ctx->wakeup_fd < 0) {
+    close(g_ctx->listen_fd);
+    delete g_ctx;
+    g_ctx = nullptr;
+    deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     return 1;
   }
 
@@ -876,8 +914,10 @@ static int prometheus_exporter_init(void *p) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Prometheus exporter: failed to create listener thread");
     close(g_ctx->listen_fd);
+    close(g_ctx->wakeup_fd);
     delete g_ctx;
     g_ctx = nullptr;
+    deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     return 1;
   }
 
@@ -894,11 +934,19 @@ static int prometheus_exporter_deinit(void *p) {
   auto *ctx = static_cast<PrometheusContext *>(plugin->data);
 
   if (ctx != nullptr) {
-    ctx->shutdown_requested.store(true, std::memory_order_relaxed);
-    if (ctx->listen_fd >= 0) close(ctx->listen_fd);
+    ctx->shutdown_requested.store(true, std::memory_order_release);
+    if (ctx->wakeup_fd >= 0) {
+      uint64_t val = 1;
+      ssize_t r = write(ctx->wakeup_fd, &val, sizeof(val));
+      (void)r;  // ignore errors; at worst the listener wakes via EINTR
+    }
 
     void *dummy;
     my_thread_join(&ctx->listener_thread, &dummy);
+
+    // Now it's safe to close the fds
+    if (ctx->listen_fd >= 0) close(ctx->listen_fd);
+    if (ctx->wakeup_fd >= 0) close(ctx->wakeup_fd);
 
     delete ctx;
     g_ctx = nullptr;
@@ -915,32 +963,27 @@ static int prometheus_exporter_deinit(void *p) {
 static int show_requests_total(MYSQL_THD, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
-  *reinterpret_cast<longlong *>(buff) =
-      g_ctx != nullptr
-          ? static_cast<longlong>(g_ctx->requests_total.load(
-                std::memory_order_relaxed))
-          : 0;
+  longlong v = static_cast<longlong>(
+      g_requests_total.load(std::memory_order_relaxed));
+  memcpy(buff, &v, sizeof(v));
   return 0;
 }
 
 static int show_errors_total(MYSQL_THD, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
-  *reinterpret_cast<longlong *>(buff) =
-      g_ctx != nullptr ? static_cast<longlong>(
-                             g_ctx->errors_total.load(std::memory_order_relaxed))
-                       : 0;
+  longlong v =
+      static_cast<longlong>(g_errors_total.load(std::memory_order_relaxed));
+  memcpy(buff, &v, sizeof(v));
   return 0;
 }
 
 static int show_scrape_duration(MYSQL_THD, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
-  *reinterpret_cast<longlong *>(buff) =
-      g_ctx != nullptr
-          ? static_cast<longlong>(g_ctx->last_scrape_duration_us.load(
-                std::memory_order_relaxed))
-          : 0;
+  longlong v = static_cast<longlong>(
+      g_last_scrape_duration_us.load(std::memory_order_relaxed));
+  memcpy(buff, &v, sizeof(v));
   return 0;
 }
 
