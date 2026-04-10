@@ -64,5 +64,4 @@ constexpr auto TESTTYPE = vsql::make_type<kTestTypeName>()
                               .compare<&cmp_testtype>()
                               .build();
 
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest").type(TESTTYPE))
+VEF_GENERATE_ENTRY_POINTS(make_extension().type(TESTTYPE))

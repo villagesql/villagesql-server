@@ -137,7 +137,7 @@ constexpr auto BYTEARRAY = vsql::make_type<kBytearrayTypeName>()
                                .compare<&bytearray_compare>()
                                .build();
 
-VEF_GENERATE_ENTRY_POINTS(make_extension("vsql_simple", "0.0.1")
+VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .type(BYTEARRAY)
                               .func(make_func<&rot13>("rot13")
                                         .returns(BYTEARRAY)

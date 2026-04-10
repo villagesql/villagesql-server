@@ -22,4 +22,4 @@
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest"))
+VEF_GENERATE_ENTRY_POINTS(make_extension())

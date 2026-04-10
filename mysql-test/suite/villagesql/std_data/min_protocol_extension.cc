@@ -21,5 +21,5 @@
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension(VEF_EXTENSION_NAME, "7.7.7-devtest")
-                              .test_only_require_protocol(VEF_PROTOCOL_2))
+VEF_GENERATE_ENTRY_POINTS(
+    make_extension().test_only_require_protocol(VEF_PROTOCOL_2))

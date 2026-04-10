@@ -155,7 +155,7 @@ void simple_double_impl(IntArg input, IntResult out) {
 }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
+    make_extension()
         .func(make_func<&vdf_sum_result>("vdf_sum")
                   .returns(INT)
                   .param(INT)

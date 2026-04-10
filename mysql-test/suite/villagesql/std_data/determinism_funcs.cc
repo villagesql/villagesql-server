@@ -40,7 +40,7 @@ void nondeterministic_func_impl(IntArg val, IntResult out) {
 }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "1.0.0")
+    make_extension()
         .func(make_func<&deterministic_inc_impl>("deterministic_inc")
                   .returns(INT)
                   .param(INT)

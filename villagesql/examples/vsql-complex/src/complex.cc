@@ -417,7 +417,7 @@ constexpr auto COMPLEX2 =
         .build();
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("vsql_complex", "0.0.1")
+    make_extension()
         // COMPLEX type with canonicalization (normalizes -0.0 to +0.0)
         .type(COMPLEX)
         // COMPLEX2 type without canonicalization (preserves -0.0)

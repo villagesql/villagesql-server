@@ -75,5 +75,4 @@ constexpr auto COMPLEX3 = vsql::make_type<kComplex3TypeName>()
                               .compare<&complex3_compare>()
                               .build();
 
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension("complex3_ext", "0.0.1-devtest").type(COMPLEX3))
+VEF_GENERATE_ENTRY_POINTS(make_extension().type(COMPLEX3))

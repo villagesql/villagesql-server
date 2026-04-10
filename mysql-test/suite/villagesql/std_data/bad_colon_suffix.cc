@@ -58,7 +58,7 @@ using namespace villagesql::type_builder;
 // The suffix "transform" is not a valid type method (must be encode, decode,
 // compare, or hash), so installation must fail.
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("bad_colon_suffix", "0.0.1-devtest")
+    make_extension()
         .type(make_type("MYTYPE")
                   .persisted_length(16)
                   .max_decode_buffer_length(64)

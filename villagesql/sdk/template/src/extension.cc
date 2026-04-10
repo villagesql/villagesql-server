@@ -32,9 +32,5 @@ void add_impl(IntArg a, IntArg b, IntResult out) {
 }
 
 // Register the extension
-VEF_GENERATE_ENTRY_POINTS(make_extension("my_extension", "0.0.1")
-                              .func(make_func<&add_impl>("my_add")
-                                        .returns(INT)
-                                        .param(INT)
-                                        .param(INT)
-                                        .build()))
+VEF_GENERATE_ENTRY_POINTS(make_extension().func(
+    make_func<&add_impl>("my_add").returns(INT).param(INT).param(INT).build()))

@@ -183,7 +183,7 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("vsql_test_only", "0.0.1")
+    make_extension()
         // FAULT_BLOB type: behaviour controlled by
         // "OK"/"DECODE_FAIL"/"ENCODE_FAIL" prefix
         .type(FAULT_BLOB)

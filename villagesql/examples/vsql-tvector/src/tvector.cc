@@ -346,7 +346,7 @@ constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("vsql_tvector", "0.0.1")
+    make_extension()
         .type(TVECTOR)
         .func(make_intrinsic_default<&tvector_default>(
             "tvector_intrinsic_default"))

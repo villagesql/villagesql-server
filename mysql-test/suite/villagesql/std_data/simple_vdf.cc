@@ -41,7 +41,7 @@ void simple_test_impl(StringArg input, IntResult out) {
 }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
+    make_extension()
         .func(make_func<&simple_int_func_impl>("simple_int_func")
                   .returns(INT)
                   .build())

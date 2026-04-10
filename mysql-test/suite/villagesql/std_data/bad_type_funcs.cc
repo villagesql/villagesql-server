@@ -69,5 +69,4 @@ constexpr auto TESTBADTYPE = vsql::make_type<kTestBadTypeName>()
 
 // Register a simple type for testing - tests can use this extension
 // to verify basic type operations work
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension("bad_type_funcs", "0.0.1-devtest").type(TESTBADTYPE))
+VEF_GENERATE_ENTRY_POINTS(make_extension().type(TESTBADTYPE))

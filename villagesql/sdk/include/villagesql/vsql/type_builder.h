@@ -70,7 +70,7 @@
 // Pass TypeObject to ExtensionBuilder::type() to register the type and any
 // embedded SQL-callable VDFs in one step:
 //
-//   make_extension("my_ext", "1.0.0")
+//   make_extension()
 //       .type(MYTYPE)   // registers type + all embedded VDFs
 //       .func(...)
 //

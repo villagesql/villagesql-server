@@ -58,7 +58,7 @@ using namespace villagesql::type_builder;
 // "WRONGTYPE::from_string". The prefix "WRONGTYPE" does not match "MYTYPE", so
 // installation must fail.
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("bad_colon_prefix", "0.0.1-devtest")
+    make_extension()
         .type(make_type("MYTYPE")
                   .persisted_length(16)
                   .max_decode_buffer_length(64)

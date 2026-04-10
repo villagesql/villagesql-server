@@ -54,8 +54,8 @@
 //
 //   // 4. Register
 //   VEF_GENERATE_ENTRY_POINTS(
-//     make_extension("my_ext", "1.0.0")
-//       .type(COMPLEX)
+//     make_extension()
+//       .type(COMPLEX)                          // type object, not a string
 //       .func(make_func<&complex_add>("complex_add")
 //           .returns(COMPLEX)
 //           .param(COMPLEX)

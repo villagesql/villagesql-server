@@ -31,11 +31,8 @@ void dummy_result(vef_context_t *ctx, vef_vdf_args_t *args,
   out->type = VEF_RESULT_VALUE;
 }
 
-VEF_GENERATE_REGISTRATION(make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
-                              .func(make_func<&dummy_result>("bad_agg")
-                                        .returns(INT)
-                                        .param(INT)
-                                        .build()))
+VEF_GENERATE_REGISTRATION(make_extension().func(
+    make_func<&dummy_result>("bad_agg").returns(INT).param(INT).build()))
 
 // Override vef_register to patch the descriptor after the builder runs.
 // The builder's compile-time check prevents setting clear without accumulate,

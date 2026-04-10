@@ -74,10 +74,11 @@ static std::string registration_to_json(const vef_registration_t *r) {
   w.StartObject();
 
   w.Key("extension_name");
-  w.String(r->extension_name ? r->extension_name : "");
+  w.String(r->deprecated_extension_name ? r->deprecated_extension_name : "");
 
   w.Key("extension_version");
-  w.String(r->extension_version ? r->extension_version : "");
+  w.String(r->deprecated_extension_version ? r->deprecated_extension_version
+                                           : "");
 
   std::string sdk_ver = std::to_string(r->sdk_version.major) + "." +
                         std::to_string(r->sdk_version.minor) + "." +

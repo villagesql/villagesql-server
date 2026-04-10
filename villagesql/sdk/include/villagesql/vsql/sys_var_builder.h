@@ -20,7 +20,7 @@
 //
 // Usage (in extension registration):
 //
-//   make_extension("myext", "1.0")
+//   make_extension()
 //     .sys_var(make_sys_var_int("threshold_ms",
 //                               "Slow query threshold in ms",
 //                               &g_threshold_ms, 1000, 0, 3600000))

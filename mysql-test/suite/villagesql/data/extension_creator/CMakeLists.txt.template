@@ -12,7 +12,6 @@ include_directories(${VillageSQLExtensionFramework_INCLUDE_DIR})
 add_library(ext_lib SHARED src/extension.cc)
 
 target_compile_options(ext_lib PRIVATE -fPIC)
-target_compile_definitions(ext_lib PRIVATE VEF_EXTENSION_NAME="${EXTENSION_NAME}")
 
 VEF_CREATE_VEB(
     NAME ${EXTENSION_NAME}

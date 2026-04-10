@@ -93,8 +93,8 @@ vef_registration_t *vef_register(vef_register_arg_t *arg) {
   memset(&g_reg, 0, sizeof(g_reg));
   g_reg.protocol = VEF_PROTOCOL_1;
   g_reg.error_msg = nullptr;
-  g_reg.extension_name = VEF_EXTENSION_NAME;
-  g_reg.extension_version = "0.0.1";
+  g_reg.deprecated_extension_name = nullptr;
+  g_reg.deprecated_extension_version = nullptr;
   g_reg.sdk_version = arg->vef_version;
   g_reg.func_count = 0;
   g_reg.funcs = nullptr;
