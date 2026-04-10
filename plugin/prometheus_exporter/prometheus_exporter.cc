@@ -49,17 +49,9 @@
 #include <string>
 #include <vector>
 
-// -----------------------------------------------------------------------
-// Logging service references
-// -----------------------------------------------------------------------
-
 static SERVICE_TYPE(registry) *reg_srv = nullptr;
 SERVICE_TYPE(log_builtins) *log_bi = nullptr;
 SERVICE_TYPE(log_builtins_string) *log_bs = nullptr;
-
-// -----------------------------------------------------------------------
-// System variables
-// -----------------------------------------------------------------------
 
 static bool prom_enabled = false;
 static unsigned int prom_port = 9104;
@@ -103,20 +95,12 @@ static SYS_VAR *prom_system_vars[] = {
     nullptr,
 };
 
-// -----------------------------------------------------------------------
-// Module-scope counters
-// -----------------------------------------------------------------------
-
 // Module-scope counters. Lifetime independent of the context so that
 // SHOW STATUS callbacks can safely read them even during plugin
 // install/uninstall races.
 static std::atomic<uint64_t> g_requests_total{0};
 static std::atomic<uint64_t> g_errors_total{0};
 static std::atomic<uint64_t> g_last_scrape_duration_us{0};
-
-// -----------------------------------------------------------------------
-// Plugin context
-// -----------------------------------------------------------------------
 
 struct PrometheusContext {
   my_thread_handle listener_thread;
@@ -131,12 +115,6 @@ struct PrometheusContext {
         shutdown_requested(false),
         plugin_ref(nullptr) {}
 };
-
-static PrometheusContext *g_ctx = nullptr;
-
-// -----------------------------------------------------------------------
-// Gauge variable classification
-// -----------------------------------------------------------------------
 
 static const char *gauge_variables[] = {
     "Threads_connected",
@@ -177,10 +155,6 @@ static bool is_gauge(const char *name) {
   }
   return false;
 }
-
-// -----------------------------------------------------------------------
-// Metrics collection via srv_session + command_service
-// -----------------------------------------------------------------------
 
 typedef const char *(*type_fn_t)(const char *name);
 
@@ -307,10 +281,6 @@ static const struct st_command_service_cbs prom_cbs = {
     nullptr,  // connection_alive
 };
 
-// -----------------------------------------------------------------------
-// InnoDB metrics collection (4-column result set)
-// -----------------------------------------------------------------------
-
 struct InnodbMetricsCtx {
   std::string *output;
   std::string current_name;
@@ -418,10 +388,6 @@ static void collect_innodb_metrics(MYSQL_SESSION session, std::string &output) {
                              &my_charset_utf8mb3_general_ci, &innodb_cbs,
                              CS_TEXT_REPRESENTATION, &mc);
 }
-
-// -----------------------------------------------------------------------
-// SHOW REPLICA STATUS collection (column-name-aware parsing)
-// -----------------------------------------------------------------------
 
 struct ReplicaStatusCtx {
   std::string *output;
@@ -568,10 +534,6 @@ static void collect_replica_status(MYSQL_SESSION session, std::string &output) {
                              CS_TEXT_REPRESENTATION, &rc);
 }
 
-// -----------------------------------------------------------------------
-// SHOW BINARY LOGS collection
-// -----------------------------------------------------------------------
-
 struct BinlogCtx {
   std::string *output;
   int col_index;
@@ -676,10 +638,6 @@ static void collect_binlog(MYSQL_SESSION session, std::string &output) {
                              CS_TEXT_REPRESENTATION, &bc);
 }
 
-// -----------------------------------------------------------------------
-// Generic name/value query collection
-// -----------------------------------------------------------------------
-
 static void collect_name_value_query(MYSQL_SESSION session,
                                      std::string &output, const char *query,
                                      const char *prefix, type_fn_t type_fn) {
@@ -750,10 +708,6 @@ static std::string collect_metrics() {
 
   return output;
 }
-
-// -----------------------------------------------------------------------
-// HTTP server
-// -----------------------------------------------------------------------
 
 static int setup_listen_socket(const char *bind_addr, unsigned int port) {
   if (bind_addr == nullptr || *bind_addr == '\0') {
@@ -912,10 +866,6 @@ static void *prometheus_listener_thread(void *arg) {
   return nullptr;
 }
 
-// -----------------------------------------------------------------------
-// Plugin init / deinit
-// -----------------------------------------------------------------------
-
 static int prometheus_exporter_init(void *p) {
   auto *plugin = static_cast<struct st_plugin_int *>(p);
 
@@ -929,29 +879,27 @@ static int prometheus_exporter_init(void *p) {
     return 0;
   }
 
-  g_ctx = new (std::nothrow) PrometheusContext();
-  if (g_ctx == nullptr) {
+  auto *ctx = new (std::nothrow) PrometheusContext();
+  if (ctx == nullptr) {
     deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     return 1;
   }
-  g_ctx->plugin_ref = p;
+  ctx->plugin_ref = p;
 
-  g_ctx->listen_fd = setup_listen_socket(prom_bind_address, prom_port);
-  if (g_ctx->listen_fd < 0) {
+  ctx->listen_fd = setup_listen_socket(prom_bind_address, prom_port);
+  if (ctx->listen_fd < 0) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Prometheus exporter: failed to bind to %s:%u",
                  prom_bind_address ? prom_bind_address : "(null)", prom_port);
-    delete g_ctx;
-    g_ctx = nullptr;
+    delete ctx;
     deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     return 1;
   }
 
-  g_ctx->wakeup_fd = eventfd(0, EFD_CLOEXEC);
-  if (g_ctx->wakeup_fd < 0) {
-    close(g_ctx->listen_fd);
-    delete g_ctx;
-    g_ctx = nullptr;
+  ctx->wakeup_fd = eventfd(0, EFD_CLOEXEC);
+  if (ctx->wakeup_fd < 0) {
+    close(ctx->listen_fd);
+    delete ctx;
     deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     return 1;
   }
@@ -960,14 +908,13 @@ static int prometheus_exporter_init(void *p) {
   my_thread_attr_init(&attr);
   my_thread_attr_setdetachstate(&attr, MY_THREAD_CREATE_JOINABLE);
 
-  if (my_thread_create(&g_ctx->listener_thread, &attr,
-                       prometheus_listener_thread, g_ctx) != 0) {
+  if (my_thread_create(&ctx->listener_thread, &attr,
+                       prometheus_listener_thread, ctx) != 0) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Prometheus exporter: failed to create listener thread");
-    close(g_ctx->listen_fd);
-    close(g_ctx->wakeup_fd);
-    delete g_ctx;
-    g_ctx = nullptr;
+    close(ctx->listen_fd);
+    close(ctx->wakeup_fd);
+    delete ctx;
     deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     return 1;
   }
@@ -987,7 +934,7 @@ static int prometheus_exporter_init(void *p) {
                  prom_bind_address, prom_port);
   }
 
-  plugin->data = g_ctx;
+  plugin->data = ctx;
   return 0;
 }
 
@@ -1011,16 +958,12 @@ static int prometheus_exporter_deinit(void *p) {
     if (ctx->wakeup_fd >= 0) close(ctx->wakeup_fd);
 
     delete ctx;
-    g_ctx = nullptr;
+    plugin->data = nullptr;
   }
 
   deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
   return 0;
 }
-
-// -----------------------------------------------------------------------
-// Plugin status variables
-// -----------------------------------------------------------------------
 
 static int show_requests_total(MYSQL_THD, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
@@ -1061,10 +1004,6 @@ static SHOW_VAR prom_status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_UNDEF},
 };
-
-// -----------------------------------------------------------------------
-// Plugin declaration
-// -----------------------------------------------------------------------
 
 static struct st_mysql_daemon prometheus_exporter_descriptor = {
     MYSQL_DAEMON_INTERFACE_VERSION};
