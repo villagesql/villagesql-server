@@ -68,8 +68,6 @@ using namespace type_builder;
 
 template <typename FuncTuple, typename TypeTuple, typename SysVarTuple>
 struct ExtensionBuilder {
-  std::string_view name_;
-  std::string_view version_;
   FuncTuple funcs_;
   TypeTuple types_;
   SysVarTuple sys_vars_;
@@ -80,7 +78,7 @@ struct ExtensionBuilder {
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
     return ExtensionBuilder<decltype(new_funcs), TypeTuple, SysVarTuple>{
-        name_, version_, new_funcs, types_, sys_vars_, min_protocol_};
+        new_funcs, types_, sys_vars_, min_protocol_};
   }
 
   // Add a type (returns new builder with type appended).
@@ -92,7 +90,7 @@ struct ExtensionBuilder {
     const vef_protocol_t new_min =
         t.protocol > min_protocol_ ? t.protocol : min_protocol_;
     return ExtensionBuilder<FuncTuple, decltype(new_types), SysVarTuple>{
-        name_, version_, funcs_, new_types, sys_vars_, new_min};
+        funcs_, new_types, sys_vars_, new_min};
   }
 
   // Add a system variable. System variables require at least VEF_PROTOCOL_2.
@@ -101,7 +99,7 @@ struct ExtensionBuilder {
     const vef_protocol_t new_min =
         VEF_PROTOCOL_2 > min_protocol_ ? VEF_PROTOCOL_2 : min_protocol_;
     return ExtensionBuilder<FuncTuple, TypeTuple, decltype(new_cvs)>{
-        name_, version_, funcs_, types_, new_cvs, new_min};
+        funcs_, types_, new_cvs, new_min};
   }
 
   // Add a type object that carries embedded SQL-callable VDFs (e.g. the
@@ -119,8 +117,8 @@ struct ExtensionBuilder {
             ? t.descriptor.vef_desc.protocol
             : min_protocol_;
     return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
-                            SysVarTuple>{name_,     version_,  new_funcs,
-                                         new_types, sys_vars_, new_min};
+                            SysVarTuple>{new_funcs, new_types, sys_vars_,
+                                         new_min};
   }
 
   // This is here only for testing, please don't depend on it.
@@ -128,8 +126,8 @@ struct ExtensionBuilder {
   // If the server offers a lower protocol, registration will fail with an
   // error message explaining the version requirement.
   constexpr auto test_only_require_protocol(vef_protocol_t p) const {
-    return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple>{
-        name_, version_, funcs_, types_, sys_vars_, p};
+    return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple>{funcs_, types_,
+                                                               sys_vars_, p};
   }
 
   // Compile-time counts
@@ -138,8 +136,6 @@ struct ExtensionBuilder {
   static constexpr size_t kSysVarCount = std::tuple_size_v<SysVarTuple>;
 
   // Accessors
-  constexpr std::string_view name() const { return name_; }
-  constexpr std::string_view version() const { return version_; }
   constexpr vef_protocol_t min_protocol() const { return min_protocol_; }
 
   template <size_t I>
@@ -159,9 +155,17 @@ struct ExtensionBuilder {
 };
 
 // Entry point to create an extension builder
-constexpr auto make_extension(std::string_view name, std::string_view version) {
+constexpr auto make_extension() {
   return ExtensionBuilder<std::tuple<>, std::tuple<>, std::tuple<>>{
-      name, version, {}, {}, {}, VEF_PROTOCOL_1};
+      {}, {}, {}, VEF_PROTOCOL_1};
+}
+
+// Deprecated: name and version are now read from the VEB manifest file.
+[[deprecated(
+    "use make_extension() — name/version are now in the VEB manifest")]]
+constexpr auto make_extension(std::string_view /*name*/,
+                              std::string_view /*version*/) {
+  return make_extension();
 }
 
 }  // namespace extension_builder
@@ -305,8 +309,8 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
 
   reg.protocol = VEF_PROTOCOL_2;
   reg.error_msg = nullptr;
-  reg.extension_name = ext.name().data();
-  reg.extension_version = ext.version().data();
+  reg.deprecated_extension_name = nullptr;
+  reg.deprecated_extension_version = nullptr;
   reg.sdk_version = kSdkVersion;
   reg.func_count = FuncCount;
   reg.funcs = FuncCount > 0 ? func_ptrs : nullptr;
