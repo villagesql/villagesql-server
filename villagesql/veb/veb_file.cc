@@ -347,10 +347,13 @@ bool expand_veb_to_directory(const std::string &name,
   // Create directory structure: .veb_expansion_cache/,
   // .veb_expansion_cache/{name}/, .veb_expansion_cache/{name}/{sha256}/ Create
   // .veb_expansion_cache/ if needed
+  // TODO(villagesql-windows): On Windows, dotfiles aren't hidden by default.
+  // After creating .veb_expansion_cache/, set the hidden attribute
+  // (e.g., SetFileAttributes with FILE_ATTRIBUTE_HIDDEN).
   if (!my_stat(base_path.c_str(), &dir_stat, MYF(0))) {
     if (my_mkdir(base_path.c_str(), 0755, MYF(0)) != 0) {
-      villagesql_error("Failed to create .veb_expansion_cache directory",
-                       MYF(0));
+      villagesql_error("Failed to create .veb_expansion_cache directory: %s",
+                       MYF(0), base_path.c_str());
       return true;
     }
     LogVSQL(INFORMATION_LEVEL, "Created .veb_expansion_cache directory");
