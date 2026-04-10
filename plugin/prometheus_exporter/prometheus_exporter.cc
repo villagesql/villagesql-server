@@ -774,10 +774,34 @@ static int setup_listen_socket(const char *bind_addr, unsigned int port) {
 static void write_full(int fd, const char *buf, size_t len) {
   size_t written = 0;
   while (written < len) {
-    ssize_t n = write(fd, buf + written, len - written);
-    if (n <= 0) break;
+    ssize_t n = send(fd, buf + written, len - written, MSG_NOSIGNAL);
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      break;  // EAGAIN (timeout), EPIPE, ECONNRESET, etc. -- give up
+    }
+    if (n == 0) break;
     written += static_cast<size_t>(n);
   }
+}
+
+static ssize_t read_http_request(int fd, char *buf, size_t max_len) {
+  size_t total = 0;
+  while (total < max_len - 1) {
+    ssize_t n = recv(fd, buf + total, max_len - 1 - total, 0);
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      return -1;  // timeout or error
+    }
+    if (n == 0) break;  // client closed
+    total += static_cast<size_t>(n);
+    buf[total] = '\0';
+    // Check if we have the full request headers
+    if (strstr(buf, "\r\n\r\n") != nullptr) break;
+    // Or at least the request line for simple requests
+    if (strstr(buf, "\r\n") != nullptr && total >= 13) break;
+  }
+  buf[total] = '\0';
+  return static_cast<ssize_t>(total);
 }
 
 static void *prometheus_listener_thread(void *arg) {
@@ -815,17 +839,17 @@ static void *prometheus_listener_thread(void *arg) {
     tv.tv_sec = 5;
     tv.tv_usec = 0;
     setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     // Read HTTP request
     char buf[4096];
-    ssize_t n = read(client_fd, buf, sizeof(buf) - 1);
+    ssize_t n = read_http_request(client_fd, buf, sizeof(buf));
     if (n <= 0) {
       close(client_fd);
       continue;
     }
-    buf[n] = '\0';
 
-    if (strncmp(buf, "GET /metrics", 12) == 0 &&
+    if (n >= 12 && strncmp(buf, "GET /metrics", 12) == 0 &&
         (buf[12] == ' ' || buf[12] == '?' || buf[12] == '\r' ||
          buf[12] == '\0')) {
       g_requests_total.fetch_add(1, std::memory_order_relaxed);
