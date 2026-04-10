@@ -6,6 +6,7 @@ Variable_name	Value
 prometheus_exporter_bind_address	127.0.0.1
 prometheus_exporter_enabled	OFF
 prometheus_exporter_port	9104
+prometheus_exporter_security_user	root
 # Verify status variables exist (all zero when disabled)
 SHOW STATUS LIKE 'Prometheus_exporter%';
 Variable_name	Value

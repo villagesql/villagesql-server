@@ -63,6 +63,7 @@ SERVICE_TYPE(log_builtins_string) *log_bs = nullptr;
 static bool prom_enabled = false;
 static unsigned int prom_port = 9104;
 static char *prom_bind_address = nullptr;
+static char *prom_security_user = nullptr;
 
 static MYSQL_SYSVAR_BOOL(enabled, prom_enabled,
                           PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
@@ -83,10 +84,21 @@ static MYSQL_SYSVAR_STR(bind_address, prom_bind_address,
                          "endpoint. Default 127.0.0.1.",
                          nullptr, nullptr, "127.0.0.1");
 
+static MYSQL_SYSVAR_STR(security_user, prom_security_user,
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG |
+                             PLUGIN_VAR_MEMALLOC,
+                         "MySQL account used internally to run the metric "
+                         "collection queries. The account must exist on "
+                         "localhost. Default: root. For reduced privilege, "
+                         "use an account granted PROCESS, REPLICATION CLIENT, "
+                         "and SELECT on information_schema.",
+                         nullptr, nullptr, "root");
+
 static SYS_VAR *prom_system_vars[] = {
     MYSQL_SYSVAR(enabled),
     MYSQL_SYSVAR(port),
     MYSQL_SYSVAR(bind_address),
+    MYSQL_SYSVAR(security_user),
     nullptr,
 };
 
@@ -702,23 +714,23 @@ static std::string collect_metrics() {
     return "# Server not available\n";
   }
 
-  if (srv_session_init_thread(g_ctx->plugin_ref) != 0) {
-    return "# Failed to init session thread\n";
-  }
-
   MYSQL_SESSION session = srv_session_open(nullptr, nullptr);
   if (session == nullptr) {
-    srv_session_deinit_thread();
     return "# Failed to open session\n";
   }
 
-  // Switch to root security context
+  // Switch to the configured security context user on localhost. The user
+  // must exist and have sufficient privileges to read the metrics sources
+  // (INNODB_METRICS, etc.). Default is "root" for backward compatibility;
+  // operators may configure a least-privilege account via the
+  // prometheus_exporter_security_user sysvar.
+  const char *user = prom_security_user ? prom_security_user : "root";
   MYSQL_SECURITY_CONTEXT sc;
   if (thd_get_security_context(srv_session_info_get_thd(session), &sc) ||
-      security_context_lookup(sc, "root", "localhost", "127.0.0.1", "")) {
+      security_context_lookup(sc, user, "localhost", "127.0.0.1", "")) {
     srv_session_close(session);
-    srv_session_deinit_thread();
-    return "# Failed to set security context\n";
+    return "# Failed to set security context (user missing or lacks "
+           "privileges?)\n";
   }
 
   std::string output;
@@ -729,7 +741,6 @@ static std::string collect_metrics() {
   collect_binlog(session, output);
 
   srv_session_close(session);
-  srv_session_deinit_thread();
 
   return output;
 }
@@ -807,6 +818,15 @@ static ssize_t read_http_request(int fd, char *buf, size_t max_len) {
 static void *prometheus_listener_thread(void *arg) {
   auto *ctx = static_cast<PrometheusContext *>(arg);
 
+  // Initialize srv_session thread-local state once for this physical thread.
+  // Per the MySQL session service contract, this must be called once per
+  // thread that will use the session service, not once per request.
+  if (srv_session_init_thread(ctx->plugin_ref) != 0) {
+    LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Prometheus exporter: failed to init session thread");
+    return nullptr;
+  }
+
   while (!ctx->shutdown_requested.load(std::memory_order_acquire)) {
     struct pollfd pfds[2];
     pfds[0].fd = ctx->listen_fd;
@@ -882,6 +902,7 @@ static void *prometheus_listener_thread(void *arg) {
     close(client_fd);
   }
 
+  srv_session_deinit_thread();
   return nullptr;
 }
 
