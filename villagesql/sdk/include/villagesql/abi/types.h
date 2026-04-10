@@ -825,12 +825,12 @@ typedef struct {
   // If the register call failed, provide a useful debugging message.
   char *error_msg;
 
-  // Extension version as a string (e.g., "1.0.0", "2.0.0-beta.1")
-  const char *extension_version;
+  // Deprecated: extension name and version are now sourced from the VEB
+  // manifest. These fields exist only to preserve struct layout for v1
+  // binary compatibility. New extensions set them to nullptr.
+  const char *deprecated_extension_version;
   vef_version_t sdk_version;
-
-  // Encoded using UTF-8
-  const char *extension_name;
+  const char *deprecated_extension_name;
 
   unsigned int func_count;
   vef_func_desc_t **funcs;
