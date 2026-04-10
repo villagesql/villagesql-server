@@ -44,6 +44,7 @@
 #include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <climits>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -501,10 +502,11 @@ static int replica_end_row(void *ctx) {
     if (wanted.is_bool) {
       value_str = (val == "Yes") ? "1" : "0";
     } else {
-      // Check if numeric
+      // Check if numeric -- require full-string consumption
+      const char *start = val.c_str();
       char *end = nullptr;
-      strtod(val.c_str(), &end);
-      if (end == val.c_str() || *end != '\0') continue;  // not numeric, skip
+      strtod(start, &end);
+      if (end == start || *end != '\0') continue;  // not numeric, skip
       value_str = val;
     }
 
@@ -590,9 +592,11 @@ static int binlog_end_row(void *ctx) {
   auto *bc = static_cast<BinlogCtx *>(ctx);
   bc->file_count++;
   if (!bc->current_size.empty()) {
+    const char *start = bc->current_size.c_str();
     char *end = nullptr;
-    long long sz = strtoll(bc->current_size.c_str(), &end, 10);
-    if (end != bc->current_size.c_str() && *end == '\0') {
+    long long sz = strtoll(start, &end, 10);
+    if (end != start && *end == '\0' && sz >= 0 &&
+        bc->total_size <= LLONG_MAX - sz) {
       bc->total_size += sz;
     }
   }
@@ -701,7 +705,9 @@ static void collect_global_status(MYSQL_SESSION session, std::string &output) {
                            "mysql_global_status_", global_status_type);
 }
 
-static const char *global_variables_type(const char *) { return "gauge"; }
+static const char *global_variables_type([[maybe_unused]] const char *name) {
+  return "gauge";
+}
 
 static void collect_global_variables(MYSQL_SESSION session,
                                      std::string &output) {
@@ -969,6 +975,17 @@ static int prometheus_exporter_init(void *p) {
   LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                "Prometheus exporter listening on %s:%u", prom_bind_address,
                prom_port);
+
+  if (prom_bind_address != nullptr &&
+      strcmp(prom_bind_address, "127.0.0.1") != 0 &&
+      strcmp(prom_bind_address, "localhost") != 0) {
+    LogPluginErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+                 "Prometheus exporter is bound to %s which is not a "
+                 "loopback address. The /metrics endpoint has no "
+                 "authentication or TLS -- ensure network access to "
+                 "port %u is restricted.",
+                 prom_bind_address, prom_port);
+  }
 
   plugin->data = g_ctx;
   return 0;
