@@ -663,8 +663,8 @@ bool load_installed_extensions(THD *thd) {
 
       ExtensionRegistration registration;
       std::string load_error;
-      if (load_vef_extension(so_path, extension_name, registration,
-                             vef_server_protocol_version, load_error)) {
+      if (load_vef_extension(so_path, registration, vef_server_protocol_version,
+                             load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -814,24 +814,7 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
-// Validate a vef_registration_t returned by vef_register().
-// TODO(villagesql-beta): Add more validation of the returned registration
-// object (e.g. func/type descriptors, protocol version, null pointers).
-// Returns false on success, true on error.
-static bool validate_vef_registration(const vef_registration_t *reg,
-                                      const std::string_view expected_name,
-                                      std::string &error_msg) {
-  if (reg->extension_name == nullptr || expected_name != reg->extension_name) {
-    error_msg = std::string("extension name mismatch: expected '") +
-                std::string(expected_name) + "' but .so registered '" +
-                (reg->extension_name ? reg->extension_name : "(null)") + "'";
-    return true;
-  }
-  return false;
-}
-
 bool load_vef_extension(const std::string &so_path,
-                        const std::string_view expected_name,
                         ExtensionRegistration &registration,
                         vef_protocol_t max_protocol,
                         std::string &error_message) {
@@ -894,12 +877,8 @@ bool load_vef_extension(const std::string &so_path,
     return true;
   }
 
-  if (validate_vef_registration(reg, expected_name, error_message)) {
-    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
-    vef_unregister(&unregister_arg, reg);
-    dlclose(handle);
-    return true;
-  }
+  // TODO(villagesql-beta): Add more validation of the returned registration
+  // object (e.g. func/type descriptors, protocol version, null pointers).
 
   LogVSQL(INFORMATION_LEVEL,
           "Successfully loaded VEF extension '%s' (protocol %d, %d funcs, %d "

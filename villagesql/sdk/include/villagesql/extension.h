@@ -39,7 +39,7 @@
 //
 //   // Register the extension with inline function definitions
 //   VEF_GENERATE_ENTRY_POINTS(
-//     make_extension("my_extension", "1.0.0")
+//     make_extension()
 //       .func(make_func<&add_impl>("add")
 //         .returns(INT)
 //         .param(INT)
@@ -275,7 +275,7 @@
 // Use VEF_GENERATE_ENTRY_POINTS with make_extension():
 //
 //   VEF_GENERATE_ENTRY_POINTS(
-//     make_extension("my_ext", "1.0.0")
+//     make_extension()
 //       .type(make_type(MYTYPE)
 //         .persisted_length(8)
 //         .max_decode_buffer_length(64)
@@ -346,7 +346,7 @@
 //
 //   // Register everything
 //   VEF_GENERATE_ENTRY_POINTS(
-//     make_extension("bytearray_ext", "1.0.0")
+//     make_extension()
 //       .type(make_type(BYTEARRAY)
 //         .persisted_length(kBytearrayLen)
 //         .max_decode_buffer_length(kBytearrayLen)
