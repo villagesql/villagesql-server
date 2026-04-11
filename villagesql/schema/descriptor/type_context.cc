@@ -115,6 +115,17 @@ bool TypeContext::init_intrinsic_default() {
       intrinsic_default_size_ = *r;
       return false;
     }
+    if (!r) {
+      LogVSQL(ERROR_LEVEL,
+              "intrinsic_default for type '%s': VDF encode failed for "
+              "input '%s' (storage_size=%zu)",
+              qualified_name_.c_str(), input_str.c_str(), storage_size);
+    } else {
+      LogVSQL(ERROR_LEVEL,
+              "intrinsic_default for type '%s': VDF encode returned wrong "
+              "size %zu for input '%s' (expected storage_size=%zu)",
+              qualified_name_.c_str(), *r, input_str.c_str(), storage_size);
+    }
   } else if (op.fn() != nullptr) {
     bool fn_failed = op.fn()(buffer.data(), storage_size, input_str.c_str(),
                              input_str.size(), &encoded_length);
@@ -123,11 +134,24 @@ bool TypeContext::init_intrinsic_default() {
       intrinsic_default_size_ = encoded_length;
       return false;
     }
+    if (fn_failed) {
+      LogVSQL(ERROR_LEVEL,
+              "intrinsic_default for type '%s': encode function failed for "
+              "input '%s' (storage_size=%zu)",
+              qualified_name_.c_str(), input_str.c_str(), storage_size);
+    } else {
+      LogVSQL(ERROR_LEVEL,
+              "intrinsic_default for type '%s': encode function returned wrong "
+              "size %zu for input '%s' (expected storage_size=%zu)",
+              qualified_name_.c_str(), encoded_length, input_str.c_str(),
+              storage_size);
+    }
+  } else {
+    LogVSQL(ERROR_LEVEL,
+            "intrinsic_default for type '%s': encode op has neither VDF nor "
+            "function for input '%s'",
+            qualified_name_.c_str(), input_str.c_str());
   }
-
-  LogVSQL(ERROR_LEVEL,
-          "intrinsic_default for type '%s' failed to encode from string",
-          qualified_name_.c_str());
   return true;
 }
 
