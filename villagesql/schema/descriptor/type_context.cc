@@ -89,6 +89,11 @@ bool TypeContext::init_intrinsic_default() {
     }
   } else if (descriptor_->intrinsic_default_str().has_value()) {
     input_str = *descriptor_->intrinsic_default_str();
+  } else {
+    LogVSQL(INFORMATION_LEVEL,
+            "type '%s' has no intrinsic_default value configured",
+            qualified_name_.c_str());
+    return false;
   }
 
   if (!encode_op_.has_value()) {
