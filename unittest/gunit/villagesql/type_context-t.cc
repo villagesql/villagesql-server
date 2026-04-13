@@ -215,8 +215,8 @@ class TypeContextTest : public ::testing::Test {
 
 TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
   villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"), 1, 16, 256,
-      villagesql::EncodeFunction(dummy_encode),
+      villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_1, 1, 16, 256, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
   villagesql::TypeContextKey key("COMPLEX", "test_ext", "1.0.0");
@@ -231,7 +231,8 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
       make_resolve_params_fd("rp_ok", &resolve_params_ok_vdf);
 
   villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_2, 1, -1, 0,
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
@@ -251,7 +252,8 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
       make_resolve_params_fd("rp_fail", &resolve_params_fail_vdf);
 
   villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_2, 1, -1, 0,
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
@@ -271,7 +273,8 @@ TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
       make_resolve_params_fd("rp_fail2", &resolve_params_fail_vdf);
 
   villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_2, 1, -1, 0,
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
