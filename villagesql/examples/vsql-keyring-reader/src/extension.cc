@@ -21,7 +21,7 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// VillageSQL extension demonstrating keyring access via vef_context_t.
+// VillageSQL extension demonstrating keyring access via vef_register_arg_t.
 //
 // Exposes a single VDF:
 //   keyring_read(data_id VARCHAR, auth_id VARCHAR) RETURNS VARCHAR
@@ -41,7 +41,7 @@ static const size_t kMaxSecretLen = 4096;
 // keyring_read(data_id, auth_id) - reads a secret from the keyring.
 // Returns the secret as a string, or NULL if not found or keyring unavailable.
 // Pass NULL for auth_id to read internal keys.
-void keyring_read_impl(vef_context_t *ctx, vef_invalue_t *data_id_arg,
+void keyring_read_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
                        vef_invalue_t *auth_id_arg, vef_vdf_result_t *out) {
   if (data_id_arg->is_null) {
     out->type = VEF_RESULT_NULL;
@@ -51,9 +51,9 @@ void keyring_read_impl(vef_context_t *ctx, vef_invalue_t *data_id_arg,
   const char *auth_id = auth_id_arg->is_null ? nullptr : auth_id_arg->str_value;
 
   size_t out_len = 0;
-  if (ctx->read_keyring(ctx, data_id_arg->str_value, auth_id,
-                        reinterpret_cast<unsigned char *>(out->str_buf),
-                        out->max_str_len, &out_len)) {
+  if (villagesql::keyring::read(data_id_arg->str_value, auth_id,
+                                reinterpret_cast<unsigned char *>(out->str_buf),
+                                out->max_str_len, &out_len)) {
     out->type = VEF_RESULT_NULL;
     return;
   }
@@ -64,7 +64,7 @@ void keyring_read_impl(vef_context_t *ctx, vef_invalue_t *data_id_arg,
 // keyring_store(data_id, auth_id, value) - stores a secret in the keyring.
 // Returns 0 on success, 1 on error.
 // Pass NULL for auth_id to store as an internal key.
-void keyring_store_impl(vef_context_t *ctx, vef_invalue_t *data_id_arg,
+void keyring_store_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
                         vef_invalue_t *auth_id_arg, vef_invalue_t *value_arg,
                         vef_vdf_result_t *out) {
   out->int_value = 1;
@@ -72,8 +72,8 @@ void keyring_store_impl(vef_context_t *ctx, vef_invalue_t *data_id_arg,
 
   const char *auth_id = auth_id_arg->is_null ? nullptr : auth_id_arg->str_value;
 
-  if (!ctx->write_keyring(
-          ctx, data_id_arg->str_value, auth_id,
+  if (!villagesql::keyring::write(
+          data_id_arg->str_value, auth_id,
           reinterpret_cast<const unsigned char *>(value_arg->str_value),
           value_arg->str_len))
     out->int_value = 0;

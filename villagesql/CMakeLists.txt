@@ -102,6 +102,7 @@ add_custom_target(sdk ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/types.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/abi/"
   COMMAND ${CMAKE_COMMAND} -E copy
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/keyring.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/sys_var_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/type_builder.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/vsql/"

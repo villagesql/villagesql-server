@@ -46,6 +46,7 @@
 #include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/keyring.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/sql_extension.h"
 #include "villagesql/veb/veb_register_type.h"
@@ -1035,7 +1036,9 @@ bool load_vef_extension(const std::string &so_path,
       {MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, MYSQL_VERSION_PATCH, nullptr},
       {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr},
       villagesql::services::get_variable,
-      villagesql::services::set_variable};
+      villagesql::services::set_variable,
+      villagesql::services::read_keyring,
+      villagesql::services::write_keyring};
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {

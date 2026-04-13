@@ -95,6 +95,9 @@
 // System variable builder
 #include <villagesql/vsql/sys_var_builder.h>
 
+// Keyring access
+#include <villagesql/vsql/keyring.h>
+
 // Bring the new vsql API into scope alongside the existing villagesql names.
 // After `using namespace vsql`, make_type() comes from ::vsql, while
 // make_func() and make_extension() continue to come from
@@ -106,8 +109,9 @@ namespace vsql {
 using villagesql::extension_builder::make_extension;
 using villagesql::func_builder::make_func;
 
-// Re-export sys_var namespace for system variable access
+// Re-export sys_var and keyring namespaces
 namespace sys_var = villagesql::sys_var;
+namespace keyring = villagesql::keyring;
 using villagesql::sys_var_builder::make_sys_var_bool;
 using villagesql::sys_var_builder::make_sys_var_double;
 using villagesql::sys_var_builder::make_sys_var_int;

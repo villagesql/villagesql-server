@@ -170,11 +170,9 @@ typedef enum : unsigned int {
                    // + Extension system variables (vef_sys_var_desc_t):
                    //   server registers these as MySQL component system
                    //   variables on the extension's behalf.
-                   // + get_variable/set_variable function pointers added to
-                   //   vef_register_arg_t: thread-safe access to MySQL
-                   //   component system variables from any extension VDF.
-                   // + vef_context_t gains read_keyring function pointer for
-                   //   reading secrets from the MySQL keyring component.
+                   // + get_variable/set_variable/read_keyring/write_keyring
+                   //   function pointers in vef_register_arg_t: access to
+                   //   MySQL system variables and keyring component.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -197,38 +195,11 @@ typedef struct {
 
 // Context passed to all function calls (prerun, vdf, postrun)
 //
-typedef struct vef_context_t {
+typedef struct {
   // protocol version being used
   vef_protocol_t protocol;
 
-  // protocol >= VEF_PROTOCOL_2
-  //
-  // Read a secret from the MySQL keyring component.
-  //
-  // data_id:    identifier for the secret.
-  // auth_id:    owner of the secret, or NULL for internal keys.
-  // buf:        caller-provided buffer to receive the secret bytes.
-  // buf_len:    size of buf in bytes.
-  // out_len:    set to the actual number of bytes written on success.
-  //
-  // Returns false on success, true on error (including key not found).
-  bool (*read_keyring)(struct vef_context_t *ctx, const char *data_id,
-                       const char *auth_id, unsigned char *buf, size_t buf_len,
-                       size_t *out_len);
-
-  // protocol >= VEF_PROTOCOL_2
-  //
-  // Write a secret to the MySQL keyring component.
-  //
-  // data_id:    identifier for the secret.
-  // auth_id:    owner of the secret, or NULL for internal keys.
-  // data:       secret bytes to store.
-  // data_len:   length of data in bytes.
-  //
-  // Returns false on success, true on error.
-  bool (*write_keyring)(struct vef_context_t *ctx, const char *data_id,
-                        const char *auth_id, const unsigned char *data,
-                        size_t data_len);
+  // We foresee adding logger or distributed trace information in this context
 } vef_context_t;
 
 // Function pointer types for system variable access, passed to extensions
@@ -253,6 +224,27 @@ typedef bool (*vef_set_variable_fn)(const char *component_name,
                                     const char *name, const char *scope,
                                     const char *val);
 
+// read_keyring: read a secret from the MySQL keyring component.
+//   data_id:  identifier for the secret.
+//   auth_id:  owner of the secret, or NULL for internal keys.
+//   buf:      caller-provided buffer to receive the secret bytes.
+//   buf_len:  size of buf in bytes.
+//   out_len:  set to the actual number of bytes written on success.
+//   Returns false on success, true on error (including key not found).
+typedef bool (*vef_read_keyring_fn)(const char *data_id, const char *auth_id,
+                                    unsigned char *buf, size_t buf_len,
+                                    size_t *out_len);
+
+// write_keyring: write a secret to the MySQL keyring component.
+//   data_id:   identifier for the secret.
+//   auth_id:   owner of the secret, or NULL for internal keys.
+//   data:      secret bytes to store.
+//   data_len:  length of data in bytes.
+//   Returns false on success, true on error.
+typedef bool (*vef_write_keyring_fn)(const char *data_id, const char *auth_id,
+                                     const unsigned char *data,
+                                     size_t data_len);
+
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -263,6 +255,8 @@ typedef struct {
   // protocol >= VEF_PROTOCOL_2
   vef_get_variable_fn get_variable;
   vef_set_variable_fn set_variable;
+  vef_read_keyring_fn read_keyring;
+  vef_write_keyring_fn write_keyring;
 } vef_register_arg_t;
 
 typedef struct {

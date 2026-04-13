@@ -21,9 +21,12 @@
 namespace villagesql {
 namespace services {
 
-// Returns a vef_context_t with function pointers initialized for the given
-// protocol. For protocol >= VEF_PROTOCOL_2, read_keyring is wired up.
-vef_context_t make_vef_context(vef_protocol_t protocol);
+// Implementations of the keyring access functions passed to extensions
+// via vef_register_arg_t.
+bool read_keyring(const char *data_id, const char *auth_id, unsigned char *buf,
+                  size_t buf_len, size_t *out_len);
+bool write_keyring(const char *data_id, const char *auth_id,
+                   const unsigned char *data, size_t data_len);
 
 }  // namespace services
 }  // namespace villagesql

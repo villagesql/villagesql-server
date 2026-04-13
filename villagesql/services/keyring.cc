@@ -23,11 +23,8 @@
 namespace villagesql {
 namespace services {
 
-namespace {
-
-bool vef_read_keyring_impl(vef_context_t * /*ctx*/, const char *data_id,
-                           const char *auth_id, unsigned char *buf,
-                           size_t buf_len, size_t *out_len) {
+bool read_keyring(const char *data_id, const char *auth_id, unsigned char *buf,
+                  size_t buf_len, size_t *out_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return true;
 
@@ -58,9 +55,8 @@ bool vef_read_keyring_impl(vef_context_t * /*ctx*/, const char *data_id,
   return result;
 }
 
-bool vef_write_keyring_impl(vef_context_t * /*ctx*/, const char *data_id,
-                            const char *auth_id, const unsigned char *data,
-                            size_t data_len) {
+bool write_keyring(const char *data_id, const char *auth_id,
+                   const unsigned char *data, size_t data_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return true;
 
@@ -73,18 +69,6 @@ bool vef_write_keyring_impl(vef_context_t * /*ctx*/, const char *data_id,
 
   mysql_plugin_registry_release(registry);
   return result;
-}
-
-}  // namespace
-
-vef_context_t make_vef_context(vef_protocol_t protocol) {
-  vef_context_t ctx{};
-  ctx.protocol = protocol;
-  if (protocol >= VEF_PROTOCOL_2) {
-    ctx.read_keyring = vef_read_keyring_impl;
-    ctx.write_keyring = vef_write_keyring_impl;
-  }
-  return ctx;
 }
 
 }  // namespace services
