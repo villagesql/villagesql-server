@@ -65,6 +65,8 @@
 namespace villagesql {
 namespace veb {
 
+const vef_protocol_t vef_server_protocol_version = VEF_PROTOCOL_2;
+
 static std::string get_expansion_cache_base_path() {
   char path_buf[FN_REFLEN];
   fn_format(path_buf, ".veb_expansion_cache", mysql_real_data_home, "", 0);
@@ -663,7 +665,7 @@ bool load_installed_extensions(THD *thd) {
       ExtensionRegistration registration;
       std::string load_error;
       if (load_vef_extension(so_path, extension_name, registration,
-                             VEF_PROTOCOL_2, load_error)) {
+                             vef_server_protocol_version, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;

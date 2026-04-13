@@ -1,0 +1,51 @@
+# No extensions installed - table should be empty
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION;
+EXTENSION_NAME	NEGOTIATED_PROTOCOL	REGISTRATION_JSON
+Creating extension foo using SDK...
+Created foo.veb
+# Install both extensions and verify registration metadata
+INSTALL EXTENSION foo;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION ORDER BY EXTENSION_NAME;
+EXTENSION_NAME	NEGOTIATED_PROTOCOL	REGISTRATION_JSON
+foo	2	{"extension_name":"foo","extension_version":"EXT_VERSION","sdk_version":"SDK_VERSION","requested_protocol":2,"funcs":[],"types":[],"sys_vars":[]}
+vsql_complex	2	{"extension_name":"vsql_complex","extension_version":"EXT_VERSION","sdk_version":"SDK_VERSION","requested_protocol":2,"funcs":[{"name":"COMPLEX::from_string","return_type":"COMPLEX","params":["STRING"],"deterministic":false,"is_aggregate":false},{"name":"COMPLEX::to_string","return_type":"STRING","params":["COMPLEX"],"deterministic":false,"is_aggregate":false},{"name":"COMPLEX::compare","return_type":"INT","params":["COMPLEX","COMPLEX"],"deterministic":false,"is_aggregate":false},{"name":"COMPLEX2::from_string","return_type":"COMPLEX2","params":["STRING"],"deterministic":false,"is_aggregate":false},{"name":"COMPLEX2::to_string","return_type":"STRING","params":["COMPLEX2"],"deterministic":false,"is_aggregate":false},{"name":"COMPLEX2::compare","return_type":"INT","params":["COMPLEX2","COMPLEX2"],"deterministic":false,"is_aggregate":false},{"name":"COMPLEX2::hash","return_type":"INT","params":["COMPLEX2"],"deterministic":false,"is_aggregate":false},{"name":"complex_add","return_type":"COMPLEX","params":["COMPLEX","COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_subtract","return_type":"COMPLEX","params":["COMPLEX","COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_multiply","return_type":"COMPLEX","params":["COMPLEX","COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_divide","return_type":"COMPLEX","params":["COMPLEX","COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_real","return_type":"REAL","params":["COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_imag","return_type":"REAL","params":["COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_abs","return_type":"REAL","params":["COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_conjugate","return_type":"COMPLEX","params":["COMPLEX"],"deterministic":true,"is_aggregate":false},{"name":"complex_sum","return_type":"COMPLEX","params":["COMPLEX"],"deterministic":false,"is_aggregate":true}],"types":[{"name":"COMPLEX","persisted_length":16,"max_decode_buffer_length":64,"encode_vdf":"COMPLEX::from_string","decode_vdf":"COMPLEX::to_string","compare_vdf":"COMPLEX::compare","intrinsic_default_str":"(0,0)"},{"name":"COMPLEX2","persisted_length":16,"max_decode_buffer_length":64,"encode_vdf":"COMPLEX2::from_string","decode_vdf":"COMPLEX2::to_string","compare_vdf":"COMPLEX2::compare","hash_vdf":"COMPLEX2::hash","intrinsic_default_str":"(0,0)"}],"sys_vars":[]}
+# Verify requested and negotiated protocols match the server's VEF protocol version
+SELECT EXTENSION_NAME,
+JSON_EXTRACT(REGISTRATION_JSON, '$.requested_protocol') = @@villagesql_vef_server_protocol AS requested_matches_server,
+NEGOTIATED_PROTOCOL = @@villagesql_vef_server_protocol AS negotiated_matches_server
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION
+ORDER BY EXTENSION_NAME;
+EXTENSION_NAME	requested_matches_server	negotiated_matches_server
+foo	1	1
+vsql_complex	1	1
+# Verify vsql_complex func signatures via JSON_TABLE
+SELECT jt.name, jt.return_type, jt.params
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
+JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
+name        VARCHAR(64) PATH '$.name',
+return_type VARCHAR(64) PATH '$.return_type',
+params      JSON        PATH '$.params'
+)) AS jt
+WHERE EXTENSION_NAME = 'vsql_complex'
+ORDER BY jt.name;
+name	return_type	params
+complex_abs	REAL	["COMPLEX"]
+complex_add	COMPLEX	["COMPLEX", "COMPLEX"]
+complex_conjugate	COMPLEX	["COMPLEX"]
+complex_divide	COMPLEX	["COMPLEX", "COMPLEX"]
+complex_imag	REAL	["COMPLEX"]
+complex_multiply	COMPLEX	["COMPLEX", "COMPLEX"]
+complex_real	REAL	["COMPLEX"]
+complex_subtract	COMPLEX	["COMPLEX", "COMPLEX"]
+complex_sum	COMPLEX	["COMPLEX"]
+COMPLEX::compare	INT	["COMPLEX", "COMPLEX"]
+COMPLEX::from_string	COMPLEX	["STRING"]
+COMPLEX::to_string	STRING	["COMPLEX"]
+COMPLEX2::compare	INT	["COMPLEX2", "COMPLEX2"]
+COMPLEX2::from_string	COMPLEX2	["STRING"]
+COMPLEX2::hash	INT	["COMPLEX2"]
+COMPLEX2::to_string	STRING	["COMPLEX2"]
+# Uninstall and verify rows are removed
+UNINSTALL EXTENSION foo;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION;
+EXTENSION_NAME	NEGOTIATED_PROTOCOL	REGISTRATION_JSON

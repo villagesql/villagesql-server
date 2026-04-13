@@ -148,6 +148,7 @@
 #include "strmake.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "villagesql/system_views/extension_registration.h"
 #include "villagesql/types/util.h"
 
 /* @see dynamic_privileges_table.cc */
@@ -5129,6 +5130,8 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_tmp_table_columns_format, get_schema_tmp_table_columns_record, true},
     {"TMP_TABLE_KEYS", tmp_table_keys_fields_info, show_temporary_tables,
      make_old_format, get_schema_tmp_table_keys_record, true},
+    {"EXTENSION_REGISTRATION", villagesql_extension_registration_fields,
+     fill_extension_registration, nullptr, nullptr, false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {

@@ -82,6 +82,12 @@ const uchar *Sys_var_villagesql_server_version::global_value_ptr(
 static Sys_var_villagesql_server_version Sys_villagesql_server_version(
     "villagesql_server_version", "VillageSQL server version.");
 
+static Sys_var_uint Sys_villagesql_vef_server_protocol(
+    "villagesql_vef_server_protocol",
+    "Highest VEF protocol version supported by this server build",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(veb::vef_server_protocol_version),
+    NO_CMD_LINE, VALID_RANGE(0, 255), DEFAULT(0), BLOCK_SIZE(1));
+
 bool bootstrap_for_init_file(THD *thd) {
   if (SchemaManager::bootstrap(thd)) {
     sysd::notify("STATUS=VillageSQL bootstrap for init-file unsuccessful\n");

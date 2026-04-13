@@ -1,0 +1,14 @@
+# Test @@villagesql_vef_server_protocol system variable.
+# Verifies the variable is accessible, reports the expected protocol version,
+# and is read-only / non-persistable at runtime.
+
+--echo # Variable reflects the server's highest supported VEF protocol version
+SELECT @@GLOBAL.villagesql_vef_server_protocol AS vef_server_protocol;
+
+--echo # Variable cannot be set at runtime
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL villagesql_vef_server_protocol = 1;
+
+--echo # Variable cannot be persisted
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET PERSIST villagesql_vef_server_protocol = 1;

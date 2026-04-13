@@ -17,6 +17,7 @@
 
 SET(VILLAGESQL_SYSTEM_VIEWS_SOURCES
   columns.cc
+  extension_registration.cc
   extensions.cc
 )
 
@@ -26,3 +27,5 @@ ADD_LIBRARY(villagesql_system_views OBJECT
 
 ADD_DEPENDENCIES(villagesql_system_views GenError)
 ADD_DEPENDENCIES(villagesql_system_views GenServerSource)
+
+TARGET_LINK_LIBRARIES(villagesql_system_views PRIVATE extra::rapidjson)

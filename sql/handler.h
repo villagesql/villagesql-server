@@ -3,6 +3,7 @@
 
 /*
    Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -933,7 +934,8 @@ enum enum_schema_tables : int {
   SCH_USER_PRIVILEGES,
   SCH_TMP_TABLE_COLUMNS,
   SCH_TMP_TABLE_KEYS,
-  SCH_LAST = SCH_TMP_TABLE_KEYS
+  SCH_EXTENSION_REGISTRATION,
+  SCH_LAST = SCH_EXTENSION_REGISTRATION
 };
 
 enum ha_stat_type { HA_ENGINE_STATUS, HA_ENGINE_LOGS, HA_ENGINE_MUTEX };

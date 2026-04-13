@@ -81,6 +81,10 @@ bool load_installed_extensions(THD *thd);
 void cleanup_orphaned_expansion_directories(
     const std::set<std::string> &installed_extensions);
 
+// The highest VEF protocol version this server build supports.
+// Exposed as the @@villagesql_vef_server_protocol system variable.
+extern const vef_protocol_t vef_server_protocol_version;
+
 struct ExtensionRegistration {
   vef_registration_t *registration;
 
