@@ -366,9 +366,9 @@ std::optional<TypeDescriptor> build_type_descriptor_v2(
   // 6. Build TypeDescriptor.
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
-      MYSQL_TYPE_VARCHAR, td->persisted_length, td->max_decode_buffer_length,
-      std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
-      std::move(hash_fn), std::move(int_to_params_fn),
+      VEF_PROTOCOL_2, MYSQL_TYPE_VARCHAR, td->persisted_length,
+      td->max_decode_buffer_length, std::move(encode_fn), std::move(decode_fn),
+      std::move(compare_fn), std::move(hash_fn), std::move(int_to_params_fn),
       std::move(resolve_params_fn), std::move(storage_intf_fns));
 
   // 7. Set intrinsic default (VDF or string literal, mutually exclusive).

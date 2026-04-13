@@ -31,13 +31,15 @@ TypeDescriptorKey::TypeDescriptorKey(std::string type_name,
                       normalize_extension_name(extension_version_)) {}
 
 TypeDescriptor::TypeDescriptor(
-    TypeDescriptorKey key, unsigned char impl_type, int64_t persisted_len,
-    int64_t max_unpersisted_len, EncodeFunction encode, DecodeFunction decode,
-    CompareFunction compare, std::optional<HashFunction> hash,
+    TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
+    int64_t persisted_len, int64_t max_unpersisted_len, EncodeFunction encode,
+    DecodeFunction decode, CompareFunction compare,
+    std::optional<HashFunction> hash,
     std::optional<IntToParamsFunction> int_to_params,
     std::optional<ResolveParamsFunction> resolve_params,
     std::optional<StorageInterface> storage_intf)
     : key_(std::move(key)),
+      protocol_(protocol),
       implementation_type_(impl_type),
       persisted_length_(persisted_len),
       max_decode_buffer_length_(max_unpersisted_len),

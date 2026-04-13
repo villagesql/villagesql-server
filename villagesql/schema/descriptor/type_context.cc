@@ -52,6 +52,10 @@ TypeContext::TypeContext(const TypeContextKey &key,
 }
 
 bool TypeContext::init_intrinsic_default() {
+  // Protocol-1 types do not define intrinsic defaults; MySQL's built-in default
+  // handling is used instead. Nothing to initialize.
+  if (descriptor_->protocol() < VEF_PROTOCOL_2) return false;
+
   // Pre-encode the intrinsic default value. Returns false (success) when a
   // default is stored. Returns true (failure) when no source produces a valid
   // default. Variable-length types with no resolved size skip this entirely.

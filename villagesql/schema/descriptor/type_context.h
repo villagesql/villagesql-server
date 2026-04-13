@@ -280,11 +280,11 @@ class TypeContext {
     return descriptor_->storage_intf();
   }
 
-  // Get cached intrinsic default buffer. Always valid —
-  // init_intrinsic_default() guarantees this is populated, and
-  // TableTraits::create() returns nullptr on failure.
+  // Get cached intrinsic default buffer, or nullptr if not set.
+  // Protocol-1 types never populate this buffer; callers must check for
+  // nullptr.
   const unsigned char *intrinsic_default_buffer() const {
-    assert(!intrinsic_default_buffer_.empty());
+    if (intrinsic_default_buffer_.empty()) return nullptr;
     return intrinsic_default_buffer_.data();
   }
 

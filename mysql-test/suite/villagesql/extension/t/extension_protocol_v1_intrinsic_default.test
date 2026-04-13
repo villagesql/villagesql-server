@@ -3,9 +3,9 @@
 #
 # The test extension registers a protocol-1 type with intrinsic_default_str
 # set to the sentinel "V1_BUG".  A correct server ignores this field for
-# protocol-1 types, so the intrinsic default comes from encode("") which
-# produces 8 asterisks.  The buggy code reads the sentinel and produces
-# encode("V1_BUG") = "V1_BUG**" instead.
+# protocol-1 types entirely — protocol-1 types have no intrinsic default.
+# Attempting to store NULL into a NOT NULL protocol-1 column must return an
+# error, not silently fall back to encode("") or read the sentinel.
 
 --let $veb_dir = $MYSQLTEST_VARDIR/veb
 --exec mkdir -p $veb_dir
@@ -26,19 +26,16 @@ CREATE TABLE t1 (
     val V1_REGTEST NOT NULL
 );
 
-# Use LOAD DATA IGNORE with a NULL value to trigger the intrinsic default
-# path for the NOT NULL column.
+# Use LOAD DATA IGNORE with a NULL value. Protocol-1 types have no intrinsic
+# default, so this must fail with an error rather than silently storing
+# encode("") or the sentinel "V1_BUG**".
 --write_file $MYSQLTEST_VARDIR/tmp/v1_regtest.dat
 1	\N
 EOF
 
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error 3219
 --eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/v1_regtest.dat' IGNORE INTO TABLE t1
-
-# With the bug:   val = 'V1_BUG**' (sentinel was read)
-# Without the bug: val = '********' (encode("") fallback)
---echo # Intrinsic default should be 8 asterisks (from encode("")), not "V1_BUG**"
-SELECT * FROM t1;
 
 DROP TABLE t1;
 --remove_file $MYSQLTEST_VARDIR/tmp/v1_regtest.dat

@@ -922,6 +922,13 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
   assert(field->has_type_context());
   const TypeContext &tc = *field->get_type_context();
   const unsigned char *cached_buffer = tc.intrinsic_default_buffer();
+  if (cached_buffer == nullptr) {
+    // Protocol-1 types have no intrinsic default; callers should not reach
+    // here.
+    villagesql_error("Type '%s' has no intrinsic default", MYF(0),
+                     tc.qualified_name().c_str());
+    return TYPE_ERR_BAD_VALUE;
+  }
   const size_t cached_size = tc.intrinsic_default_size();
   assert(cached_size == static_cast<size_t>(tc.persisted_length()));
 

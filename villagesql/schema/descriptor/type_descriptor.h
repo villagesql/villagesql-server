@@ -121,9 +121,10 @@ class TypeDescriptor {
   // Full constructor. hash, int_to_params, resolve_params, intrinsic_default,
   // and storage_intf are optional.
   TypeDescriptor(
-      TypeDescriptorKey key, unsigned char impl_type, int64_t persisted_len,
-      int64_t max_unpersisted_len, EncodeFunction encode, DecodeFunction decode,
-      CompareFunction compare, std::optional<HashFunction> hash = std::nullopt,
+      TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
+      int64_t persisted_len, int64_t max_unpersisted_len, EncodeFunction encode,
+      DecodeFunction decode, CompareFunction compare,
+      std::optional<HashFunction> hash = std::nullopt,
       std::optional<IntToParamsFunction> int_to_params = std::nullopt,
       std::optional<ResolveParamsFunction> resolve_params = std::nullopt,
       std::optional<StorageInterface> storage_intf = std::nullopt);
@@ -154,6 +155,9 @@ class TypeDescriptor {
   std::string qualified_base_name() const {
     return make_qualified_base_name(extension_name(), type_name());
   }
+
+  // Protocol version this type was registered with.
+  vef_protocol_t protocol() const { return protocol_; }
 
   // Type implementation details
   unsigned char implementation_type() const { return implementation_type_; }
@@ -217,6 +221,8 @@ class TypeDescriptor {
 
  private:
   TypeDescriptorKey key_;
+
+  vef_protocol_t protocol_{VEF_PROTOCOL_1};
 
   // Type implementation details
   unsigned char implementation_type_{0};
