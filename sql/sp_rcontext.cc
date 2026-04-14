@@ -137,11 +137,31 @@ bool sp_rcontext::maybe_inject_custom_sp_params() {
   // VillageSQL: sp must be set before calling this.
   assert(sp != nullptr);
 
+  // Fast path: skip the victionary entirely if a previous call confirmed this
+  // SP has no custom-typed params. This is safe because custom_sp_params is
+  // populated at CREATE PROCEDURE time for all params and DECLARE variables
+  // across all branches — not lazily at runtime. If the SP is dropped and
+  // recreated, sp_head is replaced and the cached state resets to UNCHECKED.
+  // sp_head is never shared across threads (IS_INVOKED prevents concurrent
+  // use), so this read is safe without a lock.
+  if (sp->m_vsql_custom_params_state == sp_head::VSQL_SP_PARAMS_NO_CUSTOM) {
+    return false;
+  }
+
   if (!m_var_table) return false;
 
-  return villagesql::InjectCustomSpParams(
+  bool had_custom_params = false;
+  bool err = villagesql::InjectCustomSpParams(
       sp->m_db.str, sp->m_name.str, m_root_parsing_ctx, m_var_table->field,
-      m_var_items, m_custom_type_refs);
+      m_var_items, m_custom_type_refs, &had_custom_params);
+
+  if (!err) {
+    sp->m_vsql_custom_params_state =
+        had_custom_params ? sp_head::VSQL_SP_PARAMS_HAS_CUSTOM
+                          : sp_head::VSQL_SP_PARAMS_NO_CUSTOM;
+  }
+
+  return err;
 }
 
 bool sp_rcontext::init_var_items(THD *thd) {

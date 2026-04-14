@@ -66,11 +66,14 @@ extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
 // pctx provides the variable definitions; fields is the TABLE field array;
 // var_items is the Item wrapper array. type_refs receives a shared_ptr for each
 // injected TypeContext and must remain alive as long as the fields reference
-// it. Returns false on success, true on error.
+// it. had_custom_params is set to true when the SP has at least one
+// custom-typed param, false when it has none. Returns false on success, true
+// on error.
 extern bool InjectCustomSpParams(
     const char *db_name, const char *sp_name, const sp_pcontext *pctx,
     Field **fields, Bounds_checked_array<Item *> var_items,
-    std::vector<std::shared_ptr<const TypeContext>> &type_refs);
+    std::vector<std::shared_ptr<const TypeContext>> &type_refs,
+    bool *had_custom_params);
 
 // Fills *result with a TypeContext based on the type_name given. If
 // extension_name is non-empty, filters results to match that extension

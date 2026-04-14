@@ -1379,9 +1379,13 @@ std::shared_ptr<const TypeContext> AcquireTypeContextClientManaged(
 bool InjectCustomSpParams(
     const char *db_name, const char *sp_name, const sp_pcontext *pctx,
     Field **fields, Bounds_checked_array<Item *> var_items,
-    std::vector<std::shared_ptr<const TypeContext>> &type_refs) {
+    std::vector<std::shared_ptr<const TypeContext>> &type_refs,
+    bool *had_custom_params) {
+  assert(had_custom_params != nullptr);
+
   // Null db/sp_name means there is nothing to inject — not an error.
   if (!db_name || !sp_name) {
+    *had_custom_params = false;
     return false;
   }
 
@@ -1389,100 +1393,184 @@ bool InjectCustomSpParams(
   // Called during startup before VictionaryClient is ready (e.g. system SPs);
   // nothing to inject yet, so treat as a no-op rather than an error.
   if (!vclient.is_initialized()) {
+    *had_custom_params = false;
     return false;
   }
 
-  // Acquire write lock since get_or_create_client_managed may insert entries.
-  auto guard = vclient.get_write_lock();
+  // First pass: read lock only. Collect matching params and check whether all
+  // TypeContexts are already cached. On the hot path (repeated SP calls) every
+  // TypeContext exists, so no write lock is ever needed after the first call.
+  struct Match {
+    const SpParamEntry *param_entry;
+    uint field_idx;
+    TypeDescriptorKey type_descriptor_key;
+    TypeContextKey type_context_key;
+  };
+  std::vector<Match> matches;
+  bool needs_create = false;
 
-  auto sp_params = vclient.GetCustomSpParamsForSP(std::string(db_name),
-                                                  std::string(sp_name));
+  {
+    auto guard = vclient.get_read_lock();
 
-  if (sp_params.empty()) {
-    return false;
-  }
-
-  // Iterate over all SP variable definitions (params + DECLARE vars from all
-  // contexts) and inject TypeContext into matching fields.
-  List<Create_field> field_def_lst;
-  pctx->retrieve_field_definitions(&field_def_lst);
-
-  List_iterator_fast<Create_field> it(field_def_lst);
-  Create_field *cdef;
-  uint field_idx = 0;
-  while ((cdef = it++)) {
-    if (!cdef->field_name) {
-      field_idx++;
-      continue;
+    auto sp_params = vclient.GetCustomSpParamsForSP(std::string(db_name),
+                                                    std::string(sp_name));
+    if (sp_params.empty()) {
+      *had_custom_params = false;
+      return false;
     }
 
-    const SpParamEntry *param_entry = nullptr;
-    for (const SpParamEntry *entry : sp_params) {
-      if (my_strcasecmp(system_charset_info, cdef->field_name,
-                        entry->param_name().c_str()) == 0) {
-        param_entry = entry;
-        break;
+    // Iterate over all SP variable definitions (params + DECLARE vars from all
+    // contexts) and collect those with a matching custom param entry.
+    List<Create_field> field_def_lst;
+    pctx->retrieve_field_definitions(&field_def_lst);
+
+    List_iterator_fast<Create_field> it(field_def_lst);
+    Create_field *cdef;
+    uint field_idx = 0;
+    while ((cdef = it++)) {
+      if (!cdef->field_name) {
+        field_idx++;
+        continue;
       }
-    }
 
-    if (param_entry == nullptr) {
+      const SpParamEntry *param_entry = nullptr;
+      for (const SpParamEntry *entry : sp_params) {
+        if (my_strcasecmp(system_charset_info, cdef->field_name,
+                          entry->param_name().c_str()) == 0) {
+          param_entry = entry;
+          break;
+        }
+      }
+
+      if (param_entry == nullptr) {
+        field_idx++;
+        continue;
+      }
+
+      TypeDescriptorKey tdk(param_entry->type_name, param_entry->extension_name,
+                            param_entry->extension_version);
+      TypeContextKey tck(tdk,
+                         TypeParameters::from_json(param_entry->type_parameters));
+
+      if (!vclient.type_contexts().get_committed(tck)) needs_create = true;
+
+      matches.push_back({param_entry, field_idx, std::move(tdk), std::move(tck)});
       field_idx++;
-      continue;
     }
+  }  // read lock released
 
-    TypeDescriptorKey type_descriptor_key(param_entry->type_name,
-                                          param_entry->extension_name,
-                                          param_entry->extension_version);
-    const TypeDescriptor *type_descriptor =
-        vclient.type_descriptors().get_committed(type_descriptor_key);
-    if (should_assert_if_null(type_descriptor)) {
-      LogVSQL(ERROR_LEVEL,
-              "Failed to find type %s in extension %s, version %s for SP "
-              "variable %s in %s.%s",
-              param_entry->type_name.c_str(),
-              param_entry->extension_name.c_str(),
-              param_entry->extension_version.c_str(),
-              param_entry->param_name().c_str(), db_name, sp_name);
-      return true;
-    }
-
-    TypeParameters parameters =
-        TypeParameters::from_json(param_entry->type_parameters);
-    TypeContextKey type_context_key(type_descriptor_key, parameters);
-
-    // Use get_or_create_client_managed so the caller (sp_rcontext) holds a
-    // shared_ptr. The TypeContext refcount is decremented when sp_rcontext is
-    // destroyed (via m_custom_type_refs), not when some mem_root is cleared.
-    std::shared_ptr<const TypeContext> tc_ref =
-        vclient.type_contexts().get_or_create_client_managed(type_context_key,
-                                                             type_descriptor);
-    if (!tc_ref) {
-      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
-      return true;
-    }
-
-    if (fields[field_idx]) {
-      fields[field_idx]->set_type_context(tc_ref.get());
-    }
-
-    // Sync TypeContext into the Item wrapper so SP body statements
-    // (e.g. INSERT INTO t VALUES (in_param)) see the correct custom type.
-    // The Item_field delegates has_type_context() to its field pointer, but
-    // set_type_context() on the Item base caches it for non-field items
-    // (Item_sp_variable) that call get_type_context() on this_item().
-    // TODO(villagesql-ga): Once Item_field delegates set_type_context() to its
-    // underlying Field, this call can be dropped for field-backed items.
-    if (var_items.array() && var_items[field_idx]) {
-      var_items[field_idx]->set_type_context(tc_ref.get());
-    }
-
-    // Transfer ownership to caller — released when sp_rcontext is destroyed.
-    type_refs.push_back(std::move(tc_ref));
-
-    field_idx++;
+  if (matches.empty()) {
+    // sp_params was non-empty but no fields matched — treat as no custom params.
+    *had_custom_params = false;
+    return false;
   }
 
-  return false;
+  *had_custom_params = true;
+
+  // Second pass: inject TypeContexts into fields and items.
+  //
+  // Hot path (all TypeContexts already cached): take a read lock and use
+  // acquire_client_managed to get a shared_ptr without inserting anything.
+  //
+  // Cold path: take a write lock and use get_or_create_client_managed to
+  // create and cache the TypeContext. This happens on the first call after each
+  // server start (or extension reload): sp_params entries are persisted in the
+  // system table and reloaded into the victionary on startup, but TypeContexts
+  // are in-memory only and must be reconstructed from the TypeDescriptor on
+  // first use. After that first call the hot path is always taken.
+  auto inject_read = [&]() -> bool {
+    auto guard = vclient.get_read_lock();
+    for (auto &m : matches) {
+      const TypeDescriptor *type_descriptor =
+          vclient.type_descriptors().get_committed(m.type_descriptor_key);
+      if (should_assert_if_null(type_descriptor)) {
+        LogVSQL(ERROR_LEVEL,
+                "Failed to find type %s in extension %s, version %s for SP "
+                "variable %s in %s.%s",
+                m.param_entry->type_name.c_str(),
+                m.param_entry->extension_name.c_str(),
+                m.param_entry->extension_version.c_str(),
+                m.param_entry->param_name().c_str(), db_name, sp_name);
+        return true;
+      }
+
+      std::shared_ptr<const TypeContext> tc_ref =
+          vclient.type_contexts().acquire_client_managed(m.type_context_key);
+      if (!tc_ref) {
+        my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
+        return true;
+      }
+
+      if (fields[m.field_idx]) {
+        fields[m.field_idx]->set_type_context(tc_ref.get());
+      }
+
+      // Sync TypeContext into the Item wrapper so SP body statements
+      // (e.g. INSERT INTO t VALUES (in_param)) see the correct custom type.
+      // The Item_field delegates has_type_context() to its field pointer, but
+      // set_type_context() on the Item base caches it for non-field items
+      // (Item_sp_variable) that call get_type_context() on this_item().
+      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to its
+      // underlying Field, this call can be dropped for field-backed items.
+      if (var_items.array() && var_items[m.field_idx]) {
+        var_items[m.field_idx]->set_type_context(tc_ref.get());
+      }
+
+      // Transfer ownership to caller — released when sp_rcontext is destroyed.
+      type_refs.push_back(std::move(tc_ref));
+    }
+    return false;
+  };
+
+  auto inject_write = [&]() -> bool {
+    auto guard = vclient.get_write_lock();
+    for (auto &m : matches) {
+      const TypeDescriptor *type_descriptor =
+          vclient.type_descriptors().get_committed(m.type_descriptor_key);
+      if (should_assert_if_null(type_descriptor)) {
+        LogVSQL(ERROR_LEVEL,
+                "Failed to find type %s in extension %s, version %s for SP "
+                "variable %s in %s.%s",
+                m.param_entry->type_name.c_str(),
+                m.param_entry->extension_name.c_str(),
+                m.param_entry->extension_version.c_str(),
+                m.param_entry->param_name().c_str(), db_name, sp_name);
+        return true;
+      }
+
+      // Use get_or_create_client_managed so the caller (sp_rcontext) holds a
+      // shared_ptr. The TypeContext refcount is decremented when sp_rcontext is
+      // destroyed (via m_custom_type_refs), not when some mem_root is cleared.
+      std::shared_ptr<const TypeContext> tc_ref =
+          vclient.type_contexts().get_or_create_client_managed(
+              m.type_context_key, type_descriptor);
+      if (!tc_ref) {
+        my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
+        return true;
+      }
+
+      if (fields[m.field_idx]) {
+        fields[m.field_idx]->set_type_context(tc_ref.get());
+      }
+
+      // Sync TypeContext into the Item wrapper so SP body statements
+      // (e.g. INSERT INTO t VALUES (in_param)) see the correct custom type.
+      // The Item_field delegates has_type_context() to its field pointer, but
+      // set_type_context() on the Item base caches it for non-field items
+      // (Item_sp_variable) that call get_type_context() on this_item().
+      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to its
+      // underlying Field, this call can be dropped for field-backed items.
+      if (var_items.array() && var_items[m.field_idx]) {
+        var_items[m.field_idx]->set_type_context(tc_ref.get());
+      }
+
+      // Transfer ownership to caller — released when sp_rcontext is destroyed.
+      type_refs.push_back(std::move(tc_ref));
+    }
+    return false;
+  };
+
+  return needs_create ? inject_write() : inject_read();
 }
 
 }  // namespace villagesql
