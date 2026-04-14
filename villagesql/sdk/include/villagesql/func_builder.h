@@ -524,10 +524,10 @@ using TypeHashWithParamsFunc = size_t (*)(const P &,
 // INSERT IGNORE or UPDATE IGNORE). Returns the string representation of the
 // default value (e.g. "(0,0)" for COMPLEX). The server converts this string
 // using the type's from_string function to produce the binary default.
-// Returns nullptr on error (writes to error_msg).
-using IntrinsicDefaultFunc = const char *(*)(char *error_msg);
+// Returns an empty string on error (writes to error_msg).
+using IntrinsicDefaultFunc = std::string (*)(char *error_msg);
 template <typename P>
-using IntrinsicDefaultWithParamsFunc = const char *(*)(const P &,
+using IntrinsicDefaultWithParamsFunc = std::string (*)(const P &,
                                                        char *error_msg);
 
 // IntrinsicDefaultWrapper: wraps IntrinsicDefaultFunc into a VDF.
@@ -536,13 +536,14 @@ template <auto Func>
 struct IntrinsicDefaultWrapper {
   static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t * /*args*/,
                      vef_vdf_result_t *result) {
-    const char *str = Func(result->error_msg);
-    if (str == nullptr) {
+    static thread_local std::string buf;
+    buf = Func(result->error_msg);
+    if (result->error_msg[0] != '\0') {
       result->type = VEF_RESULT_ERROR;
       return;
     }
-    *result->alt_str_buf = const_cast<char *>(str);
-    result->actual_len = strlen(str);
+    *result->alt_str_buf = buf.data();
+    result->actual_len = buf.size();
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -750,7 +751,7 @@ struct TypeDecodeWithCacheVdfWrapper {
   }
 };
 
-// IntrinsicDefaultWithCacheWrapper: wraps const char* Func(const P&, char*).
+// IntrinsicDefaultWithCacheWrapper: wraps std::string Func(const P&, char*).
 // VDF signature: () -> STRING.
 // P is deduced from Func's first parameter. The TypeParamsCache for P must
 // have been bound via .params<P, &parse_fn>() in the type builder.
@@ -761,14 +762,15 @@ struct IntrinsicDefaultWithCacheWrapper {
 
   static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t * /*args*/,
                      vef_vdf_result_t *result) {
+    static thread_local std::string buf;
     const P &p = type_params_cache_for<P>().get(result->type_params);
-    const char *str = Func(p, result->error_msg);
-    if (str == nullptr) {
+    buf = Func(p, result->error_msg);
+    if (result->error_msg[0] != '\0') {
       result->type = VEF_RESULT_ERROR;
       return;
     }
-    *result->alt_str_buf = const_cast<char *>(str);
-    result->actual_len = strlen(str);
+    *result->alt_str_buf = buf.data();
+    result->actual_len = buf.size();
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -1388,7 +1390,7 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
 
 // Entry point for intrinsic_default functions:
 //   make_intrinsic_default<&my_func>("my_func")
-// my_func returns const char* (string representation of the default value).
+// my_func returns std::string (string representation of the default value).
 // The server encodes this string to produce the binary default.
 // If my_func's first parameter is const P&, the cache is used automatically
 // (parse function must be bound via .params<P, &parse_fn>() in the type

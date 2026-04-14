@@ -287,17 +287,16 @@ int tvector_compare(const TVectorParams &p,
   return 0;
 }
 
-// Implicit default for TVECTOR: returns "[0,0,...,0]" with p.dimension zeros.
+/// Implicit default for TVECTOR: returns "[0,0,...,0]" with p.dimension zeros.
 // The server converts this string using the type's from_string function.
-const char *tvector_default(const TVectorParams &p, char * /*error_msg*/) {
-  static thread_local std::string buf;
-  buf = "[";
+std::string tvector_default(const TVectorParams &p, char * /*error_msg*/) {
+  std::string buf = "[";
   for (int64_t i = 0; i < p.dimension; i++) {
     if (i > 0) buf += ",";
     buf += "0";
   }
   buf += "]";
-  return buf.c_str();
+  return buf;
 }
 
 // Dot product: (TVECTOR, TVECTOR) -> REAL
