@@ -7,9 +7,7 @@
 delimiter //;
 CREATE PROCEDURE p1(INOUT val COMPLEX)
 BEGIN
-  # Simple pass-through logic for now, assuming string representation
-  # Ideally this would do math if operations were supported
-  SET val = '(9.0,9.0)';
+  SET val = vsql_complex.complex_add(val, '(1.0,1.0)');
 END//
 delimiter ;//
 
