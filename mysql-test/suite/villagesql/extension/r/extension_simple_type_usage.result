@@ -19,7 +19,7 @@ id	data
 1	hello   
 2	world123
 3	abcdefgh
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data FROM test_bytearray ORDER BY id;
 id	data
 1	'hello   '
 2	'world123'
@@ -30,7 +30,7 @@ id	data	rotated
 1	hello   	uryyb   
 2	world123	jbeyq123
 3	abcdefgh	nopqrstu
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray_to_string(vsql_simple.rot13(data)), "'") as rotated FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") as rotated FROM test_bytearray ORDER BY id;
 id	data	rotated
 1	'hello   '	'uryyb   '
 2	'world123'	'jbeyq123'
@@ -41,7 +41,7 @@ id	data	even
 1	hello   	hlo     
 2	world123	wrd2    
 3	abcdefgh	aceg    
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray_to_string(vsql_simple.even_chars(data)), "'") as even FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.even_chars(data)), "'") as even FROM test_bytearray ORDER BY id;
 id	data	even
 1	'hello   '	'hlo     '
 2	'world123'	'wrd2    '
@@ -52,7 +52,7 @@ id	data	odd
 1	hello   	el      
 2	world123	ol13    
 3	abcdefgh	bdfh    
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray_to_string(vsql_simple.odd_chars(data)), "'") as odd FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.odd_chars(data)), "'") as odd FROM test_bytearray ORDER BY id;
 id	data	odd
 1	'hello   '	'el      '
 2	'world123'	'ol13    '

@@ -22,19 +22,19 @@ INSERT INTO test_bytearray VALUES (3, 'abcdefgh');
 
 --echo # Query the data
 SELECT id, data FROM test_bytearray ORDER BY id;
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data FROM test_bytearray ORDER BY id;
 
 --echo # Test rot13 function
 SELECT id, data, vsql_simple.rot13(data) as rotated FROM test_bytearray ORDER BY id;
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray_to_string(vsql_simple.rot13(data)), "'") as rotated FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") as rotated FROM test_bytearray ORDER BY id;
 
 --echo # Test even_chars function (extracts bytes at positions 0, 2, 4, 6)
 SELECT id, data, vsql_simple.even_chars(data) as even FROM test_bytearray ORDER BY id;
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray_to_string(vsql_simple.even_chars(data)), "'") as even FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.even_chars(data)), "'") as even FROM test_bytearray ORDER BY id;
 
 --echo # Test odd_chars function (extracts bytes at positions 1, 3, 5, 7)
 SELECT id, data, vsql_simple.odd_chars(data) as odd FROM test_bytearray ORDER BY id;
-SELECT id, CONCAT("'", vsql_simple.bytearray_to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray_to_string(vsql_simple.odd_chars(data)), "'") as odd FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.odd_chars(data)), "'") as odd FROM test_bytearray ORDER BY id;
 
 --echo # Test ba_concat function (returns STRING, not BYTEARRAY)
 SELECT vsql_simple.ba_concat(t1.data, t2.data) as concatenated
