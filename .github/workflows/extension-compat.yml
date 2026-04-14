@@ -40,8 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     outputs:
-      matrix: ${{ steps.build-matrix.outputs.matrix }}
-      has-jobs: ${{ steps.build-matrix.outputs.has-jobs }}
+      build-matrix: ${{ steps.build-matrix.outputs.build-matrix }}
+      test-matrix: ${{ steps.build-matrix.outputs.test-matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,97 +55,30 @@ jobs:
           EXTENSION_FILTER: ${{ inputs.extension }}
           ABI_FILTER: ${{ inputs.abi }}
         run: |
-          # Read entries from bundled_extensions.txt as {extension, url, branch} objects.
-          # Format per line: "url [branch-or-tag]" — branch is optional.
-          # "extension" is the last path segment of the url.
-          EXTS_JSON=$(grep -v '^[[:space:]]*#\|^[[:space:]]*$' \
-                        villagesql/dev_server/bundled_extensions.txt \
-                      | jq -R '
-                          split(" ") |
-                          {
-                            url:       (.[0] | rtrimstr("/")),
-                            branch:    (.[1] // ""),
-                            extension: (.[0] | rtrimstr("/") | split("/") | last)
-                          }' \
-                      | jq -sc .)
+          # Delegate all matrix logic to the script so it can be tested locally:
+          #   PLATFORM_FILTER=macos-arm64 ABI_FILTER=stable \
+          #     ./scripts/villagesql_build-compat-matrix.sh
+          mapfile -t MATRICES < <(./scripts/villagesql_build-compat-matrix.sh)
+          BUILD_MATRIX="${MATRICES[0]}"
+          TEST_MATRIX="${MATRICES[1]}"
 
-          if [ -n "$EXTENSION_FILTER" ]; then
-            EXTS_JSON=$(echo "$EXTS_JSON" \
-              | jq --arg f "$EXTENSION_FILTER" '[.[] | select(.extension == $f)]')
+          COUNT=$(echo "$TEST_MATRIX" | jq '.include | length')
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No test jobs matched filters (platform='$PLATFORM_FILTER' extension='$EXTENSION_FILTER' abi='$ABI_FILTER'). Nothing to test."
+            exit 1
           fi
-
-          if [ "$(echo "$EXTS_JSON" | jq 'length')" -eq 0 ]; then
-            echo "has-jobs=false" >> "$GITHUB_OUTPUT"
-            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          ALL_PLATFORMS='[
-            {"platform":"linux-x86_64","runner":["self-hosted","linux","x86_64"],"os":"linux"},
-            {"platform":"linux-aarch64","runner":"ubuntu-24.04-arm","os":"linux"},
-            {"platform":"macos-arm64","runner":"macos-latest","os":"macos"}
-          ]'
-
-          if [ -n "$PLATFORM_FILTER" ]; then
-            PLATFORMS=$(echo "$ALL_PLATFORMS" \
-              | jq --arg f "$PLATFORM_FILTER" '[.[] | select(.platform == $f)]')
-          else
-            PLATFORMS="$ALL_PLATFORMS"
-          fi
-
-          if [ -n "$ABI_FILTER" ]; then
-            ABIS="[\"$ABI_FILTER\"]"
-          else
-            ABIS='["stable","dev"]'
-          fi
-
-          # Cross-product: one matrix entry per (platform, extension, abi) triple
-          MATRIX=$(jq -n \
-            --argjson platforms "$PLATFORMS" \
-            --argjson extensions "$EXTS_JSON" \
-            --argjson abis "$ABIS" \
-            '{include: [$platforms[] as $p | $extensions[] as $e | $abis[] as $a | ($p + $e + {abi: $a})]}')
-
-          COUNT=$(echo "$MATRIX" | jq '.include | length')
-          echo "has-jobs=$([ "$COUNT" -gt 0 ] && echo true || echo false)" \
-            >> "$GITHUB_OUTPUT"
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "build-matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "test-matrix=$TEST_MATRIX" >> "$GITHUB_OUTPUT"
 
   # Builds the server (for mysqld + MTR) and SDK (for extension compilation).
-  # One job per (platform, abi) pair; skips entries filtered out by prepare.
+  # One job per platform; the server binary is ABI-agnostic.
   build-server:
-    name: Build Server (${{ matrix.platform }}, ${{ matrix.abi }} ABI)
+    name: Build Server (${{ matrix.platform }})
     needs: prepare
-    if: needs.prepare.outputs.has-jobs == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: [self-hosted, linux, x86_64]
-            platform: linux-x86_64
-            os: linux
-            abi: stable
-          - runner: [self-hosted, linux, x86_64]
-            platform: linux-x86_64
-            os: linux
-            abi: dev
-          - runner: ubuntu-24.04-arm
-            platform: linux-aarch64
-            os: linux
-            abi: stable
-          - runner: ubuntu-24.04-arm
-            platform: linux-aarch64
-            os: linux
-            abi: dev
-          - runner: macos-latest
-            platform: macos-arm64
-            os: macos
-            abi: stable
-          - runner: macos-latest
-            platform: macos-arm64
-            os: macos
-            abi: dev
+      matrix: ${{ fromJson(needs.prepare.outputs.build-matrix) }}
 
     env:
       BUILD_DIR: ${{ github.workspace }}/build
@@ -180,9 +113,6 @@ jobs:
           if [ "${{ matrix.os }}" = "macos" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
           fi
-          if [ "${{ matrix.abi }}" = "dev" ]; then
-            EXTRA_FLAGS="$EXTRA_FLAGS -DVSQL_USE_DEV_ABI=ON"
-          fi
 
           # Build without bundled extensions — each test-extension job builds
           # its own extension against the SDK artifact from this job.
@@ -195,14 +125,14 @@ jobs:
       - name: Upload dev server
         uses: actions/upload-artifact@v4
         with:
-          name: devserver-${{ matrix.platform }}-${{ matrix.abi }}
+          name: devserver-${{ matrix.platform }}
           path: ${{ env.OUTPUT_DIR }}/*.tar.gz
           retention-days: 3
 
       - name: Upload SDK
         uses: actions/upload-artifact@v4
         with:
-          name: sdk-${{ matrix.platform }}-${{ matrix.abi }}
+          name: sdk-${{ matrix.platform }}
           path: ${{ env.BUILD_DIR }}/villagesql-extension-sdk-*.tar.gz
           retention-days: 3
 
@@ -212,25 +142,30 @@ jobs:
     name: Test ${{ matrix.extension }} (${{ matrix.platform }}, ${{ matrix.abi }} ABI)
     needs: [prepare, build-server]
     if: |
-      needs.prepare.outputs.has-jobs == 'true' &&
       needs.build-server.result != 'failure' &&
       needs.build-server.result != 'cancelled'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.prepare.outputs.test-matrix) }}
     runs-on: ${{ matrix.runner }}
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+          ref: ${{ inputs.ref || github.ref }}
+
       - name: Download dev server
         uses: actions/download-artifact@v4
         with:
-          name: devserver-${{ matrix.platform }}-${{ matrix.abi }}
+          name: devserver-${{ matrix.platform }}
           path: artifacts/
 
       - name: Download SDK
         uses: actions/download-artifact@v4
         with:
-          name: sdk-${{ matrix.platform }}-${{ matrix.abi }}
+          name: sdk-${{ matrix.platform }}
           path: artifacts/
 
       - name: Extract dev server and SDK
@@ -241,6 +176,14 @@ jobs:
           echo "PACKAGE_DIR=$(echo "$PWD"/package/villagesql-dev-server-*)" >> "$GITHUB_ENV"
           echo "SDK_DIR=$(echo "$PWD"/sdk/villagesql-extension-sdk-*)" >> "$GITHUB_ENV"
 
+      - name: Install build dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: sudo ./scripts/setup_linux_ext_deps.sh
+
+      - name: Install build dependencies (macOS)
+        if: matrix.os == 'macos'
+        run: ./scripts/setup_macos_ext_deps.sh
+
       - name: Clone extension
         run: |
           CLONE_ARGS=(--depth=1)
@@ -250,9 +193,12 @@ jobs:
       - name: Build extension VEB
         run: |
           NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
+          DEV_ABI_FLAG=""
+          [ "${{ matrix.abi }}" = "dev" ] && DEV_ABI_FLAG="-DVSQL_USE_DEV_ABI=ON"
           cmake -S extension/ -B ext-build/ \
-            -DCMAKE_PREFIX_PATH="$SDK_DIR" \
-            -DCMAKE_BUILD_TYPE=Release
+            -DVillageSQL_SDK_DIR="$SDK_DIR" \
+            -DCMAKE_BUILD_TYPE=Release \
+            $DEV_ABI_FLAG
           cmake --build ext-build/ --parallel "$NCORES"
 
           # Copy the built VEB into the dev server's extension directory
@@ -272,14 +218,15 @@ jobs:
       - name: Run MTR suite
         run: |
           if [ ! -d "extension/mysql-test" ]; then
-            echo "No test suite for ${{ matrix.extension }}, nothing to run."
-            exit 0
+            echo "Error: no mysql-test/ directory found in ${{ matrix.extension }}"
+            exit 1
           fi
-          cd "$PACKAGE_DIR"
-          ./mysql-test/mysql-test-run.pl \
+          "$PACKAGE_DIR/villagesql" mysql-test \
             --suite=${{ matrix.extension }} \
             --parallel=auto \
-            --nounit-tests
+            --nounit-tests \
+            --force \
+            --retry=0
 
       - name: Upload MTR results on failure
         if: failure()

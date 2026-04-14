@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Builds the JSON matrices used by extension-compat.yml.
+#
+# Outputs two JSON values to stdout (one per line):
+#   1. build-matrix  — platforms for the build-server job (no abi dimension;
+#                      the server binary is ABI-agnostic)
+#   2. test-matrix   — full (platform, extension, abi) triples for test-extension
+#
+# Inputs (environment variables, all optional):
+#   PLATFORM_FILTER   — limit to a single platform  (e.g. linux-x86_64)
+#   EXTENSION_FILTER  — limit to a single extension (e.g. vsql-ai)
+#   ABI_FILTER        — limit to a single ABI        (e.g. stable)
+#   EXTENSIONS_FILE   — path to bundled_extensions.txt
+#                       (default: villagesql/dev_server/bundled_extensions.txt)
+#
+# Usage (from repo root):
+#   ./scripts/villagesql_build-compat-matrix.sh
+#   PLATFORM_FILTER=macos-arm64 ABI_FILTER=stable ./scripts/villagesql_build-compat-matrix.sh
+#   EXTENSION_FILTER=vsql-ai ./scripts/villagesql_build-compat-matrix.sh
+
+set -euo pipefail
+
+EXTENSIONS_FILE="${EXTENSIONS_FILE:-villagesql/dev_server/bundled_extensions.txt}"
+
+# ---------------------------------------------------------------------------
+# Parse extensions
+# ---------------------------------------------------------------------------
+EXTS_JSON=$(grep -v '^[[:space:]]*#\|^[[:space:]]*$' "$EXTENSIONS_FILE" \
+  | jq -R '
+      split(" ") |
+      {
+        url:       (.[0] | rtrimstr("/")),
+        branch:    (.[1] // ""),
+        extension: (.[0] | rtrimstr("/") | split("/") | last)
+      }' \
+  | jq -sc .)
+
+if [ -n "${EXTENSION_FILTER:-}" ]; then
+  EXTS_JSON=$(echo "$EXTS_JSON" \
+    | jq --arg f "$EXTENSION_FILTER" '[.[] | select(.extension == $f)]')
+fi
+
+# ---------------------------------------------------------------------------
+# Platforms
+# ---------------------------------------------------------------------------
+ALL_PLATFORMS='[
+  {"platform":"linux-x86_64","runner":["self-hosted","linux","x86_64"],"os":"linux"},
+  {"platform":"linux-aarch64","runner":"ubuntu-24.04-arm","os":"linux"},
+  {"platform":"macos-arm64","runner":"macos-latest","os":"macos"}
+]'
+
+if [ -n "${PLATFORM_FILTER:-}" ]; then
+  PLATFORMS=$(echo "$ALL_PLATFORMS" \
+    | jq --arg f "$PLATFORM_FILTER" '[.[] | select(.platform == $f)]')
+else
+  PLATFORMS="$ALL_PLATFORMS"
+fi
+
+# ---------------------------------------------------------------------------
+# ABIs
+# ---------------------------------------------------------------------------
+if [ -n "${ABI_FILTER:-}" ]; then
+  ABIS="[\"$ABI_FILTER\"]"
+else
+  ABIS='["stable","dev"]'
+fi
+
+# ---------------------------------------------------------------------------
+# Emit empty sentinel when nothing matches
+# ---------------------------------------------------------------------------
+EXT_COUNT=$(echo "$EXTS_JSON" | jq 'length')
+PLAT_COUNT=$(echo "$PLATFORMS" | jq 'length')
+
+if [ "$EXT_COUNT" -eq 0 ] || [ "$PLAT_COUNT" -eq 0 ]; then
+  echo '{"include":[]}'  # build-matrix
+  echo '{"include":[]}'  # test-matrix
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# build-matrix: platforms only — the server is ABI-agnostic
+# ---------------------------------------------------------------------------
+BUILD_MATRIX=$(jq -cn \
+  --argjson platforms "$PLATFORMS" \
+  '{include: [$platforms[]]}')
+
+# ---------------------------------------------------------------------------
+# test-matrix: full (platform, extension, abi) triples
+# ---------------------------------------------------------------------------
+TEST_MATRIX=$(jq -cn \
+  --argjson platforms "$PLATFORMS" \
+  --argjson extensions "$EXTS_JSON" \
+  --argjson abis "$ABIS" \
+  '{include: [$platforms[] as $p | $extensions[] as $e | $abis[] as $a | ($p + $e + {abi: $a})]}')
+
+echo "$BUILD_MATRIX"
+echo "$TEST_MATRIX"
