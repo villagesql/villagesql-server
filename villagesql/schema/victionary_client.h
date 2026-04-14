@@ -315,7 +315,8 @@ class SystemTableMap {
   // cleanup — the caller is responsible for releasing the shared_ptr.
   //
   // REQUIRES: Caller must hold write lock (needed to potentially insert).
-  // Returns: shared_ptr to the entry, or empty shared_ptr on error.
+  // Returns: shared_ptr to the entry, or empty shared_ptr on OOM (the only
+  // possible error — all other preconditions are enforced by assertions).
   template <typename... Args>
   std::shared_ptr<const EntryType> get_or_create_client_managed(
       const typename EntryType::key_type &key, Args &&...create_args) {

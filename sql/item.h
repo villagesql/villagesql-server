@@ -3922,6 +3922,11 @@ class Item_sp_variable : public Item {
   bool has_type_context() const override {
     return this_item()->has_type_context();
   }
+  // TODO(villagesql-ga): Delegate set_type_context() (and the encode/decode
+  // methods) to this_item() so Item_sp_variable is fully symmetric with its
+  // underlying Item. Currently set_type_context() writes to the Item base
+  // cache while get_type_context() reads from the delegated item, which is
+  // inconsistent.
 
  protected:
   inline type_conversion_status save_in_field_inner(

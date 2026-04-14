@@ -3014,7 +3014,7 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
   // VillageSQL: inject custom type contexts for SP params after sp is set.
   if (proc_runtime_ctx->maybe_inject_custom_sp_params()) err_status = true;
 
-  if (params > 0) {
+  if (!err_status && params > 0) {
     auto it_args = args->begin();
 
     DBUG_PRINT("info", (" %.*s: eval args", (int)m_name.length, m_name.str));

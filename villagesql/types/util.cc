@@ -1380,11 +1380,14 @@ bool InjectCustomSpParams(
     const char *db_name, const char *sp_name, const sp_pcontext *pctx,
     Field **fields, Bounds_checked_array<Item *> var_items,
     std::vector<std::shared_ptr<const TypeContext>> &type_refs) {
+  // Null db/sp_name means there is nothing to inject — not an error.
   if (!db_name || !sp_name) {
     return false;
   }
 
   auto &vclient = VictionaryClient::instance();
+  // Called during startup before VictionaryClient is ready (e.g. system SPs);
+  // nothing to inject yet, so treat as a no-op rather than an error.
   if (!vclient.is_initialized()) {
     return false;
   }
@@ -1462,11 +1465,13 @@ bool InjectCustomSpParams(
       fields[field_idx]->set_type_context(tc_ref.get());
     }
 
-    // Sync TypeContext into the Item_field wrapper so SP body statements
+    // Sync TypeContext into the Item wrapper so SP body statements
     // (e.g. INSERT INTO t VALUES (in_param)) see the correct custom type.
     // The Item_field delegates has_type_context() to its field pointer, but
     // set_type_context() on the Item base caches it for non-field items
     // (Item_sp_variable) that call get_type_context() on this_item().
+    // TODO(villagesql-ga): Once Item_field delegates set_type_context() to its
+    // underlying Field, this call can be dropped for field-backed items.
     if (var_items.array() && var_items[field_idx]) {
       var_items[field_idx]->set_type_context(tc_ref.get());
     }
