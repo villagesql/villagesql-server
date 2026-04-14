@@ -33,6 +33,7 @@
 //   SET GLOBAL myext.threshold_ms = 500;
 
 #include <cstdio>
+#include <string_view>
 
 #include <villagesql/abi/types.h>
 
@@ -110,23 +111,26 @@ inline vef_get_variable_fn g_get_variable = nullptr;
 inline vef_set_variable_fn g_set_variable = nullptr;
 
 // Wrappers callable as free functions from extension code.
-inline bool get(const char *component_name, const char *name, void **val,
-                size_t *val_len) {
+inline bool get(std::string_view component_name, std::string_view name,
+                void **val, size_t *val_len) {
   if (g_get_variable == nullptr) return true;
-  return g_get_variable(component_name, name, val, val_len);
+  return g_get_variable(component_name.data(), name.data(), val, val_len);
 }
 
-inline bool set(const char *component_name, const char *name, const char *scope,
-                const char *val) {
+// scope may be nullptr to update the running value only (no persistence),
+// "PERSIST" to also write to mysqld-auto.cnf, or "PERSIST_ONLY" to write
+// to mysqld-auto.cnf without updating the running value.
+inline bool set(std::string_view component_name, std::string_view name,
+                const char *scope, std::string_view val) {
   if (g_set_variable == nullptr) return true;
-  return g_set_variable(component_name, name, scope, val);
+  return g_set_variable(component_name.data(), name.data(), scope, val.data());
 }
 
-inline bool set(const char *component_name, const char *name, const char *scope,
-                long long val) {
+inline bool set(std::string_view component_name, std::string_view name,
+                const char *scope, long long val) {
   char buf[32];
   snprintf(buf, sizeof(buf), "%lld", val);
-  return set(component_name, name, scope, buf);
+  return set(component_name, name, scope, std::string_view(buf));
 }
 
 }  // namespace sys_var

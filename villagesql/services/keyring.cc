@@ -25,8 +25,8 @@ namespace villagesql {
 namespace services {
 
 vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
-                                   unsigned char *buf, size_t buf_len,
-                                   size_t *out_len) {
+                                  unsigned char *buf, size_t buf_len,
+                                  size_t *out_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return VEF_KEYRING_ERROR;
 
@@ -44,8 +44,7 @@ vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
   my_h_keyring_reader_object obj = nullptr;
   if (!reader->init(data_id, auth_id, &obj) && obj != nullptr) {
     size_t key_len = 0, type_len = 0;
-    if (!reader->fetch_length(obj, &key_len, &type_len) &&
-        key_len <= buf_len) {
+    if (!reader->fetch_length(obj, &key_len, &type_len) && key_len <= buf_len) {
       char type_buf[64];
       size_t fetched_len = 0, fetched_type_len = 0;
       if (!reader->fetch(obj, buf, buf_len, &fetched_len, type_buf,
@@ -62,8 +61,7 @@ vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
 }
 
 vef_keyring_result_t write_keyring(const char *data_id, const char *auth_id,
-                                    const unsigned char *data,
-                                    size_t data_len) {
+                                   const unsigned char *data, size_t data_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return VEF_KEYRING_ERROR;
 

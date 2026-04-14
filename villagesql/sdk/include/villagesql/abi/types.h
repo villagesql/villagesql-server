@@ -226,9 +226,9 @@ typedef bool (*vef_set_variable_fn)(const char *component_name,
 
 typedef enum {
   VEF_KEYRING_OK = 0,
-  VEF_KEYRING_NOT_FOUND = 1,   // key does not exist
-  VEF_KEYRING_UNAVAILABLE = 2, // no keyring component is installed
-  VEF_KEYRING_ERROR = 3,       // other error
+  VEF_KEYRING_NOT_FOUND = 1,    // key does not exist
+  VEF_KEYRING_UNAVAILABLE = 2,  // no keyring component is installed
+  VEF_KEYRING_ERROR = 3,        // other error
 } vef_keyring_result_t;
 
 // read_keyring: read a secret from the MySQL keyring component.
@@ -261,6 +261,11 @@ typedef struct {
   vef_version_t vef_version;
 
   // protocol >= VEF_PROTOCOL_2
+  // TODO(villagesql-beta): How do extension authors opt into requiring these
+  // APIs? An extension that uses get_variable/set_variable/read_keyring/
+  // write_keyring should be able to declare that dependency so the server can
+  // reject loading it with a clear error on older servers that do not provide
+  // these functions (where these pointers would be nullptr).
   vef_get_variable_fn get_variable;
   vef_set_variable_fn set_variable;
   vef_read_keyring_fn read_keyring;

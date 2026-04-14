@@ -48,16 +48,15 @@ void keyring_read_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
     return;
   }
 
-  const char *auth_id = auth_id_arg->is_null ? nullptr : auth_id_arg->str_value;
+  std::string_view auth_id = auth_id_arg->is_null ? "" : auth_id_arg->str_value;
 
-  size_t out_len = 0;
-  vef_keyring_result_t kr = villagesql::keyring::read(
-      data_id_arg->str_value, auth_id,
-      reinterpret_cast<unsigned char *>(out->str_buf), out->max_str_len,
-      &out_len);
+  std::string value;
+  vef_keyring_result_t kr =
+      villagesql::keyring::read(data_id_arg->str_value, auth_id, value);
   if (kr == VEF_KEYRING_UNAVAILABLE) {
     out->type = VEF_RESULT_ERROR;
-    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "No keyring component is installed");
+    snprintf(out->error_msg, VEF_MAX_ERROR_LEN,
+             "No keyring component is installed");
     return;
   }
   if (kr != VEF_KEYRING_OK) {
@@ -65,7 +64,8 @@ void keyring_read_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
     return;
   }
 
-  out->actual_len = out_len;
+  out->actual_len = value.size();
+  memcpy(out->str_buf, value.data(), value.size());
 }
 
 // keyring_store(data_id, auth_id, value) - stores a secret in the keyring.
@@ -77,15 +77,15 @@ void keyring_store_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
   out->int_value = 1;
   if (data_id_arg->is_null || value_arg->is_null) return;
 
-  const char *auth_id = auth_id_arg->is_null ? nullptr : auth_id_arg->str_value;
+  std::string_view auth_id = auth_id_arg->is_null ? "" : auth_id_arg->str_value;
 
   vef_keyring_result_t kr = villagesql::keyring::write(
       data_id_arg->str_value, auth_id,
-      reinterpret_cast<const unsigned char *>(value_arg->str_value),
-      value_arg->str_len);
+      std::string_view(value_arg->str_value, value_arg->str_len));
   if (kr == VEF_KEYRING_UNAVAILABLE) {
     out->type = VEF_RESULT_ERROR;
-    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "No keyring component is installed");
+    snprintf(out->error_msg, VEF_MAX_ERROR_LEN,
+             "No keyring component is installed");
     return;
   }
   if (kr == VEF_KEYRING_OK) out->int_value = 0;

@@ -16,6 +16,9 @@
 #ifndef VILLAGESQL_VSQL_KEYRING_H_
 #define VILLAGESQL_VSQL_KEYRING_H_
 
+#include <string>
+#include <string_view>
+
 #include <villagesql/abi/types.h>
 
 namespace villagesql {
@@ -27,28 +30,34 @@ namespace keyring {
 inline vef_read_keyring_fn g_read_keyring = nullptr;
 inline vef_write_keyring_fn g_write_keyring = nullptr;
 
-// Read a secret from the MySQL keyring component.
-//   data_id:  identifier for the secret.
-//   auth_id:  owner of the secret, or NULL for internal keys.
-//   buf:      caller-provided buffer to receive the secret bytes.
-//   buf_len:  size of buf in bytes.
-//   out_len:  set to the actual number of bytes written on success.
-inline vef_keyring_result_t read(const char *data_id, const char *auth_id,
-                                  unsigned char *buf, size_t buf_len,
-                                  size_t *out_len) {
+// Read a secret from the MySQL keyring component into value.
+//   auth_id may be empty to read internal keys.
+//   Returns VEF_KEYRING_OK on success, VEF_KEYRING_NOT_FOUND if the key does
+//   not exist, VEF_KEYRING_UNAVAILABLE if no keyring component is installed,
+//   or VEF_KEYRING_ERROR on other failures.
+inline vef_keyring_result_t read(std::string_view data_id,
+                                 std::string_view auth_id, std::string &value) {
   if (g_read_keyring == nullptr) return VEF_KEYRING_UNAVAILABLE;
-  return g_read_keyring(data_id, auth_id, buf, buf_len, out_len);
+  value.resize(4096);
+  size_t out_len = 0;
+  vef_keyring_result_t result = g_read_keyring(
+      data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
+      reinterpret_cast<unsigned char *>(value.data()), value.size(), &out_len);
+  if (result == VEF_KEYRING_OK) value.resize(out_len);
+  return result;
 }
 
 // Write a secret to the MySQL keyring component.
-//   data_id:   identifier for the secret.
-//   auth_id:   owner of the secret, or NULL for internal keys.
-//   data:      secret bytes to store.
-//   data_len:  length of data in bytes.
-inline vef_keyring_result_t write(const char *data_id, const char *auth_id,
-                                   const unsigned char *data, size_t data_len) {
+//   auth_id may be empty to store as an internal key.
+//   Returns VEF_KEYRING_OK on success, VEF_KEYRING_UNAVAILABLE if no keyring
+//   component is installed, or VEF_KEYRING_ERROR on other failures.
+inline vef_keyring_result_t write(std::string_view data_id,
+                                  std::string_view auth_id,
+                                  std::string_view data) {
   if (g_write_keyring == nullptr) return VEF_KEYRING_UNAVAILABLE;
-  return g_write_keyring(data_id, auth_id, data, data_len);
+  return g_write_keyring(
+      data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
+      reinterpret_cast<const unsigned char *>(data.data()), data.size());
 }
 
 }  // namespace keyring

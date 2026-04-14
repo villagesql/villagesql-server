@@ -24,10 +24,10 @@ namespace services {
 // Implementations of the keyring access functions passed to extensions
 // via vef_register_arg_t.
 vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
-                                   unsigned char *buf, size_t buf_len,
-                                   size_t *out_len);
+                                  unsigned char *buf, size_t buf_len,
+                                  size_t *out_len);
 vef_keyring_result_t write_keyring(const char *data_id, const char *auth_id,
-                                    const unsigned char *data, size_t data_len);
+                                   const unsigned char *data, size_t data_len);
 
 }  // namespace services
 }  // namespace villagesql
