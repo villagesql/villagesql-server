@@ -17,9 +17,7 @@
 #include "villagesql/types/util.h"
 
 #include <cinttypes>
-#include <memory>
 #include <optional>
-#include <vector>
 
 #include "lex_string.h"
 #include "my_alloc.h"
@@ -40,7 +38,6 @@
 #include "sql/key.h"
 #include "sql/parse_tree_column_attrs.h"
 #include "sql/sp_pcontext.h"
-#include "sql/sql_array.h"
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
 #include "sql/sql_udf.h"
