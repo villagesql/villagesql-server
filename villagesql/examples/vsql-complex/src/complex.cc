@@ -28,15 +28,14 @@
 
 #include <villagesql/vsql.h>
 
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <cstring>
-#include <optional>
 #include <string>
 #include <string_view>
+
+using namespace vsql;
 
 struct Complex {
   double re, im;
@@ -101,37 +100,6 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
     hash *= 16777619u;
   }
   return hash;
-}
-
-std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
-  if (v->bin_len != kComplexSize) {
-    return std::nullopt;
-  }
-  return load_complex(v->bin_value);
-}
-
-void ReturnWarning(std::string_view err_msg, vef_vdf_result_t *result) {
-  result->type = VEF_RESULT_WARNING;
-  if (err_msg.size() >= VEF_MAX_ERROR_LEN) {
-    err_msg = err_msg.substr(0, VEF_MAX_ERROR_LEN - 1);
-  }
-  err_msg.copy(result->error_msg, err_msg.size());
-  result->error_msg[err_msg.size()] = 0;
-}
-
-void ReturnError(std::string_view err_msg, vef_vdf_result_t *result) {
-  result->type = VEF_RESULT_ERROR;
-  if (err_msg.size() >= VEF_MAX_ERROR_LEN) {
-    err_msg = err_msg.substr(0, VEF_MAX_ERROR_LEN - 1);
-  }
-  err_msg.copy(result->error_msg, err_msg.size());
-  result->error_msg[err_msg.size()] = 0;
-}
-
-void ReturnComplex(const Complex &cx, vef_vdf_result_t *result) {
-  result->type = VEF_RESULT_VALUE;
-  store_complex(result->bin_buf, cx);
-  result->actual_len = kComplexSize;
 }
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
@@ -211,204 +179,170 @@ size_t complex2_hash(villagesql::Span<const unsigned char> data) {
 }
 
 // Arithmetic: complex_add(a, b) -> COMPLEX
-void complex_add_impl(vef_context_t *ctx, vef_invalue_t *in_l,
-                      vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  if (in_l->is_null || in_r->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_add(CustomArg in_l, CustomArg in_r, CustomResult out) {
+  if (in_l.is_null() || in_r.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto lhs = TryLoadFromInValue(in_l);
-  if (!lhs.has_value()) {
-    ReturnError("left argument malformed", out);
+  if (in_l.value().size() != kComplexSize) {
+    out.error("left argument malformed");
     return;
   }
-
-  const auto rhs = TryLoadFromInValue(in_r);
-  if (!rhs.has_value()) {
-    ReturnError("right argument malformed", out);
+  if (in_r.value().size() != kComplexSize) {
+    out.error("right argument malformed");
     return;
   }
-
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
+  if (out.buffer().size() < kComplexSize) {
+    out.error("response buffer too small");
     return;
   }
-
-  ReturnComplex(Complex{lhs->re + rhs->re, lhs->im + rhs->im}, out);
+  Complex lhs = load_complex(in_l.value().data());
+  Complex rhs = load_complex(in_r.value().data());
+  store_complex(out.buffer().data(), Complex{lhs.re + rhs.re, lhs.im + rhs.im});
+  out.set_length(kComplexSize);
 }
 
 // Arithmetic: complex_subtract(a, b) -> COMPLEX
-void complex_subtract_impl(vef_context_t *ctx, vef_invalue_t *in_l,
-                           vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  if (in_l->is_null || in_r->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_subtract(CustomArg in_l, CustomArg in_r, CustomResult out) {
+  if (in_l.is_null() || in_r.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto lhs = TryLoadFromInValue(in_l);
-  if (!lhs.has_value()) {
-    ReturnError("left argument malformed", out);
+  if (in_l.value().size() != kComplexSize) {
+    out.error("left argument malformed");
     return;
   }
-
-  const auto rhs = TryLoadFromInValue(in_r);
-  if (!rhs.has_value()) {
-    ReturnError("right argument malformed", out);
+  if (in_r.value().size() != kComplexSize) {
+    out.error("right argument malformed");
     return;
   }
-
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
+  if (out.buffer().size() < kComplexSize) {
+    out.error("response buffer too small");
     return;
   }
-
-  ReturnComplex(Complex{lhs->re - rhs->re, lhs->im - rhs->im}, out);
+  Complex lhs = load_complex(in_l.value().data());
+  Complex rhs = load_complex(in_r.value().data());
+  store_complex(out.buffer().data(), Complex{lhs.re - rhs.re, lhs.im - rhs.im});
+  out.set_length(kComplexSize);
 }
 
 // Arithmetic: complex_multiply(a, b) -> COMPLEX
-void complex_multiply_impl(vef_context_t *ctx, vef_invalue_t *in_l,
-                           vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  if (in_l->is_null || in_r->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_multiply(CustomArg in_l, CustomArg in_r, CustomResult out) {
+  if (in_l.is_null() || in_r.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto lhs = TryLoadFromInValue(in_l);
-  if (!lhs.has_value()) {
-    ReturnError("left argument malformed", out);
+  if (in_l.value().size() != kComplexSize) {
+    out.error("left argument malformed");
     return;
   }
-
-  const auto rhs = TryLoadFromInValue(in_r);
-  if (!rhs.has_value()) {
-    ReturnError("right argument malformed", out);
+  if (in_r.value().size() != kComplexSize) {
+    out.error("right argument malformed");
     return;
   }
-
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
+  if (out.buffer().size() < kComplexSize) {
+    out.error("response buffer too small");
     return;
   }
-
+  Complex lhs = load_complex(in_l.value().data());
+  Complex rhs = load_complex(in_r.value().data());
   // (a + bi) * (c + di) = (ac - bd) + (ad + bc)i
-  ReturnComplex(Complex{lhs->re * rhs->re - lhs->im * rhs->im,
-                        lhs->re * rhs->im + lhs->im * rhs->re},
-                out);
+  store_complex(out.buffer().data(),
+                Complex{lhs.re * rhs.re - lhs.im * rhs.im,
+                        lhs.re * rhs.im + lhs.im * rhs.re});
+  out.set_length(kComplexSize);
 }
 
 // Arithmetic: complex_divide(a, b) -> COMPLEX
-void complex_divide_impl(vef_context_t *ctx, vef_invalue_t *in_l,
-                         vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  if (in_l->is_null || in_r->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_divide(CustomArg in_l, CustomArg in_r, CustomResult out) {
+  if (in_l.is_null() || in_r.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto lhs = TryLoadFromInValue(in_l);
-  if (!lhs.has_value()) {
-    ReturnError("left argument malformed", out);
+  if (in_l.value().size() != kComplexSize) {
+    out.error("left argument malformed");
     return;
   }
-
-  const auto rhs = TryLoadFromInValue(in_r);
-  if (!rhs.has_value()) {
-    ReturnError("right argument malformed", out);
+  if (in_r.value().size() != kComplexSize) {
+    out.error("right argument malformed");
     return;
   }
-
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
+  if (out.buffer().size() < kComplexSize) {
+    out.error("response buffer too small");
     return;
   }
-
+  Complex lhs = load_complex(in_l.value().data());
+  Complex rhs = load_complex(in_r.value().data());
   // Check for division by zero
-  double denominator = rhs->re * rhs->re + rhs->im * rhs->im;
+  double denominator = rhs.re * rhs.re + rhs.im * rhs.im;
   if (denominator == 0.0) {
-    ReturnWarning("division by 0", out);
+    out.warning("division by 0");
     return;
   }
-
   // (a + bi) / (c + di) = [(ac + bd) + (bc - ad)i] / (c^2 + d^2)
-  ReturnComplex(Complex{(lhs->re * rhs->re + lhs->im * rhs->im) / denominator,
-                        (lhs->im * rhs->re - lhs->re * rhs->im) / denominator},
-                out);
+  store_complex(out.buffer().data(),
+                Complex{(lhs.re * rhs.re + lhs.im * rhs.im) / denominator,
+                        (lhs.im * rhs.re - lhs.re * rhs.im) / denominator});
+  out.set_length(kComplexSize);
 }
 
 // Utility: complex_real(c) -> REAL
-void complex_real_impl(vef_context_t *ctx, vef_invalue_t *in,
-                       vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_real(CustomArg in, RealResult out) {
+  if (in.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto cx = TryLoadFromInValue(in);
-  if (!cx.has_value()) {
-    ReturnError("argument malformed", out);
+  if (in.value().size() != kComplexSize) {
+    out.error("argument malformed");
     return;
   }
-
-  out->real_value = cx->re;
-  out->type = VEF_RESULT_VALUE;
+  out.set(load_complex(in.value().data()).re);
 }
 
 // Utility: complex_imag(c) -> REAL
-void complex_imag_impl(vef_context_t *ctx, vef_invalue_t *in,
-                       vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_imag(CustomArg in, RealResult out) {
+  if (in.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto cx = TryLoadFromInValue(in);
-  if (!cx.has_value()) {
-    ReturnError("argument malformed", out);
+  if (in.value().size() != kComplexSize) {
+    out.error("argument malformed");
     return;
   }
-
-  out->real_value = cx->im;
-  out->type = VEF_RESULT_VALUE;
+  out.set(load_complex(in.value().data()).im);
 }
 
 // Utility: complex_abs(c) -> REAL
-void complex_abs_impl(vef_context_t *ctx, vef_invalue_t *in,
-                      vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_abs(CustomArg in, RealResult out) {
+  if (in.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto cx = TryLoadFromInValue(in);
-  if (!cx.has_value()) {
-    ReturnError("argument malformed", out);
+  if (in.value().size() != kComplexSize) {
+    out.error("argument malformed");
     return;
   }
-
-  out->real_value = sqrt(cx->re * cx->re + cx->im * cx->im);
-  out->type = VEF_RESULT_VALUE;
+  Complex cx = load_complex(in.value().data());
+  out.set(sqrt(cx.re * cx.re + cx.im * cx.im));
 }
 
 // Utility: complex_conjugate(c) -> COMPLEX
-void complex_conjugate_impl(vef_context_t *ctx, vef_invalue_t *in,
-                            vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
+void complex_conjugate(CustomArg in, CustomResult out) {
+  if (in.is_null()) {
+    out.set_null();
     return;
   }
-
-  const auto cx = TryLoadFromInValue(in);
-  if (!cx.has_value()) {
-    ReturnError("argument malformed", out);
+  if (in.value().size() != kComplexSize) {
+    out.error("argument malformed");
     return;
   }
-
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
+  if (out.buffer().size() < kComplexSize) {
+    out.error("response buffer too small");
     return;
   }
-
-  ReturnComplex(Complex{cx->re, -cx->im}, out);
+  Complex cx = load_complex(in.value().data());
+  store_complex(out.buffer().data(), Complex{cx.re, -cx.im});
+  out.set_length(kComplexSize);
 }
 
 // Aggregate: complex_sum(COMPLEX) -> COMPLEX
@@ -416,26 +350,15 @@ void complex_conjugate_impl(vef_context_t *ctx, vef_invalue_t *in,
 
 using ComplexSumState = std::optional<Complex>;
 
-void complex_sum_clear(vef_context_t *ctx, vef_vdf_args_t *args) {
-  auto *state = static_cast<ComplexSumState *>(args->user_data);
-  *state = std::nullopt;
-}
+void complex_sum_clear(ComplexSumState &state) { state = std::nullopt; }
 
-void complex_sum_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
-                            vef_vdf_result_t *result) {
-  auto *state = static_cast<ComplexSumState *>(args->user_data);
-  vef_invalue_t val = villagesql::func_builder::get_invalue(ctx, args, 0);
-  if (!val.is_null) {
-    auto cx = TryLoadFromInValue(&val);
-    if (!cx.has_value()) {
-      ReturnError("argument malformed", result);
-      return;
-    }
-    Complex total = state->value_or(Complex{0.0, 0.0});
-    total.re += cx->re;
-    total.im += cx->im;
-    *state = total;
-  }
+void complex_sum_accumulate(ComplexSumState &state, CustomArg val) {
+  if (val.is_null() || val.value().size() != kComplexSize) return;
+  Complex cx = load_complex(val.value().data());
+  Complex total = state.value_or(Complex{0.0, 0.0});
+  total.re += cx.re;
+  total.im += cx.im;
+  state = total;
 }
 
 void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
@@ -446,12 +369,15 @@ void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
     return;
   }
   if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
+    out->type = VEF_RESULT_ERROR;
+    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "response buffer too small");
     return;
   }
   Complex total = state->value();
   total.canonicalize();
-  ReturnComplex(total, out);
+  store_complex(out->bin_buf, total);
+  out->actual_len = kComplexSize;
+  out->type = VEF_RESULT_VALUE;
 }
 
 // Type name NTTPs — required for auto-generating VDF names like
@@ -488,57 +414,55 @@ constexpr auto COMPLEX2 =
         .intrinsic_default_str("(0,0)")
         .build();
 
-using namespace vsql;
-
 VEF_GENERATE_ENTRY_POINTS(
     make_extension("vsql_complex", "0.0.1")
-         // COMPLEX type with canonicalization (normalizes -0.0 to +0.0)
-         .type(COMPLEX)
-         // COMPLEX2 type without canonicalization (preserves -0.0)
-         // Requires custom hash that canonicalizes -0 to +0 before hashing
-         .type(COMPLEX2)
-         // Arithmetic functions
-        .func(make_func<&complex_add_impl>("complex_add")
+        // COMPLEX type with canonicalization (normalizes -0.0 to +0.0)
+        .type(COMPLEX)
+        // COMPLEX2 type without canonicalization (preserves -0.0)
+        // Requires custom hash that canonicalizes -0 to +0 before hashing
+        .type(COMPLEX2)
+        // Arithmetic functions
+        .func(make_func<&complex_add>("complex_add")
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_subtract_impl>("complex_subtract")
+        .func(make_func<&complex_subtract>("complex_subtract")
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_multiply_impl>("complex_multiply")
+        .func(make_func<&complex_multiply>("complex_multiply")
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_divide_impl>("complex_divide")
+        .func(make_func<&complex_divide>("complex_divide")
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
         // Utility functions
-        .func(make_func<&complex_real_impl>("complex_real")
+        .func(make_func<&complex_real>("complex_real")
                   .returns(REAL)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_imag_impl>("complex_imag")
+        .func(make_func<&complex_imag>("complex_imag")
                   .returns(REAL)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_abs_impl>("complex_abs")
+        .func(make_func<&complex_abs>("complex_abs")
                   .returns(REAL)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_conjugate_impl>("complex_conjugate")
+        .func(make_func<&complex_conjugate>("complex_conjugate")
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
