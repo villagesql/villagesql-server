@@ -2152,7 +2152,8 @@ TEST_F(VictionaryClientTest, SpParamInsertAndLookup) {
 
   {
     auto guard = client_->get_write_lock();
-    EXPECT_FALSE(client_->sp_params().MarkForInsertion(*fake_thd, std::move(entry)));
+    EXPECT_FALSE(
+        client_->sp_params().MarkForInsertion(*fake_thd, std::move(entry)));
   }
   client_->commit_all_tables(fake_thd);
 
@@ -2170,9 +2171,12 @@ TEST_F(VictionaryClientTest, SpParamInsertAndLookup) {
 TEST_F(VictionaryClientTest, SpParamPrefixQuery) {
   THD *fake_thd = reinterpret_cast<THD *>(0xAA02);
 
-  SpParamEntry p1(SpParamKey("db1", "proc1", "param1"), "ext1", "1.0", "VECTOR");
-  SpParamEntry p2(SpParamKey("db1", "proc1", "param2"), "ext1", "1.0", "VECTOR");
-  SpParamEntry p3(SpParamKey("db1", "proc2", "param1"), "ext1", "1.0", "VECTOR");
+  SpParamEntry p1(SpParamKey("db1", "proc1", "param1"), "ext1", "1.0",
+                  "VECTOR");
+  SpParamEntry p2(SpParamKey("db1", "proc1", "param2"), "ext1", "1.0",
+                  "VECTOR");
+  SpParamEntry p3(SpParamKey("db1", "proc2", "param1"), "ext1", "1.0",
+                  "VECTOR");
 
   {
     auto guard = client_->get_write_lock();
