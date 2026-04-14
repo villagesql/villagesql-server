@@ -33,7 +33,7 @@
 // Prerequisites: a keyring component must be installed, e.g.:
 //   INSTALL COMPONENT 'file://component_keyring_file';
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 // Buffer size for keyring secrets. Secrets larger than this will not be read.
 static const size_t kMaxSecretLen = 4096;
@@ -51,9 +51,16 @@ void keyring_read_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
   const char *auth_id = auth_id_arg->is_null ? nullptr : auth_id_arg->str_value;
 
   size_t out_len = 0;
-  if (villagesql::keyring::read(data_id_arg->str_value, auth_id,
-                                reinterpret_cast<unsigned char *>(out->str_buf),
-                                out->max_str_len, &out_len)) {
+  vef_keyring_result_t kr = villagesql::keyring::read(
+      data_id_arg->str_value, auth_id,
+      reinterpret_cast<unsigned char *>(out->str_buf), out->max_str_len,
+      &out_len);
+  if (kr == VEF_KEYRING_UNAVAILABLE) {
+    out->type = VEF_RESULT_ERROR;
+    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "No keyring component is installed");
+    return;
+  }
+  if (kr != VEF_KEYRING_OK) {
     out->type = VEF_RESULT_NULL;
     return;
   }
@@ -72,11 +79,16 @@ void keyring_store_impl(vef_context_t * /*ctx*/, vef_invalue_t *data_id_arg,
 
   const char *auth_id = auth_id_arg->is_null ? nullptr : auth_id_arg->str_value;
 
-  if (!villagesql::keyring::write(
-          data_id_arg->str_value, auth_id,
-          reinterpret_cast<const unsigned char *>(value_arg->str_value),
-          value_arg->str_len))
-    out->int_value = 0;
+  vef_keyring_result_t kr = villagesql::keyring::write(
+      data_id_arg->str_value, auth_id,
+      reinterpret_cast<const unsigned char *>(value_arg->str_value),
+      value_arg->str_len);
+  if (kr == VEF_KEYRING_UNAVAILABLE) {
+    out->type = VEF_RESULT_ERROR;
+    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "No keyring component is installed");
+    return;
+  }
+  if (kr == VEF_KEYRING_OK) out->int_value = 0;
 }
 
 VEF_GENERATE_ENTRY_POINTS(

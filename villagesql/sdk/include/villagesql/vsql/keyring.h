@@ -33,10 +33,10 @@ inline vef_write_keyring_fn g_write_keyring = nullptr;
 //   buf:      caller-provided buffer to receive the secret bytes.
 //   buf_len:  size of buf in bytes.
 //   out_len:  set to the actual number of bytes written on success.
-//   Returns false on success, true on error (including key not found).
-inline bool read(const char *data_id, const char *auth_id, unsigned char *buf,
-                 size_t buf_len, size_t *out_len) {
-  if (g_read_keyring == nullptr) return true;
+inline vef_keyring_result_t read(const char *data_id, const char *auth_id,
+                                  unsigned char *buf, size_t buf_len,
+                                  size_t *out_len) {
+  if (g_read_keyring == nullptr) return VEF_KEYRING_UNAVAILABLE;
   return g_read_keyring(data_id, auth_id, buf, buf_len, out_len);
 }
 
@@ -45,10 +45,9 @@ inline bool read(const char *data_id, const char *auth_id, unsigned char *buf,
 //   auth_id:   owner of the secret, or NULL for internal keys.
 //   data:      secret bytes to store.
 //   data_len:  length of data in bytes.
-//   Returns false on success, true on error.
-inline bool write(const char *data_id, const char *auth_id,
-                  const unsigned char *data, size_t data_len) {
-  if (g_write_keyring == nullptr) return true;
+inline vef_keyring_result_t write(const char *data_id, const char *auth_id,
+                                   const unsigned char *data, size_t data_len) {
+  if (g_write_keyring == nullptr) return VEF_KEYRING_UNAVAILABLE;
   return g_write_keyring(data_id, auth_id, data, data_len);
 }
 

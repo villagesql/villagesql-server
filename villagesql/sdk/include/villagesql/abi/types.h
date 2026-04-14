@@ -224,26 +224,34 @@ typedef bool (*vef_set_variable_fn)(const char *component_name,
                                     const char *name, const char *scope,
                                     const char *val);
 
+typedef enum {
+  VEF_KEYRING_OK = 0,
+  VEF_KEYRING_NOT_FOUND = 1,   // key does not exist
+  VEF_KEYRING_UNAVAILABLE = 2, // no keyring component is installed
+  VEF_KEYRING_ERROR = 3,       // other error
+} vef_keyring_result_t;
+
 // read_keyring: read a secret from the MySQL keyring component.
 //   data_id:  identifier for the secret.
 //   auth_id:  owner of the secret, or NULL for internal keys.
 //   buf:      caller-provided buffer to receive the secret bytes.
 //   buf_len:  size of buf in bytes.
 //   out_len:  set to the actual number of bytes written on success.
-//   Returns false on success, true on error (including key not found).
-typedef bool (*vef_read_keyring_fn)(const char *data_id, const char *auth_id,
-                                    unsigned char *buf, size_t buf_len,
-                                    size_t *out_len);
+typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
+                                                    const char *auth_id,
+                                                    unsigned char *buf,
+                                                    size_t buf_len,
+                                                    size_t *out_len);
 
 // write_keyring: write a secret to the MySQL keyring component.
 //   data_id:   identifier for the secret.
 //   auth_id:   owner of the secret, or NULL for internal keys.
 //   data:      secret bytes to store.
 //   data_len:  length of data in bytes.
-//   Returns false on success, true on error.
-typedef bool (*vef_write_keyring_fn)(const char *data_id, const char *auth_id,
-                                     const unsigned char *data,
-                                     size_t data_len);
+typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
+                                                     const char *auth_id,
+                                                     const unsigned char *data,
+                                                     size_t data_len);
 
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
