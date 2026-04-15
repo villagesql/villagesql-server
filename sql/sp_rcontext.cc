@@ -156,9 +156,9 @@ bool sp_rcontext::maybe_inject_custom_sp_params() {
       m_var_items, m_custom_type_refs, &had_custom_params);
 
   if (!err) {
-    sp->m_vsql_custom_params_state =
-        had_custom_params ? sp_head::VSQL_SP_PARAMS_HAS_CUSTOM
-                          : sp_head::VSQL_SP_PARAMS_NO_CUSTOM;
+    sp->m_vsql_custom_params_state = had_custom_params
+                                         ? sp_head::VSQL_SP_PARAMS_HAS_CUSTOM
+                                         : sp_head::VSQL_SP_PARAMS_NO_CUSTOM;
   }
 
   return err;

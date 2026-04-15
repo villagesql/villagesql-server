@@ -1,0 +1,45 @@
+# Test that UNINSTALL EXTENSION is blocked by a stored procedure that uses a
+# custom type, even after a server restart. The sp_params records are persisted
+# in the villagesql system table and reloaded on startup, so the block must
+# survive a restart.
+
+--let $default_veb_dir = `SELECT @@veb_dir`
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+--exec cp $default_veb_dir/vsql_complex.veb $veb_dir/
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo # Create a stored procedure with a COMPLEX IN parameter
+delimiter //;
+CREATE PROCEDURE p1(IN val COMPLEX)
+BEGIN
+  SELECT val;
+END//
+delimiter ;//
+
+--echo # Restart the server — sp_params are reloaded from the system table
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # Try to uninstall the extension - should still fail after restart
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Verify the extension is still installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+
+--echo # Drop the stored procedure
+DROP PROCEDURE p1;
+
+--echo # Now uninstall should succeed
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Verify the extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';

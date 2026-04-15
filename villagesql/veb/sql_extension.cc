@@ -330,6 +330,32 @@ bool check_for_columns_of_extension(
   return false;
 }
 
+bool check_for_sp_params_of_extension(
+    const villagesql::ExtensionEntry &ext_entry,
+    const std::vector<const SpParamEntry *> &all_sp_params) {
+  const SpParamEntry *first = nullptr;
+  int count = 0;
+
+  for (const auto *entry : all_sp_params) {
+    if (entry->extension_name == ext_entry.extension_name() &&
+        entry->extension_version == ext_entry.extension_version) {
+      if (count == 0) first = entry;
+      count++;
+    }
+  }
+
+  if (first != nullptr) {
+    villagesql_error(
+        "Cannot uninstall extension '%s': stored procedure %s.%s uses "
+        "custom type %s",
+        MYF(0), ext_entry.extension_name().c_str(), first->db_name().c_str(),
+        first->sp_name().c_str(), first->type_name.c_str());
+    return true;
+  }
+
+  return false;
+}
+
 // If the transaction commits, then `to_unregister` is used to unregister the
 // .so file.
 bool remove_extension_from_victionary(
@@ -347,9 +373,14 @@ bool remove_extension_from_victionary(
   }
 
   // Delete all custom types for this extension (RESTRICT behavior - fails
-  // if any type has dependent columns)
+  // if any type has dependent columns or stored procedures)
   const auto &all_columns = victionary.columns().get_all_committed();
   if (check_for_columns_of_extension(*ext_entry, all_columns)) {
+    return true;
+  }
+
+  const auto &all_sp_params = victionary.sp_params().get_all_committed();
+  if (check_for_sp_params_of_extension(*ext_entry, all_sp_params)) {
     return true;
   }
 

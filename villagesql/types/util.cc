@@ -1449,18 +1449,20 @@ bool InjectCustomSpParams(
 
       TypeDescriptorKey tdk(param_entry->type_name, param_entry->extension_name,
                             param_entry->extension_version);
-      TypeContextKey tck(tdk,
-                         TypeParameters::from_json(param_entry->type_parameters));
+      TypeContextKey tck(
+          tdk, TypeParameters::from_json(param_entry->type_parameters));
 
       if (!vclient.type_contexts().get_committed(tck)) needs_create = true;
 
-      matches.push_back({param_entry, field_idx, std::move(tdk), std::move(tck)});
+      matches.push_back(
+          {param_entry, field_idx, std::move(tdk), std::move(tck)});
       field_idx++;
     }
   }  // read lock released
 
   if (matches.empty()) {
-    // sp_params was non-empty but no fields matched — treat as no custom params.
+    // sp_params was non-empty but no fields matched — treat as no custom
+    // params.
     *had_custom_params = false;
     return false;
   }
@@ -1510,8 +1512,8 @@ bool InjectCustomSpParams(
       // The Item_field delegates has_type_context() to its field pointer, but
       // set_type_context() on the Item base caches it for non-field items
       // (Item_sp_variable) that call get_type_context() on this_item().
-      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to its
-      // underlying Field, this call can be dropped for field-backed items.
+      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to
+      // its underlying Field, this call can be dropped for field-backed items.
       if (var_items.array() && var_items[m.field_idx]) {
         var_items[m.field_idx]->set_type_context(tc_ref.get());
       }
@@ -1558,8 +1560,8 @@ bool InjectCustomSpParams(
       // The Item_field delegates has_type_context() to its field pointer, but
       // set_type_context() on the Item base caches it for non-field items
       // (Item_sp_variable) that call get_type_context() on this_item().
-      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to its
-      // underlying Field, this call can be dropped for field-backed items.
+      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to
+      // its underlying Field, this call can be dropped for field-backed items.
       if (var_items.array() && var_items[m.field_idx]) {
         var_items[m.field_idx]->set_type_context(tc_ref.get());
       }
