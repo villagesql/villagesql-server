@@ -1,6 +1,6 @@
-# ABI v1 Compliance Test
-Found SDK v1 source directory
-# Building test extension
+# ABI v1 Source Compatibility Test
+Found VillageSQL SDK paths
+# Building test extension against current SDK
 # Verify VEB was created
 # Copy VEB to server's VEB directory
 # Install the extension
@@ -32,12 +32,10 @@ h*llo
 SELECT abi_v1_test.to_string(abi_v1_test.mask(abi_v1_test.from_string('abcdefgh'), 7)) AS result;
 result
 abcdefg*
-# Out-of-range offset error returns NULL and a warning
+# Out-of-range offset
+# (current behavior: raises an error)
 SELECT abi_v1_test.to_string(abi_v1_test.mask(abi_v1_test.from_string('hello'), 100)) AS result;
-result
-NULL
-Warnings:
-Warning	3200	VDF error in function 'mask': offset 100 is out of range [0, 7]
+ERROR HY000: VDF error in function 'mask': offset 100 is out of range [0, 7]
 #
 # NULL handling: each parameter slot independently
 #

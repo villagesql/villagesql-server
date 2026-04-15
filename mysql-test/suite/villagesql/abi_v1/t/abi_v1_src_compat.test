@@ -1,0 +1,46 @@
+# ABI v1 Source Compatibility Test
+#
+# Compiles the v1 test extension against the current (unstable) SDK headers
+# and verifies it loads and runs correctly against the current server.  This
+# test catches source-level API regressions: if the current dev SDK breaks
+# source compatibility with v1 extension code, the extension will fail to
+# compile here.
+#
+# Complements abi_v1_bin_compat.test which checks binary compatibility by
+# building against the frozen v1 headers.
+#
+# Requires: cmake in PATH, C++ compiler in PATH
+
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # ABI v1 Source Compatibility Test
+
+--let $veb_dir = `SELECT @@veb_dir`
+--let $test_dir = $MYSQLTEST_VARDIR/tmp/abi_v1_src_compat_test
+
+--exec mkdir -p $MYSQLTEST_VARDIR/tmp
+--source abi_v1_find_sdk.inc
+
+--echo # Building test extension against current SDK
+--exec rm -rf $test_dir
+--exec mkdir -p $test_dir/build
+--exec sh -c "stable_sdk=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_stable_sdk.txt) && src_dir=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_source_dir.txt) && dev_inc=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_dev_sdk_include.txt) && cmake -S \$stable_sdk/test_extension -B $test_dir/build -DCMAKE_PREFIX_PATH=\$src_dir -DVillageSQLExtensionFramework_INCLUDE_DIR=\$dev_inc > $test_dir/cmake_out.txt 2>&1"
+--exec sh -c "cmake --build $test_dir/build > $test_dir/make_out.txt 2>&1"
+
+--echo # Verify VEB was created
+--file_exists $test_dir/build/abi_v1_test.veb
+
+--echo # Copy VEB to server's VEB directory
+--exec cp $test_dir/build/abi_v1_test.veb $veb_dir/
+
+--let $v1_error_treated_as_warning = 0
+--source abi_v1_test_logic.inc
+
+--echo # Cleanup
+--exec rm -rf $test_dir
+--exec rm -f $veb_dir/abi_v1_test.veb
+--exec rm -f $MYSQLTEST_VARDIR/tmp/vsql_source_dir.txt
+--exec rm -f $MYSQLTEST_VARDIR/tmp/vsql_stable_sdk.txt
+--exec rm -f $MYSQLTEST_VARDIR/tmp/vsql_dev_sdk_include.txt
+
+--source include/villagesql/binlog_check_end.inc

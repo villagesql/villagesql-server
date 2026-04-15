@@ -47,8 +47,13 @@ configure_file(
   @ONLY
 )
 
-# Generate source directory reference for ABI compliance tests
-file(WRITE "${CMAKE_BINARY_DIR}/villagesql_source_dir.txt" "${CMAKE_SOURCE_DIR}")
+# Generate test environment file for ABI compatibility tests.
+# Sourced by mysql-tests to locate SDK paths.
+file(WRITE "${CMAKE_BINARY_DIR}/villagesql_test_env.sh"
+  "VILLAGESQL_SOURCE_DIR=${CMAKE_SOURCE_DIR}\n"
+  "VILLAGESQL_STABLE_SDK=${STABLE_SDK_DIR}\n"
+  "VILLAGESQL_DEV_SDK_INCLUDE=${SDK_STAGING_DIR}/include-dev\n"
+)
 
 # SDK packaging target - built by default (ALL)
 add_custom_target(sdk ALL
