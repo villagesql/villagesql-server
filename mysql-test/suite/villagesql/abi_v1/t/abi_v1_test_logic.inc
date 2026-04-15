@@ -21,6 +21,10 @@ WHERE extension_name = 'abi_v1_test';
 --echo # Round-trip: from_string then to_string
 SELECT abi_v1_test.to_string(abi_v1_test.from_string('hello')) AS roundtrip;
 
+--echo # Type-methods: not supported for raw function pointers
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT abi_v1_test.BYTEARRAY::from_string('hello') AS typemethod;
+
 --echo #
 --echo # mask: mixed BYTEARRAY + INT parameters
 --echo #

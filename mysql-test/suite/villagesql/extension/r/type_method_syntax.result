@@ -56,10 +56,3 @@ decoded
 (10,20)
 (30,40)
 DROP TABLE t2;
-# Test 10: Error — :: syntax on type without :: VDF registration
-Creating extension simple_type_funcs using SDK...
-Created simple_type_funcs.veb
-INSTALL EXTENSION simple_type_funcs;
-SELECT SIMPLETYPE::from_string('hello') AS result;
-ERROR HY000: Type 'SIMPLETYPE' method 'from_string' does not support '::' syntax (not registered with a '::' name)
-UNINSTALL EXTENSION simple_type_funcs;

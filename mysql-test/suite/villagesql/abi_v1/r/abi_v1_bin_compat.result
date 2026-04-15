@@ -17,6 +17,9 @@ abi_v1_test	0.0.1
 SELECT abi_v1_test.to_string(abi_v1_test.from_string('hello')) AS roundtrip;
 roundtrip
 hello   
+# Type-methods: not supported for raw function pointers
+SELECT abi_v1_test.BYTEARRAY::from_string('hello') AS typemethod;
+ERROR HY000: Type 'BYTEARRAY' method 'from_string' does not support '::' syntax (not registered with a '::' name)
 #
 # mask: mixed BYTEARRAY + INT parameters
 #

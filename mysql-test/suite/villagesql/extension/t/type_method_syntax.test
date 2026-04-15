@@ -49,16 +49,4 @@ SELECT vsql_complex.COMPLEX::to_string(val) AS decoded FROM t2 ORDER BY id;
 SELECT COMPLEX::to_string(val) AS decoded FROM t2 ORDER BY id;
 DROP TABLE t2;
 
---echo # Test 10: Error — :: syntax on type without :: VDF registration
-# simple_type_funcs registers SIMPLETYPE using raw function pointers,
-# not :: VDF names, so SIMPLETYPE::from_string must fail with a targeted error.
---let $extension_name = simple_type_funcs
---let $extension_version = 0.0.1-devtest
---let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_type_funcs.cc
---source include/villagesql/create_extension_sdk.inc
-INSTALL EXTENSION simple_type_funcs;
---error ER_VILLAGESQL_GENERIC_ERROR
-SELECT SIMPLETYPE::from_string('hello') AS result;
-UNINSTALL EXTENSION simple_type_funcs;
-
 --source include/villagesql/uninstall_complex_extension.inc
