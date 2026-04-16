@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,6 +58,8 @@
 #include "sql_string.h"
 #include "string_with_len.h"
 #include "typelib.h"
+
+#include "villagesql/types/util.h"
 
 void prepare_sp_chistics_from_dd_routine(const dd::Routine *routine,
                                          st_sp_chistics *sp_chistics) {
@@ -137,6 +140,19 @@ static void prepare_type_string_from_dd_param(THD *thd,
                                               const dd::Parameter *param,
                                               String *type_str) {
   DBUG_TRACE;
+
+  // VillageSQL: at CREATE PROCEDURE/FUNCTION time, custom-typed params have
+  // their data_type_utf8 set to the fully qualified type name (e.g.
+  // "vsql_complex.COMPLEX"). Plain SQL types never contain a dot in
+  // data_type_utf8, so the dot is an unambiguous signal that this param uses a
+  // VillageSQL custom type. We use it here rather than a victionary lookup
+  // because this function may be called before the victionary is initialized
+  // and has no SP name context to key a lookup on.
+  if (villagesql::IsQualifiedName(param->data_type_utf8())) {
+    type_str->copy(param->data_type_utf8().c_str(),
+                   param->data_type_utf8().length(), system_charset_info);
+    return;
+  }
 
   // ENUM/SET elements.
   TYPELIB *interval = nullptr;

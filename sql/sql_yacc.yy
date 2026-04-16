@@ -17862,17 +17862,6 @@ sf_tail:
 
             CONTEXTUALIZE($10);
 
-            // TODO(villagesql-beta): Support custom type function return values
-            // Reject custom type function return values
-            if ($10->is_custom_type())
-            {
-              villagesql_error(
-                  "Custom types are not yet supported in stored "
-                  "procedures/functions",
-                  MYF(0));
-              MYSQL_YYABORT;
-            }
-
             enum_field_types field_type= $10->type;
             const CHARSET_INFO *cs= $10->get_charset();
             if (merge_sp_var_charset_and_collation(cs, $11, &cs))
@@ -17905,6 +17894,18 @@ sf_tail:
             if (prepare_sp_create_field(YYTHD,
                                         &sp->m_return_field_def))
               MYSQL_YYABORT;
+
+            // VillageSQL: store custom return type context on the return field
+            // def (for dd_routine.cc during CREATE FUNCTION) and acquire a
+            // client-managed ref (keeps TypeContext alive beyond parse
+            // mem_root for create_result_field() and returns_type()).
+            if ($10->is_custom_type()) {
+              sp->m_return_field_def.custom_type_context=
+                  $10->get_type_context();
+              sp->m_return_type_context_ref=
+                  villagesql::AcquireTypeContextClientManaged(
+                      $10->get_type_context());
+            }
 
             memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
 

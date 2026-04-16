@@ -24,6 +24,7 @@
 
 #include "lex_string.h"
 #include "my_inttypes.h"
+#include "sql/dd/string_type.h"
 #include "sql/field.h"
 #include "sql/sql_array.h"
 #include "sql_string.h"
@@ -74,6 +75,15 @@ extern bool InjectCustomSpParams(
     Field **fields, Bounds_checked_array<Item *> var_items,
     std::vector<std::shared_ptr<const TypeContext>> &type_refs,
     bool *had_custom_params);
+
+// Returns true if name is a qualified custom type name (contains a dot),
+// e.g. "vsql_complex.COMPLEX". Used to detect custom type names stored in DD.
+extern bool IsQualifiedName(const dd::String_type &name);
+
+// Returns the fully qualified custom type name (e.g. "vsql_complex.COMPLEX")
+// for a field with a custom_type_context. Must only be called when
+// field.custom_type_context != nullptr.
+extern dd::String_type CustomTypeNameForField(const Create_field &field);
 
 // Fills *result with a TypeContext based on the type_name given. If
 // extension_name is non-empty, filters results to match that extension

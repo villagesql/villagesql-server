@@ -8413,7 +8413,8 @@ String *Item_func_sp::val_str(String *str) {
     when SP is executed. In order to prevent occasional
     corruption of returned value, we make here a copy.
   */
-  sp_result_field->val_str(&buf);
+  // VillageSQL: use val_external_str so custom type fields are decoded.
+  sp_result_field->val_external_str(&buf);
   str->copy(buf);
   return str;
 }

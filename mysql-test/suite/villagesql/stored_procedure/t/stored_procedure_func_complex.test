@@ -1,8 +1,6 @@
 # Test Stored Function returning COMPLEX type
 # Grammar: CREATE FUNCTION ... RETURNS COMPLEX ...
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 
 delimiter //;

@@ -1972,6 +1972,12 @@ Field *sp_head::create_result_field(THD *thd, size_t field_max_length,
   field->stored_in_db = m_return_field_def.stored_in_db;
   field->init(table);
 
+  // VillageSQL: propagate custom type context so the result field decodes
+  // correctly when the function return value is read (e.g. SELECT f1()).
+  if (m_return_type_context_ref) {
+    field->set_type_context(m_return_type_context_ref.get());
+  }
+
   assert(field->pack_length() == m_return_field_def.pack_length());
 
   return field;
@@ -1990,6 +1996,15 @@ void sp_head::returns_type(THD *thd, String *result) const {
                             m_return_field_def.max_display_width_in_bytes(),
                             nullptr, nullptr, 0);
   field->init(&table);
+
+  // VillageSQL: if the return type is a custom type, emit the qualified name
+  // instead of the underlying storage type.
+  if (m_return_type_context_ref) {
+    villagesql::AppendFullyQualifiedName(*m_return_type_context_ref, result);
+    ::destroy_at(field);
+    return;
+  }
+
   field->sql_type(*result);
 
   if (field->has_charset()) {
@@ -2788,6 +2803,13 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
   }
 
   func_runtime_ctx->sp = this;
+
+  // VillageSQL: inject custom type contexts for SP params after sp is set.
+  if (func_runtime_ctx->maybe_inject_custom_sp_params()) {
+    thd->swap_query_arena(backup_arena, &call_arena);
+    err_status = true;
+    goto err_with_cleanup;
+  }
 
   /*
     We have to switch temporarily back to callers arena/memroot.

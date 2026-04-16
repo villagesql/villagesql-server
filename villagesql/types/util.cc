@@ -1555,4 +1555,14 @@ bool InjectCustomSpParams(
   }
 }
 
+bool IsQualifiedName(const dd::String_type &name) {
+  return name.find('.') != dd::String_type::npos;
+}
+
+dd::String_type CustomTypeNameForField(const Create_field &field) {
+  const TypeContext *tc = field.custom_type_context;
+  auto name = make_qualified_base_name(tc->extension_name(), tc->type_name());
+  return dd::String_type(name.c_str());
+}
+
 }  // namespace villagesql

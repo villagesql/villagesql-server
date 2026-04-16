@@ -60,6 +60,9 @@ class THD;
 class sp_head;
 struct CHARSET_INFO;
 struct MY_BITMAP;
+namespace villagesql {
+class TypeContext;
+}  // namespace villagesql
 
 /**
   @defgroup Stored_Routines Stored Routines
@@ -451,6 +454,12 @@ class sp_head {
     It's used (and valid) for stored functions only.
   */
   Create_field m_return_field_def;
+
+  // VillageSQL: client-managed reference to the custom TypeContext for the
+  // function return type. Keeps the TypeContext alive for the lifetime of this
+  // sp_head so that create_result_field() can safely set it on the result
+  // field.
+  std::shared_ptr<const villagesql::TypeContext> m_return_type_context_ref;
 
   /// Attributes used during the parsing stage only.
   sp_parser_data m_parser_data;

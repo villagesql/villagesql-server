@@ -904,9 +904,17 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
       any_custom = true;
     }
 
-    // TODO(villagesql-beta): persist function return type
-    // (m_return_type_context_ref is added in a follow-up patch with function
-    // return type support).
+    // Persist the function return type using the sentinel name.
+    if (sp->m_type == enum_sp_type::FUNCTION && sp->m_return_type_context_ref) {
+      const TypeContext &tc = *sp->m_return_type_context_ref;
+      SpParamEntry entry(
+          SpParamKey(sp->m_db.str, sp->m_name.str, SP_RETURNS_SENTINEL),
+          tc.extension_name(), tc.extension_version(), tc.type_name(),
+          tc.parameters().to_json());
+      if (vclient.sp_params().MarkForInsertion(*thd, std::move(entry)))
+        return true;
+      any_custom = true;
+    }
 
     // Verify that only sp_params has uncommitted entries for this THD. This
     // matters because write_all_uncommitted_entries() only opens
