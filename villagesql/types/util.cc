@@ -1397,9 +1397,27 @@ bool InjectCustomSpParams(
     return false;
   }
 
-  // First pass: read lock only. Collect matching params and check whether all
-  // TypeContexts are already cached. On the hot path (repeated SP calls) every
-  // TypeContext exists, so no write lock is ever needed after the first call.
+  // Background: SP params and DECLARE variables have no persistent table share
+  // to cache their TypeContext on (unlike table columns). MySQL also normalizes
+  // their types in the DD (e.g. COMPLEX -> varbinary(16)), so the TypeContext
+  // must be re-attached to the freshly-created sp_rcontext fields on every
+  // CALL. The sp_params system table is the source of truth: it is written at
+  // CREATE PROCEDURE time and reloaded from disk on server restart.
+  //
+  // TypeContexts are in-memory only (not persisted). They are created on first
+  // use from the TypeDescriptor (which is registered when the extension loads).
+  // Once created they live in the victionary's type_contexts cache for the
+  // lifetime of the server (or until the extension is uninstalled).
+  //
+  // Locking strategy:
+  //   First pass (read lock): look up sp_params, collect the matching fields,
+  //   and check whether every TypeContext is already in the cache.
+  //   Second pass:
+  //     Hot path — all cached (every CALL after the first post-restart call):
+  //       read lock + acquire_client_managed, no writes needed.
+  //     Cold path — some missing (first CALL after server start or extension
+  //       reload): write lock + get_or_create_client_managed to populate the
+  //       cache. After this, the hot path is always taken.
   struct Match {
     const SpParamEntry *param_entry;
     uint field_idx;
@@ -1428,11 +1446,15 @@ bool InjectCustomSpParams(
     Create_field *cdef;
     uint field_idx = 0;
     while ((cdef = it++)) {
+      // Nameless fields are return-value placeholders added by MySQL for stored
+      // functions (index 0). Skip them but keep field_idx in sync.
       if (!cdef->field_name) {
         field_idx++;
         continue;
       }
 
+      // Find the matching sp_params entry for this field by name. Most fields
+      // are plain SQL types with no entry — only custom-typed ones match.
       const SpParamEntry *param_entry = nullptr;
       for (const SpParamEntry *entry : sp_params) {
         if (my_strcasecmp(system_charset_info, cdef->field_name,
@@ -1460,28 +1482,17 @@ bool InjectCustomSpParams(
     }
   }  // read lock released
 
-  if (matches.empty()) {
-    // sp_params was non-empty but no fields matched — treat as no custom
-    // params.
-    *had_custom_params = false;
-    return false;
-  }
+  // sp_params was non-empty but no fields matched. This means custom_sp_params
+  // has entries for params that don't exist in the SP's field definitions —
+  // a bug in the CREATE PROCEDURE path.
+  assert(!matches.empty());
 
   *had_custom_params = true;
 
-  // Second pass: inject TypeContexts into fields and items.
-  //
-  // Hot path (all TypeContexts already cached): take a read lock and use
-  // acquire_client_managed to get a shared_ptr without inserting anything.
-  //
-  // Cold path: take a write lock and use get_or_create_client_managed to
-  // create and cache the TypeContext. This happens on the first call after each
-  // server start (or extension reload): sp_params entries are persisted in the
-  // system table and reloaded into the victionary on startup, but TypeContexts
-  // are in-memory only and must be reconstructed from the TypeDescriptor on
-  // first use. After that first call the hot path is always taken.
-  auto inject_read = [&]() -> bool {
-    auto guard = vclient.get_read_lock();
+  // Second pass: inject TypeContexts into fields and items (see locking
+  // strategy above). get_tc resolves a TypeContext shared_ptr from the
+  // victionary — the only difference between the hot and cold paths.
+  auto inject = [&](auto get_tc) -> bool {
     for (auto &m : matches) {
       const TypeDescriptor *type_descriptor =
           vclient.type_descriptors().get_committed(m.type_descriptor_key);
@@ -1497,12 +1508,13 @@ bool InjectCustomSpParams(
       }
 
       std::shared_ptr<const TypeContext> tc_ref =
-          vclient.type_contexts().acquire_client_managed(m.type_context_key);
+          get_tc(m.type_context_key, type_descriptor);
       if (!tc_ref) {
         my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
         return true;
       }
 
+      // fields[i] can be null for unused variable slots in the var table.
       if (fields[m.field_idx]) {
         fields[m.field_idx]->set_type_context(tc_ref.get());
       }
@@ -1518,61 +1530,27 @@ bool InjectCustomSpParams(
         var_items[m.field_idx]->set_type_context(tc_ref.get());
       }
 
-      // Transfer ownership to caller — released when sp_rcontext is destroyed.
+      // Transfer ownership to caller. sp_rcontext holds these shared_ptrs in
+      // m_custom_type_refs to keep the TypeContext alive for the duration of
+      // the CALL — without this the victionary could drop the refcount to zero
+      // and free the TypeContext while the fields still point to it.
       type_refs.push_back(std::move(tc_ref));
     }
     return false;
   };
 
-  auto inject_write = [&]() -> bool {
+  if (needs_create) {
     auto guard = vclient.get_write_lock();
-    for (auto &m : matches) {
-      const TypeDescriptor *type_descriptor =
-          vclient.type_descriptors().get_committed(m.type_descriptor_key);
-      if (should_assert_if_null(type_descriptor)) {
-        LogVSQL(ERROR_LEVEL,
-                "Failed to find type %s in extension %s, version %s for SP "
-                "variable %s in %s.%s",
-                m.param_entry->type_name.c_str(),
-                m.param_entry->extension_name.c_str(),
-                m.param_entry->extension_version.c_str(),
-                m.param_entry->param_name().c_str(), db_name, sp_name);
-        return true;
-      }
-
-      // Use get_or_create_client_managed so the caller (sp_rcontext) holds a
-      // shared_ptr. The TypeContext refcount is decremented when sp_rcontext is
-      // destroyed (via m_custom_type_refs), not when some mem_root is cleared.
-      std::shared_ptr<const TypeContext> tc_ref =
-          vclient.type_contexts().get_or_create_client_managed(
-              m.type_context_key, type_descriptor);
-      if (!tc_ref) {
-        my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
-        return true;
-      }
-
-      if (fields[m.field_idx]) {
-        fields[m.field_idx]->set_type_context(tc_ref.get());
-      }
-
-      // Sync TypeContext into the Item wrapper so SP body statements
-      // (e.g. INSERT INTO t VALUES (in_param)) see the correct custom type.
-      // The Item_field delegates has_type_context() to its field pointer, but
-      // set_type_context() on the Item base caches it for non-field items
-      // (Item_sp_variable) that call get_type_context() on this_item().
-      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to
-      // its underlying Field, this call can be dropped for field-backed items.
-      if (var_items.array() && var_items[m.field_idx]) {
-        var_items[m.field_idx]->set_type_context(tc_ref.get());
-      }
-
-      // Transfer ownership to caller — released when sp_rcontext is destroyed.
-      type_refs.push_back(std::move(tc_ref));
-    }
-    return false;
-  };
-
-  return needs_create ? inject_write() : inject_read();
+    return inject([&](const TypeContextKey &key, const TypeDescriptor *td) {
+      // Cold path: populate the cache for future calls.
+      return vclient.type_contexts().get_or_create_client_managed(key, td);
+    });
+  } else {
+    auto guard = vclient.get_read_lock();
+    return inject([&](const TypeContextKey &key, const TypeDescriptor *) {
+      return vclient.type_contexts().acquire_client_managed(key);
+    });
+  }
 }
 
 }  // namespace villagesql
