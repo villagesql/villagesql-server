@@ -20,8 +20,8 @@
 // and API are under active development and will change without notice. Do not
 // use this in production extensions.
 
-#ifndef VILLAGESQL_SDK_STORAGE_API_H_
-#define VILLAGESQL_SDK_STORAGE_API_H_
+#ifndef VILLAGESQL_EXPERIMENTAL_STORAGE_API_H_
+#define VILLAGESQL_EXPERIMENTAL_STORAGE_API_H_
 
 #include <villagesql/abi/storage.h>
 #include <cassert>
@@ -863,4 +863,4 @@ struct Column {
 };
 
 }  // namespace villagesql::storage
-#endif  // VILLAGESQL_SDK_STORAGE_API_H_
+#endif  // VILLAGESQL_EXPERIMENTAL_STORAGE_API_H_

@@ -17,12 +17,13 @@
 #define VILLAGESQL_VSQL_H
 
 // =============================================================================
-// VillageSQL Extension Framework — Object-based API (::vsql namespace)
+// VillageSQL Extension Framework — Typed C++ API (::vsql namespace)
 // =============================================================================
 //
-// This header provides the new object-based API for writing VillageSQL
-// extensions. Include this instead of <villagesql/extension.h> when using
-// the new API.
+// This is the main header for writing VillageSQL extensions using the typed
+// C++ API. Raw ABI types (vef_context_t*, vef_invalue_t*, vef_encode_func_t,
+// etc.) are not exposed here; use typed wrappers (IntArg, RealArg, Span<>,
+// etc.) and the object-based type builder (vsql::make_type<Name>()) instead.
 //
 // QUICK START
 // -----------
@@ -32,8 +33,7 @@
 //
 //   // 1. Implement your type operations
 //   bool complex_from_string(std::string_view s,
-//                            villagesql::Span<unsigned char> buf, size_t*
-//                            len);
+//                            villagesql::Span<unsigned char> buf, size_t* len);
 //   bool complex_to_string(villagesql::Span<const unsigned char> data,
 //                          villagesql::Span<char> out, size_t* out_len);
 //   int  complex_compare(villagesql::Span<const unsigned char> a,
@@ -44,70 +44,65 @@
 //   constexpr auto COMPLEX = make_type<kComplexTypeName>()
 //       .persisted_length(16)
 //       .max_decode_buffer_length(64)
-//       .from_string<&complex_from_string>()  // statically checked signature
+//       .from_string<&complex_from_string>()
 //       .to_string<&complex_to_string>()
 //       .compare<&complex_compare>()
 //       .build();  // compile error if any required operation is missing
 //
-//   // 3. Implement regular VDFs, using COMPLEX as a type reference
+//   // 3. Implement regular VDFs using COMPLEX as a type reference
 //   void complex_add(CustomArg a, CustomArg b, CustomResult out) { ... }
 //
 //   // 4. Register
 //   VEF_GENERATE_ENTRY_POINTS(
 //     make_extension("my_ext", "1.0.0")
-//       .type(COMPLEX)                          // type object, not a string
+//       .type(COMPLEX)
 //       .func(make_func<&complex_add>("complex_add")
-//           .returns(COMPLEX)                   // type object in signature
+//           .returns(COMPLEX)
 //           .param(COMPLEX)
 //           .param(COMPLEX)
 //           .build()))
 //
-// STATIC CHECKING
-// ---------------
-//
-// - build() fails to compile if from_string, to_string, or compare is missing.
-// - Each template method checks the function signature via static_assert.
-//   Wrong signatures (wrong param count, wrong types) are compile errors.
-// - Type name mismatches are impossible: .returns(COMPLEX) derives the SQL
-//   name from the object; no manual string is involved.
-//
-// BACKWARD COMPATIBILITY
-// ----------------------
-//
-// The existing villagesql::type_builder and villagesql::func_builder APIs
-// are unchanged. Extensions using the old API continue to compile. The new
-// vsql API is additive — both styles can be mixed in the same extension.
-//
-// LIMITATIONS
-// -----------
-//
-// - intrinsic_default VDFs must be registered separately with
-//   make_intrinsic_default(). Reference them by name with
-//   .intrinsic_default_vdf("vdf_name") on the vsql TypeBuilder.
+// For full documentation see the individual headers below.
 
-// Pull in the full existing SDK (func_types, func_builder, extension_builder,
-// VEF_GENERATE_ENTRY_POINTS macro, etc.)
-#include <villagesql/extension.h>
+// Typed function and type-operation builders (rejects raw ABI signatures).
+#include <villagesql/vsql/func_builder.h>
 
-// New object-based type builder
+// Typed argument/result wrappers: IntArg, RealArg, StringArg, CustomArg, etc.
+#include <villagesql/vsql/func_types.h>
+
+// Object-based type builder: vsql::make_type<Name>()
 #include <villagesql/vsql/type_builder.h>
 
-// System variable builder
+// Parameterized type cache: TypeParamsCache<P>, type_params_cache_for<P>()
+#include <villagesql/vsql/type_params_cache.h>
+
+// Storage interface (column-level custom storage, under development)
+#include <villagesql/experimental/storage_api.h>
+#include <villagesql/experimental/storage_builder.h>
+
+// System variable builder: make_sys_var_int(), make_sys_var_str(), etc.
 #include <villagesql/vsql/sys_var_builder.h>
 
-// Keyring access
+// Keyring access: vsql::keyring::read(), vsql::keyring::write()
 #include <villagesql/vsql/keyring.h>
 
-// Bring the new vsql API into scope alongside the existing villagesql names.
-// After `using namespace vsql`, make_type() comes from ::vsql, while
-// make_func() and make_extension() continue to come from
-// villagesql::func_builder / villagesql::extension_builder (via extension.h).
+// Extension builder and VEF_GENERATE_ENTRY_POINTS macro
+#include <villagesql/extension_builder.h>
+
 namespace vsql {
 
-// Re-export make_func and make_extension from the existing villagesql API
-// so that `using namespace vsql` is sufficient for a complete extension.
+// Re-export make_extension from villagesql::extension_builder
 using villagesql::extension_builder::make_extension;
+
+// Re-export make_func and type-operation entry points from the typed builder
 using villagesql::func_builder::make_func;
+using villagesql::func_builder::make_int_to_params;
+using villagesql::func_builder::make_intrinsic_default;
+using villagesql::func_builder::make_resolve_params;
+using villagesql::func_builder::make_type_compare;
+using villagesql::func_builder::make_type_decode;
+using villagesql::func_builder::make_type_encode;
+using villagesql::func_builder::make_type_hash;
 
 // Re-export sys_var and keyring namespaces
 namespace sys_var = villagesql::sys_var;
@@ -130,8 +125,7 @@ using villagesql::Span;
 using villagesql::StringArg;
 using villagesql::StringResult;
 
-// Re-export built-in type name constants (the string versions, for
-// .returns(INT) / .param(STRING) etc.)
+// Re-export built-in type name constants
 using villagesql::func_builder::INT;
 using villagesql::func_builder::REAL;
 using villagesql::func_builder::STRING;

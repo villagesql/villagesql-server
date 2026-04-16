@@ -19,8 +19,8 @@
 // This is a template for creating VillageSQL extensions.
 // See the extension.h header for full documentation.
 
-#include <villagesql/extension.h>
-using namespace villagesql;
+#include <villagesql/vsql.h>
+using namespace vsql;
 
 // Example function: adds two integers
 void add_impl(IntArg a, IntArg b, IntResult out) {

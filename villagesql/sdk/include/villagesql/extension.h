@@ -366,7 +366,13 @@
 //         .build()))
 //
 
+// V1 extension entry point. Supports raw vef_vdf_func_t VDFs and raw function
+// pointer type operations (RawFromStringFunc / RawToStringFunc).
+//
+// For the typed C++ API (IntArg, RealArg, Span<>, vsql::make_type<>, etc.)
+// use villagesql/vsql.h instead.
+
 #include <villagesql/extension_builder.h>
-#include <villagesql/storage_api.h>
+#include <villagesql/func_builder.h>
 
 #endif  // VILLAGESQL_SDK_EXTENSION_H

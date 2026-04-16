@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_SDK_TYPE_PARAMS_CACHE_H
-#define VILLAGESQL_SDK_TYPE_PARAMS_CACHE_H
+#ifndef VILLAGESQL_VSQL_TYPE_PARAMS_CACHE_H
+#define VILLAGESQL_VSQL_TYPE_PARAMS_CACHE_H
 
 #include <algorithm>
 #include <cassert>
@@ -188,4 +188,4 @@ __attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
 
 }  // namespace villagesql
 
-#endif  // VILLAGESQL_SDK_TYPE_PARAMS_CACHE_H
+#endif  // VILLAGESQL_VSQL_TYPE_PARAMS_CACHE_H

@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_SDK_STORAGE_BUILDER_H
-#define VILLAGESQL_SDK_STORAGE_BUILDER_H
+#ifndef VILLAGESQL_EXPERIMENTAL_STORAGE_BUILDER_H
+#define VILLAGESQL_EXPERIMENTAL_STORAGE_BUILDER_H
 
 // TODO(villagesql-beta): Column storage is not ready for external use.
 // See storage_api.h for details.
@@ -25,7 +25,7 @@
 #include <type_traits>
 
 #include <villagesql/abi/storage.h>
-#include <villagesql/storage_api.h>
+#include <villagesql/experimental/storage_api.h>
 
 namespace villagesql {
 namespace storage_builder {
@@ -319,4 +319,4 @@ constexpr StorageBuilder<UserCtx> make_storage() {
 }  // namespace storage_builder
 }  // namespace villagesql
 
-#endif  // VILLAGESQL_SDK_STORAGE_BUILDER_H
+#endif  // VILLAGESQL_EXPERIMENTAL_STORAGE_BUILDER_H

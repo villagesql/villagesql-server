@@ -89,28 +89,13 @@ add_custom_target(sdk ALL
     "${STABLE_SDK_DIR}/include/villagesql/abi/types.h"
     "${SDK_STAGING_DIR}/include/villagesql/abi/"
 
-  # Copy dev (unstable) SDK headers
+  # Copy dev (unstable) SDK headers (all subdirectories picked up automatically)
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql"
+    "${SDK_STAGING_DIR}/include-dev/villagesql"
   COMMAND ${CMAKE_COMMAND} -E copy
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/extension.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/extension_builder.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/func_builder.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/func_types.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_api.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_builder.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_builder.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_params_cache.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql.h"
     "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/"
-  COMMAND ${CMAKE_COMMAND} -E copy
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/storage.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/types.h"
-    "${SDK_STAGING_DIR}/include-dev/villagesql/abi/"
-  COMMAND ${CMAKE_COMMAND} -E copy
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/keyring.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/sys_var_builder.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/vsql/type_builder.h"
-    "${SDK_STAGING_DIR}/include-dev/villagesql/vsql/"
 
   # Copy template project
   COMMAND ${CMAKE_COMMAND} -E copy

@@ -85,18 +85,24 @@
 #include <type_traits>
 
 #include <villagesql/abi/types.h>
-#include <villagesql/func_builder.h>
 #include <villagesql/type_builder.h>
+#include <villagesql/vsql/func_builder.h>
+#include <villagesql/vsql/type_params_cache.h>
 
 namespace vsql {
 
-// =============================================================================
-// detail — internal helpers, not part of the public API
-// =============================================================================
-
 namespace detail {
 
-using namespace villagesql::func_builder;
+// Binds the parse function for parameterized type caches. Stored as a function
+// pointer in TypeDescriptor.params_init_fn and called once during registration.
+template <typename P, auto ParseFunc>
+void bind_params_cache() {
+  villagesql::type_params_cache_for<P>().bind(ParseFunc);
+}
+
+// =============================================================================
+// TypeOpVdfName and TypeOp — internal helpers for auto-named VDF strings
+// =============================================================================
 
 enum class TypeOp {
   kEncode = 0,
@@ -226,8 +232,7 @@ class TypeBuilder {
   template <typename P, auto ParseFunc>
   constexpr auto params() const {
     detail::TypeBuilderState s = state_;
-    s.desc.params_init_fn =
-        &villagesql::type_builder::bind_params_cache<P, ParseFunc>;
+    s.desc.params_init_fn = &detail::bind_params_cache<P, ParseFunc>;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     return TypeBuilder<HasFromString, HasToString, HasCompare, true,
                        HasIntToParams, HasResolveParams, EFT, Name>{

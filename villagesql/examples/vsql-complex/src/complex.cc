@@ -361,6 +361,8 @@ void complex_sum_accumulate(ComplexSumState &state, CustomArg val) {
   state = total;
 }
 
+// TODO(villagesql-beta): convert to typed style: void(const ComplexSumState&,
+// CustomResult)
 void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
                         vef_vdf_result_t *out) {
   auto *state = static_cast<ComplexSumState *>(args->user_data);

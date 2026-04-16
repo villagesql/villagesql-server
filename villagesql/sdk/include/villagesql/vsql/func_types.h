@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_SDK_FUNC_TYPES_H
-#define VILLAGESQL_SDK_FUNC_TYPES_H
+#ifndef VILLAGESQL_VSQL_FUNC_TYPES_H
+#define VILLAGESQL_VSQL_FUNC_TYPES_H
 
 // Typed wrappers for VDF function parameters and results.
 //
@@ -66,7 +66,7 @@
 #include <string_view>
 
 #include <villagesql/abi/types.h>
-#include <villagesql/type_params_cache.h>
+#include <villagesql/vsql/type_params_cache.h>
 
 // In C++20, Span<T> is std::span<T>. In C++17, it is a minimal compatible
 // implementation. User code written against villagesql::Span<T> works in
@@ -350,4 +350,4 @@ class CustomResultWith {
 
 }  // namespace villagesql
 
-#endif  // VILLAGESQL_SDK_FUNC_TYPES_H
+#endif  // VILLAGESQL_VSQL_FUNC_TYPES_H
