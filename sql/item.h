@@ -3920,6 +3920,7 @@ class Item_sp_variable : public Item {
     return this_item()->get_type_context();
   }
   bool has_type_context() const override {
+    // TODO(villagesql-beta): Investigate if we have some latent issues here.
     return this_item()->has_type_context();
   }
   // TODO(villagesql-ga): Delegate set_type_context() (and the encode/decode

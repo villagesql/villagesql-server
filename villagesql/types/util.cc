@@ -1428,6 +1428,8 @@ bool InjectCustomSpParams(
   bool needs_create = false;
 
   {
+    // TODO(villagesql-performance): consider ways in which we would not need to
+    // grab victionary locks on every call.
     auto guard = vclient.get_read_lock();
 
     auto sp_params = vclient.GetCustomSpParamsForSP(std::string(db_name),
