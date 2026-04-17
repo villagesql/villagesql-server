@@ -37,6 +37,16 @@
 #include <villagesql/vsql/sys_var_builder.h>
 
 namespace villagesql {
+
+// Forward-declare the func_builder namespace so that extension_builder.h can
+// be included before func_builder.h (e.g. when alphabetical include order
+// puts extension_builder.h before func_builder.h). The actual symbols are
+// supplied by whichever func_builder header the caller includes.
+namespace func_builder {
+template <typename FuncData, size_t Index>
+vef_func_desc_t *materialize_func_desc(const FuncData &func_data);
+}  // namespace func_builder
+
 namespace extension_builder {
 
 using sys_var_builder::SysVarDescriptor;
