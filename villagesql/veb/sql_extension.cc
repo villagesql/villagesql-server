@@ -53,6 +53,8 @@
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/sql/metadata_modifier.h"
+#include "villagesql/veb/register.h"
+#include "villagesql/veb/validate.h"
 #include "villagesql/veb/veb_file.h"
 
 // Global variables for VEB directory configuration
@@ -206,27 +208,31 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  std::string reg_error;
+  std::optional<villagesql::veb::ValidatedRegistration> validated =
+      villagesql::veb::validate_extension_registration(
+          registration, extension_name, version, reg_error);
+  if (!validated) {
+    villagesql_error("Failed to install extension '%s': %s", MYF(0),
+                     extension_name.c_str(), reg_error.c_str());
+    return end_transaction(thd, true);
+  }
+
   bool mark_success = true;
   {
     auto write_lock = victionary.get_write_lock();
 
-    if (villagesql::veb::register_types_from_extension(*thd, extension_name,
-                                                       version, registration)) {
-      villagesql_error("Failed to register types for extension '%s'", MYF(0),
-                       extension_name.c_str());
+    if (villagesql::veb::register_validated_extension(
+            *thd, std::move(*validated), reg_error)) {
+      villagesql_error("Failed to install extension '%s': %s", MYF(0),
+                       extension_name.c_str(), reg_error.c_str());
       // Rollback should be done after releasing the victionary lock.
-      mark_success = false;
-
-    } else if (villagesql::veb::register_funcs_from_extension(
-                   *thd, extension_name, version, registration)) {
-      villagesql_error("Failed to register VDFs for extension '%s'", MYF(0),
-                       extension_name.c_str());
       mark_success = false;
 
     } else if (villagesql::services::register_sys_vars_from_extension(
                    extension_name, registration)) {
-      villagesql_error("Failed to register system variables for extension '%s'", MYF(0),
-                       extension_name.c_str());
+      villagesql_error("Failed to register system variables for extension '%s'",
+                       MYF(0), extension_name.c_str());
       mark_success = false;
 
     } else if (victionary.extension_descriptors().MarkForInsertion(

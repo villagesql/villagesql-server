@@ -7,7 +7,7 @@
 
 call mtr.add_suppression("Orphaned expansion directory found but not removed");
 call mtr.add_suppression("Failed to load VEF extension");
-call mtr.add_suppression("Aggregate VDF.*must provide both clear and accumulate");
+call mtr.add_suppression("must provide both clear and accumulate");
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --let $restart_parameters = restart: --veb-dir=$veb_dir
 --source include/restart_mysqld.inc

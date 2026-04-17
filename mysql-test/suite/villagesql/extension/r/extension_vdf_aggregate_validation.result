@@ -1,18 +1,18 @@
 call mtr.add_suppression("Orphaned expansion directory found but not removed");
 call mtr.add_suppression("Failed to load VEF extension");
-call mtr.add_suppression("Aggregate VDF.*must provide both clear and accumulate");
+call mtr.add_suppression("must provide both clear and accumulate");
 # restart: --veb-dir=MYSQLTEST_VARDIR/veb
 Creating extension agg_accumulate_only using SDK...
 Created agg_accumulate_only.veb
 INSTALL EXTENSION agg_accumulate_only;
-ERROR HY000: Failed to register VDFs for extension 'agg_accumulate_only'
+ERROR HY000: Failed to install extension 'agg_accumulate_only': VDF 'bad_agg' must provide both clear and accumulate callbacks, or neither
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_accumulate_only';
 COUNT(*)
 0
 Creating extension agg_clear_only using SDK...
 Created agg_clear_only.veb
 INSTALL EXTENSION agg_clear_only;
-ERROR HY000: Failed to register VDFs for extension 'agg_clear_only'
+ERROR HY000: Failed to install extension 'agg_clear_only': VDF 'bad_agg' must provide both clear and accumulate callbacks, or neither
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_clear_only';
 COUNT(*)
 0

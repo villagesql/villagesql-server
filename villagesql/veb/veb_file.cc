@@ -32,7 +32,6 @@
 #include "scope_guard.h"
 #include "sha2.h"
 #include "sql/auth/auth_common.h"
-#include "sql/field.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/mysqld.h"
 #include "sql/sql_base.h"
@@ -43,13 +42,12 @@
 #include "sql_string.h"
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
-#include "villagesql/schema/descriptor/func_descriptor.h"
-#include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/keyring.h"
 #include "villagesql/services/sys_vars.h"
+#include "villagesql/veb/register.h"
 #include "villagesql/veb/sql_extension.h"
-#include "villagesql/veb/veb_register_type.h"
+#include "villagesql/veb/validate.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -672,17 +670,20 @@ bool load_installed_extensions(THD *thd) {
         return true;
       }
 
-      if (register_types_from_extension(*thd, extension_name, expected_version,
-                                        registration)) {
-        LogVSQL(ERROR_LEVEL, "Failed to register types for extension '%s'",
-                extension_name.c_str());
+      std::string reg_error;
+      std::optional<ValidatedRegistration> validated =
+          validate_extension_registration(registration, extension_name,
+                                          expected_version, reg_error);
+      if (!validated) {
+        LogVSQL(ERROR_LEVEL, "Failed to validate extension '%s': %s",
+                extension_name.c_str(), reg_error.c_str());
         return true;
       }
 
-      if (register_funcs_from_extension(*thd, extension_name, expected_version,
-                                        registration)) {
-        LogVSQL(ERROR_LEVEL, "Failed to register VDFs for extension '%s'",
-                extension_name.c_str());
+      if (register_validated_extension(*thd, std::move(*validated),
+                                       reg_error)) {
+        LogVSQL(ERROR_LEVEL, "Failed to register extension '%s': %s",
+                extension_name.c_str(), reg_error.c_str());
         return true;
       }
 
@@ -789,172 +790,6 @@ void cleanup_orphaned_expansion_directories(
   } else {
     LogVSQL(INFORMATION_LEVEL, "No orphaned expansion directories found");
   }
-}
-
-bool register_types_from_extension(THD &thd, const std::string &extension_name,
-                                   const std::string &extension_version,
-                                   const ExtensionRegistration &ext_reg) {
-  auto &victionary = VictionaryClient::instance();
-  victionary.assert_write_lock_held();
-
-  if (ext_reg.registration == nullptr ||
-      ext_reg.registration->type_count == 0) {
-    LogVSQL(INFORMATION_LEVEL, "No types to register for extension '%s'",
-            extension_name.c_str());
-    return false;
-  }
-
-  const vef_registration_t &reg = *ext_reg.registration;
-
-  LogVSQL(INFORMATION_LEVEL,
-          "Registering %d types from extension '%s' version '%s'",
-          reg.type_count, extension_name.c_str(), extension_version.c_str());
-
-  for (unsigned int i = 0; i < reg.type_count; i++) {
-    const vef_type_desc_t *td = reg.types[i];
-    if (td == nullptr || td->name == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Extension '%s' has NULL type descriptor at index %u",
-              extension_name.c_str(), i);
-      return true;
-    }
-
-    std::string type_name(td->name);
-
-    if (td->max_decode_buffer_length <= 0) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' must set max_decode_buffer_length",
-              type_name.c_str(), extension_name.c_str());
-      return true;
-    }
-
-    LogVSQL(INFORMATION_LEVEL, "Registering type '%s' from extension '%s'",
-            type_name.c_str(), extension_name.c_str());
-
-    // Dispatch to protocol-specific builder.
-    bool is_v2 = td->protocol >= VEF_PROTOCOL_2 &&
-                 ext_reg.negotiated_protocol >= VEF_PROTOCOL_2;
-    std::optional<TypeDescriptor> maybe_descriptor =
-        is_v2 ? build_type_descriptor_v2(td, reg, type_name, extension_name,
-                                         extension_version)
-              : build_type_descriptor_v1(td, type_name, extension_name,
-                                         extension_version);
-    if (!maybe_descriptor.has_value()) return true;
-    TypeDescriptor descriptor = std::move(*maybe_descriptor);
-
-    const TypeDescriptor *existing =
-        victionary.type_descriptors().get_committed(descriptor.key());
-    if (existing) {
-      LogVSQL(ERROR_LEVEL, "Type '%s' from extension '%s' already exists",
-              type_name.c_str(), extension_name.c_str());
-      return true;
-    }
-
-    if (victionary.type_descriptors().MarkForInsertion(thd,
-                                                       std::move(descriptor))) {
-      LogVSQL(ERROR_LEVEL, "Failed to mark type descriptor '%s' for insertion",
-              type_name.c_str());
-      return true;
-    }
-
-    LogVSQL(INFORMATION_LEVEL, "Successfully registered type '%s'",
-            type_name.c_str());
-  }
-
-  return false;
-}
-
-// Convert VEF type to MySQL Item_result
-static Item_result vef_type_to_item_result(const vef_type_t &type) {
-  switch (type.id) {
-    case VEF_TYPE_STRING:
-      return STRING_RESULT;
-    case VEF_TYPE_REAL:
-      return REAL_RESULT;
-    case VEF_TYPE_INT:
-      return INT_RESULT;
-    case VEF_TYPE_CUSTOM:
-      // Custom types are passed as binary strings
-      return STRING_RESULT;
-    default:
-      return STRING_RESULT;
-  }
-}
-
-bool register_funcs_from_extension(THD &thd, const std::string &extension_name,
-                                   const std::string &extension_version,
-                                   const ExtensionRegistration &ext_reg) {
-  auto &victionary = VictionaryClient::instance();
-  victionary.assert_write_lock_held();
-
-  if (ext_reg.registration == nullptr ||
-      ext_reg.registration->func_count == 0) {
-    LogVSQL(INFORMATION_LEVEL, "No VDFs to register for extension '%s'",
-            extension_name.c_str());
-    return false;
-  }
-
-  const vef_registration_t &reg = *ext_reg.registration;
-
-  LogVSQL(INFORMATION_LEVEL, "Registering %d VDFs from extension '%s'",
-          reg.func_count, extension_name.c_str());
-
-  for (unsigned int i = 0; i < reg.func_count; i++) {
-    const vef_func_desc_t *func_desc = reg.funcs[i];
-    if (func_desc == nullptr || func_desc->name == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Extension '%s' has NULL func descriptor at index %u",
-              extension_name.c_str(), i);
-      return true;
-    }
-
-    std::string func_name(func_desc->name);
-
-    // clear/accumulate fields were added in PROTOCOL_2; older extensions
-    // don't initialize them so we must not read them.
-    if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
-      bool has_clear = (func_desc->clear != nullptr);
-      bool has_accumulate = (func_desc->accumulate != nullptr);
-      if (has_clear != has_accumulate) {
-        LogVSQL(ERROR_LEVEL,
-                "Aggregate VDF '%s' in extension '%s' must provide both clear "
-                "and accumulate callbacks, or neither",
-                func_name.c_str(), extension_name.c_str());
-        return true;
-      }
-    }
-
-    LogVSQL(INFORMATION_LEVEL, "Registering VDF '%s' from extension '%s'",
-            func_desc->name, extension_name.c_str());
-
-    FuncKey key(func_name, extension_name);
-
-    // Check if VDF already exists
-    const FuncDescriptor *existing = victionary.funcs().get_committed(key);
-    if (existing) {
-      LogVSQL(ERROR_LEVEL, "VDF '%s' from extension '%s' already exists",
-              func_name.c_str(), extension_name.c_str());
-      return true;
-    }
-
-    // Convert return type from VEF signature
-    Item_result return_type =
-        vef_type_to_item_result(func_desc->signature->return_type);
-
-    FuncDescriptor descriptor(key, extension_version, func_desc,
-                              ext_reg.negotiated_protocol, return_type);
-
-    if (victionary.funcs().MarkForInsertion(thd, std::move(descriptor))) {
-      LogVSQL(ERROR_LEVEL, "Failed to mark VDF '%s' for insertion",
-              func_name.c_str());
-      return true;
-    }
-
-    LogVSQL(INFORMATION_LEVEL, "Successfully registered VDF '%s'",
-            func_desc->name);
-  }
-
-  return false;
 }
 
 static std::string format_dlerror() {

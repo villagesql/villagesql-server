@@ -97,22 +97,6 @@ struct ExtensionRegistration {
   vef_unregister_func_t unregister_func;
 };
 
-// Register type descriptors from an extension. This creates
-// TypeDescriptors in the victionary for each type defined by the
-// extension.
-// REQUIRES: Caller must hold victionary write lock.
-// Returns false on success, true on error.
-bool register_types_from_extension(THD &thd, const std::string &extension_name,
-                                   const std::string &extension_version,
-                                   const ExtensionRegistration &ext_reg);
-
-// Register VDFs (VillageSQL Defined Functions) from an extension.
-// REQUIRES: Caller must hold victionary write lock.
-// Returns false on success, true on error.
-bool register_funcs_from_extension(THD &thd, const std::string &extension_name,
-                                   const std::string &extension_version,
-                                   const ExtensionRegistration &ext_reg);
-
 // Load a VEF extension from a .so file and get the registration.
 //
 // The caller is responsible for calling unload_vef_extension() when done.

@@ -22,6 +22,7 @@ SET(VILLAGESQL_UNIT_TESTS
   semver-t
   type_context-t
   type_descriptor-t
+  validate-t
   victionary_client-t
 )
 
@@ -63,6 +64,7 @@ ADD_VILLAGESQL_TEST(abi_v2_check-t)
 ADD_VILLAGESQL_TEST(semver-t)
 ADD_VILLAGESQL_TEST(type_context-t)
 ADD_VILLAGESQL_TEST(type_descriptor-t)
+ADD_VILLAGESQL_TEST(validate-t)
 ADD_VILLAGESQL_TEST(victionary_client-t)
 
 # Custom target to build all VillageSQL unit tests

@@ -8,7 +8,7 @@
 call mtr.add_suppression("Orphaned expansion directory found but not removed");
 call mtr.add_suppression("uses '::' but prefix");
 call mtr.add_suppression("is not a valid type method");
-call mtr.add_suppression("Failed to register types for extension");
+call mtr.add_suppression("Failed to install extension");
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --let $restart_parameters = restart: --veb-dir=$veb_dir
 --source include/restart_mysqld.inc

@@ -14,7 +14,9 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_VEB_SOURCES
+  register.cc
   sql_extension.cc
+  validate.cc
   veb_file.cc
   veb_register_type_v1.cc
   veb_register_type_v2.cc
