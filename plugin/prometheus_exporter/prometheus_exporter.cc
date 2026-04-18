@@ -1,17 +1,26 @@
-// Copyright (c) 2025, VillageSQL and/or its affiliates.
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License, version 2.0,
-// as published by the Free Software Foundation.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License, version 2.0, for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+/* Copyright (c) 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #define LOG_COMPONENT_TAG "prometheus_exporter"
 
@@ -59,33 +68,33 @@ static char *prom_bind_address = nullptr;
 static char *prom_security_user = nullptr;
 
 static MYSQL_SYSVAR_BOOL(enabled, prom_enabled,
-                          PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
-                          "Enable the Prometheus metrics exporter HTTP "
-                          "endpoint. Default OFF.",
-                          nullptr, nullptr, false);
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
+                         "Enable the Prometheus metrics exporter HTTP "
+                         "endpoint. Default OFF.",
+                         nullptr, nullptr, false);
 
 static MYSQL_SYSVAR_UINT(port, prom_port,
-                          PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
-                          "TCP port for the Prometheus exporter HTTP "
-                          "endpoint. Default 9104.",
-                          nullptr, nullptr, 9104, 1024, 65535, 0);
+                         PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
+                         "TCP port for the Prometheus exporter HTTP "
+                         "endpoint. Default 9104.",
+                         nullptr, nullptr, 9104, 1024, 65535, 0);
 
 static MYSQL_SYSVAR_STR(bind_address, prom_bind_address,
-                         PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG |
-                             PLUGIN_VAR_MEMALLOC,
-                         "Bind address for the Prometheus exporter HTTP "
-                         "endpoint. Default 127.0.0.1.",
-                         nullptr, nullptr, "127.0.0.1");
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG |
+                            PLUGIN_VAR_MEMALLOC,
+                        "Bind address for the Prometheus exporter HTTP "
+                        "endpoint. Default 127.0.0.1.",
+                        nullptr, nullptr, "127.0.0.1");
 
 static MYSQL_SYSVAR_STR(security_user, prom_security_user,
-                         PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG |
-                             PLUGIN_VAR_MEMALLOC,
-                         "MySQL account used internally to run the metric "
-                         "collection queries. The account must exist on "
-                         "localhost. Default: root. For reduced privilege, "
-                         "use an account granted PROCESS, REPLICATION CLIENT, "
-                         "and SELECT on information_schema.",
-                         nullptr, nullptr, "root");
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG |
+                            PLUGIN_VAR_MEMALLOC,
+                        "MySQL account used internally to run the metric "
+                        "collection queries. The account must exist on "
+                        "localhost. Default: root. For reduced privilege, "
+                        "use an account granted PROCESS, REPLICATION CLIENT, "
+                        "and SELECT on information_schema.",
+                        nullptr, nullptr, "root");
 
 static SYS_VAR *prom_system_vars[] = {
     MYSQL_SYSVAR(enabled),
@@ -305,8 +314,7 @@ static int innodb_end_row(void *ctx) {
   if (mc->current_name.empty() || mc->current_count.empty()) return 0;
 
   // Map InnoDB TYPE to Prometheus type: "counter" -> counter, else gauge
-  const char *prom_type =
-      (mc->current_type == "counter") ? "counter" : "gauge";
+  const char *prom_type = (mc->current_type == "counter") ? "counter" : "gauge";
 
   // Build metric name: mysql_innodb_metrics_ + lowercase(name)
   std::string prom_name = "mysql_innodb_metrics_";
@@ -370,7 +378,16 @@ static const struct st_command_service_cbs innodb_cbs = {
     nullptr,  // connection_alive
 };
 
-static void collect_innodb_metrics(MYSQL_SESSION session, std::string &output) {
+static bool command_failed(int command_fail, bool callback_error) {
+  if (!command_fail && !callback_error) return false;
+
+  if (command_fail && !callback_error) {
+    g_errors_total.fetch_add(1, std::memory_order_relaxed);
+  }
+  return true;
+}
+
+static bool collect_innodb_metrics(MYSQL_SESSION session, std::string &output) {
   InnodbMetricsCtx mc;
   mc.output = &output;
   mc.col_index = 0;
@@ -384,15 +401,18 @@ static void collect_innodb_metrics(MYSQL_SESSION session, std::string &output) {
       "WHERE STATUS='enabled'";
   cmd.com_query.length = strlen(cmd.com_query.query);
 
-  command_service_run_command(session, COM_QUERY, &cmd,
-                             &my_charset_utf8mb3_general_ci, &innodb_cbs,
-                             CS_TEXT_REPRESENTATION, &mc);
+  const int fail = command_service_run_command(
+      session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &innodb_cbs,
+      CS_TEXT_REPRESENTATION, &mc);
+  return !command_failed(fail, mc.error);
 }
 
 struct ReplicaStatusCtx {
   std::string *output;
   std::vector<std::string> col_names;
+  std::vector<bool> col_is_null;
   std::vector<std::string> col_values;
+  std::vector<bool> type_emitted;
   int col_index;
   bool has_row;
   bool error;
@@ -415,6 +435,8 @@ static int replica_field_metadata(void *ctx, struct st_send_field *field,
 
 static int replica_start_row(void *ctx) {
   auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  rc->col_is_null.clear();
+  rc->col_is_null.resize(rc->col_names.size(), false);
   rc->col_values.clear();
   rc->col_values.resize(rc->col_names.size());
   rc->col_index = 0;
@@ -426,7 +448,49 @@ static int replica_get_string(void *ctx, const char *value, size_t length,
                               const CHARSET_INFO *) {
   auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
   if (rc->col_index < static_cast<int>(rc->col_values.size())) {
+    rc->col_is_null[rc->col_index] = false;
     rc->col_values[rc->col_index].assign(value, length);
+  }
+  rc->col_index++;
+  return 0;
+}
+
+static int replica_get_integer(void *ctx, longlong value) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  if (rc->col_index < static_cast<int>(rc->col_values.size())) {
+    rc->col_is_null[rc->col_index] = false;
+    rc->col_values[rc->col_index] = std::to_string(value);
+  }
+  rc->col_index++;
+  return 0;
+}
+
+static int replica_get_longlong(void *ctx, longlong value, uint is_unsigned) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  if (rc->col_index < static_cast<int>(rc->col_values.size())) {
+    rc->col_is_null[rc->col_index] = false;
+    rc->col_values[rc->col_index] =
+        is_unsigned ? std::to_string(static_cast<ulonglong>(value))
+                    : std::to_string(value);
+  }
+  rc->col_index++;
+  return 0;
+}
+
+static int replica_get_double(void *ctx, double value, uint32) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  if (rc->col_index < static_cast<int>(rc->col_values.size())) {
+    rc->col_is_null[rc->col_index] = false;
+    rc->col_values[rc->col_index] = std::to_string(value);
+  }
+  rc->col_index++;
+  return 0;
+}
+
+static int replica_get_null(void *ctx) {
+  auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  if (rc->col_index < static_cast<int>(rc->col_is_null.size())) {
+    rc->col_is_null[rc->col_index] = true;
   }
   rc->col_index++;
   return 0;
@@ -447,39 +511,89 @@ static const ReplicaWantedField replica_wanted_fields[] = {
     {"Read_Source_Log_Pos", "mysql_replica_read_source_log_pos", false},
 };
 
+static int find_replica_column_index(const ReplicaStatusCtx &ctx,
+                                     const char *col_name) {
+  for (int i = 0; i < static_cast<int>(ctx.col_names.size()); ++i) {
+    if (ctx.col_names[i] == col_name) return i;
+  }
+  return -1;
+}
+
+static void append_prometheus_label_value(std::string &output,
+                                          const std::string &value) {
+  for (char ch : value) {
+    switch (ch) {
+      case '\\':
+        output += "\\\\";
+        break;
+      case '"':
+        output += "\\\"";
+        break;
+      case '\n':
+        output += "\\n";
+        break;
+      default:
+        output += ch;
+        break;
+    }
+  }
+}
+
+static void append_replica_channel_label(std::string &output,
+                                         const std::string &channel_name) {
+  if (channel_name.empty()) return;
+
+  output += "{channel=\"";
+  append_prometheus_label_value(output, channel_name);
+  output += "\"}";
+}
+
 static int replica_end_row(void *ctx) {
   auto *rc = static_cast<ReplicaStatusCtx *>(ctx);
+  const int channel_idx = find_replica_column_index(*rc, "Channel_Name");
+  const std::string channel_name =
+      (channel_idx >= 0 &&
+       channel_idx < static_cast<int>(rc->col_values.size()))
+          ? rc->col_values[channel_idx]
+          : "";
 
-  for (const auto &wanted : replica_wanted_fields) {
-    // Find column index by name
-    int idx = -1;
-    for (int i = 0; i < static_cast<int>(rc->col_names.size()); ++i) {
-      if (rc->col_names[i] == wanted.col_name) {
-        idx = i;
-        break;
-      }
-    }
+  for (size_t wanted_idx = 0;
+       wanted_idx < array_elements(replica_wanted_fields); ++wanted_idx) {
+    const auto &wanted = replica_wanted_fields[wanted_idx];
+    const int idx = find_replica_column_index(*rc, wanted.col_name);
     if (idx < 0 || idx >= static_cast<int>(rc->col_values.size())) continue;
 
+    const bool is_null =
+        idx < static_cast<int>(rc->col_is_null.size()) && rc->col_is_null[idx];
     const std::string &val = rc->col_values[idx];
-    if (val.empty()) continue;
 
     std::string value_str;
     if (wanted.is_bool) {
+      if (is_null || val.empty()) continue;
       value_str = (val == "Yes") ? "1" : "0";
     } else {
-      // Check if numeric -- require full-string consumption
-      const char *start = val.c_str();
-      char *end = nullptr;
-      strtod(start, &end);
-      if (end == start || *end != '\0') continue;  // not numeric, skip
-      value_str = val;
+      if (is_null) {
+        if (strcmp(wanted.col_name, "Seconds_Behind_Source") != 0) continue;
+        value_str = "NaN";
+      } else {
+        if (val.empty()) continue;
+        // Check if numeric -- require full-string consumption
+        const char *start = val.c_str();
+        char *end = nullptr;
+        strtod(start, &end);
+        if (end == start || *end != '\0') continue;  // not numeric, skip
+        value_str = val;
+      }
     }
 
-    *rc->output += "# TYPE ";
+    if (!rc->type_emitted[wanted_idx]) {
+      *rc->output += "# TYPE ";
+      *rc->output += wanted.metric_name;
+      *rc->output += " gauge\n";
+      rc->type_emitted[wanted_idx] = true;
+    }
     *rc->output += wanted.metric_name;
-    *rc->output += " gauge\n";
-    *rc->output += wanted.metric_name;
+    append_replica_channel_label(*rc->output, channel_name);
     *rc->output += ' ';
     *rc->output += value_str;
     *rc->output += '\n';
@@ -502,11 +616,11 @@ static const struct st_command_service_cbs replica_cbs = {
     replica_end_row,
     prom_abort_row,
     prom_get_client_capabilities,
-    prom_get_null,
-    prom_get_integer,
-    prom_get_longlong,
+    replica_get_null,
+    replica_get_integer,
+    replica_get_longlong,
     prom_get_decimal,
-    prom_get_double,
+    replica_get_double,
     prom_get_date,
     prom_get_time,
     prom_get_datetime,
@@ -517,9 +631,10 @@ static const struct st_command_service_cbs replica_cbs = {
     nullptr,  // connection_alive
 };
 
-static void collect_replica_status(MYSQL_SESSION session, std::string &output) {
+static bool collect_replica_status(MYSQL_SESSION session, std::string &output) {
   ReplicaStatusCtx rc;
   rc.output = &output;
+  rc.type_emitted.assign(array_elements(replica_wanted_fields), false);
   rc.col_index = 0;
   rc.has_row = false;
   rc.error = false;
@@ -529,9 +644,10 @@ static void collect_replica_status(MYSQL_SESSION session, std::string &output) {
   cmd.com_query.query = "SHOW REPLICA STATUS";
   cmd.com_query.length = strlen(cmd.com_query.query);
 
-  command_service_run_command(session, COM_QUERY, &cmd,
-                             &my_charset_utf8mb3_general_ci, &replica_cbs,
-                             CS_TEXT_REPRESENTATION, &rc);
+  const int fail = command_service_run_command(
+      session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &replica_cbs,
+      CS_TEXT_REPRESENTATION, &rc);
+  return !command_failed(fail, rc.error);
 }
 
 struct BinlogCtx {
@@ -620,7 +736,7 @@ static const struct st_command_service_cbs binlog_cbs = {
     nullptr,  // connection_alive
 };
 
-static void collect_binlog(MYSQL_SESSION session, std::string &output) {
+static bool collect_binlog(MYSQL_SESSION session, std::string &output) {
   BinlogCtx bc;
   bc.output = &output;
   bc.col_index = 0;
@@ -633,14 +749,15 @@ static void collect_binlog(MYSQL_SESSION session, std::string &output) {
   cmd.com_query.query = "SHOW BINARY LOGS";
   cmd.com_query.length = strlen(cmd.com_query.query);
 
-  command_service_run_command(session, COM_QUERY, &cmd,
-                             &my_charset_utf8mb3_general_ci, &binlog_cbs,
-                             CS_TEXT_REPRESENTATION, &bc);
+  const int fail = command_service_run_command(
+      session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &binlog_cbs,
+      CS_TEXT_REPRESENTATION, &bc);
+  return !command_failed(fail, bc.error);
 }
 
-static void collect_name_value_query(MYSQL_SESSION session,
-                                     std::string &output, const char *query,
-                                     const char *prefix, type_fn_t type_fn) {
+static bool collect_name_value_query(MYSQL_SESSION session, std::string &output,
+                                     const char *query, const char *prefix,
+                                     type_fn_t type_fn) {
   MetricsCollectorCtx mc;
   mc.output = &output;
   mc.prefix = prefix;
@@ -653,34 +770,51 @@ static void collect_name_value_query(MYSQL_SESSION session,
   cmd.com_query.query = query;
   cmd.com_query.length = strlen(query);
 
-  command_service_run_command(session, COM_QUERY, &cmd,
-                             &my_charset_utf8mb3_general_ci, &prom_cbs,
-                             CS_TEXT_REPRESENTATION, &mc);
+  const int fail = command_service_run_command(
+      session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &prom_cbs,
+      CS_TEXT_REPRESENTATION, &mc);
+  return !command_failed(fail, mc.error);
 }
 
-static void collect_global_status(MYSQL_SESSION session, std::string &output) {
-  collect_name_value_query(session, output, "SHOW GLOBAL STATUS",
-                           "mysql_global_status_", global_status_type);
+static bool collect_global_status(MYSQL_SESSION session, std::string &output) {
+  return collect_name_value_query(session, output, "SHOW GLOBAL STATUS",
+                                  "mysql_global_status_", global_status_type);
 }
 
 static const char *global_variables_type([[maybe_unused]] const char *name) {
   return "gauge";
 }
 
-static void collect_global_variables(MYSQL_SESSION session,
+static bool collect_global_variables(MYSQL_SESSION session,
                                      std::string &output) {
-  collect_name_value_query(session, output, "SHOW GLOBAL VARIABLES",
-                           "mysql_global_variables_", global_variables_type);
+  return collect_name_value_query(session, output, "SHOW GLOBAL VARIABLES",
+                                  "mysql_global_variables_",
+                                  global_variables_type);
 }
 
-static std::string collect_metrics() {
+struct ScrapeResult {
+  int http_status;
+  const char *reason_phrase;
+  std::string body;
+};
+
+static ScrapeResult make_scrape_error(int http_status,
+                                      const char *reason_phrase,
+                                      const char *body) {
+  g_errors_total.fetch_add(1, std::memory_order_relaxed);
+  return {http_status, reason_phrase, body};
+}
+
+static ScrapeResult collect_metrics() {
   if (!srv_session_server_is_available()) {
-    return "# Server not available\n";
+    return make_scrape_error(503, "Service Unavailable",
+                             "# Server not available\n");
   }
 
   MYSQL_SESSION session = srv_session_open(nullptr, nullptr);
   if (session == nullptr) {
-    return "# Failed to open session\n";
+    return make_scrape_error(500, "Internal Server Error",
+                             "# Failed to open session\n");
   }
 
   // Switch to the configured security context user on localhost. The user
@@ -693,20 +827,42 @@ static std::string collect_metrics() {
   if (thd_get_security_context(srv_session_info_get_thd(session), &sc) ||
       security_context_lookup(sc, user, "localhost", "127.0.0.1", "")) {
     srv_session_close(session);
-    return "# Failed to set security context (user missing or lacks "
-           "privileges?)\n";
+    return make_scrape_error(
+        500, "Internal Server Error",
+        "# Failed to set security context (user missing or lacks "
+        "privileges?)\n");
   }
 
   std::string output;
-  collect_global_status(session, output);
-  collect_global_variables(session, output);
-  collect_innodb_metrics(session, output);
-  collect_replica_status(session, output);
-  collect_binlog(session, output);
+  if (!collect_global_status(session, output)) {
+    srv_session_close(session);
+    return make_scrape_error(500, "Internal Server Error",
+                             "# Failed to collect global status metrics\n");
+  }
+  if (!collect_global_variables(session, output)) {
+    srv_session_close(session);
+    return make_scrape_error(500, "Internal Server Error",
+                             "# Failed to collect global variable metrics\n");
+  }
+  if (!collect_innodb_metrics(session, output)) {
+    srv_session_close(session);
+    return make_scrape_error(500, "Internal Server Error",
+                             "# Failed to collect InnoDB metrics\n");
+  }
+  if (!collect_replica_status(session, output)) {
+    srv_session_close(session);
+    return make_scrape_error(500, "Internal Server Error",
+                             "# Failed to collect replica metrics\n");
+  }
+  if (!collect_binlog(session, output)) {
+    srv_session_close(session);
+    return make_scrape_error(500, "Internal Server Error",
+                             "# Failed to collect binary log metrics\n");
+  }
 
   srv_session_close(session);
 
-  return output;
+  return {200, "OK", output};
 }
 
 static int setup_listen_socket(const char *bind_addr, unsigned int port) {
@@ -835,21 +991,23 @@ static void *prometheus_listener_thread(void *arg) {
       g_requests_total.fetch_add(1, std::memory_order_relaxed);
 
       auto start = std::chrono::steady_clock::now();
-      std::string body = collect_metrics();
+      ScrapeResult scrape = collect_metrics();
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::steady_clock::now() - start);
-      g_last_scrape_duration_us.store(
-          static_cast<uint64_t>(elapsed.count()), std::memory_order_relaxed);
+      g_last_scrape_duration_us.store(static_cast<uint64_t>(elapsed.count()),
+                                      std::memory_order_relaxed);
 
       std::string response =
-          "HTTP/1.1 200 OK\r\n"
+          "HTTP/1.1 " + std::to_string(scrape.http_status) + " " +
+          scrape.reason_phrase +
+          "\r\n"
           "Content-Type: text/plain; version=0.0.4; charset=utf-8\r\n"
           "Content-Length: " +
-          std::to_string(body.size()) +
+          std::to_string(scrape.body.size()) +
           "\r\n"
           "Connection: close\r\n"
           "\r\n" +
-          body;
+          scrape.body;
 
       write_full(client_fd, response.c_str(), response.size());
     } else {
@@ -908,8 +1066,8 @@ static int prometheus_exporter_init(void *p) {
   my_thread_attr_init(&attr);
   my_thread_attr_setdetachstate(&attr, MY_THREAD_CREATE_JOINABLE);
 
-  if (my_thread_create(&ctx->listener_thread, &attr,
-                       prometheus_listener_thread, ctx) != 0) {
+  if (my_thread_create(&ctx->listener_thread, &attr, prometheus_listener_thread,
+                       ctx) != 0) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Prometheus exporter: failed to create listener thread");
     close(ctx->listen_fd);
@@ -924,8 +1082,7 @@ static int prometheus_exporter_init(void *p) {
                prom_port);
 
   if (prom_bind_address != nullptr &&
-      strcmp(prom_bind_address, "127.0.0.1") != 0 &&
-      strcmp(prom_bind_address, "localhost") != 0) {
+      strcmp(prom_bind_address, "127.0.0.1") != 0) {
     LogPluginErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
                  "Prometheus exporter is bound to %s which is not a "
                  "loopback address. The /metrics endpoint has no "
@@ -968,8 +1125,8 @@ static int prometheus_exporter_deinit(void *p) {
 static int show_requests_total(MYSQL_THD, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
-  longlong v = static_cast<longlong>(
-      g_requests_total.load(std::memory_order_relaxed));
+  longlong v =
+      static_cast<longlong>(g_requests_total.load(std::memory_order_relaxed));
   memcpy(buff, &v, sizeof(v));
   return 0;
 }

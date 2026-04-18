@@ -1,0 +1,9 @@
+include/rpl/init_source_replica.inc
+[connection master]
+include/rpl/stop_replica.inc
+# Stopped replicas still expose lag as NaN instead of dropping the series
+1
+mysql_replica_seconds_behind_source NaN
+mysql_replica_io_running 0
+mysql_replica_sql_running 0
+include/rpl/deinit.inc

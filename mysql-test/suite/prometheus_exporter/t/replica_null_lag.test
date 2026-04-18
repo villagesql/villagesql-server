@@ -1,0 +1,25 @@
+--source include/not_windows.inc
+--source suite/prometheus_exporter/inc/have_prometheus_exporter_plugin.inc
+
+--disable_query_log
+--disable_result_log
+--source include/rpl/init_source_replica.inc
+
+--connection slave
+--source include/rpl/stop_replica.inc
+
+--enable_result_log
+--enable_query_log
+
+--echo # Stopped replicas still expose lag as NaN instead of dropping the series
+--exec sh -c 'curl -s http://127.0.0.1:19113/metrics > "$MYSQLTEST_VARDIR/tmp/replica_null_lag.metrics"'
+--exec grep -c '^# TYPE mysql_replica_seconds_behind_source gauge$' "$MYSQLTEST_VARDIR/tmp/replica_null_lag.metrics"
+--exec grep '^mysql_replica_seconds_behind_source NaN$' "$MYSQLTEST_VARDIR/tmp/replica_null_lag.metrics" | head -1
+--exec grep '^mysql_replica_io_running 0$' "$MYSQLTEST_VARDIR/tmp/replica_null_lag.metrics" | head -1
+--exec grep '^mysql_replica_sql_running 0$' "$MYSQLTEST_VARDIR/tmp/replica_null_lag.metrics" | head -1
+--remove_file $MYSQLTEST_VARDIR/tmp/replica_null_lag.metrics
+
+--disable_query_log
+--disable_result_log
+--let $rpl_skip_sync= 1
+--source include/rpl/deinit.inc

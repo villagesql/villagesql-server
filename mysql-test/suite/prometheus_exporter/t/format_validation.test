@@ -4,11 +4,13 @@
 # Uses a perl block to fetch /metrics and validate:
 # - Every # TYPE line has a valid type (counter, gauge, untyped)
 # - Every # TYPE line is followed by a metric line with matching name
+# - Metric lines may optionally include Prometheus labels
 # - Metric names match [a-z_][a-z0-9_]*
 # - Every metric value is numeric or NaN/+Inf/-Inf per Prometheus spec
 # =============================================================================
 
 --source include/not_windows.inc
+--source suite/prometheus_exporter/inc/have_prometheus_exporter_plugin.inc
 
 --echo # Fetching and validating /metrics output format
 
@@ -21,6 +23,7 @@ my @lines = split /\n/, $output;
 my $errors = 0;
 my $metrics_count = 0;
 my $expect_metric_name = undef;
+my %seen_types;
 
 for (my $i = 0; $i < scalar @lines; $i++) {
   my $line = $lines[$i];
@@ -35,6 +38,10 @@ for (my $i = 0; $i < scalar @lines; $i++) {
       $errors++;
     }
     if ($line =~ /^# TYPE ([a-z_][a-z0-9_]*) (counter|gauge|untyped)$/) {
+      if ($seen_types{$1}++) {
+        print "FORMAT ERROR: duplicate TYPE line for '$1'\n";
+        $errors++;
+      }
       $expect_metric_name = $1;
     } else {
       print "FORMAT ERROR: invalid TYPE line: $line\n";
@@ -48,8 +55,8 @@ for (my $i = 0; $i < scalar @lines; $i++) {
   next if $line =~ /^#/;
 
   # Metric value line
-  if ($line =~ /^([a-z_][a-z0-9_]*) (.+)$/) {
-    my ($name, $value) = ($1, $2);
+  if ($line =~ /^([a-z_][a-z0-9_]*)(\{(?:[a-z_][a-z0-9_]*="(?:[^"\\]|\\["\\n])*"(?:,[a-z_][a-z0-9_]*="(?:[^"\\]|\\["\\n])*")*)\})? (.+)$/) {
+    my ($name, $value) = ($1, $3);
     $metrics_count++;
 
     # Check name matches expected from TYPE line

@@ -9,6 +9,7 @@
 # =============================================================================
 
 --source include/not_windows.inc
+--source suite/prometheus_exporter/inc/have_prometheus_exporter_plugin.inc
 
 # Verify plugin is loaded and enabled
 SHOW VARIABLES LIKE 'prometheus_exporter_enabled';

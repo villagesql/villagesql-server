@@ -1,4 +1,5 @@
 --source include/not_windows.inc
+--source suite/prometheus_exporter/inc/have_prometheus_exporter_plugin.inc
 
 --echo # Verify InnoDB metrics are present
 --exec curl -s http://127.0.0.1:19106/metrics | grep "^# TYPE mysql_innodb_metrics_" | head -3

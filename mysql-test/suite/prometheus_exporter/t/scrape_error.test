@@ -1,0 +1,11 @@
+--source include/not_windows.inc
+--source suite/prometheus_exporter/inc/have_prometheus_exporter_plugin.inc
+
+--echo # Failed scrapes return HTTP 500 instead of a false-success 200
+--exec curl -s -o "$MYSQLTEST_VARDIR/tmp/scrape_error.body" -w "%{http_code}\n" http://127.0.0.1:19112/metrics
+--exec grep '^# Failed to set security context (user missing or lacks privileges?)$' "$MYSQLTEST_VARDIR/tmp/scrape_error.body" | head -1
+--remove_file $MYSQLTEST_VARDIR/tmp/scrape_error.body
+
+--echo # Failed scrapes increment the exporter error counter
+--replace_regex /[0-9]+/NUM/
+SHOW STATUS LIKE 'Prometheus_exporter_errors_total';

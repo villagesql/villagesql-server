@@ -1,0 +1,7 @@
+# Failed scrapes return HTTP 500 instead of a false-success 200
+500
+# Failed to set security context (user missing or lacks privileges?)
+# Failed scrapes increment the exporter error counter
+SHOW STATUS LIKE 'Prometheus_exporter_errors_total';
+Variable_name	Value
+Prometheus_exporter_errors_total	NUM

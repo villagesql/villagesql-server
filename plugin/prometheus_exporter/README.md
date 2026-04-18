@@ -58,13 +58,15 @@ directly. This makes it resilient to MySQL version changes during rebases.
 ## Configuration
 
 The plugin is disabled by default. All variables are read-only (require
-server restart to change).
+server restart to change). Future versions may support dynamic changes to
+port and bind address without restart if there is sufficient interest.
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `prometheus_exporter_enabled` | BOOL | OFF | Enable the HTTP metrics endpoint |
 | `prometheus_exporter_port` | UINT | 9104 | TCP port to listen on (1024-65535) |
-| `prometheus_exporter_bind_address` | STRING | 127.0.0.1 | IP address to bind to |
+| `prometheus_exporter_bind_address` | STRING | 127.0.0.1 | Numeric IPv4 address to bind to |
+| `prometheus_exporter_security_user` | STRING | root | Internal user name used for collector sessions |
 
 ## Usage
 
@@ -79,13 +81,18 @@ prometheus-exporter-port=9104
 prometheus-exporter-bind-address=127.0.0.1
 ```
 
+Use a numeric IPv4 address for `prometheus_exporter_bind_address`. Hostnames
+such as `localhost` are not accepted by the current listener implementation.
+
 ### Load at runtime
 
 ```sql
 INSTALL PLUGIN prometheus_exporter SONAME 'prometheus_exporter.so';
--- Note: enabled defaults to OFF, so the HTTP server won't start
--- unless --prometheus-exporter-enabled=ON was set at startup
 ```
+
+Runtime installation is useful as a loadability smoke test. The HTTP endpoint
+still requires the read-only startup variables to be set when the server boots,
+so the recommended production path is to load the plugin from `my.cnf`.
 
 ### Scrape
 
@@ -127,7 +134,11 @@ point-in-time snapshots.
 - `value`, `status_counter`, `set_owner`, `set_member` -> Prometheus `gauge`
 
 **Replica Status**: All fields typed as `gauge`. Boolean fields
-(Replica_IO_Running, Replica_SQL_Running) are converted to 1/0.
+(Replica_IO_Running, Replica_SQL_Running) are converted to 1/0. When
+`SHOW REPLICA STATUS` returns multiple rows for named channels, samples are
+labeled with `channel="..."` so multi-source replication remains representable.
+The default unnamed channel remains unlabeled. `Seconds_Behind_Source=NULL`
+is exported as `NaN`.
 
 **Binary Logs**: Both metrics (file_count, size_bytes_total) are `gauge`.
 
@@ -149,7 +160,19 @@ The plugin exposes its own operational metrics via `SHOW GLOBAL STATUS`:
   controls. Prometheus typically scrapes over a private network.
 - **Single-threaded**: One scrape at a time. Concurrent requests queue on
   the TCP backlog. This is fine for Prometheus's 15-60s scrape interval.
-- **Linux only**: Uses POSIX sockets (socket/bind/listen/accept/poll).
-  Windows support would require Winsock adaptation.
+- **Linux only**: The plugin build is gated to Linux. The current
+  implementation uses Linux-specific APIs such as `eventfd()` and
+  `MSG_NOSIGNAL`.
+- **Bind address format**: The current listener accepts numeric IPv4
+  addresses only. Use `127.0.0.1`, not `localhost`.
 - **Read-only variables**: Port and bind address require a server restart
-  to change.
+  to change (may become dynamic in future versions if demand warrants)
+
+## Verification Notes
+
+The Linux verification for this branch covers:
+
+- runtime `INSTALL PLUGIN` / `UNINSTALL PLUGIN`
+- endpoint scrapes from a single server
+- multi-channel replication with one replica connected to two sources
+- Prometheus format validation with labeled replica metrics

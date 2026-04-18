@@ -1,0 +1,41 @@
+--source include/not_windows.inc
+--source suite/prometheus_exporter/inc/have_prometheus_exporter_plugin.inc
+
+--disable_result_log
+--disable_query_log
+--disable_warnings
+--let $rpl_topology= 1->2,3->2
+--let $rpl_multi_source= 1
+--let $rpl_skip_start_slave= 1
+--source include/rpl/init.inc
+
+--connection server_2
+--let $rpl_channel_name= 'channel_1'
+--source include/rpl/start_replica.inc
+--let $rpl_channel_name= 'channel_3'
+--source include/rpl/start_replica.inc
+--enable_warnings
+
+--let $wait_condition= SELECT COUNT(*) = 2 FROM performance_schema.replication_connection_status WHERE CHANNEL_NAME IN ('channel_1', 'channel_3') AND SERVICE_STATE='ON'
+--source include/wait_condition_or_abort.inc
+--let $wait_condition= SELECT COUNT(*) = 2 FROM performance_schema.replication_applier_status WHERE CHANNEL_NAME IN ('channel_1', 'channel_3') AND SERVICE_STATE='ON'
+--source include/wait_condition_or_abort.inc
+--enable_result_log
+--enable_query_log
+
+--echo # Verify multi-channel replica metrics carry a channel label
+--exec sh -c 'curl -s http://127.0.0.1:19111/metrics > "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics"'
+--exec grep -c '^# TYPE mysql_replica_read_source_log_pos gauge$' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" || true
+--exec grep -c '^mysql_replica_read_source_log_pos{channel="' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" || true
+--exec grep -c '^mysql_replica_read_source_log_pos{channel="channel_1"} ' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" || true
+--exec grep -c '^mysql_replica_read_source_log_pos{channel="channel_3"} ' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" || true
+--exec grep '^mysql_replica_io_running{channel="channel_1"} 1$' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" | head -1
+--exec grep '^mysql_replica_io_running{channel="channel_3"} 1$' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" | head -1
+--exec grep '^mysql_replica_sql_running{channel="channel_1"} 1$' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" | head -1
+--exec grep '^mysql_replica_sql_running{channel="channel_3"} 1$' "$MYSQLTEST_VARDIR/tmp/replica_channels.metrics" | head -1
+--remove_file $MYSQLTEST_VARDIR/tmp/replica_channels.metrics
+
+--disable_result_log
+--disable_query_log
+--let $rpl_skip_sync= 1
+--source include/rpl/deinit.inc

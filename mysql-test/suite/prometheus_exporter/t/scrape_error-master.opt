@@ -1,0 +1,1 @@
+$PROMETHEUS_EXPORTER_PLUGIN_OPT $PROMETHEUS_EXPORTER_PLUGIN_LOAD --loose-prometheus-exporter-enabled=ON --loose-prometheus-exporter-port=19112 --loose-prometheus-exporter-bind-address=127.0.0.1 --loose-prometheus-exporter-security-user=missing_prometheus_exporter_user
