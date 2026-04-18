@@ -1,3 +1,40 @@
+/**
+ * @file prometheus_exporter.cc
+ * @brief Embedded Prometheus metrics exporter plugin for VillageSQL/MySQL.
+ *
+ * This plugin serves Prometheus text exposition format metrics via an
+ * embedded HTTP server, eliminating the need for an external
+ * @c mysqld_exporter sidecar process.
+ *
+ * ## Architecture
+ *
+ * The plugin spawns a single background thread that runs a poll-based
+ * HTTP server on the configured port. When Prometheus scrapes @c /metrics,
+ * the plugin executes standard SQL queries via @c srv_session (no external
+ * network connection) and formats results in Prometheus text format.
+ *
+ * ## Supported Metric Sources
+ *
+ * - @c SHOW GLOBAL STATUS (mysql_global_status_*)
+ * - @c SHOW GLOBAL VARIABLES (mysql_global_variables_*)
+ * - @c INFORMATION_SCHEMA.INNODB_METRICS (mysql_innodb_metrics_*)
+ * - @c SHOW REPLICA STATUS (mysql_replica_*) with multi-channel labels
+ * - @c SHOW BINARY LOGS (mysql_binlog_*)
+ *
+ * ## Security Notes
+ *
+ * The HTTP endpoint has no authentication or TLS. Use a loopback bind address
+ * and restrict network access to the port. The plugin executes all queries
+ * through the server's internal session service using a configurable security
+ * context user.
+ *
+ * ## Platform Notes
+ *
+ * Requires Linux due to use of @c eventfd() and @c MSG_NOSIGNAL.
+ *
+ * @sa plugin/prometheus_exporter/README.md
+ */
+
 /* Copyright (c) 2025, Oracle and/or its affiliates.
    Copyright (c) 2026 VillageSQL Contributors
 
@@ -62,10 +99,39 @@ static SERVICE_TYPE(registry) *reg_srv = nullptr;
 SERVICE_TYPE(log_builtins) *log_bi = nullptr;
 SERVICE_TYPE(log_builtins_string) *log_bs = nullptr;
 
+/**
+ * @name Plugin Configuration Variables
+ * @{
+ */
+
+/** @brief Enable the Prometheus metrics exporter HTTP endpoint. */
 static bool prom_enabled = false;
+
+/**
+ * @brief TCP port for the Prometheus exporter HTTP endpoint.
+ *
+ * Valid range: 1024-65535. Requires server restart to change.
+ */
 static unsigned int prom_port = 9104;
+
+/**
+ * @brief IPv4 address to bind the HTTP endpoint to.
+ *
+ * Must be a numeric IPv4 address (e.g. "127.0.0.1"). Hostnames are not
+ * accepted. Requires server restart to change.
+ */
 static char *prom_bind_address = nullptr;
+
+/**
+ * @brief MySQL account used for internal session-based metric queries.
+ *
+ * The account must exist on localhost and have sufficient privileges to
+ * query INNODB_METRICS, SHOW REPLICA STATUS, and related tables.
+ * Requires server restart to change.
+ */
 static char *prom_security_user = nullptr;
+
+/** @} */
 
 static MYSQL_SYSVAR_BOOL(enabled, prom_enabled,
                          PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
@@ -104,13 +170,42 @@ static SYS_VAR *prom_system_vars[] = {
     nullptr,
 };
 
-// Module-scope counters. Lifetime independent of the context so that
-// SHOW STATUS callbacks can safely read them even during plugin
-// install/uninstall races.
+/**
+ * @name Plugin Operational Metrics
+ * @{
+ */
+
+/**
+ * @brief Total number of /metrics scrapes served.
+ *
+ * Exposed via SHOW GLOBAL STATUS as Prometheus_exporter_requests_total.
+ */
 static std::atomic<uint64_t> g_requests_total{0};
+
+/**
+ * @brief Total number of scrape errors encountered.
+ *
+ * Incremented when any collector query fails. Exposed via
+ * SHOW GLOBAL STATUS as Prometheus_exporter_errors_total.
+ */
 static std::atomic<uint64_t> g_errors_total{0};
+
+/**
+ * @brief Duration of the last scrape in microseconds.
+ *
+ * Exposed via SHOW GLOBAL STATUS as
+ * Prometheus_exporter_scrape_duration_microseconds.
+ */
 static std::atomic<uint64_t> g_last_scrape_duration_us{0};
 
+/** @} */
+
+/**
+ * @brief Per-plugin-instance context for the HTTP listener thread.
+ *
+ * Contains all state needed to manage the background listener thread
+ * including file descriptors and shutdown coordination.
+ */
 struct PrometheusContext {
   my_thread_handle listener_thread;
   int listen_fd;
