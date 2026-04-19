@@ -2804,13 +2804,6 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
 
   func_runtime_ctx->sp = this;
 
-  // VillageSQL: inject custom type contexts for SP params after sp is set.
-  if (func_runtime_ctx->maybe_inject_custom_sp_params()) {
-    thd->swap_query_arena(backup_arena, &call_arena);
-    err_status = true;
-    goto err_with_cleanup;
-  }
-
   /*
     We have to switch temporarily back to callers arena/memroot.
     Function arguments belong to the caller and so the may reference
@@ -2818,6 +2811,14 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
     this function call will be finished (e.g. in Item::cleanup()).
   */
   thd->swap_query_arena(backup_arena, &call_arena);
+
+  // VillageSQL: inject custom type contexts for SP params after sp is set.
+  // Done after the arena swap since injection allocates into sp_rcontext's
+  // own mem_root, not the query arena.
+  if (func_runtime_ctx->maybe_inject_custom_sp_params()) {
+    err_status = true;
+    goto err_with_cleanup;
+  }
 
   /*
     Pass arguments.

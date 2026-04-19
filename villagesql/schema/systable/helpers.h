@@ -56,6 +56,13 @@ inline std::string make_qualified_base_name(const std::string &extension_name,
   return extension_name + "." + type_name;
 }
 
+// Returns true if name is a qualified custom type name (contains a dot),
+// e.g. "vsql_complex.COMPLEX". The dot is the canonical separator defined
+// by make_qualified_base_name().
+inline bool is_qualified_name(const std::string &name) {
+  return name.find('.') != std::string::npos;
+}
+
 // Helper functions for reading a value from a Field.
 void read_string_field(Field *f, std::string &out);
 void read_unsigned_field(Field *f, unsigned int &out);

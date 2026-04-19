@@ -59,7 +59,7 @@
 #include "string_with_len.h"
 #include "typelib.h"
 
-#include "villagesql/types/util.h"
+#include "villagesql/schema/systable/helpers.h"
 
 void prepare_sp_chistics_from_dd_routine(const dd::Routine *routine,
                                          st_sp_chistics *sp_chistics) {
@@ -141,14 +141,14 @@ static void prepare_type_string_from_dd_param(THD *thd,
                                               String *type_str) {
   DBUG_TRACE;
 
-  // VillageSQL: at CREATE PROCEDURE/FUNCTION time, custom-typed params have
-  // their data_type_utf8 set to the fully qualified type name (e.g.
-  // "vsql_complex.COMPLEX"). Plain SQL types never contain a dot in
-  // data_type_utf8, so the dot is an unambiguous signal that this param uses a
-  // VillageSQL custom type. We use it here rather than a victionary lookup
-  // because this function may be called before the victionary is initialized
-  // and has no SP name context to key a lookup on.
-  if (villagesql::IsQualifiedName(param->data_type_utf8())) {
+  // VillageSQL: at CREATE PROCEDURE/FUNCTION time, get_param_type_utf8() stores
+  // the fully qualified custom type name in data_type_utf8. A qualified name
+  // is an unambiguous signal that this param uses a VillageSQL custom type.
+  // Note: sp_params serves a different purpose — it stores the extension/type
+  // mapping for runtime TypeContext injection at CALL time. Here we only need
+  // the type name string to feed back to the parser, which data_type_utf8
+  // already provides directly.
+  if (villagesql::is_qualified_name(param->data_type_utf8().c_str())) {
     type_str->copy(param->data_type_utf8().c_str(),
                    param->data_type_utf8().length(), system_charset_info);
     return;
