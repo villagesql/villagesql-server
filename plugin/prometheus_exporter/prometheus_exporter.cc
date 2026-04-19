@@ -802,10 +802,15 @@ static void binlog_handle_ok(void *ctx, uint, uint, ulonglong, ulonglong,
   }
 }
 
-static void binlog_handle_error(void *ctx, uint, const char *, const char *) {
+static void binlog_handle_error(void *ctx, uint sql_errno, const char *,
+                                 const char *) {
   auto *bc = static_cast<BinlogCtx *>(ctx);
   bc->error = true;
-  g_errors_total.fetch_add(1, std::memory_order_relaxed);
+  // ER_NO_BINARY_LOGGING is expected when binary logging is disabled, so don't
+  // count it as an error for monitoring purposes.
+  if (sql_errno != ER_NO_BINARY_LOGGING) {
+    g_errors_total.fetch_add(1, std::memory_order_relaxed);
+  }
 }
 
 static const struct st_command_service_cbs binlog_cbs = {
@@ -947,6 +952,9 @@ static ScrapeResult collect_metrics() {
                              "# Failed to collect replica metrics\n");
   }
   if (!collect_binlog(session, output)) {
+    // Binlog collection is optional. Errors (like ER_NO_BINARY_LOGGING when
+    // binary logging is disabled) are handled by binlog_handle_error and are
+    // non-fatal, so we continue with other metrics.
   }
 
   srv_session_close(session);
