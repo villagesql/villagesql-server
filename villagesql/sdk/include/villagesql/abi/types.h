@@ -173,6 +173,9 @@ typedef enum : unsigned int {
                    // + get_variable/set_variable/read_keyring/write_keyring
                    //   function pointers in vef_register_arg_t: access to
                    //   MySQL system variables and keyring component.
+                   // + run_query function pointer in vef_register_arg_t:
+                   //   execute a SQL query from a background thread and
+                   //   receive results row by row via callbacks.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -253,6 +256,75 @@ typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
                                                      const unsigned char *data,
                                                      size_t data_len);
 
+// =============================================================================
+// Query execution service (protocol >= VEF_PROTOCOL_2)
+// =============================================================================
+//
+// run_query lets extensions execute SQL from a background thread and receive
+// results row by row. It is intended for use from threads registered via
+// on_install / register_background_thread (Protocol 4), but can be called from
+// any thread that has a MySQL THD attached.
+//
+// Column metadata is delivered via vef_column_meta_fn before the first row.
+// Each row is delivered as an array of vef_col_value_t values via
+// vef_row_fn. All string values (including numeric types requested as text)
+// point into server-managed memory valid only for the duration of that
+// callback; copy any values you need to retain.
+//
+// Return values for callbacks:
+//   0  continue processing
+//   1  abort — the query is cancelled and run_query returns an error
+
+// A single column value delivered to vef_row_fn.
+// The server always uses text representation (CS_TEXT_REPRESENTATION), so
+// every value arrives as a null-terminated string in `str` / `str_len`, or
+// is_null == true for SQL NULL.
+typedef struct {
+  bool is_null;
+  const char *str;  // null-terminated; valid only during the row callback
+  size_t str_len;
+} vef_col_value_t;
+
+// Called once before the first row with column names and count.
+//   col_names:  array of col_count null-terminated column name strings.
+//   col_count:  number of columns in the result set.
+//   ctx:        the user context pointer passed to run_query.
+// Return 0 to continue, 1 to abort.
+typedef int (*vef_column_meta_fn)(const char *const *col_names,
+                                  unsigned int col_count, void *ctx);
+
+// Called once per result row.
+//   values:     array of col_count vef_col_value_t, one per column.
+//   col_count:  number of columns (matches the value from vef_column_meta_fn).
+//   ctx:        the user context pointer passed to run_query.
+// Return 0 to continue, 1 to abort.
+typedef int (*vef_row_fn)(const vef_col_value_t *values, unsigned int col_count,
+                          void *ctx);
+
+typedef enum {
+  VEF_QUERY_OK = 0,       // query executed successfully
+  VEF_QUERY_ERROR = 1,    // server returned an error (SQL error)
+  VEF_QUERY_ABORTED = 2,  // a callback returned 1
+} vef_run_query_result_t;
+
+// run_query: execute a SQL statement and stream rows to the caller.
+//   sql:         null-terminated SQL string.
+//   sql_len:     byte length of sql (not including the null terminator).
+//   meta_cb:     called once with column metadata before the first row;
+//                may be NULL if metadata is not needed.
+//   row_cb:      called once per result row; may be NULL for statements
+//                that return no rows (INSERT, SET, etc.).
+//   ctx:         opaque pointer forwarded to meta_cb and row_cb.
+//   error_msg:   on VEF_QUERY_ERROR, a null-terminated description is written
+//                here; must point to a buffer of at least VEF_MAX_ERROR_LEN
+//                bytes; may be NULL if the caller does not need the message.
+// Returns VEF_QUERY_OK, VEF_QUERY_ERROR, or VEF_QUERY_ABORTED.
+typedef vef_run_query_result_t (*vef_run_query_fn)(const char *sql,
+                                                   size_t sql_len,
+                                                   vef_column_meta_fn meta_cb,
+                                                   vef_row_fn row_cb, void *ctx,
+                                                   char *error_msg);
+
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -270,6 +342,7 @@ typedef struct {
   vef_set_variable_fn set_variable;
   vef_read_keyring_fn read_keyring;
   vef_write_keyring_fn write_keyring;
+  vef_run_query_fn run_query;
 } vef_register_arg_t;
 
 typedef struct {

@@ -15,6 +15,7 @@
 
 SET(VILLAGESQL_SERVICES_SOURCES
   keyring.cc
+  run_query.cc
   sys_vars.cc
 )
 

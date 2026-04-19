@@ -1,0 +1,65 @@
+# Install extension
+INSTALL EXTENSION vsql_run_query_test;
+# run_query_count: basic row count
+CREATE TABLE t1 (id INT, val VARCHAR(32));
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM t1');
+vsql_run_query_test.run_query_count('SELECT * FROM t1')
+3
+# run_query_count: empty result set returns 0
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM t1 WHERE 1=0');
+vsql_run_query_test.run_query_count('SELECT * FROM t1 WHERE 1=0')
+0
+# run_query_count: NULL sql returns NULL
+SELECT vsql_run_query_test.run_query_count(NULL);
+vsql_run_query_test.run_query_count(NULL)
+NULL
+# run_query_count: statement that returns no rows (INSERT) returns 0
+SELECT vsql_run_query_test.run_query_count('INSERT INTO t1 VALUES (4, ''d'')');
+vsql_run_query_test.run_query_count('INSERT INTO t1 VALUES (4, ''d'')')
+0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+# run_query_first_col: returns first column of first row
+SELECT vsql_run_query_test.run_query_first_col('SELECT val FROM t1 ORDER BY id LIMIT 1');
+vsql_run_query_test.run_query_first_col('SELECT val FROM t1 ORDER BY id LIMIT 1')
+a
+# run_query_first_col: empty result set returns NULL
+SELECT vsql_run_query_test.run_query_first_col('SELECT val FROM t1 WHERE 1=0');
+vsql_run_query_test.run_query_first_col('SELECT val FROM t1 WHERE 1=0')
+NULL
+# run_query_first_col: NULL sql returns NULL
+SELECT vsql_run_query_test.run_query_first_col(NULL);
+vsql_run_query_test.run_query_first_col(NULL)
+NULL
+# run_query_first_col: only first row returned when multiple rows exist
+SELECT vsql_run_query_test.run_query_first_col('SELECT val FROM t1 ORDER BY id');
+vsql_run_query_test.run_query_first_col('SELECT val FROM t1 ORDER BY id')
+a
+# run_query_count: SQL error returns NULL with a warning
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM no_such_table_xyz');
+vsql_run_query_test.run_query_count('SELECT * FROM no_such_table_xyz')
+NULL
+Warnings:
+Warning	3200	VDF error in function 'run_query_count': MySQL error 1146: Table 'test.no_such_table_xyz' doesn't exist
+# run_query_first_col: SQL error returns NULL with a warning
+SELECT vsql_run_query_test.run_query_first_col('SELECT * FROM no_such_table_xyz');
+vsql_run_query_test.run_query_first_col('SELECT * FROM no_such_table_xyz')
+NULL
+Warnings:
+Warning	3200	VDF error in function 'run_query_first_col': MySQL error 1146: Table 'test.no_such_table_xyz' doesn't exist
+# run_query_count: aggregation query
+SELECT vsql_run_query_test.run_query_count('SELECT @@global.max_connections');
+vsql_run_query_test.run_query_count('SELECT @@global.max_connections')
+1
+# run_query_first_col: system variable value via SQL
+SELECT vsql_run_query_test.run_query_first_col('SELECT 42');
+vsql_run_query_test.run_query_first_col('SELECT 42')
+42
+DROP TABLE t1;
+# Uninstall extension
+UNINSTALL EXTENSION vsql_run_query_test;
+# VDFs no longer exist after uninstall
+SELECT vsql_run_query_test.run_query_count('SELECT 1');
+ERROR 42000: FUNCTION vsql_run_query_test.run_query_count does not exist

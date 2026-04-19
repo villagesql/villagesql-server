@@ -1,0 +1,54 @@
+# Test the run_query service via the vsql_run_query_test extension.
+# Covers: row counting, first-column extraction, NULL inputs, empty result
+# sets, SQL errors, and uninstall cleanup.
+
+--echo # Install extension
+INSTALL EXTENSION vsql_run_query_test;
+
+--echo # run_query_count: basic row count
+CREATE TABLE t1 (id INT, val VARCHAR(32));
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM t1');
+
+--echo # run_query_count: empty result set returns 0
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM t1 WHERE 1=0');
+
+--echo # run_query_count: NULL sql returns NULL
+SELECT vsql_run_query_test.run_query_count(NULL);
+
+--echo # run_query_count: statement that returns no rows (INSERT) returns 0
+SELECT vsql_run_query_test.run_query_count('INSERT INTO t1 VALUES (4, ''d'')');
+SELECT COUNT(*) FROM t1;
+
+--echo # run_query_first_col: returns first column of first row
+SELECT vsql_run_query_test.run_query_first_col('SELECT val FROM t1 ORDER BY id LIMIT 1');
+
+--echo # run_query_first_col: empty result set returns NULL
+SELECT vsql_run_query_test.run_query_first_col('SELECT val FROM t1 WHERE 1=0');
+
+--echo # run_query_first_col: NULL sql returns NULL
+SELECT vsql_run_query_test.run_query_first_col(NULL);
+
+--echo # run_query_first_col: only first row returned when multiple rows exist
+SELECT vsql_run_query_test.run_query_first_col('SELECT val FROM t1 ORDER BY id');
+
+--echo # run_query_count: SQL error returns NULL with a warning
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM no_such_table_xyz');
+
+--echo # run_query_first_col: SQL error returns NULL with a warning
+SELECT vsql_run_query_test.run_query_first_col('SELECT * FROM no_such_table_xyz');
+
+--echo # run_query_count: aggregation query
+SELECT vsql_run_query_test.run_query_count('SELECT @@global.max_connections');
+
+--echo # run_query_first_col: system variable value via SQL
+SELECT vsql_run_query_test.run_query_first_col('SELECT 42');
+
+DROP TABLE t1;
+
+--echo # Uninstall extension
+UNINSTALL EXTENSION vsql_run_query_test;
+
+--echo # VDFs no longer exist after uninstall
+--error ER_SP_DOES_NOT_EXIST
+SELECT vsql_run_query_test.run_query_count('SELECT 1');

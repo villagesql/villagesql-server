@@ -330,4 +330,30 @@ IF(NOT WITHOUT_SERVER)
 
   add_custom_target(storage_test_veb ALL)
   add_dependencies(storage_test_veb copy_vsql_storage_test_veb)
+
+  ExternalProject_Add(vsql_run_query_test_extension
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-run-query-test
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-run-query-test-build
+    CMAKE_GENERATOR ${CMAKE_GENERATOR}
+    CMAKE_ARGS
+      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
+      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
+      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+    DEPENDS sdk
+    BUILD_ALWAYS ON
+    INSTALL_COMMAND ""
+  )
+
+  add_custom_target(copy_vsql_run_query_test_veb
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-run-query-test-build/vsql_run_query_test.veb
+      ${CMAKE_BINARY_DIR}/veb_output_directory/
+    DEPENDS vsql_run_query_test_extension
+    COMMENT "Copying vsql_run_query_test.veb to veb_output_directory"
+  )
+
+  add_custom_target(run_query_test_veb ALL)
+  add_dependencies(run_query_test_veb copy_vsql_run_query_test_veb)
 ENDIF()

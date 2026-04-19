@@ -1,0 +1,30 @@
+# Test that run_query returns custom type values (COMPLEX, TVECTOR) as strings.
+# Custom types have no typed cb_get_* callback in the Command Services API —
+# they come through as their serialized text representation.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+INSTALL EXTENSION vsql_run_query_test;
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  c vsql_complex.COMPLEX,
+  v TVECTOR(3)
+);
+INSERT INTO t1 VALUES (1, '(1.0, 2.0)', '[1, 2, 3]');
+INSERT INTO t1 VALUES (2, '(3.0, 4.0)', '[4, 5, 6]');
+
+--echo # COMPLEX values are returned as their text representation
+SELECT vsql_run_query_test.run_query_first_col('SELECT c FROM t1 ORDER BY id LIMIT 1');
+
+--echo # TVECTOR values are returned as their text representation
+SELECT vsql_run_query_test.run_query_first_col('SELECT v FROM t1 ORDER BY id LIMIT 1');
+
+--echo # row count works on tables with custom type columns
+SELECT vsql_run_query_test.run_query_count('SELECT * FROM t1');
+
+DROP TABLE t1;
+
+UNINSTALL EXTENSION vsql_run_query_test;
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

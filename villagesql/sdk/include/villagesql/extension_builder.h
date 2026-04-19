@@ -34,6 +34,7 @@
 #include <villagesql/sdk_version.h>
 #include <villagesql/type_builder.h>
 #include <villagesql/vsql/keyring.h>
+#include <villagesql/vsql/run_query.h>
 #include <villagesql/vsql/sys_var_builder.h>
 
 namespace villagesql {
@@ -261,6 +262,7 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
     villagesql::sys_var::g_set_variable = arg->set_variable;
     villagesql::keyring::g_read_keyring = arg->read_keyring;
     villagesql::keyring::g_write_keyring = arg->write_keyring;
+    villagesql::g_run_query = arg->run_query;
   }
 
   if (arg->protocol < ext.min_protocol()) {

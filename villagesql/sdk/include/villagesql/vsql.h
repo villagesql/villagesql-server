@@ -82,6 +82,9 @@
 // Keyring access: vsql::keyring::read(), vsql::keyring::write()
 #include <villagesql/vsql/keyring.h>
 
+// SQL query execution from background threads: villagesql::run_query()
+#include <villagesql/vsql/run_query.h>
+
 // Extension builder and VEF_GENERATE_ENTRY_POINTS macro
 #include <villagesql/extension_builder.h>
 
@@ -100,9 +103,10 @@ using villagesql::func_builder::make_type_decode;
 using villagesql::func_builder::make_type_encode;
 using villagesql::func_builder::make_type_hash;
 
-// Re-export sys_var and keyring namespaces
+// Re-export sys_var, keyring, and run_query
 namespace sys_var = villagesql::sys_var;
 namespace keyring = villagesql::keyring;
+using villagesql::run_query;
 using villagesql::sys_var_builder::make_sys_var_bool;
 using villagesql::sys_var_builder::make_sys_var_double;
 using villagesql::sys_var_builder::make_sys_var_int;

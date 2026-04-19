@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -168,7 +169,7 @@ bool Protocol_callback::store_field(const Field *field) {
     case CS_TEXT_REPRESENTATION: {
       if (field->is_null()) return store_null();
       StringBuffer<MAX_FIELD_WIDTH> buffer;
-      return store(field->val_str(&buffer));
+      return store(field->val_external_str(&buffer));
     }
     case CS_BINARY_REPRESENTATION:
       return field->send_to_protocol(this);
