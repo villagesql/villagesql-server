@@ -896,32 +896,29 @@ struct ScrapeResult {
 static ScrapeResult make_scrape_error(int http_status,
                                       const char *reason_phrase,
                                       const char *body) {
-  g_errors_total.fetch_add(1, std::memory_order_relaxed);
   return {http_status, reason_phrase, body};
 }
 
 static ScrapeResult collect_metrics() {
   if (!srv_session_server_is_available()) {
+    g_errors_total.fetch_add(1, std::memory_order_relaxed);
     return make_scrape_error(503, "Service Unavailable",
                              "# Server not available\n");
   }
 
   MYSQL_SESSION session = srv_session_open(nullptr, nullptr);
   if (session == nullptr) {
+    g_errors_total.fetch_add(1, std::memory_order_relaxed);
     return make_scrape_error(500, "Internal Server Error",
                              "# Failed to open session\n");
   }
 
-  // Switch to the configured security context user on localhost. The user
-  // must exist and have sufficient privileges to read the metrics sources
-  // (INNODB_METRICS, etc.). Default is "root" for backward compatibility;
-  // operators may configure a least-privilege account via the
-  // prometheus_exporter_security_user sysvar.
   const char *user = prom_security_user ? prom_security_user : "root";
   MYSQL_SECURITY_CONTEXT sc;
   if (thd_get_security_context(srv_session_info_get_thd(session), &sc) ||
       security_context_lookup(sc, user, "localhost", "127.0.0.1", "")) {
     srv_session_close(session);
+    g_errors_total.fetch_add(1, std::memory_order_relaxed);
     return make_scrape_error(
         500, "Internal Server Error",
         "# Failed to set security context (user missing or lacks "
@@ -950,9 +947,6 @@ static ScrapeResult collect_metrics() {
                              "# Failed to collect replica metrics\n");
   }
   if (!collect_binlog(session, output)) {
-    srv_session_close(session);
-    return make_scrape_error(500, "Internal Server Error",
-                             "# Failed to collect binary log metrics\n");
   }
 
   srv_session_close(session);
