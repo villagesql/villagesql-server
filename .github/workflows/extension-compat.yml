@@ -100,7 +100,7 @@ jobs:
           fi
 
           # Cross-product: one matrix entry per (platform, extension, abi) triple
-          MATRIX=$(jq -n \
+          MATRIX=$(jq -cn \
             --argjson platforms "$PLATFORMS" \
             --argjson extensions "$EXTS_JSON" \
             --argjson abis "$ABIS" \
