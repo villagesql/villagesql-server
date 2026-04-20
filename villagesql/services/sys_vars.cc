@@ -44,10 +44,37 @@ struct RegisteredSysVar {
   std::string extension_name;
   std::string var_name;
   vef_var_type_t type;
+  // Storage pointer for this variable (same value passed to register_variable
+  // as variable_value). Used to look up on_change from the update trampoline.
+  void *value_ptr;
+  vef_sys_var_on_change_func_t on_change;
 };
 
 std::mutex g_sys_vars_mutex;
 std::vector<RegisteredSysVar> g_sys_vars;
+
+// Generic update trampoline used when on_change is non-null.
+// Performs the default memcpy update then calls the extension callback.
+static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
+                                          const void *save) {
+  // The default update for all variable types is a pointer-sized memcpy.
+  memcpy(val_ptr, save, sizeof(void *));
+
+  vef_sys_var_on_change_func_t on_change = nullptr;
+  const char *var_name = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+    for (const RegisteredSysVar &v : g_sys_vars) {
+      if (v.value_ptr == val_ptr) {
+        on_change = v.on_change;
+        var_name = v.var_name.c_str();
+        break;
+      }
+    }
+  }
+
+  if (on_change != nullptr && var_name != nullptr) on_change(var_name);
+}
 
 }  // namespace
 
@@ -242,9 +269,12 @@ bool register_sys_vars_from_extension(
         break;
     }
 
+    mysql_sys_var_update_func update_fn =
+        v->on_change != nullptr ? vef_sys_var_update_trampoline : nullptr;
+
     if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
                                    v->comment ? v->comment : "", nullptr,
-                                   nullptr, check_arg, value_ptr)) {
+                                   update_fn, check_arg, value_ptr)) {
       LogVSQL(ERROR_LEVEL, "Failed to register system variable '%s' for extension '%s'",
               v->name, extension_name.c_str());
       error = true;
@@ -253,7 +283,8 @@ bool register_sys_vars_from_extension(
 
     {
       std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-      g_sys_vars.push_back({extension_name, std::string(v->name), v->type});
+      g_sys_vars.push_back({extension_name, std::string(v->name), v->type,
+                            value_ptr, v->on_change});
     }
 
     LogVSQL(INFORMATION_LEVEL, "Registered system variable '%s' for extension '%s'",

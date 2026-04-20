@@ -779,6 +779,12 @@ typedef enum : int {
   VEF_VAR_STR = 3,
 } vef_var_type_t;
 
+// Called after the server writes a new value to the variable's storage
+// pointer. The new value is already visible via the storage pointer at the
+// time this function is called. The variable name (without extension prefix)
+// is passed so a single callback can handle multiple variables.
+typedef void (*vef_sys_var_on_change_func_t)(const char *var_name);
+
 typedef struct {
   vef_protocol_t protocol;
 
@@ -789,6 +795,10 @@ typedef struct {
   const char *comment;
 
   vef_var_type_t type;
+
+  // Optional. Called after the server writes a new value to the variable.
+  // nullptr means no notification.
+  vef_sys_var_on_change_func_t on_change;
 
   // Pointer to storage in the extension .so. Must remain valid for the
   // lifetime of the extension. MySQL writes directly to this storage when

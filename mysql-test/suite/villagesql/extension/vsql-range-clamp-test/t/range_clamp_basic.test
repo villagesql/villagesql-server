@@ -1,0 +1,41 @@
+# Test on_change callbacks enforcing min_setting <= max_setting invariant.
+#
+# Verifies:
+# - Default values (min=0, max=100)
+# - Setting min above max raises max to match
+# - Setting max below min lowers min to match
+# - Independent changes within the current range leave the other unchanged
+# - Setting both to the same value is allowed
+
+INSTALL EXTENSION vsql_range_clamp_test;
+
+--echo # Verify defaults
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+--echo # Setting min above max raises max to match
+SET GLOBAL vsql_range_clamp_test.min_setting = 200;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+--echo # Setting max below min lowers min to match
+SET GLOBAL vsql_range_clamp_test.max_setting = 50;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+--echo # Independent change within range leaves other unchanged
+SET GLOBAL vsql_range_clamp_test.min_setting = 10;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+SET GLOBAL vsql_range_clamp_test.max_setting = 80;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+--echo # Setting both to same value is allowed
+SET GLOBAL vsql_range_clamp_test.min_setting = 42;
+SET GLOBAL vsql_range_clamp_test.max_setting = 42;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+UNINSTALL EXTENSION vsql_range_clamp_test;

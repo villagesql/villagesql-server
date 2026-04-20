@@ -41,20 +41,28 @@ namespace villagesql {
 namespace sys_var_builder {
 
 // Wraps a single vef_sys_var_desc_t by value so the builder can store it
-// in a compile-time tuple.
+// in a compile-time tuple. Call .on_change(&fn) to register a callback that
+// fires after the server writes a new value.
 struct SysVarDescriptor {
   vef_sys_var_desc_t desc;
+
+  constexpr SysVarDescriptor on_change(vef_sys_var_on_change_func_t fn) const {
+    SysVarDescriptor copy = *this;
+    copy.desc.on_change = fn;
+    return copy;
+  }
 };
 
 constexpr SysVarDescriptor make_sys_var_bool(const char *name,
                                              const char *comment,
                                              bool *value_ptr, bool def_val) {
-  return SysVarDescriptor{.desc = {.protocol = VEF_PROTOCOL_2,
-                                   .name = name,
-                                   .comment = comment,
-                                   .type = VEF_VAR_BOOL,
-                                   .boolean = {.value_ptr = value_ptr,
-                                               .def_val = def_val}}};
+  return SysVarDescriptor{
+      .desc = {.protocol = VEF_PROTOCOL_2,
+               .name = name,
+               .comment = comment,
+               .type = VEF_VAR_BOOL,
+               .on_change = nullptr,
+               .boolean = {.value_ptr = value_ptr, .def_val = def_val}}};
 }
 
 constexpr SysVarDescriptor make_sys_var_int(const char *name,
@@ -67,6 +75,7 @@ constexpr SysVarDescriptor make_sys_var_int(const char *name,
                                    .name = name,
                                    .comment = comment,
                                    .type = VEF_VAR_INT,
+                                   .on_change = nullptr,
                                    .integer = {.value_ptr = value_ptr,
                                                .def_val = def_val,
                                                .min_val = min_val,
@@ -82,6 +91,7 @@ constexpr SysVarDescriptor make_sys_var_double(const char *name,
                                    .name = name,
                                    .comment = comment,
                                    .type = VEF_VAR_DOUBLE,
+                                   .on_change = nullptr,
                                    .dbl = {.value_ptr = value_ptr,
                                            .def_val = def_val,
                                            .min_val = min_val,
@@ -92,12 +102,13 @@ constexpr SysVarDescriptor make_sys_var_str(const char *name,
                                             const char *comment,
                                             char **value_ptr,
                                             const char *def_val) {
-  return SysVarDescriptor{.desc = {.protocol = VEF_PROTOCOL_2,
-                                   .name = name,
-                                   .comment = comment,
-                                   .type = VEF_VAR_STR,
-                                   .str = {.value_ptr = value_ptr,
-                                           .def_val = def_val}}};
+  return SysVarDescriptor{
+      .desc = {.protocol = VEF_PROTOCOL_2,
+               .name = name,
+               .comment = comment,
+               .type = VEF_VAR_STR,
+               .on_change = nullptr,
+               .str = {.value_ptr = value_ptr, .def_val = def_val}}};
 }
 
 }  // namespace sys_var_builder
