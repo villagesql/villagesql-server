@@ -79,6 +79,9 @@
 // System variable builder: make_sys_var_int(), make_sys_var_str(), etc.
 #include <villagesql/vsql/sys_var_builder.h>
 
+// Status variable builder: make_status_var_int(), make_status_var_double()
+#include <villagesql/vsql/status_var_builder.h>
+
 // Keyring access: vsql::keyring::read(), vsql::keyring::write()
 #include <villagesql/vsql/keyring.h>
 
@@ -103,6 +106,8 @@ using villagesql::func_builder::make_type_hash;
 // Re-export sys_var and keyring namespaces
 namespace sys_var = villagesql::sys_var;
 namespace keyring = villagesql::keyring;
+using villagesql::status_var_builder::make_status_var_double;
+using villagesql::status_var_builder::make_status_var_int;
 using villagesql::sys_var_builder::make_sys_var_bool;
 using villagesql::sys_var_builder::make_sys_var_double;
 using villagesql::sys_var_builder::make_sys_var_int;

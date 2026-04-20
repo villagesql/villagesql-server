@@ -1,0 +1,51 @@
+INSTALL EXTENSION vsql_usage_counter;
+# Counter starts at zero
+SELECT VARIABLE_VALUE = 0 AS add_calls_starts_at_zero
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+add_calls_starts_at_zero
+1
+# Basic addition works
+SELECT vsql_usage_counter.add(3, 4);
+vsql_usage_counter.add(3, 4)
+7
+# Counter is now 1
+SELECT VARIABLE_VALUE = 1 AS add_calls_is_one
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+add_calls_is_one
+1
+# Two more calls
+SELECT vsql_usage_counter.add(10, 20);
+vsql_usage_counter.add(10, 20)
+30
+SELECT vsql_usage_counter.add(0, 0);
+vsql_usage_counter.add(0, 0)
+0
+# Counter is now 3
+SELECT VARIABLE_VALUE = 3 AS add_calls_is_three
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+add_calls_is_three
+1
+# NULL input returns NULL but still increments counter
+SELECT vsql_usage_counter.add(NULL, 1) IS NULL AS null_returns_null;
+null_returns_null
+1
+# Counter is now 4
+SELECT VARIABLE_VALUE = 4 AS add_calls_is_four
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+add_calls_is_four
+1
+# Counter visible in SHOW GLOBAL STATUS
+SHOW GLOBAL STATUS LIKE 'vsql_usage_counter.add_calls';
+Variable_name	Value
+vsql_usage_counter.add_calls	4
+UNINSTALL EXTENSION vsql_usage_counter;
+# Status variable gone after uninstall
+SELECT COUNT(*) = 0 AS no_status_var_after_uninstall
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+no_status_var_after_uninstall
+1
