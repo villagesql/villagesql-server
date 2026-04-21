@@ -61,19 +61,36 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
   memcpy(val_ptr, save, sizeof(void *));
 
   vef_sys_var_on_change_func_t on_change = nullptr;
-  const char *var_name = nullptr;
+  vef_sys_var_change_t change{};
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
     for (const RegisteredSysVar &v : g_sys_vars) {
       if (v.value_ptr == val_ptr) {
         on_change = v.on_change;
-        var_name = v.var_name.c_str();
+        change.var_name = v.var_name.c_str();
+        change.type = v.type;
+        // Capture the committed value from `save` while still under the lock
+        // so a concurrent SET cannot overwrite val_ptr before we read it.
+        switch (v.type) {
+          case VEF_VAR_BOOL:
+            change.bool_val = *static_cast<const bool *>(save);
+            break;
+          case VEF_VAR_INT:
+            change.int_val = *static_cast<const long long *>(save);
+            break;
+          case VEF_VAR_DOUBLE:
+            change.dbl_val = *static_cast<const double *>(save);
+            break;
+          case VEF_VAR_STR:
+            change.str_val = *static_cast<const char *const *>(save);
+            break;
+        }
         break;
       }
     }
   }
 
-  if (on_change != nullptr && var_name != nullptr) on_change(var_name);
+  if (on_change != nullptr && change.var_name != nullptr) on_change(&change);
 }
 
 }  // namespace

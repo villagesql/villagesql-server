@@ -33,14 +33,16 @@
 //   - Setting max_setting below the current min_setting lowers min_setting
 //     to match.
 //
-// The on_change callback writes directly to the other variable's storage
-// pointer. sys_var::set() cannot be used here because on_change is called
-// while MySQL holds the sys_var lock; calling set() would attempt to
-// re-acquire the same lock and deadlock.
+// The on_change callback reads the committed value from the change struct
+// (rather than the global storage pointer) to avoid a race where a concurrent
+// SET overwrites the global before the callback runs. It then clamps the other
+// variable by writing directly to its storage pointer — sys_var::set() cannot
+// be used here because on_change is called while MySQL holds the sys_var lock,
+// and calling set() would attempt to re-acquire the same lock and deadlock.
 //
-// Direct writes to long long globals are safe: MySQL reads them under the
-// same lock that protects the write path, so the adjusted value is visible
-// to other sessions on their next read.
+// Direct writes to the other variable's long long global are safe: MySQL reads
+// them under the same lock that protects the write path, so the adjusted value
+// is visible to other sessions on their next read.
 
 #include <villagesql/vsql.h>
 
@@ -49,11 +51,11 @@ using namespace vsql;
 static long long g_min_setting = 0;
 static long long g_max_setting = 100;
 
-static void on_var_change(const char *var_name) {
-  if (strcmp(var_name, "min_setting") == 0) {
-    if (g_min_setting > g_max_setting) g_max_setting = g_min_setting;
-  } else if (strcmp(var_name, "max_setting") == 0) {
-    if (g_max_setting < g_min_setting) g_min_setting = g_max_setting;
+static void on_var_change(const vef_sys_var_change_t *change) {
+  if (strcmp(change->var_name, "min_setting") == 0) {
+    if (change->int_val > g_max_setting) g_max_setting = change->int_val;
+  } else if (strcmp(change->var_name, "max_setting") == 0) {
+    if (change->int_val < g_min_setting) g_min_setting = change->int_val;
   }
 }
 

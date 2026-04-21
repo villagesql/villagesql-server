@@ -779,11 +779,31 @@ typedef enum : int {
   VEF_VAR_STR = 3,
 } vef_var_type_t;
 
-// Called after the server writes a new value to the variable's storage
-// pointer. The new value is already visible via the storage pointer at the
-// time this function is called. The variable name (without extension prefix)
-// is passed so a single callback can handle multiple variables.
-typedef void (*vef_sys_var_on_change_func_t)(const char *var_name);
+// Passed to vef_sys_var_on_change_func_t. Contains the variable name and the
+// new value as committed by the server. Reading the value from this struct is
+// preferred over reading the storage pointer: in a concurrent SET scenario the
+// storage pointer may already hold a later value by the time the callback runs.
+typedef struct {
+  // Variable name without extension prefix.
+  const char *var_name;
+
+  vef_var_type_t type;
+
+  union {
+    bool bool_val;
+    long long int_val;
+    double dbl_val;
+    // For VEF_VAR_STR: points to the newly allocated string. Valid for the
+    // duration of the callback; do not retain the pointer.
+    const char *str_val;
+  };
+} vef_sys_var_change_t;
+
+// Called after the server commits a new value to the variable. The new value
+// is passed directly in change->*_val so a callback handles multiple variables
+// without racing against concurrent SET operations on the storage pointer.
+typedef void (*vef_sys_var_on_change_func_t)(
+    const vef_sys_var_change_t *change);
 
 typedef struct {
   vef_protocol_t protocol;
