@@ -384,6 +384,12 @@ class TypeBuilder {
     return *this;
   }
 
+  constexpr TypeBuilder &column_storage(const vef_type_storage_intf_t &intf) {
+    state_.desc.storage_intf = intf;
+    state_.desc.vef_desc.storage_intf = &state_.desc.storage_intf;
+    return *this;
+  }
+
   // -------------------------------------------------------------------------
   // build() — finalize to TypeObject<EFT>
   // -------------------------------------------------------------------------
