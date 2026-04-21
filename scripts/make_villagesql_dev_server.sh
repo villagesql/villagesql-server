@@ -22,6 +22,7 @@ cleanup() {
         rm -rf "$STAGING_DIR"
     fi
     [[ -n "$_EXT_CLONES_DIR" ]] && rm -rf "$_EXT_CLONES_DIR"
+    return 0
 }
 
 trap cleanup EXIT
