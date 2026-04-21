@@ -1,17 +1,17 @@
 # Install extension and persist a variable
 INSTALL EXTENSION vsql_config_vars_test;
 SET PERSIST vsql_config_vars_test.max_items = 42;
-# Uninstall extension while persisted value remains in mysqld-auto.cnf
-CALL mtr.add_suppression("Currently unknown variable 'vsql_config_vars_test");
+# Uninstall extension; persisted value should be removed from mysqld-auto.cnf
 UNINSTALL EXTENSION vsql_config_vars_test;
 # Restart without extension installed
 # restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
-# Server should have started cleanly; orphaned persisted value is ignored
+# Server should have started cleanly; no orphaned persisted value
 SELECT @@global.vsql_config_vars_test.max_items;
 ERROR HY000: Unknown system variable 'vsql_config_vars_test.max_items'
-# Clean up orphaned persisted value
+# Persisted value should be gone (RESET PERSIST should report no such variable)
 RESET PERSIST vsql_config_vars_test.max_items;
-# Install extension again; should get default value, not the old persisted one
+ERROR HY000: Variable vsql_config_vars_test.max_items does not exist in persisted config file
+# Install extension again; should get default value (not the old persisted one)
 INSTALL EXTENSION vsql_config_vars_test;
 SELECT @@global.vsql_config_vars_test.max_items;
 @@global.vsql_config_vars_test.max_items

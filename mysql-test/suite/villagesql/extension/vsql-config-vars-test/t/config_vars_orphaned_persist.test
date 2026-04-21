@@ -1,15 +1,12 @@
-# Test behavior when a persisted config variable is orphaned on restart.
-# Scenario: persist a variable, uninstall the extension, restart the server
-# without the extension installed. The persisted value in mysqld-auto.cnf has
-# no corresponding variable (extension is gone). Verify the server starts
-# cleanly and the orphaned entry is simply ignored.
+# Test that UNINSTALL EXTENSION removes persisted variable values from
+# mysqld-auto.cnf. After uninstall and restart, the extension should start
+# with default values even if the variable was previously persisted.
 
 --echo # Install extension and persist a variable
 INSTALL EXTENSION vsql_config_vars_test;
 SET PERSIST vsql_config_vars_test.max_items = 42;
 
---echo # Uninstall extension while persisted value remains in mysqld-auto.cnf
-CALL mtr.add_suppression("Currently unknown variable 'vsql_config_vars_test");
+--echo # Uninstall extension; persisted value should be removed from mysqld-auto.cnf
 UNINSTALL EXTENSION vsql_config_vars_test;
 
 --echo # Restart without extension installed
@@ -18,15 +15,15 @@ UNINSTALL EXTENSION vsql_config_vars_test;
 --let $restart_parameters = restart: --veb-dir=$veb_dir
 --source include/restart_mysqld.inc
 
---echo # Server should have started cleanly; orphaned persisted value is ignored
+--echo # Server should have started cleanly; no orphaned persisted value
 --error ER_UNKNOWN_SYSTEM_VARIABLE
 SELECT @@global.vsql_config_vars_test.max_items;
 
---echo # Clean up orphaned persisted value
---error 0, ER_VAR_DOES_NOT_EXIST
+--echo # Persisted value should be gone (RESET PERSIST should report no such variable)
+--error ER_VAR_DOES_NOT_EXIST
 RESET PERSIST vsql_config_vars_test.max_items;
 
---echo # Install extension again; should get default value, not the old persisted one
+--echo # Install extension again; should get default value (not the old persisted one)
 INSTALL EXTENSION vsql_config_vars_test;
 SELECT @@global.vsql_config_vars_test.max_items;
 UNINSTALL EXTENSION vsql_config_vars_test;

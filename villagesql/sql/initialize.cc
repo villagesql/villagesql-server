@@ -192,7 +192,8 @@ void deinit_extension_infrastructure() {
       LogVSQL(INFORMATION_LEVEL, "Unloading extension '%s' version '%s'",
               desc->extension_name().c_str(),
               desc->extension_version().c_str());
-      services::unregister_sys_vars_from_extension(desc->extension_name());
+      services::unregister_sys_vars_from_extension(desc->extension_name(),
+                                                   nullptr);
       veb::unload_vef_extension(desc->registration());
     }
   }

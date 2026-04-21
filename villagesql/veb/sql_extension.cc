@@ -543,7 +543,8 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
   }
 
   if (to_unregister.has_value()) {
-    villagesql::services::unregister_sys_vars_from_extension(extension_name);
+    villagesql::services::unregister_sys_vars_from_extension(extension_name,
+                                                             thd);
     villagesql::veb::unload_vef_extension(*to_unregister);
   }
 

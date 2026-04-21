@@ -16,6 +16,7 @@
 
 #include "villagesql/services/sys_vars.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <mutex>
 #include <string>
@@ -27,6 +28,7 @@
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
 #include "mysql/service_plugin_registry.h"
+#include "sql/persisted_variable.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
@@ -266,7 +268,8 @@ bool register_sys_vars_from_extension(
   return error;
 }
 
-void unregister_sys_vars_from_extension(const std::string &extension_name) {
+void unregister_sys_vars_from_extension(const std::string &extension_name,
+                                        THD *thd) {
   std::vector<std::string> var_names;
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
@@ -282,6 +285,37 @@ void unregister_sys_vars_from_extension(const std::string &extension_name) {
   }
 
   if (var_names.empty()) return;
+
+  // Remove persisted values from mysqld-auto.cnf. This is done before
+  // unregister_variable so that the variable name is still resolvable in
+  // reset_persisted_variables (it looks up the alias via
+  // LOCK_system_variables_hash). Only done on explicit UNINSTALL EXTENSION (thd
+  // != nullptr); on server shutdown thd is null and persisted values are
+  // intentionally left intact.
+  if (thd != nullptr) {
+    Persisted_variables_cache *pvc = Persisted_variables_cache::get_instance();
+    if (pvc != nullptr) {
+      // Get the set of persisted plugin/component variables once. We check
+      // membership before calling reset_persisted_variables to avoid the
+      // warning that MySQL emits when the variable is not in the persisted
+      // config file (reset_persisted_variables with if_exists=true warns
+      // rather than errors, but we want complete silence for variables that
+      // were never persisted).
+      Persisted_variables_uset *plugin_vars =
+          pvc->get_persisted_dynamic_plugin_variables();
+      for (const auto &name : var_names) {
+        std::string full_name = extension_name + "." + name;
+        if (plugin_vars != nullptr) {
+          auto it = std::find_if(plugin_vars->begin(), plugin_vars->end(),
+                                 [&full_name](const st_persist_var &v) {
+                                   return v.key == full_name;
+                                 });
+          if (it == plugin_vars->end()) continue;
+        }
+        pvc->reset_persisted_variables(thd, full_name.c_str(), true);
+      }
+    }
+  }
 
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return;

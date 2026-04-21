@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2314,6 +2315,11 @@ end:
 Persisted_variables_uset *
 Persisted_variables_cache::get_persisted_dynamic_variables() {
   return &m_persisted_dynamic_variables;
+}
+
+Persisted_variables_uset *
+Persisted_variables_cache::get_persisted_dynamic_plugin_variables() {
+  return &m_persisted_dynamic_plugin_variables;
 }
 
 /*

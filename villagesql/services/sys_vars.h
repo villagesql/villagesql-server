@@ -22,6 +22,8 @@
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/veb/veb_file.h"
 
+class THD;
+
 namespace villagesql {
 namespace services {
 
@@ -32,9 +34,12 @@ bool register_sys_vars_from_extension(
     const std::string &extension_name,
     const veb::ExtensionRegistration &ext_reg);
 
-// Unregister system variables that belong to the given extension.
-// Called when an extension is uninstalled.
-void unregister_sys_vars_from_extension(const std::string &extension_name);
+// Unregister system variables that belong to the given extension and, if thd
+// is non-null, also remove any persisted values from mysqld-auto.cnf.
+// Pass thd on explicit UNINSTALL EXTENSION; pass nullptr on server shutdown
+// (persisted values should survive a shutdown/restart cycle).
+void unregister_sys_vars_from_extension(const std::string &extension_name,
+                                        THD *thd);
 
 // Implementations of the system variable access functions passed to extensions
 // via vef_register_arg_t.
