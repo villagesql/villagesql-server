@@ -57,7 +57,7 @@ log_info "  - Example VEB files (vsql_simple, vsql_complex)"
 if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
     log_info "  - Bundled extensions (from villagesql/dev_server/bundled_extensions.txt)"
 fi
-log_info "  - mysql-test framework with VillageSQL tests"
+log_info "  - mysql-test framework (binaries only, no test/result files)"
 log_info "  - Support files and SQL scripts"
 echo ""
 
@@ -198,14 +198,8 @@ if [[ -d "mysql-test" ]]; then
             log_info "Preserved essential SSL certificates in std_data ($STD_DATA_SIZE)"
         fi
 
-        log_info "Removing existing test suites (keeping only villagesql)..."
-        if [[ -d "mysql-test/suite" ]]; then
-            # Keep only villagesql suite, remove all others
-            find mysql-test/suite -mindepth 1 -maxdepth 1 -type d ! -name "villagesql" -exec rm -rf {} \; 2>/dev/null || true
-        fi
-
-        log_info "Removing top-level test files and results..."
-        rm -rf mysql-test/r mysql-test/t
+        log_info "Removing all test suites and test/result files..."
+        rm -rf mysql-test/suite mysql-test/r mysql-test/t
 
     # Calculate space saved
     MYSQL_TEST_SIZE=$(du -sh mysql-test 2>/dev/null | cut -f1 || echo "unknown")
@@ -231,7 +225,7 @@ log_info "Convenience scripts added"
 log_step "Step 6: Creating documentation..."
 
 # Generate test documentation (always included with stripped MySQL tests)
-TEST_NOTE="**Note:** This package includes the test framework (mysql-test-run.pl, lib/, include/) with VillageSQL tests. MySQL test suites have been removed to save space. You can create your own test suites for your extensions."
+TEST_NOTE="**Note:** This package includes the test framework (mysql-test-run.pl, lib/, include/) without any bundled test suites. You can create your own test suites for your extensions."
 sed "s|@TEST_NOTE@|$TEST_NOTE|g" "$TEMPLATE_DIR/TEST_DOCS.md.template" > test_docs.tmp
 
 # Process QUICKSTART template
