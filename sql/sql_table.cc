@@ -3400,8 +3400,8 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
   if (drop_ctx.has_base_atomic_tables() || drop_ctx.has_views() ||
       drop_ctx.has_base_nonexistent_tables()) {
     // VillageSQL: Track custom columns and acquire necessary MDL locks.
-    if (villagesql::Metadata_modifier::process_drop(
-            thd, drop_temporary, drop_ctx.base_atomic_tables)) {
+    if (!drop_temporary && villagesql::Metadata_modifier::process_drop(
+                               thd, drop_ctx.base_atomic_tables)) {
       goto err_with_rollback;
     }
     /*

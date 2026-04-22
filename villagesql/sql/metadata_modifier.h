@@ -97,8 +97,7 @@ class Metadata_modifier {
   // Process custom columns for DROP TABLE operations.
   // Returns false on success, true on error.
   template <typename TableContainer>
-  static bool process_drop(THD *thd, bool drop_temporary,
-                           const TableContainer &tables);
+  static bool process_drop(THD *thd, const TableContainer &tables);
 
   // Process custom columns for ALTER TABLE operations.
   // Returns false on success, true on error.
@@ -222,14 +221,7 @@ class Metadata_modifier {
 
 // Template implementation for process_drop
 template <typename TableContainer>
-bool Metadata_modifier::process_drop(THD *thd, bool drop_temporary,
-                                     const TableContainer &tables) {
-  // Temporary tables are never passed here; they go into tmp_trans_tables /
-  // tmp_non_trans_tables in Drop_tables_ctx, which is a separate code path.
-  // Extension uninstall is already blocked for temp tables by the
-  // shared_ptr<TypeContext> held in TmpMetadata for the session lifetime.
-  assert(!drop_temporary);
-
+bool Metadata_modifier::process_drop(THD *thd, const TableContainer &tables) {
   Metadata_modifier custom_columns;
   for (auto *table : tables) {
     Table_name db_table = {table->db, table->table_name};
