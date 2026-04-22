@@ -980,21 +980,28 @@ dberr_t Custom_column::fetch_for_bulk_ddl(const dict_index_t *new_index,
                                           dfield_t *fields, mem_heap_t *heap) {
   ut_a(old_index != nullptr);
 
+  auto fetch_at = [&](uint32_t field_pos, const dict_col_t *col) -> dberr_t {
+    auto *data = static_cast<const byte *>(dfield_get_data(&fields[field_pos]));
+    ulint len = dfield_get_len(&fields[field_pos]);
+
+    auto err = allocate_fetch(old_index->table, col, data, len, heap);
+    if (err != DB_SUCCESS) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: DDL rebuild: Custom column allocate and fetch failed";
+      return err;
+    }
+
+    dfield_set_data(&fields[field_pos], data, len);
+    return DB_SUCCESS;
+  };
+
   // No col_map: old and new tables are the same. Position i is valid in both
   // old and new index; fetch each extended field at its current position.
   if (col_map == nullptr) {
     for (uint32_t i = 0; i < n_fields; i++) {
       if (!fields[i].is_extended()) continue;
-      auto *data = static_cast<const byte *>(dfield_get_data(&fields[i]));
-      ulint len = dfield_get_len(&fields[i]);
-      auto err = allocate_fetch(old_index->table, old_index->get_field(i)->col,
-                                data, len, heap);
-      if (err != DB_SUCCESS) {
-        ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-            << "InnoDB: DDL rebuild: Custom column allocate and fetch failed";
-        return err;
-      }
-      dfield_set_data(&fields[i], data, len);
+      auto err = fetch_at(i, old_index->get_field(i)->col);
+      if (err != DB_SUCCESS) return err;
     }
     return DB_SUCCESS;
   }
@@ -1021,17 +1028,8 @@ dberr_t Custom_column::fetch_for_bulk_ddl(const dict_index_t *new_index,
     }
     ut_a(new_field_pos != UINT32_MAX);
 
-    auto *data =
-        static_cast<const byte *>(dfield_get_data(&fields[new_field_pos]));
-    ulint len = dfield_get_len(&fields[new_field_pos]);
-
-    auto err = allocate_fetch(old_table, old_col, data, len, heap);
-    if (err != DB_SUCCESS) {
-      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-          << "InnoDB: DDL rebuild: Custom column allocate and fetch failed";
-      return err;
-    }
-    dfield_set_data(&fields[new_field_pos], data, len);
+    auto err = fetch_at(new_field_pos, old_col);
+    if (err != DB_SUCCESS) return err;
   }
 
   return DB_SUCCESS;
