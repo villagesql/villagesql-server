@@ -165,6 +165,7 @@ ALLOWED_TODO_TAGS=(
   "villagesql-windows"
   "villagesql-blob"
   "villagesql-indexing"
+  "villagesql-back-to-mysql"
 )
 
 INVALID_TODO_TAGS_FOUND=0
