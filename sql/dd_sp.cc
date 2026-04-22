@@ -148,6 +148,11 @@ static void prepare_type_string_from_dd_param(THD *thd,
   // mapping for runtime TypeContext injection at CALL time. Here we only need
   // the type name string to feed back to the parser, which data_type_utf8
   // already provides directly.
+  // TODO(villagesql-ga): storing the qualified type name in the DD means a
+  // downgrade to stock MySQL would encounter an unrecognized type in the
+  // parameters table. Consider storing the wire type (e.g. varbinary) in the
+  // DD and cross-referencing sp_params at load time, as we do for table
+  // columns, to make downgrades safer.
   if (villagesql::is_qualified_name(param->data_type_utf8().c_str())) {
     type_str->copy(param->data_type_utf8().c_str(),
                    param->data_type_utf8().length(), system_charset_info);

@@ -19,6 +19,7 @@
 
 #include <initializer_list>
 #include <string>
+#include <string_view>
 
 struct CHARSET_INFO;
 class Field;
@@ -59,8 +60,8 @@ inline std::string make_qualified_base_name(const std::string &extension_name,
 // Returns true if name is a qualified custom type name (contains a dot),
 // e.g. "vsql_complex.COMPLEX". The dot is the canonical separator defined
 // by make_qualified_base_name().
-inline bool is_qualified_name(const std::string &name) {
-  return name.find('.') != std::string::npos;
+inline bool is_qualified_name(std::string_view name) {
+  return name.find('.') != std::string_view::npos;
 }
 
 // Helper functions for reading a value from a Field.
