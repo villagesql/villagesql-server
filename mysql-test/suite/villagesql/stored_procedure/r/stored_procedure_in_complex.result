@@ -14,7 +14,7 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `t1` (
   `val` vsql_complex.COMPLEX DEFAULT NULL
 )
-#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(IN input_val COMPLEX)
+#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(IN `input_val` vsql_complex.COMPLEX)
 BEGIN
 INSERT INTO t1 VALUES (input_val);
 END

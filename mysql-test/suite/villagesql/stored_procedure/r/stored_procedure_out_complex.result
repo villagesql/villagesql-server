@@ -10,7 +10,7 @@ DROP PROCEDURE p1;
 SET @res = NULL;
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(OUT output_val COMPLEX)
+#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(OUT `output_val` vsql_complex.COMPLEX)
 BEGIN
 SET output_val = '(3.0,4.0)';
 END

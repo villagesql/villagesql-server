@@ -11,7 +11,7 @@ SET @my_val = NULL;
 DROP PROCEDURE p1;
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(INOUT val COMPLEX)
+#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(INOUT `val` vsql_complex.COMPLEX)
 BEGIN
 SET val = vsql_complex.complex_add(val, '(1.0,1.0)');
 END

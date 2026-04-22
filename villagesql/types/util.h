@@ -35,6 +35,7 @@ class Create_field;
 class Field;
 class Item;
 class Item_func;
+enum class enum_sp_type;
 struct MEM_ROOT;
 struct ORDER;
 class sp_pcontext;
@@ -75,6 +76,13 @@ extern bool InjectCustomSpParams(
     Field **fields, Bounds_checked_array<Item *> var_items,
     std::vector<std::shared_ptr<const TypeContext>> &type_refs,
     bool *had_custom_params);
+
+// Builds a parameter string with fully qualified custom type names for all
+// parameters in root_ctx. Returns true and fills *out if any parameter has a
+// custom type, returns false and leaves *out unchanged otherwise.
+extern bool BuildQualifiedParamsString(THD *thd, enum_sp_type sp_type,
+                                       const sp_pcontext *root_ctx,
+                                       String *out);
 
 // Fills *result with a TypeContext based on the type_name given. If
 // extension_name is non-empty, filters results to match that extension

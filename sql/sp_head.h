@@ -759,6 +759,8 @@ class sp_head {
 
   void returns_type(THD *thd, String *result) const;
 
+  void maybe_update_params_with_qualified_names(THD *thd);
+
   void set_info(longlong created, longlong modified, st_sp_chistics *chistics,
                 sql_mode_t sql_mode);
 
