@@ -425,7 +425,7 @@ static UNIV_COLD void my_error_innodb(
     case DB_TABLESPACE_EXISTS:
       my_error(ER_TABLESPACE_EXISTS, MYF(0), table);
       break;
-    case DB_VILLAGE_ERROR:
+    case DB_VILLAGESQL_ERROR:
       villagesql_error(
           "InnoDB: Custom type operation failed. See server"
           " error log for details.",
@@ -5157,8 +5157,8 @@ error_handling:
     case DB_UNSUPPORTED:
       my_error(ER_TABLE_CANT_HANDLE_SPKEYS, MYF(0));
       break;
-    case DB_VILLAGE_ERROR:
-      ut_ad(ctx->trx->error_state == DB_VILLAGE_ERROR);
+    case DB_VILLAGESQL_ERROR:
+      ut_ad(ctx->trx->error_state == DB_VILLAGESQL_ERROR);
       villagesql_error("%s", MYF(0), ctx->trx->detailed_error);
       break;
     default:

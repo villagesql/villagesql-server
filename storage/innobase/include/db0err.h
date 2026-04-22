@@ -210,7 +210,7 @@ enum dberr_t {
 
   // TODO(villagesql-rebase): check this enum value for conflict.
   // VillageSQL error code for InnoDB
-  DB_VILLAGE_ERROR = 500,
+  DB_VILLAGESQL_ERROR = 500,
 
   /* The following are partial failure codes */
 

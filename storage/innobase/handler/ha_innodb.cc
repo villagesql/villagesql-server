@@ -2278,7 +2278,7 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
     case DB_IO_NO_PUNCH_HOLE_FS:
     case DB_IO_NO_PUNCH_HOLE_TABLESPACE:
       return HA_ERR_UNSUPPORTED;
-    case DB_VILLAGE_ERROR:
+    case DB_VILLAGESQL_ERROR:
       if (thd) {
         villagesql_error(
             "InnoDB: Custom type operation failed. See server"

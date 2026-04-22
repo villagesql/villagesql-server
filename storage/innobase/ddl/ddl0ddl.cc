@@ -220,7 +220,7 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
       name = table->get_col_name(ifield->m_col_no);
       dict_col_t *col = table->get_col(ifield->m_col_no);
       if (col->stored_by_extn()) {
-        trx->error_state = DB_VILLAGE_ERROR;
+        trx->error_state = DB_VILLAGESQL_ERROR;
         trx_set_detailed_error(
             trx,
             "InnoDB: Indexing for types with column storage is not"

@@ -489,7 +489,7 @@ const char *ut_strerr(dberr_t num) {
       return "Data is not sorted.";
     case DB_BULK_TOO_BIG_RECORD:
       return "Row is too big for LOAD BULK DATA operation.";
-    case DB_VILLAGE_ERROR:
+    case DB_VILLAGESQL_ERROR:
       return "VillageSQL: Error in custom type operation.";
     case DB_ERROR_UNSET:;
       /* Fall through. */
