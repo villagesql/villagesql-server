@@ -31,6 +31,11 @@ on:
         description: 'Branch, tag, or commit SHA to test, or leave empty for the default branch'
         required: false
         default: ''
+      notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   # Reads bundled_extensions.txt and builds a cross-product matrix of
@@ -234,3 +239,72 @@ jobs:
         with:
           name: mtr-results-${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}
           path: ${{ env.PACKAGE_DIR }}/mysql-test/var/log/
+
+  # Sends a Slack summary after all test jobs complete.
+  # Runs automatically (workflow_run) or when notify is true (workflow_dispatch).
+  notify:
+    name: Slack Notification
+    needs: [build-server, test-extension]
+    if: always() && inputs.notify != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute overall status
+        id: status
+        run: |
+          BUILD="${{ needs.build-server.result }}"
+          TEST="${{ needs.test-extension.result }}"
+          if [[ "$BUILD" == "success" && "$TEST" == "success" ]]; then
+            echo "label=passed" >> "$GITHUB_OUTPUT"
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+            echo "color=#36a64f" >> "$GITHUB_OUTPUT"
+          elif [[ "$BUILD" == "cancelled" || "$TEST" == "cancelled" ]]; then
+            echo "label=cancelled" >> "$GITHUB_OUTPUT"
+            echo "emoji=⚠️" >> "$GITHUB_OUTPUT"
+            echo "color=#daa520" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=failed" >> "$GITHUB_OUTPUT"
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "color=#cc0000" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.emoji }} Extension SDK Compatibility ${{ steps.status.outputs.label }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "fields": [
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Triggered by",
+                      "value": "${{ github.event_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Build",
+                      "value": "${{ needs.build-server.result }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Tests",
+                      "value": "${{ needs.test-extension.result }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
