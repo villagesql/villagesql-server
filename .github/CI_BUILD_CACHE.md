@@ -6,6 +6,8 @@ This document describes how build caching works in CI, known issues, and how to 
 
 The "Build and Test" workflow uses [ccache](https://ccache.dev/) to cache compiled object files, backed by [GitHub Actions cache](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows) for persistence across runs.
 
+Builds run on self-hosted runners (see the github-runner directory in our tools repo; sorry open source people, we're still figuring out how to set up infrastructure).
+
 **Components:**
 - **ccache**: Caches compiled C/C++ object files locally. Keyed on preprocessed source content + compiler flags. Compression is enabled.
 - **hendrikmuhs/ccache-action**: Saves/restores the ccache directory to/from GitHub Actions cache between runs.
@@ -52,14 +54,6 @@ The partial miss tier occurs when the restored cache was saved from a commit tha
 **Root cause**: Each build saves a new cache entry keyed by commit SHA. With active development, the quota fills up and older entries are evicted. If all recent `main` entries get evicted, the next `main` build has no cache.
 
 **Mitigation**: The stale entry eviction step keeps cache entries lean. Only frequently-used workflows have caching enabled. The GitHub Actions cache quota can be increased beyond 10GB via org/enterprise settings if needed.
-
-### Queue wait on self-hosted runners
-
-**Symptom**: Very long total run times (30+ minutes to hours) but normal build/test times.
-
-**Root cause**: Only one self-hosted runner is available. When multiple builds queue up, later ones wait.
-
-**Diagnosis**: Compare `createdAt` (when run was triggered) vs job `startedAt` (when runner picked it up).
 
 ## Diagnosing Cache Issues
 
