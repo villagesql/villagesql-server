@@ -83,7 +83,7 @@ void keyring_store(StringArg data_id, StringArg auth_id, StringArg value,
   out.set(kr == VEF_KEYRING_OK ? 0 : 1);
 }
 
-VEF_GENERATE_ENTRY_POINTS(make_extension("vsql_keyring_reader", "0.0.1")
+VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .func(make_func<&keyring_read>("keyring_read")
                                         .returns(STRING)
                                         .param(STRING)
