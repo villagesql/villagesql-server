@@ -1837,13 +1837,8 @@ void sp_head::set_body_end(THD *thd) {
 // VillageSQL: if any parameter has a custom type, overwrite m_params with
 // the fully qualified version so it is used in binlog and SHOW CREATE.
 void sp_head::maybe_update_params_with_qualified_names(THD *thd) {
-  String qualified(64);
-  qualified.set_charset(system_charset_info);
-  if (villagesql::BuildQualifiedParamsString(
-          thd, m_type, get_root_parsing_context(), &qualified)) {
-    m_params.length = qualified.length();
-    m_params.str = thd->strmake(qualified.ptr(), qualified.length());
-  }
+  villagesql::BuildQualifiedParamsString(thd, m_type,
+                                         get_root_parsing_context(), &m_params);
 }
 
 bool sp_head::setup_trigger_fields(THD *thd, Table_trigger_field_support *tfs,

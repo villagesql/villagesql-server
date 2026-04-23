@@ -78,11 +78,12 @@ extern bool InjectCustomSpParams(
     bool *had_custom_params);
 
 // Builds a parameter string with fully qualified custom type names for all
-// parameters in root_ctx. Returns true and fills *out if any parameter has a
-// custom type, returns false and leaves *out unchanged otherwise.
-extern bool BuildQualifiedParamsString(THD *thd, enum_sp_type sp_type,
+// parameters in root_ctx. If any parameter has a custom type, writes the result
+// into *out using thd->strmake for the backing memory. Leaves *out unchanged if
+// no custom types are present.
+extern void BuildQualifiedParamsString(THD *thd, enum_sp_type sp_type,
                                        const sp_pcontext *root_ctx,
-                                       String *out);
+                                       LEX_STRING *out);
 
 // Fills *result with a TypeContext based on the type_name given. If
 // extension_name is non-empty, filters results to match that extension
