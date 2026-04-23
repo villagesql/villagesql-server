@@ -48,30 +48,31 @@
 #include <cstring>
 #include <string_view>
 
-namespace se = vsql::experimental::storage;
+namespace storage = vsql::experimental::storage;
+using vsql::experimental::storage_builder::make_storage;
 
 // Per-column user context. Populated during create/load and used by every
 // subsequent storage call for that column.
 struct StoredIntCtx {
-  se::Space::Ref space = 0;
-  se::Segment::PageRef root_page = se::Page::INVALID_REF;
+  storage::Space::Ref space = 0;
+  storage::Segment::PageRef root_page = storage::Page::INVALID_REF;
 };
 
-using Ctx = se::Column::StorageCtx<StoredIntCtx>;
+using Ctx = storage::Column::StorageCtx<StoredIntCtx>;
 
 // Absolute page offsets for each field within the DATA area of a data page.
-constexpr se::Page::Offset kValueOff = se::Page::HEADER_SIZE;
-constexpr se::Page::Offset kRowidOff = se::Page::HEADER_SIZE + 8;
-constexpr se::Page::Offset kTrxOff = se::Page::HEADER_SIZE + 16;
-constexpr se::Page::Offset kFlagOff = se::Page::HEADER_SIZE + 24;
+constexpr storage::Page::Offset kValueOff = storage::Page::HEADER_SIZE;
+constexpr storage::Page::Offset kRowidOff = storage::Page::HEADER_SIZE + 8;
+constexpr storage::Page::Offset kTrxOff = storage::Page::HEADER_SIZE + 16;
+constexpr storage::Page::Offset kFlagOff = storage::Page::HEADER_SIZE + 24;
 
 // StorageRef packs (space_ref, root_page_num) into a uint64:
 //   high 32 bits — space_ref
 //   low  32 bits — root_page_num
-static se::Column::StorageRef encode_storage_ref(se::Space::Ref space,
-                                                 se::Segment::PageRef root) {
-  return (static_cast<se::Column::StorageRef>(space) << 32) |
-         static_cast<se::Column::StorageRef>(root);
+static storage::Column::StorageRef encode_storage_ref(
+    storage::Space::Ref space, storage::Segment::PageRef root) {
+  return (static_cast<storage::Column::StorageRef>(space) << 32) |
+         static_cast<storage::Column::StorageRef>(root);
 }
 
 // ============================================================================
@@ -157,11 +158,14 @@ int stored_int_compare(villagesql::Span<const unsigned char> a,
 // Storage interface functions
 // ============================================================================
 
-bool stored_int_create(Ctx *ctx, se::Space::Ref space, se::Segment::TrxRef trx,
-                       uint32_t /*col_len*/, char *err, uint32_t err_len) {
-  se::Segment::PageRef root_page;
-  if (se::Segment::create(space, 1, trx, root_page) != se::Error::SUCCESS) {
-    snprintf(err, err_len, "stored_int create: %s", se::last_error().data());
+bool stored_int_create(Ctx *ctx, storage::Space::Ref space,
+                       storage::Segment::TrxRef trx, uint32_t /*col_len*/,
+                       char *err, uint32_t err_len) {
+  storage::Segment::PageRef root_page;
+  if (storage::Segment::create(space, 1, trx, root_page) !=
+      storage::Error::SUCCESS) {
+    snprintf(err, err_len, "stored_int create: %s",
+             storage::last_error().data());
     return true;
   }
   ctx->user()->space = space;
@@ -170,52 +174,56 @@ bool stored_int_create(Ctx *ctx, se::Space::Ref space, se::Segment::TrxRef trx,
   return false;
 }
 
-bool stored_int_drop(Ctx *ctx, se::Segment::TrxRef trx, char *err,
+bool stored_int_drop(Ctx *ctx, storage::Segment::TrxRef trx, char *err,
                      uint32_t err_len) {
-  if (se::Segment::drop(ctx->user()->space, trx, ctx->user()->root_page) !=
-      se::Error::SUCCESS) {
-    snprintf(err, err_len, "stored_int drop: %s", se::last_error().data());
+  if (storage::Segment::drop(ctx->user()->space, trx, ctx->user()->root_page) !=
+      storage::Error::SUCCESS) {
+    snprintf(err, err_len, "stored_int drop: %s", storage::last_error().data());
     return true;
   }
   return false;
 }
 
-bool stored_int_load(Ctx *ctx, se::Column::StorageRef storage_ref,
+bool stored_int_load(Ctx *ctx, storage::Column::StorageRef storage_ref,
                      char * /*err*/, uint32_t /*err_len*/) {
-  ctx->user()->space = static_cast<se::Space::Ref>(storage_ref >> 32);
+  ctx->user()->space = static_cast<storage::Space::Ref>(storage_ref >> 32);
   ctx->user()->root_page =
-      static_cast<se::Segment::PageRef>(storage_ref & 0xFFFFFFFF);
+      static_cast<storage::Segment::PageRef>(storage_ref & 0xFFFFFFFF);
   ctx->set_ref(storage_ref);
   return false;
 }
 
-bool stored_int_insert(Ctx *ctx, se::MtrCtx::Ref mctx, se::Segment::TrxRef trx,
-                       se::Column::Data col_data, se::Column::Data rowid_prefix,
-                       se::Column::Ref *col_ref, char *err, uint32_t err_len) {
+bool stored_int_insert(Ctx *ctx, storage::MtrCtx::Ref mctx,
+                       storage::Segment::TrxRef trx,
+                       storage::Column::Data col_data,
+                       storage::Column::Data rowid_prefix,
+                       storage::Column::Ref *col_ref, char *err,
+                       uint32_t err_len) {
   if (col_data.length != 8) {
     snprintf(err, err_len, "stored_int insert: expected 8-byte value, got %u",
              col_data.length);
     return true;
   }
 
-  se::Page root;
+  storage::Page root;
   if (root.load(ctx->user()->space, ctx->user()->root_page,
-                se::Page::Latch::EXCLUSIVE, mctx) != se::Error::SUCCESS) {
+                storage::Page::Latch::EXCLUSIVE,
+                mctx) != storage::Error::SUCCESS) {
     snprintf(err, err_len, "stored_int insert: root page load failed: %s",
-             se::last_error().data());
+             storage::last_error().data());
     return true;
   }
 
-  se::Segment::Ref seg = se::Segment::get_header(root, 0);
+  storage::Segment::Ref seg = storage::Segment::get_header(root, 0);
   if (seg == nullptr) {
     snprintf(err, err_len, "stored_int insert: segment header not found");
     return true;
   }
 
-  se::Page data_page;
-  if (data_page.load_new(seg, mctx) != se::Error::SUCCESS) {
+  storage::Page data_page;
+  if (data_page.load_new(seg, mctx) != storage::Error::SUCCESS) {
     snprintf(err, err_len, "stored_int insert: page allocation failed: %s",
-             se::last_error().data());
+             storage::last_error().data());
     return true;
   }
 
@@ -230,21 +238,22 @@ bool stored_int_insert(Ctx *ctx, se::MtrCtx::Ref mctx, se::Segment::TrxRef trx,
   data_page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
   data_page.write_integer_1(kFlagOff, 0, mctx);
 
-  *col_ref = static_cast<se::Column::Ref>(data_page.get_ref());
+  *col_ref = static_cast<storage::Column::Ref>(data_page.get_ref());
   return false;
 }
 
-bool stored_int_select(Ctx *ctx, se::MtrCtx::Ref mctx, se::Column::Ref col_ref,
-                       se::Column::Data *col_data,
-                       se::Column::Data *rowid_prefix,
-                       se::Segment::TrxRef *trx_ref, bool *delete_marked,
+bool stored_int_select(Ctx *ctx, storage::MtrCtx::Ref mctx,
+                       storage::Column::Ref col_ref,
+                       storage::Column::Data *col_data,
+                       storage::Column::Data *rowid_prefix,
+                       storage::Segment::TrxRef *trx_ref, bool *delete_marked,
                        char *err, uint32_t err_len) {
-  auto page_num = static_cast<se::Segment::PageRef>(col_ref);
-  se::Page page;
-  if (page.load(ctx->user()->space, page_num, se::Page::Latch::SHARED, mctx) !=
-      se::Error::SUCCESS) {
+  auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
+  storage::Page page;
+  if (page.load(ctx->user()->space, page_num, storage::Page::Latch::SHARED,
+                mctx) != storage::Error::SUCCESS) {
     snprintf(err, err_len, "stored_int select: page load failed: %s",
-             se::last_error().data());
+             storage::last_error().data());
     return true;
   }
 
@@ -256,20 +265,22 @@ bool stored_int_select(Ctx *ctx, se::MtrCtx::Ref mctx, se::Column::Ref col_ref,
   col_data->length = 8;
   rowid_prefix->data = base + kRowidOff;
   rowid_prefix->length = 8;
-  *trx_ref = static_cast<se::Segment::TrxRef>(page.read_integer_8(kTrxOff));
+  *trx_ref =
+      static_cast<storage::Segment::TrxRef>(page.read_integer_8(kTrxOff));
   *delete_marked = page.read_integer_1(kFlagOff) != 0;
   return false;
 }
 
-bool stored_int_mark_delete(Ctx *ctx, se::MtrCtx::Ref mctx,
-                            se::Segment::TrxRef trx, se::Column::Ref col_ref,
-                            bool delete_mark, char *err, uint32_t err_len) {
-  auto page_num = static_cast<se::Segment::PageRef>(col_ref);
-  se::Page page;
-  if (page.load(ctx->user()->space, page_num, se::Page::Latch::EXCLUSIVE,
-                mctx) != se::Error::SUCCESS) {
+bool stored_int_mark_delete(Ctx *ctx, storage::MtrCtx::Ref mctx,
+                            storage::Segment::TrxRef trx,
+                            storage::Column::Ref col_ref, bool delete_mark,
+                            char *err, uint32_t err_len) {
+  auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
+  storage::Page page;
+  if (page.load(ctx->user()->space, page_num, storage::Page::Latch::EXCLUSIVE,
+                mctx) != storage::Error::SUCCESS) {
     snprintf(err, err_len, "stored_int mark_delete: page load failed: %s",
-             se::last_error().data());
+             storage::last_error().data());
     return true;
   }
   page.write_integer_1(kFlagOff, delete_mark ? 1 : 0, mctx);
@@ -277,9 +288,10 @@ bool stored_int_mark_delete(Ctx *ctx, se::MtrCtx::Ref mctx,
   return false;
 }
 
-bool stored_int_purge(Ctx * /*ctx*/, se::MtrCtx::Ref /*mctx*/,
-                      se::Segment::TrxRef /*trx*/, se::Column::Ref /*col_ref*/,
-                      char * /*err*/, uint32_t /*err_len*/) {
+bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
+                      storage::Segment::TrxRef /*trx*/,
+                      storage::Column::Ref /*col_ref*/, char * /*err*/,
+                      uint32_t /*err_len*/) {
   // TODO(villagesql-beta): Free the individual data page once a per-page
   // release API is available. Until then, pages are reclaimed only when the
   // segment is dropped (on column drop).
@@ -291,7 +303,7 @@ bool stored_int_purge(Ctx * /*ctx*/, se::MtrCtx::Ref /*mctx*/,
 // ============================================================================
 
 static constexpr vef_type_storage_intf_t kStoredIntStorageIntf =
-    se::make_storage<StoredIntCtx>()
+    make_storage<StoredIntCtx>()
         .create<&stored_int_create>()
         .drop<&stored_int_drop>()
         .load<&stored_int_load>()

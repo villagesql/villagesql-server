@@ -29,7 +29,7 @@
 
 namespace vsql {
 namespace experimental {
-namespace storage {
+namespace storage_builder {
 
 // =============================================================================
 // StorageBuilder<UserCtx>
@@ -92,7 +92,8 @@ namespace storage {
 namespace detail {
 
 template <typename UserCtx>
-using StorageCtx = Column::StorageCtx<UserCtx>;
+using StorageCtx = vsql::experimental::storage::Column::StorageCtx<UserCtx>;
+using Arena = vsql::experimental::storage::Arena;
 
 template <auto F, typename UserCtx>
 struct CreateWrapper {
@@ -315,7 +316,7 @@ constexpr StorageBuilder<UserCtx> make_storage() {
   return StorageBuilder<UserCtx>{};
 }
 
-}  // namespace storage
+}  // namespace storage_builder
 }  // namespace experimental
 }  // namespace vsql
 
@@ -323,7 +324,7 @@ constexpr StorageBuilder<UserCtx> make_storage() {
 // migrated to vsql::experimental::storage::make_storage.
 namespace villagesql {
 namespace storage_builder {
-using vsql::experimental::storage::make_storage;
+using vsql::experimental::storage_builder::make_storage;
 }  // namespace storage_builder
 }  // namespace villagesql
 
