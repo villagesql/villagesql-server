@@ -108,7 +108,7 @@ TEST_F(ValidateExtensionRegistrationTest, ValidV1TypeAndFunc) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
   reg.func_count = 1;
@@ -134,7 +134,7 @@ TEST_F(ValidateExtensionRegistrationTest, ValidV1TypeAndFunc) {
 TEST_F(ValidateExtensionRegistrationTest, EmptyRegistration) {
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "empty_ext";
+  reg.deprecated_extension_name = "empty_ext";
 
   std::string error;
   auto result = villagesql::veb::validate_extension_registration(
@@ -162,7 +162,7 @@ TEST_F(ValidateExtensionRegistrationTest, NullTypeDescriptor) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
 
@@ -181,7 +181,7 @@ TEST_F(ValidateExtensionRegistrationTest, ZeroMaxDecodeBufferLength) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
 
@@ -200,7 +200,7 @@ TEST_F(ValidateExtensionRegistrationTest, NullFuncDescriptor) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.func_count = 1;
   reg.funcs = funcs;
 
@@ -224,7 +224,7 @@ TEST_F(ValidateExtensionRegistrationTest, ClearWithoutAccumulate) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_2;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.func_count = 1;
   reg.funcs = funcs;
 
@@ -250,7 +250,7 @@ TEST_F(ValidateExtensionRegistrationTest, AccumulateWithoutClear) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_2;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.func_count = 1;
   reg.funcs = funcs;
 
@@ -275,7 +275,7 @@ TEST_F(ValidateExtensionRegistrationTest,
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.func_count = 1;
   reg.funcs = funcs;
 
@@ -302,7 +302,7 @@ TEST_F(ValidateExtensionRegistrationTest, MultipleTypesAndFuncs) {
 
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_1;
-  reg.extension_name = "my_ext";
+  reg.deprecated_extension_name = "my_ext";
   reg.type_count = 2;
   reg.types = types;
   reg.func_count = 3;
