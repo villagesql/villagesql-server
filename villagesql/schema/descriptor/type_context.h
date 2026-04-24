@@ -234,6 +234,13 @@ class TypeContext {
   const TypeParameters &parameters() const { return key_.parameters(); }
   const TypeDescriptor *descriptor() const { return descriptor_; }
 
+  // Returns true when this TypeContext represents a parameterized type whose
+  // parameters have not yet been resolved. A non-parameterized type with empty
+  // parameters (e.g. COMPLEX) is fully known and returns false.
+  bool is_unknown() const {
+    return descriptor_->is_parameterized() && parameters().empty();
+  }
+
   // Convenience accessors for frequently used fields
   const std::string &extension_name() const {
     return descriptor_->extension_name();

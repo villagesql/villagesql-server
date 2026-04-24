@@ -191,6 +191,11 @@ class TypeDescriptor {
     return resolve_params_fn_;
   }
 
+  // Returns true if this type accepts parameters (i.e., has a resolve_params
+  // callback). Types like VECTOR(N) are parameterized; types like COMPLEX
+  // are not.
+  bool is_parameterized() const { return resolve_params_fn_.has_value(); }
+
   // Returns the intrinsic default function, or nullopt if not set.
   const std::optional<IntrinsicDefaultFunction> &intrinsic_default_fn() const {
     return intrinsic_default_fn_;
