@@ -35,6 +35,9 @@
 
 using namespace vsql;
 
+// Counter incremented on every add() call. Concurrent increments from
+// multiple query threads may occasionally be lost (non-atomic ++), which is
+// acceptable for an approximate call counter exposed via SHOW STATUS.
 static long long g_add_calls = 0;
 
 void add_impl(IntArg a, IntArg b, IntResult out) {
@@ -46,7 +49,7 @@ void add_impl(IntArg a, IntArg b, IntResult out) {
   out.set(a.value() + b.value());
 }
 
-VEF_GENERATE_ENTRY_POINTS(make_extension("vsql_usage_counter", "0.0.1")
+VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .func(make_func<&add_impl>("add")
                                         .returns(INT)
                                         .param(INT)

@@ -16,9 +16,8 @@
 
 #include "villagesql/services/status_vars.h"
 
-#include <cstdlib>
-#include <cstring>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -48,10 +47,10 @@ struct RegisteredStatusVar {
 };
 
 std::mutex g_status_vars_mutex;
-// std::list gives stable iterators/pointers: elements never move on insert,
-// which keeps the SHOW_VAR.name pointer (pointing into full_name) valid for
-// MySQL's use after register_variable() returns.
-std::list<RegisteredStatusVar> g_status_vars;
+// unique_ptr elements in std::list: heap allocation gives stable addresses for
+// full_name (used as SHOW_VAR.name by MySQL) and show_var (passed to
+// register_variable/unregister_variable), regardless of list operations.
+std::list<std::unique_ptr<RegisteredStatusVar>> g_status_vars;
 
 }  // namespace
 
@@ -64,6 +63,10 @@ bool register_status_vars_from_extension(
     return false;
   }
 
+  // The plugin registry and status_variable_registration service should always
+  // be available when an extension is installed, but can be absent during
+  // early startup or late shutdown if the component infrastructure has not yet
+  // initialised (or has already been torn down).
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) {
     LogVSQL(ERROR_LEVEL,
@@ -84,17 +87,6 @@ bool register_status_vars_from_extension(
   bool error = false;
   for (unsigned int i = 0; i < reg->status_var_count; i++) {
     vef_status_var_desc_t *v = reg->status_vars[i];
-    if (v == nullptr || v->name == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Extension '%s' has NULL status variable descriptor at index %u",
-              extension_name.c_str(), i);
-      error = true;
-      break;
-    }
-
-    RegisteredStatusVar rsv;
-    rsv.extension_name = extension_name;
-    rsv.full_name = extension_name + "." + v->name;
 
     enum_mysql_show_type show_type;
     char *value_ptr;
@@ -116,17 +108,22 @@ bool register_status_vars_from_extension(
     }
     if (error) break;
 
-    rsv.show_var[1] = {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_GLOBAL};
+    // Build the full struct on the heap before locking, so that full_name
+    // (used as SHOW_VAR.name) is at a stable address. show_var[0].name points
+    // into full_name, which remains valid for MySQL's use after
+    // register_variable() returns.
+    auto rsv = std::make_unique<RegisteredStatusVar>();
+    rsv->extension_name = extension_name;
+    rsv->full_name = extension_name + "." + v->name;
+    rsv->show_var[0] = {rsv->full_name.c_str(), value_ptr, show_type,
+                        SHOW_SCOPE_GLOBAL};
+    rsv->show_var[1] = {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_GLOBAL};
 
-    // Insert into g_status_vars first so that full_name is at a stable address,
-    // then point show_var[0].name at it. std::list never moves elements.
     RegisteredStatusVar *stored = nullptr;
     {
       std::lock_guard<std::mutex> lock(g_status_vars_mutex);
       g_status_vars.push_back(std::move(rsv));
-      stored = &g_status_vars.back();
-      stored->show_var[0] = {stored->full_name.c_str(), value_ptr, show_type,
-                             SHOW_SCOPE_GLOBAL};
+      stored = g_status_vars.back().get();
     }
 
     if (reg_svc->register_variable(stored->show_var)) {
@@ -136,7 +133,7 @@ bool register_status_vars_from_extension(
       std::lock_guard<std::mutex> lock(g_status_vars_mutex);
       // Remove the entry we just added.
       for (auto it = g_status_vars.begin(); it != g_status_vars.end(); ++it) {
-        if (&*it == stored) {
+        if (it->get() == stored) {
           g_status_vars.erase(it);
           break;
         }
@@ -159,11 +156,12 @@ void unregister_status_vars_from_extension(const std::string &extension_name) {
   // The SHOW_VAR.name pointers point into RegisteredStatusVar::full_name.
   // Those must remain valid until after unregister_variable() returns,
   // since MySQL may still be reading the list during the call.
-  std::vector<std::list<RegisteredStatusVar>::iterator> to_remove;
+  std::vector<std::list<std::unique_ptr<RegisteredStatusVar>>::iterator>
+      to_remove;
   {
     std::lock_guard<std::mutex> lock(g_status_vars_mutex);
     for (auto it = g_status_vars.begin(); it != g_status_vars.end(); ++it) {
-      if (it->extension_name == extension_name) to_remove.push_back(it);
+      if ((*it)->extension_name == extension_name) to_remove.push_back(it);
     }
   }
 
@@ -176,15 +174,17 @@ void unregister_status_vars_from_extension(const std::string &extension_name) {
     if (reg_svc.is_valid()) {
       for (auto it : to_remove) {
         // Pass the original SHOW_VAR[2] array — name pointer is still valid.
-        reg_svc->unregister_variable(it->show_var);
+        reg_svc->unregister_variable((*it)->show_var);
       }
     }
     mysql_plugin_registry_release(registry);
   }
 
   // Now it is safe to free the entries: MySQL has removed its references.
-  std::lock_guard<std::mutex> lock(g_status_vars_mutex);
-  for (auto it : to_remove) g_status_vars.erase(it);
+  {
+    std::lock_guard<std::mutex> lock(g_status_vars_mutex);
+    for (auto it : to_remove) g_status_vars.erase(it);
+  }
 }
 
 }  // namespace services

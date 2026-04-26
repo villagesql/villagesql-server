@@ -162,6 +162,10 @@ bool register_sys_vars_from_extension(
     return false;
   }
 
+  // The plugin registry and component_sys_variable_register service should
+  // always be available when an extension is installed, but can be absent
+  // during early startup or late shutdown if the component infrastructure has
+  // not yet initialised (or has already been torn down).
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) {
     LogVSQL(ERROR_LEVEL,
@@ -182,14 +186,6 @@ bool register_sys_vars_from_extension(
   bool error = false;
   for (unsigned int i = 0; i < reg->sys_var_count; i++) {
     vef_sys_var_desc_t *v = reg->sys_vars[i];
-    if (v == nullptr || v->name == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Extension '%s' has NULL system variable descriptor at index %u",
-              extension_name.c_str(), i);
-      error = true;
-      break;
-    }
-
     int flags = PLUGIN_VAR_RQCMDARG;
     void *check_arg = nullptr;
     void *value_ptr = nullptr;

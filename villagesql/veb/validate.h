@@ -29,6 +29,7 @@
 
 #include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/sdk/include/villagesql/abi/types.h"
 
 namespace villagesql {
 namespace veb {
@@ -41,6 +42,20 @@ struct ValidatedRegistration {
   std::vector<TypeDescriptor> types;
   std::vector<FuncDescriptor> funcs;
 };
+
+// Validate status variable descriptors in a registration object.
+// Returns true (error) if any descriptor or its name pointer is NULL.
+// Called during the validate phase, before any apply/register step.
+bool validate_status_var_descriptors(const std::string &extension_name,
+                                     const vef_registration_t *reg,
+                                     std::string &error_out);
+
+// Validate system variable descriptors in a registration object.
+// Returns true (error) if any descriptor or its name pointer is NULL.
+// Called during the validate phase, before any apply/register step.
+bool validate_sys_var_descriptors(const std::string &extension_name,
+                                  const vef_registration_t *reg,
+                                  std::string &error_out);
 
 // Validates the raw ABI registration and builds C++ descriptors.
 // No THD, no VictionaryClient — purely operates on the ExtensionRegistration.

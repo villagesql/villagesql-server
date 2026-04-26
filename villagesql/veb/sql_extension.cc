@@ -219,6 +219,21 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  const vef_registration_t *raw_reg = registration.registration;
+  if (raw_reg != nullptr &&
+      registration.negotiated_protocol >= VEF_PROTOCOL_2) {
+    if ((raw_reg->sys_var_count > 0 &&
+         villagesql::veb::validate_sys_var_descriptors(extension_name, raw_reg,
+                                                       reg_error)) ||
+        (raw_reg->status_var_count > 0 &&
+         villagesql::veb::validate_status_var_descriptors(
+             extension_name, raw_reg, reg_error))) {
+      villagesql_error("Failed to install extension '%s': %s", MYF(0),
+                       extension_name.c_str(), reg_error.c_str());
+      return end_transaction(thd, true);
+    }
+  }
+
   bool mark_success = true;
   {
     auto write_lock = victionary.get_write_lock();
