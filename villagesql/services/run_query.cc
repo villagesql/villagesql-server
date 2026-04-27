@@ -182,8 +182,10 @@ static int cb_get_integer(void *ctx, longlong value) {
   return cb_get_longlong(ctx, value, 0);
 }
 
-// Decimal/date/time types: fall back to treating their value as a string.
-// In CS_TEXT_REPRESENTATION these typically come via get_string instead.
+// Decimal/date/time types: no-op stubs required by the callback interface.
+// With CS_TEXT_REPRESENTATION the server converts these to strings and routes
+// them through cb_get_string instead, so these callbacks are never called in
+// practice. They are present only to satisfy the st_command_service_cbs struct.
 static int cb_get_decimal(void * /*ctx*/, const decimal_t * /*value*/) {
   return 0;
 }
@@ -247,9 +249,10 @@ static const struct st_command_service_cbs kRunQueryCallbacks = {
 
 }  // namespace
 
-vef_run_query_result_t run_query(const char *sql, size_t sql_len,
-                                 vef_column_meta_fn meta_cb, vef_row_fn row_cb,
-                                 void *ctx, char *error_msg) {
+vef_run_query_result_t run_query(vef_thread_t * /*thread*/, const char *sql,
+                                 size_t sql_len, vef_column_meta_fn meta_cb,
+                                 vef_row_fn row_cb, void *ctx,
+                                 char *error_msg) {
   assert(sql != nullptr);
 
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
@@ -279,7 +282,12 @@ vef_run_query_result_t run_query(const char *sql, size_t sql_len,
     return VEF_QUERY_ERROR;
   }
 
-  // Propagate the caller's current database into the admin session.
+  // Propagate the caller's current database into the admin session so that
+  // unqualified table references in the SQL resolve correctly. This is
+  // intentional: extensions that run queries against tables in the caller's
+  // current database would otherwise need to fully-qualify every name.
+  // Extensions that want a clean session context should USE a specific database
+  // explicitly in their SQL (e.g. "USE mydb; SELECT ...").
   if (current_thd != nullptr) {
     LEX_CSTRING caller_db = current_thd->db();
     if (caller_db.str != nullptr && caller_db.length > 0) {

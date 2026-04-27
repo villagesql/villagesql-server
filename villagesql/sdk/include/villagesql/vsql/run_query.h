@@ -18,28 +18,30 @@
 
 // run_query — execute SQL from an extension background thread
 //
-// Usage:
+// run_query requires a vef_thread_t* handle, which the server passes to
+// background thread entry points registered by the extension. This design
+// enforces at compile time that run_query cannot be called from inside a VDF,
+// since VDF callbacks do not receive a vef_thread_t handle.
+//
+// Usage (from a background thread entry point):
 //
 //   #include <villagesql/vsql/run_query.h>
 //
-//   // Collect SHOW GLOBAL STATUS into a vector of {name, value} pairs.
-//   std::vector<std::pair<std::string, std::string>> rows;
-//   auto result = villagesql::run_query(
-//       "SHOW GLOBAL STATUS",
-//       [&](const std::vector<std::string_view> &cols) { /* optional */ },
-//       [&](const std::vector<std::string_view> &vals) {
-//           rows.push_back({std::string(vals[0]), std::string(vals[1])});
-//       });
-//   if (result != VEF_QUERY_OK) { /* handle error */ }
+//   void my_thread(vef_thread_t *thread) {
+//     // Collect SHOW GLOBAL STATUS into a vector of {name, value} pairs.
+//     std::vector<std::pair<std::string, std::string>> rows;
+//     auto result = villagesql::run_query(
+//         thread,
+//         "SHOW GLOBAL STATUS",
+//         [&](const std::vector<std::string_view> &cols) { /* optional */ },
+//         [&](const std::vector<std::string_view> &vals) {
+//             rows.push_back({std::string(vals[0]), std::string(vals[1])});
+//         });
+//     if (result != VEF_QUERY_OK) { /* handle error */ }
 //
-// The simpler overload with no callbacks is useful for SET / DDL statements:
-//
-//   villagesql::run_query("SET SESSION sql_mode = ''");
-//
-// All calls must originate from a thread that has an active MySQL THD
-// (i.e., a background thread registered via the Protocol 4 lifecycle hooks,
-// or any server-internal thread). Calling from an arbitrary OS thread that
-// was not initialized by the server results in undefined behavior.
+//     // The simpler overload with no callbacks is useful for SET / DDL:
+//     villagesql::run_query(thread, "SET SESSION sql_mode = ''");
+//   }
 
 #include <functional>
 #include <string>
@@ -59,14 +61,18 @@ using RunQueryMetaCb =
     std::function<void(const std::vector<std::string_view> &col_names)>;
 
 // Row callback type: called once per result row with column values as strings.
-// SQL NULL is represented as an empty string_view (check is_null via the raw
-// ABI if you need to distinguish NULL from empty string).
+// SQL NULL is represented as a default-constructed string_view (data() ==
+// nullptr). An empty (non-NULL) string has data() != nullptr and size() == 0.
+// To distinguish NULL from empty string, check data() == nullptr.
 using RunQueryRowCb =
     std::function<void(const std::vector<std::string_view> &values)>;
 
 // Execute a SQL statement. Returns VEF_QUERY_OK, VEF_QUERY_ERROR, or
-// VEF_QUERY_ABORTED. On error, error_msg (if non-null) receives a description.
-inline vef_run_query_result_t run_query(std::string_view sql,
+// VEF_QUERY_ABORTED. On error, error_msg (if non-null, must point to a buffer
+// of at least VEF_MAX_ERROR_LEN bytes) receives a description.
+// inline: header-only implementation to avoid ODR violations across TUs.
+inline vef_run_query_result_t run_query(vef_thread_t *thread,
+                                        std::string_view sql,
                                         RunQueryMetaCb meta_cb,
                                         RunQueryRowCb row_cb,
                                         char *error_msg = nullptr) {
@@ -113,13 +119,15 @@ inline vef_run_query_result_t run_query(std::string_view sql,
     return 0;
   };
 
-  return g_run_query(sql.data(), sql.size(), c_meta, c_row, &c, error_msg);
+  return g_run_query(thread, sql.data(), sql.size(), c_meta, c_row, &c,
+                     error_msg);
 }
 
 // Convenience overload: execute a statement with no result processing.
-inline vef_run_query_result_t run_query(std::string_view sql,
+inline vef_run_query_result_t run_query(vef_thread_t *thread,
+                                        std::string_view sql,
                                         char *error_msg = nullptr) {
-  return run_query(sql, nullptr, nullptr, error_msg);
+  return run_query(thread, sql, nullptr, nullptr, error_msg);
 }
 
 }  // namespace villagesql

@@ -33,6 +33,14 @@
 //     Executes the given SQL and returns the first column of the first row
 //     as a string. Returns NULL if sql is NULL, the result set is empty,
 //     the first value is SQL NULL, or on SQL error (sets a warning on error).
+//
+// TODO(villagesql): These VDFs call run_query from inside a VDF callback,
+// which is the wrong pattern. run_query is intended for use from background
+// threads, which are not yet implemented. Once background thread registration
+// lands, this test extension should be rewritten to use a background thread
+// that writes results to a system variable, and the VDFs removed.
+// The nullptr passed as vef_thread_t* below is a temporary workaround;
+// the server-side ignores the handle until background threads are implemented.
 
 #include <villagesql/vsql.h>
 
@@ -48,8 +56,10 @@ void run_query_count(StringArg sql, IntResult out) {
   long long count = 0;
   char error_msg[VEF_MAX_ERROR_LEN] = {};
 
+  // TODO(villagesql): replace nullptr with a real vef_thread_t* once
+  // background thread registration is implemented.
   vef_run_query_result_t rc = villagesql::run_query(
-      sql.value(), nullptr,
+      nullptr, sql.value(), nullptr,
       [&](const std::vector<std::string_view> & /*vals*/) { ++count; },
       error_msg);
 
@@ -73,11 +83,15 @@ void run_query_first_col(StringArg sql, StringResult out) {
   bool first_is_null = false;
   char error_msg[VEF_MAX_ERROR_LEN] = {};
 
+  // TODO(villagesql): replace nullptr with a real vef_thread_t* once
+  // background thread registration is implemented.
   vef_run_query_result_t rc = villagesql::run_query(
-      sql.value(), nullptr,
+      nullptr, sql.value(), nullptr,
       [&](const std::vector<std::string_view> &vals) {
         if (got_row) return;  // only keep the first row
         got_row = true;
+        // data() == nullptr means SQL NULL (empty string has data() !=
+        // nullptr).
         if (vals.empty() || vals[0].data() == nullptr) {
           first_is_null = true;
         } else {
@@ -103,7 +117,7 @@ void run_query_first_col(StringArg sql, StringResult out) {
 }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("vsql_run_query_test", "0.0.1")
+    make_extension()
         .func(make_func<&run_query_count>("run_query_count")
                   .returns(INT)
                   .param(STRING)

@@ -261,9 +261,12 @@ typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
 // =============================================================================
 //
 // run_query lets extensions execute SQL from a background thread and receive
-// results row by row. It is intended for use from threads registered via
-// on_install / register_background_thread (Protocol 4), but can be called from
-// any thread that has a MySQL THD attached.
+// results row by row.
+//
+// Calling run_query requires a vef_thread_t handle. This handle is provided
+// by the server to background thread entry points registered by the extension.
+// The requirement is intentional: it makes calling run_query from inside a VDF
+// impossible at compile time, since VDF callbacks do not receive a handle.
 //
 // Column metadata is delivered via vef_column_meta_fn before the first row.
 // Each row is delivered as an array of vef_col_value_t values via
@@ -275,6 +278,11 @@ typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
 //   0  continue processing
 //   1  abort — the query is cancelled and run_query returns an error
 
+// Opaque handle representing a server-managed background thread context.
+// Passed by the server to background thread entry points; must be forwarded
+// to run_query. Extensions cannot construct or copy this handle.
+typedef struct vef_thread_t vef_thread_t;
+
 // A single column value delivered to vef_row_fn.
 // The server always uses text representation (CS_TEXT_REPRESENTATION), so
 // every value arrives as a null-terminated string in `str` / `str_len`, or
@@ -282,7 +290,8 @@ typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
 typedef struct {
   bool is_null;
   const char *str;  // null-terminated; valid only during the row callback
-  size_t str_len;
+  size_t str_len;   // number of bytes in str, not including the null terminator
+                    // (i.e. str_len == strlen(str)); 0 when is_null is true
 } vef_col_value_t;
 
 // Called once before the first row with column names and count.
@@ -308,6 +317,8 @@ typedef enum {
 } vef_run_query_result_t;
 
 // run_query: execute a SQL statement and stream rows to the caller.
+//   thread:      handle for the calling background thread, provided by the
+//                server to the thread entry point. May not be NULL.
 //   sql:         null-terminated SQL string.
 //   sql_len:     byte length of sql (not including the null terminator).
 //   meta_cb:     called once with column metadata before the first row;
@@ -316,14 +327,12 @@ typedef enum {
 //                that return no rows (INSERT, SET, etc.).
 //   ctx:         opaque pointer forwarded to meta_cb and row_cb.
 //   error_msg:   on VEF_QUERY_ERROR, a null-terminated description is written
-//                here; must point to a buffer of at least VEF_MAX_ERROR_LEN
-//                bytes; may be NULL if the caller does not need the message.
+//                here; if non-NULL, must point to a buffer of at least
+//                VEF_MAX_ERROR_LEN bytes.
 // Returns VEF_QUERY_OK, VEF_QUERY_ERROR, or VEF_QUERY_ABORTED.
-typedef vef_run_query_result_t (*vef_run_query_fn)(const char *sql,
-                                                   size_t sql_len,
-                                                   vef_column_meta_fn meta_cb,
-                                                   vef_row_fn row_cb, void *ctx,
-                                                   char *error_msg);
+typedef vef_run_query_result_t (*vef_run_query_fn)(
+    vef_thread_t *thread, const char *sql, size_t sql_len,
+    vef_column_meta_fn meta_cb, vef_row_fn row_cb, void *ctx, char *error_msg);
 
 typedef struct {
   // protocol >= VEF_PROTOCOL_1

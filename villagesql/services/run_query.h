@@ -19,6 +19,12 @@
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
+// Server-side definition of the opaque vef_thread_t handle. Extensions see
+// only the forward declaration in abi/types.h; the server owns the definition.
+// TODO(villagesql): populate this with actual thread state once background
+// thread registration is implemented.
+struct vef_thread_t {};
+
 namespace villagesql {
 namespace services {
 
@@ -32,9 +38,9 @@ namespace services {
 // Must be called from a thread that has been initialized for server use (i.e.,
 // a thread registered via register_vef_background_thread, or the main server
 // thread). Calling from an uninitialized thread results in undefined behavior.
-vef_run_query_result_t run_query(const char *sql, size_t sql_len,
-                                 vef_column_meta_fn meta_cb, vef_row_fn row_cb,
-                                 void *ctx, char *error_msg);
+vef_run_query_result_t run_query(vef_thread_t *thread, const char *sql,
+                                 size_t sql_len, vef_column_meta_fn meta_cb,
+                                 vef_row_fn row_cb, void *ctx, char *error_msg);
 
 }  // namespace services
 }  // namespace villagesql
