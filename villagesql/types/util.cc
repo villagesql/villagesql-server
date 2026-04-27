@@ -17,6 +17,7 @@
 #include "villagesql/types/util.h"
 
 #include <cinttypes>
+#include <map>
 #include <optional>
 
 #include "lex_string.h"
@@ -1263,58 +1264,128 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return true;
   }
 
-  // Process each argument against expected parameter type
+  // Pass 1: Validate base type matches for args that already have a
+  // TypeContext, and collect known TypeParameters per qualified base name.
+  // This enables type disambiguation rule 1 (TD1): when multiple args share the
+  // same custom type, known params from one arg propagate to args that lack
+  // params.
+  //
+  // known_params maps qbn -> (TypeParameters*, first_arg_index) so that
+  // conflicts can be reported with both argument positions.
+  struct KnownEntry {
+    const TypeParameters *params;
+    uint arg_index;
+  };
+  std::map<std::string, KnownEntry> known_params;
+
   for (uint i = 0; i < arg_count; i++) {
     const vef_type_t &expected_type = signature->params[i];
+    if (expected_type.id != VEF_TYPE_CUSTOM) continue;
+    if (args[i]->type() == Item::NULL_ITEM) continue;
 
-    // Only validate custom type parameters
-    if (expected_type.id != VEF_TYPE_CUSTOM) {
-      continue;
-    }
-
-    // NULL is allowed for any parameter type - the VDF will handle it
-    if (args[i]->type() == Item::NULL_ITEM) {
-      continue;
-    }
-
-    // Build the expected qualified base name ("extension.TYPE") once for use
-    // in Cases 1 and 3. This ensures a TYPE from extension A is not accepted
-    // by a VDF from extension B that also declares the same TYPE.
-    // expected_type.custom_type is always non-null for VEF_TYPE_CUSTOM params
-    // (enforced by the SDK).
     assert(expected_type.custom_type != nullptr);
     const std::string expected_qbn = make_qualified_base_name(
         std::string(extension_name.str, extension_name.length),
         expected_type.custom_type);
 
-    // Case 1: Argument already has custom type - validate compatibility.
     auto *tc = args[i]->get_type_context();
-    if (tc != nullptr) {
-      if (tc->qualified_base_name() != expected_qbn) {
+    if (tc == nullptr) continue;  // String constants handled in pass 2
+
+    // Validate the base type matches.
+    if (tc->qualified_base_name() != expected_qbn) {
+      villagesql_error(
+          "Cannot initialize function '%s': argument %u type mismatch "
+          "(expected %s, got %s)",
+          MYF(0), func_name, i + 1, expected_qbn.c_str(),
+          tc->qualified_base_name().c_str());
+      return true;
+    }
+
+    // If this arg has known (non-unknown) params, record them for TD1.
+    if (!tc->is_unknown()) {
+      auto it = known_params.find(expected_qbn);
+      if (it != known_params.end()) {
+        // Another arg already provided params for this type. They must match.
+        if (!(tc->parameters() == *it->second.params)) {
+          villagesql_error(
+              "Cannot initialize function '%s': conflicting type parameters "
+              "for %s in arguments %u and %u",
+              MYF(0), func_name, expected_qbn.c_str(), it->second.arg_index + 1,
+              i + 1);
+          return true;
+        }
+      } else {
+        known_params[expected_qbn] = {&tc->parameters(), i};
+      }
+    }
+  }
+
+  // Pass 2: Resolve unknown params and convert string constants. For each
+  // custom-type arg that needs params, use TD1 (known_params from pass 1).
+  for (uint i = 0; i < arg_count; i++) {
+    const vef_type_t &expected_type = signature->params[i];
+    if (expected_type.id != VEF_TYPE_CUSTOM) continue;
+    if (args[i]->type() == Item::NULL_ITEM) continue;
+
+    assert(expected_type.custom_type != nullptr);
+    const std::string expected_qbn = make_qualified_base_name(
+        std::string(extension_name.str, extension_name.length),
+        expected_type.custom_type);
+
+    auto *tc = args[i]->get_type_context();
+
+    // Case 1: Arg already has a TypeContext with known params — nothing to do.
+    if (tc != nullptr && !tc->is_unknown()) continue;
+
+    // Case 2: Arg has a TypeContext but with unknown params (e.g., from an
+    // inner VDF that returned an unknown-params type). Re-acquire with the
+    // known params if available via TD1.
+    if (tc != nullptr && tc->is_unknown()) {
+      auto it = known_params.find(expected_qbn);
+      if (it != known_params.end()) {
+        LEX_STRING lex_type_name;
+        lex_type_name.str = const_cast<char *>(expected_type.custom_type);
+        lex_type_name.length = strlen(expected_type.custom_type);
+
+        const TypeContext *resolved_tc = nullptr;
+        if (ResolveTypeToContext(extension_name, lex_type_name,
+                                 *it->second.params, *thd->mem_root,
+                                 resolved_tc)) {
+          return true;
+        }
+        if (resolved_tc != nullptr) {
+          args[i]->set_type_context(resolved_tc);
+        }
+      } else {
+        // No known params available for this type. Error.
         villagesql_error(
-            "Cannot initialize function '%s': argument %u type mismatch "
-            "(expected %s, got %s)",
-            MYF(0), func_name, i + 1, expected_qbn.c_str(),
-            tc->qualified_base_name().c_str());
+            "Cannot initialize function '%s': cannot determine type parameters "
+            "for %s in argument %u",
+            MYF(0), func_name, expected_qbn.c_str(), i + 1);
         return true;
       }
       continue;
     }
 
-    // Case 2: Argument is a constant string - try implicit conversion
+    // Case 3: Arg is a constant string — implicit conversion.
     if (args[i]->type() == Item::STRING_ITEM &&
         args[i]->const_for_execution()) {
-      // Resolve the custom type by extension and type name
       LEX_STRING lex_type_name;
       lex_type_name.str = const_cast<char *>(expected_type.custom_type);
       lex_type_name.length = strlen(expected_type.custom_type);
 
+      // Use known params from TD1 if available, otherwise empty (correct for
+      // non-parameterized types).
+      TypeParameters resolved_params;
+      auto it = known_params.find(expected_qbn);
+      if (it != known_params.end()) {
+        resolved_params = *it->second.params;
+      }
+
       const TypeContext *type_ctx = nullptr;
-      // TODO(villagesql-beta): pass real TypeParameters for parameterized types
-      TypeParameters empty_params;
-      if (ResolveTypeToContext(extension_name, lex_type_name, empty_params,
+      if (ResolveTypeToContext(extension_name, lex_type_name, resolved_params,
                                *thd->mem_root, type_ctx)) {
-        return true;  // Error already reported
+        return true;
       }
 
       if (type_ctx == nullptr) {
@@ -1325,14 +1396,23 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
         return true;
       }
 
-      // Inject and encode the custom type
+      // If the resolved type is still unknown (parameterized type, no known
+      // params from other args), error.
+      if (type_ctx->is_unknown()) {
+        villagesql_error(
+            "Cannot initialize function '%s': cannot determine type parameters "
+            "for %s in argument %u",
+            MYF(0), func_name, expected_qbn.c_str(), i + 1);
+        return true;
+      }
+
       if (InjectAndEncodeCustomType(args[i], *type_ctx)) {
-        return true;  // Error already reported
+        return true;
       }
       continue;
     }
 
-    // Case 3: Argument is not a custom type and not a constant string
+    // Case 4: Argument is not a custom type and not a constant string
     villagesql_error(
         "Cannot initialize function '%s': argument %u must be a custom type "
         "or string constant",
