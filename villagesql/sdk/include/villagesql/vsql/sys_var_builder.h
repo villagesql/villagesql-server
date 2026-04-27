@@ -46,8 +46,7 @@ namespace sys_var_builder {
 struct SysVarDescriptor {
   vef_sys_var_desc_t desc;
 
-  constexpr SysVarDescriptor on_change(
-      vef_sys_var_on_change_func_t fn) const {
+  constexpr SysVarDescriptor on_change(vef_sys_var_on_change_func_t fn) const {
     SysVarDescriptor copy = *this;
     copy.desc.on_change = fn;
     return copy;

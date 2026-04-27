@@ -60,7 +60,7 @@ static void on_var_change(const vef_sys_var_change_t *change) {
 }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension("vsql_range_clamp_test", "0.0.1")
+    make_extension()
         .sys_var(make_sys_var_int("min_setting", "Lower bound of the range",
                                   &g_min_setting, 0, 0, 1000)
                      .on_change(&on_var_change))
