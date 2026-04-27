@@ -368,19 +368,26 @@ extern bool TryImplicitCastToCustom(Item *item, const TypeContext &tc);
 // Returns false on success, true on error (with my_error already called)
 extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 
-
 // Validate VDF arguments against function signature and convert string
-// constants to custom types where appropriate. Returns false on success, true
-// on error.
+// constants to custom types where appropriate. Applies type disambiguation
+// rules to the arguments (args of the same custom type share params) to resolve
+// unknown type parameters. If out_return_params is non-null and the return type
+// is a parameterized custom type, writes the resolved TypeParameters for the
+// return type (inferred from args via the rule that the return parameters are
+// the same as those matching arguements of the same abstract type). Returns
+// false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                            const LEX_STRING &extension_name,
                                            uint arg_count, Item **args,
-                                           const vef_signature_t *signature);
+                                           const vef_signature_t *signature,
+                                           TypeParameters *out_return_params);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
+// If return_params is non-null, uses those params instead of empty ones.
 extern void SetVDFReturnTypeContext(THD *thd, const LEX_STRING &extension_name,
                                     const vef_signature_t *signature,
-                                    Item *result_item);
+                                    Item *result_item,
+                                    const TypeParameters *return_params);
 
 // Acquire a client-managed reference to a TypeContext.
 // Returns a shared_ptr that the caller is responsible for releasing.

@@ -13,4 +13,15 @@ CREATE TABLE t_err (v TVECTOR('dimension=0'));
 ERROR 42000: TVECTOR: dimension must be a positive integer near 'TVECTOR('dimension=0'))' at line 1
 CREATE TABLE t_err (v TVECTOR('unknown_key=5'));
 ERROR 42000: TVECTOR: dimension must be a positive integer near 'TVECTOR('unknown_key=5'))' at line 1
+SELECT vsql_tvector.tvector_dot_product('[1,2,3]', '[4,5,6]');
+ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+CREATE TABLE t_dim3 (v TVECTOR(3));
+CREATE TABLE t_dim4 (v TVECTOR(4));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+INSERT INTO t_dim4 (v) VALUES ('[1,2,3,4]');
+SELECT vsql_tvector.tvector_dot_product(
+(SELECT v FROM t_dim3 LIMIT 1),
+(SELECT v FROM t_dim4 LIMIT 1));
+ERROR HY000: Cannot initialize function 'tvector_dot_product': conflicting type parameters for vsql_tvector.TVECTOR in arguments 1 and 2
+DROP TABLE t_dim3, t_dim4;
 UNINSTALL EXTENSION vsql_tvector;

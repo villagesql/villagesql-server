@@ -1254,7 +1254,8 @@ void ClearAlterCustomFields(THD *thd) {
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     const LEX_STRING &extension_name,
                                     uint arg_count, Item **args,
-                                    const vef_signature_t *signature) {
+                                    const vef_signature_t *signature,
+                                    TypeParameters *out_return_params) {
   // Validate argument count matches signature
   if (arg_count != signature->param_count) {
     villagesql_error(
@@ -1277,6 +1278,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     uint arg_index;
   };
   std::map<std::string, KnownEntry> known_params;
+  const std::string ext_name(extension_name.str, extension_name.length);
 
   for (uint i = 0; i < arg_count; i++) {
     const vef_type_t &expected_type = signature->params[i];
@@ -1284,9 +1286,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
     assert(expected_type.custom_type != nullptr);
-    const std::string expected_qbn = make_qualified_base_name(
-        std::string(extension_name.str, extension_name.length),
-        expected_type.custom_type);
+    const std::string expected_qbn =
+        make_qualified_base_name(ext_name, expected_type.custom_type);
 
     auto *tc = args[i]->get_type_context();
     if (tc == nullptr) continue;  // String constants handled in pass 2
@@ -1328,9 +1329,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
     assert(expected_type.custom_type != nullptr);
-    const std::string expected_qbn = make_qualified_base_name(
-        std::string(extension_name.str, extension_name.length),
-        expected_type.custom_type);
+    const std::string expected_qbn =
+        make_qualified_base_name(ext_name, expected_type.custom_type);
 
     auto *tc = args[i]->get_type_context();
 
@@ -1420,12 +1420,26 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return true;
   }
 
+  // Type disambiguation rule 2 (TD2): If the return type is a parameterized
+  // custom type, infer its params from args of the same type.
+  if (out_return_params != nullptr &&
+      signature->return_type.id == VEF_TYPE_CUSTOM &&
+      signature->return_type.custom_type != nullptr) {
+    const std::string return_qbn =
+        make_qualified_base_name(ext_name, signature->return_type.custom_type);
+    auto it = known_params.find(return_qbn);
+    if (it != known_params.end()) {
+      *out_return_params = *it->second.params;
+    }
+  }
+
   return false;
 }
 
 void SetVDFReturnTypeContext(THD *thd, const LEX_STRING &extension_name,
                              const vef_signature_t *signature,
-                             Item *result_item) {
+                             Item *result_item,
+                             const TypeParameters *return_params) {
   const char *return_type_name = signature->return_type.custom_type;
   if (return_type_name == nullptr) {
     return;
@@ -1435,10 +1449,13 @@ void SetVDFReturnTypeContext(THD *thd, const LEX_STRING &extension_name,
   lex_return_type.str = const_cast<char *>(return_type_name);
   lex_return_type.length = strlen(return_type_name);
 
+  TypeParameters params;
+  if (return_params != nullptr) {
+    params = *return_params;
+  }
+
   const TypeContext *return_type_ctx = nullptr;
-  // TODO(villagesql-beta): pass real TypeParameters for parameterized types
-  TypeParameters empty_params;
-  if (!ResolveTypeToContext(extension_name, lex_return_type, empty_params,
+  if (!ResolveTypeToContext(extension_name, lex_return_type, params,
                             *thd->mem_root, return_type_ctx) &&
       return_type_ctx != nullptr) {
     result_item->set_type_context(return_type_ctx);

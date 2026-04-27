@@ -59,5 +59,42 @@ SELECT vsql_tvector.tvector_dot_product(
 (SELECT v FROM t_nulls WHERE id=2)) AS dot_null_both;
 dot_null_both
 NULL
+SELECT vsql_tvector.tvector_add(
+(SELECT v FROM t WHERE id=1),
+'[4,5,6]') AS add_col_str;
+add_col_str
+[5,7,9]
+SELECT vsql_tvector.tvector_add(
+(SELECT v FROM t WHERE id=1),
+(SELECT v FROM t WHERE id=2)) AS add_col_col;
+add_col_col
+[5,7,9]
+SELECT vsql_tvector.tvector_add(
+'[10,20,30]',
+(SELECT v FROM t WHERE id=1)) AS add_str_col;
+add_str_col
+[11,22,33]
+SELECT vsql_tvector.tvector_add(
+(SELECT v FROM t_nulls WHERE id=1),
+(SELECT v FROM t_nulls WHERE id=2)) AS add_null;
+add_null
+NULL
+SELECT vsql_tvector.tvector_scale(
+(SELECT v FROM t WHERE id=1),
+2.0) AS scale_2x;
+scale_2x
+[2,4,6]
+SELECT vsql_tvector.tvector_scale(
+(SELECT v FROM t_nulls WHERE id=2),
+2.0) AS scale_null;
+scale_null
+NULL
+SELECT vsql_tvector.tvector_add(
+vsql_tvector.tvector_scale(
+(SELECT v FROM t WHERE id=1),
+2.0),
+'[1,1,1]') AS chain_scale_add;
+chain_scale_add
+[3,5,7]
 DROP TABLE t, t_double, t_nulls;
 UNINSTALL EXTENSION vsql_tvector;

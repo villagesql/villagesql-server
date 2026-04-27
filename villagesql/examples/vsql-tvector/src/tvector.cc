@@ -329,6 +329,70 @@ void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
   out.set(sum);
 }
 
+// Element-wise add: (TVECTOR, TVECTOR) -> TVECTOR
+// Vectors must have the same dimension and element type.
+void tvector_add(villagesql::CustomArgWith<TVectorParams> a,
+                 villagesql::CustomArgWith<TVectorParams> b,
+                 villagesql::CustomResultWith<TVectorParams> out) {
+  if (a.is_null() || b.is_null()) {
+    out.set_null();
+    return;
+  }
+  const TVectorParams &pa = a.params();
+  const TVectorParams &pb = b.params();
+  if (pa.dimension != pb.dimension || pa.bytes_per_elem != pb.bytes_per_elem) {
+    out.error("tvector_add: vectors must have the same dimension and type");
+    return;
+  }
+  auto buf = out.buffer();
+  size_t byte_size = static_cast<size_t>(pa.dimension) * pa.bytes_per_elem;
+  if (buf.size() < byte_size) {
+    out.error("tvector_add: output buffer too small");
+    return;
+  }
+  const unsigned char *da = a.value().data();
+  const unsigned char *db = b.value().data();
+  for (int64_t i = 0; i < pa.dimension; i++) {
+    if (pa.bytes_per_elem == 8) {
+      double v = load_double(da + i * 8) + load_double(db + i * 8);
+      store_double(buf.data() + i * 8, v);
+    } else {
+      float v = load_float(da + i * 4) + load_float(db + i * 4);
+      store_float(buf.data() + i * 4, v);
+    }
+  }
+  out.set_length(byte_size);
+}
+
+// Scalar multiply: (TVECTOR, REAL) -> TVECTOR
+void tvector_scale(villagesql::CustomArgWith<TVectorParams> a,
+                   villagesql::RealArg scalar,
+                   villagesql::CustomResultWith<TVectorParams> out) {
+  if (a.is_null() || scalar.is_null()) {
+    out.set_null();
+    return;
+  }
+  const TVectorParams &pa = a.params();
+  double s = scalar.value();
+  auto buf = out.buffer();
+  size_t byte_size = static_cast<size_t>(pa.dimension) * pa.bytes_per_elem;
+  if (buf.size() < byte_size) {
+    out.error("tvector_scale: output buffer too small");
+    return;
+  }
+  const unsigned char *da = a.value().data();
+  for (int64_t i = 0; i < pa.dimension; i++) {
+    if (pa.bytes_per_elem == 8) {
+      double v = load_double(da + i * 8) * s;
+      store_double(buf.data() + i * 8, v);
+    } else {
+      float v = load_float(da + i * 4) * static_cast<float>(s);
+      store_float(buf.data() + i * 4, v);
+    }
+  }
+  out.set_length(byte_size);
+}
+
 static constexpr const char kTVectorTypeName[] = "TVECTOR";
 
 constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
@@ -354,5 +418,17 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(REAL)
                   .param(TVECTOR)
                   .param(TVECTOR)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_add>("tvector_add")
+                  .returns(TVECTOR)
+                  .param(TVECTOR)
+                  .param(TVECTOR)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_scale>("tvector_scale")
+                  .returns(TVECTOR)
+                  .param(TVECTOR)
+                  .param(REAL)
                   .deterministic()
                   .build()))

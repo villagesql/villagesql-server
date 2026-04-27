@@ -85,6 +85,59 @@ SELECT vsql_tvector.tvector_dot_product(
 
 ########################################################################
 #
+# Test: tvector_add - element-wise addition
+#
+########################################################################
+
+# Column + string constant
+SELECT vsql_tvector.tvector_add(
+    (SELECT v FROM t WHERE id=1),
+    '[4,5,6]') AS add_col_str;
+
+# Both args from table columns
+SELECT vsql_tvector.tvector_add(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=2)) AS add_col_col;
+
+# String constant + column
+SELECT vsql_tvector.tvector_add(
+    '[10,20,30]',
+    (SELECT v FROM t WHERE id=1)) AS add_str_col;
+
+# NULL handling
+SELECT vsql_tvector.tvector_add(
+    (SELECT v FROM t_nulls WHERE id=1),
+    (SELECT v FROM t_nulls WHERE id=2)) AS add_null;
+
+########################################################################
+#
+# Test: tvector_scale - scalar multiplication
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_scale(
+    (SELECT v FROM t WHERE id=1),
+    2.0) AS scale_2x;
+
+# NULL handling
+SELECT vsql_tvector.tvector_scale(
+    (SELECT v FROM t_nulls WHERE id=2),
+    2.0) AS scale_null;
+
+########################################################################
+#
+# Test: chained VDFs
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_add(
+    vsql_tvector.tvector_scale(
+        (SELECT v FROM t WHERE id=1),
+        2.0),
+    '[1,1,1]') AS chain_scale_add;
+
+########################################################################
+#
 # Clean up
 #
 ########################################################################

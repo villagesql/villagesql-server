@@ -91,11 +91,15 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     m_vdf_args.values_v1 = m_invalues_v1;
   }
 
-  // Validate and convert VDF arguments (custom type handling)
+  // Validate and convert VDF arguments (custom type handling).
+  // We resolve unknown type params from sibling args by default; we then infer
+  // return type params from the args, as written into return_params.
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
-  if (signature != nullptr && villagesql::ValidateAndConvertVDFArguments(
-                                  thd, m_udf->name.str, m_udf->extension_name,
-                                  arg_count, m_args, signature)) {
+  villagesql::TypeParameters return_params;
+  if (signature != nullptr &&
+      villagesql::ValidateAndConvertVDFArguments(
+          thd, m_udf->name.str, m_udf->extension_name, arg_count, m_args,
+          signature, &return_params)) {
     return true;
   }
 
@@ -163,10 +167,12 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     }
   }
 
-  // Set return type_context if this VDF returns a custom type
+  // Set return type_context if this VDF returns a custom type. Pass the
+  // return_params inferred from args via the call to
+  // ValidateAndConvertVDFArguments.
   if (signature != nullptr && signature->return_type.id == VEF_TYPE_CUSTOM) {
     villagesql::SetVDFReturnTypeContext(thd, m_udf->extension_name, signature,
-                                        func);
+                                        func, &return_params);
     m_return_type_context = func->get_type_context();
   }
 

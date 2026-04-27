@@ -66,6 +66,33 @@ CREATE TABLE t_err (v TVECTOR('unknown_key=5'));
 
 ########################################################################
 #
+# Test: VDF with two string constants - no type params can be inferred
+#
+########################################################################
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dot_product('[1,2,3]', '[4,5,6]');
+
+########################################################################
+#
+# Test: VDF with conflicting dimensions from table columns
+#
+########################################################################
+
+CREATE TABLE t_dim3 (v TVECTOR(3));
+CREATE TABLE t_dim4 (v TVECTOR(4));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+INSERT INTO t_dim4 (v) VALUES ('[1,2,3,4]');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t_dim3 LIMIT 1),
+    (SELECT v FROM t_dim4 LIMIT 1));
+
+DROP TABLE t_dim3, t_dim4;
+
+########################################################################
+#
 # Clean up
 #
 ########################################################################
