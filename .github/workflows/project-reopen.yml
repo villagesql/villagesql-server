@@ -1,0 +1,45 @@
+name: Reset status on issue reopen
+on:
+  issues:
+    types: [reopened]
+
+jobs:
+  reset-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get project item ID
+        id: get-item
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          ITEM_ID=$(gh api graphql -f query='
+            query($issue: ID!) {
+              node(id: $issue) {
+                ... on Issue {
+                  projectItems(first: 1) {
+                    nodes { id }
+                  }
+                }
+              }
+            }' -f issue="${{ github.event.issue.node_id }}" \
+            --jq '.data.node.projectItems.nodes[0].id')
+          echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
+
+      - name: Set status to In Progress
+        if: steps.get-item.outputs.item_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          gh api graphql -f query='
+            mutation($project: ID!, $item: ID!, $field: ID!, $value: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $project
+                itemId: $item
+                fieldId: $field
+                value: { singleSelectOptionId: $value }
+              }) { projectV2Item { id } }
+            }' \
+            -f project="PVT_kwDODHBxMc4BV8Kx" \
+            -f item="${{ steps.get-item.outputs.item_id }}" \
+            -f field="PVTSSF_lADODHBxMc4BV8KxzhRUOCQ" \
+            -f value="01a79077"
