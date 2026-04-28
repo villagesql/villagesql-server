@@ -15,11 +15,15 @@
  */
 #include "custom_column.h"
 
+#include <unordered_set>
+
+#include "sql/create_field.h"
 #include "sql/current_thd.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/types/column.h"
 #include "sql/dd/types/table.h"
 #include "sql/field.h"
+#include "sql/handler.h"
 #include "sql/table.h"
 #include "storage/innobase/include/btr0pcur.h"
 #include "storage/innobase/include/dict0dd.h"
@@ -46,6 +50,29 @@ namespace innodb {
 const std::optional<Custom_column::StorageIntf> &
 Custom_column::storage_interface() const {
   return type_context_->storage_intf();
+}
+
+bool Custom_column::alter_add_drop_with_extended_storage(
+    const Alter_inplace_info *ha_alter_info, const TABLE *table) {
+  auto has_extended = [](const TypeContext *tc) {
+    return tc != nullptr && tc->storage_intf().has_value();
+  };
+
+  // Build set of old Field* objects being kept; also check any added column.
+  std::unordered_set<const Field *> kept;
+  for (const Create_field &f : ha_alter_info->alter_info->create_list) {
+    if (f.field != nullptr)
+      kept.insert(f.field);
+    else if (has_extended(f.custom_type_context))
+      return true;  // ADD of extended-storage column
+  }
+
+  // Any old field absent from kept is being dropped.
+  for (uint i = 0; table->field[i]; i++) {
+    const Field *f = table->field[i];
+    if (!kept.count(f) && has_extended(f->get_type_context())) return true;
+  }
+  return false;
 }
 
 Custom_column::Info Custom_column::get_from_field(const dict_field_t *field) {

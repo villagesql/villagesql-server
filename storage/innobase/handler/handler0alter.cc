@@ -1102,6 +1102,19 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
           /* In this case, it can't be instant because the table
           may not be empty. Have to fall back to INPLACE */
           break;
+        } else if (villagesql::innodb::Custom_column::
+                       alter_add_drop_with_extended_storage(ha_alter_info,
+                                                            table)) {
+          // TODO(villagesql-ga): Support INSTANT ALTER for custom columns with
+          // extended storage.
+          if (is_instant_requested) {
+            villagesql_error(
+                "ALGORITHM=INSTANT is not supported for columns "
+                "with extended storage.",
+                MYF(0));
+            return HA_ALTER_ERROR;
+          }
+          break;
         }
         [[fallthrough]];
       case Instant_Type::INSTANT_NO_CHANGE:
