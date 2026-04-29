@@ -28,10 +28,13 @@ EXTENSIONS_FILE="${EXTENSIONS_FILE:-villagesql/dev_server/bundled_extensions.txt
 EXTS_JSON=$(grep -v '^[[:space:]]*#\|^[[:space:]]*$' "$EXTENSIONS_FILE" \
   | jq -R '
       split(" ") |
+      . as $f |
       {
-        url:       (.[0] | rtrimstr("/")),
-        branch:    (.[1] // ""),
-        extension: (.[0] | rtrimstr("/") | split("/") | last)
+        url:       ($f[0] | rtrimstr("/")),
+        branch:    ($f[1] // ""),
+        extension: ($f[0] | rtrimstr("/") | split("/") | last),
+        abis:      (($f[2:] | map(select(startswith("abi=")) | ltrimstr("abi=")) | .[0]) as $a |
+                   if $a then [$a] else ["stable","dev"] end)
       }' \
   | jq -sc .)
 
@@ -56,14 +59,7 @@ else
   PLATFORMS="$ALL_PLATFORMS"
 fi
 
-# ---------------------------------------------------------------------------
-# ABIs
-# ---------------------------------------------------------------------------
-if [ -n "${ABI_FILTER:-}" ]; then
-  ABIS="[\"$ABI_FILTER\"]"
-else
-  ABIS='["stable","dev"]'
-fi
+ABI_FILTER="${ABI_FILTER:-}"
 
 # ---------------------------------------------------------------------------
 # Emit empty sentinel when nothing matches
@@ -90,8 +86,13 @@ BUILD_MATRIX=$(jq -cn \
 TEST_MATRIX=$(jq -cn \
   --argjson platforms "$PLATFORMS" \
   --argjson extensions "$EXTS_JSON" \
-  --argjson abis "$ABIS" \
-  '{include: [$platforms[] as $p | $extensions[] as $e | $abis[] as $a | ($p + $e + {abi: $a})]}')
+  --arg abi_filter "$ABI_FILTER" \
+  '{include: [
+    $platforms[] as $p |
+    $extensions[] as $e |
+    ($e.abis | if $abi_filter != "" then map(select(. == $abi_filter)) else . end)[] as $a |
+    ($p + {url: $e.url, branch: $e.branch, extension: $e.extension} + {abi: $a})
+  ]}')
 
 echo "$BUILD_MATRIX"
 echo "$TEST_MATRIX"

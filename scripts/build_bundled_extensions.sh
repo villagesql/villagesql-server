@@ -60,12 +60,22 @@ while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${line// }" ]] && continue
 
-    # Parse "url [branch-or-tag]" — branch is optional
-    read -r SOURCE BRANCH <<< "$line"
-    SOURCE="${SOURCE%/}"  # strip any trailing slash
+    # Parse "url [branch-or-tag] [key=value ...]" — all fields after url are optional
+    read -ra FIELDS <<< "$line"
+    SOURCE="${FIELDS[0]%/}"
+    BRANCH="${FIELDS[1]:-}"
     REPO_NAME="${SOURCE##*/}"
 
     if [[ -n "$EXTENSION_FILTER" && "$REPO_NAME" != "$EXTENSION_FILTER" ]]; then
+        continue
+    fi
+
+    BUNDLE=true
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == "bundle=false" || "$FIELD" == "bundle=no" ]] && BUNDLE=false
+    done
+    if [[ "$BUNDLE" == "false" ]]; then
+        log_info "Skipping $REPO_NAME (bundle=false)"
         continue
     fi
 
