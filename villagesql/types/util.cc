@@ -1449,13 +1449,9 @@ void SetVDFReturnTypeContext(THD *thd, const LEX_STRING &extension_name,
   lex_return_type.str = const_cast<char *>(return_type_name);
   lex_return_type.length = strlen(return_type_name);
 
-  TypeParameters params;
-  if (return_params != nullptr) {
-    params = *return_params;
-  }
-
   const TypeContext *return_type_ctx = nullptr;
-  if (!ResolveTypeToContext(extension_name, lex_return_type, params,
+  if (!ResolveTypeToContext(extension_name, lex_return_type,
+                            return_params ? *return_params : TypeParameters{},
                             *thd->mem_root, return_type_ctx) &&
       return_type_ctx != nullptr) {
     result_item->set_type_context(return_type_ctx);
