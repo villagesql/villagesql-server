@@ -91,32 +91,28 @@ struct ExtensionBuilder {
   // is raised automatically.
   constexpr auto type(const TypeDescriptor &td) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(td));
-    const auto &t = td.vef_desc;
-    const vef_protocol_t new_min =
-        t.protocol > min_protocol_ ? t.protocol : min_protocol_;
     return ExtensionBuilder<FuncTuple, decltype(new_types), SysVarTuple,
-                            StatusVarTuple>{funcs_, new_types, sys_vars_,
-                                            status_vars_, new_min};
+                            StatusVarTuple>{
+        funcs_, new_types, sys_vars_, status_vars_,
+        require_atleast_min(td.vef_desc.protocol)};
   }
 
   // Add a system variable. System variables require at least VEF_PROTOCOL_2.
   constexpr auto sys_var(const SysVarDescriptor &cv) const {
     auto new_cvs = std::tuple_cat(sys_vars_, std::make_tuple(cv));
-    const vef_protocol_t new_min =
-        VEF_PROTOCOL_2 > min_protocol_ ? VEF_PROTOCOL_2 : min_protocol_;
     return ExtensionBuilder<FuncTuple, TypeTuple, decltype(new_cvs),
-                            StatusVarTuple>{funcs_, types_, new_cvs,
-                                            status_vars_, new_min};
+                            StatusVarTuple>{
+        funcs_, types_, new_cvs, status_vars_,
+        require_atleast_min(VEF_PROTOCOL_2)};
   }
 
   // Add a status variable. Status variables require at least VEF_PROTOCOL_2.
   constexpr auto status_var(const StatusVarDescriptor &sv) const {
     auto new_svs = std::tuple_cat(status_vars_, std::make_tuple(sv));
-    const vef_protocol_t new_min =
-        VEF_PROTOCOL_2 > min_protocol_ ? VEF_PROTOCOL_2 : min_protocol_;
     return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple,
-                            decltype(new_svs)>{funcs_, types_, sys_vars_,
-                                               new_svs, new_min};
+                            decltype(new_svs)>{
+        funcs_, types_, sys_vars_, new_svs,
+        require_atleast_min(VEF_PROTOCOL_2)};
   }
 
   // Add a type object that carries embedded SQL-callable VDFs (e.g. the
@@ -129,13 +125,14 @@ struct ExtensionBuilder {
   constexpr auto type(const TypeObj &t) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(t.descriptor));
     auto new_funcs = std::tuple_cat(funcs_, t.embedded_funcs);
-    const vef_protocol_t new_min =
-        t.descriptor.vef_desc.protocol > min_protocol_
-            ? t.descriptor.vef_desc.protocol
-            : min_protocol_;
     return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
                             SysVarTuple, StatusVarTuple>{
-        new_funcs, new_types, sys_vars_, status_vars_, new_min};
+        new_funcs, new_types, sys_vars_, status_vars_,
+        require_atleast_min(t.descriptor.vef_desc.protocol)};
+  }
+
+  constexpr vef_protocol_t require_atleast_min(vef_protocol_t required) const {
+    return required > min_protocol_ ? required : min_protocol_;
   }
 
   // This is here only for testing, please don't depend on it.
