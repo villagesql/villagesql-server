@@ -23,9 +23,17 @@
 
 // VillageSQL test extension demonstrating on_change callbacks.
 //
-// Exposes two system variables:
+// Exposes three system variables:
 //   vsql_range_clamp_test.min_setting  INT  (default 0,  range 0..1000)
 //   vsql_range_clamp_test.max_setting  INT  (default 100, range 0..1000)
+//   vsql_range_clamp_test.label        STR  (default "")
+//
+// min_setting and max_setting share an on_change handler — the callback
+// receives a SysVarChange and uses var_name() to identify which variable
+// changed, then as_int() to read the typed value.
+//
+// label uses a separate on_change handler that calls as_str() to read the
+// value. Both demonstrate the SysVarChange typed API.
 //
 // The on_change callback enforces min_setting <= max_setting:
 //   - Setting min_setting above the current max_setting raises max_setting
@@ -50,20 +58,43 @@ using namespace vsql;
 
 static long long g_min_setting = 0;
 static long long g_max_setting = 100;
+static char *g_label = nullptr;
+static char g_last_label[256] = "";
 
-static void on_var_change(const vef_sys_var_change_t *change) {
-  if (strcmp(change->var_name, "min_setting") == 0) {
-    if (change->int_val > g_max_setting) g_max_setting = change->int_val;
-  } else if (strcmp(change->var_name, "max_setting") == 0) {
-    if (change->int_val < g_min_setting) g_min_setting = change->int_val;
+// Shared handler for min_setting and max_setting — uses var_name() to
+// identify which variable changed, and as_int() to read the typed value.
+static void on_range_change(SysVarChange change) {
+  if (change.var_name() == "min_setting") {
+    if (change.as_int().value() > g_max_setting)
+      g_max_setting = change.as_int().value();
+  } else if (change.var_name() == "max_setting") {
+    if (change.as_int().value() < g_min_setting)
+      g_min_setting = change.as_int().value();
   }
+}
+
+// Separate handler for label — uses as_str() to read the typed value.
+static void on_label_change(SysVarChange change) {
+  auto sv = change.as_str().value();
+  size_t len = sv.size() < sizeof(g_last_label) - 1 ? sv.size()
+                                                     : sizeof(g_last_label) - 1;
+  memcpy(g_last_label, sv.data(), len);
+  g_last_label[len] = '\0';
+}
+
+static void last_label_vdf(StringResult out) {
+  out.set(std::string_view(g_last_label));
 }
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
         .sys_var(make_sys_var_int("min_setting", "Lower bound of the range",
                                   &g_min_setting, 0, 0, 1000)
-                     .on_change(&on_var_change))
+                     .on_change<&on_range_change>())
         .sys_var(make_sys_var_int("max_setting", "Upper bound of the range",
                                   &g_max_setting, 100, 0, 1000)
-                     .on_change(&on_var_change)))
+                     .on_change<&on_range_change>())
+        .sys_var(make_sys_var_str("label", "Arbitrary label string", &g_label,
+                                  "")
+                     .on_change<&on_label_change>())
+        .func(make_func<&last_label_vdf>("last_label").returns(STRING).build()))

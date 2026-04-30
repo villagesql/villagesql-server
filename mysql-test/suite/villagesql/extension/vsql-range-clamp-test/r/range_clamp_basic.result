@@ -6,6 +6,9 @@ SELECT @@global.vsql_range_clamp_test.min_setting;
 SELECT @@global.vsql_range_clamp_test.max_setting;
 @@global.vsql_range_clamp_test.max_setting
 100
+SELECT @@global.vsql_range_clamp_test.label;
+@@global.vsql_range_clamp_test.label
+
 # Setting min above max raises max to match
 SET GLOBAL vsql_range_clamp_test.min_setting = 200;
 SELECT @@global.vsql_range_clamp_test.min_setting;
@@ -46,4 +49,13 @@ SELECT @@global.vsql_range_clamp_test.min_setting;
 SELECT @@global.vsql_range_clamp_test.max_setting;
 @@global.vsql_range_clamp_test.max_setting
 42
+# Typed on_change callback fires with the new string value
+SET GLOBAL vsql_range_clamp_test.label = 'hello';
+SELECT vsql_range_clamp_test.last_label();
+vsql_range_clamp_test.last_label()
+hello
+SET GLOBAL vsql_range_clamp_test.label = 'world';
+SELECT vsql_range_clamp_test.last_label();
+vsql_range_clamp_test.last_label()
+world
 UNINSTALL EXTENSION vsql_range_clamp_test;

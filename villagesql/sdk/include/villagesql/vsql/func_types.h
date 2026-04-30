@@ -258,6 +258,11 @@ class StringResult {
     r_->actual_len = len;
     r_->type = VEF_RESULT_VALUE;
   }
+  void set(std::string_view sv) {
+    size_t len = sv.size() < r_->max_str_len ? sv.size() : r_->max_str_len;
+    memcpy(r_->str_buf, sv.data(), len);
+    set_length(len);
+  }
   void set_null() { r_->type = VEF_RESULT_NULL; }
   void warning(std::string_view msg) {
     r_->type = VEF_RESULT_WARNING;

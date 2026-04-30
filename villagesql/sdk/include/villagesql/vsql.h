@@ -131,6 +131,9 @@ using villagesql::func_builder::INT;
 using villagesql::func_builder::REAL;
 using villagesql::func_builder::STRING;
 
+// Re-export sys_var change wrapper
+using villagesql::sys_var_builder::SysVarChange;
+
 }  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_H
