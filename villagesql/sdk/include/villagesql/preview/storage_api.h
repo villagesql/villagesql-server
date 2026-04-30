@@ -35,11 +35,32 @@
 #include <vector>
 
 #include <villagesql/abi/preview/storage.h>
+#include <villagesql/detail/capability_hash.h>
+#include <villagesql/vsql/extension_builder.h>
 
 static_assert(VEF_STORAGE_SE_INTF_VERSION == 1,
               "This C++ wrapper supports ABI v1 only");
 
 namespace vsql::preview_storage {
+
+// C++ wrapper around vef_preview_storage_t.
+//
+// Usage:
+//   static auto g_storage = vsql::preview_storage::make_capability();
+//
+// Register with:
+//   make_extension().with<vsql::preview::preview_storage<g_storage>>()
+//
+class StorageCapability {
+ public:
+  static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+
+  // Populated by the server via the required_capability receive callback.
+  // Public so that detail::storage_cap_receive<> can access it.
+  vef_preview_storage_t abi_{};
+};
+
+inline StorageCapability make_capability() { return StorageCapability{}; }
 
 // Error codes returned by storage ABI functions.
 enum class Error {
@@ -55,6 +76,21 @@ enum class Error {
 namespace detail {
 inline constexpr size_t ERROR_MSG_SIZE = 512;
 inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
+
+// TODO(villagesql-indexing): remove this global pointer, instead passing the
+// capability in the API.
+// Module-level vtable pointer, set by storage_cap_receive when the server
+// calls the required_capability receive callback during registration.
+// The inline implementations below call through this pointer so that
+// extensions that don't use storage never emit references to vef_storage_*
+// symbols at link time.
+inline const vef_preview_storage_t *g_abi = nullptr;
+
+template <StorageCapability *cap_ptr>
+void storage_cap_receive(void *vtable) {
+  cap_ptr->abi_ = *static_cast<vef_preview_storage_t *>(vtable);
+  g_abi = &cap_ptr->abi_;
+}
 }  // namespace detail
 
 // Returns a string_view over the error message from the last failed call on
@@ -402,9 +438,9 @@ inline MtrCtx::Ref MtrCtx::start() {
   uint32_t required_size = 0;
   uint32_t required_alignment = 0;
 
-  m_ref = vef_storage_mtr_start(m_buf, MAX_STACK_SIZE, &required_size,
-                                &required_alignment, detail::tl_error_msg,
-                                detail::ERROR_MSG_SIZE);
+  m_ref = detail::g_abi->mtr_start(m_buf, MAX_STACK_SIZE, &required_size,
+                                   &required_alignment, detail::tl_error_msg,
+                                   detail::ERROR_MSG_SIZE);
   if (m_ref != nullptr) {
     return m_ref;
   }
@@ -430,15 +466,15 @@ inline MtrCtx::Ref MtrCtx::start() {
       return nullptr;
     }
   }
-  m_ref = vef_storage_mtr_start(m_heap_buf, m_heap_size, &required_size,
-                                &required_alignment, detail::tl_error_msg,
-                                detail::ERROR_MSG_SIZE);
+  m_ref = detail::g_abi->mtr_start(m_heap_buf, m_heap_size, &required_size,
+                                   &required_alignment, detail::tl_error_msg,
+                                   detail::ERROR_MSG_SIZE);
   return m_ref;
 }
 
 inline void MtrCtx::commit() {
   if (m_ref != nullptr) {
-    vef_storage_mtr_commit(m_ref);
+    detail::g_abi->mtr_commit(m_ref);
     m_ref = nullptr;
   }
 }
@@ -453,9 +489,9 @@ inline MtrCtx::~MtrCtx() {
 // Segment inline implementations
 inline Error Segment::create(Space::Ref space, uint8_t num_segments,
                              TrxRef trx_ref, PageRef &root_page_ref) {
-  return static_cast<Error>(
-      vef_storage_segment_create(space, num_segments, trx_ref, &root_page_ref,
-                                 detail::tl_error_msg, detail::ERROR_MSG_SIZE));
+  return static_cast<Error>(detail::g_abi->segment_create(
+      space, num_segments, trx_ref, &root_page_ref, detail::tl_error_msg,
+      detail::ERROR_MSG_SIZE));
 }
 
 inline Segment::Ref Segment::get_header(Page &root_page, size_t seg_no) {
@@ -478,9 +514,9 @@ inline Segment::Ref Segment::get_header(Page &root_page, size_t seg_no) {
 
 inline Error Segment::drop(Space::Ref space, TrxRef trx_ref,
                            PageRef root_page_ref) {
-  return static_cast<Error>(
-      vef_storage_segment_drop(space, trx_ref, root_page_ref,
-                               detail::tl_error_msg, detail::ERROR_MSG_SIZE));
+  return static_cast<Error>(detail::g_abi->segment_drop(
+      space, trx_ref, root_page_ref, detail::tl_error_msg,
+      detail::ERROR_MSG_SIZE));
 }
 
 // Page inline implementations
@@ -498,7 +534,7 @@ inline bool Page::is_loaded(Latch latch) const {
 }
 
 inline uint32_t Page::get_size(Space::Ref space) {
-  return vef_storage_page_get_size(space);
+  return detail::g_abi->page_get_size(space);
 }
 
 inline uint32_t Page::data_size() const {
@@ -529,15 +565,17 @@ inline void Page::read_links(Ref &prev_page, Ref &next_page) const {
 inline void Page::write_prev_link(Ref prev_page, MtrCtx::Ref mtr) {
   assert(is_loaded());
   if (!is_loaded()) return;
-  vef_storage_page_write_integer(m_block, VEF_STORAGE_FIL_PAGE_PREV, prev_page,
-                                 VEF_STORAGE_PAGE_INT_4BYTES, mtr);
+  detail::g_abi->page_write_integer(m_block, VEF_STORAGE_FIL_PAGE_PREV,
+                                    prev_page, VEF_STORAGE_PAGE_INT_4BYTES,
+                                    mtr);
 }
 
 inline void Page::write_next_link(Ref next_page, MtrCtx::Ref mtr) {
   assert(is_loaded());
   if (!is_loaded()) return;
-  vef_storage_page_write_integer(m_block, VEF_STORAGE_FIL_PAGE_NEXT, next_page,
-                                 VEF_STORAGE_PAGE_INT_4BYTES, mtr);
+  detail::g_abi->page_write_integer(m_block, VEF_STORAGE_FIL_PAGE_NEXT,
+                                    next_page, VEF_STORAGE_PAGE_INT_4BYTES,
+                                    mtr);
 }
 
 inline void Page::write_links(Ref prev_page, Ref next_page, MtrCtx::Ref mtr) {
@@ -566,10 +604,10 @@ inline bool Page::data_bounds_check(Offset offset, size_t size) const {
 inline Error Page::load(Space::Ref space, Ref page, Latch latch,
                         MtrCtx::Ref mtr) {
   reset();
-  auto err = static_cast<Error>(
-      vef_storage_page_load(&m_block, &m_position, &m_data, &m_data_size, space,
-                            page, static_cast<vef_storage_latch_t>(latch), mtr,
-                            detail::tl_error_msg, detail::ERROR_MSG_SIZE));
+  auto err = static_cast<Error>(detail::g_abi->page_load(
+      &m_block, &m_position, &m_data, &m_data_size, space, page,
+      static_cast<vef_storage_latch_t>(latch), mtr, detail::tl_error_msg,
+      detail::ERROR_MSG_SIZE));
   if (err != Error::SUCCESS) {
     reset();
     return err;
@@ -581,7 +619,7 @@ inline Error Page::load(Space::Ref space, Ref page, Latch latch,
 
 inline Error Page::load_new(Segment::Ref segment_header, MtrCtx::Ref mtr) {
   reset();
-  auto err = static_cast<Error>(vef_storage_page_allocate_and_load(
+  auto err = static_cast<Error>(detail::g_abi->page_allocate_and_load(
       &m_block, &m_ref, &m_data, &m_data_size,
       static_cast<unsigned char *>(segment_header), mtr, detail::tl_error_msg,
       detail::ERROR_MSG_SIZE));
@@ -624,8 +662,8 @@ inline Error Page::latch(Latch &latch, MtrCtx::Ref mtr) {
 
   auto abi_latch = static_cast<vef_storage_latch_t>(latch);
   auto err = static_cast<Error>(
-      vef_storage_page_latch(m_block, m_position, abi_latch, mtr,
-                             detail::tl_error_msg, detail::ERROR_MSG_SIZE));
+      detail::g_abi->page_latch(m_block, m_position, abi_latch, mtr,
+                                detail::tl_error_msg, detail::ERROR_MSG_SIZE));
   if (err == Error::SUCCESS) {
     m_latch = latch;
   }
@@ -648,7 +686,7 @@ inline Error Page::release(MtrCtx::Ref mtr) {
     return Error::INVALID_ARGUMENT;
   }
 
-  auto err = static_cast<Error>(vef_storage_page_release(
+  auto err = static_cast<Error>(detail::g_abi->page_release(
       m_block, m_position, mtr, detail::tl_error_msg, detail::ERROR_MSG_SIZE));
   if (err != Error::SUCCESS) return err;
 
@@ -660,35 +698,35 @@ inline Error Page::release(MtrCtx::Ref mtr) {
 inline void Page::write_integer_1(Offset offset, uint8_t value,
                                   MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, 1)) return;
-  vef_storage_page_write_integer(m_block, offset, value,
-                                 VEF_STORAGE_PAGE_INT_1BYTE, mtr);
+  detail::g_abi->page_write_integer(m_block, offset, value,
+                                    VEF_STORAGE_PAGE_INT_1BYTE, mtr);
 }
 
 inline void Page::write_integer_2(Offset offset, uint16_t value,
                                   MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, 2)) return;
-  vef_storage_page_write_integer(m_block, offset, value,
-                                 VEF_STORAGE_PAGE_INT_2BYTES, mtr);
+  detail::g_abi->page_write_integer(m_block, offset, value,
+                                    VEF_STORAGE_PAGE_INT_2BYTES, mtr);
 }
 
 inline void Page::write_integer_4(Offset offset, uint32_t value,
                                   MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, 4)) return;
-  vef_storage_page_write_integer(m_block, offset, value,
-                                 VEF_STORAGE_PAGE_INT_4BYTES, mtr);
+  detail::g_abi->page_write_integer(m_block, offset, value,
+                                    VEF_STORAGE_PAGE_INT_4BYTES, mtr);
 }
 
 inline void Page::write_integer_8(Offset offset, uint64_t value,
                                   MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, 8)) return;
-  vef_storage_page_write_integer(m_block, offset, value,
-                                 VEF_STORAGE_PAGE_INT_8BYTES, mtr);
+  detail::g_abi->page_write_integer(m_block, offset, value,
+                                    VEF_STORAGE_PAGE_INT_8BYTES, mtr);
 }
 
 inline void Page::write_string(Offset offset, const unsigned char *str,
                                size_t len, MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, len)) return;
-  vef_storage_page_write_string(m_block, offset, str, len, mtr);
+  detail::g_abi->page_write_string(m_block, offset, str, len, mtr);
 }
 
 template <typename T>
@@ -866,4 +904,22 @@ struct Column {
 };
 
 }  // namespace vsql::preview_storage
+
+namespace vsql::preview {
+
+// Traits type for registering the storage capability via
+// .with<preview_storage<cap>>. Only available when this header is included.
+template <auto &cap>
+struct preview_storage {
+  template <typename EB>
+  static constexpr auto bind(EB builder) {
+    using Cap = vsql::preview_storage::StorageCapability;
+    return builder.required_capability(
+        {Cap::kName, &vsql::preview_storage::detail::storage_cap_receive<&cap>,
+         villagesql::detail::abi_type_hash<vef_preview_storage_t>()});
+  }
+};
+
+}  // namespace vsql::preview
+
 #endif  // VILLAGESQL_PREVIEW_STORAGE_API_H_

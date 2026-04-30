@@ -483,8 +483,76 @@ void vef_storage_page_write_string(vef_storage_block_ref_t block,
                                    const unsigned char *str, uint32_t len,
                                    vef_storage_mtr_ref_t mtr_ref);
 
+// Preview capability: "vsql::preview::storage"
+//
+// Provides access to InnoDB storage engine functions. Extensions that require
+// this capability can create, load, and manipulate InnoDB segments and pages.
+//
+// The server populates the vtable before vef_register() returns. Extensions
+// must not call any storage functions before registration completes.
+//
+// Capability name: VEF_PREVIEW_STORAGE_NAME
+
+#define VEF_PREVIEW_STORAGE_NAME "vsql::preview::storage"
+
+typedef vef_storage_mtr_ref_t (*vef_storage_mtr_start_fn)(
+    void *buffer, uint32_t buffer_size, uint32_t *required_size,
+    uint32_t *required_alignment, char *error_msg, uint32_t error_msg_len);
+typedef void (*vef_storage_mtr_commit_fn)(vef_storage_mtr_ref_t ref);
+typedef int (*vef_storage_segment_create_fn)(
+    vef_storage_space_ref_t space_ref, uint8_t num_segments,
+    vef_storage_trx_ref_t trx_ref, vef_storage_page_num_t *root_page_num_p,
+    char *error_msg, uint32_t error_msg_len);
+typedef int (*vef_storage_segment_drop_fn)(vef_storage_space_ref_t space_ref,
+                                           vef_storage_trx_ref_t trx_ref,
+                                           vef_storage_page_num_t root_page_num,
+                                           char *error_msg,
+                                           uint32_t error_msg_len);
+typedef int (*vef_storage_page_load_fn)(
+    vef_storage_block_ref_t *block_p, uint64_t *position_p,
+    unsigned char **data_p, uint32_t *data_size_p,
+    vef_storage_space_ref_t space_ref, vef_storage_page_num_t page_num,
+    vef_storage_latch_t latch_mode, vef_storage_mtr_ref_t mtr_ref,
+    char *error_msg, uint32_t error_msg_len);
+typedef int (*vef_storage_page_allocate_and_load_fn)(
+    vef_storage_block_ref_t *block_p, vef_storage_page_num_t *page_num_p,
+    unsigned char **data_p, uint32_t *data_size_p,
+    unsigned char *segment_header, vef_storage_mtr_ref_t mtr_ref,
+    char *error_msg, uint32_t error_msg_len);
+typedef int (*vef_storage_page_latch_fn)(
+    vef_storage_block_ref_t block, uint64_t position, vef_storage_latch_t latch,
+    vef_storage_mtr_ref_t mtr_ref, char *error_msg, uint32_t error_msg_len);
+typedef int (*vef_storage_page_release_fn)(vef_storage_block_ref_t block,
+                                           uint64_t position,
+                                           vef_storage_mtr_ref_t mtr_ref,
+                                           char *error_msg,
+                                           uint32_t error_msg_len);
+typedef uint32_t (*vef_storage_page_get_size_fn)(
+    vef_storage_space_ref_t space_ref);
+typedef void (*vef_storage_page_write_integer_fn)(
+    vef_storage_block_ref_t block, vef_storage_page_offset_t offset,
+    uint64_t value, vef_storage_integer_bytes_t bytes,
+    vef_storage_mtr_ref_t mtr_ref);
+typedef void (*vef_storage_page_write_string_fn)(
+    vef_storage_block_ref_t block, vef_storage_page_offset_t offset,
+    const unsigned char *str, uint32_t len, vef_storage_mtr_ref_t mtr_ref);
+
+typedef struct {
+  vef_storage_mtr_start_fn mtr_start;
+  vef_storage_mtr_commit_fn mtr_commit;
+  vef_storage_segment_create_fn segment_create;
+  vef_storage_segment_drop_fn segment_drop;
+  vef_storage_page_load_fn page_load;
+  vef_storage_page_allocate_and_load_fn page_allocate_and_load;
+  vef_storage_page_latch_fn page_latch;
+  vef_storage_page_release_fn page_release;
+  vef_storage_page_get_size_fn page_get_size;
+  vef_storage_page_write_integer_fn page_write_integer;
+  vef_storage_page_write_string_fn page_write_string;
+} vef_preview_storage_t;
+
 #ifdef __cplusplus
-}  // extern "C"
+}
 #endif
 
 #endif  // VILLAGESQL_ABI_PREVIEW_STORAGE_H_

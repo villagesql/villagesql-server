@@ -301,6 +301,8 @@ bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
 // Type and extension registration
 // ============================================================================
 
+static auto STORAGE = storage::make_capability();
+
 static constexpr vef_type_storage_intf_t kStoredIntStorageIntf =
     make_storage<StoredIntCtx>()
         .create<&stored_int_create>()
@@ -328,4 +330,6 @@ constexpr auto STORED_INT =
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension().type(STORED_INT))
+VEF_GENERATE_ENTRY_POINTS(make_extension()
+                              .with<vsql::preview::preview_storage<STORAGE>>()
+                              .type(STORED_INT))

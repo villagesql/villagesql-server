@@ -20,6 +20,7 @@
 #include "villagesql/sdk/include/villagesql/detail/capability_hash.h"
 #include "villagesql/services/preview/keyring.h"
 #include "villagesql/services/preview/ping.h"
+#include "villagesql/services/preview/storage.h"
 
 bool vsql_allow_preview_extensions = false;
 
@@ -92,6 +93,9 @@ void register_builtin_capabilities() {
   register_capability(
       VEF_PREVIEW_KEYRING_NAME, preview_keyring_vtable(),
       villagesql::detail::abi_type_hash<vef_preview_keyring_t>());
+  register_capability(
+      VEF_PREVIEW_STORAGE_NAME, preview_storage_vtable(),
+      villagesql::detail::abi_type_hash<vef_preview_storage_t>());
   // TODO(villagesql-beta): register "vsql::thread_worker" and "vsql::sql" here
 }
 

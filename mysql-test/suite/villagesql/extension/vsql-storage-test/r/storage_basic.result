@@ -1,3 +1,4 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
 # Install extension
 INSTALL EXTENSION vsql_storage_test;
 # Create a table with a STORED_INT column
@@ -29,3 +30,5 @@ id	n
 DROP TABLE t1;
 # Uninstall extension
 UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

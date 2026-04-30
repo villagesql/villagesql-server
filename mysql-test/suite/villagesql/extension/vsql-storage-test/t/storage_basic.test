@@ -6,6 +6,8 @@
 # Covers: install, CREATE TABLE, INSERT, SELECT, UPDATE, DELETE, DROP TABLE,
 # and UNINSTALL EXTENSION.
 
+SET PERSIST vsql_allow_preview_extensions = ON;
+
 --echo # Install extension
 INSTALL EXTENSION vsql_storage_test;
 
@@ -33,3 +35,6 @@ DROP TABLE t1;
 
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_storage_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
