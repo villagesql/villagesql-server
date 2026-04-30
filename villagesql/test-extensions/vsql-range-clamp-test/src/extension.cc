@@ -77,7 +77,7 @@ static void on_range_change(SysVarChange change) {
 static void on_label_change(SysVarChange change) {
   auto sv = change.as_str().value();
   size_t len = sv.size() < sizeof(g_last_label) - 1 ? sv.size()
-                                                     : sizeof(g_last_label) - 1;
+                                                    : sizeof(g_last_label) - 1;
   memcpy(g_last_label, sv.data(), len);
   g_last_label[len] = '\0';
 }

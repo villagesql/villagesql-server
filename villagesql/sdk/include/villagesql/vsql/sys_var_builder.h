@@ -51,14 +51,15 @@ class SysVarChange {
 
   std::string_view var_name() const { return c_->var_name; }
 
-  bool is_bool()   const { return c_->type == VEF_VAR_BOOL; }
-  bool is_int()    const { return c_->type == VEF_VAR_INT; }
-  bool is_real()   const { return c_->type == VEF_VAR_DOUBLE; }
-  bool is_str()    const { return c_->type == VEF_VAR_STR; }
+  bool is_bool() const { return c_->type == VEF_VAR_BOOL; }
+  bool is_int() const { return c_->type == VEF_VAR_INT; }
+  bool is_real() const { return c_->type == VEF_VAR_DOUBLE; }
+  bool is_str() const { return c_->type == VEF_VAR_STR; }
 
   IntArg as_int() const {
     vef_invalue_t v{};
-    v.int_value = is_bool() ? static_cast<long long>(c_->bool_val) : c_->int_val;
+    v.int_value =
+        is_bool() ? static_cast<long long>(c_->bool_val) : c_->int_val;
     return IntArg(&v);
   }
 
