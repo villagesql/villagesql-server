@@ -870,14 +870,14 @@ struct Column {
 // migrated to vsql::experimental::storage::*.
 namespace villagesql {
 namespace storage {
-using vsql::experimental::storage::Column;
-using vsql::experimental::storage::Error;
-using vsql::experimental::storage::MtrCtx;
-using vsql::experimental::storage::Page;
-using vsql::experimental::storage::Segment;
-using vsql::experimental::storage::Space;
+using ::vsql::experimental::storage::Column;
+using ::vsql::experimental::storage::Error;
+using ::vsql::experimental::storage::MtrCtx;
+using ::vsql::experimental::storage::Page;
+using ::vsql::experimental::storage::Segment;
+using ::vsql::experimental::storage::Space;
 
-using vsql::experimental::storage::last_error;
+using ::vsql::experimental::storage::last_error;
 }  // namespace storage
 }  // namespace villagesql
 #endif  // VILLAGESQL_EXPERIMENTAL_STORAGE_API_H_

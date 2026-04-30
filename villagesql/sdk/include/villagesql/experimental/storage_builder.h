@@ -324,7 +324,7 @@ constexpr StorageBuilder<UserCtx> make_storage() {
 // migrated to vsql::experimental::storage::make_storage.
 namespace villagesql {
 namespace storage_builder {
-using vsql::experimental::storage_builder::make_storage;
+using ::vsql::experimental::storage_builder::make_storage;
 }  // namespace storage_builder
 }  // namespace villagesql
 

@@ -85,13 +85,13 @@
 // Keyring access: vsql::keyring::read(), vsql::keyring::write()
 #include <villagesql/vsql/keyring.h>
 
-// Extension builder and VEF_GENERATE_ENTRY_POINTS macro
-#include <villagesql/extension_builder.h>
+// vsql ExtensionBuilder, make_extension(), and VEF_GENERATE_ENTRY_POINTS
+#include <villagesql/vsql/extension_builder.h>
 
 namespace vsql {
 
-// Re-export make_extension from villagesql::extension_builder
-using villagesql::extension_builder::make_extension;
+// Re-export make_extension from villagesql::vsql (extended version)
+using villagesql::vsql::make_extension;
 
 // Re-export make_func and type-operation entry points from the typed builder
 using villagesql::func_builder::make_func;

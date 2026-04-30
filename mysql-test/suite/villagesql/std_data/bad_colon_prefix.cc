@@ -50,7 +50,7 @@ int mytype_compare(vsql::Span<const unsigned char> a,
   return 0;
 }
 
-using namespace villagesql::extension_builder;
+using villagesql::vsql::make_extension;
 using namespace villagesql::func_builder;
 using namespace villagesql::type_builder;
 
