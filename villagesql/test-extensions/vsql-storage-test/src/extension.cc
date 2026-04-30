@@ -13,8 +13,8 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// vsql_storage_test extension: exercises the experimental column storage API
-// (vsql::experimental::storage) through a simple STORED_INT custom type.
+// vsql_storage_test extension: exercises the preview column storage API
+// (vsql::preview_storage) through a simple STORED_INT custom type.
 //
 // NOTE: This is an internal testing tool, not an example of how to write a
 // VillageSQL extension. For guidance on writing extensions, see the examples
@@ -37,8 +37,8 @@
 //   HEADER_SIZE + 16 [8 bytes] — last-writer trx_ref
 //   HEADER_SIZE + 24 [1 byte]  — delete-mark flag (0 = live, 1 = deleted)
 
-#include <villagesql/experimental/storage_api.h>
-#include <villagesql/experimental/storage_builder.h>
+#include <villagesql/preview/storage_api.h>
+#include <villagesql/preview/storage_builder.h>
 #include <villagesql/vsql.h>
 
 #include <cassert>
@@ -48,8 +48,8 @@
 #include <cstring>
 #include <string_view>
 
-namespace storage = vsql::experimental::storage;
-using vsql::experimental::storage_builder::make_storage;
+namespace storage = vsql::preview_storage;
+using vsql::preview_storage_builder::make_storage;
 
 // Per-column user context. Populated during create/load and used by every
 // subsequent storage call for that column.
