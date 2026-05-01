@@ -1,0 +1,3 @@
+call mtr.add_suppression("required capability not registered");
+INSTALL EXTENSION vsql_preview_unknown_cap_test;
+ERROR HY000: Failed to load VEF extension 'vsql_preview_unknown_cap_test': required capability not registered: vsql::nonexistent

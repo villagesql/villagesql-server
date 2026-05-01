@@ -25,7 +25,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
-#include "villagesql/services/preview_capabilities.h"
+#include "villagesql/services/capability_registry.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/veb_file.h"
 

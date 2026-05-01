@@ -41,4 +41,4 @@ static void ping_impl(IntResult out) {
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
         .func(make_func<&ping_impl>("ping").returns(INT).build())
-        .preview_require_ping(g_ping))
+        .preview_require<g_ping>())

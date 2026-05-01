@@ -878,19 +878,23 @@ typedef struct {
   };
 } vef_status_var_desc_t;
 
-// A single preview capability request in
-// vef_registration_t.required_capabilities. The extension sets name, version,
-// and the capability pointer. The server then populates the function pointers
-// inside the struct pointed to by capability.
+// A single capability request in vef_registration_t.required_capabilities.
+// The extension sets name, version, and a receive callback. The server calls
+// receive() with the vtable pointer if the capability is registered; the
+// callback assigns it into the extension's struct in a type-safe way.
 typedef struct {
   // Capability name, e.g. "vsql::ping". Must remain valid for the lifetime
   // of the extension (use a string literal).
   const char *name;
   // Version of the capability struct the extension was compiled against.
   uint32_t version;
-  // Pointer to the extension's capability struct (e.g. vef_preview_ping_t*).
-  // The server writes function pointers into this struct.
-  void *capability;
+  // Called by the server with the capability vtable pointer if registered.
+  // The extension assigns the vtable to its own capability struct.
+  void (*receive)(void *vtable);
+  // Compile-time hash of the ABI struct type, computed via
+  // villagesql::detail::abi_type_hash<AbiType>(). The server compares this
+  // against its own hash for the same (name, version) to detect mismatches.
+  size_t abi_type_hash;
 } vef_required_capability_t;
 
 typedef struct {

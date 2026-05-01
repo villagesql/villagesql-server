@@ -141,9 +141,8 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
 }
 
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
-// FuncCount, TypeCount, SysVarCount, StatusVarCount, and
-// RequiredCapabilityCount are explicit template parameters so that array sizes
-// are compile-time constants without relying on VLAs.
+// The counts are explicit template parameters so that array sizes are
+// compile-time constants without relying on VLAs.
 template <typename Ext, size_t FuncCount, size_t TypeCount, size_t SysVarCount,
           size_t StatusVarCount, size_t RequiredCapabilityCount>
 vef_registration_t *vef_register_impl(vef_registration_t &reg,

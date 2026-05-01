@@ -20,9 +20,9 @@
 #include <tuple>
 #include <utility>
 
-#include <villagesql/abi/preview/ping.h>
+#include <villagesql/detail/capability_hash.h>
+
 #include <villagesql/detail/vef_register.h>
-#include <villagesql/preview/ping.h>
 #include <villagesql/type_builder.h>
 #include <villagesql/vsql/status_var_builder.h>
 #include <villagesql/vsql/sys_var_builder.h>
@@ -34,6 +34,15 @@ namespace villagesql::vsql {
 // additional using-declarations at the call site.
 using namespace func_builder;
 using namespace type_builder;
+
+// cap_receive<Cap, cap_ptr> is a captureless function pointer that copies the
+// server-provided vtable into cap_ptr->abi_. Instantiated once per unique
+// (Cap, cap_ptr) pair. cap_ptr must have static storage duration so its
+// address is a valid non-type template argument.
+template <typename Cap, Cap *cap_ptr>
+void cap_receive(void *vtable) {
+  cap_ptr->abi_ = *static_cast<decltype(cap_ptr->abi_) *>(vtable);
+}
 
 // ExtensionBuilder is the vsql-API extension builder. It is a standalone type
 // (not a wrapper around villagesql::extension_builder::ExtensionBuilder) so it
@@ -153,13 +162,20 @@ struct ExtensionBuilder {
         require_atleast_min(VEF_PROTOCOL_2)};
   }
 
-  // Declare a requirement for the "vsql::ping" preview capability.
-  // The server will populate cap's function pointers before vef_register()
-  // returns. Requires at least VEF_PROTOCOL_2.
-  constexpr auto preview_require_ping(
-      ::vsql::preview::ping::PingCapability &cap) const {
-    vef_required_capability_t req{VEF_PREVIEW_PING_NAME,
-                                  VEF_PREVIEW_PING_VERSION, &cap.abi_};
+  // Declare a requirement for a preview capability. The server will populate
+  // cap's function pointers before vef_register() returns. Cap must expose
+  // static kName and kVersion members and a public abi_ field.
+  // cap must have static storage duration so its address is a valid non-type
+  // template argument and remains valid after vef_register() returns.
+  // Requires at least VEF_PROTOCOL_2.
+  //
+  // Usage: make_extension().preview_require<g_my_cap>()
+  template <auto &cap>
+  constexpr auto preview_require() const {
+    using Cap = std::decay_t<decltype(cap)>;
+    vef_required_capability_t req{Cap::kName, Cap::kVersion,
+                                  &cap_receive<Cap, &cap>,
+                                  detail::abi_type_hash<decltype(cap.abi_)>()};
     auto new_caps =
         std::tuple_cat(required_capabilities_, std::make_tuple(req));
     return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple,
