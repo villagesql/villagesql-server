@@ -173,6 +173,12 @@ typedef enum : unsigned int {
                    // + get_variable/set_variable/read_keyring/write_keyring
                    //   function pointers in vef_register_arg_t: access to
                    //   MySQL system variables and keyring component.
+                   // + Preview capability system: extensions declare named
+                   //   capabilities they require in vef_registration_t;
+                   //   the server populates their function pointers before
+                   //   vef_register() returns.
+                   //   (vef_required_capability_t, required_capabilities,
+                   //   required_capability_count in vef_registration_t)
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -872,6 +878,21 @@ typedef struct {
   };
 } vef_status_var_desc_t;
 
+// A single preview capability request in
+// vef_registration_t.required_capabilities. The extension sets name, version,
+// and the capability pointer. The server then populates the function pointers
+// inside the struct pointed to by capability.
+typedef struct {
+  // Capability name, e.g. "vsql::ping". Must remain valid for the lifetime
+  // of the extension (use a string literal).
+  const char *name;
+  // Version of the capability struct the extension was compiled against.
+  uint32_t version;
+  // Pointer to the extension's capability struct (e.g. vef_preview_ping_t*).
+  // The server writes function pointers into this struct.
+  void *capability;
+} vef_required_capability_t;
+
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -899,6 +920,15 @@ typedef struct {
   // protocol >= VEF_PROTOCOL_2
   unsigned int status_var_count;
   vef_status_var_desc_t **status_vars;
+
+  // protocol >= VEF_PROTOCOL_2
+  // Preview capabilities required by this extension. Each entry names a
+  // capability the extension needs (e.g. "vsql::ping"). The server populates
+  // the capability struct pointed to by each entry before vef_register()
+  // returns. If a capability is unavailable or the version is unsupported,
+  // its function pointers are left as nullptr.
+  unsigned int required_capability_count;
+  const vef_required_capability_t *required_capabilities;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the

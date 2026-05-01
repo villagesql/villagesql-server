@@ -89,6 +89,14 @@ void vef_fill_status_var_ptrs(vef_status_var_desc_t **arr, const Ext &e,
    ...);
 }
 
+// Fills arr[I] with a copy of each vef_required_capability_t.
+template <typename Ext, size_t... Is>
+void vef_fill_required_capability_reqs(vef_required_capability_t *arr,
+                                       const Ext &e,
+                                       std::index_sequence<Is...>) {
+  ((arr[Is] = e.template required_capability_at<Is>()), ...);
+}
+
 // Calls params_init_fn() for each type that has one.
 template <typename Ext, size_t... Is>
 void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
@@ -133,11 +141,11 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
 }
 
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
-// FuncCount, TypeCount, SysVarCount, and StatusVarCount are explicit template
-// parameters so that array sizes are compile-time constants without relying on
-// VLAs.
+// FuncCount, TypeCount, SysVarCount, StatusVarCount, and
+// RequiredCapabilityCount are explicit template parameters so that array sizes
+// are compile-time constants without relying on VLAs.
 template <typename Ext, size_t FuncCount, size_t TypeCount, size_t SysVarCount,
-          size_t StatusVarCount>
+          size_t StatusVarCount, size_t RequiredCapabilityCount>
 vef_registration_t *vef_register_impl(vef_registration_t &reg,
                                       bool &initialized,
                                       vef_register_arg_t *arg, const Ext &ext) {
@@ -173,6 +181,8 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   static vef_sys_var_desc_t *sys_var_ptrs[SysVarCount > 0 ? SysVarCount : 1];
   static vef_status_var_desc_t
       *status_var_ptrs[StatusVarCount > 0 ? StatusVarCount : 1];
+  static vef_required_capability_t required_capability_reqs
+      [RequiredCapabilityCount > 0 ? RequiredCapabilityCount : 1];
 
   if constexpr (FuncCount > 0) {
     vef_init_auto_names(ext, std::make_index_sequence<FuncCount>{});
@@ -189,6 +199,11 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   if constexpr (StatusVarCount > 0) {
     vef_fill_status_var_ptrs(status_var_ptrs, ext,
                              std::make_index_sequence<StatusVarCount>{});
+  }
+  if constexpr (RequiredCapabilityCount > 0) {
+    vef_fill_required_capability_reqs(
+        required_capability_reqs, ext,
+        std::make_index_sequence<RequiredCapabilityCount>{});
   }
 
   if constexpr (FuncCount > 0) {
@@ -220,6 +235,9 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   reg.sys_vars = SysVarCount > 0 ? sys_var_ptrs : nullptr;
   reg.status_var_count = StatusVarCount;
   reg.status_vars = StatusVarCount > 0 ? status_var_ptrs : nullptr;
+  reg.required_capability_count = RequiredCapabilityCount;
+  reg.required_capabilities =
+      RequiredCapabilityCount > 0 ? required_capability_reqs : nullptr;
 
   initialized = true;
   return &reg;

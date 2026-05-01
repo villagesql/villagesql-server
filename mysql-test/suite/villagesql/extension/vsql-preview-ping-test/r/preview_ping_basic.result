@@ -1,0 +1,10 @@
+INSTALL EXTENSION vsql_preview_ping_test;
+# ping() returns a positive integer
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+ping_positive
+1
+# Consecutive calls return strictly increasing values
+SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping() AS ping_increases;
+ping_increases
+1
+UNINSTALL EXTENSION vsql_preview_ping_test;

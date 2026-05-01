@@ -25,6 +25,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/preview_capabilities.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/veb_file.h"
 
@@ -155,6 +156,8 @@ static bool do_init_extension_infrastructure(THD *thd) {
 */
 bool init_extension_infrastructure() {
   sysd::notify("STATUS=VillageSQL initialization in progress\n");
+
+  villagesql::services::register_builtin_capabilities();
 
   // We need a temporary THD during boot
   // The initialization code may update table settings, in order to avoid

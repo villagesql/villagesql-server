@@ -382,4 +382,6 @@ IF(NOT WITHOUT_SERVER)
 
   add_custom_target(storage_test_veb ALL)
   add_dependencies(storage_test_veb copy_vsql_storage_test_veb)
+
+  include(test-extensions/CMakeLists.txt)
 ENDIF()

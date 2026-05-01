@@ -44,6 +44,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/keyring.h"
+#include "villagesql/services/preview_capabilities.h"
 #include "villagesql/services/status_vars.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/register.h"
@@ -873,6 +874,9 @@ bool load_vef_extension(const std::string &so_path,
     dlclose(handle);
     return true;
   }
+
+  // Populate any preview capabilities the extension requires.
+  villagesql::services::populate_preview_capabilities(reg);
 
   const vef_protocol_t negotiated_protocol =
       std::min(max_protocol, reg->protocol);

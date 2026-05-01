@@ -1,0 +1,13 @@
+# Test the preview ping capability for vsql_preview_ping_test extension.
+# Verifies that the ping() VDF returns an incrementing counter, proving
+# the server-side preview capability was populated correctly.
+
+INSTALL EXTENSION vsql_preview_ping_test;
+
+--echo # ping() returns a positive integer
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+
+--echo # Consecutive calls return strictly increasing values
+SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping() AS ping_increases;
+
+UNINSTALL EXTENSION vsql_preview_ping_test;
