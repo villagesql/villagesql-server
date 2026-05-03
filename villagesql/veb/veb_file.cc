@@ -43,6 +43,7 @@
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/background_thread.h"
 #include "villagesql/services/keyring.h"
 #include "villagesql/services/status_vars.h"
 #include "villagesql/services/sys_vars.h"
@@ -591,6 +592,12 @@ bool load_installed_extensions(THD *thd) {
   int success_count = 0;
   std::set<std::string> installed_extensions;
 
+  // on_load callbacks collected inside the lock, called after the lock is
+  // released. on_load may call back into server services (e.g. sys_var::set
+  // with PERSIST) which themselves try to acquire the victionary write lock,
+  // so they must not run while we hold it.
+  std::vector<std::pair<std::string, vef_on_load_func_t>> on_load_callbacks;
+
   {
     auto lock_guard = victionary.get_write_lock();
 
@@ -664,8 +671,8 @@ bool load_installed_extensions(THD *thd) {
 
       ExtensionRegistration registration;
       std::string load_error;
-      if (load_vef_extension(so_path, registration, vef_server_protocol_version,
-                             load_error)) {
+      if (load_vef_extension(so_path, extension_name, registration,
+                             vef_server_protocol_version, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -704,6 +711,13 @@ bool load_installed_extensions(THD *thd) {
         return true;
       }
 
+      // Capture on_load before moving registration into the victionary.
+      vef_on_load_func_t on_load_fn = nullptr;
+      if (registration.registration != nullptr &&
+          registration.negotiated_protocol >= VEF_PROTOCOL_2) {
+        on_load_fn = registration.registration->on_load;
+      }
+
       if (victionary.extension_descriptors().MarkForInsertion(
               *thd, ExtensionDescriptor(ExtensionDescriptorKey(
                                             extension_name, expected_version),
@@ -712,11 +726,26 @@ bool load_installed_extensions(THD *thd) {
                 extension_name.c_str());
         return true;
       }
+
+      if (on_load_fn != nullptr) {
+        on_load_callbacks.emplace_back(extension_name, on_load_fn);
+      }
+
       success_count++;
 
       LogVSQL(INFORMATION_LEVEL,
               "Successfully registered VEF extension '%s' from '%s'",
               extension_name.c_str(), so_path.c_str());
+    }
+  }
+
+  // Call on_load callbacks after releasing the victionary write lock.
+  for (auto &[ext_name, on_load_fn] : on_load_callbacks) {
+    char error_msg[VEF_MAX_ERROR_LEN] = {};
+    if (on_load_fn(error_msg)) {
+      LogVSQL(ERROR_LEVEL, "Extension '%s' on_load failed during startup: %s",
+              ext_name.c_str(), error_msg[0] ? error_msg : "(no message)");
+      return true;
     }
   }
 
@@ -824,6 +853,7 @@ static T lookup_symbol(void *handle, const char *symbol_name,
 }
 
 bool load_vef_extension(const std::string &so_path,
+                        const std::string &extension_name,
                         ExtensionRegistration &registration,
                         vef_protocol_t max_protocol,
                         std::string &error_message) {
@@ -862,10 +892,16 @@ bool load_vef_extension(const std::string &so_path,
       max_protocol,
       {MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, MYSQL_VERSION_PATCH, nullptr},
       {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr},
+      extension_name.c_str(),
       villagesql::services::get_variable,
       villagesql::services::set_variable,
       villagesql::services::read_keyring,
-      villagesql::services::write_keyring};
+      villagesql::services::write_keyring,
+      villagesql::services::register_vef_background_thread,
+      villagesql::services::unregister_vef_background_thread,
+      villagesql::services::sleep_vef_background_thread,
+      villagesql::services::stop_vef_background_thread,
+      villagesql::services::sleep_vef_background_thread_fd};
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {
@@ -909,6 +945,11 @@ void unload_vef_extension(const ExtensionRegistration &registration) {
   }
 
   if (registration.registration != nullptr) {
+    const vef_registration_t *reg = registration.registration;
+    if (reg->on_unload != nullptr &&
+        registration.negotiated_protocol >= VEF_PROTOCOL_2) {
+      reg->on_unload();
+    }
     vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
     LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
             registration.so_path.c_str());

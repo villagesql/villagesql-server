@@ -17,9 +17,11 @@
 #define VILLAGESQL_VSQL_EXTENSION_BUILDER_H
 
 #include <cstddef>
+#include <string_view>
 #include <tuple>
 #include <utility>
 
+#include <villagesql/detail/thread_builder.h>
 #include <villagesql/detail/vef_register.h>
 #include <villagesql/type_builder.h>
 #include <villagesql/vsql/status_var_builder.h>
@@ -44,6 +46,27 @@ struct ExtensionBuilder {
   TypeTuple types_;
   SysVarTuple sys_vars_;
   StatusVarTuple status_vars_;
+  // User-supplied lifecycle callbacks, set by .on_load() / .on_unload().
+  vef_on_load_func_t user_on_load_{nullptr};
+  vef_on_unload_func_t user_on_unload_{nullptr};
+  // Framework-internal lifecycle callbacks, set by .thread(). Composed with
+  // the user callbacks at registration: impl_on_load_ runs after user_on_load_,
+  // impl_on_unload_ runs before user_on_unload_.
+  vef_on_load_func_t impl_on_load_{nullptr};
+  vef_on_unload_func_t impl_on_unload_{nullptr};
+  // Called inside vef_register() with the negotiated protocol and full arg
+  // struct. Use this to capture service pointers before returning from
+  // vef_register().
+  using on_register_func_t = void (*)(vef_protocol_t, vef_register_arg_t *);
+  on_register_func_t on_register_{nullptr};
+  // Called with the thread suffix, sleep_ms, and poll_fd_ptr before on_load.
+  // Used by .thread() to initialise ManagedThread's statics.
+  using on_setup_func_t = void (*)(std::string_view, const char *, unsigned int,
+                                   const int *);
+  on_setup_func_t on_setup_{nullptr};
+  const char *thread_suffix_{nullptr};
+  unsigned int thread_sleep_ms_{0};
+  const int *thread_poll_fd_ptr_{nullptr};
   vef_protocol_t min_protocol_;
 
   static constexpr size_t kFuncCount = std::tuple_size_v<FuncTuple>;
@@ -82,15 +105,30 @@ struct ExtensionBuilder {
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
     return ExtensionBuilder<decltype(new_funcs), TypeTuple, SysVarTuple,
-                            StatusVarTuple>{new_funcs, types_, sys_vars_,
-                                            status_vars_, min_protocol_};
+                            StatusVarTuple>{
+        new_funcs,           types_,          sys_vars_,      status_vars_,
+        user_on_load_,       user_on_unload_, impl_on_load_,  impl_on_unload_,
+        on_register_,        on_setup_,       thread_suffix_, thread_sleep_ms_,
+        thread_poll_fd_ptr_, min_protocol_};
   }
 
   constexpr auto type(const type_builder::TypeDescriptor &td) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(td));
     return ExtensionBuilder<FuncTuple, decltype(new_types), SysVarTuple,
                             StatusVarTuple>{
-        funcs_, new_types, sys_vars_, status_vars_,
+        funcs_,
+        new_types,
+        sys_vars_,
+        status_vars_,
+        user_on_load_,
+        user_on_unload_,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
         require_atleast_min(td.vef_desc.protocol)};
   }
 
@@ -103,7 +141,19 @@ struct ExtensionBuilder {
     auto new_funcs = std::tuple_cat(funcs_, t.embedded_funcs);
     return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
                             SysVarTuple, StatusVarTuple>{
-        new_funcs, new_types, sys_vars_, status_vars_,
+        new_funcs,
+        new_types,
+        sys_vars_,
+        status_vars_,
+        user_on_load_,
+        user_on_unload_,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
         require_atleast_min(t.descriptor.vef_desc.protocol)};
   }
 
@@ -111,7 +161,19 @@ struct ExtensionBuilder {
     auto new_svs = std::tuple_cat(sys_vars_, std::make_tuple(sv));
     return ExtensionBuilder<FuncTuple, TypeTuple, decltype(new_svs),
                             StatusVarTuple>{
-        funcs_, types_, new_svs, status_vars_,
+        funcs_,
+        types_,
+        new_svs,
+        status_vars_,
+        user_on_load_,
+        user_on_unload_,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
         require_atleast_min(VEF_PROTOCOL_2)};
   }
 
@@ -120,7 +182,96 @@ struct ExtensionBuilder {
     auto new_svs = std::tuple_cat(status_vars_, std::make_tuple(sv));
     return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple,
                             decltype(new_svs)>{
-        funcs_, types_, sys_vars_, new_svs,
+        funcs_,
+        types_,
+        sys_vars_,
+        new_svs,
+        user_on_load_,
+        user_on_unload_,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
+        require_atleast_min(VEF_PROTOCOL_2)};
+  }
+
+  // Register a managed background thread. Requires at least VEF_PROTOCOL_2.
+  // Takes a ThreadDescriptor produced by make_thread<&work_fn>("suffix").
+  // Can be combined with .on_load()/.on_unload(): the user on_load runs before
+  // the thread starts; the user on_unload runs after the thread has stopped.
+  template <void (*WorkFn)()>
+  constexpr auto thread(
+      villagesql::extension_builder::ThreadDescriptor<WorkFn> td) const {
+    using T = villagesql::extension_builder::ManagedThread<WorkFn>;
+    struct Setup {
+      static void call(std::string_view ext_name, const char *suffix,
+                       unsigned int sleep_ms, const int *poll_fd_ptr) {
+        T::setup(ext_name, suffix, sleep_ms, poll_fd_ptr);
+      }
+    };
+    return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple>{
+        funcs_,         types_,
+        sys_vars_,      status_vars_,
+        user_on_load_,  user_on_unload_,
+        &T::on_load,    &T::on_unload,
+        on_register_,   &Setup::call,
+        td.suffix,      td.sleep_ms,
+        td.poll_fd_ptr, require_atleast_min(VEF_PROTOCOL_2)};
+  }
+
+  // Set the on_load callback. Requires at least VEF_PROTOCOL_2.
+  // Called after all VDFs, types, and sys vars are live, on every server start
+  // and on INSTALL EXTENSION. Call result.fail("msg") to abort loading.
+  // If a managed thread is registered, this runs before the thread starts.
+  template <void (*Fn)(villagesql::LoadResult &)>
+  constexpr auto on_load() const {
+    struct Trampoline {
+      static bool call(char *error_msg) {
+        villagesql::LoadResult result(error_msg);
+        Fn(result);
+        return result.failed();
+      }
+    };
+    return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple>{
+        funcs_,
+        types_,
+        sys_vars_,
+        status_vars_,
+        &Trampoline::call,
+        user_on_unload_,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
+        require_atleast_min(VEF_PROTOCOL_2)};
+  }
+
+  // Set the on_unload callback. Requires at least VEF_PROTOCOL_2.
+  // Called before VDFs/types/sys vars are removed, on every server shutdown
+  // and on UNINSTALL EXTENSION. If a managed thread is registered, this runs
+  // after the thread stops.
+  template <void (*Fn)()>
+  constexpr auto on_unload() const {
+    return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple>{
+        funcs_,
+        types_,
+        sys_vars_,
+        status_vars_,
+        user_on_load_,
+        Fn,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
         require_atleast_min(VEF_PROTOCOL_2)};
   }
 
@@ -128,13 +279,28 @@ struct ExtensionBuilder {
   // of which features are registered.
   constexpr auto test_only_require_protocol(vef_protocol_t p) const {
     return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple>{
-        funcs_, types_, sys_vars_, status_vars_, p};
+        funcs_,
+        types_,
+        sys_vars_,
+        status_vars_,
+        user_on_load_,
+        user_on_unload_,
+        impl_on_load_,
+        impl_on_unload_,
+        on_register_,
+        on_setup_,
+        thread_suffix_,
+        thread_sleep_ms_,
+        thread_poll_fd_ptr_,
+        p};
   }
 };
 
 constexpr auto make_extension() {
   return ExtensionBuilder<std::tuple<>, std::tuple<>, std::tuple<>,
-                          std::tuple<>>{{}, {}, {}, {}, VEF_PROTOCOL_1};
+                          std::tuple<>>{
+      {},      {},      {},      {},      nullptr, nullptr, nullptr,
+      nullptr, nullptr, nullptr, nullptr, 0,       nullptr, VEF_PROTOCOL_1};
 }
 
 }  // namespace villagesql::vsql

@@ -25,6 +25,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/background_thread.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/veb_file.h"
 
@@ -155,6 +156,12 @@ static bool do_init_extension_infrastructure(THD *thd) {
 */
 bool init_extension_infrastructure() {
   sysd::notify("STATUS=VillageSQL initialization in progress\n");
+
+  // Register the PSI (Performance Schema Instrumentation) thread key for VEF
+  // extension background threads. Must be called before any extension is loaded
+  // so the key is ready when an extension calls register_background_thread from
+  // its on_load callback.
+  villagesql::services::init_vef_background_thread_psi_key();
 
   // We need a temporary THD during boot
   // The initialization code may update table settings, in order to avoid

@@ -21,6 +21,7 @@
 
 #include <cstddef>
 #include <cstdio>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -42,6 +43,13 @@ namespace keyring {
 extern vef_read_keyring_fn g_read_keyring;
 extern vef_write_keyring_fn g_write_keyring;
 }  // namespace keyring
+namespace thread {
+extern vef_register_background_thread_func_t g_register_background_thread;
+extern vef_unregister_background_thread_func_t g_unregister_background_thread;
+extern vef_sleep_background_thread_func_t g_sleep_background_thread;
+extern vef_stop_background_thread_func_t g_stop_background_thread;
+extern vef_sleep_background_thread_fd_func_t g_sleep_background_thread_fd;
+}  // namespace thread
 
 // Forward-declare materialize_func_desc so the helpers below can reference it
 // without requiring func_builder.h to be included first.
@@ -154,6 +162,16 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
       villagesql::sys_var::g_set_variable = arg->set_variable;
       villagesql::keyring::g_read_keyring = arg->read_keyring;
       villagesql::keyring::g_write_keyring = arg->write_keyring;
+      villagesql::thread::g_register_background_thread =
+          arg->register_background_thread;
+      villagesql::thread::g_unregister_background_thread =
+          arg->unregister_background_thread;
+      villagesql::thread::g_sleep_background_thread =
+          arg->sleep_background_thread;
+      villagesql::thread::g_stop_background_thread =
+          arg->stop_background_thread;
+      villagesql::thread::g_sleep_background_thread_fd =
+          arg->sleep_background_thread_fd;
     }
   }
 
@@ -207,6 +225,15 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
     }
   }
 
+  // Let the .thread() setup function build the full "extname/suffix" name
+  // and store sleep_ms before on_load starts the background thread.
+  if constexpr (Ext::kHasVsqlGlobals) {
+    if (ext.on_setup_)
+      ext.on_setup_(
+          std::string_view{arg->extension_name ? arg->extension_name : ""},
+          ext.thread_suffix_, ext.thread_sleep_ms_, ext.thread_poll_fd_ptr_);
+  }
+
   reg.protocol = VEF_PROTOCOL_2;
   reg.error_msg = nullptr;
   reg.deprecated_extension_name = nullptr;
@@ -220,6 +247,42 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   reg.sys_vars = SysVarCount > 0 ? sys_var_ptrs : nullptr;
   reg.status_var_count = StatusVarCount;
   reg.status_vars = StatusVarCount > 0 ? status_var_ptrs : nullptr;
+
+  if constexpr (Ext::kHasVsqlGlobals) {
+    // Compose user and impl callbacks into the two ABI slots.
+    // on_load:  user callback first (may abort), then impl (starts thread).
+    // on_unload: impl first (stops thread), then user callback.
+    if (ext.user_on_load_ && ext.impl_on_load_) {
+      static vef_on_load_func_t s_user = ext.user_on_load_;
+      static vef_on_load_func_t s_impl = ext.impl_on_load_;
+      struct Combined {
+        static bool call(char *error_msg) {
+          if (s_user(error_msg)) return true;
+          return s_impl(error_msg);
+        }
+      };
+      reg.on_load = &Combined::call;
+    } else {
+      reg.on_load = ext.user_on_load_ ? ext.user_on_load_ : ext.impl_on_load_;
+    }
+
+    if (ext.user_on_unload_ && ext.impl_on_unload_) {
+      static vef_on_unload_func_t s_user = ext.user_on_unload_;
+      static vef_on_unload_func_t s_impl = ext.impl_on_unload_;
+      struct Combined {
+        static void call() {
+          s_impl();
+          s_user();
+        }
+      };
+      reg.on_unload = &Combined::call;
+    } else {
+      reg.on_unload =
+          ext.impl_on_unload_ ? ext.impl_on_unload_ : ext.user_on_unload_;
+    }
+
+    if (ext.on_register_) ext.on_register_(VEF_PROTOCOL_2, arg);
+  }
 
   initialized = true;
   return &reg;

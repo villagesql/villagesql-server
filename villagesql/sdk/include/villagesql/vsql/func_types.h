@@ -353,6 +353,42 @@ class CustomResultWith {
   vef_vdf_result_t *r_;
 };
 
+// LoadResult — passed by reference to on_load callbacks.
+//
+// Call result.fail("reason") to abort loading with an error message.
+// If fail() is not called, loading proceeds normally.
+//
+// Usage:
+//
+//   void my_on_load(villagesql::LoadResult &result) {
+//     if (!start_my_background_service()) {
+//       result.fail("failed to start background service");
+//     }
+//   }
+//
+//   VEF_GENERATE_ENTRY_POINTS(
+//       make_extension("my_ext", "1.0.0")
+//           .on_load<&my_on_load>()
+//           ...);
+class LoadResult {
+ public:
+  explicit LoadResult(char *error_msg) : error_msg_(error_msg) {}
+
+  void fail(std::string_view msg) {
+    failed_ = true;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(error_msg_, msg.data(), n);
+    error_msg_[n] = '\0';
+  }
+
+  bool failed() const { return failed_; }
+
+ private:
+  char *error_msg_;
+  bool failed_{false};
+};
+
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_VSQL_FUNC_TYPES_H

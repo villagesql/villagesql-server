@@ -1,0 +1,7 @@
+{
+  "name": "vsql_http_monitor",
+  "version": "0.0.1",
+  "description": "Minimal HTTP monitoring endpoint example using on_load/on_unload and poll_fd",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

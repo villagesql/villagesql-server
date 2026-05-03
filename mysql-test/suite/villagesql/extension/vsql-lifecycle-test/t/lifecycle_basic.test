@@ -1,0 +1,36 @@
+# Test on_load/on_unload lifecycle callbacks and background thread registration.
+#
+# Verifies:
+# - INSTALL EXTENSION triggers on_load, which starts a monitor background thread
+# - the thread appears in performance_schema.processlist (info column) while installed
+# - tick_count() advances over time (thread is actually looping)
+# - UNINSTALL EXTENSION triggers on_unload, which stops the thread cleanly
+
+# The processlist checks require PSI thread instrumentation.
+if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
+{
+  skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
+}
+
+INSTALL EXTENSION vsql_lifecycle_test;
+
+# Give the monitor thread a moment to start and register with the process list.
+--sleep 0.5
+
+--echo # Thread should appear in processlist with expected user and info
+--replace_column 1 <id>
+SELECT id, user, info FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+ORDER BY id;
+
+--echo # Tick count should be positive after 500ms (thread ticks every 100ms)
+SELECT vsql_lifecycle_test.tick_count() > 0;
+
+--echo # on_load_count should be 1: on_load fired exactly once on install
+SELECT vsql_lifecycle_test.on_load_count();
+
+UNINSTALL EXTENSION vsql_lifecycle_test;
+
+--echo # Thread is gone from processlist after uninstall
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';

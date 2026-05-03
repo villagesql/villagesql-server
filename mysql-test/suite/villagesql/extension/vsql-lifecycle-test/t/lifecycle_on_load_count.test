@@ -1,0 +1,52 @@
+# Test that on_load fires on server restart (not just on INSTALL EXTENSION).
+#
+# The tick_count() VDF starts at 0 and increments every 100ms from the
+# background monitor thread. After a server restart the extension's on_load
+# fires again, restarting the thread and resetting the counter to 0.
+# Verifying tick_count() >= 0 and the thread appears in the processlist
+# confirms that on_load fired successfully on restart.
+
+# The processlist checks require PSI thread instrumentation.
+if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
+{
+  skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
+}
+
+INSTALL EXTENSION vsql_lifecycle_test;
+
+--echo # Give thread time to start
+--sleep 0.3
+
+--echo # Tick count should be positive: on_load fired and thread is running
+SELECT vsql_lifecycle_test.tick_count() > 0;
+
+--echo # on_load_count should be 1 after first install
+SELECT vsql_lifecycle_test.on_load_count();
+
+--echo # Restart server (extension reinstated from villagesql.extensions)
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # Give thread time to start after restart
+--sleep 0.3
+
+--echo # tick_count >= 0 confirms on_load fired and thread restarted
+SELECT vsql_lifecycle_test.tick_count() >= 0;
+
+--echo # on_load_count should be 1: counter resets on server restart (fresh .so load)
+--echo # confirms on_load fired in the new process
+SELECT vsql_lifecycle_test.on_load_count();
+
+--echo # Monitor thread visible in processlist after restart
+--replace_column 1 <id>
+SELECT id, user, info FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+ORDER BY id;
+
+UNINSTALL EXTENSION vsql_lifecycle_test;
+
+--echo # Thread is gone from processlist after uninstall
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';

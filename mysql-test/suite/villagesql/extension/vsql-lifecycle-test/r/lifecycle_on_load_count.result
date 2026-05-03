@@ -1,0 +1,34 @@
+INSTALL EXTENSION vsql_lifecycle_test;
+# Give thread time to start
+# Tick count should be positive: on_load fired and thread is running
+SELECT vsql_lifecycle_test.tick_count() > 0;
+vsql_lifecycle_test.tick_count() > 0
+1
+# on_load_count should be 1 after first install
+SELECT vsql_lifecycle_test.on_load_count();
+vsql_lifecycle_test.on_load_count()
+1
+# Restart server (extension reinstated from villagesql.extensions)
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# Give thread time to start after restart
+# tick_count >= 0 confirms on_load fired and thread restarted
+SELECT vsql_lifecycle_test.tick_count() >= 0;
+vsql_lifecycle_test.tick_count() >= 0
+1
+# on_load_count should be 1: counter resets on server restart (fresh .so load)
+# confirms on_load fired in the new process
+SELECT vsql_lifecycle_test.on_load_count();
+vsql_lifecycle_test.on_load_count()
+1
+# Monitor thread visible in processlist after restart
+SELECT id, user, info FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+ORDER BY id;
+id	user	info
+<id>	vef_worker	vsql_lifecycle_test/monitor
+UNINSTALL EXTENSION vsql_lifecycle_test;
+# Thread is gone from processlist after uninstall
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+COUNT(*)
+0

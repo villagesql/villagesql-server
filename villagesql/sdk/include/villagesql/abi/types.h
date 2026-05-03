@@ -173,6 +173,10 @@ typedef enum : unsigned int {
                    // + get_variable/set_variable/read_keyring/write_keyring
                    //   function pointers in vef_register_arg_t: access to
                    //   MySQL system variables and keyring component.
+                   // + Extension lifecycle callbacks: on_load, on_unload.
+                   // + Background thread registration service:
+                   //   register_background_thread,
+                   //   unregister_background_thread.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -253,12 +257,136 @@ typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
                                                      const unsigned char *data,
                                                      size_t data_len);
 
+// =============================================================================
+// Background thread registration service (protocol >= VEF_PROTOCOL_2)
+// =============================================================================
+//
+// Extensions may start background threads (e.g. HTTP listeners, periodic
+// tasks). To make such threads visible in INFORMATION_SCHEMA.PROCESSLIST and
+// Performance Schema, call register_background_thread from inside the new
+// thread after it starts, and unregister_background_thread before it exits.
+//
+// The opaque handle type is forward-declared here; the server owns the
+// complete definition. Extensions must not free or dereference the handle.
+
+typedef struct vef_thread_handle_t vef_thread_handle_t;
+
+// Arg/result structs for background thread service functions.
+// Using structs (rather than bare parameters) allows fields to be added in
+// future protocol versions without breaking existing extensions.
+
+typedef struct {
+  // Name shown as the thread state in INFORMATION_SCHEMA.PROCESSLIST
+  // (e.g. "myext/http-listener").
+  const char *thread_name;
+} vef_register_background_thread_arg_t;
+
+typedef struct {
+  // Opaque handle to pass to the other thread functions.
+  // NULL on failure; check error_msg for details.
+  vef_thread_handle_t *handle;
+  // Human-readable error message on failure, empty string on success.
+  // Points into server-owned storage valid until the next call.
+  const char *error_msg;
+} vef_register_background_thread_result_t;
+
+typedef struct {
+  vef_thread_handle_t *handle;
+} vef_unregister_background_thread_arg_t;
+
+typedef struct {
+  vef_thread_handle_t *handle;
+  unsigned int milliseconds;
+} vef_sleep_background_thread_arg_t;
+
+typedef struct {
+  // true if the thread should keep running, false if it should stop.
+  bool keep_running;
+  // true if woken because poll_fd became readable (only meaningful for
+  // vef_sleep_background_thread_fd_func_t; always false for plain sleep).
+  bool woke_on_fd;
+} vef_sleep_background_thread_result_t;
+
+typedef struct {
+  vef_thread_handle_t *handle;
+} vef_stop_background_thread_arg_t;
+
+typedef struct {
+  vef_thread_handle_t *handle;
+  unsigned int milliseconds;
+  // File descriptor to also wait on (e.g. a listening socket).
+  // If -1, behaves like vef_sleep_background_thread_func_t.
+  int poll_fd;
+} vef_sleep_background_thread_fd_arg_t;
+
+// Register the calling thread with MySQL's process list and Performance Schema.
+// Call from inside the background thread after it starts.
+// Available when protocol >= VEF_PROTOCOL_2.
+typedef vef_register_background_thread_result_t (
+    *vef_register_background_thread_func_t)(
+    const vef_register_background_thread_arg_t *arg);
+
+// Unregister the background thread. Must be called from inside the thread
+// before it exits, after register_background_thread succeeded.
+// Available when protocol >= VEF_PROTOCOL_2.
+typedef void (*vef_unregister_background_thread_func_t)(
+    const vef_unregister_background_thread_arg_t *arg);
+
+// Sleep for up to milliseconds ms, waking early if the server wants the thread
+// to stop (shutdown or UNINSTALL EXTENSION). Typical usage:
+//
+//   while (villagesql::thread::sleep(handle, 100)) {
+//     // ... do periodic work ...
+//   }
+//
+// Available when protocol >= VEF_PROTOCOL_2.
+typedef vef_sleep_background_thread_result_t (
+    *vef_sleep_background_thread_func_t)(
+    const vef_sleep_background_thread_arg_t *arg);
+
+// Signal a background thread to stop and wake it if it is sleeping.
+// Call from on_unload() before joining the thread. The next call to
+// sleep() (or an in-progress sleep) will return false.
+// Available when protocol >= VEF_PROTOCOL_2.
+typedef void (*vef_stop_background_thread_func_t)(
+    const vef_stop_background_thread_arg_t *arg);
+
+// Like vef_sleep_background_thread_func_t but also wakes when poll_fd becomes
+// readable. Useful for threads that wait for I/O (e.g. a listening socket):
+// wakes on whichever fires first — poll_fd readable, stop signal, or timeout.
+// Available when protocol >= VEF_PROTOCOL_2.
+typedef vef_sleep_background_thread_result_t (
+    *vef_sleep_background_thread_fd_func_t)(
+    const vef_sleep_background_thread_fd_arg_t *arg);
+
+// =============================================================================
+// Extension lifecycle callbacks (protocol >= VEF_PROTOCOL_2)
+// =============================================================================
+//
+// on_load is called by the server after an extension is fully registered
+// (all VDFs, types, and sys vars are live). This fires on every server start
+// as well as on INSTALL EXTENSION. Return false on success; return true and
+// write an error message to error_msg to abort loading.
+//
+// on_unload is called by the server before the extension is unregistered
+// (before VDFs/types/sys vars are removed and before dlclose). This fires on
+// every server shutdown as well as on UNINSTALL EXTENSION. The extension must
+// stop any background threads before returning.
+
+// error_msg points to a buffer of VEF_MAX_ERROR_LEN bytes.
+typedef bool (*vef_on_load_func_t)(char *error_msg);
+typedef void (*vef_on_unload_func_t)();
+
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
 
   vef_version_t mysql_version;
   vef_version_t vef_version;
+
+  // The name of the extension as declared in the VEB manifest.
+  // Always non-null. Stable for the lifetime of the vef_register() call.
+  const char *extension_name;
 
   // protocol >= VEF_PROTOCOL_2
   // TODO(villagesql-beta): How do extension authors opt into requiring these
@@ -270,6 +398,11 @@ typedef struct {
   vef_set_variable_fn set_variable;
   vef_read_keyring_fn read_keyring;
   vef_write_keyring_fn write_keyring;
+  vef_register_background_thread_func_t register_background_thread;
+  vef_unregister_background_thread_func_t unregister_background_thread;
+  vef_sleep_background_thread_func_t sleep_background_thread;
+  vef_stop_background_thread_func_t stop_background_thread;
+  vef_sleep_background_thread_fd_func_t sleep_background_thread_fd;
 } vef_register_arg_t;
 
 typedef struct {
@@ -899,6 +1032,15 @@ typedef struct {
   // protocol >= VEF_PROTOCOL_2
   unsigned int status_var_count;
   vef_status_var_desc_t **status_vars;
+
+  // Optional lifecycle callbacks (protocol >= VEF_PROTOCOL_2).
+  // on_load: called after all VDFs/types/sys vars are live, on every server
+  //   start and on INSTALL EXTENSION. Return true (and write to error_msg)
+  //   to abort loading.
+  // on_unload: called before VDFs/types/sys vars are removed, on every server
+  //   shutdown and on UNINSTALL EXTENSION.
+  vef_on_load_func_t on_load;
+  vef_on_unload_func_t on_unload;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the

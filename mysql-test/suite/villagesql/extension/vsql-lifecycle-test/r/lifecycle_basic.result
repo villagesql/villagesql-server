@@ -1,0 +1,21 @@
+INSTALL EXTENSION vsql_lifecycle_test;
+# Thread should appear in processlist with expected user and info
+SELECT id, user, info FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+ORDER BY id;
+id	user	info
+<id>	vef_worker	vsql_lifecycle_test/monitor
+# Tick count should be positive after 500ms (thread ticks every 100ms)
+SELECT vsql_lifecycle_test.tick_count() > 0;
+vsql_lifecycle_test.tick_count() > 0
+1
+# on_load_count should be 1: on_load fired exactly once on install
+SELECT vsql_lifecycle_test.on_load_count();
+vsql_lifecycle_test.on_load_count()
+1
+UNINSTALL EXTENSION vsql_lifecycle_test;
+# Thread is gone from processlist after uninstall
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+COUNT(*)
+0

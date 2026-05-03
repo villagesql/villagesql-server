@@ -200,7 +200,7 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   }
 #endif
   std::string load_error;
-  if (villagesql::veb::load_vef_extension(so_path, registration,
+  if (villagesql::veb::load_vef_extension(so_path, extension_name, registration,
                                           server_protocol, load_error)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
             extension_name.c_str(), load_error.c_str());
@@ -232,6 +232,13 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
                        extension_name.c_str(), reg_error.c_str());
       return end_transaction(thd, true);
     }
+  }
+
+  // Capture on_load before moving registration into the victionary.
+  vef_on_load_func_t on_load_fn = nullptr;
+  if (raw_reg != nullptr &&
+      registration.negotiated_protocol >= VEF_PROTOCOL_2) {
+    on_load_fn = raw_reg->on_load;
   }
 
   bool mark_success = true;
@@ -315,6 +322,20 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     villagesql_error("Failed to write extension '%s' to table", MYF(0),
                      extension_name.c_str());
     return end_transaction(thd, true);
+  }
+
+  // Call on_load after everything is committed and live.
+  if (on_load_fn != nullptr) {
+    char error_msg[VEF_MAX_ERROR_LEN] = {};
+    if (on_load_fn(error_msg)) {
+      LogVSQL(ERROR_LEVEL, "Extension '%s' on_load failed: %s",
+              extension_name.c_str(),
+              error_msg[0] ? error_msg : "(no message)");
+      villagesql_error("Extension '%s' on_load failed: %s", MYF(0),
+                       extension_name.c_str(),
+                       error_msg[0] ? error_msg : "(no message)");
+      return end_transaction(thd, true);
+    }
   }
 
   LogVSQL(INFORMATION_LEVEL,

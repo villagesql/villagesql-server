@@ -82,6 +82,9 @@
 // Status variable builder: make_status_var_int(), make_status_var_double()
 #include <villagesql/vsql/status_var_builder.h>
 
+// Background thread support (use make_thread() + .thread() on the builder)
+#include <villagesql/vsql/thread.h>
+
 // Keyring access: vsql::keyring::read(), vsql::keyring::write()
 #include <villagesql/vsql/keyring.h>
 
@@ -133,6 +136,10 @@ using villagesql::func_builder::STRING;
 
 // Re-export sys_var change wrapper
 using villagesql::sys_var_builder::SysVarChange;
+
+// Re-export background thread builder
+using villagesql::LoadResult;
+using villagesql::extension_builder::make_thread;
 
 }  // namespace vsql
 
