@@ -28,15 +28,16 @@ constexpr size_t fnv1a_hash(const char *s, size_t len) {
   return h;
 }
 
-// Returns a compile-time hash of T's fully qualified type name via
-// __PRETTY_FUNCTION__. Used to verify that the capability ABI struct type
-// an extension was compiled against matches the type the server registered.
+// Returns a compile-time hash of T's fully qualified type name and size via
+// __PRETTY_FUNCTION__ and sizeof(T). Used to verify that the capability ABI
+// struct type an extension was compiled against matches the type the server
+// registered. Catches both type name changes and struct size changes.
 template <typename T>
 constexpr size_t abi_type_hash() {
   const char *s = __PRETTY_FUNCTION__;
   size_t len = 0;
   while (s[len]) ++len;
-  return fnv1a_hash(s, len);
+  return fnv1a_hash(s, len) ^ (sizeof(T) * 1099511628211ULL);
 }
 
 }  // namespace villagesql::detail

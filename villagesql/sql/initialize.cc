@@ -89,12 +89,59 @@ static Sys_var_uint Sys_villagesql_vef_server_protocol(
     READ_ONLY NON_PERSIST GLOBAL_VAR(veb::vef_server_protocol_version),
     NO_CMD_LINE, VALID_RANGE(0, 255), DEFAULT(0), BLOCK_SIZE(1));
 
+static bool any_preview_extensions_installed() {
+  VictionaryClient &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+  auto guard = vclient.get_read_lock();
+  for (const ExtensionDescriptor *desc :
+       vclient.extension_descriptors().get_all_committed()) {
+    const vef_registration_t *reg = desc->registration().registration;
+    if (reg != nullptr && reg->required_capability_count > 0) return true;
+  }
+  return false;
+}
+
+static bool check_allow_preview_extensions(sys_var *, THD *, set_var *var) {
+  const bool new_value = var->save_result.ulonglong_value != 0;
+
+  // TODO(villagesql-beta): There is a TOCTOU race between this check and the
+  // actual variable write: another thread could INSTALL a preview extension
+  // after we check but before the variable is set to OFF. Fixing this requires
+  // making the check-and-set atomic with INSTALL EXTENSION, e.g. by performing
+  // the assignment inside ON_UPDATE while holding the VictionaryClient write
+  // lock (which INSTALL EXTENSION also holds).
+  if (new_value) {
+    // SET GLOBAL = ON is rejected; only SET PERSIST is allowed so that
+    // the value survives restart (extensions with preview capabilities
+    // require it to be ON at startup).
+    if (var->type == OPT_GLOBAL) {
+      villagesql_error(
+          "vsql_allow_preview_extensions must be set with SET PERSIST, "
+          "not SET GLOBAL, to ensure the setting survives server restart",
+          MYF(0));
+      return true;
+    }
+  } else {
+    // SET ... = OFF is rejected while any preview extensions are installed.
+    if (any_preview_extensions_installed()) {
+      villagesql_error(
+          "Cannot set vsql_allow_preview_extensions = OFF while preview "
+          "extensions are installed. Uninstall all preview extensions first.",
+          MYF(0));
+      return true;
+    }
+  }
+  return false;
+}
+
 static Sys_var_bool Sys_vsql_allow_preview_extensions(
     "vsql_allow_preview_extensions",
     "Allow loading extensions that use preview capabilities. Preview "
     "capabilities are unstable and may change or be removed without notice.",
     GLOBAL_VAR(vsql_allow_preview_extensions), CMD_LINE(OPT_ARG),
-    DEFAULT(false));
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_allow_preview_extensions), ON_UPDATE(nullptr), nullptr,
+    sys_var::PARSE_EARLY);
 
 bool bootstrap_for_init_file(THD *thd) {
   if (SchemaManager::bootstrap(thd)) {

@@ -1,4 +1,7 @@
+# SET GLOBAL is rejected; must use SET PERSIST
 SET GLOBAL vsql_allow_preview_extensions = ON;
+ERROR HY000: vsql_allow_preview_extensions must be set with SET PERSIST, not SET GLOBAL, to ensure the setting survives server restart
+SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_preview_ping_test;
 # ping() returns a positive integer
 SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
@@ -8,5 +11,9 @@ ping_positive
 SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping() AS ping_increases;
 ping_increases
 1
+# SET ... = OFF is rejected while preview extensions are installed
+SET PERSIST vsql_allow_preview_extensions = OFF;
+ERROR HY000: Cannot set vsql_allow_preview_extensions = OFF while preview extensions are installed. Uninstall all preview extensions first.
 UNINSTALL EXTENSION vsql_preview_ping_test;
-SET GLOBAL vsql_allow_preview_extensions = OFF;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

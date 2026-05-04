@@ -10,7 +10,8 @@ call mtr.add_suppression("vsql_allow_preview_extensions");
 INSTALL EXTENSION vsql_preview_unknown_cap_test;
 
 --echo # With preview capabilities allowed, install fails due to missing capability
-SET GLOBAL vsql_allow_preview_extensions = ON;
+SET PERSIST vsql_allow_preview_extensions = ON;
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION vsql_preview_unknown_cap_test;
-SET GLOBAL vsql_allow_preview_extensions = OFF;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
