@@ -1,3 +1,4 @@
+SET GLOBAL vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_preview_ping_test;
 # ping() returns a positive integer
 SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
@@ -8,3 +9,4 @@ SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping() AS ping_inc
 ping_increases
 1
 UNINSTALL EXTENSION vsql_preview_ping_test;
+SET GLOBAL vsql_allow_preview_extensions = OFF;

@@ -20,6 +20,8 @@
 #include "villagesql/sdk/include/villagesql/detail/capability_hash.h"
 #include "villagesql/services/preview/ping.h"
 
+bool vsql_allow_preview_extensions = false;
+
 namespace villagesql::services {
 
 namespace {
@@ -60,6 +62,13 @@ bool populate_capabilities(const vef_registration_t *reg,
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
     return false;
+
+  if (!vsql_allow_preview_extensions) {
+    error_message =
+        "extension requires preview capabilities but "
+        "vsql_allow_preview_extensions is OFF";
+    return true;
+  }
 
   for (uint32_t i = 0; i < reg->required_capability_count; ++i) {
     const vef_required_capability_t &req = reg->required_capabilities[i];

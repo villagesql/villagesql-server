@@ -1,3 +1,10 @@
 call mtr.add_suppression("required capability not registered");
+call mtr.add_suppression("vsql_allow_preview_extensions");
+# With preview capabilities blocked (default), install fails immediately
+INSTALL EXTENSION vsql_preview_unknown_cap_test;
+ERROR HY000: Failed to load VEF extension 'vsql_preview_unknown_cap_test': extension requires preview capabilities but vsql_allow_preview_extensions is OFF
+# With preview capabilities allowed, install fails due to missing capability
+SET GLOBAL vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_preview_unknown_cap_test;
 ERROR HY000: Failed to load VEF extension 'vsql_preview_unknown_cap_test': required capability not registered: vsql::nonexistent
+SET GLOBAL vsql_allow_preview_extensions = OFF;

@@ -89,6 +89,13 @@ static Sys_var_uint Sys_villagesql_vef_server_protocol(
     READ_ONLY NON_PERSIST GLOBAL_VAR(veb::vef_server_protocol_version),
     NO_CMD_LINE, VALID_RANGE(0, 255), DEFAULT(0), BLOCK_SIZE(1));
 
+static Sys_var_bool Sys_vsql_allow_preview_extensions(
+    "vsql_allow_preview_extensions",
+    "Allow loading extensions that use preview capabilities. Preview "
+    "capabilities are unstable and may change or be removed without notice.",
+    GLOBAL_VAR(vsql_allow_preview_extensions), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
+
 bool bootstrap_for_init_file(THD *thd) {
   if (SchemaManager::bootstrap(thd)) {
     sysd::notify("STATUS=VillageSQL bootstrap for init-file unsuccessful\n");

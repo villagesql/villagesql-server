@@ -21,6 +21,10 @@
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
+// When false (default), loading an extension that declares any preview
+// capabilities fails with an error. Set to true to allow preview capabilities.
+extern bool vsql_allow_preview_extensions;
+
 namespace villagesql::services {
 
 // General-purpose registry mapping capability name to a vtable pointer.

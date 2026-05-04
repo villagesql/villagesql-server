@@ -2,6 +2,8 @@
 # Verifies that the ping() VDF returns an incrementing counter, proving
 # the server-side preview capability was populated correctly.
 
+SET GLOBAL vsql_allow_preview_extensions = ON;
+
 INSTALL EXTENSION vsql_preview_ping_test;
 
 --echo # ping() returns a positive integer
@@ -11,3 +13,5 @@ SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
 SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping() AS ping_increases;
 
 UNINSTALL EXTENSION vsql_preview_ping_test;
+
+SET GLOBAL vsql_allow_preview_extensions = OFF;
