@@ -35,8 +35,8 @@ namespace vsql::preview::ping {
 class Capability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
-  static constexpr void (*kOnLoad)(const vef_registration_t *) = nullptr;
-  static constexpr void (*kOnUnload)(const vef_registration_t *) = nullptr;
+  static constexpr void (*kOnLoad)(const vef_register_arg_t *) = nullptr;
+  static constexpr void (*kOnUnload)() = nullptr;
 
   // Returns the next counter value from the server, or 0 if unavailable.
   uint64_t ping() const {

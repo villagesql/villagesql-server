@@ -48,6 +48,7 @@ void register_builtin_capabilities();
 // (missing capability or ABI type mismatch) and returns true.
 // Returns false if all capabilities were satisfied.
 bool populate_capabilities(const vef_registration_t *reg,
+                           const vef_register_arg_t *arg,
                            std::string &error_message);
 
 // Invoke on_unload for each capability in reg->required_capabilities.

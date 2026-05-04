@@ -888,7 +888,8 @@ bool load_vef_extension(const std::string &so_path,
   }
 
   // Populate any capabilities the extension requires.
-  if (villagesql::services::populate_capabilities(reg, error_message)) {
+  if (villagesql::services::populate_capabilities(reg, &register_arg,
+                                                  error_message)) {
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);
     dlclose(handle);

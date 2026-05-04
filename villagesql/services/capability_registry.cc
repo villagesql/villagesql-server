@@ -54,6 +54,7 @@ void register_builtin_capabilities() {
 // TODO(villagesql-beta): Verify that the capabilities declared in
 // vef_registration_t match those listed in the extension's manifest.
 bool populate_capabilities(const vef_registration_t *reg,
+                           const vef_register_arg_t *arg,
                            std::string &error_message) {
   if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
       reg->required_capabilities == nullptr ||
@@ -76,7 +77,7 @@ bool populate_capabilities(const vef_registration_t *reg,
     }
 
     req.receive(entry->vtable);
-    if (req.on_load != nullptr) req.on_load(reg);
+    if (req.on_load != nullptr) req.on_load(arg);
   }
 
   return false;
@@ -90,7 +91,7 @@ void depopulate_capabilities(const vef_registration_t *reg) {
 
   for (uint32_t i = 0; i < reg->required_capability_count; ++i) {
     const vef_required_capability_t &req = reg->required_capabilities[i];
-    if (req.on_unload != nullptr) req.on_unload(reg);
+    if (req.on_unload != nullptr) req.on_unload();
   }
 }
 

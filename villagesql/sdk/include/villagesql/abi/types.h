@@ -896,12 +896,12 @@ typedef struct {
   // villagesql::detail::abi_type_hash<AbiType>(). The server compares this
   // against its own hash for the same name to detect ABI struct mismatches.
   size_t abi_type_hash;
-  // Called immediately after the capability vtable is populated, still within
-  // vef_register(). Use for runtime initialization that requires context not
-  // available at compile time (e.g. reg->extension_name). May be NULL.
-  void (*on_load)(const vef_registration_t *reg);
+  // Called immediately after the capability vtable is populated. Use for
+  // runtime initialization (e.g. thread naming). arg is the same register_arg
+  // passed to vef_register(). May be NULL.
+  void (*on_load)(const vef_register_arg_t *arg);
   // Called before the extension is unloaded. Use for cleanup. May be NULL.
-  void (*on_unload)(const vef_registration_t *reg);
+  void (*on_unload)();
 } vef_required_capability_t;
 
 typedef struct vef_registration_t {
