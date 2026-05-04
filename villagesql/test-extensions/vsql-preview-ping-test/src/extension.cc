@@ -27,6 +27,7 @@
 #include <villagesql/vsql.h>
 
 using namespace vsql;
+using vsql::preview::preview_ping;
 
 static auto g_ping = vsql::preview::ping::make_capability();
 
@@ -41,4 +42,4 @@ static void ping_impl(IntResult out) {
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
         .func(make_func<&ping_impl>("ping").returns(INT).build())
-        .preview_require<g_ping>())
+        .with<preview_ping<g_ping>>())

@@ -16,9 +16,9 @@
 #ifndef VILLAGESQL_PREVIEW_PING_H
 #define VILLAGESQL_PREVIEW_PING_H
 
-#include <cstdint>
-
 #include <villagesql/abi/preview/ping.h>
+#include <villagesql/detail/capability_hash.h>
+#include <villagesql/vsql/extension_builder.h>
 
 namespace vsql::preview::ping {
 
@@ -31,11 +31,12 @@ namespace vsql::preview::ping {
 //   uint64_t n = g_ping.ping();
 //
 // Register with:
-//   make_extension().preview_require<g_ping>()
-class PingCapability {
+//   make_extension().with<preview_ping<g_ping>>()
+class Capability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
-  static constexpr uint32_t kVersion = VEF_PREVIEW_PING_VERSION;
+  static constexpr void (*kOnLoad)(const vef_registration_t *) = nullptr;
+  static constexpr void (*kOnUnload)(const vef_registration_t *) = nullptr;
 
   // Returns the next counter value from the server, or 0 if unavailable.
   uint64_t ping() const {
@@ -45,13 +46,31 @@ class PingCapability {
 
   bool available() const { return abi_.ping != nullptr; }
 
-  // Public so that preview_require() can take &abi_ as a constexpr pointer.
+  // Public so that cap_receive() can access abi_ via a pointer.
   // Do not access directly — use ping() and available() instead.
   vef_preview_ping_t abi_;
 };
 
-inline PingCapability make_capability() { return PingCapability{}; }
+inline Capability make_capability() { return Capability{}; }
 
 }  // namespace vsql::preview::ping
+
+namespace vsql::preview {
+
+// Traits type for registering the ping capability via
+// .with<preview_ping<cap>>. Only available when this header is included.
+template <auto &cap>
+struct preview_ping {
+  template <typename Inner>
+  static constexpr auto bind(Inner builder) {
+    using Cap = ping::Capability;
+    return builder.required_capability(
+        {Cap::kName, &::villagesql::vsql::cap_receive<Cap, &cap>,
+         ::villagesql::detail::abi_type_hash<decltype(cap.abi_)>(),
+         Cap::kOnLoad, Cap::kOnUnload});
+  }
+};
+
+}  // namespace vsql::preview
 
 #endif  // VILLAGESQL_PREVIEW_PING_H

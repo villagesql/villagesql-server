@@ -918,6 +918,7 @@ void unload_vef_extension(const ExtensionRegistration &registration) {
   }
 
   if (registration.registration != nullptr) {
+    villagesql::services::depopulate_capabilities(registration.registration);
     vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
     LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
             registration.so_path.c_str());

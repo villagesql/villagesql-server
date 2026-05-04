@@ -878,6 +878,9 @@ typedef struct {
   };
 } vef_status_var_desc_t;
 
+// Forward declaration so vef_required_capability_t can reference it.
+typedef struct vef_registration_t vef_registration_t;
+
 // A single capability request in vef_registration_t.required_capabilities.
 // The extension sets name, version, and a receive callback. The server calls
 // receive() with the vtable pointer if the capability is registered; the
@@ -886,18 +889,22 @@ typedef struct {
   // Capability name, e.g. "vsql::ping". Must remain valid for the lifetime
   // of the extension (use a string literal).
   const char *name;
-  // Version of the capability struct the extension was compiled against.
-  uint32_t version;
   // Called by the server with the capability vtable pointer if registered.
   // The extension assigns the vtable to its own capability struct.
   void (*receive)(void *vtable);
   // Compile-time hash of the ABI struct type, computed via
   // villagesql::detail::abi_type_hash<AbiType>(). The server compares this
-  // against its own hash for the same (name, version) to detect mismatches.
+  // against its own hash for the same name to detect ABI struct mismatches.
   size_t abi_type_hash;
+  // Called immediately after the capability vtable is populated, still within
+  // vef_register(). Use for runtime initialization that requires context not
+  // available at compile time (e.g. reg->extension_name). May be NULL.
+  void (*on_load)(const vef_registration_t *reg);
+  // Called before the extension is unloaded. Use for cleanup. May be NULL.
+  void (*on_unload)(const vef_registration_t *reg);
 } vef_required_capability_t;
 
-typedef struct {
+typedef struct vef_registration_t {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
 
@@ -929,8 +936,8 @@ typedef struct {
   // Preview capabilities required by this extension. Each entry names a
   // capability the extension needs (e.g. "vsql::ping"). The server populates
   // the capability struct pointed to by each entry before vef_register()
-  // returns. If a capability is unavailable or the version is unsupported,
-  // its function pointers are left as nullptr.
+  // returns. If a capability is unavailable or there is an ABI struct
+  // mismatch, loading the extension fails with an error.
   unsigned int required_capability_count;
   const vef_required_capability_t *required_capabilities;
 } vef_registration_t;

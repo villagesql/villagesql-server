@@ -24,6 +24,7 @@
 //   cap_available() -> INT   Returns 1 if the unknown cap was populated, else
 //   0.
 
+#include <villagesql/detail/capability_hash.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
@@ -36,7 +37,6 @@ struct NonexistentAbi {
 
 struct UnknownCapability {
   static constexpr const char *kName = "vsql::nonexistent";
-  static constexpr uint32_t kVersion = 1;
   NonexistentAbi abi_;
 };
 
@@ -51,4 +51,8 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_func<&cap_available_impl>("cap_available")
                   .returns(INT)
                   .build())
-        .preview_require<g_cap>())
+        .required_capability(
+            {UnknownCapability::kName,
+             &villagesql::vsql::cap_receive<UnknownCapability, &g_cap>,
+             villagesql::detail::abi_type_hash<NonexistentAbi>(), nullptr,
+             nullptr}))

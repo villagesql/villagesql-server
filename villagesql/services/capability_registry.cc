@@ -24,52 +24,29 @@ namespace villagesql::services {
 
 namespace {
 
-struct CapabilityKey {
-  std::string name;
-  uint32_t version;
-
-  bool operator==(const CapabilityKey &o) const {
-    return version == o.version && name == o.name;
-  }
-};
-
-struct CapabilityKeyHash {
-  size_t operator()(const CapabilityKey &k) const {
-    size_t h = std::hash<std::string>{}(k.name);
-    h ^= std::hash<uint32_t>{}(k.version) + 0x9e3779b9 + (h << 6) + (h >> 2);
-    return h;
-  }
-};
-
 struct CapabilityValue {
   void *vtable;
   size_t abi_type_hash;
 };
 
-std::unordered_map<CapabilityKey, CapabilityValue, CapabilityKeyHash>
-    g_registry;
+std::unordered_map<std::string, CapabilityValue> g_registry;
 
 }  // namespace
 
-void register_capability(std::string name, uint32_t version, void *vtable,
-                         size_t abi_type_hash) {
-  g_registry[{std::move(name), version}] = {vtable, abi_type_hash};
+void register_capability(std::string name, void *vtable, size_t abi_type_hash) {
+  g_registry[std::move(name)] = {vtable, abi_type_hash};
 }
 
-void unregister_capability(const std::string &name, uint32_t version) {
-  g_registry.erase({name, version});
-}
+void unregister_capability(const std::string &name) { g_registry.erase(name); }
 
-static const CapabilityValue *find_capability_entry(const std::string &name,
-                                                    uint32_t version) {
-  auto it = g_registry.find({name, version});
+static const CapabilityValue *find_capability_entry(const std::string &name) {
+  auto it = g_registry.find(name);
   if (it == g_registry.end()) return nullptr;
   return &it->second;
 }
 
 void register_builtin_capabilities() {
-  register_capability(VEF_PREVIEW_PING_NAME, VEF_PREVIEW_PING_VERSION,
-                      preview_ping_vtable(),
+  register_capability(VEF_PREVIEW_PING_NAME, preview_ping_vtable(),
                       villagesql::detail::abi_type_hash<vef_preview_ping_t>());
   // TODO(villagesql-beta): register "vsql::thread_worker" and "vsql::sql" here
 }
@@ -87,7 +64,7 @@ bool populate_capabilities(const vef_registration_t *reg,
     const vef_required_capability_t &req = reg->required_capabilities[i];
     if (req.name == nullptr || req.receive == nullptr) continue;
 
-    const CapabilityValue *entry = find_capability_entry(req.name, req.version);
+    const CapabilityValue *entry = find_capability_entry(req.name);
     if (entry == nullptr) {
       error_message =
           std::string("required capability not registered: ") + req.name;
@@ -99,9 +76,22 @@ bool populate_capabilities(const vef_registration_t *reg,
     }
 
     req.receive(entry->vtable);
+    if (req.on_load != nullptr) req.on_load(reg);
   }
 
   return false;
+}
+
+void depopulate_capabilities(const vef_registration_t *reg) {
+  if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
+      reg->required_capabilities == nullptr ||
+      reg->required_capability_count == 0)
+    return;
+
+  for (uint32_t i = 0; i < reg->required_capability_count; ++i) {
+    const vef_required_capability_t &req = reg->required_capabilities[i];
+    if (req.on_unload != nullptr) req.on_unload(reg);
+  }
 }
 
 }  // namespace villagesql::services

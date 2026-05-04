@@ -162,26 +162,32 @@ struct ExtensionBuilder {
         require_atleast_min(VEF_PROTOCOL_2)};
   }
 
-  // Declare a requirement for a preview capability. The server will populate
-  // cap's function pointers before vef_register() returns. Cap must expose
-  // static kName and kVersion members and a public abi_ field.
-  // cap must have static storage duration so its address is a valid non-type
-  // template argument and remains valid after vef_register() returns.
-  // Requires at least VEF_PROTOCOL_2.
-  //
-  // Usage: make_extension().preview_require<g_my_cap>()
-  template <auto &cap>
-  constexpr auto preview_require() const {
-    using Cap = std::decay_t<decltype(cap)>;
-    vef_required_capability_t req{Cap::kName, Cap::kVersion,
-                                  &cap_receive<Cap, &cap>,
-                                  detail::abi_type_hash<decltype(cap.abi_)>()};
+  // No-op. Preview capability builders that need runtime initialization before
+  // vef_register_impl() runs should wrap ExtensionBuilder and override this.
+  void init() const {}
+
+  // Low-level method for use by capability bind() functions only.
+  // Prefer .with<Traits>() at call sites.
+  constexpr auto required_capability(
+      const vef_required_capability_t &req) const {
     auto new_caps =
         std::tuple_cat(required_capabilities_, std::make_tuple(req));
     return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple,
                             decltype(new_caps)>{
         funcs_,       types_,   sys_vars_,
         status_vars_, new_caps, require_atleast_min(VEF_PROTOCOL_2)};
+  }
+
+  // Generic builder extension point for capabilities. Traits is defined in
+  // its own header — only available when that header is included.
+  template <typename Traits>
+  constexpr auto with() const {
+    return Traits::bind(*this);
+  }
+
+  template <typename Traits, typename Config>
+  constexpr auto with(Config config) const {
+    return Traits::bind(*this, config);
   }
 
   // For testing only — forces the extension to require protocol p regardless

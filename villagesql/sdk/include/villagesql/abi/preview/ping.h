@@ -28,11 +28,9 @@ extern "C" {
 // registration system. The server provides a single ping() function that
 // returns a monotonically incrementing counter.
 //
-// Capability name:    VEF_PREVIEW_PING_NAME
-// Capability version: VEF_PREVIEW_PING_VERSION
+// Capability name: VEF_PREVIEW_PING_NAME
 
 #define VEF_PREVIEW_PING_NAME "vsql::ping"
-#define VEF_PREVIEW_PING_VERSION 1
 
 // Returns a monotonically incrementing counter. Used to verify that the
 // capability system is wired up correctly end-to-end.
