@@ -1125,10 +1125,4 @@ constexpr vef_type_t to_vef_type(const char *name) {
 }  // namespace func_builder
 }  // namespace vsql
 
-// TODO(villagesql): Remove these villagesql:: aliases once all extensions have
-// migrated to the vsql:: namespace.
-namespace villagesql {
-using ResolvedTypeParams = vsql::ResolvedTypeParams;
-}  // namespace villagesql
-
 #endif  // VILLAGESQL_VSQL_FUNC_BUILDER_H

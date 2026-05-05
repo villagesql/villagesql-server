@@ -355,23 +355,4 @@ class CustomResultWith {
 
 }  // namespace vsql
 
-// TODO(villagesql): Remove these villagesql:: aliases once all extensions have
-// migrated to the vsql:: namespace.
-namespace villagesql {
-template <typename T>
-using Span = vsql::Span<T>;
-using IntArg = vsql::IntArg;
-using RealArg = vsql::RealArg;
-using StringArg = vsql::StringArg;
-using CustomArg = vsql::CustomArg;
-template <typename P>
-using CustomArgWith = vsql::CustomArgWith<P>;
-using IntResult = vsql::IntResult;
-using RealResult = vsql::RealResult;
-using StringResult = vsql::StringResult;
-using CustomResult = vsql::CustomResult;
-template <typename P>
-using CustomResultWith = vsql::CustomResultWith<P>;
-}  // namespace villagesql
-
 #endif  // VILLAGESQL_VSQL_FUNC_TYPES_H
