@@ -289,20 +289,29 @@ TEST_F(ValidateExtensionRegistrationTest,
 
 // A v2 type whose encode_vdf_name is malformed fails validation.
 TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
-  const char *bad_names[] = {
-      "MYTYPE::transform",       // unrecognised method suffix
-      "WRONGTYPE::from_string",  // prefix does not match type name
-      "::MYTPE::transform",
-      "MYTPE::::transform",
+  struct TestCase {
+    const char *bad_name;
+    const char *expected_error;
   };
 
-  for (const char *bad_name : bad_names) {
+  const TestCase cases[] = {
+      {"MYTYPE::transform",
+       "type 'MYTYPE' failed validation"},  // unrecognised method suffix
+      {"WRONGTYPE::from_string",
+       "type 'MYTYPE' failed validation"},  // prefix does not match type name
+      {"::MYTPE::transform", "type 'MYTYPE' failed validation"},
+      {"MYTPE::::transform", "type 'MYTYPE' failed validation"},
+  };
+
+  for (const auto &tc : cases) {
+    SCOPED_TRACE(std::string("bad_name=") + tc.bad_name);
+
     vef_type_desc_t td = {};
     td.protocol = VEF_PROTOCOL_2;
     td.name = "MYTYPE";
     td.persisted_length = 16;
     td.max_decode_buffer_length = 256;
-    td.encode_vdf_name = bad_name;
+    td.encode_vdf_name = tc.bad_name;
 
     vef_type_desc_t *types[] = {&td};
     vef_registration_t reg = {};
@@ -315,9 +324,8 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
     auto result = villagesql::veb::validate_extension_registration(
         make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
 
-    EXPECT_FALSE(result.has_value()) << "bad_name=" << bad_name;
-    EXPECT_NE(error.find("MYTYPE"), std::string::npos)
-        << "bad_name=" << bad_name;
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(error, tc.expected_error);
   }
 }
 
