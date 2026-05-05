@@ -36,7 +36,7 @@
 
 #include <villagesql/abi/types.h>
 
-namespace villagesql {
+namespace vsql {
 namespace status_var_builder {
 
 // Wraps a single vef_status_var_desc_t by value so the builder can store it
@@ -66,6 +66,6 @@ constexpr StatusVarDescriptor make_status_var_double(const char *name,
 }
 
 }  // namespace status_var_builder
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_STATUS_VAR_BUILDER_H

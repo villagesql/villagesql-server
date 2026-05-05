@@ -116,8 +116,8 @@ static int64_t read_be64(const unsigned char *src) {
                               static_cast<uint64_t>(src[7]));
 }
 
-bool stored_int_from_string(std::string_view s,
-                            villagesql::Span<unsigned char> buf, size_t *len) {
+bool stored_int_from_string(std::string_view s, vsql::Span<unsigned char> buf,
+                            size_t *len) {
   if (buf.size() < kFieldSize) return true;
   int64_t val = 0;
   auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
@@ -130,8 +130,8 @@ bool stored_int_from_string(std::string_view s,
   return false;
 }
 
-bool stored_int_to_string(villagesql::Span<const unsigned char> data,
-                          villagesql::Span<char> out, size_t *out_len) {
+bool stored_int_to_string(vsql::Span<const unsigned char> data,
+                          vsql::Span<char> out, size_t *out_len) {
   // Receives the full persisted field (16 bytes: ref + value). Read the value
   // from the second half, skipping the Column::Ref prefix.
   if (data.size() < kFieldSize) return true;
@@ -142,8 +142,8 @@ bool stored_int_to_string(villagesql::Span<const unsigned char> data,
   return false;
 }
 
-int stored_int_compare(villagesql::Span<const unsigned char> a,
-                       villagesql::Span<const unsigned char> b) {
+int stored_int_compare(vsql::Span<const unsigned char> a,
+                       vsql::Span<const unsigned char> b) {
   // Receives the full persisted field (16 bytes: ref + value). The value is
   // in the last 8 bytes regardless of whether the ref has been written yet.
   if (a.size() < kFieldSize || b.size() < kFieldSize) return 0;

@@ -125,7 +125,7 @@ void vdf_max_clear(vef_context_t *, vef_vdf_args_t *args) {
 void vdf_max_accumulate(vef_context_t *ctx, vef_vdf_args_t *args,
                         vef_vdf_result_t *) {
   auto *state = static_cast<MaxState *>(args->user_data);
-  vef_invalue_t val = villagesql::func_builder::get_invalue(ctx, args, 0);
+  vef_invalue_t val = vsql::func_builder::get_invalue(ctx, args, 0);
   if (!val.is_null) {
     if (!state->has_value || val.int_value > state->max_val) {
       state->max_val = val.int_value;

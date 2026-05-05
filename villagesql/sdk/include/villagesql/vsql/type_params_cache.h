@@ -30,7 +30,7 @@
 
 #include <villagesql/abi/types.h>
 
-namespace villagesql {
+namespace vsql {
 
 // Memoizes parsed type parameters to avoid re-parsing strings on every VDF
 // call. There is one cache instance per Type Parameter C++ type. The cache is
@@ -186,6 +186,6 @@ __attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
   return type_params_cache_for<T>().is_bound();
 }
 
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_TYPE_PARAMS_CACHE_H

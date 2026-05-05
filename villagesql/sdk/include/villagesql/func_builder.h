@@ -31,6 +31,18 @@
 
 #include <villagesql/abi/types.h>
 
+// Forward-declare materialize_func_desc in vsql::func_builder.  The definition
+// lives in vef_register.h.  The using-declaration below makes
+// villagesql::func_builder::materialize_func_desc an alias to the same entity,
+// so ADL on old-API types and the explicit using in vef_fill_func_ptrs both
+// resolve to one function — eliminating overload ambiguity.
+namespace vsql {
+namespace func_builder {
+template <typename FuncData, size_t Index>
+vef_func_desc_t *materialize_func_desc(const FuncData &func_data);
+}  // namespace func_builder
+}  // namespace vsql
+
 namespace villagesql {
 namespace func_builder {
 
@@ -267,29 +279,7 @@ struct StaticFuncDesc {
   constexpr void init_name() const {}
 };
 
-template <typename FuncData, size_t Index>
-__attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
-    const FuncData &func_data) {
-  static vef_signature_t signature;
-  static vef_func_desc_t desc;
-
-  signature.param_count = static_cast<unsigned int>(func_data.num_params());
-  signature.params = func_data.num_params() > 0 ? func_data.params() : nullptr;
-  signature.return_type = func_data.return_type();
-
-  desc.protocol = VEF_PROTOCOL_2;
-  desc.name = func_data.name();
-  desc.signature = &signature;
-  desc.vdf = func_data.vdf();
-  desc.prerun = func_data.prerun();
-  desc.postrun = func_data.postrun();
-  desc.buffer_size = func_data.buffer_size();
-  desc.deterministic = func_data.deterministic();
-  desc.clear = func_data.clear();
-  desc.accumulate = func_data.accumulate();
-
-  return &desc;
-}
+using vsql::func_builder::materialize_func_desc;
 
 // =============================================================================
 // FuncBuilder (V1 — raw vef_vdf_func_t only)

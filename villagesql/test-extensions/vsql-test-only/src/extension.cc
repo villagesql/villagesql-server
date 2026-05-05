@@ -71,8 +71,8 @@ constexpr std::string_view kPrefixOk = "OK ";
 constexpr std::string_view kDecodeFail = "DECODE_FAIL";
 constexpr std::string_view kEncodeFail = "ENCODE_FAIL";
 
-bool fault_blob_encode(std::string_view from,
-                       villagesql::Span<unsigned char> buf, size_t *length) {
+bool fault_blob_encode(std::string_view from, vsql::Span<unsigned char> buf,
+                       size_t *length) {
   if (from == kEncodeFail) {
     return true;  // encode failure - exercises server encode-error path
   }
@@ -101,8 +101,8 @@ bool fault_blob_encode(std::string_view from,
   abort();
 }
 
-bool fault_blob_decode(villagesql::Span<const unsigned char> data,
-                       villagesql::Span<char> out, size_t *out_len) {
+bool fault_blob_decode(vsql::Span<const unsigned char> data,
+                       vsql::Span<char> out, size_t *out_len) {
   if (data.size() < static_cast<size_t>(kFaultBlobSize)) {
     return true;  // error: truncated value
   }
@@ -126,8 +126,8 @@ bool fault_blob_decode(villagesql::Span<const unsigned char> data,
   return false;  // success
 }
 
-int fault_blob_compare(villagesql::Span<const unsigned char> a,
-                       villagesql::Span<const unsigned char> b) {
+int fault_blob_compare(vsql::Span<const unsigned char> a,
+                       vsql::Span<const unsigned char> b) {
   size_t cmp_len = a.size() < b.size() ? a.size() : b.size();
   int r = memcmp(a.data(), b.data(), cmp_len);
   if (r != 0) return r;
@@ -148,8 +148,7 @@ int fault_blob_compare(villagesql::Span<const unsigned char> a,
 //
 //   anything else  Returns 42 (success).
 //
-static void test_result_kind(villagesql::StringArg input,
-                             villagesql::IntResult out) {
+static void test_result_kind(vsql::StringArg input, vsql::IntResult out) {
   if (input.is_null()) {
     out.set_null();
     return;

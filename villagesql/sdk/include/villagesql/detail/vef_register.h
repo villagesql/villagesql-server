@@ -28,7 +28,7 @@
 #include <villagesql/abi/types.h>
 #include <villagesql/sdk_version.h>
 
-namespace villagesql {
+namespace vsql {
 
 // Forward-declare the vsql globals so that name lookup succeeds inside the
 // `if constexpr (Ext::kHasVsqlGlobals)` block even when only the base
@@ -43,20 +43,48 @@ extern vef_read_keyring_fn g_read_keyring;
 extern vef_write_keyring_fn g_write_keyring;
 }  // namespace keyring
 
-// Forward-declare materialize_func_desc so the helpers below can reference it
-// without requiring func_builder.h to be included first.
+// Define materialize_func_desc here so it is available to both old
+// (villagesql::func_builder) and new (vsql::func_builder) API users without
+// requiring an additional include.  villagesql/func_builder.h re-exports this
+// as villagesql::func_builder::materialize_func_desc via a using-declaration,
+// so ADL on old-API types and the explicit using in vef_fill_func_ptrs both
+// resolve to the same entity — eliminating overload ambiguity.
 namespace func_builder {
 template <typename FuncData, size_t Index>
-vef_func_desc_t *materialize_func_desc(const FuncData &func_data);
+__attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
+    const FuncData &func_data) {
+  static vef_signature_t signature;
+  static vef_func_desc_t desc;
+
+  signature.param_count = static_cast<unsigned int>(func_data.num_params());
+  signature.params = func_data.num_params() > 0 ? func_data.params() : nullptr;
+  signature.return_type = func_data.return_type();
+
+  desc.protocol = VEF_PROTOCOL_2;
+  desc.name = func_data.name();
+  desc.signature = &signature;
+  desc.vdf = func_data.vdf();
+  desc.prerun = func_data.prerun();
+  desc.postrun = func_data.postrun();
+  desc.buffer_size = func_data.buffer_size();
+  desc.deterministic = func_data.deterministic();
+  desc.clear = func_data.clear();
+  desc.accumulate = func_data.accumulate();
+
+  return &desc;
+}
 }  // namespace func_builder
 
+}  // namespace vsql
+
+namespace villagesql {
 namespace detail {
 
 // Fills arr[I] with the materialized vef_func_desc_t* for each function.
 template <typename Ext, size_t... Is>
 void vef_fill_func_ptrs(vef_func_desc_t **arr, const Ext &e,
                         std::index_sequence<Is...>) {
-  using villagesql::func_builder::materialize_func_desc;
+  using vsql::func_builder::materialize_func_desc;
   ((arr[Is] = materialize_func_desc<decltype(e.template func_at<Is>()), Is>(
         e.template func_at<Is>())),
    ...);
@@ -157,10 +185,10 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   // vsql headers in scope.
   if constexpr (Ext::kHasVsqlGlobals) {
     if (arg->protocol >= VEF_PROTOCOL_2) {
-      villagesql::sys_var::g_get_variable = arg->get_variable;
-      villagesql::sys_var::g_set_variable = arg->set_variable;
-      villagesql::keyring::g_read_keyring = arg->read_keyring;
-      villagesql::keyring::g_write_keyring = arg->write_keyring;
+      vsql::sys_var::g_get_variable = arg->get_variable;
+      vsql::sys_var::g_set_variable = arg->set_variable;
+      vsql::keyring::g_read_keyring = arg->read_keyring;
+      vsql::keyring::g_write_keyring = arg->write_keyring;
     }
   }
 

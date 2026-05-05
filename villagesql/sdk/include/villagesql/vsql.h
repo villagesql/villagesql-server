@@ -33,11 +33,11 @@
 //
 //   // 1. Implement your type operations
 //   bool complex_from_string(std::string_view s,
-//                            villagesql::Span<unsigned char> buf, size_t* len);
-//   bool complex_to_string(villagesql::Span<const unsigned char> data,
-//                          villagesql::Span<char> out, size_t* out_len);
-//   int  complex_compare(villagesql::Span<const unsigned char> a,
-//                        villagesql::Span<const unsigned char> b);
+//                            vsql::Span<unsigned char> buf, size_t* len);
+//   bool complex_to_string(vsql::Span<const unsigned char> data,
+//                          vsql::Span<char> out, size_t* out_len);
+//   int  complex_compare(vsql::Span<const unsigned char> a,
+//                        vsql::Span<const unsigned char> b);
 //
 //   // 2. Define the type as a constexpr object
 //   static constexpr const char kComplexTypeName[] = "COMPLEX";
@@ -90,49 +90,27 @@
 
 namespace vsql {
 
-// Re-export make_extension from villagesql::vsql (extended version)
-using villagesql::vsql::make_extension;
+// Re-export from func_builder sub-namespace into the flat vsql:: namespace
+using func_builder::INT;
+using func_builder::make_func;
+using func_builder::make_int_to_params;
+using func_builder::make_intrinsic_default;
+using func_builder::make_resolve_params;
+using func_builder::make_type_compare;
+using func_builder::make_type_decode;
+using func_builder::make_type_encode;
+using func_builder::make_type_hash;
+using func_builder::REAL;
+using func_builder::STRING;
 
-// Re-export make_func and type-operation entry points from the typed builder
-using villagesql::func_builder::make_func;
-using villagesql::func_builder::make_int_to_params;
-using villagesql::func_builder::make_intrinsic_default;
-using villagesql::func_builder::make_resolve_params;
-using villagesql::func_builder::make_type_compare;
-using villagesql::func_builder::make_type_decode;
-using villagesql::func_builder::make_type_encode;
-using villagesql::func_builder::make_type_hash;
-
-// Re-export sys_var and keyring namespaces
-namespace sys_var = villagesql::sys_var;
-namespace keyring = villagesql::keyring;
-using villagesql::status_var_builder::make_status_var_double;
-using villagesql::status_var_builder::make_status_var_int;
-using villagesql::sys_var_builder::make_sys_var_bool;
-using villagesql::sys_var_builder::make_sys_var_double;
-using villagesql::sys_var_builder::make_sys_var_int;
-using villagesql::sys_var_builder::make_sys_var_str;
-
-// Re-export typed argument/result wrappers
-using villagesql::CustomArg;
-using villagesql::CustomArgWith;
-using villagesql::CustomResult;
-using villagesql::CustomResultWith;
-using villagesql::IntArg;
-using villagesql::IntResult;
-using villagesql::RealArg;
-using villagesql::RealResult;
-using villagesql::Span;
-using villagesql::StringArg;
-using villagesql::StringResult;
-
-// Re-export built-in type name constants
-using villagesql::func_builder::INT;
-using villagesql::func_builder::REAL;
-using villagesql::func_builder::STRING;
-
-// Re-export sys_var change wrapper
-using villagesql::sys_var_builder::SysVarChange;
+// Re-export from sys_var_builder and status_var_builder sub-namespaces
+using status_var_builder::make_status_var_double;
+using status_var_builder::make_status_var_int;
+using sys_var_builder::make_sys_var_bool;
+using sys_var_builder::make_sys_var_double;
+using sys_var_builder::make_sys_var_int;
+using sys_var_builder::make_sys_var_str;
+using sys_var_builder::SysVarChange;
 
 }  // namespace vsql
 

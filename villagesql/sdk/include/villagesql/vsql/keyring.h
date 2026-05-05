@@ -21,7 +21,7 @@
 
 #include <villagesql/abi/types.h>
 
-namespace villagesql {
+namespace vsql {
 namespace keyring {
 
 // Extension-local storage for the keyring function pointers injected by the
@@ -61,6 +61,6 @@ inline vef_keyring_result_t write(std::string_view data_id,
 }
 
 }  // namespace keyring
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_KEYRING_H_

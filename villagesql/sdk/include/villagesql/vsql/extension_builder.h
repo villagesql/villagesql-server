@@ -23,17 +23,15 @@
 #include <villagesql/detail/capability_hash.h>
 
 #include <villagesql/detail/vef_register.h>
-#include <villagesql/type_builder.h>
 #include <villagesql/vsql/status_var_builder.h>
 #include <villagesql/vsql/sys_var_builder.h>
 
-namespace villagesql::vsql {
+namespace vsql {
 
-// Re-export func_builder and type_builder symbols so the VEF_GENERATE_*
-// macros can resolve make_func, INT, STRING, make_type, etc. without
-// additional using-declarations at the call site.
+// Re-export func_builder symbols so the VEF_GENERATE_* macros can resolve
+// make_func, INT, STRING, etc. without additional using-declarations at the
+// call site.
 using namespace func_builder;
-using namespace type_builder;
 
 // cap_receive<Cap, cap_ptr> is a captureless function pointer that copies the
 // server-provided vtable into cap_ptr->abi_. Instantiated once per unique
@@ -105,18 +103,6 @@ struct ExtensionBuilder {
                             StatusVarTuple, RequiredCapabilityTuple>{
         new_funcs,    types_, sys_vars_, status_vars_, required_capabilities_,
         min_protocol_};
-  }
-
-  constexpr auto type(const type_builder::TypeDescriptor &td) const {
-    auto new_types = std::tuple_cat(types_, std::make_tuple(td));
-    return ExtensionBuilder<FuncTuple, decltype(new_types), SysVarTuple,
-                            StatusVarTuple, RequiredCapabilityTuple>{
-        funcs_,
-        new_types,
-        sys_vars_,
-        status_vars_,
-        required_capabilities_,
-        require_atleast_min(td.vef_desc.protocol)};
   }
 
   // Accepts a TypeObject (from vsql::make_type().build()) that carries embedded
@@ -204,8 +190,7 @@ constexpr auto make_extension() {
                           std::tuple<>, std::tuple<>>{{}, {}, {},
                                                       {}, {}, VEF_PROTOCOL_1};
 }
-
-}  // namespace villagesql::vsql
+}  // namespace vsql
 
 // VEF_GENERATE_REGISTRATION (vsql variant)
 //
@@ -221,7 +206,7 @@ constexpr auto make_extension() {
   }                                                                        \
                                                                            \
   static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) {   \
-    using namespace villagesql::vsql;                                      \
+    using namespace vsql;                                                  \
     static constexpr auto kExt = (ext);                                    \
     using ExtType = decltype(kExt);                                        \
     return villagesql::detail::vef_register_impl<                          \
@@ -243,7 +228,7 @@ constexpr auto make_extension() {
   }                                                                        \
                                                                            \
   extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {   \
-    using namespace villagesql::vsql;                                      \
+    using namespace vsql;                                                  \
     static constexpr auto kExt = (ext);                                    \
     using ExtType = decltype(kExt);                                        \
     return villagesql::detail::vef_register_impl<                          \

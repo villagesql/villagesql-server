@@ -63,7 +63,7 @@ struct preview_ping {
   static constexpr auto bind(Inner builder) {
     using Cap = ping::Capability;
     return builder.required_capability(
-        {Cap::kName, &::villagesql::vsql::cap_receive<Cap, &cap>,
+        {Cap::kName, &::vsql::cap_receive<Cap, &cap>,
          ::villagesql::detail::abi_type_hash<decltype(cap.abi_)>()});
   }
 };

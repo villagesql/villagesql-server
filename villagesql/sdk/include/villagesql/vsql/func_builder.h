@@ -48,7 +48,7 @@
 #include <villagesql/vsql/func_types.h>
 #include <villagesql/vsql/type_params_cache.h>
 
-namespace villagesql {
+namespace vsql {
 
 // Storage characteristics resolved from type parameters.
 struct ResolvedTypeParams {
@@ -212,7 +212,7 @@ using IntToTypeParamsFunc = bool (*)(int64_t value,
 // resolve_params: validates type parameters and computes storage sizes.
 using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
-             villagesql::ResolvedTypeParams *result, char *error_msg);
+             vsql::ResolvedTypeParams *result, char *error_msg);
 
 // =============================================================================
 // Aggregate Callback Wrappers
@@ -671,7 +671,7 @@ struct ResolveParamsWrapper {
       start = comma + 1;
     }
 
-    villagesql::ResolvedTypeParams resolved = {};
+    vsql::ResolvedTypeParams resolved = {};
     if (Func(params, &resolved, result->error_msg)) {
       result->type = VEF_RESULT_ERROR;
       return;
@@ -746,30 +746,6 @@ struct StaticFuncDesc {
   // vef_init_auto_names() in extension_builder.h compiles for any func type.
   constexpr void init_name() const {}
 };
-
-template <typename FuncData, size_t Index>
-__attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
-    const FuncData &func_data) {
-  static vef_signature_t signature;
-  static vef_func_desc_t desc;
-
-  signature.param_count = static_cast<unsigned int>(func_data.num_params());
-  signature.params = func_data.num_params() > 0 ? func_data.params() : nullptr;
-  signature.return_type = func_data.return_type();
-
-  desc.protocol = VEF_PROTOCOL_2;
-  desc.name = func_data.name();
-  desc.signature = &signature;
-  desc.vdf = func_data.vdf();
-  desc.prerun = func_data.prerun();
-  desc.postrun = func_data.postrun();
-  desc.buffer_size = func_data.buffer_size();
-  desc.deterministic = func_data.deterministic();
-  desc.clear = func_data.clear();
-  desc.accumulate = func_data.accumulate();
-
-  return &desc;
-}
 
 // =============================================================================
 // params_type_of / unique_params_types
@@ -1147,6 +1123,12 @@ constexpr vef_type_t to_vef_type(const char *name) {
 }
 
 }  // namespace func_builder
+}  // namespace vsql
+
+// TODO(villagesql): Remove these villagesql:: aliases once all extensions have
+// migrated to the vsql:: namespace.
+namespace villagesql {
+using ResolvedTypeParams = vsql::ResolvedTypeParams;
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_VSQL_FUNC_BUILDER_H

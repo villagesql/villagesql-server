@@ -97,7 +97,7 @@ namespace detail {
 // pointer in TypeDescriptor.params_init_fn and called once during registration.
 template <typename P, auto ParseFunc>
 void bind_params_cache() {
-  villagesql::type_params_cache_for<P>().bind(ParseFunc);
+  type_params_cache_for<P>().bind(ParseFunc);
 }
 
 // =============================================================================
@@ -247,13 +247,12 @@ class TypeBuilder {
   constexpr auto int_to_params() const {
     using namespace detail;
     static_assert(
-        std::is_same_v<decltype(Func),
-                       villagesql::func_builder::IntToTypeParamsFunc>,
+        std::is_same_v<decltype(Func), func_builder::IntToTypeParamsFunc>,
         "int_to_params<Func>() requires: "
         "bool fn(int64_t, std::map<std::string,std::string>&, char*)");
     constexpr const char *vdf_name =
         kTypeOpVdfName<Name, TypeOp::kIntToParams>.buf;
-    auto inner = villagesql::func_builder::make_int_to_params<Func>(vdf_name);
+    auto inner = func_builder::make_int_to_params<Func>(vdf_name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.int_to_params_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
@@ -267,19 +266,18 @@ class TypeBuilder {
   // Auto-generates VDF name "TYPENAME::resolve_params".
   // Function signature:
   //   bool fn(const std::map<std::string,std::string>&,
-  //           villagesql::ResolvedTypeParams*, char* error_msg)
+  //           vsql::ResolvedTypeParams*, char* error_msg)
   template <auto Func>
   constexpr auto resolve_params() const {
     using namespace detail;
     static_assert(
-        std::is_same_v<decltype(Func),
-                       villagesql::func_builder::ResolveTypeParamsFunc>,
+        std::is_same_v<decltype(Func), func_builder::ResolveTypeParamsFunc>,
         "resolve_params<Func>() requires: "
         "bool fn(const std::map<std::string,std::string>&, "
-        "villagesql::ResolvedTypeParams*, char*)");
+        "vsql::ResolvedTypeParams*, char*)");
     constexpr const char *vdf_name =
         kTypeOpVdfName<Name, TypeOp::kResolveParams>.buf;
-    auto inner = villagesql::func_builder::make_resolve_params<Func>(vdf_name);
+    auto inner = func_builder::make_resolve_params<Func>(vdf_name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.resolve_params_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
@@ -303,7 +301,7 @@ class TypeBuilder {
     // Accepts TypeEncodeFunc or TypeEncodeWithParamsFunc<P> (const P& as first
     // arg). Signature validation is handled by make_type_encode<Func>.
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kEncode>.buf;
-    auto inner = villagesql::func_builder::make_type_encode<Func>(
+    auto inner = func_builder::make_type_encode<Func>(
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.encode_vdf_name = vdf_name;
@@ -320,7 +318,7 @@ class TypeBuilder {
     // Accepts TypeDecodeFunc or TypeDecodeWithParamsFunc<P>.
     // Signature validation is handled by make_type_decode<Func>.
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kDecode>.buf;
-    auto inner = villagesql::func_builder::make_type_decode<Func>(
+    auto inner = func_builder::make_type_decode<Func>(
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.decode_vdf_name = vdf_name;
@@ -337,7 +335,7 @@ class TypeBuilder {
     // Accepts TypeCompareFunc or TypeCompareWithParamsFunc<P>.
     // Signature validation is handled by make_type_compare<Func>.
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kCompare>.buf;
-    auto inner = villagesql::func_builder::make_type_compare<Func>(
+    auto inner = func_builder::make_type_compare<Func>(
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.compare_vdf_name = vdf_name;
@@ -354,8 +352,8 @@ class TypeBuilder {
     // Accepts TypeHashFunc or TypeHashWithParamsFunc<P>.
     // Signature validation is handled by make_type_hash<Func>.
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kHash>.buf;
-    auto inner = villagesql::func_builder::make_type_hash<Func>(
-        vdf_name, state_.desc.vef_desc.name);
+    auto inner =
+        func_builder::make_type_hash<Func>(vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.hash_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;

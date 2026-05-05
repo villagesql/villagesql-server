@@ -38,7 +38,7 @@
 #include <villagesql/abi/types.h>
 #include <villagesql/vsql/func_types.h>
 
-namespace villagesql {
+namespace vsql {
 namespace sys_var_builder {
 
 // Typed wrapper around vef_sys_var_change_t passed to on_change callbacks.
@@ -190,6 +190,6 @@ inline bool set(std::string_view component_name, std::string_view name,
 
 }  // namespace sys_var
 
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_SYS_VAR_BUILDER_H

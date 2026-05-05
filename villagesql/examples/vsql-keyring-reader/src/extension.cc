@@ -47,7 +47,7 @@ void keyring_read(StringArg data_id, StringArg auth_id, StringResult out) {
   }
 
   std::string value;
-  vef_keyring_result_t kr = villagesql::keyring::read(
+  vef_keyring_result_t kr = vsql::keyring::read(
       data_id.value(), auth_id.is_null() ? "" : auth_id.value(), value);
   if (kr == VEF_KEYRING_UNAVAILABLE) {
     out.error("No keyring component is installed");
@@ -74,7 +74,7 @@ void keyring_store(StringArg data_id, StringArg auth_id, StringArg value,
     return;
   }
 
-  vef_keyring_result_t kr = villagesql::keyring::write(
+  vef_keyring_result_t kr = vsql::keyring::write(
       data_id.value(), auth_id.is_null() ? "" : auth_id.value(), value.value());
   if (kr == VEF_KEYRING_UNAVAILABLE) {
     out.error("No keyring component is installed");

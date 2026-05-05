@@ -30,6 +30,7 @@
 #include <utility>
 
 #include <villagesql/detail/vef_register.h>
+#include <villagesql/func_builder.h>
 #include <villagesql/type_builder.h>
 
 namespace villagesql {

@@ -104,8 +104,8 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
 // STRING -> COMPLEX
-bool complex_from_string(std::string_view from,
-                         villagesql::Span<unsigned char> buf, size_t *length) {
+bool complex_from_string(std::string_view from, vsql::Span<unsigned char> buf,
+                         size_t *length) {
   if (buf.size() < kComplexSize) return true;
   Complex cx;
   std::string from_str(from);
@@ -121,8 +121,8 @@ bool complex_from_string(std::string_view from,
 // COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
 // preserves -0.0 in binary form)
 // STRING -> COMPLEX2
-bool complex2_from_string(std::string_view from,
-                          villagesql::Span<unsigned char> buf, size_t *length) {
+bool complex2_from_string(std::string_view from, vsql::Span<unsigned char> buf,
+                          size_t *length) {
   if (buf.size() < kComplexSize) return true;
   Complex cx;
   std::string from_str(from);
@@ -138,8 +138,8 @@ bool complex2_from_string(std::string_view from,
 
 // Decode: 16 bytes -> "(real,imag)" string
 // COMPLEX -> STRING
-bool complex_to_string(villagesql::Span<const unsigned char> data,
-                       villagesql::Span<char> out, size_t *out_len) {
+bool complex_to_string(vsql::Span<const unsigned char> data,
+                       vsql::Span<char> out, size_t *out_len) {
   if (data.size() != kComplexSize) return true;
   Complex cx = load_complex(data.data());
   int written = snprintf(out.data(), out.size(), "(%g,%g)", cx.re, cx.im);
@@ -149,8 +149,8 @@ bool complex_to_string(villagesql::Span<const unsigned char> data,
 }
 
 // Compare: (COMPLEX, COMPLEX) -> INT for ORDER BY, indexes
-int complex_compare(villagesql::Span<const unsigned char> a,
-                    villagesql::Span<const unsigned char> b) {
+int complex_compare(vsql::Span<const unsigned char> a,
+                    vsql::Span<const unsigned char> b) {
   if (a.size() != kComplexSize || b.size() != kComplexSize) return 0;
   Complex lhs = load_complex(a.data());
   Complex rhs = load_complex(b.data());
@@ -168,7 +168,7 @@ int complex_compare(villagesql::Span<const unsigned char> a,
 // Canonicalizes -0 to +0 before hashing so that -0.0 and +0.0 hash to the
 // same bucket. This allows COMPLEX2 to preserve -0 in storage while still
 // working correctly with hash joins and EXCEPT operations.
-size_t complex2_hash(villagesql::Span<const unsigned char> data) {
+size_t complex2_hash(vsql::Span<const unsigned char> data) {
   if (data.size() != kComplexSize) return 0;
   Complex cx = load_complex(data.data());
   cx.canonicalize();

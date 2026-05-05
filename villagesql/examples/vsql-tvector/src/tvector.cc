@@ -136,8 +136,7 @@ bool tvector_int_to_params(int64_t value,
 
 // Validate type parameters and compute storage characteristics.
 bool tvector_resolve_params(const std::map<std::string, std::string> &params,
-                            villagesql::ResolvedTypeParams *result,
-                            char *error_msg) {
+                            vsql::ResolvedTypeParams *result, char *error_msg) {
   auto it = params.find("dimension");
   if (it == params.end()) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
@@ -178,7 +177,7 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
 // STRING -> TVECTOR
 // Dimension and element type are read from type parameters.
 bool tvector_from_string(const TVectorParams &p, std::string_view from,
-                         villagesql::Span<unsigned char> buf, size_t *length) {
+                         vsql::Span<unsigned char> buf, size_t *length) {
   // Computed values could be cached in the TVectorParams
   size_t byte_size = static_cast<size_t>(p.dimension) * p.bytes_per_elem;
   if (buf.size() < byte_size) return true;
@@ -229,8 +228,8 @@ bool tvector_from_string(const TVectorParams &p, std::string_view from,
 // TVECTOR -> STRING
 // Dimension and element type are read from type parameters.
 bool tvector_to_string(const TVectorParams &p,
-                       villagesql::Span<const unsigned char> data,
-                       villagesql::Span<char> out, size_t *out_len) {
+                       vsql::Span<const unsigned char> data,
+                       vsql::Span<char> out, size_t *out_len) {
   const size_t bpe = p.bytes_per_elem;
   if (data.size() != static_cast<size_t>(p.dimension) * bpe) return true;
 
@@ -268,9 +267,8 @@ bool tvector_to_string(const TVectorParams &p,
 // TODO(villagesql-performance): we can also consider having templated versions
 // of these functions instead of using branches, then selecting the version to
 // use with one branch.
-int tvector_compare(const TVectorParams &p,
-                    villagesql::Span<const unsigned char> a,
-                    villagesql::Span<const unsigned char> b) {
+int tvector_compare(const TVectorParams &p, vsql::Span<const unsigned char> a,
+                    vsql::Span<const unsigned char> b) {
   for (int64_t i = 0; i < p.dimension; i++) {
     if (p.bytes_per_elem == 8) {
       double v1 = load_double(a.data() + i * p.bytes_per_elem);
@@ -301,9 +299,9 @@ std::string tvector_default(const TVectorParams &p, char * /*error_msg*/) {
 
 // Dot product: (TVECTOR, TVECTOR) -> REAL
 // Returns the sum of element-wise products of two vectors of the same type.
-void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
-                         villagesql::CustomArgWith<TVectorParams> b,
-                         villagesql::RealResult out) {
+void tvector_dot_product(vsql::CustomArgWith<TVectorParams> a,
+                         vsql::CustomArgWith<TVectorParams> b,
+                         vsql::RealResult out) {
   if (a.is_null() || b.is_null()) {
     out.set_null();
     return;
@@ -331,9 +329,9 @@ void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
 
 // Element-wise add: (TVECTOR, TVECTOR) -> TVECTOR
 // Vectors must have the same dimension and element type.
-void tvector_add(villagesql::CustomArgWith<TVectorParams> a,
-                 villagesql::CustomArgWith<TVectorParams> b,
-                 villagesql::CustomResultWith<TVectorParams> out) {
+void tvector_add(vsql::CustomArgWith<TVectorParams> a,
+                 vsql::CustomArgWith<TVectorParams> b,
+                 vsql::CustomResultWith<TVectorParams> out) {
   if (a.is_null() || b.is_null()) {
     out.set_null();
     return;
@@ -365,9 +363,8 @@ void tvector_add(villagesql::CustomArgWith<TVectorParams> a,
 }
 
 // Scalar multiply: (TVECTOR, REAL) -> TVECTOR
-void tvector_scale(villagesql::CustomArgWith<TVectorParams> a,
-                   villagesql::RealArg scalar,
-                   villagesql::CustomResultWith<TVectorParams> out) {
+void tvector_scale(vsql::CustomArgWith<TVectorParams> a, vsql::RealArg scalar,
+                   vsql::CustomResultWith<TVectorParams> out) {
   if (a.is_null() || scalar.is_null()) {
     out.set_null();
     return;
