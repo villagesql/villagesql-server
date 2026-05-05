@@ -361,25 +361,15 @@ void complex_sum_accumulate(ComplexSumState &state, CustomArg val) {
   state = total;
 }
 
-// TODO(villagesql-beta): convert to typed style: void(const ComplexSumState&,
-// CustomResult)
-void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
-                        vef_vdf_result_t *out) {
-  auto *state = static_cast<ComplexSumState *>(args->user_data);
-  if (!state->has_value()) {
-    out->type = VEF_RESULT_NULL;
+void complex_sum_result(const ComplexSumState &state, CustomResult out) {
+  if (!state.has_value()) {
+    out.set_null();
     return;
   }
-  if (out->max_bin_len < kComplexSize) {
-    out->type = VEF_RESULT_ERROR;
-    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "response buffer too small");
-    return;
-  }
-  Complex total = state->value();
+  Complex total = state.value();
   total.canonicalize();
-  store_complex(out->bin_buf, total);
-  out->actual_len = kComplexSize;
-  out->type = VEF_RESULT_VALUE;
+  store_complex(out.buffer().data(), total);
+  out.set_length(kComplexSize);
 }
 
 // Type name NTTPs — required for auto-generating VDF names like
@@ -470,10 +460,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .deterministic()
                   .build())
         // Aggregate functions
-        .func(make_func<&complex_sum_result>("complex_sum")
+        .func(make_aggregate_func<ComplexSumState, &complex_sum_result>(
+                  "complex_sum")
                   .returns(COMPLEX)
                   .param(COMPLEX)
-                  .state<ComplexSumState>()
                   .clear<&complex_sum_clear>()
                   .accumulate<&complex_sum_accumulate>()
                   .build()))
