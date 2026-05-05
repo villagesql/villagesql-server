@@ -54,5 +54,4 @@ VEF_GENERATE_ENTRY_POINTS(
         .required_capability(
             {UnknownCapability::kName,
              &villagesql::vsql::cap_receive<UnknownCapability, &g_cap>,
-             villagesql::detail::abi_type_hash<NonexistentAbi>(), nullptr,
-             nullptr}))
+             villagesql::detail::abi_type_hash<NonexistentAbi>()}))

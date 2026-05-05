@@ -27,26 +27,14 @@ extern bool vsql_allow_preview_extensions;
 
 namespace villagesql::services {
 
-// General-purpose registry mapping capability name to a vtable pointer.
-// vtable must remain valid for the lifetime of the registration.
-
-// Register a capability. abi_type_hash is
-// villagesql::detail::abi_type_hash<AbiType>() and is compared against the
-// extension's hash at populate time to detect ABI struct mismatches.
-void register_capability(std::string name, void *vtable, size_t abi_type_hash);
-
-// Unregister a capability. No-op if not registered.
-void unregister_capability(const std::string &name);
-
 // Register all server built-in capabilities. Called once at server startup.
 void register_builtin_capabilities();
 
-// Populate capabilities declared in a vef_registration_t.
+// Populate capabilities declared in a vef_registration_t for one extension.
 //
 // Called after vef_register() returns. For each entry in
 // reg->required_capabilities, looks up the named capability in the registry and
-// invokes its receive callback with the vtable pointer, then calls on_load if
-// non-null.
+// invokes its receive callback with the vtable pointer.
 //
 // On failure, sets error_message to a description of what went wrong
 // (missing capability or ABI type mismatch) and returns true.
@@ -55,9 +43,8 @@ bool populate_capabilities(const vef_registration_t *reg,
                            const vef_register_arg_t *arg,
                            std::string &error_message);
 
-// Invoke on_unload for each capability in reg->required_capabilities.
 // Called before vef_unregister() when an extension is being unloaded.
-// No-op if reg is nullptr or has no required capabilities.
+// No-op currently; hook exists for future per-capability cleanup.
 void depopulate_capabilities(const vef_registration_t *reg);
 
 }  // namespace villagesql::services

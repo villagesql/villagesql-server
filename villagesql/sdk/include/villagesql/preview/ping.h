@@ -35,8 +35,6 @@ namespace vsql::preview::ping {
 class Capability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
-  static constexpr void (*kOnLoad)(const vef_register_arg_t *) = nullptr;
-  static constexpr void (*kOnUnload)() = nullptr;
 
   // Returns the next counter value from the server, or 0 if unavailable.
   uint64_t ping() const {
@@ -66,8 +64,7 @@ struct preview_ping {
     using Cap = ping::Capability;
     return builder.required_capability(
         {Cap::kName, &::villagesql::vsql::cap_receive<Cap, &cap>,
-         ::villagesql::detail::abi_type_hash<decltype(cap.abi_)>(),
-         Cap::kOnLoad, Cap::kOnUnload});
+         ::villagesql::detail::abi_type_hash<decltype(cap.abi_)>()});
   }
 };
 

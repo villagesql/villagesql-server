@@ -104,12 +104,6 @@ static bool any_preview_extensions_installed() {
 static bool check_allow_preview_extensions(sys_var *, THD *, set_var *var) {
   const bool new_value = var->save_result.ulonglong_value != 0;
 
-  // TODO(villagesql-beta): There is a TOCTOU race between this check and the
-  // actual variable write: another thread could INSTALL a preview extension
-  // after we check but before the variable is set to OFF. Fixing this requires
-  // making the check-and-set atomic with INSTALL EXTENSION, e.g. by performing
-  // the assignment inside ON_UPDATE while holding the VictionaryClient write
-  // lock (which INSTALL EXTENSION also holds).
   if (new_value) {
     // SET GLOBAL = ON is rejected; only SET PERSIST is allowed so that
     // the value survives restart (extensions with preview capabilities
@@ -122,6 +116,12 @@ static bool check_allow_preview_extensions(sys_var *, THD *, set_var *var) {
       return true;
     }
   } else {
+    // TODO(villagesql-preview): There is a TOCTOU race between this check and
+    // the actual variable write: another thread could INSTALL a preview
+    // extension after we check but before the variable is set to OFF. Fixing
+    // this requires making the check-and-set atomic with INSTALL EXTENSION,
+    // e.g. by performing the assignment inside ON_UPDATE while holding the
+    // VictionaryClient write lock (which INSTALL EXTENSION also holds).
     // SET ... = OFF is rejected while any preview extensions are installed.
     if (any_preview_extensions_installed()) {
       villagesql_error(

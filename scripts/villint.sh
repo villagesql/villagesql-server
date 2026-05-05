@@ -158,6 +158,7 @@ is_ignored() {
 ALLOWED_TODO_TAGS=(
   "villagesql"
   "villagesql-beta"
+  "villagesql-preview"
   "villagesql-crash"
   "villagesql-ga"
   "villagesql-performance"

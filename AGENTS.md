@@ -201,6 +201,7 @@ When adding VillageSQL features:
 - All todos in the code that we add should look like `// TODO(villagesql): <thing to do>`
   - Use subareas for categorization:
     - `TODO(villagesql-beta):` - Must handle before Beta Release (0.1.0)
+    - `TODO(villagesql-preview):` - Related to preview capability system
     - `TODO(villagesql-ga):` - Must handle before General Availability (1.0.0)
     - `TODO(villagesql-performance):` - Performance optimization possibility
     - `TODO(villagesql-rebase):` - Check during MySQL version rebases
