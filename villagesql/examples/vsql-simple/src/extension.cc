@@ -32,14 +32,13 @@ using namespace vsql;
 static const size_t kBytearrayLen = 8;
 
 // from_string: string -> binary (copy up to 8 bytes, space-pad)
-bool bytearray_from_string(std::string_view from, Span<unsigned char> buf,
-                           size_t *length) {
-  if (buf.size() < kBytearrayLen) return true;  // error
+void bytearray_from_string(std::string_view from, CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kBytearrayLen) return;  // wrapper default warning
   memset(buf.data(), ' ', kBytearrayLen);
   size_t copy_len = from.size() < kBytearrayLen ? from.size() : kBytearrayLen;
   if (copy_len > 0) memcpy(buf.data(), from.data(), copy_len);
-  *length = kBytearrayLen;
-  return false;  // success
+  out.set_length(kBytearrayLen);
 }
 
 // to_string: binary -> string (copy 8 bytes)

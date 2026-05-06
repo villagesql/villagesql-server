@@ -104,36 +104,33 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
 // STRING -> COMPLEX
-bool complex_from_string(std::string_view from, vsql::Span<unsigned char> buf,
-                         size_t *length) {
-  if (buf.size() < kComplexSize) return true;
+//
+// Early returns surface the wrapper's default "failed to encode '<input>'"
+// warning.
+void complex_from_string(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kComplexSize) return;
   Complex cx;
   std::string from_str(from);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    return true;
-  }
+  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) return;
   cx.canonicalize();
   store_complex(buf.data(), cx);
-  *length = kComplexSize;
-  return false;
+  out.set_length(kComplexSize);
 }
 
 // COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
 // preserves -0.0 in binary form)
 // STRING -> COMPLEX2
-bool complex2_from_string(std::string_view from, vsql::Span<unsigned char> buf,
-                          size_t *length) {
-  if (buf.size() < kComplexSize) return true;
+void complex2_from_string(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kComplexSize) return;
   Complex cx;
   std::string from_str(from);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    return true;
-  }
+  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) return;
   // No canonicalization - -0.0 is preserved in binary representation.
   // The custom hash function will canonicalize on the fly.
   store_complex(buf.data(), cx);
-  *length = kComplexSize;
-  return false;
+  out.set_length(kComplexSize);
 }
 
 // Decode: 16 bytes -> "(real,imag)" string

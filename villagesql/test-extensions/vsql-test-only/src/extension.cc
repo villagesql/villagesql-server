@@ -71,27 +71,25 @@ constexpr std::string_view kPrefixOk = "OK ";
 constexpr std::string_view kDecodeFail = "DECODE_FAIL";
 constexpr std::string_view kEncodeFail = "ENCODE_FAIL";
 
-bool fault_blob_encode(std::string_view from, vsql::Span<unsigned char> buf,
-                       size_t *length) {
+void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   if (from == kEncodeFail) {
-    return true;  // encode failure - exercises server encode-error path
+    return;  // encode failure - wrapper default warning surfaces
   }
 
+  auto buf = out.buffer();
   if (from.substr(0, kPrefixOk.size()) == kPrefixOk || from == kDecodeFail) {
-    if (from.size() > buf.size()) {
-      return true;  // error: input too long
-    }
+    if (from.size() > buf.size()) return;  // input too long
     memset(buf.data(), 0, buf.size());
     memcpy(buf.data(), from.data(), from.size());
-    *length = kFaultBlobSize;
-    return false;  // success
+    out.set_length(kFaultBlobSize);
+    return;
   }
 
   // Empty string encodes as all-zeros (used as intrinsic default).
   if (from.empty()) {
     memset(buf.data(), 0, buf.size());
-    *length = kFaultBlobSize;
-    return false;
+    out.set_length(kFaultBlobSize);
+    return;
   }
 
   // Unrecognised prefix - crash loudly so tests cannot silently pass bad input.

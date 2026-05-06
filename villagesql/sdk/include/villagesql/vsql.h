@@ -32,12 +32,17 @@
 //   using namespace vsql;
 //
 //   // 1. Implement your type operations
-//   bool complex_from_string(std::string_view s,
-//                            vsql::Span<unsigned char> buf, size_t* len);
+//   void complex_from_string(std::string_view s, vsql::CustomResult out);
 //   bool complex_to_string(vsql::Span<const unsigned char> data,
 //                          vsql::Span<char> out, size_t* out_len);
 //   int  complex_compare(vsql::Span<const unsigned char> a,
 //                        vsql::Span<const unsigned char> b);
+//
+// TODO(villagesql-beta): from_string now uses the typed CustomResult /
+// CustomResultWith<P> wrappers (see PARAMETERIZED TYPES). Migrate the other
+// special VDF entry points (to_string, compare, hash, intrinsic_default) to
+// use CustomArg / CustomArgWith<P> for inputs and the appropriate typed
+// result wrappers for outputs, replacing the raw Span<...> / size_t* shape.
 //
 //   // 2. Define the type as a constexpr object
 //   static constexpr const char kComplexTypeName[] = "COMPLEX";
@@ -72,6 +77,10 @@
 
 // Object-based type builder: vsql::make_type<Name>()
 #include <villagesql/vsql/type_builder.h>
+
+// MaybeParams<P>: known/unknown parameter wrapper for parameterized
+// from_string.
+#include <villagesql/vsql/maybe_params.h>
 
 // Parameterized type cache: TypeParamsCache<P>, type_params_cache_for<P>()
 #include <villagesql/vsql/type_params_cache.h>

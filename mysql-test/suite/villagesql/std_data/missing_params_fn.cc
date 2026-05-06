@@ -32,15 +32,15 @@ struct FakeParams {
   }
 };
 
-// Parameterized encode: takes const FakeParams& as first argument, so the SDK
-// will route through the params cache. .params<FakeParams,
+// Parameterized encode: takes MaybeParams<FakeParams>& as first argument, so
+// the SDK will route through the params cache. .params<FakeParams,
 // &FakeParams::parse>() is intentionally omitted from the type builder below.
-bool faketype_encode(const FakeParams &, std::string_view from,
-                     vsql::Span<unsigned char> buf, size_t *length) {
+void faketype_encode(vsql::MaybeParams<FakeParams> &, std::string_view from,
+                     vsql::CustomResultWith<FakeParams> out) {
+  auto buf = out.buffer();
   size_t n = from.size() < buf.size() ? from.size() : buf.size();
   memcpy(buf.data(), from.data(), n);
-  *length = n;
-  return false;
+  out.set_length(n);
 }
 
 bool faketype_decode(vsql::Span<const unsigned char> data,

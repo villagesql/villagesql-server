@@ -26,18 +26,14 @@ static const size_t kComplex3Len = 16;
 
 // FROM_STRING: always returns 16 zero bytes
 // This is used to verify the VEF lookup mechanism works
-bool complex3_from_string(std::string_view from,
-                          vsql::Span<unsigned char> buf, size_t *length) {
+void complex3_from_string(std::string_view from, vsql::CustomResult out) {
   (void)from;  // Unused - we always return zeros
 
-  if (buf.size() < kComplex3Len) {
-    *length = 0;
-    return true;  // Error
-  }
+  auto buf = out.buffer();
+  if (buf.size() < kComplex3Len) return;  // wrapper default warning
 
   memset(buf.data(), 0, kComplex3Len);
-  *length = kComplex3Len;
-  return false;  // Success
+  out.set_length(kComplex3Len);
 }
 
 // TO_STRING: always return "(0,0)"

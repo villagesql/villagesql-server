@@ -27,19 +27,18 @@ static const int64_t kLen = 4;
 
 // Encode: only accepts "(N)" format. Empty string and other invalid inputs
 // fail.
-bool no_default_encode(std::string_view from,
-                       vsql::Span<unsigned char> buffer, size_t *length) {
+void no_default_encode(std::string_view from, vsql::CustomResult out) {
   unsigned int nn = 0;
   char tmp[64];
   size_t copy = from.size() < sizeof(tmp) - 1 ? from.size() : sizeof(tmp) - 1;
   memcpy(tmp, from.data(), copy);
   tmp[copy] = '\0';
-  if (sscanf(tmp, "(%u)", &nn) != 1) return true;
-  if (buffer.size() < static_cast<size_t>(kLen)) return true;
+  if (sscanf(tmp, "(%u)", &nn) != 1) return;
+  auto buffer = out.buffer();
+  if (buffer.size() < static_cast<size_t>(kLen)) return;
   buffer[0] = static_cast<unsigned char>(nn);
   buffer[1] = buffer[2] = buffer[3] = 0;
-  *length = static_cast<size_t>(kLen);
-  return false;
+  out.set_length(static_cast<size_t>(kLen));
 }
 
 bool no_default_decode(vsql::Span<const unsigned char> buffer,

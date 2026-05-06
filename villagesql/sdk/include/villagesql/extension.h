@@ -256,10 +256,10 @@
 //
 // If the type has SQL-level parameters (e.g., TVECTOR(1536)), define a params
 // struct and a parse function, then use the struct as the first argument of
-// the type operation functions. The SDK detects the const P& signature and
-// wires up a memoized parse cache automatically. Note the parse function is
-// called based on the canonicalized output of the `resolve_params` function,
-// all parameter error checking should be done there.
+// the type operation functions. The SDK detects the parameterized signature
+// and wires up a memoized parse cache automatically. Note the parse function
+// is called based on the canonicalized output of the `resolve_params`
+// function, all parameter error checking should be done there.
 //
 // The parse function can be a static method on the struct (shown below) or
 // any free function with the signature:
@@ -272,8 +272,15 @@
 //     }
 //   };
 //
-//   bool my_encode(const MyParams& p, std::string_view from,
-//                  Span<unsigned char> buf, size_t* length) { ... }
+//   // encode takes MaybeParams<MyParams>& — params may be unknown so the
+//   // function can infer them from the input string and call p.set(...).
+//   // Reports outcome via CustomResultWith<MyParams>: out.set_length(n),
+//   // out.set_null(), out.warning(msg), or out.error(msg).
+//   void my_encode(MaybeParams<MyParams>& p, std::string_view from,
+//                  CustomResultWith<MyParams> out) { ... }
+//
+//   // decode/compare/hash take const MyParams& — params are always known.
+//   bool my_decode(const MyParams& p, ...);
 //
 //   make_type("MYTYPE")
 //     .persisted_length(...)
@@ -283,9 +290,10 @@
 //
 //   make_type_encode<&my_encode>("my_encode", MYTYPE)
 //
-// Both registrations are required: make_type_encode detects const P& and
-// routes through the cache; .params<>() binds the parse function at startup.
-// Omitting .params<>() while using const P& signatures will crash at runtime.
+// Both registrations are required: make_type_encode detects the parameterized
+// signature and routes through the cache; .params<>() binds the parse
+// function at startup. Omitting .params<>() while using parameterized
+// signatures will crash at runtime.
 // TODO(villagesql-beta): make this a compile time error.
 //
 // Note if a Params type is registered for more than one custom type, each

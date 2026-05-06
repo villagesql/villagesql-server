@@ -173,55 +173,85 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
   return false;
 }
 
-// Encode: "[v1,v2,...,vN]" -> N * bpe bytes binary.
-// STRING -> TVECTOR
-// Dimension and element type are read from type parameters.
-bool tvector_from_string(const TVectorParams &p, std::string_view from,
-                         vsql::Span<unsigned char> buf, size_t *length) {
-  // Computed values could be cached in the TVectorParams
-  size_t byte_size = static_cast<size_t>(p.dimension) * p.bytes_per_elem;
-  if (buf.size() < byte_size) return true;
-
+//
+// When p is known, dimension and element type are taken from p; the parsed
+// element count must match p.dimension. When p is unknown, the element count
+// from the string is used to set p.dimension, and bytes_per_elem defaults to 4
+// (float) since the string itself does not disambiguate float from double.
+//
+// Single-pass: each parsed element is written directly into out.buffer().
+// The loop only checks against max_supportable (what the buffer can hold).
+// Mismatch with the expected dimension is checked once at the end.
+void tvector_from_string(vsql::MaybeParams<TVectorParams> &p,
+                         std::string_view from,
+                         vsql::CustomResultWith<TVectorParams> out) {
   // strtof/strtod require a null-terminated string.
   std::string input(from);
   const char *s = input.c_str();
-
-  // Skip leading whitespace
   while (*s == ' ') s++;
-  if (*s != '[') return true;
+  if (*s != '[') {
+    out.warning("tvector_from_string: missing '['");
+    return;
+  }
   s++;
+
+  auto buf = out.buffer();
+  // bpe is fixed if known; defaults to 4 (float) when inferring.
+  const size_t bpe = (p.is_known() && p.value().bytes_per_elem > 0)
+                         ? p.value().bytes_per_elem
+                         : 4;
+  // Cap the loop on what the output buffer can hold; expected-dimension
+  // mismatch is reported once at the end.
+  const size_t max_supportable = buf.size() / bpe;
 
   size_t count = 0;
   while (*s != '\0') {
-    // Skip whitespace
     while (*s == ' ') s++;
     if (*s == ']') break;
 
-    if (count >= static_cast<size_t>(p.dimension)) return true;
+    if (count >= max_supportable) {
+      out.warning("tvector_from_string: buffer too small");
+      return;
+    }
 
     char *endptr = nullptr;
-    if (p.bytes_per_elem == 8) {
+    if (bpe == 8) {
       double val = strtod(s, &endptr);
-      if (endptr == s) return true;
-      store_double(buf.data() + count * p.bytes_per_elem, val);
+      if (endptr == s) {
+        out.warning("tvector_from_string: parse error");
+        return;
+      }
+      store_double(buf.data() + count * 8, val);
     } else {
       float val = strtof(s, &endptr);
-      if (endptr == s) return true;
-      store_float(buf.data() + count * p.bytes_per_elem, val);
+      if (endptr == s) {
+        out.warning("tvector_from_string: parse error");
+        return;
+      }
+      store_float(buf.data() + count * 4, val);
     }
     count++;
     s = endptr;
 
-    // Skip whitespace and comma
     while (*s == ' ') s++;
     if (*s == ',') s++;
   }
+  if (*s != ']') {
+    out.warning("tvector_from_string: missing ']'");
+    return;
+  }
 
-  if (*s != ']') return true;
-  if (count != static_cast<size_t>(p.dimension)) return true;
+  if (p.is_known()) {
+    if (count != static_cast<size_t>(p.value().dimension)) {
+      out.warning("tvector_from_string: dimension mismatch");
+      return;
+    }
+  } else {
+    p.set(TVectorParams{.dimension = static_cast<int64_t>(count),
+                        .bytes_per_elem = 4});
+  }
 
-  *length = byte_size;
-  return false;
+  out.set_length(count * bpe);
 }
 
 // Decode: N * bpe bytes binary -> "[v1,v2,...,vN]" string.

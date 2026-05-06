@@ -116,18 +116,17 @@ static int64_t read_be64(const unsigned char *src) {
                               static_cast<uint64_t>(src[7]));
 }
 
-bool stored_int_from_string(std::string_view s, vsql::Span<unsigned char> buf,
-                            size_t *len) {
-  if (buf.size() < kFieldSize) return true;
+void stored_int_from_string(std::string_view s, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kFieldSize) return;  // wrapper default warning
   int64_t val = 0;
   auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-  if (ec != std::errc{} || ptr != s.data() + s.size()) return true;
+  if (ec != std::errc{} || ptr != s.data() + s.size()) return;
   // [0..7]: zero placeholder for Column::Ref (server fills this after insert).
   memset(buf.data(), 0, kRefSize);
   // [8..15]: big-endian encoded integer value (becomes col_data for insert).
   write_be64(buf.data() + kRefSize, val);
-  *len = kFieldSize;
-  return false;
+  out.set_length(kFieldSize);
 }
 
 bool stored_int_to_string(vsql::Span<const unsigned char> data,

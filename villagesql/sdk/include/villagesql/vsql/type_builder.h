@@ -298,8 +298,8 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto from_string() const {
     using namespace detail;
-    // Accepts TypeEncodeFunc or TypeEncodeWithParamsFunc<P> (const P& as first
-    // arg). Signature validation is handled by make_type_encode<Func>.
+    // Accepts TypeEncodeFunc or TypeEncodeWithParamsFunc<P> (MaybeParams<P>&
+    // as first arg). Signature validation is handled by make_type_encode<Func>.
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kEncode>.buf;
     auto inner = func_builder::make_type_encode<Func>(
         vdf_name, state_.desc.vef_desc.name);
