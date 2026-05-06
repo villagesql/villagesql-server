@@ -16,6 +16,7 @@
 SET(VILLAGESQL_SERVICES_SOURCES
   capability_registry.cc
   keyring.cc
+  preview/keyring.cc
   preview/ping.cc
   status_vars.cc
   sys_vars.cc

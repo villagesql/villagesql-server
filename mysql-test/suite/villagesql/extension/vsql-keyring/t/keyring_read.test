@@ -3,6 +3,7 @@
 
 --source include/have_component_keyring_file.inc
 --source suite/component_keyring_file/inc/setup_component.inc
+SET PERSIST vsql_allow_preview_extensions = ON;
 
 --echo # Install extension
 --let $veb_dir = `SELECT @@veb_dir`
@@ -30,5 +31,7 @@ SELECT vsql_keyring_reader.keyring_read(NULL, NULL) IS NULL;
 
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_keyring_reader;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
 
 --source suite/component_keyring_file/inc/teardown_component.inc

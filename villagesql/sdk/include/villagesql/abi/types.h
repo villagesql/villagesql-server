@@ -170,9 +170,8 @@ typedef enum : unsigned int {
                    // + Extension system variables (vef_sys_var_desc_t):
                    //   server registers these as MySQL component system
                    //   variables on the extension's behalf.
-                   // + get_variable/set_variable/read_keyring/write_keyring
-                   //   function pointers in vef_register_arg_t: access to
-                   //   MySQL system variables and keyring component.
+                   // + get_variable/set_variable function pointers in
+                   //   vef_register_arg_t: access to MySQL system variables.
                    // + Preview capability system: extensions declare named
                    //   capabilities they require in vef_registration_t;
                    //   the server populates their function pointers before
@@ -230,35 +229,6 @@ typedef bool (*vef_set_variable_fn)(const char *component_name,
                                     const char *name, const char *scope,
                                     const char *val);
 
-typedef enum {
-  VEF_KEYRING_OK = 0,
-  VEF_KEYRING_NOT_FOUND = 1,    // key does not exist
-  VEF_KEYRING_UNAVAILABLE = 2,  // no keyring component is installed
-  VEF_KEYRING_ERROR = 3,        // other error
-} vef_keyring_result_t;
-
-// read_keyring: read a secret from the MySQL keyring component.
-//   data_id:  identifier for the secret.
-//   auth_id:  owner of the secret, or NULL for internal keys.
-//   buf:      caller-provided buffer to receive the secret bytes.
-//   buf_len:  size of buf in bytes.
-//   out_len:  set to the actual number of bytes written on success.
-typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
-                                                    const char *auth_id,
-                                                    unsigned char *buf,
-                                                    size_t buf_len,
-                                                    size_t *out_len);
-
-// write_keyring: write a secret to the MySQL keyring component.
-//   data_id:   identifier for the secret.
-//   auth_id:   owner of the secret, or NULL for internal keys.
-//   data:      secret bytes to store.
-//   data_len:  length of data in bytes.
-typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
-                                                     const char *auth_id,
-                                                     const unsigned char *data,
-                                                     size_t data_len);
-
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -268,14 +238,12 @@ typedef struct {
 
   // protocol >= VEF_PROTOCOL_2
   // TODO(villagesql-beta): How do extension authors opt into requiring these
-  // APIs? An extension that uses get_variable/set_variable/read_keyring/
-  // write_keyring should be able to declare that dependency so the server can
-  // reject loading it with a clear error on older servers that do not provide
-  // these functions (where these pointers would be nullptr).
+  // APIs? An extension that uses get_variable/set_variable should be able to
+  // declare that dependency so the server can reject loading it with a clear
+  // error on older servers that do not provide these functions (where these
+  // pointers would be nullptr).
   vef_get_variable_fn get_variable;
   vef_set_variable_fn set_variable;
-  vef_read_keyring_fn read_keyring;
-  vef_write_keyring_fn write_keyring;
 } vef_register_arg_t;
 
 typedef struct {

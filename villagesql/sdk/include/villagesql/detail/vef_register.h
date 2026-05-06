@@ -38,10 +38,6 @@ namespace sys_var {
 extern vef_get_variable_fn g_get_variable;
 extern vef_set_variable_fn g_set_variable;
 }  // namespace sys_var
-namespace keyring {
-extern vef_read_keyring_fn g_read_keyring;
-extern vef_write_keyring_fn g_write_keyring;
-}  // namespace keyring
 
 // Define materialize_func_desc here so it is available to both old
 // (villagesql::func_builder) and new (vsql::func_builder) API users without
@@ -187,8 +183,6 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
     if (arg->protocol >= VEF_PROTOCOL_2) {
       vsql::sys_var::g_get_variable = arg->get_variable;
       vsql::sys_var::g_set_variable = arg->set_variable;
-      vsql::keyring::g_read_keyring = arg->read_keyring;
-      vsql::keyring::g_write_keyring = arg->write_keyring;
     }
   }
 

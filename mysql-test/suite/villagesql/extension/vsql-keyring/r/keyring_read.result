@@ -1,19 +1,13 @@
-# Install extension
-INSTALL EXTENSION vsql_keyring_reader;
-# Read raises error when no keyring component is installed
-SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
-ERROR HY000: VDF error in function 'keyring_read': No keyring component is installed
-# Store raises error when no keyring component is installed
-SELECT vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value');
-ERROR HY000: VDF error in function 'keyring_store': No keyring component is installed
-# Install keyring component
 # ----------------------------------------------------------------------
 # Setup
 # Creating local configuration file for keyring component: component_keyring_file
 # Creating manifest file for current MySQL server instance
 # Re-starting mysql server with manifest file
 # ----------------------------------------------------------------------
-# Store a secret
+SET PERSIST vsql_allow_preview_extensions = ON;
+# Install extension
+INSTALL EXTENSION vsql_keyring_reader;
+# Store a secret in the keyring
 SELECT vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value');
 vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value')
 0
@@ -21,9 +15,24 @@ vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value')
 SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
 vsql_keyring_reader.keyring_read('vsql_test_key', NULL)
 my_secret_value
+# Restart server - keyring component reloads from its backing file
+# restart: --plugin-dir=KEYRING_FILE_COMPONENT_DIR
+# Secret should survive restart
+SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
+vsql_keyring_reader.keyring_read('vsql_test_key', NULL)
+my_secret_value
+# Read a non-existent key returns NULL
+SELECT vsql_keyring_reader.keyring_read('vsql_no_such_key', NULL) IS NULL;
+vsql_keyring_reader.keyring_read('vsql_no_such_key', NULL) IS NULL
+1
+# NULL data_id returns NULL
+SELECT vsql_keyring_reader.keyring_read(NULL, NULL) IS NULL;
+vsql_keyring_reader.keyring_read(NULL, NULL) IS NULL
+1
 # Uninstall extension
 UNINSTALL EXTENSION vsql_keyring_reader;
-# Uninstall keyring component
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
 # ----------------------------------------------------------------------
 # Teardown
 # Removing manifest file for current MySQL server instance

@@ -16,51 +16,16 @@
 #ifndef VILLAGESQL_VSQL_KEYRING_H_
 #define VILLAGESQL_VSQL_KEYRING_H_
 
-#include <string>
-#include <string_view>
+// Keyring access for extensions.
+//
+// Use vsql::preview::keyring::Capability via .with<preview_keyring<cap>>()
+// in VEF_GENERATE_ENTRY_POINTS. See <villagesql/preview/keyring.h>.
+//
+// This header is kept for backward compatibility but no longer defines
+// globals — keyring access is now a declared preview capability so that
+// the server can reject extensions that require it on servers where the
+// keyring component is unavailable.
 
-#include <villagesql/abi/types.h>
-
-namespace vsql {
-namespace keyring {
-
-// Extension-local storage for the keyring function pointers injected by the
-// server via vef_register_arg_t. Set once during vef_register() by
-// vef_register_impl() in extension_builder.h.
-inline vef_read_keyring_fn g_read_keyring = nullptr;
-inline vef_write_keyring_fn g_write_keyring = nullptr;
-
-// Read a secret from the MySQL keyring component into value.
-//   auth_id may be empty to read internal keys.
-//   Returns VEF_KEYRING_OK on success, VEF_KEYRING_NOT_FOUND if the key does
-//   not exist, VEF_KEYRING_UNAVAILABLE if no keyring component is installed,
-//   or VEF_KEYRING_ERROR on other failures.
-inline vef_keyring_result_t read(std::string_view data_id,
-                                 std::string_view auth_id, std::string &value) {
-  if (g_read_keyring == nullptr) return VEF_KEYRING_UNAVAILABLE;
-  value.resize(4096);
-  size_t out_len = 0;
-  vef_keyring_result_t result = g_read_keyring(
-      data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
-      reinterpret_cast<unsigned char *>(value.data()), value.size(), &out_len);
-  if (result == VEF_KEYRING_OK) value.resize(out_len);
-  return result;
-}
-
-// Write a secret to the MySQL keyring component.
-//   auth_id may be empty to store as an internal key.
-//   Returns VEF_KEYRING_OK on success, VEF_KEYRING_UNAVAILABLE if no keyring
-//   component is installed, or VEF_KEYRING_ERROR on other failures.
-inline vef_keyring_result_t write(std::string_view data_id,
-                                  std::string_view auth_id,
-                                  std::string_view data) {
-  if (g_write_keyring == nullptr) return VEF_KEYRING_UNAVAILABLE;
-  return g_write_keyring(
-      data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
-      reinterpret_cast<const unsigned char *>(data.data()), data.size());
-}
-
-}  // namespace keyring
-}  // namespace vsql
+#include <villagesql/preview/keyring.h>
 
 #endif  // VILLAGESQL_VSQL_KEYRING_H_

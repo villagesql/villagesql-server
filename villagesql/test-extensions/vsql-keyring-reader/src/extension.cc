@@ -4,14 +4,6 @@
 // it under the terms of the GNU General Public License, version 2.0,
 // as published by the Free Software Foundation.
 //
-// This program is designed to work with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an additional
-// permission to link the program and your derivative works with the
-// separately licensed software that they have either included with
-// the program or referenced in the documentation.
-//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -21,7 +13,7 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// VillageSQL extension demonstrating keyring access via vef_register_arg_t.
+// VillageSQL extension demonstrating keyring access via the keyring capability.
 //
 // Exposes a single VDF:
 //   keyring_read(data_id VARCHAR, auth_id VARCHAR) RETURNS VARCHAR
@@ -33,9 +25,13 @@
 // Prerequisites: a keyring component must be installed, e.g.:
 //   INSTALL COMPONENT 'file://component_keyring_file';
 
+#include <villagesql/preview/keyring.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
+using vsql::preview::preview_keyring;
+
+static auto g_keyring = vsql::preview::keyring::make_capability();
 
 // keyring_read(data_id, auth_id) - reads a secret from the keyring.
 // Returns the secret as a string, or NULL if not found.
@@ -47,7 +43,7 @@ void keyring_read(StringArg data_id, StringArg auth_id, StringResult out) {
   }
 
   std::string value;
-  vef_keyring_result_t kr = vsql::keyring::read(
+  vef_keyring_result_t kr = g_keyring.read(
       data_id.value(), auth_id.is_null() ? "" : auth_id.value(), value);
   if (kr == VEF_KEYRING_UNAVAILABLE) {
     out.error("No keyring component is installed");
@@ -74,7 +70,7 @@ void keyring_store(StringArg data_id, StringArg auth_id, StringArg value,
     return;
   }
 
-  vef_keyring_result_t kr = vsql::keyring::write(
+  vef_keyring_result_t kr = g_keyring.write(
       data_id.value(), auth_id.is_null() ? "" : auth_id.value(), value.value());
   if (kr == VEF_KEYRING_UNAVAILABLE) {
     out.error("No keyring component is installed");
@@ -94,4 +90,5 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .param(STRING)
                                         .param(STRING)
                                         .param(STRING)
-                                        .build()))
+                                        .build())
+                              .with<preview_keyring<g_keyring>>())

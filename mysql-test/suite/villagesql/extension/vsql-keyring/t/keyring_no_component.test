@@ -3,6 +3,8 @@
 
 --source include/have_component_keyring_file.inc
 
+SET PERSIST vsql_allow_preview_extensions = ON;
+
 --echo # Install extension
 INSTALL EXTENSION vsql_keyring_reader;
 
@@ -25,6 +27,8 @@ SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
 
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_keyring_reader;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
 
 --echo # Uninstall keyring component
 --source suite/component_keyring_file/inc/teardown_component.inc

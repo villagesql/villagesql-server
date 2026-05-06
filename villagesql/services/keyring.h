@@ -16,7 +16,7 @@
 #ifndef VILLAGESQL_SERVICES_KEYRING_H_
 #define VILLAGESQL_SERVICES_KEYRING_H_
 
-#include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/keyring.h"
 
 namespace villagesql {
 namespace services {
