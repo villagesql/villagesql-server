@@ -231,7 +231,9 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
                                    nullptr,
                                    nullptr,
                                    VEF_MAX_TYPE_PARAMS_STRING_LEN,
-                                   false};
+                                   false,
+                                   nullptr,
+                                   nullptr};
 
   static vef_type_t rp_param = {VEF_TYPE_STRING, nullptr};
   static vef_signature_t rp_sig = {1, &rp_param, {VEF_TYPE_STRING, nullptr}};
@@ -242,7 +244,9 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
                                   nullptr,
                                   nullptr,
                                   VEF_MAX_TYPE_PARAMS_STRING_LEN,
-                                  false};
+                                  false,
+                                  nullptr,
+                                  nullptr};
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
