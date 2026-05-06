@@ -1,0 +1,7 @@
+{
+  "name": "vsql_index_test",
+  "version": "0.0.1",
+  "description": "VillageSQL internal test extension for exercising the experimental custom index API",
+  "author": "VillageSQL Contributors",
+  "license": "GPL-2.0"
+}
