@@ -1,60 +1,74 @@
 #!/bin/bash
+# Copyright (c) 2026 VillageSQL Contributors
+# Configure and build the VillageSQL server for CI.
+#
+# Env vars:
+#   BUILD_DIR          - build output directory (default: <source>/../build)
+#   SOURCE_DIR         - source root (default: parent of script dir)
+#   BUILD_TYPE         - debug or release (default: release, uses RelWithDebInfo)
+#   PARALLEL_JOBS      - parallel make jobs (default: auto-detected)
+#   CMAKE_EXTRA_FLAGS  - additional cmake flags appended verbatim
 
-# VillageSQL CI Build Script
-# Performs a clean build and basic validation for CI environments
+set -euo pipefail
 
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+source "$SCRIPT_DIR/vsql_script_utils.sh"
 
-# Determine build type (default to debug)
-BUILD_TYPE="${BUILD_TYPE:-debug}"
+BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
+BUILD_TYPE="${BUILD_TYPE:-release}"
+PARALLEL_JOBS="${PARALLEL_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")}"
 
-echo "=== VillageSQL CI Build ==="
-echo "Build type: ${BUILD_TYPE}"
-echo "Available CPUs: $(nproc)"
-echo "Parallel jobs: ${PARALLEL_JOBS}"
-echo "Working directory: $(pwd)"
+log_step "VillageSQL CI Build"
+echo ""
 
-# Use SOURCE_DIR from environment, fallback to current directory
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-
-# Use BUILD_DIR from environment, fallback to ../build relative to source
-BUILD_DIR="${BUILD_DIR:-${SOURCE_DIR}/../build}"
-
-# Create build directory
-echo "Creating build directory: ${BUILD_DIR}"
-mkdir -p "$BUILD_DIR"
-cd "$BUILD_DIR"
-
-# Configure CMake
-echo "=== CMake Configuration ==="
-
-# Set debug flag based on build type
-if [ "$BUILD_TYPE" = "debug" ]; then
-  WITH_DEBUG_FLAG="-DWITH_DEBUG=1"
-else
-  WITH_DEBUG_FLAG=""
+if [[ ! -d "$SOURCE_DIR" ]]; then
+    die "Source directory not found: $SOURCE_DIR"
+fi
+if [[ ! -f "$SOURCE_DIR/CMakeLists.txt" ]]; then
+    die "Source directory doesn't appear to be valid (no CMakeLists.txt): $SOURCE_DIR"
 fi
 
-cmake "$SOURCE_DIR" \
-  -DCMAKE_INSTALL_PREFIX=/tmp/villagesql-install \
-  $WITH_DEBUG_FLAG \
-  -DWITH_SSL=system \
-  -DMYSQL_MAINTAINER_MODE=OFF \
-  -DDOWNLOAD_BOOST=1 \
-  -DWITH_BOOST=/tmp/boost \
-  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  ${CMAKE_EXTRA_FLAGS}
+mkdir -p "$BUILD_DIR"
 
-echo "=== Build Information ==="
+log_info "Source Directory: $SOURCE_DIR"
+log_info "Build Directory:  $BUILD_DIR"
+log_info "Build Type:       $BUILD_TYPE"
+log_info "Parallel Jobs:    $PARALLEL_JOBS"
+echo ""
 
-# Build the project
-echo "=== Building VillageSQL ==="
-echo "Starting build with ${PARALLEL_JOBS} parallel jobs..."
-make -j"${PARALLEL_JOBS}"
+log_step "Step 1: Configuring build with CMake..."
+cd "$BUILD_DIR"
 
-echo "=== Building VillageSQL Unit Tests ==="
-make -j"${PARALLEL_JOBS}" villagesql-unit-tests
+CMAKE_FLAGS=(
+    "-DWITH_SSL=system"
+)
 
-echo "=== Build Success ==="
-echo "VillageSQL built successfully!"
+if [[ "$BUILD_TYPE" == "debug" ]]; then
+    CMAKE_FLAGS+=("-DCMAKE_BUILD_TYPE=Debug" "-DWITH_DEBUG=1")
+else
+    CMAKE_FLAGS+=("-DCMAKE_BUILD_TYPE=RelWithDebInfo")
+fi
+
+if [[ -n "${CMAKE_EXTRA_FLAGS:-}" ]]; then
+    CMAKE_FLAGS+=($CMAKE_EXTRA_FLAGS)
+fi
+
+log_info "CMake flags: ${CMAKE_FLAGS[*]}"
+cmake "$SOURCE_DIR" "${CMAKE_FLAGS[@]}" || die "CMake configuration failed"
+log_info "CMake configuration complete"
+
+log_step "Step 2: Building binaries..."
+log_info "Building with $PARALLEL_JOBS parallel jobs..."
+make -j"${PARALLEL_JOBS}" || die "Build failed"
+
+if [[ ! -x "$BUILD_DIR/runtime_output_directory/mysqld" ]]; then
+    die "mysqld not found in $BUILD_DIR/runtime_output_directory/ after build"
+fi
+log_info "Build complete"
+
+log_step "Step 3: Building unit tests..."
+make -j"${PARALLEL_JOBS}" villagesql-unit-tests || die "Unit test build failed"
+log_info "Unit tests built"
+
+log_step "Build succeeded: $BUILD_DIR/runtime_output_directory/mysqld"

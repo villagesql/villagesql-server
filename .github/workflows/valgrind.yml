@@ -51,7 +51,7 @@ jobs:
       env:
         PARALLEL_JOBS: 16
         BUILD_TYPE: debug
-        CMAKE_EXTRA_FLAGS: -DWITH_VALGRIND=1
+        CMAKE_EXTRA_FLAGS: -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DWITH_VALGRIND=1
 
     - name: Run Valgrind tests
       uses: ./source/.github/actions/run-tests

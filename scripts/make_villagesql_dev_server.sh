@@ -62,54 +62,15 @@ log_info "  - mysql-test framework (binaries only, no test/result files)"
 log_info "  - Support files and SQL scripts"
 echo ""
 
-# Step 1: Configure build with CMake
-log_step "Step 1: Configuring build with CMake..."
-cd "$BUILD_DIR"
+log_step "Step 1: Configure and build..."
+BUILD_DIR="$BUILD_DIR" SOURCE_DIR="$SOURCE_DIR" \
+    "$SCRIPT_DIR/build-ci.sh" || die "build-ci.sh failed"
 
-# Remove old cache to ensure clean configuration
-if [[ -f "CMakeCache.txt" ]]; then
-    log_info "Removing old CMakeCache.txt..."
-    rm -f CMakeCache.txt
-fi
-
-# Configure CMake with appropriate build flags
-# - CMAKE_BUILD_TYPE=RelWithDebInfo: Release optimizations with debug symbols
-# - WITH_SSL=system: Use system OpenSSL library
-CMAKE_FLAGS=(
-    "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
-    "-DWITH_SSL=system"
-)
-
-# Add any extra flags from environment
-if [[ -n "$CMAKE_EXTRA_FLAGS" ]]; then
-    CMAKE_FLAGS+=($CMAKE_EXTRA_FLAGS)
-fi
-
-log_info "CMake flags: ${CMAKE_FLAGS[*]}"
-cmake "$SOURCE_DIR" "${CMAKE_FLAGS[@]}" || die "CMake configuration failed"
-log_info "CMake configuration complete"
-
-# Step 2: Build binaries
-log_step "Step 2: Building binaries..."
-
-# Detect number of CPU cores for parallel build
-NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
-log_info "Building with $NCORES parallel jobs..."
-
-make -j${NCORES} || die "Build failed"
-log_info "Build complete"
-
-# Verify mysqld was built (CMake places it in runtime_output_directory before install)
-if [[ ! -x "$BUILD_DIR/runtime_output_directory/mysqld" ]]; then
-    die "mysqld not found in $BUILD_DIR/runtime_output_directory/ after build"
-fi
-
-# Step 2.5: Build and test bundled extensions (optional, enabled via BUILD_BUNDLED_EXTENSIONS=1)
-# TODO(villagesql): Extract build_server.sh and package_dev_server.sh as separate
-# scripts so that CI can run build → test → package as discrete steps rather than
+# TODO(villagesql): Extract package_dev_server.sh as a separate script so that
+# CI can run build → test → package as discrete steps rather than
 # embedding the test between two halves of this monolithic script.
 if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
-    log_step "Step 2.5: Building bundled extensions..."
+    log_step "Step 2: Building bundled extensions..."
     SDK_STAGING_DIR="$BUILD_DIR/villagesql-extension-sdk-${VSQL_VERSION}"
     [[ -d "$SDK_STAGING_DIR" ]] || die "SDK staging directory not found: $SDK_STAGING_DIR"
 
@@ -135,7 +96,6 @@ fi
 mkdir -p "$STAGING_DIR"
 cd "$BUILD_DIR"
 
-# Step 3: Generate package with CPack
 log_step "Step 3: Generating base package with CPack..."
 
 CPACK_COMPONENTS="Client;Server;Server_Scripts;SharedLibraries;SupportFiles;Readme;Info;ExampleVebs;Test;TestReadme"
@@ -158,7 +118,6 @@ fi
 ORIGINAL_SIZE=$(du -h "$BASE_TARBALL" | cut -f1)
 log_info "Base package size: $ORIGINAL_SIZE"
 
-# Step 4: Extract the base package
 log_step "Step 4: Extracting base package..."
 cd "$STAGING_DIR"
 
@@ -167,7 +126,6 @@ mkdir -p "$PACKAGE_NAME"
 cd "$PACKAGE_NAME"
 tar xzf "$BUILD_DIR/$BASE_TARBALL"
 
-# Step 4.5: Strip unnecessary test data (keep only villagesql tests and SSL certs)
 log_step "Step 4.5: Stripping unnecessary test data..."
 if [[ -d "mysql-test" ]]; then
         log_info "Removing unnecessary test data from std_data..."

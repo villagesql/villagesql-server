@@ -35,6 +35,7 @@ jobs:
       run: ./scripts/build-ci.sh
       env:
         PARALLEL_JOBS: 16
+        CMAKE_EXTRA_FLAGS: -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Show ccache statistics
       run: ccache -s
