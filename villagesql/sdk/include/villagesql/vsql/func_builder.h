@@ -289,55 +289,6 @@ struct AggResultWithOutputWrapper {
   }
 };
 
-// Wraps T(const State&) or optional<T>(const State&) -> vef_vdf_func_t
-template <typename State, auto Func>
-struct AggResultWrapper {
-  static void invoke(vef_context_t *, vef_vdf_args_t *args,
-                     vef_vdf_result_t *result) {
-    const auto &state = *static_cast<State *>(args->user_data);
-    write_result(Func(state), result);
-  }
-
- private:
-  template <typename T>
-  static void write_result(const std::optional<T> &val,
-                           vef_vdf_result_t *result) {
-    if (!val.has_value()) {
-      result->type = VEF_RESULT_NULL;
-    } else {
-      write_scalar(*val, result);
-    }
-  }
-
-  template <typename T>
-  static void write_result(const T &val, vef_vdf_result_t *result) {
-    write_scalar(val, result);
-  }
-
-  static void write_scalar(long long v, vef_vdf_result_t *r) {
-    r->int_value = v;
-    r->type = VEF_RESULT_VALUE;
-  }
-
-  static void write_scalar(double v, vef_vdf_result_t *r) {
-    r->real_value = v;
-    r->type = VEF_RESULT_VALUE;
-  }
-
-  static void write_scalar(const std::string &v, vef_vdf_result_t *r) {
-    if (v.size() > r->max_str_len) {
-      r->type = VEF_RESULT_ERROR;
-      snprintf(r->error_msg, VEF_MAX_ERROR_LEN,
-               "aggregate result (%zu bytes) exceeds buffer (%zu bytes)",
-               v.size(), r->max_str_len);
-      return;
-    }
-    memcpy(r->str_buf, v.data(), v.size());
-    r->actual_len = v.size();
-    r->type = VEF_RESULT_VALUE;
-  }
-};
-
 // =============================================================================
 // Wrapper Template
 // =============================================================================
@@ -861,8 +812,6 @@ struct FuncBuilder {
         buffer_size_(0),
         prerun_(nullptr),
         postrun_(nullptr),
-        clear_(nullptr),
-        accumulate_(nullptr),
         deterministic_(false) {}
 
   const char *name_;
@@ -871,8 +820,6 @@ struct FuncBuilder {
   size_t buffer_size_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
-  vef_vdf_clear_func_t clear_;
-  vef_vdf_accumulate_func_t accumulate_;
   bool deterministic_;
 
   constexpr FuncBuilder<Func, NumParams> &returns(const char *t) {
@@ -887,8 +834,6 @@ struct FuncBuilder {
     next.buffer_size_ = buffer_size_;
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
-    next.clear_ = clear_;
-    next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
@@ -919,74 +864,17 @@ struct FuncBuilder {
     return *this;
   }
 
-  // TODO(villagesql-beta): remove .clear(), .accumulate(), and .state() from
-  // FuncBuilder once all callers have migrated to make_aggregate_func, which
-  // validates all three callback signatures against State at compile time.
-  // Raw vef_vdf_clear_func_t / vef_vdf_accumulate_func_t are accepted here
-  // for backward compatibility with existing extensions.
-  template <auto Fn>
-  constexpr FuncBuilder<Func, NumParams> &clear() {
-    if constexpr (std::is_same_v<decltype(Fn), vef_vdf_clear_func_t>) {
-      clear_ = Fn;
-    } else {
-      using Params = typename FuncParamTypes<decltype(Fn)>::type;
-      using State = std::remove_reference_t<std::tuple_element_t<0, Params>>;
-      clear_ = &agg_clear_wrapper<State, Fn>;
-    }
-    return *this;
-  }
-
-  template <auto Fn>
-  constexpr FuncBuilder<Func, NumParams> &accumulate() {
-    if constexpr (std::is_same_v<decltype(Fn), vef_vdf_accumulate_func_t>) {
-      accumulate_ = Fn;
-    } else {
-      using Params = typename FuncParamTypes<decltype(Fn)>::type;
-      using State = std::remove_reference_t<std::tuple_element_t<0, Params>>;
-      accumulate_ = &AggAccumulateWrapper<State, Fn, NumParams>::invoke;
-    }
-    return *this;
-  }
-
-  template <typename State>
-  constexpr FuncBuilder<Func, NumParams> &state() {
-    prerun_ = &auto_prerun<State>;
-    postrun_ = &auto_postrun<State>;
-    return *this;
-  }
-
   constexpr StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
-    if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
-      config_error__aggregate_must_set_both_clear_and_accumulate();
-    }
 
     using AllParams = typename FuncParamTypes<decltype(Func)>::type;
     using UniquePTuple = typename unique_params_types<AllParams>::type;
 
     FuncWithMetadata meta{};
-    if constexpr (std::is_same_v<decltype(Func), vef_vdf_func_t>) {
-      // Raw vef_vdf_func_t: passed through for backward compatibility.
-      // TODO(villagesql-beta): remove once all callers use make_aggregate_func.
-      meta.f = Func;
-    } else if constexpr (std::tuple_size_v<AllParams> == 1 &&
-                         std::is_lvalue_reference_v<
-                             std::tuple_element_t<0, AllParams>> &&
-                         std::is_const_v<std::remove_reference_t<
-                             std::tuple_element_t<0, AllParams>>>) {
-      // Typed aggregate result: T(const State&) or optional<T>(const State&).
-      using State = std::remove_const_t<
-          std::remove_reference_t<std::tuple_element_t<0, AllParams>>>;
-      meta.f = &AggResultWrapper<State, Func>::invoke;
-    } else {
-      // Typed scalar VDF.
-      meta.f = &Wrapper<Func, NumParams>::invoke;
-    }
+    meta.f = &Wrapper<Func, NumParams>::invoke;
     meta.prerun = prerun_;
     meta.postrun = postrun_;
-    meta.clear = clear_;
-    meta.accumulate = accumulate_;
     meta.return_type = to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
@@ -1007,9 +895,9 @@ struct FuncBuilder {
 // AggFuncBuilder
 // =============================================================================
 //
-// Builder for aggregate VDFs. Prefer make_aggregate_func<State, &result_fn>()
-// over make_func() + .state<>() for aggregates: the State type is explicit,
-// and clear/accumulate signatures are validated against State at compile time.
+// Builder for aggregate VDFs. Use make_aggregate_func<State, &result_fn>().
+// The State type is explicit, and clear/accumulate signatures are validated
+// against State at compile time.
 
 template <typename State, auto Func, size_t NumParams>
 struct AggFuncBuilder {
@@ -1155,14 +1043,11 @@ constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
 }
 
 // make_func<&impl>("name")
-// TODO(villagesql-beta): remove the vef_vdf_func_t exception below once all
-// callers have migrated to make_aggregate_func.
 template <auto Func>
 constexpr FuncBuilder<Func, 0> make_func(const char *name) {
   using AllParams = typename FuncParamTypes<decltype(Func)>::type;
   static_assert(
-      std::is_same_v<decltype(Func), vef_vdf_func_t> ||
-          std::tuple_size_v<AllParams> == 0 ||
+      std::tuple_size_v<AllParams> == 0 ||
           !is_context_param<std::tuple_element_t<0, AllParams>>::value,
       "vsql make_func: deprecated vef_context_t* first parameter not "
       "supported; use a typed function or make_aggregate_func (see "
