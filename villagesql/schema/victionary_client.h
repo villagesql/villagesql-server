@@ -46,14 +46,17 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/systable/custom_index_columns.h"
+#include "villagesql/schema/systable/custom_indexes.h"
 #include "villagesql/schema/systable/custom_sp_params.h"
 #include "villagesql/schema/systable/extensions.h"
 #include "villagesql/schema/systable/properties.h"
 #include "villagesql/schema/util.h"
 
-// Forward declaration for friend class
+// Forward declarations for friend classes
 namespace villagesql_unittest {
 class VictionaryClientTest;
+class CustomIndexesVictionaryTest;
 }
 
 namespace villagesql {
@@ -681,6 +684,10 @@ class VictionaryClient {
   }
   ExtensionObjectMap<TypeContext> &type_contexts() { return m_type_contexts; }
   ExtensionObjectMap<FuncDescriptor> &funcs() { return m_funcs; }
+  SystemTableMap<IndexEntry> &custom_indexes() { return m_custom_indexes; }
+  SystemTableMap<IndexColumnEntry> &custom_index_columns() {
+    return m_custom_index_columns;
+  }
 
   const SystemTableMap<PropertyEntry> &properties() const {
     return m_properties;
@@ -700,6 +707,12 @@ class VictionaryClient {
     return m_type_contexts;
   }
   const ExtensionObjectMap<FuncDescriptor> &funcs() const { return m_funcs; }
+  const SystemTableMap<IndexEntry> &custom_indexes() const {
+    return m_custom_indexes;
+  }
+  const SystemTableMap<IndexColumnEntry> &custom_index_columns() const {
+    return m_custom_index_columns;
+  }
 
   // ===== Convenience query methods =====
 
@@ -714,6 +727,24 @@ class VictionaryClient {
   // Returns vector of pointers to SpParamEntry (valid while lock is held)
   std::vector<const SpParamEntry *> GetCustomSpParamsForSP(
       const std::string &db_name, const std::string &sp_name) const;
+
+  // Get all custom indexes for a table.
+  // Caller must hold at least read lock.
+  // Returns vector of pointers (valid while lock is held).
+  std::vector<const IndexEntry *> GetCustomIndexesForTable(
+      const std::string &db_name, const std::string &table_name) const;
+
+  // Get all per-column profile bindings for a custom index.
+  // Caller must hold at least read lock.
+  // Returns vector of pointers (valid while lock is held).
+  std::vector<const IndexColumnEntry *> GetColumnsForIndex(
+      uint64_t index_id) const;
+
+  // Allocate a unique index_id for a new custom index. The counter is
+  // initialized at startup from MAX(index_id) in custom_indexes so the
+  // returned value is safe to use as the physical primary key before
+  // MarkForInsertion is called. Thread-safe: uses atomic increment.
+  uint64_t allocate_index_id() { return ++m_next_index_id; }
 
   // ===== Transaction lifecycle - operates on ALL tables =====
 
@@ -796,7 +827,9 @@ class VictionaryClient {
         m_type_descriptors(&m_lock),
         m_extension_descriptors(&m_lock),
         m_type_contexts(&m_lock),
-        m_funcs(&m_lock) {}
+        m_funcs(&m_lock),
+        m_custom_indexes(&m_lock),
+        m_custom_index_columns(&m_lock) {}
   ~VictionaryClient();
 
   // Disable copy and assignment
@@ -807,6 +840,11 @@ class VictionaryClient {
   // init(). Returns false on success, true on error.
   bool reload_all_tables(THD *thd);
 
+  // Seed m_next_index_id from the maximum index_id present in m_custom_indexes.
+  // Called once after m_custom_indexes is loaded during reload_all_tables.
+  // Requires write lock (already held by reload_all_tables).
+  void init_index_id_counter();
+
   // Initialize for unit testing without loading from database tables.
   // This only initializes the lock and marks the client as initialized.
   // Returns false on success, true on error.
@@ -814,6 +852,7 @@ class VictionaryClient {
 
   // Friend classes
   friend class villagesql_unittest::VictionaryClientTest;
+  friend class villagesql_unittest::CustomIndexesVictionaryTest;
   friend class ReadLockGuard;
   friend class WriteLockGuard;
 
@@ -855,6 +894,16 @@ class VictionaryClient {
   ExtensionObjectMap<ExtensionDescriptor> m_extension_descriptors;
   ExtensionObjectMap<TypeContext> m_type_contexts;
   ExtensionObjectMap<FuncDescriptor> m_funcs;
+
+  // Custom index maps
+  SystemTableMap<IndexEntry> m_custom_indexes;
+  SystemTableMap<IndexColumnEntry> m_custom_index_columns;
+
+  // Server-assigned surrogate key counter for custom_indexes.index_id.
+  // Initialized from MAX(index_id) in custom_indexes at startup.
+  // allocate_index_id() returns ++m_next_index_id (pre-increment, so first
+  // allocation after startup yields max+1).
+  std::atomic<uint64_t> m_next_index_id{0};
 };
 
 // ===== Helper functions =====

@@ -51,6 +51,9 @@ std::string normalize_extension_name(const std::string &name);
 // Type names: Always case-insensitive (like SQL type names)
 std::string normalize_type_name(const std::string &name);
 
+// Index names: Follow lower_case_table_names setting (same as table names)
+std::string normalize_index_name(const std::string &name);
+
 // Build a qualified base name string "extension_name.type_name".
 inline std::string make_qualified_base_name(std::string_view extension_name,
                                             std::string_view type_name) {

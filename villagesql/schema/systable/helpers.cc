@@ -200,6 +200,13 @@ std::string normalize_type_name(const std::string &name) {
   return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
 }
 
+std::string normalize_index_name(const std::string &name) {
+  if (::lower_case_table_names == 0) {
+    return name;
+  }
+  return casedn(get_identifier_charset(), name);
+}
+
 // ===== Test utilities =====
 void test_set_lower_case_table_names(int value) {
   ::lower_case_table_names = value;

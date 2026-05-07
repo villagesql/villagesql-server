@@ -23,6 +23,8 @@ SET(VILLAGESQL_SCHEMA_SOURCES
   descriptor/type_context.cc
   descriptor/type_descriptor.cc
   systable/custom_columns.cc
+  systable/custom_index_columns.cc
+  systable/custom_indexes.cc
   systable/custom_sp_params.cc
   systable/extensions.cc
   systable/helpers.cc
