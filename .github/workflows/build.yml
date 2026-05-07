@@ -42,7 +42,8 @@ jobs:
       working-directory: ./source
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
-          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          git fetch origin ${{ github.base_ref }} --depth=50
+          CHANGED=$(git diff --name-only FETCH_HEAD...HEAD)
           if echo "$CHANGED" | grep -qvE '\.(md)$|^Docs/'; then
             echo "needed=true" >> $GITHUB_OUTPUT
           else
