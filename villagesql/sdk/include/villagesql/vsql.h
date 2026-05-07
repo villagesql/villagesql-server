@@ -38,11 +38,11 @@
 //   int  complex_compare(vsql::Span<const unsigned char> a,
 //                        vsql::Span<const unsigned char> b);
 //
-// TODO(villagesql-beta): from_string now uses the typed CustomResult /
-// CustomResultWith<P> wrappers (see PARAMETERIZED TYPES). Migrate the other
-// special VDF entry points (to_string, compare, hash, intrinsic_default) to
-// use CustomArg / CustomArgWith<P> for inputs and the appropriate typed
-// result wrappers for outputs, replacing the raw Span<...> / size_t* shape.
+// TODO(villagesql-beta): from_string now uses the typed CustomResult
+// wrapper (see PARAMETERIZED TYPES). Migrate the other special VDF entry
+// points (to_string, compare, hash, intrinsic_default) to use CustomArg /
+// CustomArgWith<P> for inputs and the appropriate typed result wrappers for
+// outputs, replacing the raw Span<...> / size_t* shape.
 //
 //   // 2. Define the type as a constexpr object
 //   static constexpr const char kComplexTypeName[] = "COMPLEX";

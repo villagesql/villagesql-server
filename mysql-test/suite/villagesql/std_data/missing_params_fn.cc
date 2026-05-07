@@ -36,7 +36,7 @@ struct FakeParams {
 // the SDK will route through the params cache. .params<FakeParams,
 // &FakeParams::parse>() is intentionally omitted from the type builder below.
 void faketype_encode(vsql::MaybeParams<FakeParams> &, std::string_view from,
-                     vsql::CustomResultWith<FakeParams> out) {
+                     vsql::CustomResult out) {
   auto buf = out.buffer();
   size_t n = from.size() < buf.size() ? from.size() : buf.size();
   memcpy(buf.data(), from.data(), n);

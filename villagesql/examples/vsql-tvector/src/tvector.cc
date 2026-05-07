@@ -173,7 +173,6 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
   return false;
 }
 
-//
 // When p is known, dimension and element type are taken from p; the parsed
 // element count must match p.dimension. When p is unknown, the element count
 // from the string is used to set p.dimension, and bytes_per_elem defaults to 4
@@ -183,8 +182,7 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
 // The loop only checks against max_supportable (what the buffer can hold).
 // Mismatch with the expected dimension is checked once at the end.
 void tvector_from_string(vsql::MaybeParams<TVectorParams> &p,
-                         std::string_view from,
-                         vsql::CustomResultWith<TVectorParams> out) {
+                         std::string_view from, vsql::CustomResult out) {
   // strtof/strtod require a null-terminated string.
   std::string input(from);
   const char *s = input.c_str();

@@ -274,10 +274,11 @@
 //
 //   // encode takes MaybeParams<MyParams>& — params may be unknown so the
 //   // function can infer them from the input string and call p.set(...).
-//   // Reports outcome via CustomResultWith<MyParams>: out.set_length(n),
-//   // out.set_null(), out.warning(msg), or out.error(msg).
+//   // Reports outcome via CustomResult: out.set_length(n), out.set_null(),
+//   // out.warning(msg), or out.error(msg). Plain CustomResult (not
+//   // CustomResultWith<P>) since params come from the MaybeParams& arg.
 //   void my_encode(MaybeParams<MyParams>& p, std::string_view from,
-//                  CustomResultWith<MyParams> out) { ... }
+//                  CustomResult out) { ... }
 //
 //   // decode/compare/hash take const MyParams& — params are always known.
 //   bool my_decode(const MyParams& p, ...);

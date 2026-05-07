@@ -35,7 +35,7 @@ namespace vsql {
 //
 //   void mytype_from_string(vsql::MaybeParams<MyParams> &p,
 //                           std::string_view from,
-//                           vsql::CustomResultWith<MyParams> out) {
+//                           vsql::CustomResult out) {
 //     // ... parse the string ...
 //     if (p.is_known()) {
 //       // Validate that what was parsed matches p.value().
