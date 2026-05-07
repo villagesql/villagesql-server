@@ -32,8 +32,7 @@ files in `villagesql/sdk/include/villagesql/*.h` NOT including the subdirectory
 
 - **Fluent builder pattern**: `make_extension()`, `.function()`, `.type()`
 - **Typed argument and result wrappers**: `IntArg`, `RealArg`, `StringArg`,
-  `BinaryArg`, `CustomArg`, `IntResult`, `RealResult`, `StringResult`,
-  `BinaryResult`, `CustomResult`
+  `CustomArg`, `IntResult`, `RealResult`, `StringResult`, `CustomResult`
 - **Automatic protocol awareness**: `VEF_GENERATE_ENTRY_POINTS` sets the max
   protocol the extension will negotiate
 - **Lifecycle hooks**: `.prerun()`, `.postrun()` for per-query setup/teardown
@@ -72,7 +71,7 @@ void vef_unregister(vef_unregister_arg_t *arg, vef_registration_t *registration)
 
 - `vef_register_arg_t` / `vef_registration_t`
 - `vef_func_desc_t` / `vef_type_desc_t`
-- `vef_cdf_args_t` / `vef_invalue_t` / `vef_vdf_result_t`
+- `vef_vdf_args_t` / `vef_invalue_t` / `vef_vdf_result_t`
 - `vef_signature_t` and related types
 
 **Function pointer signatures** — The calling convention and argument types for:
