@@ -23,7 +23,6 @@
 #ifndef VILLAGESQL_PREVIEW_STORAGE_API_H_
 #define VILLAGESQL_PREVIEW_STORAGE_API_H_
 
-#include <villagesql/abi/storage.h>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +33,8 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#include <villagesql/abi/preview/storage.h>
 
 static_assert(VEF_STORAGE_SE_INTF_VERSION == 1,
               "This C++ wrapper supports ABI v1 only");

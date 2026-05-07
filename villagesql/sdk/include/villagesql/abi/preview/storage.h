@@ -17,8 +17,8 @@
 // TODO(villagesql-beta): Column storage ABI is not ready for external use.
 // See storage_api.h for details.
 
-#ifndef VILLAGESQL_ABI_STORAGE_H_
-#define VILLAGESQL_ABI_STORAGE_H_
+#ifndef VILLAGESQL_ABI_PREVIEW_STORAGE_H_
+#define VILLAGESQL_ABI_PREVIEW_STORAGE_H_
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -487,4 +487,4 @@ void vef_storage_page_write_string(vef_storage_block_ref_t block,
 }  // extern "C"
 #endif
 
-#endif  // VILLAGESQL_ABI_STORAGE_H_
+#endif  // VILLAGESQL_ABI_PREVIEW_STORAGE_H_

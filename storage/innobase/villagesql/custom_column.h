@@ -23,7 +23,8 @@
 #include "db0err.h"
 #include "mem0mem.h"
 #include "trx0types.h"
-#include "villagesql/sdk/include/villagesql/abi/storage.h"
+
+#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/types/storage.h"
 
 // Forward declarations

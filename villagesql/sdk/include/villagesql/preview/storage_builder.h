@@ -24,7 +24,7 @@
 
 #include <type_traits>
 
-#include <villagesql/abi/storage.h>
+#include <villagesql/abi/preview/storage.h>
 #include <villagesql/preview/storage_api.h>
 
 namespace vsql::preview_storage_builder {

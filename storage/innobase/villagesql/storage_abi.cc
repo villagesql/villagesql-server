@@ -16,8 +16,6 @@
 
 // C ABI implementation for InnoDB storage interface
 
-#include "villagesql/sdk/include/villagesql/abi/storage.h"
-
 #include <cstdio>
 #include <iterator>
 #include <new>
@@ -31,6 +29,8 @@
 #include "mtr0mtr.h"
 #include "page0page.h"
 #include "ut0dbg.h"
+
+#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 
 // Lookup table mapping ABI latch types (VEF_STORAGE_PAGE_LATCH_*)
 // to corresponding InnoDB RW latch modes. ABI latch values are
