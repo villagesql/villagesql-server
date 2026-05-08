@@ -195,7 +195,7 @@ bool stored_int_load(Ctx *ctx, storage::Column::StorageRef storage_ref,
   return false;
 }
 
-bool stored_int_insert(Ctx *ctx, storage::MtrCtx::Ref mctx,
+bool stored_int_insert(Ctx *ctx, const storage::MtrCtx &mctx,
                        storage::Segment::TrxRef trx,
                        storage::Column::Data col_data,
                        storage::Column::Data rowid_prefix,
@@ -244,7 +244,7 @@ bool stored_int_insert(Ctx *ctx, storage::MtrCtx::Ref mctx,
   return false;
 }
 
-bool stored_int_select(Ctx *ctx, storage::MtrCtx::Ref mctx,
+bool stored_int_select(Ctx *ctx, const storage::MtrCtx &mctx,
                        storage::Column::Ref col_ref,
                        storage::Column::Data *col_data,
                        storage::Column::Data *rowid_prefix,
@@ -273,7 +273,7 @@ bool stored_int_select(Ctx *ctx, storage::MtrCtx::Ref mctx,
   return false;
 }
 
-bool stored_int_mark_delete(Ctx *ctx, storage::MtrCtx::Ref mctx,
+bool stored_int_mark_delete(Ctx *ctx, const storage::MtrCtx &mctx,
                             storage::Segment::TrxRef trx,
                             storage::Column::Ref col_ref, bool delete_mark,
                             char *err, uint32_t err_len) {
@@ -290,7 +290,7 @@ bool stored_int_mark_delete(Ctx *ctx, storage::MtrCtx::Ref mctx,
   return false;
 }
 
-bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
+bool stored_int_purge(Ctx * /*ctx*/, const storage::MtrCtx & /*mctx*/,
                       storage::Segment::TrxRef /*trx*/,
                       storage::Column::Ref /*col_ref*/, char * /*err*/,
                       uint32_t /*err_len*/) {

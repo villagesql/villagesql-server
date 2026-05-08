@@ -193,13 +193,13 @@ class ColumnStoreCapability
 //               char* error_msg, uint32_t error_msg_len);
 //   bool drop(Ctx*, Segment::TrxRef, char*, uint32_t);
 //   bool load(Ctx*, Column::StorageRef, char*, uint32_t);
-//   bool insert(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Data col_data,
+//   bool insert(Ctx*, const MtrCtx&, Segment::TrxRef, Column::Data col_data,
 //               Column::Data rowid_prefix, Column::Ref*, char*, uint32_t);
-//   bool select(Ctx*, MtrCtx::Ref, Column::Ref, Column::Data*, Column::Data*,
+//   bool select(Ctx*, const MtrCtx&, Column::Ref, Column::Data*, Column::Data*,
 //               Segment::TrxRef*, bool* delete_marked, char*, uint32_t);
-//   bool mark_delete(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Ref,
+//   bool mark_delete(Ctx*, const MtrCtx&, Segment::TrxRef, Column::Ref,
 //                    bool delete_mark, char*, uint32_t);
-//   bool purge(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Ref, char*,
+//   bool purge(Ctx*, const MtrCtx&, Segment::TrxRef, Column::Ref, char*,
 //   uint32_t);
 //
 // All functions return false on success, true on error (writing to error_msg).
@@ -219,6 +219,7 @@ namespace detail {
 template <typename UserCtx>
 using StorageCtx = vsql::preview_storage::Column::StorageCtx<UserCtx>;
 using Arena = vsql::preview_storage::Arena;
+using MtrCtx = vsql::preview_storage::MtrCtx;
 
 // Expected extension function pointer types. Each StorageBuilder setter
 // static_asserts that F exactly matches the corresponding type alias.
@@ -240,8 +241,7 @@ using LoadFn = bool (*)(StorageCtx<UserCtx> *,
                         uint32_t);
 
 template <typename UserCtx>
-using InsertFn = bool (*)(StorageCtx<UserCtx> *,
-                          vsql::preview_storage::MtrCtx::Ref,
+using InsertFn = bool (*)(StorageCtx<UserCtx> *, const MtrCtx &,
                           vsql::preview_storage::Segment::TrxRef,
                           vsql::preview_storage::Column::Data,
                           vsql::preview_storage::Column::Data,
@@ -249,8 +249,7 @@ using InsertFn = bool (*)(StorageCtx<UserCtx> *,
                           uint32_t);
 
 template <typename UserCtx>
-using SelectFn = bool (*)(StorageCtx<UserCtx> *,
-                          vsql::preview_storage::MtrCtx::Ref,
+using SelectFn = bool (*)(StorageCtx<UserCtx> *, const MtrCtx &,
                           vsql::preview_storage::Column::Ref,
                           vsql::preview_storage::Column::Data *,
                           vsql::preview_storage::Column::Data *,
@@ -258,15 +257,13 @@ using SelectFn = bool (*)(StorageCtx<UserCtx> *,
                           char *, uint32_t);
 
 template <typename UserCtx>
-using MarkDeleteFn = bool (*)(StorageCtx<UserCtx> *,
-                              vsql::preview_storage::MtrCtx::Ref,
+using MarkDeleteFn = bool (*)(StorageCtx<UserCtx> *, const MtrCtx &,
                               vsql::preview_storage::Segment::TrxRef,
                               vsql::preview_storage::Column::Ref, bool, char *,
                               uint32_t);
 
 template <typename UserCtx>
-using PurgeFn = bool (*)(StorageCtx<UserCtx> *,
-                         vsql::preview_storage::MtrCtx::Ref,
+using PurgeFn = bool (*)(StorageCtx<UserCtx> *, const MtrCtx &,
                          vsql::preview_storage::Segment::TrxRef,
                          vsql::preview_storage::Column::Ref, char *, uint32_t);
 
@@ -349,8 +346,11 @@ struct InsertWrapper {
                      vef_storage_col_data_t rowid_prefix,
                      vef_storage_col_ref_t *col_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), mctx, trx_ref,
-             col_data, rowid_prefix, col_ref, error_msg, error_msg_len);
+    MtrCtx borrowed =
+        vsql::preview_storage::detail::make_borrowed_mtr_ctx(mctx);
+    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), borrowed,
+             trx_ref, col_data, rowid_prefix, col_ref, error_msg,
+             error_msg_len);
   }
 };
 
@@ -362,8 +362,10 @@ struct SelectWrapper {
                      vef_storage_col_data_t *rowid_prefix,
                      vef_storage_trx_ref_t *trx_ref, bool *delete_marked,
                      char *error_msg, uint32_t error_msg_len) {
-    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), mctx, col_ref,
-             col_data, rowid_prefix, trx_ref, delete_marked, error_msg,
+    MtrCtx borrowed =
+        vsql::preview_storage::detail::make_borrowed_mtr_ctx(mctx);
+    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), borrowed,
+             col_ref, col_data, rowid_prefix, trx_ref, delete_marked, error_msg,
              error_msg_len);
   }
 };
@@ -374,8 +376,10 @@ struct MarkDeleteWrapper {
                      vef_storage_trx_ref_t trx_ref,
                      vef_storage_col_ref_t col_ref, bool delete_mark,
                      char *error_msg, uint32_t error_msg_len) {
-    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), mctx, trx_ref,
-             col_ref, delete_mark, error_msg, error_msg_len);
+    MtrCtx borrowed =
+        vsql::preview_storage::detail::make_borrowed_mtr_ctx(mctx);
+    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), borrowed,
+             trx_ref, col_ref, delete_mark, error_msg, error_msg_len);
   }
 };
 
@@ -385,8 +389,10 @@ struct PurgeWrapper {
                      vef_storage_trx_ref_t trx_ref,
                      vef_storage_col_ref_t col_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), mctx, trx_ref,
-             col_ref, error_msg, error_msg_len);
+    MtrCtx borrowed =
+        vsql::preview_storage::detail::make_borrowed_mtr_ctx(mctx);
+    return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), borrowed,
+             trx_ref, col_ref, error_msg, error_msg_len);
   }
 };
 
@@ -436,10 +442,12 @@ class StorageBuilder {
 
   template <auto F>
   constexpr StorageBuilder &insert() {
-    static_assert(std::is_same_v<decltype(F), detail::InsertFn<UserCtx>>,
-                  "insert: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
-                  "Segment::TrxRef, Column::Data, Column::Data, Column::Ref*, "
-                  "char*, uint32_t)");
+    static_assert(
+        std::is_same_v<decltype(F), detail::InsertFn<UserCtx>>,
+        "insert: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+        "insert: expected bool(*)(StorageCtx<UserCtx>*, const MtrCtx&, "
+        "Segment::TrxRef, Column::Data, Column::Data, Column::Ref*, "
+        "char*, uint32_t)");
     intf_.insert = detail::InsertWrapper<F, UserCtx>::invoke;
     return *this;
   }
@@ -448,7 +456,7 @@ class StorageBuilder {
   constexpr StorageBuilder &select() {
     static_assert(
         std::is_same_v<decltype(F), detail::SelectFn<UserCtx>>,
-        "select: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+        "select: expected bool(*)(StorageCtx<UserCtx>*, const MtrCtx&, "
         "Column::Ref, Column::Data*, Column::Data*, Segment::TrxRef*, "
         "bool*, char*, uint32_t)");
     intf_.select = detail::SelectWrapper<F, UserCtx>::invoke;
@@ -459,7 +467,7 @@ class StorageBuilder {
   constexpr StorageBuilder &mark_delete() {
     static_assert(
         std::is_same_v<decltype(F), detail::MarkDeleteFn<UserCtx>>,
-        "mark_delete: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+        "mark_delete: expected bool(*)(StorageCtx<UserCtx>*, const MtrCtx&, "
         "Segment::TrxRef, Column::Ref, bool delete_mark, char*, uint32_t)");
     intf_.mark_delete = detail::MarkDeleteWrapper<F, UserCtx>::invoke;
     return *this;
@@ -467,9 +475,10 @@ class StorageBuilder {
 
   template <auto F>
   constexpr StorageBuilder &purge() {
-    static_assert(std::is_same_v<decltype(F), detail::PurgeFn<UserCtx>>,
-                  "purge: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
-                  "Segment::TrxRef, Column::Ref, char*, uint32_t)");
+    static_assert(
+        std::is_same_v<decltype(F), detail::PurgeFn<UserCtx>>,
+        "purge: expected bool(*)(StorageCtx<UserCtx>*, const MtrCtx&, "
+        "Segment::TrxRef, Column::Ref, char*, uint32_t)");
     intf_.purge = detail::PurgeWrapper<F, UserCtx>::invoke;
     return *this;
   }

@@ -54,11 +54,12 @@ enum class Error {
   PAGE_LOAD = VEF_STORAGE_ERROR_PAGE_LOAD,
 };
 
+class MtrCtx;
+
 // Implementation details — not part of the public API; do not use directly.
 namespace detail {
 inline constexpr size_t ERROR_MSG_SIZE = 512;
 inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
-
 // TODO(villagesql-indexing): remove this global pointer, instead passing the
 // capability in the API.
 // Module-level vtable pointer. The server writes it via vtable_dest during
@@ -68,6 +69,8 @@ inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
 // that don't use storage never emit references to vef_storage_* symbols at link
 // time.
 inline const vef_preview_storage_t *g_abi = nullptr;
+vef_storage_mtr_ref_t mtr_ref(const MtrCtx &mtr);
+MtrCtx make_borrowed_mtr_ctx(vef_storage_mtr_ref_t ref);
 }  // namespace detail
 
 // Returns a string_view over the error message from the last failed call on
@@ -85,22 +88,21 @@ inline std::string_view last_error() { return detail::tl_error_msg; }
 //
 //   Reading data (DML read path):
 //     MtrCtx mtr;
-//     MtrCtx::Ref mtr_ref = mtr.start();
+//     mtr.start();
 //     Page page;
-//     page.load(space, data_page_num, Page::Latch::SHARED, mtr_ref);
+//     page.load(space, data_page_num, Page::Latch::SHARED, mtr);
 //     uint32_t value = page.read_integer_4(Page::HEADER_SIZE + data_offset);
 //     mtr.commit();  // releases all page latches held by mtr
 //
 //   Writing data (DML write path):
 //     MtrCtx mtr;
-//     MtrCtx::Ref mtr_ref = mtr.start();
+//     mtr.start();
 //     Page root;
-//     root.load(space, root_page_num, Page::Latch::EXCLUSIVE, mtr_ref);
+//     root.load(space, root_page_num, Page::Latch::EXCLUSIVE, mtr);
 //     Segment::Ref seg = Segment::get_header(root, 0);
 //     Page data_page;
-//     data_page.load_new(seg, mtr_ref);  // allocates a fresh page
-//     data_page.write_integer_4(Page::HEADER_SIZE + data_offset, value,
-//                               mtr_ref);
+//     data_page.load_new(seg, mtr);  // allocates a fresh page
+//     data_page.write_integer_4(Page::HEADER_SIZE + data_offset, value, mtr);
 //     mtr.commit();  // persists redo log and releases latches
 //
 //   Dropping storage (DDL, called once on column drop):
@@ -113,9 +115,7 @@ inline std::string_view last_error() { return detail::tl_error_msg; }
 // copyable or movable; allocate them on the stack for each operation.
 class MtrCtx {
  public:
-  using Ref = vef_storage_mtr_ref_t;
-
-  [[nodiscard]] Ref start();
+  [[nodiscard]] bool start();
   void commit();
   ~MtrCtx();
 
@@ -128,6 +128,11 @@ class MtrCtx {
   MtrCtx &operator=(MtrCtx &&) = delete;
 
  private:
+  friend vef_storage_mtr_ref_t detail::mtr_ref(const MtrCtx &mtr);
+  friend MtrCtx detail::make_borrowed_mtr_ctx(vef_storage_mtr_ref_t ref);
+
+  explicit MtrCtx(vef_storage_mtr_ref_t ref) : m_ref(ref), m_borrowed(true) {}
+
   static constexpr size_t MAX_STACK_SIZE = 1536;
 
   alignas(std::max_align_t) unsigned char m_buf[MAX_STACK_SIZE];
@@ -135,7 +140,8 @@ class MtrCtx {
   size_t m_heap_size = 0;
 
   size_t m_align = alignof(std::max_align_t);
-  Ref m_ref = nullptr;
+  vef_storage_mtr_ref_t m_ref = nullptr;
+  bool m_borrowed = false;
 };
 
 // InnoDB tablespace that stores physical data on disk as fixed-size pages.
@@ -289,20 +295,20 @@ class Page {
   void read_links(Ref &prev_page, Ref &next_page) const;
 
   // Write previous page link.
-  void write_prev_link(Ref prev_page, MtrCtx::Ref mtr);
+  void write_prev_link(Ref prev_page, const MtrCtx &mtr);
 
   // Write next page link.
-  void write_next_link(Ref next_page, MtrCtx::Ref mtr);
+  void write_next_link(Ref next_page, const MtrCtx &mtr);
 
   // Write previous and next page links.
-  void write_links(Ref prev_page, Ref next_page, MtrCtx::Ref mtr);
+  void write_links(Ref prev_page, Ref next_page, const MtrCtx &mtr);
 
   // Load a page from InnoDB buffer pool latched by mtr.
   [[nodiscard]] Error load(Space::Ref space, Ref page, Latch latch,
-                           MtrCtx::Ref mtr);
+                           const MtrCtx &mtr);
 
   // Allocate a new page from the segment and latch it before returning.
-  [[nodiscard]] Error load_new(Segment::Ref segment_header, MtrCtx::Ref mtr);
+  [[nodiscard]] Error load_new(Segment::Ref segment_header, const MtrCtx &mtr);
 
   // Upgrade a page to EXCLUSIVE or SHARED_EXCLUSIVE latch. Only valid when the
   // page was loaded with NO_LATCH; upgrading an already-latched page is not
@@ -316,7 +322,7 @@ class Page {
   //                     the request was rejected.
   // @return Error::SUCCESS if latched, Error::INVALID_ARGUMENT if a
   //         pre-condition was not met, or another Error code on ABI failure.
-  [[nodiscard]] Error latch(Latch &latch, MtrCtx::Ref mtr);
+  [[nodiscard]] Error latch(Latch &latch, const MtrCtx &mtr);
 
   // Explicitly release the current latch if it was acquired by the extension
   // via the ::load or ::latch interface. Page latches are normally released
@@ -327,19 +333,19 @@ class Page {
   //     are released on mtr commit, not via this interface).
   // Other Error codes indicate an ABI failure (e.g. page was not latched by
   // the extension).
-  [[nodiscard]] Error release(MtrCtx::Ref mtr);
+  [[nodiscard]] Error release(const MtrCtx &mtr);
 
   // Write integer and string values at a DATA area offset with redo logging
   // (WAL). Asserts and returns without writing if the page is not loaded, if
   // offset is within the page header (< HEADER_SIZE), or if
   // [offset, offset+size) exceeds the DATA area. Use write_prev_link /
   // write_next_link to update header link fields.
-  void write_integer_1(Offset offset, uint8_t value, MtrCtx::Ref mtr);
-  void write_integer_2(Offset offset, uint16_t value, MtrCtx::Ref mtr);
-  void write_integer_4(Offset offset, uint32_t value, MtrCtx::Ref mtr);
-  void write_integer_8(Offset offset, uint64_t value, MtrCtx::Ref mtr);
+  void write_integer_1(Offset offset, uint8_t value, const MtrCtx &mtr);
+  void write_integer_2(Offset offset, uint16_t value, const MtrCtx &mtr);
+  void write_integer_4(Offset offset, uint32_t value, const MtrCtx &mtr);
+  void write_integer_8(Offset offset, uint64_t value, const MtrCtx &mtr);
   void write_string(Offset offset, const unsigned char *str, size_t len,
-                    MtrCtx::Ref mtr);
+                    const MtrCtx &mtr);
 
   // Read integer values at a DATA area offset. Asserts and returns 0 if the
   // page is not loaded, if offset is within the page header (< HEADER_SIZE),
@@ -405,12 +411,12 @@ class Page {
 };
 
 // MtrCtx inline implementations
-inline MtrCtx::Ref MtrCtx::start() {
+inline bool MtrCtx::start() {
   assert(m_ref == nullptr);
   if (m_ref != nullptr) {
     snprintf(detail::tl_error_msg, detail::ERROR_MSG_SIZE,
              "start: mtr is already started");
-    return nullptr;
+    return false;
   }
   uint32_t required_size = 0;
   uint32_t required_alignment = 0;
@@ -419,7 +425,7 @@ inline MtrCtx::Ref MtrCtx::start() {
                                    &required_alignment, detail::tl_error_msg,
                                    detail::ERROR_MSG_SIZE);
   if (m_ref != nullptr) {
-    return m_ref;
+    return true;
   }
 
   size_t align = static_cast<size_t>(required_alignment);
@@ -440,20 +446,19 @@ inline MtrCtx::Ref MtrCtx::start() {
       snprintf(detail::tl_error_msg, detail::ERROR_MSG_SIZE,
                "start: out of memory allocating mtr buffer (%zu bytes)",
                static_cast<size_t>(required_size));
-      return nullptr;
+      return false;
     }
   }
   m_ref = detail::g_abi->mtr_start(m_heap_buf, m_heap_size, &required_size,
                                    &required_alignment, detail::tl_error_msg,
                                    detail::ERROR_MSG_SIZE);
-  return m_ref;
+  return m_ref != nullptr;
 }
 
 inline void MtrCtx::commit() {
-  if (m_ref != nullptr) {
-    detail::g_abi->mtr_commit(m_ref);
-    m_ref = nullptr;
-  }
+  if (m_borrowed || m_ref == nullptr) return;
+  detail::g_abi->mtr_commit(m_ref);
+  m_ref = nullptr;
 }
 
 inline MtrCtx::~MtrCtx() {
@@ -462,6 +467,13 @@ inline MtrCtx::~MtrCtx() {
     ::operator delete(m_heap_buf, std::align_val_t(m_align));
   }
 }
+
+namespace detail {
+inline vef_storage_mtr_ref_t mtr_ref(const MtrCtx &mtr) { return mtr.m_ref; }
+inline MtrCtx make_borrowed_mtr_ctx(vef_storage_mtr_ref_t ref) {
+  return MtrCtx(ref);
+}
+}  // namespace detail
 
 // Segment inline implementations
 inline Error Segment::create(Space::Ref space, uint8_t num_segments,
@@ -539,23 +551,23 @@ inline void Page::read_links(Ref &prev_page, Ref &next_page) const {
   next_page = read_next_link();
 }
 
-inline void Page::write_prev_link(Ref prev_page, MtrCtx::Ref mtr) {
+inline void Page::write_prev_link(Ref prev_page, const MtrCtx &mtr) {
   assert(is_loaded());
   if (!is_loaded()) return;
   detail::g_abi->page_write_integer(m_block, VEF_STORAGE_FIL_PAGE_PREV,
                                     prev_page, VEF_STORAGE_PAGE_INT_4BYTES,
-                                    mtr);
+                                    detail::mtr_ref(mtr));
 }
 
-inline void Page::write_next_link(Ref next_page, MtrCtx::Ref mtr) {
+inline void Page::write_next_link(Ref next_page, const MtrCtx &mtr) {
   assert(is_loaded());
   if (!is_loaded()) return;
   detail::g_abi->page_write_integer(m_block, VEF_STORAGE_FIL_PAGE_NEXT,
                                     next_page, VEF_STORAGE_PAGE_INT_4BYTES,
-                                    mtr);
+                                    detail::mtr_ref(mtr));
 }
 
-inline void Page::write_links(Ref prev_page, Ref next_page, MtrCtx::Ref mtr) {
+inline void Page::write_links(Ref prev_page, Ref next_page, const MtrCtx &mtr) {
   write_prev_link(prev_page, mtr);
   write_next_link(next_page, mtr);
 }
@@ -579,12 +591,12 @@ inline bool Page::data_bounds_check(Offset offset, size_t size) const {
 }
 
 inline Error Page::load(Space::Ref space, Ref page, Latch latch,
-                        MtrCtx::Ref mtr) {
+                        const MtrCtx &mtr) {
   reset();
   auto err = static_cast<Error>(detail::g_abi->page_load(
       &m_block, &m_position, &m_data, &m_data_size, space, page,
-      static_cast<vef_storage_latch_t>(latch), mtr, detail::tl_error_msg,
-      detail::ERROR_MSG_SIZE));
+      static_cast<vef_storage_latch_t>(latch), detail::mtr_ref(mtr),
+      detail::tl_error_msg, detail::ERROR_MSG_SIZE));
   if (err != Error::SUCCESS) {
     reset();
     return err;
@@ -594,12 +606,12 @@ inline Error Page::load(Space::Ref space, Ref page, Latch latch,
   return err;
 }
 
-inline Error Page::load_new(Segment::Ref segment_header, MtrCtx::Ref mtr) {
+inline Error Page::load_new(Segment::Ref segment_header, const MtrCtx &mtr) {
   reset();
   auto err = static_cast<Error>(detail::g_abi->page_allocate_and_load(
       &m_block, &m_ref, &m_data, &m_data_size,
-      static_cast<unsigned char *>(segment_header), mtr, detail::tl_error_msg,
-      detail::ERROR_MSG_SIZE));
+      static_cast<unsigned char *>(segment_header), detail::mtr_ref(mtr),
+      detail::tl_error_msg, detail::ERROR_MSG_SIZE));
   if (err != Error::SUCCESS) {
     reset();
     return err;
@@ -610,7 +622,7 @@ inline Error Page::load_new(Segment::Ref segment_header, MtrCtx::Ref mtr) {
   return err;
 }
 
-inline Error Page::latch(Latch &latch, MtrCtx::Ref mtr) {
+inline Error Page::latch(Latch &latch, const MtrCtx &mtr) {
   assert(is_loaded());
   if (!is_loaded()) {
     snprintf(detail::tl_error_msg, detail::ERROR_MSG_SIZE,
@@ -638,16 +650,16 @@ inline Error Page::latch(Latch &latch, MtrCtx::Ref mtr) {
   }
 
   auto abi_latch = static_cast<vef_storage_latch_t>(latch);
-  auto err = static_cast<Error>(
-      detail::g_abi->page_latch(m_block, m_position, abi_latch, mtr,
-                                detail::tl_error_msg, detail::ERROR_MSG_SIZE));
+  auto err = static_cast<Error>(detail::g_abi->page_latch(
+      m_block, m_position, abi_latch, detail::mtr_ref(mtr),
+      detail::tl_error_msg, detail::ERROR_MSG_SIZE));
   if (err == Error::SUCCESS) {
     m_latch = latch;
   }
   return err;
 }
 
-inline Error Page::release(MtrCtx::Ref mtr) {
+inline Error Page::release(const MtrCtx &mtr) {
   assert(is_loaded());
   if (!is_loaded()) {
     snprintf(detail::tl_error_msg, detail::ERROR_MSG_SIZE,
@@ -664,7 +676,8 @@ inline Error Page::release(MtrCtx::Ref mtr) {
   }
 
   auto err = static_cast<Error>(detail::g_abi->page_release(
-      m_block, m_position, mtr, detail::tl_error_msg, detail::ERROR_MSG_SIZE));
+      m_block, m_position, detail::mtr_ref(mtr), detail::tl_error_msg,
+      detail::ERROR_MSG_SIZE));
   if (err != Error::SUCCESS) return err;
 
   reset();
@@ -673,37 +686,41 @@ inline Error Page::release(MtrCtx::Ref mtr) {
 }
 
 inline void Page::write_integer_1(Offset offset, uint8_t value,
-                                  MtrCtx::Ref mtr) {
+                                  const MtrCtx &mtr) {
   if (!data_bounds_check(offset, 1)) return;
-  detail::g_abi->page_write_integer(m_block, offset, value,
-                                    VEF_STORAGE_PAGE_INT_1BYTE, mtr);
+  detail::g_abi->page_write_integer(
+      m_block, offset, value, VEF_STORAGE_PAGE_INT_1BYTE, detail::mtr_ref(mtr));
 }
 
 inline void Page::write_integer_2(Offset offset, uint16_t value,
-                                  MtrCtx::Ref mtr) {
+                                  const MtrCtx &mtr) {
   if (!data_bounds_check(offset, 2)) return;
   detail::g_abi->page_write_integer(m_block, offset, value,
-                                    VEF_STORAGE_PAGE_INT_2BYTES, mtr);
+                                    VEF_STORAGE_PAGE_INT_2BYTES,
+                                    detail::mtr_ref(mtr));
 }
 
 inline void Page::write_integer_4(Offset offset, uint32_t value,
-                                  MtrCtx::Ref mtr) {
+                                  const MtrCtx &mtr) {
   if (!data_bounds_check(offset, 4)) return;
   detail::g_abi->page_write_integer(m_block, offset, value,
-                                    VEF_STORAGE_PAGE_INT_4BYTES, mtr);
+                                    VEF_STORAGE_PAGE_INT_4BYTES,
+                                    detail::mtr_ref(mtr));
 }
 
 inline void Page::write_integer_8(Offset offset, uint64_t value,
-                                  MtrCtx::Ref mtr) {
+                                  const MtrCtx &mtr) {
   if (!data_bounds_check(offset, 8)) return;
   detail::g_abi->page_write_integer(m_block, offset, value,
-                                    VEF_STORAGE_PAGE_INT_8BYTES, mtr);
+                                    VEF_STORAGE_PAGE_INT_8BYTES,
+                                    detail::mtr_ref(mtr));
 }
 
 inline void Page::write_string(Offset offset, const unsigned char *str,
-                               size_t len, MtrCtx::Ref mtr) {
+                               size_t len, const MtrCtx &mtr) {
   if (!data_bounds_check(offset, len)) return;
-  detail::g_abi->page_write_string(m_block, offset, str, len, mtr);
+  detail::g_abi->page_write_string(m_block, offset, str, len,
+                                   detail::mtr_ref(mtr));
 }
 
 template <typename T>
