@@ -71,7 +71,9 @@ static bool default_compat_fn(const vef_required_capability_t &req,
   }
   // Extension-side decision.
   char receive_error[VEF_MAX_ERROR_LEN] = {};
-  if (!req.receive(vtable, receive_error, sizeof(receive_error))) {
+  vef_capability_receive_arg_t receive_arg{vtable, receive_error,
+                                           sizeof(receive_error)};
+  if (!req.receive(&receive_arg)) {
     error_message = std::string("capability rejected by extension: ") +
                     req.name + ": " + receive_error;
     return false;

@@ -849,23 +849,42 @@ typedef struct {
 // Forward declaration so vef_required_capability_t can reference it.
 typedef struct vef_registration_t vef_registration_t;
 
+// Argument passed to vef_receive_capability_fn by the server.
+typedef struct {
+  // Server-provided vtable pointer for the capability.
+  void *vtable;
+  // Buffer for the extension to write a null-terminated rejection reason into.
+  // Only written on failure (return false). Size is VEF_MAX_ERROR_LEN.
+  char *error_buf;
+  size_t error_buf_len;
+} vef_capability_receive_arg_t;
+
+// Extension-side callback invoked by the server after its own compatibility
+// checks pass. The extension stores the vtable pointer and returns true to
+// allow loading, or writes a reason into arg->error_buf and returns false.
+//
+// The default SDK implementation (cap_receive in extension_builder.h) requires
+// an exact match between the server's vtable version and the version the
+// extension was compiled against. This is intentionally strict for preview
+// capabilities — when a capability graduates to stable, looser version
+// matching policies may be provided.
+//
+// Server-side compatibility logic (ABI hash check, min_version floor, and the
+// option to override both per capability) lives in cap_compat_fn in
+// capability_registry.h and is not visible to extension authors.
+typedef bool (*vef_receive_capability_fn)(vef_capability_receive_arg_t *arg);
+
 // A single capability request in vef_registration_t.required_capabilities.
 // The extension sets name, receive, abi_type_hash, and min_version. The server
 // calls receive() with the vtable pointer if the capability is registered and
 // passes all checks; the callback assigns it into the extension's struct in a
 // type-safe way.
 typedef struct {
-  // Capability name, e.g. "vsql::ping". Must remain valid for the lifetime
-  // of the extension (use a string literal).
+  // Capability name, e.g. "vsql::preview::ping". Must remain valid for the
+  // lifetime of the extension (use a string literal).
   const char *name;
-  // Called by the server with the capability vtable pointer if the capability
-  // is registered and passes the server-side min_version check. Returns true
-  // to allow loading, false to abort. On failure, the function should write a
-  // null-terminated reason into error_buf (up to error_buf_len bytes including
-  // the null terminator). The default implementation (cap_receive) is strict:
-  // it requires an exact version match. Capabilities may supply a custom
-  // function to allow graceful degradation across versions.
-  bool (*receive)(void *vtable, char *error_buf, size_t error_buf_len);
+  // Extension-side callback. See vef_receive_capability_fn above.
+  vef_receive_capability_fn receive;
   // Compile-time hash of the ABI struct type, computed via
   // villagesql::detail::abi_type_hash<AbiType>(). The server compares this
   // against its own hash for the same name to detect ABI struct mismatches.

@@ -25,7 +25,6 @@
 //   0.
 
 #include <cstdint>
-#include <type_traits>
 
 #include <villagesql/detail/capability_hash.h>
 #include <villagesql/vsql.h>

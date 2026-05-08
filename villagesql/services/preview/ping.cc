@@ -55,7 +55,9 @@ bool preview_ping_compat(const vef_required_capability_t &req, void *vtable,
     return false;
   }
   char receive_error[VEF_MAX_ERROR_LEN] = {};
-  if (!req.receive(vtable, receive_error, sizeof(receive_error))) {
+  vef_capability_receive_arg_t receive_arg{vtable, receive_error,
+                                           sizeof(receive_error)};
+  if (!req.receive(&receive_arg)) {
     error_message = std::string("capability rejected by extension: ") +
                     VEF_PREVIEW_PING_NAME + ": " + receive_error;
     return false;

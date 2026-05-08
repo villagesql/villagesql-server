@@ -48,10 +48,10 @@ using namespace func_builder;
 // cap_ptr must have static storage duration so its address is a valid non-type
 // template argument.
 template <typename Cap, Cap *cap_ptr>
-bool cap_receive(void *vtable, char *error_buf, size_t error_buf_len) {
-  auto *v = static_cast<decltype(cap_ptr->abi_)>(vtable);
+bool cap_receive(vef_capability_receive_arg_t *arg) {
+  auto *v = static_cast<decltype(cap_ptr->abi_)>(arg->vtable);
   if (v->version != Cap::kAbiVersion) {
-    snprintf(error_buf, error_buf_len,
+    snprintf(arg->error_buf, arg->error_buf_len,
              "version mismatch: server=%u, compiled=%u",
              static_cast<unsigned>(v->version),
              static_cast<unsigned>(Cap::kAbiVersion));
