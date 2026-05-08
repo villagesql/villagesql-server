@@ -67,7 +67,7 @@ jobs:
       env:
         PARALLEL_JOBS: 16
         BUILD_TYPE: debug
-        CMAKE_EXTRA_FLAGS: -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        CMAKE_EXTRA_FLAGS: -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Evict stale ccache entries
       if: steps.check-paths.outputs.needed == 'true'
