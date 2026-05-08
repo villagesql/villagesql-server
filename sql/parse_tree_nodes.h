@@ -1,4 +1,5 @@
 /* Copyright (c) 2013, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2283,7 +2284,9 @@ class PT_key_part_specification : public Parse_tree_node {
            index, or zero if it should index the entire column.
   */
   PT_key_part_specification(const POS &pos, const LEX_CSTRING &column_name,
-                            enum_order order, int prefix_length);
+                            enum_order order, int prefix_length,
+                            LEX_CSTRING index_profile_extension = {nullptr, 0},
+                            LEX_CSTRING index_profile = {nullptr, 0});
 
   /**
     Contextualize this key part specification. This will also call itemize on
@@ -2346,6 +2349,19 @@ class PT_key_part_specification : public Parse_tree_node {
   */
   int get_prefix_length() const { return m_prefix_length; }
 
+  /// @returns true if an explicit index profile was specified for this key
+  /// part.
+  bool has_index_profile() const { return m_index_profile.str != nullptr; }
+
+  /// @returns The optional extension name of the index profile, or empty if
+  /// unqualified.
+  LEX_CSTRING get_index_profile_extension() const {
+    return m_index_profile_extension;
+  }
+
+  /// @returns The index profile name, or an empty LEX_CSTRING if none.
+  LEX_CSTRING get_index_profile() const { return m_index_profile; }
+
  private:
   /**
     The indexed expression in case this is a functional key part. Only valid if
@@ -2365,6 +2381,16 @@ class PT_key_part_specification : public Parse_tree_node {
     is the number of characters.
   */
   int m_prefix_length = 0;
+
+  /// Optional extension qualifier for the index profile (e.g. the "myext"
+  /// in "(col myext.profile)"). Null str when unqualified.
+  LEX_CSTRING m_index_profile_extension{};
+
+  /// Optional index profile name specified in the CREATE INDEX key part.
+  /// Null str when not specified.
+  // TODO(villagesql-indexing): resolve profile to registered IndexProfileDesc
+  // during contextualization.
+  LEX_CSTRING m_index_profile{};
 };
 
 /**
@@ -2431,6 +2457,34 @@ typedef PT_index_option<bool, &KEY_CREATE_INFO::is_visible> PT_index_visibility;
 typedef PT_traceable_index_option<ha_key_alg, &KEY_CREATE_INFO::algorithm,
                                   &KEY_CREATE_INFO::is_algorithm_explicit>
     PT_index_type;
+
+// Parse tree node for a VillageSQL extension-defined index type name.
+// Created when USING EXTENDED(type) or USING EXTENDED(extension.type) is used.
+class PT_custom_index_type final : public PT_base_index_option {
+ public:
+  PT_custom_index_type(const POS &pos, LEX_CSTRING extension, LEX_CSTRING name)
+      : PT_base_index_option(pos), m_extension(extension), m_name(name) {}
+
+  bool do_contextualize(Table_ddl_parse_context *pc) override;
+
+ private:
+  LEX_CSTRING m_extension;
+  LEX_CSTRING m_name;
+};
+
+// Parse tree node for WITH (key=value, ...) on a custom index.
+// Stores the raw parameter list in KEY_CREATE_INFO::custom_index_params for
+// later validation by the extension's parse function and JSON serialization.
+class PT_index_with_options final : public PT_base_index_option {
+ public:
+  PT_index_with_options(const POS &pos, Mem_root_array<IndexWithParam> *params)
+      : PT_base_index_option(pos), m_params(params) {}
+
+  bool do_contextualize(Table_ddl_parse_context *pc) override;
+
+ private:
+  Mem_root_array<IndexWithParam> *m_params;
+};
 
 class PT_create_index_stmt final : public PT_table_ddl_stmt_base {
  public:

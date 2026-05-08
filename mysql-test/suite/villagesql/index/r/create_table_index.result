@@ -1,0 +1,44 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, INDEX idx (id) USING EXTENDED(hnsw));
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+CREATE TABLE t2 (id INT PRIMARY KEY, INDEX idx (id) USING EXTENDED(myext.hnsw));
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t2;
+ERROR 42S02: Table 'test.t2' doesn't exist
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+INDEX idx (id) USING EXTENDED(hnsw) WITH (M = 16, metric = 'l2')
+);
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t3;
+ERROR 42S02: Table 'test.t3' doesn't exist
+CREATE TABLE t4 (id INT PRIMARY KEY, INDEX idx (id) WITH (M = 16));
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t4;
+ERROR 42S02: Table 'test.t4' doesn't exist
+CREATE TABLE t5 (id INT PRIMARY KEY, INDEX idx (id hnsw_l2_profile) USING EXTENDED(hnsw));
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t5;
+ERROR 42S02: Table 'test.t5' doesn't exist
+CREATE TABLE t6 (
+id INT PRIMARY KEY,
+INDEX idx (id hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16)
+);
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t6;
+ERROR 42S02: Table 'test.t6' doesn't exist
+CREATE TABLE t7 (
+id INT PRIMARY KEY,
+INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(hnsw)
+);
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t7;
+ERROR 42S02: Table 'test.t7' doesn't exist
+CREATE TABLE t8 (
+id INT PRIMARY KEY,
+INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2')
+);
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t8;
+ERROR 42S02: Table 'test.t8' doesn't exist

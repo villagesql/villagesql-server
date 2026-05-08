@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -102,6 +103,7 @@
 #include "string_with_len.h"
 #include "strxmov.h"
 #include "template_utils.h"
+#include "villagesql/include/error.h"
 
 static constexpr const size_t MAX_SYS_VAR_LENGTH{32};
 
@@ -699,12 +701,15 @@ PT_key_part_specification::PT_key_part_specification(const POS &pos,
 
 PT_key_part_specification::PT_key_part_specification(
     const POS &pos, const LEX_CSTRING &column_name, enum_order order,
-    int prefix_length)
+    int prefix_length, LEX_CSTRING index_profile_extension,
+    LEX_CSTRING index_profile)
     : super(pos),
       m_expression(nullptr),
       m_order(order),
       m_column_name(column_name),
-      m_prefix_length(prefix_length) {}
+      m_prefix_length(prefix_length),
+      m_index_profile_extension(index_profile_extension),
+      m_index_profile(index_profile) {}
 
 bool PT_key_part_specification::do_contextualize(Parse_context *pc) {
   return super::do_contextualize(pc) || itemize_safe(pc, &m_expression);
@@ -1820,6 +1825,23 @@ bool PT_intersect::do_contextualize(Parse_context *pc [[maybe_unused]]) {
   return contextualize_setop(
       pc, QT_INTERSECT,
       m_is_distinct ? SC_INTERSECT_DISTINCT : SC_INTERSECT_ALL);
+}
+
+bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
+  pc->key_create_info->algorithm = HA_KEY_ALG_SE_SPECIFIC;
+  pc->key_create_info->is_algorithm_explicit = true;
+  pc->key_create_info->custom_index_type = m_name;
+  pc->key_create_info->custom_index_extension = m_extension;
+  // TODO(villagesql-indexing): Execute extended index type.
+  villagesql_error("Extended Index feature not yet implemented", MYF(0));
+  return true;
+}
+
+bool PT_index_with_options::do_contextualize(Table_ddl_parse_context *pc) {
+  pc->key_create_info->custom_index_params = m_params;
+  // TODO(villagesql-indexing): Execute extended index WITH parameters.
+  villagesql_error("Extended Index feature not yet implemented", MYF(0));
+  return true;
 }
 
 static bool setup_index(keytype key_type, const LEX_STRING name,

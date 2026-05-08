@@ -1,0 +1,25 @@
+CREATE TABLE t (id INT PRIMARY KEY, val INT);
+ALTER TABLE t ADD INDEX idx (id) USING EXTENDED(hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id) USING EXTENDED(myext.hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id) USING EXTENDED(hnsw) WITH (M = 16, metric = 'l2');
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id) WITH (M = 16);
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id hnsw_l2_profile) USING EXTENDED(hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2');
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+ALTER TABLE t ADD INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2');
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `val` int DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;

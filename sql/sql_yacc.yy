@@ -1697,6 +1697,8 @@ void warn_on_deprecated_user_defined_collation(
 %type <key_part>
         key_part key_part_with_expression
 
+%type <index_profile_ref> opt_index_profile
+
 %type <date_time_type> date_time_type;
 %type <interval> interval
 
@@ -2078,6 +2080,9 @@ void warn_on_deprecated_user_defined_collation(
           spatial_index_option
           index_type_clause
           opt_index_type_clause
+
+%type <index_with_param> index_with_option
+%type <index_with_params> index_with_option_list
 
 %type <alter_table_algorithm> alter_algorithm_option_value
         alter_algorithm_option
@@ -7833,6 +7838,10 @@ index_options:
 index_option:
           common_index_option { $$= $1; }
         | index_type_clause { $$= $1; }
+        | WITH '(' index_with_option_list ')'
+          {
+            $$= NEW_PTN PT_index_with_options(@$, $3);
+          }
         ;
 
 // These options are common for all index types.
@@ -7853,6 +7862,48 @@ common_index_option:
         | SECONDARY_ENGINE_ATTRIBUTE_SYM opt_equal json_attribute
           {
             $$ = make_index_secondary_engine_attribute(YYMEM_ROOT, $3);
+          }
+        ;
+
+index_with_option_list:
+          index_with_option
+          {
+            $$= NEW_PTN Mem_root_array<IndexWithParam>(YYMEM_ROOT);
+            if (!$$ || $$->push_back(*$1))
+              MYSQL_YYABORT;
+          }
+        | index_with_option_list ',' index_with_option
+          {
+            if ($1->push_back(*$3))
+              MYSQL_YYABORT;
+            $$= $1;
+          }
+        ;
+
+index_with_option:
+          ident EQ ulong_num
+          {
+            $$= NEW_PTN IndexWithParam();
+            if (!$$) MYSQL_YYABORT;
+            $$->key= to_lex_cstring($1);
+            $$->value.num= $3;
+            $$->is_string= false;
+          }
+        | ident EQ TEXT_STRING_sys
+          {
+            $$= NEW_PTN IndexWithParam();
+            if (!$$) MYSQL_YYABORT;
+            $$->key= to_lex_cstring($1);
+            $$->value.str= to_lex_cstring($3);
+            $$->is_string= true;
+          }
+        | ident EQ ident
+          {
+            $$= NEW_PTN IndexWithParam();
+            if (!$$) MYSQL_YYABORT;
+            $$->key= to_lex_cstring($1);
+            $$->value.str= to_lex_cstring($3);
+            $$->is_string= true;
           }
         ;
 
@@ -7885,8 +7936,10 @@ opt_index_type_clause:
         ;
 
 index_type_clause:
-          USING index_type    { $$= NEW_PTN PT_index_type(@$, $2); }
-        | TYPE_SYM index_type { $$= NEW_PTN PT_index_type(@$, $2); }
+          USING index_type                                      { $$= NEW_PTN PT_index_type(@$, $2); }
+        | TYPE_SYM index_type                                   { $$= NEW_PTN PT_index_type(@$, $2); }
+        | USING EXTENDED_SYM '(' ident ')'                  { $$= NEW_PTN PT_custom_index_type(@$, LEX_CSTRING{}, to_lex_cstring($4)); }
+        | USING EXTENDED_SYM '(' ident '.' ident ')'        { $$= NEW_PTN PT_custom_index_type(@$, to_lex_cstring($4), to_lex_cstring($6)); }
         ;
 
 visibility:
@@ -7917,24 +7970,32 @@ key_list:
         ;
 
 key_part:
-          ident opt_ordering_direction
+          ident opt_index_profile opt_ordering_direction
           {
-            $$= NEW_PTN PT_key_part_specification(@$, to_lex_cstring($1), $2, 0);
+            $$= NEW_PTN PT_key_part_specification(@$, to_lex_cstring($1), $3,
+                                                  0, $2.extension, $2.name);
             if ($$ == nullptr)
               MYSQL_YYABORT;
           }
-        | ident '(' NUM ')' opt_ordering_direction
+        | ident '(' NUM ')' opt_index_profile opt_ordering_direction
           {
             int key_part_length= atoi($3.str);
             if (!key_part_length)
             {
               my_error(ER_KEY_PART_0, MYF(0), $1.str);
             }
-            $$= NEW_PTN PT_key_part_specification(@$, to_lex_cstring($1), $5,
-                                                  key_part_length);
+            $$= NEW_PTN PT_key_part_specification(@$, to_lex_cstring($1), $6,
+                                                  key_part_length,
+                                                  $5.extension, $5.name);
             if ($$ == nullptr)
               MYSQL_YYABORT; /* purecov: deadcode */
           }
+        ;
+
+opt_index_profile:
+          %empty              { $$= {NULL_CSTR, NULL_CSTR}; }
+        | ident               { $$= {NULL_CSTR, to_lex_cstring($1)}; }
+        | ident '.' ident     { $$= {to_lex_cstring($1), to_lex_cstring($3)}; }
         ;
 
 key_list_with_expression:
