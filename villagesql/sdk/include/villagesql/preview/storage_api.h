@@ -54,13 +54,13 @@ namespace vsql::preview_storage {
 class StorageCapability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+  // vef_preview_storage_t has no version field; 0 means no minimum enforced.
+  static constexpr uint32_t kAbiVersion = 0;
 
   // Populated by the server via the required_capability receive callback.
   // Public so that detail::storage_cap_receive<> can access it.
   vef_preview_storage_t abi_{};
 };
-
-inline StorageCapability make_capability() { return StorageCapability{}; }
 
 // Error codes returned by storage ABI functions.
 enum class Error {
@@ -87,9 +87,10 @@ inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
 inline const vef_preview_storage_t *g_abi = nullptr;
 
 template <StorageCapability *cap_ptr>
-void storage_cap_receive(void *vtable) {
-  cap_ptr->abi_ = *static_cast<vef_preview_storage_t *>(vtable);
+bool storage_cap_receive(vef_capability_receive_arg_t *arg) {
+  cap_ptr->abi_ = *static_cast<vef_preview_storage_t *>(arg->vtable);
   g_abi = &cap_ptr->abi_;
+  return true;
 }
 }  // namespace detail
 
@@ -908,15 +909,16 @@ struct Column {
 namespace vsql::preview {
 
 // Traits type for registering the storage capability via
-// .with<preview_storage<cap>>. Only available when this header is included.
-template <auto &cap>
+// .with<preview_storage<Stg>>. Only available when this header is included.
+template <auto &Stg>
 struct preview_storage {
   template <typename EB>
   static constexpr auto bind(EB builder) {
     using Cap = vsql::preview_storage::StorageCapability;
-    return builder.required_capability(
-        {Cap::kName, &vsql::preview_storage::detail::storage_cap_receive<&cap>,
-         villagesql::detail::abi_type_hash<vef_preview_storage_t>()});
+    return builder.required_capability(vef_required_capability_t{
+        Cap::kName, &vsql::preview_storage::detail::storage_cap_receive<&Stg>,
+        villagesql::detail::abi_type_hash<vef_preview_storage_t>(),
+        Cap::kAbiVersion});
   }
 };
 

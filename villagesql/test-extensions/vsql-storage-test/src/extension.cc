@@ -301,7 +301,7 @@ bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
 // Type and extension registration
 // ============================================================================
 
-static auto STORAGE = storage::make_capability();
+static auto STORAGE = storage::StorageCapability();
 
 static constexpr vef_type_storage_intf_t kStoredIntStorageIntf =
     make_storage<StoredIntCtx>()
