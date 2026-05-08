@@ -24,26 +24,32 @@
 //   cap_available() -> INT   Returns 1 if the unknown cap was populated, else
 //   0.
 
+#include <cstdint>
+#include <type_traits>
+
 #include <villagesql/detail/capability_hash.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
 
-// Minimal ABI struct for the nonexistent capability — one function pointer.
-// The server will never populate this, so fn stays null after registration.
+// Minimal ABI struct for the nonexistent capability.
+// version must be first, as required by all capability vtables.
+// The server will never populate this, so abi_ stays null after registration.
 struct NonexistentAbi {
+  uint32_t version;
   void (*fn)();
 };
 
 struct UnknownCapability {
   static constexpr const char *kName = "vsql::nonexistent";
-  NonexistentAbi abi_;
+  static constexpr uint32_t kAbiVersion = 1;
+  const NonexistentAbi *abi_ = nullptr;
 };
 
 static UnknownCapability g_cap{};
 
 static void cap_available_impl(IntResult out) {
-  out.set(g_cap.abi_.fn != nullptr ? 1 : 0);
+  out.set(g_cap.abi_ != nullptr && g_cap.abi_->fn != nullptr ? 1 : 0);
 }
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -54,4 +60,5 @@ VEF_GENERATE_ENTRY_POINTS(
         .required_capability(
             {UnknownCapability::kName,
              &::vsql::cap_receive<UnknownCapability, &g_cap>,
-             villagesql::detail::abi_type_hash<NonexistentAbi>()}))
+             villagesql::detail::abi_type_hash<NonexistentAbi>(),
+             UnknownCapability::kAbiVersion}))

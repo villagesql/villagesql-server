@@ -17,12 +17,22 @@
 #define VILLAGESQL_SERVICES_PREVIEW_PING_H
 
 #include "villagesql/sdk/include/villagesql/abi/preview/ping.h"
+#include "villagesql/services/capability_registry.h"
 
 namespace villagesql::services {
 
 // Returns the server-side vtable for the "vsql::preview::ping" preview
 // capability.
 vef_preview_ping_t *preview_ping_vtable();
+
+// Custom compatibility check for the ping capability.
+// Accepts extensions compiled against any ping ABI version the server
+// satisfies (min_version <= server version), skipping the strict hash check.
+// This allows extensions compiled against a future ping ABI (e.g. with pong)
+// to load against an older server, with the extension responsible for guarding
+// access to fields beyond what the server provides.
+bool preview_ping_compat(const vef_required_capability_t &req, void *vtable,
+                         std::string &error_message);
 
 }  // namespace villagesql::services
 

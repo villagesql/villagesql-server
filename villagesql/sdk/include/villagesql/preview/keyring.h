@@ -18,6 +18,7 @@
 
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <villagesql/abi/preview/keyring.h>
 #include <villagesql/detail/capability_hash.h>
@@ -38,6 +39,7 @@ namespace vsql::preview::keyring {
 class Capability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_KEYRING_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_KEYRING_ABI_VERSION;
 
   // Read a secret from the MySQL keyring component into value.
   //   auth_id may be empty to read internal keys.
@@ -46,13 +48,13 @@ class Capability {
   //   or VEF_KEYRING_ERROR on other failures.
   vef_keyring_result_t read(std::string_view data_id, std::string_view auth_id,
                             std::string &value) const {
-    if (abi_.read == nullptr) return VEF_KEYRING_UNAVAILABLE;
+    if (!available()) return VEF_KEYRING_UNAVAILABLE;
     value.resize(4096);
     size_t out_len = 0;
     vef_keyring_result_t result =
-        abi_.read(data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
-                  reinterpret_cast<unsigned char *>(value.data()), value.size(),
-                  &out_len);
+        abi_->read(data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
+                   reinterpret_cast<unsigned char *>(value.data()),
+                   value.size(), &out_len);
     if (result == VEF_KEYRING_OK) value.resize(out_len);
     return result;
   }
@@ -63,17 +65,22 @@ class Capability {
   //   component is installed, or VEF_KEYRING_ERROR on other failures.
   vef_keyring_result_t write(std::string_view data_id, std::string_view auth_id,
                              std::string_view data) const {
-    if (abi_.write == nullptr) return VEF_KEYRING_UNAVAILABLE;
-    return abi_.write(
+    if (!available()) return VEF_KEYRING_UNAVAILABLE;
+    return abi_->write(
         data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
         reinterpret_cast<const unsigned char *>(data.data()), data.size());
   }
 
-  bool available() const { return abi_.read != nullptr; }
+  bool available() const { return version() > 0; }
 
-  // Public so that cap_receive() can access abi_ via a pointer.
+  // Returns the server-side capability ABI version, or 0 if unavailable.
+  // Compare against VEF_PREVIEW_KEYRING_ABI_VERSION to check what the current
+  // SDK was compiled against.
+  uint32_t version() const { return abi_ != nullptr ? abi_->version : 0; }
+
+  // Public so that cap_receive() can store the server vtable pointer here.
   // Do not access directly — use read(), write(), and available() instead.
-  vef_preview_keyring_t abi_;
+  const vef_preview_keyring_t *abi_ = nullptr;
 };
 
 inline Capability make_capability() { return Capability{}; }
@@ -91,7 +98,9 @@ struct preview_keyring {
     using Cap = keyring::Capability;
     return builder.required_capability(
         {Cap::kName, &::vsql::cap_receive<Cap, &cap>,
-         ::villagesql::detail::abi_type_hash<decltype(cap.abi_)>()});
+         ::villagesql::detail::abi_type_hash<
+             std::remove_cv_t<std::remove_pointer_t<decltype(cap.abi_)>>>(),
+         Cap::kAbiVersion});
   }
 };
 

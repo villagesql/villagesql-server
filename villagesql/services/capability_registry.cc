@@ -30,27 +30,71 @@ namespace {
 struct CapabilityValue {
   void *vtable;
   size_t abi_type_hash;
+  cap_compat_fn compat_fn;
 };
 
 std::unordered_map<std::string, CapabilityValue> g_registry;
 
-}  // namespace
-
-void register_capability(std::string name, void *vtable, size_t abi_type_hash) {
-  g_registry[std::move(name)] = {vtable, abi_type_hash};
-}
-
-void unregister_capability(const std::string &name) { g_registry.erase(name); }
-
-static const CapabilityValue *find_capability_entry(const std::string &name) {
+const CapabilityValue *find_capability_entry(const std::string &name) {
   auto it = g_registry.find(name);
   if (it == g_registry.end()) return nullptr;
   return &it->second;
 }
 
+}  // namespace
+
+// Default server-side compatibility check. Used for capabilities that pass
+// nullptr as compat_fn to register_capability().
+//
+// Checks in order:
+//   1. ABI hash: extension must have been compiled against the exact same
+//      struct layout as the server. Catches binary incompatibilities.
+//   2. min_version floor: server's vtable version must be >= the extension's
+//      declared minimum. Guards against extensions that require features not
+//      yet present on this server.
+//   3. receive(): delegates the final decision to the extension side.
+static bool default_compat_fn(const vef_required_capability_t &req,
+                              void *vtable, std::string &error_message) {
+  const CapabilityValue *entry = find_capability_entry(req.name);
+  if (entry->abi_type_hash != req.abi_type_hash) {
+    error_message = std::string("capability ABI mismatch: ") + req.name;
+    return false;
+  }
+  if (req.min_version > 0) {
+    uint32_t server_version = *static_cast<const uint32_t *>(vtable);
+    if (server_version < req.min_version) {
+      error_message = std::string("capability version too old: ") + req.name +
+                      " (server=" + std::to_string(server_version) +
+                      ", required=" + std::to_string(req.min_version) + ")";
+      return false;
+    }
+  }
+  // Extension-side decision.
+  char receive_error[VEF_MAX_ERROR_LEN] = {};
+  if (!req.receive(vtable, receive_error, sizeof(receive_error))) {
+    error_message = std::string("capability rejected by extension: ") +
+                    req.name + ": " + receive_error;
+    return false;
+  }
+  return true;
+}
+
+void register_capability(std::string name, void *vtable, size_t abi_type_hash,
+                         cap_compat_fn compat_fn = nullptr) {
+  g_registry[std::move(name)] = {vtable, abi_type_hash,
+                                 compat_fn ? compat_fn : default_compat_fn};
+}
+
+void unregister_capability(const std::string &name) { g_registry.erase(name); }
+
 void register_builtin_capabilities() {
+  // Ping uses a custom compat function: skips the ABI hash check so extensions
+  // compiled against future ping ABI versions (e.g. with pong()) can still
+  // load against older servers, as long as the server meets their min_version.
   register_capability(VEF_PREVIEW_PING_NAME, preview_ping_vtable(),
-                      villagesql::detail::abi_type_hash<vef_preview_ping_t>());
+                      villagesql::detail::abi_type_hash<vef_preview_ping_t>(),
+                      preview_ping_compat);
+  // Keyring uses the default compat function: strict ABI hash match required.
   register_capability(
       VEF_PREVIEW_KEYRING_NAME, preview_keyring_vtable(),
       villagesql::detail::abi_type_hash<vef_preview_keyring_t>());
@@ -84,12 +128,7 @@ bool populate_capabilities(const vef_registration_t *reg,
           std::string("required capability not registered: ") + req.name;
       return true;
     }
-    if (entry->abi_type_hash != req.abi_type_hash) {
-      error_message = std::string("capability ABI mismatch: ") + req.name;
-      return true;
-    }
-
-    req.receive(entry->vtable);
+    if (!entry->compat_fn(req, entry->vtable, error_message)) return true;
   }
 
   return false;

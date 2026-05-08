@@ -27,6 +27,27 @@ extern bool vsql_allow_preview_extensions;
 
 namespace villagesql::services {
 
+// Server-side compatibility check function for a capability.
+//
+// Compatibility checking is two-tiered:
+//   1. Server side (this function): runs before the extension's receive() is
+//      called. Decides whether the extension's declared requirements are
+//      satisfiable given the server's current vtable. Responsible for calling
+//      req.receive() if checks pass.
+//   2. Extension side (req.receive): called by the compat function on success.
+//      The extension makes its own decision — e.g. strict exact-version match
+//      via cap_receive, or custom logic for graceful degradation.
+//
+// Capability authors implement cap_compat_fn to customise server-side checks
+// (e.g. skipping the ABI hash check for versioned capabilities). Pass it as
+// the optional 4th argument to register_capability(). When nullptr, the
+// default_compat_fn is used: strict ABI hash match + min_version floor.
+//
+// Returns true if the extension is compatible. On failure, writes a reason
+// into error_message and returns false.
+using cap_compat_fn = bool (*)(const vef_required_capability_t &req,
+                               void *vtable, std::string &error_message);
+
 // Register all server built-in capabilities. Called once at server startup.
 void register_builtin_capabilities();
 

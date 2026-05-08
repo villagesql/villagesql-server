@@ -16,6 +16,8 @@
 #ifndef VILLAGESQL_PREVIEW_PING_H
 #define VILLAGESQL_PREVIEW_PING_H
 
+#include <type_traits>
+
 #include <villagesql/abi/preview/ping.h>
 #include <villagesql/detail/capability_hash.h>
 #include <villagesql/vsql/extension_builder.h>
@@ -35,18 +37,24 @@ namespace vsql::preview::ping {
 class Capability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_PING_ABI_VERSION;
 
   // Returns the next counter value from the server, or 0 if unavailable.
   uint64_t ping() const {
-    if (abi_.ping == nullptr) return 0;
-    return abi_.ping();
+    if (!available()) return 0;
+    return abi_->ping();
   }
 
-  bool available() const { return abi_.ping != nullptr; }
+  bool available() const { return version() > 0; }
 
-  // Public so that cap_receive() can access abi_ via a pointer.
+  // Returns the server-side capability ABI version, or 0 if unavailable.
+  // Compare against VEF_PREVIEW_PING_ABI_VERSION to check what the current
+  // SDK was compiled against.
+  uint32_t version() const { return abi_ != nullptr ? abi_->version : 0; }
+
+  // Public so that cap_receive() can store the server vtable pointer here.
   // Do not access directly — use ping() and available() instead.
-  vef_preview_ping_t abi_;
+  const vef_preview_ping_t *abi_ = nullptr;
 };
 
 inline Capability make_capability() { return Capability{}; }
@@ -64,7 +72,9 @@ struct preview_ping {
     using Cap = ping::Capability;
     return builder.required_capability(
         {Cap::kName, &::vsql::cap_receive<Cap, &cap>,
-         ::villagesql::detail::abi_type_hash<decltype(cap.abi_)>()});
+         ::villagesql::detail::abi_type_hash<
+             std::remove_cv_t<std::remove_pointer_t<decltype(cap.abi_)>>>(),
+         Cap::kAbiVersion});
   }
 };
 

@@ -17,6 +17,7 @@
 #define VILLAGESQL_ABI_PREVIEW_KEYRING_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,6 +31,11 @@ extern "C" {
 // Capability name: VEF_PREVIEW_KEYRING_NAME
 
 #define VEF_PREVIEW_KEYRING_NAME "vsql::preview::keyring"
+
+// Capability ABI version compiled into this SDK snapshot.
+// Extensions can compare this against abi_->version at runtime to determine
+// which fields the server supports.
+#define VEF_PREVIEW_KEYRING_ABI_VERSION 1
 
 typedef enum {
   VEF_KEYRING_OK = 0,
@@ -61,6 +67,11 @@ typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
                                                      size_t data_len);
 
 typedef struct {
+  // Capability ABI version. Always the first field in every capability vtable.
+  // Extensions must check this before accessing fields added in later versions.
+  uint32_t version;
+
+  // version >= 1
   vef_read_keyring_fn read;
   vef_write_keyring_fn write;
 } vef_preview_keyring_t;

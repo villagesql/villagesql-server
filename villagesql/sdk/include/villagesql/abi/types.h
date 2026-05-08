@@ -850,20 +850,31 @@ typedef struct {
 typedef struct vef_registration_t vef_registration_t;
 
 // A single capability request in vef_registration_t.required_capabilities.
-// The extension sets name, version, and a receive callback. The server calls
-// receive() with the vtable pointer if the capability is registered; the
-// callback assigns it into the extension's struct in a type-safe way.
+// The extension sets name, receive, abi_type_hash, and min_version. The server
+// calls receive() with the vtable pointer if the capability is registered and
+// passes all checks; the callback assigns it into the extension's struct in a
+// type-safe way.
 typedef struct {
   // Capability name, e.g. "vsql::ping". Must remain valid for the lifetime
   // of the extension (use a string literal).
   const char *name;
-  // Called by the server with the capability vtable pointer if registered.
-  // The extension assigns the vtable to its own capability struct.
-  void (*receive)(void *vtable);
+  // Called by the server with the capability vtable pointer if the capability
+  // is registered and passes the server-side min_version check. Returns true
+  // to allow loading, false to abort. On failure, the function should write a
+  // null-terminated reason into error_buf (up to error_buf_len bytes including
+  // the null terminator). The default implementation (cap_receive) is strict:
+  // it requires an exact version match. Capabilities may supply a custom
+  // function to allow graceful degradation across versions.
+  bool (*receive)(void *vtable, char *error_buf, size_t error_buf_len);
   // Compile-time hash of the ABI struct type, computed via
   // villagesql::detail::abi_type_hash<AbiType>(). The server compares this
   // against its own hash for the same name to detect ABI struct mismatches.
   size_t abi_type_hash;
+  // Minimum capability ABI version the extension requires. The server reads
+  // the version field from its vtable and fails loading if it is less than
+  // this value. Set to the VEF_PREVIEW_*_ABI_VERSION constant the extension
+  // was compiled against.
+  uint32_t min_version;
 } vef_required_capability_t;
 
 typedef struct vef_registration_t {

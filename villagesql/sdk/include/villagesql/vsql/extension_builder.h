@@ -17,6 +17,7 @@
 #define VILLAGESQL_VSQL_EXTENSION_BUILDER_H
 
 #include <cstddef>
+#include <cstdio>
 #include <tuple>
 #include <utility>
 
@@ -33,13 +34,31 @@ namespace vsql {
 // call site.
 using namespace func_builder;
 
-// cap_receive<Cap, cap_ptr> is a captureless function pointer that copies the
-// server-provided vtable into cap_ptr->abi_. Instantiated once per unique
-// (Cap, cap_ptr) pair. cap_ptr must have static storage duration so its
-// address is a valid non-type template argument.
+// cap_receive<Cap, cap_ptr> is the default extension-side receive function.
+// Called by the server's capability compat function with the server's vtable
+// pointer. Stores the vtable into cap_ptr->abi_ and returns true only if the
+// server's capability version exactly matches Cap::kAbiVersion.
+//
+// Exact match is intentionally strict: it ensures the extension is always
+// running against the same ABI version it was compiled against. If you need
+// to accept a different server version (e.g. degrade gracefully when the
+// server is newer), supply a custom receive function in the capability's
+// bind() instead of using cap_receive.
+//
+// cap_ptr must have static storage duration so its address is a valid non-type
+// template argument.
 template <typename Cap, Cap *cap_ptr>
-void cap_receive(void *vtable) {
-  cap_ptr->abi_ = *static_cast<decltype(cap_ptr->abi_) *>(vtable);
+bool cap_receive(void *vtable, char *error_buf, size_t error_buf_len) {
+  auto *v = static_cast<decltype(cap_ptr->abi_)>(vtable);
+  if (v->version != Cap::kAbiVersion) {
+    snprintf(error_buf, error_buf_len,
+             "version mismatch: server=%u, compiled=%u",
+             static_cast<unsigned>(v->version),
+             static_cast<unsigned>(Cap::kAbiVersion));
+    return false;
+  }
+  cap_ptr->abi_ = v;
+  return true;
 }
 
 // ExtensionBuilder is the vsql-API extension builder. It is a standalone type
