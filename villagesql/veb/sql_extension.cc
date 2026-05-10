@@ -214,14 +214,13 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
 
   std::string reg_error;
   std::optional<villagesql::veb::ValidatedRegistration> validated =
-      villagesql::veb::validate_extension_registration(
+      villagesql::veb::parse_extension_registration(
           registration, extension_name, version, reg_error);
   if (!validated) {
     villagesql_error("Failed to install extension '%s': %s", MYF(0),
                      extension_name.c_str(), reg_error.c_str());
     return end_transaction(thd, true);
   }
-
 
   bool mark_success = true;
   {

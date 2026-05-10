@@ -14,9 +14,9 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Unit tests for validate_extension_registration().
+// Unit tests for parse_extension_registration().
 //
-// These tests exercise the pure validation path — no THD, no VictionaryClient,
+// These tests exercise the pure parsing path — no THD, no VictionaryClient,
 // no .so loading — by constructing vef_registration_t structs directly.
 
 #include <gtest/gtest.h>
@@ -25,6 +25,7 @@
 #include <string>
 
 #include "unittest/gunit/test_utils.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/veb/validate.h"
 #include "villagesql/veb/veb_file.h"
@@ -115,7 +116,7 @@ TEST_F(ValidateExtensionRegistrationTest, ValidV1TypeAndFunc) {
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
@@ -137,7 +138,7 @@ TEST_F(ValidateExtensionRegistrationTest, EmptyRegistration) {
   reg.deprecated_extension_name = "empty_ext";
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "empty_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
@@ -148,7 +149,7 @@ TEST_F(ValidateExtensionRegistrationTest, EmptyRegistration) {
 // A null registration pointer (extension registered nothing) is allowed.
 TEST_F(ValidateExtensionRegistrationTest, NullRegistrationPointer) {
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(nullptr, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
@@ -167,7 +168,7 @@ TEST_F(ValidateExtensionRegistrationTest, NullTypeDescriptor) {
   reg.types = types;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
@@ -186,7 +187,7 @@ TEST_F(ValidateExtensionRegistrationTest, ZeroMaxDecodeBufferLength) {
   reg.types = types;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
@@ -205,7 +206,7 @@ TEST_F(ValidateExtensionRegistrationTest, NullFuncDescriptor) {
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
@@ -229,7 +230,7 @@ TEST_F(ValidateExtensionRegistrationTest, ClearWithoutAccumulate) {
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
@@ -255,7 +256,7 @@ TEST_F(ValidateExtensionRegistrationTest, AccumulateWithoutClear) {
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
@@ -280,7 +281,7 @@ TEST_F(ValidateExtensionRegistrationTest,
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
@@ -321,7 +322,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
     reg.types = types;
 
     std::string error;
-    auto result = villagesql::veb::validate_extension_registration(
+    auto result = villagesql::veb::parse_extension_registration(
         make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
 
     EXPECT_FALSE(result.has_value());
@@ -380,13 +381,304 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
   EXPECT_TRUE(error.empty());
   ASSERT_EQ(result->types.size(), 1u);
   EXPECT_EQ(result->types[0].type_name(), "MYTYPE");
+}
+
+// Stub column storage function pointers — never called during validation.
+static bool stub_storage_create(vef_storage_space_ref_t, vef_storage_trx_ref_t,
+                                uint32_t, vef_storage_arena_t *,
+                                vef_storage_arena_func_t, vef_storage_ctx_t **,
+                                char *, uint32_t) {
+  return false;
+}
+static bool stub_storage_drop(vef_storage_ctx_t *, vef_storage_trx_ref_t,
+                              char *, uint32_t) {
+  return false;
+}
+static bool stub_storage_load(vef_storage_ref_t, vef_storage_arena_t *,
+                              vef_storage_arena_func_t, vef_storage_ctx_t **,
+                              char *, uint32_t) {
+  return false;
+}
+static bool stub_storage_insert(vef_storage_ctx_t *, vef_storage_mtr_ref_t,
+                                vef_storage_trx_ref_t, vef_storage_col_data_t,
+                                vef_storage_col_data_t, vef_storage_col_ref_t *,
+                                char *, uint32_t) {
+  return false;
+}
+static bool stub_storage_select(vef_storage_ctx_t *, vef_storage_mtr_ref_t,
+                                vef_storage_col_ref_t, vef_storage_col_data_t *,
+                                vef_storage_col_data_t *,
+                                vef_storage_trx_ref_t *, bool *, char *,
+                                uint32_t) {
+  return false;
+}
+static bool stub_storage_mark_delete(vef_storage_ctx_t *, vef_storage_mtr_ref_t,
+                                     vef_storage_trx_ref_t,
+                                     vef_storage_col_ref_t, bool, char *,
+                                     uint32_t) {
+  return false;
+}
+static bool stub_storage_purge(vef_storage_ctx_t *, vef_storage_mtr_ref_t,
+                               vef_storage_trx_ref_t, vef_storage_col_ref_t,
+                               char *, uint32_t) {
+  return false;
+}
+
+static vef_type_storage_intf_t make_storage_intf(const char *type_name) {
+  vef_type_storage_intf_t si = {};
+  si.version = VEF_STORAGE_TYPE_INTF_VERSION;
+  si.type_name = type_name;
+  si.create = stub_storage_create;
+  si.drop = stub_storage_drop;
+  si.load = stub_storage_load;
+  si.insert = stub_storage_insert;
+  si.select = stub_storage_select;
+  si.mark_delete = stub_storage_mark_delete;
+  si.purge = stub_storage_purge;
+  return si;
+}
+
+// A v2 extension with a column_store capability wires storage_intf into the
+// matching TypeDescriptor. This is the regression test for the accidental
+// deletion of the wiring block in parse_extension_registration() (commit
+// 736f6a7afca removed it as a side effect of removing
+// validate_sys_var_descriptors in the same diff hunk).
+TEST_F(ValidateExtensionRegistrationTest, ColumnStorageWiredToType) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_storage_intf_t si = make_storage_intf("MYTYPE");
+  const vef_type_storage_intf_t *storages[] = {&si};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION;
+  ext_desc.type_storage_count = 1;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(error.empty());
+  ASSERT_EQ(result->types.size(), 1u);
+  EXPECT_TRUE(result->types[0].storage_intf().has_value());
+}
+
+// Column store wiring is skipped entirely for protocol-1 negotiations even if
+// a column_store capability is present (the field didn't exist in v1).
+TEST_F(ValidateExtensionRegistrationTest,
+       ColumnStorageNotWiredForProtocol1Negotiation) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_storage_intf_t si = make_storage_intf("MYTYPE");
+  const vef_type_storage_intf_t *storages[] = {&si};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION;
+  ext_desc.type_storage_count = 1;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  ASSERT_EQ(result->types.size(), 1u);
+  EXPECT_FALSE(result->types[0].storage_intf().has_value());
+}
+
+// Column store capability referencing a type not registered by this extension
+// fails validation.
+TEST_F(ValidateExtensionRegistrationTest, ColumnStorageUnknownTypeFails) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_storage_intf_t si = make_storage_intf("OTHERTYPE");
+  const vef_type_storage_intf_t *storages[] = {&si};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION;
+  ext_desc.type_storage_count = 1;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("OTHERTYPE"), std::string::npos);
+}
+
+// Column store capability with incomplete storage functions (missing purge)
+// fails validation.
+TEST_F(ValidateExtensionRegistrationTest, ColumnStorageMissingFunctionFails) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_storage_intf_t si = make_storage_intf("MYTYPE");
+  si.purge = nullptr;
+  const vef_type_storage_intf_t *storages[] = {&si};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION;
+  ext_desc.type_storage_count = 1;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("MYTYPE"), std::string::npos);
+}
+
+// A null entry in the type_storages array fails validation.
+TEST_F(ValidateExtensionRegistrationTest, ColumnStorageNullDescriptorFails) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  const vef_type_storage_intf_t *storages[] = {nullptr};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION;
+  ext_desc.type_storage_count = 1;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("NULL"), std::string::npos);
+}
+
+// A column_store capability with a mismatched version field fails validation.
+TEST_F(ValidateExtensionRegistrationTest, ColumnStorageVersionMismatchFails) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_storage_intf_t si = make_storage_intf("MYTYPE");
+  const vef_type_storage_intf_t *storages[] = {&si};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION + 99;
+  ext_desc.type_storage_count = 1;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("unsupported version"), std::string::npos);
+}
+
+// Two storage descriptors claiming the same type name fail validation.
+TEST_F(ValidateExtensionRegistrationTest, ColumnStorageDuplicateTypeFails) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_storage_intf_t si1 = make_storage_intf("MYTYPE");
+  vef_type_storage_intf_t si2 = make_storage_intf("MYTYPE");
+  const vef_type_storage_intf_t *storages[] = {&si1, &si2};
+
+  vef_preview_column_store_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_COLUMN_STORE_INTF_VERSION;
+  ext_desc.type_storage_count = 2;
+  ext_desc.type_storages = storages;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
+  cap.extension_data = &ext_desc;
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("duplicate"), std::string::npos);
 }
 
 // Multiple types and funcs are all validated and returned.
@@ -411,7 +703,7 @@ TEST_F(ValidateExtensionRegistrationTest, MultipleTypesAndFuncs) {
   reg.funcs = funcs;
 
   std::string error;
-  auto result = villagesql::veb::validate_extension_registration(
+  auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "2.0.0", error);
 
   ASSERT_TRUE(result.has_value());

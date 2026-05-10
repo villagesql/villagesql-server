@@ -19,7 +19,7 @@
 // register_validated_extension() inserts pre-validated TypeDescriptors and
 // FuncDescriptors into the victionary.  The caller must hold the victionary
 // write lock and supply a ValidatedRegistration produced by
-// validate_extension_registration().
+// parse_extension_registration().
 
 #ifndef VILLAGESQL_VEB_REGISTER_H_
 #define VILLAGESQL_VEB_REGISTER_H_

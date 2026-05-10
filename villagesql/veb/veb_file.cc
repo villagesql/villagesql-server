@@ -675,10 +675,10 @@ bool load_installed_extensions(THD *thd) {
 
       std::string reg_error;
       std::optional<ValidatedRegistration> validated =
-          validate_extension_registration(registration, extension_name,
-                                          expected_version, reg_error);
+          parse_extension_registration(registration, extension_name,
+                                       expected_version, reg_error);
       if (!validated) {
-        LogVSQL(ERROR_LEVEL, "Failed to validate extension '%s': %s",
+        LogVSQL(ERROR_LEVEL, "Failed to parse extension '%s': %s",
                 extension_name.c_str(), reg_error.c_str());
         return true;
       }

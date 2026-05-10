@@ -14,10 +14,10 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Validates a raw VEF ExtensionRegistration (ABI structs from a loaded .so)
+// Parses a raw VEF ExtensionRegistration (ABI structs from a loaded .so)
 // into a ValidatedRegistration containing typed C++ descriptors.
 //
-// validate_extension_registration() has no side effects and no dependency on
+// parse_extension_registration() has no side effects and no dependency on
 // the victionary or THD, making it independently testable.
 
 #ifndef VILLAGESQL_VEB_VALIDATE_H_
@@ -36,17 +36,18 @@ namespace veb {
 
 struct ExtensionRegistration;
 
-// The result of validating a raw ExtensionRegistration.
-// Contains validated, ready-to-register C++ descriptors for types and funcs.
+// The result of parsing a raw ExtensionRegistration.
+// Contains parsed, ready-to-register C++ descriptors for types and funcs.
 struct ValidatedRegistration {
   std::vector<TypeDescriptor> types;
   std::vector<FuncDescriptor> funcs;
 };
 
-// Validates the raw ABI registration and builds C++ descriptors.
+// Parses the raw ABI registration into C++ descriptors, including wiring
+// column storage interfaces into any types that register them.
 // No THD, no VictionaryClient — purely operates on the ExtensionRegistration.
 // Returns nullopt on error; error_out is set to a descriptive message.
-std::optional<ValidatedRegistration> validate_extension_registration(
+std::optional<ValidatedRegistration> parse_extension_registration(
     const ExtensionRegistration &ext_reg, const std::string &extension_name,
     const std::string &extension_version, std::string &error_out);
 
