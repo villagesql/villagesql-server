@@ -396,19 +396,21 @@ EOF
 # Check for required tools
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REQUIRED_CLANG_FORMAT_MAJOR=$(cat "$SCRIPT_DIR/clang-format-version")
-if ! command -v clang-format >/dev/null 2>&1; then
-  echo "Error: clang-format is not installed or not in PATH" >&2
-  echo "Please install clang-format version $REQUIRED_CLANG_FORMAT_MAJOR" >&2
-  echo "  macOS: brew install clang-format@$REQUIRED_CLANG_FORMAT_MAJOR && brew link --force clang-format@$REQUIRED_CLANG_FORMAT_MAJOR" >&2
-  echo "  Ubuntu: sudo apt-get install clang-format-$REQUIRED_CLANG_FORMAT_MAJOR" >&2
+
+die_clang_format() {
+  echo "Error: $1" >&2
+  echo "Please install clang-format version $REQUIRED_CLANG_FORMAT_MAJOR:" >&2
+  echo "  macOS:  brew install clang-format" >&2
+  echo "  Ubuntu: see https://apt.llvm.org/ for clang-format-$REQUIRED_CLANG_FORMAT_MAJOR" >&2
   exit 1
+}
+
+if ! command -v clang-format >/dev/null 2>&1; then
+  die_clang_format "clang-format is not installed or not in PATH"
 fi
 CLANG_FORMAT_MAJOR=$(clang-format --version | grep -oE '[0-9]+' | head -1)
 if [ "$CLANG_FORMAT_MAJOR" != "$REQUIRED_CLANG_FORMAT_MAJOR" ]; then
-  echo "Warning: clang-format version $CLANG_FORMAT_MAJOR found, expected $REQUIRED_CLANG_FORMAT_MAJOR." >&2
-  echo "Formatting differences may occur. Install version $REQUIRED_CLANG_FORMAT_MAJOR to match CI." >&2
-  echo "  macOS: brew install clang-format@$REQUIRED_CLANG_FORMAT_MAJOR && brew link --force clang-format@$REQUIRED_CLANG_FORMAT_MAJOR" >&2
-  echo "  Ubuntu: sudo apt-get install clang-format-$REQUIRED_CLANG_FORMAT_MAJOR" >&2
+  die_clang_format "clang-format version $CLANG_FORMAT_MAJOR found, expected $REQUIRED_CLANG_FORMAT_MAJOR"
 fi
 
 # Determine comparison point if not specified
