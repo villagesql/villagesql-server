@@ -23,9 +23,9 @@
 
 namespace vsql::preview_keyring {
 
-// Declare a Keyring by value in your extension and pass its address to
+// Declare a KeyringCapability by value in your extension and pass it to
 // .with(). VEF populates `abi` during registration.
-class Keyring {
+class KeyringCapability {
  public:
   enum class Status {
     OK = VEF_KEYRING_OK,

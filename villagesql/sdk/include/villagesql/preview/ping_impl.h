@@ -21,7 +21,7 @@
 
 namespace vsql::preview_ping {
 
-inline long long Ping::ping() const {
+inline long long PingCapability::ping() const {
   return static_cast<long long>(abi->ping());
 }
 

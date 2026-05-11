@@ -20,9 +20,9 @@
 
 namespace vsql::preview_ping {
 
-// Declare a Ping by value in your extension and pass its address to
+// Declare a PingCapability by value in your extension and pass it to
 // .with(). VEF populates `abi` during registration.
-class Ping {
+class PingCapability {
  public:
   long long ping() const;
 

@@ -23,13 +23,13 @@
 namespace vsql::detail {
 
 template <>
-struct CapabilityTraits<::vsql::preview_ping::Ping> {
+struct CapabilityTraits<::vsql::preview_ping::PingCapability> {
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_PING_ABI_VERSION;
   using AbiType = vef_preview_ping_t;
 
   static constexpr void *vtable_destination(
-      ::vsql::preview_ping::Ping *p) noexcept {
+      ::vsql::preview_ping::PingCapability *p) noexcept {
     return static_cast<void *>(&p->abi);
   }
 };

@@ -21,8 +21,8 @@
 
 namespace vsql::preview_keyring {
 
-inline Keyring::ReadResult Keyring::read(std::string_view data_id,
-                                         std::string_view auth_id) const {
+inline KeyringCapability::ReadResult KeyringCapability::read(
+    std::string_view data_id, std::string_view auth_id) const {
   std::string value;
   value.resize(4096);
   size_t out_len = 0;
@@ -36,9 +36,9 @@ inline Keyring::ReadResult Keyring::read(std::string_view data_id,
   return {static_cast<Status>(result), {}};
 }
 
-inline Keyring::Status Keyring::write(std::string_view data_id,
-                                      std::string_view auth_id,
-                                      std::string_view data) const {
+inline KeyringCapability::Status KeyringCapability::write(
+    std::string_view data_id, std::string_view auth_id,
+    std::string_view data) const {
   return static_cast<Status>(abi->write(
       data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
       reinterpret_cast<const unsigned char *>(data.data()), data.size()));

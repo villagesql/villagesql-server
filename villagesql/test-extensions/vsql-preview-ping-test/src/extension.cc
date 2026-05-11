@@ -24,7 +24,7 @@
 
 using namespace vsql;
 
-static vsql::preview_ping::Ping g_ping;
+static vsql::preview_ping::PingCapability g_ping;
 
 static void ping_impl(IntResult out) { out.set(g_ping.ping()); }
 

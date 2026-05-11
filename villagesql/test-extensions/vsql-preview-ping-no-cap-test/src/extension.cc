@@ -28,7 +28,7 @@ using namespace vsql;
 
 // g_ping is never registered via .with(g_ping), so
 // abi stays null.
-static vsql::preview_ping::Ping g_ping;
+static vsql::preview_ping::PingCapability g_ping;
 
 static void ping_available_impl(IntResult out) {
   out.set(g_ping.abi != nullptr ? 1 : 0);

@@ -120,11 +120,9 @@ void vef_fill_status_var_ptrs(vef_status_var_desc_t **arr, const Ext &e,
 // CapReceiveSlot<Capability>::instance (so the captureless receive
 // callback can find its target) and fill arr[I] with the wire entry.
 template <size_t I, typename Ext>
-void vef_fill_one_capability_req(vef_required_capability_t *arr,
-                                 const Ext &e) {
+void vef_fill_one_capability_req(vef_required_capability_t *arr, const Ext &e) {
   auto *cap_ptr = e.template required_capability_at<I>();
-  using Capability =
-      std::remove_cv_t<std::remove_pointer_t<decltype(cap_ptr)>>;
+  using Capability = std::remove_cv_t<std::remove_pointer_t<decltype(cap_ptr)>>;
   using Traits = ::vsql::detail::CapabilityTraits<Capability>;
 
   ::vsql::detail::CapReceiveSlot<Capability>::instance = cap_ptr;
