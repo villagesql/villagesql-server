@@ -18,6 +18,7 @@
 #define VILLAGESQL_SERVICES_SYS_VARS_H_
 
 #include <string>
+#include <string_view>
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/veb/veb_file.h"
@@ -26,6 +27,13 @@ class THD;
 
 namespace villagesql {
 namespace services {
+
+// Register a single system variable for the given extension.
+// Used by capability on_populate handlers to inject capability-managed vars
+// (e.g. the "{suffix}_enabled" var for thread_worker).
+// Returns false on success, true on error.
+bool register_one_sys_var(std::string_view extension_name,
+                          vef_sys_var_desc_t *v);
 
 // Register system variables declared by an extension as MySQL component system
 // variables. Called after load_vef_extension(), outside the victionary lock.

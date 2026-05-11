@@ -1,0 +1,81 @@
+# Test thread_worker dynamic wakeup control.
+#
+# Verifies:
+# - ENABLE opens socket on OS-assigned port; active_port() returns it
+# - POLL_FD fires on connection; worker reads command, stores last_command
+# - last_command() VDF returns the received string
+# - DISABLE closes socket; active_port() returns 0
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_thread_worker_test;
+
+--echo # Thread should NOT be running yet
+SELECT vsql_thread_worker_test.active_port();
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+
+--echo # Connect and send PING
+--let $port_file = $MYSQLTEST_VARDIR/tmp/tw_port.txt
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SELECT vsql_thread_worker_test.active_port() INTO OUTFILE '$port_file';
+--perl
+use IO::Socket::INET;
+open(my $fh, '<', $ENV{MYSQLTEST_VARDIR} . '/tmp/tw_port.txt') or die $!;
+my $port = <$fh>; chomp $port;
+close($fh);
+my $sock = IO::Socket::INET->new(
+  PeerAddr => "127.0.0.1",
+  PeerPort => $port,
+  Proto    => "tcp",
+  Timeout  => 5,
+) or die "connect failed: $!";
+$sock->autoflush(1);
+print $sock "PING\n";
+shutdown($sock, 1);
+close($sock);
+EOF
+--remove_file $port_file
+
+--let $wait_condition = SELECT vsql_thread_worker_test.last_command() = 'PING'
+--source include/wait_condition.inc
+
+--echo # last_command should be PING
+SELECT vsql_thread_worker_test.last_command();
+
+--echo # Connect and send HELLO
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SELECT vsql_thread_worker_test.active_port() INTO OUTFILE '$port_file';
+--perl
+use IO::Socket::INET;
+open(my $fh, '<', $ENV{MYSQLTEST_VARDIR} . '/tmp/tw_port.txt') or die $!;
+my $port = <$fh>; chomp $port;
+close($fh);
+my $sock = IO::Socket::INET->new(
+  PeerAddr => "127.0.0.1",
+  PeerPort => $port,
+  Proto    => "tcp",
+  Timeout  => 5,
+) or die "connect failed: $!";
+$sock->autoflush(1);
+print $sock "HELLO\n";
+shutdown($sock, 1);
+close($sock);
+EOF
+--remove_file $port_file
+
+--let $wait_condition = SELECT vsql_thread_worker_test.last_command() = 'HELLO'
+--source include/wait_condition.inc
+
+--echo # last_command should now be HELLO
+SELECT vsql_thread_worker_test.last_command();
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+
+--echo # After disable: active_port should be 0
+SELECT vsql_thread_worker_test.active_port();
+
+UNINSTALL EXTENSION vsql_thread_worker_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

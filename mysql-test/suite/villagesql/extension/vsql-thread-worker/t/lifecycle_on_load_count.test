@@ -1,0 +1,48 @@
+# Test that a thread_worker restarts after server restart when enabled = ON
+# was persisted.
+#
+# The tick_count() VDF increments every 100ms from the background monitor
+# thread. After a server restart the extension reloads and the enabled
+# sys var is restored from mysqld-auto.cnf, restarting the thread.
+
+# The processlist checks require PSI thread instrumentation.
+if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
+{
+  skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
+}
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_lifecycle_test;
+SET PERSIST vsql_lifecycle_test.monitor_enabled = ON;
+
+--let $wait_condition = SELECT vsql_lifecycle_test.tick_count() > 0
+--source include/wait_condition.inc
+
+--echo # Tick count should be positive: thread is running
+SELECT vsql_lifecycle_test.tick_count() > 0;
+
+--echo # Restart server (extension reinstated from villagesql.extensions)
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $wait_condition = SELECT COUNT(*) > 0 FROM performance_schema.processlist WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+--source include/wait_condition.inc
+
+--echo # Monitor thread visible in processlist after restart (enabled was persisted)
+--replace_column 1 <id>
+SELECT id, user, info FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+ORDER BY id;
+
+--echo # Tick count >= 0 confirms thread restarted
+SELECT vsql_lifecycle_test.tick_count() >= 0;
+
+SET PERSIST vsql_lifecycle_test.monitor_enabled = OFF;
+UNINSTALL EXTENSION vsql_lifecycle_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+
+--echo # Thread is gone from processlist after uninstall
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';

@@ -664,8 +664,8 @@ bool load_installed_extensions(THD *thd) {
 
       ExtensionRegistration registration;
       std::string load_error;
-      if (load_vef_extension(so_path, registration, vef_server_protocol_version,
-                             load_error)) {
+      if (load_vef_extension(so_path, extension_name, registration,
+                             vef_server_protocol_version, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -824,6 +824,7 @@ static T lookup_symbol(void *handle, const char *symbol_name,
 }
 
 bool load_vef_extension(const std::string &so_path,
+                        std::string_view extension_name,
                         ExtensionRegistration &registration,
                         vef_protocol_t max_protocol,
                         std::string &error_message) {
@@ -885,7 +886,7 @@ bool load_vef_extension(const std::string &so_path,
   }
 
   // Populate any capabilities the extension requires.
-  if (villagesql::services::populate_capabilities(reg, &register_arg,
+  if (villagesql::services::populate_capabilities(reg, extension_name,
                                                   error_message)) {
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);

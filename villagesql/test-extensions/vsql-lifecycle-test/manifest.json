@@ -1,0 +1,7 @@
+{
+  "name": "vsql_lifecycle_test",
+  "version": "0.0.1",
+  "description": "VillageSQL extension testing on_load/on_unload lifecycle callbacks and background thread registration",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

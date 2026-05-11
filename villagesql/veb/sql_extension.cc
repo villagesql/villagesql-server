@@ -200,7 +200,7 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   }
 #endif
   std::string load_error;
-  if (villagesql::veb::load_vef_extension(so_path, registration,
+  if (villagesql::veb::load_vef_extension(so_path, extension_name, registration,
                                           server_protocol, load_error)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
             extension_name.c_str(), load_error.c_str());

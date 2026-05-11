@@ -102,6 +102,58 @@ add_custom_target(copy_vsql_keyring_reader_veb
 add_custom_target(keyring_reader_veb ALL)
 add_dependencies(keyring_reader_veb copy_vsql_keyring_reader_veb)
 
+ExternalProject_Add(vsql_lifecycle_test_extension
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-lifecycle-test
+  BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-lifecycle-test-build
+  CMAKE_GENERATOR ${CMAKE_GENERATOR}
+  CMAKE_ARGS
+    "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+    "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
+    "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  DEPENDS sdk
+  BUILD_ALWAYS ON
+  INSTALL_COMMAND ""
+)
+
+add_custom_target(copy_vsql_lifecycle_test_veb
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
+  COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-lifecycle-test-build/vsql_lifecycle_test.veb
+    ${CMAKE_BINARY_DIR}/veb_output_directory/
+  DEPENDS vsql_lifecycle_test_extension
+  COMMENT "Copying vsql_lifecycle_test.veb to veb_output_directory"
+)
+
+add_custom_target(lifecycle_test_veb ALL)
+add_dependencies(lifecycle_test_veb copy_vsql_lifecycle_test_veb)
+
+ExternalProject_Add(vsql_thread_worker_test_extension
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-thread-worker-test
+  BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-thread-worker-test-build
+  CMAKE_GENERATOR ${CMAKE_GENERATOR}
+  CMAKE_ARGS
+    "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+    "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
+    "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  DEPENDS sdk
+  BUILD_ALWAYS ON
+  INSTALL_COMMAND ""
+)
+
+add_custom_target(copy_vsql_thread_worker_test_veb
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
+  COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-thread-worker-test-build/vsql_thread_worker_test.veb
+    ${CMAKE_BINARY_DIR}/veb_output_directory/
+  DEPENDS vsql_thread_worker_test_extension
+  COMMENT "Copying vsql_thread_worker_test.veb to veb_output_directory"
+)
+
+add_custom_target(thread_worker_test_veb ALL)
+add_dependencies(thread_worker_test_veb copy_vsql_thread_worker_test_veb)
+
 ExternalProject_Add(vsql_preview_ping_no_cap_test_extension
   SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-preview-ping-no-cap-test
   BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-preview-ping-no-cap-test-build

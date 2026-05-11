@@ -136,6 +136,13 @@ void vef_fill_status_var_ptrs(vef_status_var_desc_t **arr, const Ext &e,
    ...);
 }
 
+// Detection idiom: true if CapabilityTraits has a DescriptorType member.
+template <typename T, typename = void>
+struct has_capability_descriptor : std::false_type {};
+template <typename T>
+struct has_capability_descriptor<T, std::void_t<typename T::DescriptorType>>
+    : std::true_type {};
+
 // Fill arr[I] with the wire entry for this Capability. The vtable_dest
 // points at the abi-pointer slot inside the extension's wrapper, as
 // determined by the trait specialization; the server writes the vtable
@@ -152,6 +159,14 @@ void vef_fill_one_capability_req(vef_required_capability_t *arr, const Ext &e) {
   arr[I].abi_type_hash =
       villagesql::detail::abi_type_hash<typename Traits::AbiType>();
   arr[I].min_version = Traits::kAbiVersion;
+  if constexpr (has_capability_descriptor<Traits>::value) {
+    arr[I].extension_data = Traits::extension_data(cap_ptr);
+    arr[I].descriptor_abi_hash =
+        villagesql::detail::abi_type_hash<typename Traits::DescriptorType>();
+  } else {
+    arr[I].extension_data = nullptr;
+    arr[I].descriptor_abi_hash = 0;
+  }
 }
 
 template <typename Ext, size_t... Is>

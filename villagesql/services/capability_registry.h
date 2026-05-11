@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
@@ -35,13 +36,42 @@ namespace villagesql::services {
 //
 // Capability authors implement cap_compat_fn to customise server-side checks
 // (e.g. skipping the ABI hash check for versioned capabilities). Pass it as
-// the optional 4th argument to register_capability(). When nullptr, the
+// the compat_fn argument to register_capability(). When nullptr, the
 // default_compat_fn is used: strict ABI hash match + min_version floor.
 //
 // Returns true if the extension is compatible. On failure, writes a reason
 // into error_message and returns false.
 using cap_compat_fn = bool (*)(const vef_required_capability_t &req,
                                void *vtable, std::string &error_message);
+
+// Parameters for register_capability(). Zero/null fields use defaults.
+struct CapabilityRegistration {
+  // Required: server-side vtable pointer.
+  void *vtable = nullptr;
+  // Required: villagesql::detail::abi_type_hash<VtableType>().
+  size_t abi_type_hash = 0;
+  // Hash of the descriptor struct type (0 if capability has no descriptor).
+  size_t descriptor_abi_hash = 0;
+  // Called once at server startup (e.g. to register PSI keys). May be null.
+  void (*on_server_startup)() = nullptr;
+  // Called after the compat check for each extension that requires this
+  // capability. Receives the extension name and extension_data from the
+  // requirement.
+  // Null for capabilities that need no server-side setup per extension.
+  void (*on_populate)(std::string_view extension_name,
+                      const void *extension_data) = nullptr;
+  // Called before unloading an extension. Null if no cleanup is needed.
+  void (*on_depopulate)(const void *extension_data) = nullptr;
+  // Overrides the default server-side compat check (ABI hash + min_version).
+  // Null uses default_compat_fn.
+  cap_compat_fn compat_fn = nullptr;
+};
+
+// Register a capability by name.
+void register_capability(std::string name, CapabilityRegistration reg);
+
+// Unregister a capability. No-op if not registered.
+void unregister_capability(const std::string &name);
 
 // Register all server built-in capabilities. Called once at server startup.
 void register_builtin_capabilities();
@@ -57,11 +87,12 @@ void register_builtin_capabilities();
 // (missing capability or ABI type mismatch) and returns true.
 // Returns false if all capabilities were satisfied.
 bool populate_capabilities(const vef_registration_t *reg,
-                           const vef_register_arg_t *arg,
+                           std::string_view extension_name,
                            std::string &error_message);
 
 // Called before vef_unregister() when an extension is being unloaded.
-// No-op currently; hook exists for future per-capability cleanup.
+// Invokes on_depopulate for each capability that registered one, allowing
+// capabilities to stop threads or clean up server-side resources.
 void depopulate_capabilities(const vef_registration_t *reg);
 
 }  // namespace villagesql::services

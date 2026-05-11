@@ -98,6 +98,66 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
 
 }  // namespace
 
+bool register_one_sys_var(std::string_view extension_name,
+                          vef_sys_var_desc_t *v) {
+  const std::string ext_name(extension_name);
+  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
+  if (registry == nullptr) {
+    LogVSQL(ERROR_LEVEL, "register_one_sys_var: failed to acquire registry");
+    return true;
+  }
+
+  my_service<SERVICE_TYPE(component_sys_variable_register)> reg_svc(
+      "component_sys_variable_register", registry);
+  if (!reg_svc.is_valid()) {
+    LogVSQL(
+        ERROR_LEVEL,
+        "register_one_sys_var: component_sys_variable_register unavailable");
+    mysql_plugin_registry_release(registry);
+    return true;
+  }
+
+  int flags = PLUGIN_VAR_RQCMDARG;
+  void *check_arg = nullptr;
+  void *value_ptr = nullptr;
+
+  BOOL_CHECK_ARG(bool) bool_arg;
+  memset(&bool_arg, 0, sizeof(bool_arg));
+
+  switch (v->type) {
+    case VEF_VAR_BOOL:
+      flags |= PLUGIN_VAR_BOOL;
+      bool_arg.def_val = v->boolean.def_val;
+      check_arg = &bool_arg;
+      value_ptr = v->boolean.value_ptr;
+      break;
+    default:
+      LogVSQL(ERROR_LEVEL, "register_one_sys_var: unsupported type for '%s'",
+              v->name);
+      mysql_plugin_registry_release(registry);
+      return true;
+  }
+
+  mysql_sys_var_update_func update_fn =
+      v->on_change != nullptr ? vef_sys_var_update_trampoline : nullptr;
+
+  bool error = false;
+  if (reg_svc->register_variable(ext_name.c_str(), v->name, flags,
+                                 v->comment ? v->comment : "", nullptr,
+                                 update_fn, check_arg, value_ptr)) {
+    LogVSQL(ERROR_LEVEL, "Failed to register system variable '%s' for '%s'",
+            v->name, ext_name.c_str());
+    error = true;
+  } else {
+    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+    g_sys_vars.push_back(
+        {ext_name, std::string(v->name), v->type, value_ptr, v->on_change});
+  }
+
+  mysql_plugin_registry_release(registry);
+  return error;
+}
+
 bool get_variable(const char *component_name, const char *name, void **val,
                   size_t *val_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
