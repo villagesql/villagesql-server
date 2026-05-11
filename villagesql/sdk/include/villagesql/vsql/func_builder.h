@@ -267,6 +267,24 @@ using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
              vsql::ResolvedTypeParams *result, char *error_msg);
 
+// params_to_strings: converts the typed params struct P into its canonical
+// key/value string form (e.g., SVectorParams{6} -> {"dimension":"6"}). This
+// is the inverse direction of the parse callback an extension registers via
+// `.params<P, &Parse>()` on the type builder, whose signature is
+//   P parse(const std::map<std::string,std::string>&)
+// — Parse turns server-supplied strings into a typed P; params_to_strings
+// turns a typed P back into strings the server can read.
+//
+// Used by inference paths (e.g. constant-string from_string pre-execute at
+// fix_fields time) that produce a P and need to publish the equivalent
+// string-form params back to the server.
+//
+// The map keys/values are subject to the same rules as int_to_params: keys
+// are non-empty and free of ',' and '='; values are free of ',' and '='.
+template <typename P>
+using ParamsToStringsFunc = void (*)(const P &,
+                                     std::map<std::string, std::string> &);
+
 // =============================================================================
 // Aggregate Callback Wrappers
 // =============================================================================

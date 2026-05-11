@@ -79,6 +79,27 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
 namespace villagesql {
 namespace detail {
 
+// has_descriptor<T>: true when T has a .descriptor member (the vsql TypeObject
+// shape produced by vsql::make_type<>().build()). False for the low-level
+// type_builder::TypeDescriptor which stores vef_desc directly.
+template <typename T, typename = void>
+struct has_descriptor : std::false_type {};
+template <typename T>
+struct has_descriptor<T, std::void_t<decltype(std::declval<T>().descriptor)>>
+    : std::true_type {};
+
+// Uniform accessor for the underlying vef_type_desc_t regardless of which
+// shape (TypeObject or TypeDescriptor) the typed-API or low-level extension
+// builder stored in its types_ tuple.
+template <typename T>
+inline const vef_type_desc_t &get_vef_desc(const T &t) {
+  if constexpr (has_descriptor<T>::value) {
+    return t.descriptor.vef_desc;
+  } else {
+    return t.vef_desc;
+  }
+}
+
 // Fills arr[I] with the materialized vef_func_desc_t* for each function.
 template <typename Ext, size_t... Is>
 void vef_fill_func_ptrs(vef_func_desc_t **arr, const Ext &e,
@@ -94,7 +115,7 @@ template <typename Ext, size_t... Is>
 void vef_fill_type_ptrs(vef_type_desc_t **arr, const Ext &e,
                         std::index_sequence<Is...>) {
   ((arr[Is] =
-        const_cast<vef_type_desc_t *>(&e.template type_at<Is>().vef_desc)),
+        const_cast<vef_type_desc_t *>(&get_vef_desc(e.template type_at<Is>()))),
    ...);
 }
 
@@ -141,13 +162,22 @@ void vef_fill_required_capability_reqs(vef_required_capability_t *arr,
   (vef_fill_one_capability_req<Is>(arr, e), ...);
 }
 
-// Calls params_init_fn() for each type that has one.
+// Calls params_init_fn() and params_to_strings_init_fn() for each type that
+// has one. These fields live on the vsql TypeObject only (parameterized types
+// flow through the typed C++ API); low-level type_builder::TypeDescriptor has
+// no init fns. has_descriptor<> gates the access so low-level extensions
+// compile and run with a no-op loop body.
+template <typename T>
+inline void call_type_init_fns(const T &t) {
+  if constexpr (has_descriptor<T>::value) {
+    if (t.params_init_fn) t.params_init_fn();
+    if (t.params_to_strings_init_fn) t.params_to_strings_init_fn();
+  }
+}
+
 template <typename Ext, size_t... Is>
 void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
-  ((e.template type_at<Is>().params_init_fn
-        ? e.template type_at<Is>().params_init_fn()
-        : void()),
-   ...);
+  (call_type_init_fns(e.template type_at<Is>()), ...);
 }
 
 // Calls init_name() on any func that has it (auto-named VDFs from the vsql

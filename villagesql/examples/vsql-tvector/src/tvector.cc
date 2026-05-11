@@ -134,6 +134,16 @@ bool tvector_int_to_params(int64_t value,
   return false;
 }
 
+// Inverse of TVectorParams::parse: render a typed TVectorParams back into the
+// canonical key/value string form. Used by the SDK when the server needs to
+// publish inferred params (e.g., from a constant-string from_string) back in
+// the same shape that parse() consumes.
+void tvector_params_to_strings(const TVectorParams &p,
+                               std::map<std::string, std::string> &out) {
+  out["dimension"] = std::to_string(p.dimension);
+  out["type"] = (p.bytes_per_elem == 8) ? "double" : "float";
+}
+
 // Validate type parameters and compute storage characteristics.
 bool tvector_resolve_params(const std::map<std::string, std::string> &params,
                             vsql::ResolvedTypeParams *result, char *error_msg) {
@@ -424,6 +434,7 @@ constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
                              .persisted_length(-1)
                              .max_decode_buffer_length(16)
                              .params<TVectorParams, &TVectorParams::parse>()
+                             .params_to_strings<&tvector_params_to_strings>()
                              .int_to_params<&tvector_int_to_params>()
                              .resolve_params<&tvector_resolve_params>()
                              .from_string<&tvector_from_string>()

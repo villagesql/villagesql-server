@@ -98,11 +98,13 @@ struct ExtensionBuilder {
   }
 
   // Accepts a TypeObject (from vsql::make_type().build()) that carries embedded
-  // VDFs alongside the type descriptor, registering both in one call.
+  // VDFs and params-cache init fns alongside the type descriptor, registering
+  // all of them in one call. The whole TypeObject is stored in types_ so that
+  // detail/vef_register.h can reach the init fns at registration time.
   template <typename TypeObj,
             typename = decltype(std::declval<TypeObj>().embedded_funcs)>
   constexpr auto type(const TypeObj &t) const {
-    auto new_types = std::tuple_cat(types_, std::make_tuple(t.descriptor));
+    auto new_types = std::tuple_cat(types_, std::make_tuple(t));
     auto new_funcs = std::tuple_cat(funcs_, t.embedded_funcs);
     return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
                             SysVarTuple, StatusVarTuple,

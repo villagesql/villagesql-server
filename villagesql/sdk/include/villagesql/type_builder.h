@@ -39,28 +39,22 @@ namespace type_builder {
 struct TypeDescriptor {
   vef_type_desc_t vef_desc{};
   vef_type_storage_intf_t storage_intf{};
-  void (*params_init_fn)() = nullptr;
 
   constexpr TypeDescriptor() = default;
 
   constexpr TypeDescriptor(const TypeDescriptor &o)
-      : vef_desc(o.vef_desc),
-        storage_intf(o.storage_intf),
-        params_init_fn(o.params_init_fn) {
+      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
   }
 
   constexpr TypeDescriptor(TypeDescriptor &&o)
-      : vef_desc(o.vef_desc),
-        storage_intf(o.storage_intf),
-        params_init_fn(o.params_init_fn) {
+      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
   }
 
   constexpr TypeDescriptor &operator=(const TypeDescriptor &o) {
     vef_desc = o.vef_desc;
     storage_intf = o.storage_intf;
-    params_init_fn = o.params_init_fn;
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
     return *this;
   }

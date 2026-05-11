@@ -94,10 +94,18 @@ namespace vsql {
 namespace detail {
 
 // Binds the parse function for parameterized type caches. Stored as a function
-// pointer in TypeDescriptor.params_init_fn and called once during registration.
+// pointer in TypeObject.params_init_fn and called once during registration.
 template <typename P, auto ParseFunc>
 void bind_params_cache() {
   type_params_cache_for<P>().bind(ParseFunc);
+}
+
+// Binds the inverse-of-parse (params_to_strings) function. Stored in
+// TypeObject.params_to_strings_init_fn and called once during registration.
+// P is recovered from the function signature via ParamsToStringsFunc<P>.
+template <typename P, auto ToStringsFunc>
+void bind_params_to_strings_cache() {
+  type_params_cache_for<P>().bind_to_strings(ToStringsFunc);
 }
 
 // =============================================================================
@@ -161,8 +169,17 @@ template <const char *TypeName, TypeOp Op>
 inline constexpr TypeOpVdfName<TypeName, Op> kTypeOpVdfName{};
 
 // Shared builder state passed by value between TypeBuilder specializations.
+//
+// params_init_fn / params_to_strings_init_fn are typed-API-side state set by
+// .params<P, &Parse>() and .params_to_strings<&Fn>() respectively. They are
+// forwarded into the built TypeObject and called once at extension
+// registration to bind the corresponding callbacks into TypeParamsCache<P>.
+// They live here (not on the low-level TypeDescriptor) because parameterized
+// types only flow through the typed C++ API.
 struct TypeBuilderState {
   villagesql::type_builder::TypeDescriptor desc;
+  void (*params_init_fn)() = nullptr;
+  void (*params_to_strings_init_fn)() = nullptr;
 };
 
 }  // namespace detail
@@ -180,6 +197,11 @@ template <typename EmbeddedFuncsTuple = std::tuple<>>
 struct TypeObject {
   villagesql::type_builder::TypeDescriptor descriptor;
   EmbeddedFuncsTuple embedded_funcs;
+  // Init fns bound to TypeParamsCache<P> at extension registration. Set by
+  // .params<P, &Parse>() / .params_to_strings<&Fn>(); read by the
+  // registration loop in detail/vef_register.h.
+  void (*params_init_fn)() = nullptr;
+  void (*params_to_strings_init_fn)() = nullptr;
 
   // Converts to the SQL type name string for use in .returns() and .param().
   constexpr operator const char *() const { return descriptor.vef_desc.name; }
@@ -203,7 +225,9 @@ struct TypeObject {
 //   Name — const char* NTTP from make_type<kName>(); drives selection of the
 //     per-(Name,Op) constexpr VDF name buffers via kTypeOpVdfName<Name,Op>.
 //
-//     NB - there is no HasHash because it is optional.
+//     NB - there is no HasHash because it is optional. params_to_strings is
+//     also optional (for now); it's bound through a separate init-fn slot
+//     rather than tracked via a TypeBuilder template parameter.
 
 template <bool HasFromString = false, bool HasToString = false,
           bool HasCompare = false, bool HasParams = false,
@@ -232,7 +256,7 @@ class TypeBuilder {
   template <typename P, auto ParseFunc>
   constexpr auto params() const {
     detail::TypeBuilderState s = state_;
-    s.desc.params_init_fn = &detail::bind_params_cache<P, ParseFunc>;
+    s.params_init_fn = &detail::bind_params_cache<P, ParseFunc>;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     return TypeBuilder<HasFromString, HasToString, HasCompare, true,
                        HasIntToParams, HasResolveParams, EFT, Name>{
@@ -285,6 +309,34 @@ class TypeBuilder {
     return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
                        HasIntToParams, true, decltype(new_embedded), Name>{
         s, new_embedded};
+  }
+
+  // params_to_strings: converts a typed P back into canonical key/value
+  // strings — the inverse direction of the parse function registered via
+  // .params<P, &Parse>() above. Required only for parameterized types whose
+  // params need to be inferred at runtime (e.g., constant-string from_string
+  // pre-execute at fix_fields time), so that the inferred P can be expressed
+  // in the string-form the server uses. Not SQL-callable; no VDF name is
+  // generated. Must be called after .params<P, &Parse>().
+  // Function signature:
+  //   void fn(const P&, std::map<std::string,std::string>&)
+  template <auto Func>
+  constexpr auto params_to_strings() const {
+    static_assert(
+        HasParams,
+        "params_to_strings<Func>() requires .params<P, &ParseFn>() first");
+    using P = std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<
+        0, typename func_builder::FuncParamTypes<decltype(Func)>::type>>>;
+    static_assert(
+        std::is_same_v<decltype(Func), func_builder::ParamsToStringsFunc<P>>,
+        "params_to_strings<Func>() requires: "
+        "void fn(const P&, std::map<std::string,std::string>&)");
+    detail::TypeBuilderState s = state_;
+    s.params_to_strings_init_fn =
+        &detail::bind_params_to_strings_cache<P, Func>;
+    return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
+                       HasIntToParams, HasResolveParams, EFT, Name>{
+        s, embedded_funcs_};
   }
 
   // -------------------------------------------------------------------------
@@ -416,7 +468,8 @@ class TypeBuilder {
     static_assert(!HasResolveParams || HasParams,
                   "vsql::TypeBuilder: params<P, &parse_fn>() is required when "
                   "resolve_params() is used");
-    return TypeObject<EFT>{state_.desc, embedded_funcs_};
+    return TypeObject<EFT>{state_.desc, embedded_funcs_, state_.params_init_fn,
+                           state_.params_to_strings_init_fn};
   }
 
   // Cross-specialization and make_type access.
