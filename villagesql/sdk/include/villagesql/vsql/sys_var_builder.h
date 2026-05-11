@@ -47,24 +47,8 @@ namespace sys_var_builder {
 // variables — use var_name() to identify which variable changed.
 class SysVarChange {
  public:
-  explicit SysVarChange(const vef_sys_var_change_t *c) : c_(c) {
-    v_ = {};
-    switch (c->type) {
-      case VEF_VAR_BOOL:
-        v_.int_value = static_cast<long long>(c->bool_val);
-        break;
-      case VEF_VAR_INT:
-        v_.int_value = c->int_val;
-        break;
-      case VEF_VAR_DOUBLE:
-        v_.real_value = c->dbl_val;
-        break;
-      case VEF_VAR_STR:
-        v_.str_value = c->str_val;
-        v_.str_len = c->str_val ? strlen(c->str_val) : 0;
-        break;
-    }
-  }
+  explicit SysVarChange(const vef_sys_var_change_t *c)
+      : c_(c), v_(make_invalue(c)) {}
 
   std::string_view var_name() const { return c_->var_name; }
 
@@ -78,6 +62,26 @@ class SysVarChange {
   StringArg as_str() const { return StringArg(&v_); }
 
  private:
+  static vef_invalue_t make_invalue(const vef_sys_var_change_t *c) {
+    vef_invalue_t v{};
+    switch (c->type) {
+      case VEF_VAR_BOOL:
+        v.int_value = static_cast<long long>(c->bool_val);
+        break;
+      case VEF_VAR_INT:
+        v.int_value = c->int_val;
+        break;
+      case VEF_VAR_DOUBLE:
+        v.real_value = c->dbl_val;
+        break;
+      case VEF_VAR_STR:
+        v.str_value = c->str_val;
+        v.str_len = c->str_val ? strlen(c->str_val) : 0;
+        break;
+    }
+    return v;
+  }
+
   const vef_sys_var_change_t *c_;
   vef_invalue_t v_;
 };
