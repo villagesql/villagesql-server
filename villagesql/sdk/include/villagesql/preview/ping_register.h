@@ -13,27 +13,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_PREVIEW_PING_H
-#define VILLAGESQL_PREVIEW_PING_H
+#ifndef VILLAGESQL_PREVIEW_PING_REGISTER_H
+#define VILLAGESQL_PREVIEW_PING_REGISTER_H
 
 #include <villagesql/abi/preview/ping.h>
+#include <villagesql/preview/ping.h>
+#include <villagesql/vsql/capability_traits.h>
 
-namespace vsql::preview_ping {
+namespace vsql::detail {
 
-// Declare a Ping by value in your extension and pass its address to
-// .with(). VEF populates `abi` during registration.
-class Ping {
- public:
-  long long ping() const;
+template <>
+struct CapabilityTraits<::vsql::preview_ping::Ping> {
+  static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_PING_ABI_VERSION;
+  using AbiType = vef_preview_ping_t;
 
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_ping_t *abi = nullptr;
+  static constexpr void *vtable_destination(
+      ::vsql::preview_ping::Ping *p) noexcept {
+    return static_cast<void *>(&p->abi);
+  }
 };
 
-}  // namespace vsql::preview_ping
+}  // namespace vsql::detail
 
-#include <villagesql/preview/ping_impl.h>
-#include <villagesql/preview/ping_register.h>
-
-#endif  // VILLAGESQL_PREVIEW_PING_H
+#endif  // VILLAGESQL_PREVIEW_PING_REGISTER_H

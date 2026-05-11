@@ -17,11 +17,11 @@
 #define VILLAGESQL_VSQL_EXTENSION_BUILDER_H
 
 #include <cstddef>
-#include <cstdio>
 #include <tuple>
 #include <utility>
 
-#include <villagesql/detail/capability_hash.h>
+#include <villagesql/detail/cap_receive.h>
+#include <villagesql/vsql/capability_traits.h>
 
 #include <villagesql/detail/vef_register.h>
 #include <villagesql/vsql/status_var_builder.h>
@@ -33,33 +33,6 @@ namespace vsql {
 // make_func, INT, STRING, etc. without additional using-declarations at the
 // call site.
 using namespace func_builder;
-
-// cap_receive<Cap, cap_ptr> is the default extension-side receive function.
-// Called by the server's capability compat function with the server's vtable
-// pointer. Stores the vtable into cap_ptr->abi_ and returns true only if the
-// server's capability version exactly matches Cap::kAbiVersion.
-//
-// Exact match is intentionally strict: it ensures the extension is always
-// running against the same ABI version it was compiled against. If you need
-// to accept a different server version (e.g. degrade gracefully when the
-// server is newer), supply a custom receive function in the capability's
-// bind() instead of using cap_receive.
-//
-// cap_ptr must have static storage duration so its address is a valid non-type
-// template argument.
-template <typename Cap, Cap *cap_ptr>
-bool cap_receive(vef_capability_receive_arg_t *arg) {
-  auto *v = static_cast<decltype(cap_ptr->abi_)>(arg->vtable);
-  if (v->version != Cap::kAbiVersion) {
-    snprintf(arg->error_buf, arg->error_buf_len,
-             "version mismatch: server=%u, compiled=%u",
-             static_cast<unsigned>(v->version),
-             static_cast<unsigned>(Cap::kAbiVersion));
-    return false;
-  }
-  cap_ptr->abi_ = v;
-  return true;
-}
 
 // ExtensionBuilder is the vsql-API extension builder. It is a standalone type
 // (not a wrapper around villagesql::extension_builder::ExtensionBuilder) so it
@@ -171,28 +144,19 @@ struct ExtensionBuilder {
   // vef_register_impl() runs should wrap ExtensionBuilder and override this.
   void init() const {}
 
-  // Low-level method for use by capability bind() functions only.
-  // Prefer .with<Traits>() at call sites.
-  constexpr auto required_capability(
-      const vef_required_capability_t &req) const {
+  // Capability registration. The user's wrapper is captured into the
+  // builder's tuple as a typed Capability*. At registration time
+  // vef_register_impl publishes the pointer into
+  // CapReceiveSlot<Capability> and emits a wire entry whose receive
+  // callback is the slot's captureless `receive` function.
+  template <typename Capability>
+  constexpr auto with(Capability &cap) const {
     auto new_caps =
-        std::tuple_cat(required_capabilities_, std::make_tuple(req));
+        std::tuple_cat(required_capabilities_, std::make_tuple(&cap));
     return ExtensionBuilder<FuncTuple, TypeTuple, SysVarTuple, StatusVarTuple,
                             decltype(new_caps)>{
         funcs_,       types_,   sys_vars_,
         status_vars_, new_caps, require_atleast_min(VEF_PROTOCOL_2)};
-  }
-
-  // Generic builder extension point for capabilities. Traits is defined in
-  // its own header — only available when that header is included.
-  template <typename Traits>
-  constexpr auto with() const {
-    return Traits::bind(*this);
-  }
-
-  template <typename Traits, typename Config>
-  constexpr auto with(Config config) const {
-    return Traits::bind(*this, config);
   }
 
   // For testing only — forces the extension to require protocol p regardless

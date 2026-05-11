@@ -17,47 +17,39 @@
 // system when a requested capability is not registered on the server.
 //
 // Requests a capability named "vsql::nonexistent" which the server will never
-// populate. The cap_available() VDF returns whether the capability was
-// populated — it should always return 0.
-//
-// VDFs provided:
-//   cap_available() -> INT   Returns 1 if the unknown cap was populated, else
-//   0.
+// register. INSTALL EXTENSION fails with a "required capability not
+// registered" error before any user-visible code runs, so the extension
+// exposes no VDFs.
 
-#include <cstdint>
-
-#include <villagesql/detail/capability_hash.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
 
-// Minimal ABI struct for the nonexistent capability.
-// version must be first, as required by all capability vtables.
-// The server will never populate this, so abi_ stays null after registration.
+// Made-up abi struct + capability name that the server never registers.
 struct NonexistentAbi {
   uint32_t version;
   void (*fn)();
 };
 
-struct UnknownCapability {
-  static constexpr const char *kName = "vsql::nonexistent";
-  static constexpr uint32_t kAbiVersion = 1;
-  const NonexistentAbi *abi_ = nullptr;
+struct NonexistentCap {
+  const NonexistentAbi *abi = nullptr;
 };
 
-static UnknownCapability g_cap{};
+namespace vsql::detail {
 
-static void cap_available_impl(IntResult out) {
-  out.set(g_cap.abi_ != nullptr && g_cap.abi_->fn != nullptr ? 1 : 0);
-}
+template <>
+struct CapabilityTraits<NonexistentCap> {
+  static constexpr const char *kName = "vsql::nonexistent";
+  static constexpr uint32_t kAbiVersion = 1;
+  using AbiType = NonexistentAbi;
 
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension()
-        .func(make_func<&cap_available_impl>("cap_available")
-                  .returns(INT)
-                  .build())
-        .required_capability(
-            {UnknownCapability::kName,
-             &::vsql::cap_receive<UnknownCapability, &g_cap>,
-             villagesql::detail::abi_type_hash<NonexistentAbi>(),
-             UnknownCapability::kAbiVersion}))
+  static constexpr void *vtable_destination(NonexistentCap *p) noexcept {
+    return static_cast<void *>(&p->abi);
+  }
+};
+
+}  // namespace vsql::detail
+
+static NonexistentCap g_nonexistent;
+
+VEF_GENERATE_ENTRY_POINTS(make_extension().with(g_nonexistent))

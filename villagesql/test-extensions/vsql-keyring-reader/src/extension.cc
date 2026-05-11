@@ -29,9 +29,9 @@
 #include <villagesql/vsql.h>
 
 using namespace vsql;
-using vsql::preview::preview_keyring;
+using Keyring = vsql::preview_keyring::Keyring;
 
-static auto g_keyring = vsql::preview::keyring::make_capability();
+static Keyring g_keyring;
 
 // keyring_read(data_id, auth_id) - reads a secret from the keyring.
 // Returns the secret as a string, or NULL if not found.
@@ -42,14 +42,13 @@ void keyring_read(StringArg data_id, StringArg auth_id, StringResult out) {
     return;
   }
 
-  std::string value;
-  vef_keyring_result_t kr = g_keyring.read(
-      data_id.value(), auth_id.is_null() ? "" : auth_id.value(), value);
-  if (kr == VEF_KEYRING_UNAVAILABLE) {
+  const auto [status, value] =
+      g_keyring.read(data_id.value(), auth_id.is_null() ? "" : auth_id.value());
+  if (status == Keyring::Status::UNAVAILABLE) {
     out.error("No keyring component is installed");
     return;
   }
-  if (kr != VEF_KEYRING_OK) {
+  if (status != Keyring::Status::OK) {
     out.set_null();
     return;
   }
@@ -70,13 +69,13 @@ void keyring_store(StringArg data_id, StringArg auth_id, StringArg value,
     return;
   }
 
-  vef_keyring_result_t kr = g_keyring.write(
+  Keyring::Status status = g_keyring.write(
       data_id.value(), auth_id.is_null() ? "" : auth_id.value(), value.value());
-  if (kr == VEF_KEYRING_UNAVAILABLE) {
+  if (status == Keyring::Status::UNAVAILABLE) {
     out.error("No keyring component is installed");
     return;
   }
-  out.set(kr == VEF_KEYRING_OK ? 0 : 1);
+  out.set(status == Keyring::Status::OK ? 0 : 1);
 }
 
 VEF_GENERATE_ENTRY_POINTS(make_extension()
@@ -91,4 +90,4 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .param(STRING)
                                         .param(STRING)
                                         .build())
-                              .with<preview_keyring<g_keyring>>())
+                              .with(g_keyring))

@@ -13,8 +13,8 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// vsql_preview_ping_no_cap_test extension: verifies that omitting .with<>
-// for a capability causes it to be unavailable (abi_ stays null), and that
+// vsql_preview_ping_no_cap_test extension: verifies that omitting .with()
+// for a capability causes it to be unavailable (abi stays null), and that
 // the extension degrades gracefully rather than crashing.
 //
 // VDFs provided:
@@ -26,20 +26,20 @@
 
 using namespace vsql;
 
-// g_ping is never registered via .with<preview_ping<g_ping>>(), so
-// abi_ stays null and available() returns false.
-static auto g_ping = vsql::preview::ping::make_capability();
+// g_ping is never registered via .with(g_ping), so
+// abi stays null.
+static vsql::preview_ping::Ping g_ping;
 
 static void ping_available_impl(IntResult out) {
-  out.set(g_ping.available() ? 1 : 0);
+  out.set(g_ping.abi != nullptr ? 1 : 0);
 }
 
 static void ping_value_impl(IntResult out) {
-  if (!g_ping.available()) {
+  if (g_ping.abi == nullptr) {
     out.set_null();
     return;
   }
-  out.set(static_cast<long long>(g_ping.ping()));
+  out.set(g_ping.ping());
 }
 
 VEF_GENERATE_ENTRY_POINTS(

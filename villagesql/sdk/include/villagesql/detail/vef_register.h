@@ -26,7 +26,10 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/cap_receive.h>
+#include <villagesql/detail/capability_hash.h>
 #include <villagesql/sdk_version.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql {
 
@@ -113,12 +116,31 @@ void vef_fill_status_var_ptrs(vef_status_var_desc_t **arr, const Ext &e,
    ...);
 }
 
-// Fills arr[I] with a copy of each vef_required_capability_t.
+// For each Capability* the builder accumulated, publish it into
+// CapReceiveSlot<Capability>::instance (so the captureless receive
+// callback can find its target) and fill arr[I] with the wire entry.
+template <size_t I, typename Ext>
+void vef_fill_one_capability_req(vef_required_capability_t *arr,
+                                 const Ext &e) {
+  auto *cap_ptr = e.template required_capability_at<I>();
+  using Capability =
+      std::remove_cv_t<std::remove_pointer_t<decltype(cap_ptr)>>;
+  using Traits = ::vsql::detail::CapabilityTraits<Capability>;
+
+  ::vsql::detail::CapReceiveSlot<Capability>::instance = cap_ptr;
+
+  arr[I].name = Traits::kName;
+  arr[I].receive = &::vsql::detail::CapReceiveSlot<Capability>::receive;
+  arr[I].abi_type_hash =
+      villagesql::detail::abi_type_hash<typename Traits::AbiType>();
+  arr[I].min_version = Traits::kAbiVersion;
+}
+
 template <typename Ext, size_t... Is>
 void vef_fill_required_capability_reqs(vef_required_capability_t *arr,
                                        const Ext &e,
                                        std::index_sequence<Is...>) {
-  ((arr[Is] = e.template required_capability_at<Is>()), ...);
+  (vef_fill_one_capability_req<Is>(arr, e), ...);
 }
 
 // Calls params_init_fn() for each type that has one.

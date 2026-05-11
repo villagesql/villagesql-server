@@ -17,46 +17,54 @@
 // only provides ping ABI v1.
 //
 // Uses a local ping_abi_v2.h instead of the SDK's ping header so that it can
-// declare min_version=2 without waiting for the real ping v2 to exist. The
+// declare kAbiVersion=2 without waiting for the real ping v2 to exist. The
 // server's preview_ping_compat checks min_version against its vtable version
 // field (1) and rejects the extension with "capability version too old".
-//
-// VDFs provided (never reachable — extension always fails to load):
-//   ping_v2_value() -> INT   Returns the ping counter.
-//   pong_value()    -> INT   Returns the pong counter (requires server v2).
 
 #include "ping_abi_v2.h"
 
 #include <cstdint>
-#include <type_traits>
 
-#include <villagesql/detail/capability_hash.h>
 #include <villagesql/vsql.h>
+#include <villagesql/vsql/capability_traits.h>
 
 using namespace vsql;
 
 struct PingV2Capability {
+  const vef_preview_ping_v2_t *abi = nullptr;
+};
+
+namespace vsql::detail {
+
+template <>
+struct CapabilityTraits<PingV2Capability> {
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_PING_V2_ABI_VERSION;
-  const vef_preview_ping_v2_t *abi_ = nullptr;
+  using AbiType = vef_preview_ping_v2_t;
+
+  static constexpr void *vtable_destination(PingV2Capability *p) noexcept {
+    return static_cast<void *>(&p->abi);
+  }
 };
+
+}  // namespace vsql::detail
 
 static PingV2Capability g_ping{};
 
 static void ping_v2_value_impl(IntResult out) {
-  if (g_ping.abi_ == nullptr) {
+  if (g_ping.abi == nullptr) {
     out.set_null();
     return;
   }
-  out.set(static_cast<long long>(g_ping.abi_->ping()));
+  out.set(static_cast<long long>(g_ping.abi->ping()));
 }
 
 static void pong_value_impl(IntResult out) {
-  if (g_ping.abi_ == nullptr || g_ping.abi_->version < 2) {
+  if (g_ping.abi == nullptr || g_ping.abi->version < 2) {
     out.set_null();
     return;
   }
-  out.set(static_cast<long long>(g_ping.abi_->pong()));
+  out.set(static_cast<long long>(g_ping.abi->pong()));
 }
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -65,9 +73,4 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(INT)
                   .build())
         .func(make_func<&pong_value_impl>("pong_value").returns(INT).build())
-        .required_capability(
-            {PingV2Capability::kName,
-             &::vsql::cap_receive<PingV2Capability, &g_ping>,
-             villagesql::detail::abi_type_hash<std::remove_cv_t<
-                 std::remove_pointer_t<decltype(g_ping.abi_)>>>(),
-             PingV2Capability::kAbiVersion}))
+        .with(g_ping))
