@@ -26,6 +26,7 @@
 
 #include <villagesql/abi/preview/storage.h>
 #include <villagesql/preview/storage_api.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::preview_storage_builder {
 
@@ -315,5 +316,24 @@ constexpr StorageBuilder<UserCtx> make_storage() {
 }
 
 }  // namespace vsql::preview_storage_builder
+
+namespace vsql::detail {
+
+template <>
+struct CapabilityTraits<::vsql::preview_storage::StorageCapability> {
+  static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
+  using AbiType = vef_preview_storage_t;
+
+  // Write the vtable pointer into the module-level g_abi so that the
+  // inline implementations (MtrCtx, Page, Segment) can call through it
+  // without holding a reference to the StorageCapability instance.
+  static void *vtable_destination(
+      ::vsql::preview_storage::StorageCapability * /*p*/) noexcept {
+    return static_cast<void *>(&::vsql::preview_storage::detail::g_abi);
+  }
+};
+
+}  // namespace vsql::detail
 
 #endif  // VILLAGESQL_PREVIEW_STORAGE_BUILDER_H

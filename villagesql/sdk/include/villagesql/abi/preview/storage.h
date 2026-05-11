@@ -538,6 +538,11 @@ typedef void (*vef_storage_page_write_string_fn)(
     const unsigned char *str, uint32_t len, vef_storage_mtr_ref_t mtr_ref);
 
 typedef struct {
+  // Capability ABI version. Always the first field in every capability vtable.
+  // Extensions must check this before accessing fields added in later versions.
+  uint32_t version;
+
+  // version >= VEF_STORAGE_SE_INTF_VERSION_1
   vef_storage_mtr_start_fn mtr_start;
   vef_storage_mtr_commit_fn mtr_commit;
   vef_storage_segment_create_fn segment_create;

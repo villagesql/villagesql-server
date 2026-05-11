@@ -21,11 +21,17 @@ namespace villagesql::services {
 namespace {
 
 vef_preview_storage_t g_storage_vtable{
-    vef_storage_mtr_start,         vef_storage_mtr_commit,
-    vef_storage_segment_create,    vef_storage_segment_drop,
-    vef_storage_page_load,         vef_storage_page_allocate_and_load,
-    vef_storage_page_latch,        vef_storage_page_release,
-    vef_storage_page_get_size,     vef_storage_page_write_integer,
+    VEF_STORAGE_SE_INTF_VERSION,
+    vef_storage_mtr_start,
+    vef_storage_mtr_commit,
+    vef_storage_segment_create,
+    vef_storage_segment_drop,
+    vef_storage_page_load,
+    vef_storage_page_allocate_and_load,
+    vef_storage_page_latch,
+    vef_storage_page_release,
+    vef_storage_page_get_size,
+    vef_storage_page_write_integer,
     vef_storage_page_write_string,
 };
 

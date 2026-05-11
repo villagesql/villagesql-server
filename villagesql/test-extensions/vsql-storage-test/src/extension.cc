@@ -330,6 +330,4 @@ constexpr auto STORED_INT =
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension()
-                              .with<vsql::preview::preview_storage<STORAGE>>()
-                              .type(STORED_INT))
+VEF_GENERATE_ENTRY_POINTS(make_extension().with(STORAGE).type(STORED_INT))

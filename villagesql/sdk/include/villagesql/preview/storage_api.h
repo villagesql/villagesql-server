@@ -35,8 +35,6 @@
 #include <vector>
 
 #include <villagesql/abi/preview/storage.h>
-#include <villagesql/detail/capability_hash.h>
-#include <villagesql/vsql/extension_builder.h>
 
 static_assert(VEF_STORAGE_SE_INTF_VERSION == 1,
               "This C++ wrapper supports ABI v1 only");
@@ -46,20 +44,15 @@ namespace vsql::preview_storage {
 // C++ wrapper around vef_preview_storage_t.
 //
 // Usage:
-//   static auto g_storage = vsql::preview_storage::make_capability();
+//   static auto STORAGE = vsql::preview_storage::StorageCapability();
 //
 // Register with:
-//   make_extension().with<vsql::preview::preview_storage<g_storage>>()
+//   make_extension().with(STORAGE)
 //
 class StorageCapability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
-  // vef_preview_storage_t has no version field; 0 means no minimum enforced.
-  static constexpr uint32_t kAbiVersion = 0;
-
-  // Populated by the server via the required_capability receive callback.
-  // Public so that detail::storage_cap_receive<> can access it.
-  vef_preview_storage_t abi_{};
+  static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
 };
 
 // Error codes returned by storage ABI functions.
@@ -79,19 +72,12 @@ inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
 
 // TODO(villagesql-indexing): remove this global pointer, instead passing the
 // capability in the API.
-// Module-level vtable pointer, set by storage_cap_receive when the server
-// calls the required_capability receive callback during registration.
+// Module-level vtable pointer, written by CapReceiveSlot<StorageCapability>
+// during registration (via CapabilityTraits::vtable_destination).
 // The inline implementations below call through this pointer so that
 // extensions that don't use storage never emit references to vef_storage_*
 // symbols at link time.
 inline const vef_preview_storage_t *g_abi = nullptr;
-
-template <StorageCapability *cap_ptr>
-bool storage_cap_receive(vef_capability_receive_arg_t *arg) {
-  cap_ptr->abi_ = *static_cast<vef_preview_storage_t *>(arg->vtable);
-  g_abi = &cap_ptr->abi_;
-  return true;
-}
 }  // namespace detail
 
 // Returns a string_view over the error message from the last failed call on
@@ -905,23 +891,5 @@ struct Column {
 };
 
 }  // namespace vsql::preview_storage
-
-namespace vsql::preview {
-
-// Traits type for registering the storage capability via
-// .with<preview_storage<Stg>>. Only available when this header is included.
-template <auto &Stg>
-struct preview_storage {
-  template <typename EB>
-  static constexpr auto bind(EB builder) {
-    using Cap = vsql::preview_storage::StorageCapability;
-    return builder.required_capability(vef_required_capability_t{
-        Cap::kName, &vsql::preview_storage::detail::storage_cap_receive<&Stg>,
-        villagesql::detail::abi_type_hash<vef_preview_storage_t>(),
-        Cap::kAbiVersion});
-  }
-};
-
-}  // namespace vsql::preview
 
 #endif  // VILLAGESQL_PREVIEW_STORAGE_API_H_
