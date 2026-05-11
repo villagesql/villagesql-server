@@ -39,10 +39,13 @@
 //     int64_t dimension;
 //     static TVectorParams parse(const std::map<std::string,std::string>&);
 //   };
+//   void tvector_params_to_strings(const TVectorParams&,
+//                                  std::map<std::string,std::string>&);
 //   static constexpr const char kTVectorTypeName[] = "TVECTOR";
 //
 //   constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
-//       .params<TVectorParams, &TVectorParams::parse>()
+//       .params<TVectorParams, &TVectorParams::parse,
+//               &tvector_params_to_strings>()
 //       .int_to_params<&my_int_to_params_fn>()
 //       .resolve_params<&my_resolve_params_fn>()
 //       .from_string<&my_from_string_fn>()
@@ -249,33 +252,30 @@ class TypeBuilder {
   // Parameterized type support
   // -------------------------------------------------------------------------
 
-  // Bind the params parse function to TypeParamsCache<P>, optionally also
-  // binding the inverse params_to_strings function.
-  // Must be called before int_to_params() or resolve_params().
+  // Bind the params parse function and its inverse params_to_strings function
+  // to TypeParamsCache<P>. Must be called before int_to_params() or
+  // resolve_params().
   //
   // P is the params struct type. Required signatures:
   //   ParseFunc:            P  fn(const std::map<std::string,std::string>&)
   //   ParamsToStringsFunc:  void fn(const P&,
-  //   std::map<std::string,std::string>&)
+  //                                 std::map<std::string,std::string>&)
   //
   // ParamsToStringsFunc is the inverse of ParseFunc and is needed by paths
   // that produce a typed P at runtime (e.g., constant-string from_string
   // pre-execute at fix_fields time) and need to publish the equivalent
-  // string-form params back to the server. Optional for now while extensions
-  // migrate; will become required.
-  template <typename P, auto ParseFunc, auto ParamsToStringsFunc = nullptr>
+  // string-form params back to the server.
+  template <typename P, auto ParseFunc, auto ParamsToStringsFunc>
   constexpr auto params() const {
+    static_assert(
+        std::is_same_v<decltype(ParamsToStringsFunc),
+                       func_builder::ParamsToStringsFunc<P>>,
+        "params<P, &Parse, &ToStrings>(): third argument must have signature "
+        "void fn(const P&, std::map<std::string,std::string>&)");
     detail::TypeBuilderState s = state_;
     s.params_init_fn = &detail::bind_params_cache<P, ParseFunc>;
-    if constexpr (ParamsToStringsFunc != nullptr) {
-      static_assert(
-          std::is_same_v<decltype(ParamsToStringsFunc),
-                         func_builder::ParamsToStringsFunc<P>>,
-          "params<P, &Parse, &ToStrings>(): third argument must have signature "
-          "void fn(const P&, std::map<std::string,std::string>&)");
-      s.params_to_strings_init_fn =
-          &detail::bind_params_to_strings_cache<P, ParamsToStringsFunc>;
-    }
+    s.params_to_strings_init_fn =
+        &detail::bind_params_to_strings_cache<P, ParamsToStringsFunc>;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     return TypeBuilder<HasFromString, HasToString, HasCompare, true,
                        HasIntToParams, HasResolveParams, EFT, Name>{
