@@ -433,8 +433,8 @@ static constexpr const char kTVectorTypeName[] = "TVECTOR";
 constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
                              .persisted_length(-1)
                              .max_decode_buffer_length(16)
-                             .params<TVectorParams, &TVectorParams::parse>()
-                             .params_to_strings<&tvector_params_to_strings>()
+                             .params<TVectorParams, &TVectorParams::parse,
+                                     &tvector_params_to_strings>()
                              .int_to_params<&tvector_int_to_params>()
                              .resolve_params<&tvector_resolve_params>()
                              .from_string<&tvector_from_string>()

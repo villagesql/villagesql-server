@@ -171,8 +171,8 @@ inline constexpr TypeOpVdfName<TypeName, Op> kTypeOpVdfName{};
 // Shared builder state passed by value between TypeBuilder specializations.
 //
 // params_init_fn / params_to_strings_init_fn are typed-API-side state set by
-// .params<P, &Parse>() and .params_to_strings<&Fn>() respectively. They are
-// forwarded into the built TypeObject and called once at extension
+// the two- and three-argument forms of .params<P, &Parse[, &ToStrings]>().
+// They are forwarded into the built TypeObject and called once at extension
 // registration to bind the corresponding callbacks into TypeParamsCache<P>.
 // They live here (not on the low-level TypeDescriptor) because parameterized
 // types only flow through the typed C++ API.
@@ -198,8 +198,8 @@ struct TypeObject {
   villagesql::type_builder::TypeDescriptor descriptor;
   EmbeddedFuncsTuple embedded_funcs;
   // Init fns bound to TypeParamsCache<P> at extension registration. Set by
-  // .params<P, &Parse>() / .params_to_strings<&Fn>(); read by the
-  // registration loop in detail/vef_register.h.
+  // the two- and three-argument forms of .params<P, &Parse[, &ToStrings]>();
+  // read by the registration loop in detail/vef_register.h.
   void (*params_init_fn)() = nullptr;
   void (*params_to_strings_init_fn)() = nullptr;
 
@@ -249,14 +249,33 @@ class TypeBuilder {
   // Parameterized type support
   // -------------------------------------------------------------------------
 
-  // Bind the params parse function to TypeParamsCache<P>.
+  // Bind the params parse function to TypeParamsCache<P>, optionally also
+  // binding the inverse params_to_strings function.
   // Must be called before int_to_params() or resolve_params().
-  // P is the params struct type; ParseFunc is a function:
-  //   P fn(const std::map<std::string, std::string>&)
-  template <typename P, auto ParseFunc>
+  //
+  // P is the params struct type. Required signatures:
+  //   ParseFunc:            P  fn(const std::map<std::string,std::string>&)
+  //   ParamsToStringsFunc:  void fn(const P&,
+  //   std::map<std::string,std::string>&)
+  //
+  // ParamsToStringsFunc is the inverse of ParseFunc and is needed by paths
+  // that produce a typed P at runtime (e.g., constant-string from_string
+  // pre-execute at fix_fields time) and need to publish the equivalent
+  // string-form params back to the server. Optional for now while extensions
+  // migrate; will become required.
+  template <typename P, auto ParseFunc, auto ParamsToStringsFunc = nullptr>
   constexpr auto params() const {
     detail::TypeBuilderState s = state_;
     s.params_init_fn = &detail::bind_params_cache<P, ParseFunc>;
+    if constexpr (ParamsToStringsFunc != nullptr) {
+      static_assert(
+          std::is_same_v<decltype(ParamsToStringsFunc),
+                         func_builder::ParamsToStringsFunc<P>>,
+          "params<P, &Parse, &ToStrings>(): third argument must have signature "
+          "void fn(const P&, std::map<std::string,std::string>&)");
+      s.params_to_strings_init_fn =
+          &detail::bind_params_to_strings_cache<P, ParamsToStringsFunc>;
+    }
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     return TypeBuilder<HasFromString, HasToString, HasCompare, true,
                        HasIntToParams, HasResolveParams, EFT, Name>{
@@ -309,34 +328,6 @@ class TypeBuilder {
     return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
                        HasIntToParams, true, decltype(new_embedded), Name>{
         s, new_embedded};
-  }
-
-  // params_to_strings: converts a typed P back into canonical key/value
-  // strings — the inverse direction of the parse function registered via
-  // .params<P, &Parse>() above. Required only for parameterized types whose
-  // params need to be inferred at runtime (e.g., constant-string from_string
-  // pre-execute at fix_fields time), so that the inferred P can be expressed
-  // in the string-form the server uses. Not SQL-callable; no VDF name is
-  // generated. Must be called after .params<P, &Parse>().
-  // Function signature:
-  //   void fn(const P&, std::map<std::string,std::string>&)
-  template <auto Func>
-  constexpr auto params_to_strings() const {
-    static_assert(
-        HasParams,
-        "params_to_strings<Func>() requires .params<P, &ParseFn>() first");
-    using P = std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<
-        0, typename func_builder::FuncParamTypes<decltype(Func)>::type>>>;
-    static_assert(
-        std::is_same_v<decltype(Func), func_builder::ParamsToStringsFunc<P>>,
-        "params_to_strings<Func>() requires: "
-        "void fn(const P&, std::map<std::string,std::string>&)");
-    detail::TypeBuilderState s = state_;
-    s.params_to_strings_init_fn =
-        &detail::bind_params_to_strings_cache<P, Func>;
-    return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
-                       HasIntToParams, HasResolveParams, EFT, Name>{
-        s, embedded_funcs_};
   }
 
   // -------------------------------------------------------------------------
