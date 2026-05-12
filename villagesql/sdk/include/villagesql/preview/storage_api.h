@@ -58,11 +58,12 @@ inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
 
 // TODO(villagesql-indexing): remove this global pointer, instead passing the
 // capability in the API.
-// Module-level vtable pointer, written by CapReceiveSlot<StorageCapability>
-// during registration (via CapabilityTraits::vtable_destination).
-// The inline implementations below call through this pointer so that
-// extensions that don't use storage never emit references to vef_storage_*
-// symbols at link time.
+// Module-level vtable pointer. The server writes it via vtable_dest during
+// extension registration
+// (CapabilityTraits<StorageCapability>::vtable_destination returns &g_abi). The
+// inline implementations below call through this pointer so that extensions
+// that don't use storage never emit references to vef_storage_* symbols at link
+// time.
 inline const vef_preview_storage_t *g_abi = nullptr;
 }  // namespace detail
 
