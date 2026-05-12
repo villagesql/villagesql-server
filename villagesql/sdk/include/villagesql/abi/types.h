@@ -734,6 +734,22 @@ typedef struct {
   // for the lifetime of the extension. The server reads storage_intf->version
   // to determine which fields are available.
   const vef_type_storage_intf_t *storage_intf;
+
+  // Upper bound on persisted_length across all valid parameterizations of
+  // this type. Required for parameterized types; ignored for non-parameterized
+  // types (where persisted_length already gives the answer). Placed at the
+  // end of the struct so that adding it does not shift earlier offsets,
+  // preserving binary compatibility for v1 extensions.
+  //
+  // Used only on the fix_fields-time constant-string inference path: the
+  // server doesn't yet know the parameters (those are about to be inferred),
+  // so it cannot consult resolve_params to size the encode buffer. It
+  // allocates max_persisted_length bytes, runs from_string with
+  // MaybeParams<P> unknown, then trims the result to actual_len.
+  //
+  // Example: for SVECTOR with max dimension 3072, this is
+  //   sizeof(vef_storage_ref_t) + 3072 * sizeof(float).
+  int64_t max_persisted_length;
 } vef_type_desc_t;
 
 // Config Variables

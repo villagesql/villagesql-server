@@ -44,6 +44,7 @@
 //   static constexpr const char kTVectorTypeName[] = "TVECTOR";
 //
 //   constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
+//       .max_persisted_length(/* upper bound across all valid params */)
 //       .params<TVectorParams, &TVectorParams::parse,
 //               &TVectorParams::to_strings>()
 //       .int_to_params<&my_int_to_params_fn>()
@@ -245,6 +246,24 @@ class TypeBuilder {
 
   constexpr TypeBuilder &max_decode_buffer_length(int64_t len) {
     state_.desc.vef_desc.max_decode_buffer_length = len;
+    return *this;
+  }
+
+  // Upper bound on persisted_length across all valid parameterizations.
+  // Required for parameterized types (parse + to_strings); ignored for
+  // non-parameterized types (persisted_length suffices there).
+  //
+  // Used only on the fix_fields-time constant-string inference path, where
+  // the server has not yet inferred the params and so cannot consult
+  // resolve_params to size the encode buffer. The server allocates this many
+  // bytes, runs from_string with MaybeParams<P> unknown, then trims to
+  // actual_len. After inference, normal row-time calls continue to use the
+  // params-resolved persisted_length as today.
+  //
+  // Optional for now while extensions migrate; will become required for
+  // parameterized types.
+  constexpr TypeBuilder &max_persisted_length(int64_t len) {
+    state_.desc.vef_desc.max_persisted_length = len;
     return *this;
   }
 

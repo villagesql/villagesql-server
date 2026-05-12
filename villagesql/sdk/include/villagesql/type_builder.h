@@ -201,6 +201,7 @@ class TypeBuilder {
         intrinsic_default_vdf_name_,
         intrinsic_default_str_,
         storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
+        0,  // max_persisted_length: only set via the typed API
     };
     return desc;
   }

@@ -42,6 +42,11 @@
 #include <string>
 #include <string_view>
 
+// Largest dimension a TVECTOR may declare. Enforced in resolve_params and
+// int_to_params; also drives kTVectorMaxPersistedLength below for the
+// constant-string inference path.
+constexpr int64_t kTVectorMaxDimension = 4096;
+
 // Parsed representation of TVECTOR type parameters.
 // The static parse() method is used automatically by make_type_encode,
 // make_type_decode, and make_intrinsic_default when the operation function
@@ -133,10 +138,10 @@ size_t bytes_per_element(const std::map<std::string, std::string> &params) {
 bool tvector_int_to_params(int64_t value,
                            std::map<std::string, std::string> &params,
                            char *error_msg) {
-  if (value <= 0) {
+  if (value <= 0 || value > kTVectorMaxDimension) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TVECTOR dimension must be a positive integer, got %" PRId64,
-             value);
+             "TVECTOR dimension must be in 1..%" PRId64 ", got %" PRId64,
+             kTVectorMaxDimension, value);
     return true;
   }
   params["dimension"] = std::to_string(value);
@@ -160,9 +165,10 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
              "TVECTOR: invalid dimension value '%s'", it->second.c_str());
     return true;
   }
-  if (dimension <= 0) {
+  if (dimension <= 0 || dimension > kTVectorMaxDimension) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TVECTOR: dimension must be a positive integer");
+             "TVECTOR: dimension must be in 1..%" PRId64 ", got %" PRId64,
+             kTVectorMaxDimension, dimension);
     return true;
   }
 
@@ -430,9 +436,17 @@ void tvector_scale(vsql::CustomArgWith<TVectorParams> a, vsql::RealArg scalar,
 
 static constexpr const char kTVectorTypeName[] = "TVECTOR";
 
+// Upper bound on TVECTOR's persisted byte size: kTVectorMaxDimension
+// elements at 8 bytes each (double, the wider of the two supported element
+// types). Used only on the fix_fields-time constant-string inference path;
+// row-time encoding uses the params-resolved persisted_length set by
+// tvector_resolve_params.
+constexpr int64_t kTVectorMaxPersistedLength = kTVectorMaxDimension * 8;
+
 constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
                              .persisted_length(-1)
                              .max_decode_buffer_length(16)
+                             .max_persisted_length(kTVectorMaxPersistedLength)
                              .params<TVectorParams, &TVectorParams::parse,
                                      &TVectorParams::to_strings>()
                              .int_to_params<&tvector_int_to_params>()
