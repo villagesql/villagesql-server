@@ -292,6 +292,35 @@ typedef struct {
   const char *const *values;
 } vef_type_params_t;
 
+// Server-supplied output channel for at-parse-time (fix_fields) inference of
+// from_string parameters from a constant string literal. The SDK wrapper
+// writes the canonical "k=v,k=v" form of the inferred params here when the
+// extension's parameterized from_string transitions MaybeParams<P> from
+// unknown to known during the call.
+//
+// Used only on the constant-string inference path. NULL on the normal
+// row-time path; see vef_vdf_args_t::out_type_params.
+//
+// Overflow contract (snprintf-style): the wrapper always sets actual_len to
+// the number of bytes that *would* have been written. If actual_len exceeds
+// max_buf_len, overflow is true and the contents of buf are undefined; the
+// caller should re-invoke with a heap-allocated buffer sized to
+// actual_len + 1 and try again.
+typedef struct {
+  // INPUT: caller-supplied buffer for the canonical "k=v,k=v" params string.
+  char *buf;
+  // INPUT: capacity of buf in bytes.
+  size_t max_buf_len;
+  // OUTPUT: number of bytes that would have been written (no NUL). 0 means
+  // no params were inferred (e.g., the extension's from_string did not call
+  // p.set(), the call errored, or the type does not register
+  // params_to_strings).
+  size_t actual_len;
+  // OUTPUT: true if actual_len > max_buf_len. When true, buf is not safe to
+  // read; the caller should retry with a larger buffer.
+  bool overflow;
+} vef_inferred_type_params_t;
+
 // Input value for VDF function arguments.
 // The `type` field indicates which union member to read.
 // Check `is_null` first - if true, the value is SQL NULL.
@@ -449,6 +478,16 @@ typedef struct {
     // protocol versions.
     vef_invalue_t **values;
   };
+
+  // protocol >= VEF_PROTOCOL_2
+  //
+  // Optional out-channel for constant-string from_string inference at
+  // fix_fields time. NULL on the normal row-time path. When non-NULL AND the
+  // extension's parameterized from_string transitions MaybeParams<P> from
+  // unknown to known, the SDK wrapper writes the inferred params as a
+  // canonical "k=v,k=v" string via the type's registered params_to_strings
+  // callback. See vef_inferred_type_params_t for the overflow contract.
+  vef_inferred_type_params_t *out_type_params;
 } vef_vdf_args_t;
 
 typedef struct {

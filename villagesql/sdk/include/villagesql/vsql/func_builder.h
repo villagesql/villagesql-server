@@ -499,12 +499,56 @@ struct TypeEncodeWithCacheVdfWrapper {
     // wrapper construction below will then leave MaybeParams<P> in the unknown
     // state.
     MaybeParams<P> maybe_params;
-    if (result->type_params.count > 0) {
+    const bool input_params_known = result->type_params.count > 0;
+    if (input_params_known) {
       maybe_params =
           MaybeParams<P>(type_params_cache_for<P>().get(result->type_params));
     }
     set_default_encode_failure(result, arg);
     Func(maybe_params, {arg.str_value, arg.str_len}, CustomResult(result));
+
+    // Inference-path write-back: when the server invoked us with no input
+    // type_params (signalling "please infer"), the wrapper publishes the
+    // canonical "k=v,k=v" form of the resulting MaybeParams<P> back to the
+    // server via args->out_type_params. All four guards must hold:
+    //   1. server opted in by setting args->out_type_params
+    //   2. encode succeeded (no warning/error)
+    //   3. we were on the inference path (input type_params was empty)
+    //   4. the extension actually inferred params and registered to_strings
+    if (args->out_type_params != nullptr && result->type == VEF_RESULT_VALUE &&
+        !input_params_known && maybe_params.is_known() &&
+        type_params_cache_for<P>().has_to_strings()) {
+      std::map<std::string, std::string> m;
+      type_params_cache_for<P>().to_strings(maybe_params.value(), m);
+
+      // Single-pass greedy write into the caller's buffer. If a pair (with
+      // its leading comma if not first) won't fit, stop writing but keep
+      // iterating to accumulate `needed` for the snprintf-style overflow
+      // signal. Caller retries with a larger buffer.
+      char *const buf_begin = args->out_type_params->buf;
+      const size_t cap = args->out_type_params->max_buf_len;
+      char *p = buf_begin;
+      size_t needed = 0;
+      bool ok = true;
+      bool first = true;
+      for (const auto &[k, v] : m) {
+        const size_t pair_size = (first ? 0u : 1u) + k.size() + 1u + v.size();
+        if (ok && static_cast<size_t>(p - buf_begin) + pair_size <= cap) {
+          if (!first) *p++ = ',';
+          std::memcpy(p, k.data(), k.size());
+          p += k.size();
+          *p++ = '=';
+          std::memcpy(p, v.data(), v.size());
+          p += v.size();
+        } else {
+          ok = false;
+        }
+        needed += pair_size;
+        first = false;
+      }
+      args->out_type_params->actual_len = needed;
+      args->out_type_params->overflow = !ok;
+    }
   }
 };
 
