@@ -43,6 +43,7 @@ RUN mkdir /build && cd /build && \
         -DINSTALL_MYSQLTESTDIR="" \
         -DWITH_ROUTER=OFF \
         -DWITH_NUMA=OFF \
+        -DMYSQL_DATADIR=/var/lib/mysql \
         -DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
         -DMYSQLX_UNIX_ADDR=/var/run/mysqld/mysqlx.sock \
         -DVSQL_PRE_RELEASE_VERSION="$VSQL_PRE_RELEASE_VERSION" \
