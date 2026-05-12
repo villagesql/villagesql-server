@@ -214,21 +214,6 @@ template <typename P>
 using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
                                           std::string_view from, CustomResult);
 
-// Backward-compat (deprecated) signatures for from_string. New extensions
-// should use TypeEncodeFunc / TypeEncodeWithParamsFunc<P>; these aliases let
-// existing extensions continue to compile against the SDK during a transition
-// window. Failure on the old signature: return true and the wrapper surfaces
-// "failed to encode '<input>'". length == SIZE_MAX signals NULL output.
-//
-// TODO(villagesql-beta): drop these once all bundled extensions migrate to
-// the typed CustomResult shape.
-using TypeEncodeFuncOld = bool (*)(std::string_view from,
-                                   Span<unsigned char> buf, size_t *length);
-template <typename P>
-using TypeEncodeWithParamsFuncOld = bool (*)(const P &, std::string_view from,
-                                             Span<unsigned char> buf,
-                                             size_t *length);
-
 // Decode: binary -> string. false=success, true=error.
 using TypeDecodeFunc = bool (*)(Span<const unsigned char> data, Span<char> out,
                                 size_t *out_len);
@@ -405,18 +390,13 @@ inline void set_default_encode_failure(vef_vdf_result_t *result,
            static_cast<int>(display_len), arg.str_value, ellipsis);
 }
 
-// TypeEncodeVdfWrapper: wraps TypeEncodeFunc / TypeEncodeFuncOld into a VDF.
+// TypeEncodeVdfWrapper: wraps TypeEncodeFunc into a VDF.
 // VDF signature: (STRING) -> CUSTOM(type).
 //
-// New signature (TypeEncodeFunc): pre-sets the result to VEF_RESULT_WARNING
-// with a default "failed to encode '<input>'" message; the extension can
-// override by calling out.set_length(), out.set_null(), out.warning(), or
-// out.error(); any early return without such a call surfaces the default
-// warning.
-//
-// Old signature (TypeEncodeFuncOld): bool return is treated as true=error
-// (synthesizes the same default warning), false=success. length == SIZE_MAX
-// signals NULL output.
+// Pre-sets the result to VEF_RESULT_WARNING with a default
+// "failed to encode '<input>'" message; the extension can override by calling
+// out.set_length(), out.set_null(), out.warning(), or out.error(); any early
+// return without such a call surfaces the default warning.
 template <auto Func>
 struct TypeEncodeVdfWrapper {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
@@ -426,24 +406,8 @@ struct TypeEncodeVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    if constexpr (std::is_same_v<decltype(Func), TypeEncodeFuncOld>) {
-      size_t length;
-      bool failed = Func({arg.str_value, arg.str_len},
-                         {result->bin_buf, result->max_bin_len}, &length);
-      if (failed) {
-        set_default_encode_failure(result, arg);
-        return;
-      }
-      if (length == SIZE_MAX) {
-        result->type = VEF_RESULT_NULL;
-        return;
-      }
-      result->type = VEF_RESULT_VALUE;
-      result->actual_len = length;
-    } else {
-      set_default_encode_failure(result, arg);
-      Func({arg.str_value, arg.str_len}, CustomResult(result));
-    }
+    set_default_encode_failure(result, arg);
+    Func({arg.str_value, arg.str_len}, CustomResult(result));
   }
 };
 
@@ -506,29 +470,21 @@ struct TypeHashVdfWrapper {
   }
 };
 
-// Cache-aware wrappers for parameterized types.
-
-// Recovers the params type P from the encode function's first argument.
-//   New signature first arg: MaybeParams<P>& -> P
-//   Old signature first arg: const P&        -> P
-template <typename T>
-struct ExtractEncodeParamsType {
-  using type = T;
-};
-template <typename P>
-struct ExtractEncodeParamsType<MaybeParams<P>> {
-  using type = P;
-};
+// Cache-aware wrapper for parameterized types.
 
 template <auto Func>
 struct TypeEncodeWithCacheVdfWrapper {
-  // Func has either:
-  //   new: void(MaybeParams<P>&, string_view, CustomResult)
-  //   old: bool(const P&, string_view, Span<uchar>, size_t*)
-  // Recover P from the first argument.
+  // Func signature: void(MaybeParams<P>&, string_view, CustomResult).
+  // Recover P from the first argument's MaybeParams<P>.
   using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
-  using P = typename ExtractEncodeParamsType<FirstArgStripped>::type;
+  template <typename T>
+  struct ExtractP;
+  template <typename P_>
+  struct ExtractP<MaybeParams<P_>> {
+    using type = P_;
+  };
+  using P = typename ExtractP<FirstArgStripped>::type;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -537,36 +493,18 @@ struct TypeEncodeWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    if constexpr (std::is_same_v<decltype(Func),
-                                 TypeEncodeWithParamsFuncOld<P>>) {
-      const P &p = type_params_cache_for<P>().get(result->type_params);
-      size_t length;
-      bool failed = Func(p, {arg.str_value, arg.str_len},
-                         {result->bin_buf, result->max_bin_len}, &length);
-      if (failed) {
-        set_default_encode_failure(result, arg);
-        return;
-      }
-      if (length == SIZE_MAX) {
-        result->type = VEF_RESULT_NULL;
-        return;
-      }
-      result->type = VEF_RESULT_VALUE;
-      result->actual_len = length;
-    } else {
-      // At runtime today the type params are always known by the time the
-      // encode VDF runs (fix_fields binds them via TD1/TD2 / Case 3). The
-      // future pre-execute path for constant literals will call this wrapper
-      // with empty type_params to request inference; the wrapper construction
-      // below will then leave MaybeParams<P> in the unknown state.
-      MaybeParams<P> maybe_params;
-      if (result->type_params.count > 0) {
-        maybe_params =
-            MaybeParams<P>(type_params_cache_for<P>().get(result->type_params));
-      }
-      set_default_encode_failure(result, arg);
-      Func(maybe_params, {arg.str_value, arg.str_len}, CustomResult(result));
+    // At runtime today the type params are always known by the time the
+    // encode VDF runs. The future pre-execute path for constant literals will
+    // call this wrapper with empty type_params to request inference; the
+    // wrapper construction below will then leave MaybeParams<P> in the unknown
+    // state.
+    MaybeParams<P> maybe_params;
+    if (result->type_params.count > 0) {
+      maybe_params =
+          MaybeParams<P>(type_params_cache_for<P>().get(result->type_params));
     }
+    set_default_encode_failure(result, arg);
+    Func(maybe_params, {arg.str_value, arg.str_len}, CustomResult(result));
   }
 };
 
@@ -1157,27 +1095,21 @@ constexpr FuncBuilder<Func, 0> make_func(const char *name) {
 
 // make_type_encode<&fn>("name", TYPE) — (STRING) -> CUSTOM(type).
 //
-// Accepts four signatures:
-//   TypeEncodeFunc                 (new, non-parameterized)
-//   TypeEncodeFuncOld              (deprecated, non-parameterized)
-//   TypeEncodeWithParamsFunc<P>    (new, parameterized)
-//   TypeEncodeWithParamsFuncOld<P> (deprecated, parameterized)
+// Accepts two signatures:
+//   TypeEncodeFunc              (non-parameterized)
+//   TypeEncodeWithParamsFunc<P> (parameterized)
 template <auto Func>
 constexpr StaticFuncDesc<1> make_type_encode(const char *name,
                                              const char *type_name) {
   using F = decltype(Func);
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<F, TypeEncodeFunc> ||
-                std::is_same_v<F, TypeEncodeFuncOld>) {
+  if constexpr (std::is_same_v<F, TypeEncodeFunc>) {
     meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
   } else {
     using P = typename TypeEncodeWithCacheVdfWrapper<Func>::P;
-    static_assert(std::is_same_v<F, TypeEncodeWithParamsFunc<P>> ||
-                      std::is_same_v<F, TypeEncodeWithParamsFuncOld<P>>,
-                  "make_type_encode: function must match one of "
-                  "TypeEncodeFunc, TypeEncodeFuncOld, "
-                  "TypeEncodeWithParamsFunc<P>, or "
-                  "TypeEncodeWithParamsFuncOld<P>.");
+    static_assert(std::is_same_v<F, TypeEncodeWithParamsFunc<P>>,
+                  "make_type_encode: function must match either "
+                  "TypeEncodeFunc or TypeEncodeWithParamsFunc<P>.");
     meta.f = &TypeEncodeWithCacheVdfWrapper<Func>::invoke;
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
