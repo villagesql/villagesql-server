@@ -29,14 +29,9 @@ namespace villagesql::services {
 
 // Server-side compatibility check function for a capability.
 //
-// Compatibility checking is two-tiered:
-//   1. Server side (this function): runs before the extension's receive() is
-//      called. Decides whether the extension's declared requirements are
-//      satisfiable given the server's current vtable. Responsible for calling
-//      req.receive() if checks pass.
-//   2. Extension side (req.receive): called by the compat function on success.
-//      The extension makes its own decision — e.g. strict exact-version match
-//      via cap_receive, or custom logic for graceful degradation.
+// Decides whether the extension's declared requirements are satisfiable given
+// the server's current vtable. On success, writes the vtable pointer into
+// *req.vtable_dest so the extension can call into it.
 //
 // Capability authors implement cap_compat_fn to customise server-side checks
 // (e.g. skipping the ABI hash check for versioned capabilities). Pass it as
@@ -54,8 +49,9 @@ void register_builtin_capabilities();
 // Populate capabilities declared in a vef_registration_t for one extension.
 //
 // Called after vef_register() returns. For each entry in
-// reg->required_capabilities, looks up the named capability in the registry and
-// invokes its receive callback with the vtable pointer.
+// reg->required_capabilities, looks up the named capability in the registry,
+// runs its compat function, and on success writes the vtable pointer into the
+// extension's vtable_dest slot.
 //
 // On failure, sets error_message to a description of what went wrong
 // (missing capability or ABI type mismatch) and returns true.

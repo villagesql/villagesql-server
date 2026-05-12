@@ -26,7 +26,6 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
-#include <villagesql/detail/cap_receive.h>
 #include <villagesql/detail/capability_hash.h>
 #include <villagesql/sdk_version.h>
 #include <villagesql/vsql/capability_traits.h>
@@ -137,19 +136,19 @@ void vef_fill_status_var_ptrs(vef_status_var_desc_t **arr, const Ext &e,
    ...);
 }
 
-// For each Capability* the builder accumulated, publish it into
-// CapReceiveSlot<Capability>::instance (so the captureless receive
-// callback can find its target) and fill arr[I] with the wire entry.
+// Fill arr[I] with the wire entry for this Capability. The vtable_dest
+// points at the abi-pointer slot inside the extension's wrapper, as
+// determined by the trait specialization; the server writes the vtable
+// pointer there at registration time if all compat checks pass.
 template <size_t I, typename Ext>
 void vef_fill_one_capability_req(vef_required_capability_t *arr, const Ext &e) {
   auto *cap_ptr = e.template required_capability_at<I>();
   using Capability = std::remove_cv_t<std::remove_pointer_t<decltype(cap_ptr)>>;
   using Traits = ::vsql::detail::CapabilityTraits<Capability>;
 
-  ::vsql::detail::CapReceiveSlot<Capability>::instance = cap_ptr;
-
   arr[I].name = Traits::kName;
-  arr[I].receive = &::vsql::detail::CapReceiveSlot<Capability>::receive;
+  arr[I].vtable_dest =
+      static_cast<void **>(Traits::vtable_destination(cap_ptr));
   arr[I].abi_type_hash =
       villagesql::detail::abi_type_hash<typename Traits::AbiType>();
   arr[I].min_version = Traits::kAbiVersion;

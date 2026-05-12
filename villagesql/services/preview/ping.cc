@@ -16,7 +16,6 @@
 #include "villagesql/services/preview/ping.h"
 
 #include <atomic>
-#include <cstdio>
 #include <string>
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -43,7 +42,6 @@ vef_preview_ping_t *preview_ping_vtable() { return &g_ping_vtable; }
 //
 // Fails if the server's vtable version is less than the extension's declared
 // min_version, meaning the server is too old to satisfy the extension's needs.
-// Otherwise delegates to req.receive() for the extension-side decision.
 bool preview_ping_compat(const vef_required_capability_t &req, void *vtable,
                          std::string &error_message) {
   uint32_t server_version = *static_cast<const uint32_t *>(vtable);
@@ -54,14 +52,7 @@ bool preview_ping_compat(const vef_required_capability_t &req, void *vtable,
                     ", required=" + std::to_string(req.min_version) + ")";
     return false;
   }
-  char receive_error[VEF_MAX_ERROR_LEN] = {};
-  vef_capability_receive_arg_t receive_arg{vtable, receive_error,
-                                           sizeof(receive_error)};
-  if (!req.receive(&receive_arg)) {
-    error_message = std::string("capability rejected by extension: ") +
-                    VEF_PREVIEW_PING_NAME + ": " + receive_error;
-    return false;
-  }
+  *req.vtable_dest = vtable;
   return true;
 }
 

@@ -20,7 +20,6 @@
 #include <tuple>
 #include <utility>
 
-#include <villagesql/detail/cap_receive.h>
 #include <villagesql/vsql/capability_traits.h>
 
 #include <villagesql/detail/vef_register.h>
@@ -148,9 +147,10 @@ struct ExtensionBuilder {
 
   // Capability registration. The user's wrapper is captured into the
   // builder's tuple as a typed Capability*. At registration time
-  // vef_register_impl publishes the pointer into
-  // CapReceiveSlot<Capability> and emits a wire entry whose receive
-  // callback is the slot's captureless `receive` function.
+  // vef_register_impl emits a wire entry whose vtable_dest points at the
+  // abi-pointer slot inside *cap (located via CapabilityTraits<>::
+  // vtable_destination); the server writes the vtable pointer there if
+  // all compat checks pass.
   template <typename Capability>
   constexpr auto with(Capability &cap) const {
     auto new_caps =

@@ -52,7 +52,7 @@ const CapabilityValue *find_capability_entry(const std::string &name) {
 //   2. min_version floor: server's vtable version must be >= the extension's
 //      declared minimum. Guards against extensions that require features not
 //      yet present on this server.
-//   3. receive(): delegates the final decision to the extension side.
+// On success, writes the vtable pointer into the extension's vtable_dest.
 static bool default_compat_fn(const vef_required_capability_t &req,
                               void *vtable, std::string &error_message) {
   const CapabilityValue *entry = find_capability_entry(req.name);
@@ -69,15 +69,7 @@ static bool default_compat_fn(const vef_required_capability_t &req,
       return false;
     }
   }
-  // Extension-side decision.
-  char receive_error[VEF_MAX_ERROR_LEN] = {};
-  vef_capability_receive_arg_t receive_arg{vtable, receive_error,
-                                           sizeof(receive_error)};
-  if (!req.receive(&receive_arg)) {
-    error_message = std::string("capability rejected by extension: ") +
-                    req.name + ": " + receive_error;
-    return false;
-  }
+  *req.vtable_dest = vtable;
   return true;
 }
 
@@ -122,7 +114,7 @@ bool populate_capabilities(const vef_registration_t *reg,
 
   for (uint32_t i = 0; i < reg->required_capability_count; ++i) {
     const vef_required_capability_t &req = reg->required_capabilities[i];
-    if (req.name == nullptr || req.receive == nullptr) continue;
+    if (req.name == nullptr || req.vtable_dest == nullptr) continue;
 
     const CapabilityValue *entry = find_capability_entry(req.name);
     if (entry == nullptr) {

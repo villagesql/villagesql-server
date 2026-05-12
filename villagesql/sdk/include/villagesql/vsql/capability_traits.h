@@ -23,16 +23,17 @@ namespace vsql::detail {
 //   static constexpr const char* kName;
 //       The capability name the server looks up.
 //   static constexpr uint32_t kAbiVersion;
-//       The ABI version this extension was compiled against. Used as
-//       min_version in the wire entry and for the exact-match check in
-//       CapReceiveSlot::receive.
+//       The ABI version this extension was compiled against. Sent as
+//       min_version in the wire entry; the server fails the load if its
+//       own vtable version is below this.
 //   using AbiType = ...;
 //       The C ABI struct type (e.g. vef_preview_ping_t). Used to
 //       compute villagesql::detail::abi_type_hash<AbiType>() for the
 //       wire format's mismatch check.
 //   static constexpr void* vtable_destination(Capability* p);
 //       The address inside *p where the server should write the
-//       capability's vtable pointer at registration time.
+//       capability's vtable pointer at registration time. Returned as
+//       void*; vef_register_impl casts it to void** for the wire entry.
 //
 // .with(Capability&) on ExtensionBuilder reads these from the
 // specialization keyed by the user's wrapper type.
