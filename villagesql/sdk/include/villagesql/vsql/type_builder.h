@@ -38,14 +38,14 @@
 //   struct TVectorParams {
 //     int64_t dimension;
 //     static TVectorParams parse(const std::map<std::string,std::string>&);
+//     static void to_strings(const TVectorParams&,
+//                            std::map<std::string,std::string>&);
 //   };
-//   void tvector_params_to_strings(const TVectorParams&,
-//                                  std::map<std::string,std::string>&);
 //   static constexpr const char kTVectorTypeName[] = "TVECTOR";
 //
 //   constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
 //       .params<TVectorParams, &TVectorParams::parse,
-//               &tvector_params_to_strings>()
+//               &TVectorParams::to_strings>()
 //       .int_to_params<&my_int_to_params_fn>()
 //       .resolve_params<&my_resolve_params_fn>()
 //       .from_string<&my_from_string_fn>()
