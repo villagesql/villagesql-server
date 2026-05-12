@@ -26,6 +26,7 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/airlock_state.h>
 #include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/sdk_version.h>
@@ -244,6 +245,16 @@ inline void call_type_init_fns(const T &t) {
   }
 }
 
+// SFINAE detector: does Ext have an init() method we can call? Used to invoke
+// the vsql ExtensionBuilder's init() hook, which fires any with_airlock()
+// participants so they populate villagesql::detail::airlock state before
+// vef_register_impl copies the request list into the registration struct.
+template <typename T, typename = void>
+struct has_init : std::false_type {};
+template <typename T>
+struct has_init<T, std::void_t<decltype(std::declval<const T &>().init())>>
+    : std::true_type {};
+
 template <typename Ext, size_t... Is>
 void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
   (call_type_init_fns(e.template type_at<Is>()), ...);
@@ -411,6 +422,13 @@ vef_registration_t *vef_register_impl(
     }
   }
 
+  // Run the builder's init() hook (if any). For the vsql ExtensionBuilder this
+  // invokes any with_airlock() participants, which populate per-extension
+  // airlock state in villagesql::detail::airlock.
+  if constexpr (has_init<Ext>::value) {
+    ext.init();
+  }
+
   reg.protocol = VEF_PROTOCOL_4;
   reg.error_msg = nullptr;
   reg.deprecated_extension_name = nullptr;
@@ -434,6 +452,14 @@ vef_registration_t *vef_register_impl(
       Ext::kInitFn();
     }
   }
+
+  // Airlock requests come from per-extension static state populated by the
+  // init() call above. The vector's contiguous storage is stable for as long
+  // as no further requests are added; init() is the only thing that adds
+  // them and we don't run again (initialized = true below).
+  auto &al = airlock::state();
+  reg.airlock_request_count = static_cast<unsigned int>(al.requests.size());
+  reg.airlock_requests = al.requests.empty() ? nullptr : al.requests.data();
 
   initialized = true;
   return &reg;

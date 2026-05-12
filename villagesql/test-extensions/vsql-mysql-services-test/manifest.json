@@ -1,0 +1,12 @@
+{
+  "name": "vsql_mysql_services_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension exercising the MySQL Services airlock bridge",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0",
+  "required_mysql_services": [
+    "keyring_component_status",
+    "keyring_reader_with_status",
+    "keyring_writer"
+  ]
+}

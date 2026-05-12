@@ -872,6 +872,43 @@ typedef struct {
   const void *capability_config;
 } vef_required_capability_t;
 
+// =============================================================================
+// Airlock Requests
+// =============================================================================
+//
+// Deliberately narrow extension point that lets vsql-provided "bridge" layers
+// participate in extension load without polluting the SDK or its ABI with
+// knowledge of what's on the other side. The server side has a registry of
+// airlock handlers indexed by name; each handler produces an opaque blob of
+// bytes which the server delivers to the extension's `receive` callback.
+//
+// The SDK never inspects the bytes. Bridge code on both sides agrees on a
+// channel name (e.g. "vsql::mysql_service_registry/v1") and a struct layout
+// for the bytes. Versioning is encoded in the channel name; when the bridge
+// evolves the payload struct, it bumps the version suffix and old extensions
+// keep asking for the old name.
+//
+// See villagesql/airlock.h for the C++ API used by bridges.
+typedef struct {
+  // Channel name. Must remain valid for the duration of vef_register().
+  const char *name;
+
+  // Request payload, interpreted by the channel's server-side handler. The
+  // bytes may include pointers into the extension's .so (e.g. a destination
+  // pointer the server is asked to populate). Lifetime must extend through
+  // server-side processing — typically these point into the
+  // RequiredService<>/ProvidedService<> instance, which has static storage.
+  // The SDK never reads the bytes.
+  const unsigned char *in_bytes;
+  size_t in_size;
+
+  // Caller-provided buffer for an error message. VEF_MAX_ERROR_LEN bytes.
+  // The SDK supplies this; the server's handler writes to it on failure. If
+  // non-empty after server-side processing, extension load is aborted with
+  // this message.
+  char *error_msg;
+} vef_airlock_request_t;
+
 typedef struct vef_registration_t {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -900,6 +937,13 @@ typedef struct vef_registration_t {
   // mismatch, loading the extension fails with an error.
   unsigned int required_capability_count;
   const vef_required_capability_t *required_capabilities;
+
+  // protocol >= VEF_PROTOCOL_2
+  // Airlock requests. Processed by the server after vef_register() returns
+  // and before extension load completes. See vef_airlock_request_t. A failed
+  // airlock request aborts extension load.
+  unsigned int airlock_request_count;
+  const vef_airlock_request_t *airlock_requests;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the

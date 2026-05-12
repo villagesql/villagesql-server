@@ -1,0 +1,20 @@
+# Test that an extension's code requesting a service not in its manifest's
+# required_mysql_services array fails at install time, even when the service
+# does exist in the MySQL registry.
+#
+# vsql_mysql_services_undeclared_test declares no required services in its
+# manifest but its code requests keyring_component_status. With the keyring
+# component installed, the service exists — but the bridge refuses the
+# acquire because the manifest didn't declare it.
+
+--source include/have_component_keyring_file.inc
+--source suite/component_keyring_file/inc/setup_component.inc
+
+call mtr.add_suppression("not declared in manifest");
+
+--echo # Install must fail with a manifest-declaration error, not an
+--echo # acquire-existence error: the service is registered but undeclared.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_mysql_services_undeclared_test;
+
+--source suite/component_keyring_file/inc/teardown_component.inc

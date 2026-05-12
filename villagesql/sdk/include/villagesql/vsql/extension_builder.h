@@ -20,6 +20,8 @@
 #include <tuple>
 #include <utility>
 
+#include <villagesql/airlock.h>
+#include <villagesql/detail/airlock_state.h>
 #include <villagesql/detail/capability_traits.h>
 
 #include <villagesql/detail/vef_register.h>
@@ -35,19 +37,30 @@ using namespace func_builder;
 // (not a wrapper around villagesql::extension_builder::ExtensionBuilder) so it
 // can evolve independently. It satisfies the same duck-typed interface required
 // by VEF_GENERATE_ENTRY_POINTS.
+//
+// AirlockThunkTuple is a tuple of void(*)(void*) function pointers that erase
+// each participant's type and forward to its airlock() method.
+// AirlockPtrTuple is the parallel tuple of void* pointers to the participants
+// themselves. The thunks are invoked from init() at vef_register() time.
 template <typename FuncTuple, typename TypeTuple,
           typename RequiredCapabilityTuple = std::tuple<>,
-          void (*InitFn)() = nullptr, void (*DeinitFn)() = nullptr>
+          typename AirlockThunkTuple = std::tuple<>,
+          typename AirlockPtrTuple = std::tuple<>, void (*InitFn)() = nullptr,
+          void (*DeinitFn)() = nullptr>
 struct ExtensionBuilder {
   FuncTuple funcs_;
   TypeTuple types_;
   RequiredCapabilityTuple required_capabilities_;
   vef_protocol_t min_protocol_;
+  AirlockThunkTuple airlock_thunks_;
+  AirlockPtrTuple airlock_pointers_;
 
   static constexpr size_t kFuncCount = std::tuple_size_v<FuncTuple>;
   static constexpr size_t kTypeCount = std::tuple_size_v<TypeTuple>;
   static constexpr size_t kRequiredCapabilityCount =
       std::tuple_size_v<RequiredCapabilityTuple>;
+  static constexpr size_t kAirlockCount = std::tuple_size_v<AirlockThunkTuple>;
+  static constexpr bool kHasVsqlGlobals = true;
 
   // Extension-side init / deinit callbacks (null if unset). Invoked by
   // vef_register_impl / vef_unregister — see on_init() / on_deinit() below.
@@ -79,9 +92,14 @@ struct ExtensionBuilder {
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
     return ExtensionBuilder<decltype(new_funcs), TypeTuple,
-                            RequiredCapabilityTuple, InitFn, DeinitFn>{
-        new_funcs, types_, required_capabilities_,
-        require_atleast_min(f.required_protocol())};
+                            RequiredCapabilityTuple, AirlockThunkTuple,
+                            AirlockPtrTuple, InitFn, DeinitFn>{
+        new_funcs,
+        types_,
+        required_capabilities_,
+        require_atleast_min(f.required_protocol()),
+        airlock_thunks_,
+        airlock_pointers_};
   }
 
   // Accepts a TypeObject (from vsql::make_type().build()) that carries embedded
@@ -94,14 +112,25 @@ struct ExtensionBuilder {
     auto new_types = std::tuple_cat(types_, std::make_tuple(t));
     auto new_funcs = std::tuple_cat(funcs_, t.embedded_funcs);
     return ExtensionBuilder<decltype(new_funcs), decltype(new_types),
-                            RequiredCapabilityTuple, InitFn, DeinitFn>{
-        new_funcs, new_types, required_capabilities_,
-        require_atleast_min(t.descriptor.vef_desc.protocol)};
+                            RequiredCapabilityTuple, AirlockThunkTuple,
+                            AirlockPtrTuple, InitFn, DeinitFn>{
+        new_funcs,
+        new_types,
+        required_capabilities_,
+        require_atleast_min(t.descriptor.vef_desc.protocol),
+        airlock_thunks_,
+        airlock_pointers_};
   }
 
-  // No-op. Preview capability builders that need runtime initialization before
-  // vef_register_impl() runs should wrap ExtensionBuilder and override this.
-  void init() const {}
+  // Called from vef_register_impl at extension load time. Invokes each
+  // airlock participant's airlock() method, which adds requests to the
+  // per-extension static state in villagesql::detail::airlock so
+  // vef_register_impl can copy them into the registration struct.
+  void init() const {
+    if constexpr (kAirlockCount > 0) {
+      init_airlock_(std::make_index_sequence<kAirlockCount>{});
+    }
+  }
 
   // Registers a capability requirement. Pass a capability object declared in
   // your extension (e.g., a PingCapability or StorageCapability) by reference.
@@ -111,9 +140,12 @@ struct ExtensionBuilder {
   constexpr auto with(Capability &cap) const {
     auto new_caps =
         std::tuple_cat(required_capabilities_, std::make_tuple(&cap));
-    return ExtensionBuilder<FuncTuple, TypeTuple, decltype(new_caps), InitFn,
-                            DeinitFn>{funcs_, types_, new_caps,
-                                      require_atleast_min(VEF_PROTOCOL_3)};
+    return ExtensionBuilder<FuncTuple, TypeTuple, decltype(new_caps),
+                            AirlockThunkTuple, AirlockPtrTuple, InitFn,
+                            DeinitFn>{
+        funcs_,          types_,
+        new_caps,        require_atleast_min(VEF_PROTOCOL_3),
+        airlock_thunks_, airlock_pointers_};
   }
 
   // Registers a function to run once, extension-side, at extension load (every
@@ -124,9 +156,10 @@ struct ExtensionBuilder {
   // pointers or allocating extension-owned state.
   template <void (*Fn)()>
   constexpr auto on_init() const {
-    return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple, Fn,
-                            DeinitFn>{funcs_, types_, required_capabilities_,
-                                      min_protocol_};
+    return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple,
+                            AirlockThunkTuple, AirlockPtrTuple, Fn, DeinitFn>{
+        funcs_,        types_,          required_capabilities_,
+        min_protocol_, airlock_thunks_, airlock_pointers_};
   }
 
   // Registers a function to run at extension unload (server shutdown or
@@ -134,16 +167,56 @@ struct ExtensionBuilder {
   template <void (*Fn)()>
   constexpr auto on_deinit() const {
     return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple,
-                            InitFn, Fn>{funcs_, types_, required_capabilities_,
-                                        min_protocol_};
+                            AirlockThunkTuple, AirlockPtrTuple, InitFn, Fn>{
+        funcs_,        types_,          required_capabilities_,
+        min_protocol_, airlock_thunks_, airlock_pointers_};
+  }
+
+  // Airlock extension point — the deliberately narrow hook used by
+  // vsql-provided bridge layers (MySQL Services, etc.) to plug into the
+  // extension lifecycle. The participant must satisfy:
+  //   void airlock(villagesql::airlock&)
+  //
+  // Multiple participants chain naturally:
+  //   make_extension().with_airlock(reader).with_airlock(writer)...
+  //
+  // The participant must have static storage duration: with_airlock captures
+  // its address. Its airlock() body runs at vef_register() time via init().
+  template <typename Participant>
+  constexpr auto with_airlock(Participant &p) const {
+    constexpr auto thunk = +[](void *erased) {
+      ::villagesql::airlock a;
+      static_cast<Participant *>(erased)->airlock(a);
+    };
+    auto new_thunks = std::tuple_cat(
+        airlock_thunks_, std::make_tuple(static_cast<void (*)(void *)>(thunk)));
+    auto new_pointers = std::tuple_cat(
+        airlock_pointers_, std::make_tuple(static_cast<void *>(&p)));
+    return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple,
+                            decltype(new_thunks), decltype(new_pointers),
+                            InitFn, DeinitFn>{
+        funcs_,
+        types_,
+        required_capabilities_,
+        require_atleast_min(VEF_PROTOCOL_2),
+        new_thunks,
+        new_pointers};
   }
 
   // For testing only — forces the extension to require protocol p regardless
   // of which features are registered.
   constexpr auto test_only_require_protocol(vef_protocol_t p) const {
     return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple,
-                            InitFn, DeinitFn>{funcs_, types_,
-                                              required_capabilities_, p};
+                            AirlockThunkTuple, AirlockPtrTuple, InitFn,
+                            DeinitFn>{
+        funcs_, types_,          required_capabilities_,
+        p,      airlock_thunks_, airlock_pointers_};
+  }
+
+ private:
+  template <size_t... Is>
+  void init_airlock_(std::index_sequence<Is...>) const {
+    (std::get<Is>(airlock_thunks_)(std::get<Is>(airlock_pointers_)), ...);
   }
 };
 
@@ -151,8 +224,9 @@ struct ExtensionBuilder {
 // and .with() calls to register types, functions, and capabilities, then pass
 // the result to VEF_GENERATE_ENTRY_POINTS.
 constexpr auto make_extension() {
-  return ExtensionBuilder<std::tuple<>, std::tuple<>, std::tuple<>>{
-      {}, {}, {}, VEF_PROTOCOL_1};
+  return ExtensionBuilder<std::tuple<>, std::tuple<>, std::tuple<>,
+                          std::tuple<>, std::tuple<>>{
+      {}, {}, {}, VEF_PROTOCOL_1, {}, {}};
 }
 }  // namespace vsql
 

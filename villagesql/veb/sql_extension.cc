@@ -69,15 +69,17 @@ namespace {
 // Helpers below execute_install. Forward-declared so the install path can
 // call them without reordering this file.
 bool validate_extension_name(THD *thd, const std::string &extension_name);
-bool resolve_veb_version(THD *thd, const std::string &extension_name,
-                         const LEX_CSTRING &m_version, bool require_explicit,
-                         std::string &veb_version, std::string &version);
-bool load_veb_and_so(THD *thd, const std::string &extension_name,
-                     const std::string &veb_version,
-                     villagesql::veb::ExtensionRegistration &registration,
-                     std::string &sha256_hash,
-                     villagesql::services::LoadReason load_reason =
-                         villagesql::services::LoadReason::kInstall);
+bool resolve_veb_version(
+    THD *thd, const std::string &extension_name, const LEX_CSTRING &m_version,
+    bool require_explicit, std::string &veb_version, std::string &version,
+    villagesql::services::ExtensionManifestServices &manifest_services);
+bool load_veb_and_so(
+    THD *thd, const std::string &extension_name, const std::string &veb_version,
+    const villagesql::services::ExtensionManifestServices &manifest_services,
+    villagesql::veb::ExtensionRegistration &registration,
+    std::string &sha256_hash,
+    villagesql::services::LoadReason load_reason =
+        villagesql::services::LoadReason::kInstall);
 }  // namespace
 
 // Guards the extension DDL (INSTALL / UNINSTALL / ALTER EXTENSION). These
@@ -424,14 +426,16 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
 
   std::string veb_version;
   std::string version;
+  villagesql::services::ExtensionManifestServices manifest_services;
   if (resolve_veb_version(thd, extension_name, m_version,
-                          /*require_explicit=*/false, veb_version, version))
+                          /*require_explicit=*/false, veb_version, version,
+                          manifest_services))
     return end_transaction(thd, true);
 
   villagesql::veb::ExtensionRegistration registration;
   std::string sha256_hash;
-  if (load_veb_and_so(thd, extension_name, veb_version, registration,
-                      sha256_hash))
+  if (load_veb_and_so(thd, extension_name, veb_version, manifest_services,
+                      registration, sha256_hash))
     return end_transaction(thd, true);
 
   // Unload the .so on any failure below; released after a successful commit.
@@ -599,9 +603,10 @@ bool validate_extension_name(THD *thd, const std::string &extension_name) {
 // When require_explicit is true and m_version is unset, fails — used by
 // callers (e.g. extension update) where omitting VERSION is not allowed.
 // Returns true on error (thd error already set), false on success.
-bool resolve_veb_version(THD *thd, const std::string &extension_name,
-                         const LEX_CSTRING &m_version, bool require_explicit,
-                         std::string &veb_version, std::string &version) {
+bool resolve_veb_version(
+    THD *thd, const std::string &extension_name, const LEX_CSTRING &m_version,
+    bool require_explicit, std::string &veb_version, std::string &version,
+    villagesql::services::ExtensionManifestServices &manifest_services) {
   std::string requested_version;
   if (m_version.str != nullptr && m_version.length > 0) {
     requested_version.assign(m_version.str, m_version.length);
@@ -626,9 +631,13 @@ bool resolve_veb_version(THD *thd, const std::string &extension_name,
   }
 
   // Load manifest; for versioned VEBs this also asserts that the manifest
-  // version matches veb_version.
+  // version matches veb_version. Also pulls declared MySQL services out of
+  // the manifest so the airlock enforcement gate downstream has the
+  // extension's contract.
   version = veb_version;
-  if (villagesql::veb::load_veb_manifest(extension_name, version)) {
+  if (villagesql::veb::load_veb_manifest(
+          extension_name, version, &manifest_services.required_services,
+          &manifest_services.provided_services)) {
     // Error already reported by load_veb_manifest
     return true;
   }
@@ -649,11 +658,11 @@ bool resolve_veb_version(THD *thd, const std::string &extension_name,
 // Expand the VEB archive and load the .so into memory.
 // On success, registration is populated and sha256_hash contains the hash.
 // Returns true on error (thd error set), false on success.
-bool load_veb_and_so(THD *thd, const std::string &extension_name,
-                     const std::string &veb_version,
-                     villagesql::veb::ExtensionRegistration &registration,
-                     std::string &sha256_hash,
-                     villagesql::services::LoadReason load_reason) {
+bool load_veb_and_so(
+    THD *thd, const std::string &extension_name, const std::string &veb_version,
+    const villagesql::services::ExtensionManifestServices &manifest_services,
+    villagesql::veb::ExtensionRegistration &registration,
+    std::string &sha256_hash, villagesql::services::LoadReason load_reason) {
   std::string expanded_path;
   if (villagesql::veb::expand_veb_to_directory(extension_name, veb_version,
                                                expanded_path, sha256_hash)) {
@@ -684,7 +693,8 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
   std::string load_error;
   if (villagesql::veb::load_vef_extension(
           {.extension_name = extension_name, .reason = load_reason, .thd = thd},
-          so_path, server_protocol, registration, load_error)) {
+          so_path, server_protocol, registration, manifest_services,
+          load_error)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
             extension_name.c_str(), load_error.c_str());
     villagesql_error("Failed to load VEF extension '%s': %s", MYF(0),

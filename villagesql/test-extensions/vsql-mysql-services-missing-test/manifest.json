@@ -1,0 +1,10 @@
+{
+  "name": "vsql_mysql_services_missing_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension that requests a nonexistent MySQL service to exercise the airlock failure path",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0",
+  "required_mysql_services": [
+    "vsql_intentionally_missing"
+  ]
+}

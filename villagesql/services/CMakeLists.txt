@@ -14,7 +14,9 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_SERVICES_SOURCES
+  airlock_registry.cc
   capability_registry.cc
+  mysql_service_registry.cc
   sys_var_access.cc
   preview/auth.cc
   preview/column_store.cc

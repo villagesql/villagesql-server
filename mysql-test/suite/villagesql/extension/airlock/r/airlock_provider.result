@@ -1,0 +1,16 @@
+# Install — register provider impl, then acquire it as the default
+INSTALL EXTENSION vsql_mysql_services_provider_test;
+# The VDF call goes: SQL -> consumer (RequiredService) -> impl pointer
+# -> impl_say_hello (lives inside the same .so as the provider).
+SELECT vsql_mysql_services_provider_test.say_hello() AS reply;
+reply
+hello from provided impl
+# Uninstall — bridge teardown unregisters impl from the service registry
+# (and releases the consumer's handle).
+UNINSTALL EXTENSION vsql_mysql_services_provider_test;
+# Reinstall to verify register_impl + acquire round-trip is repeatable.
+INSTALL EXTENSION vsql_mysql_services_provider_test;
+SELECT vsql_mysql_services_provider_test.say_hello() AS reply_again;
+reply_again
+hello from provided impl
+UNINSTALL EXTENSION vsql_mysql_services_provider_test;

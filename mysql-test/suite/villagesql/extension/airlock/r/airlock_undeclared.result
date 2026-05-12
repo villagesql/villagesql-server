@@ -1,0 +1,18 @@
+# ----------------------------------------------------------------------
+# Setup
+# Creating local configuration file for keyring component: component_keyring_file
+# Creating manifest file for current MySQL server instance
+# Re-starting mysql server with manifest file
+# ----------------------------------------------------------------------
+call mtr.add_suppression("not declared in manifest");
+# Install must fail with a manifest-declaration error, not an
+# acquire-existence error: the service is registered but undeclared.
+INSTALL EXTENSION vsql_mysql_services_undeclared_test;
+ERROR HY000: Failed to load VEF extension 'vsql_mysql_services_undeclared_test': airlock handler error for vsql::mysql_service_required/v1: service 'keyring_component_status' is requested by code but not declared in manifest 'required_mysql_services'
+# ----------------------------------------------------------------------
+# Teardown
+# Removing manifest file for current MySQL server instance
+# Removing local keyring file for keyring component: component_keyring_file
+# Removing local configuration file for keyring component: component_keyring_file
+# Restarting server without the manifest file
+# ----------------------------------------------------------------------

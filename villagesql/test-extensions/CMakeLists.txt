@@ -59,3 +59,11 @@ vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.
 # mytype_to_v2 conversion VDF.
 vsql_add_test_extension(update-schema-test-v1          update_schema_test  VERSION 1.0.0)
 vsql_add_test_extension(update-schema-test-v2          update_schema_test  VERSION 2.0.0)
+
+# Airlock (MySQL Services bridge) test extensions. These include MySQL
+# component service headers directly, so the shared template needs
+# MYSQL_INCLUDE_DIR — request it with the MYSQL_HEADERS flag.
+vsql_add_test_extension(vsql-mysql-services-test             vsql_mysql_services_test             MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-provider-test    vsql_mysql_services_provider_test    MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-missing-test     vsql_mysql_services_missing_test     MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-undeclared-test  vsql_mysql_services_undeclared_test  MYSQL_HEADERS)

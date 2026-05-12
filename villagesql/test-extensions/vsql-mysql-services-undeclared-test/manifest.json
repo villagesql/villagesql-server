@@ -1,0 +1,8 @@
+{
+  "name": "vsql_mysql_services_undeclared_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension that requests a real MySQL service that is intentionally not declared in the manifest",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0",
+  "required_mysql_services": []
+}

@@ -1,0 +1,40 @@
+# Test the MySQL Services airlock bridge end-to-end.
+#
+# The vsql_mysql_services_test extension declares three RequiredServices
+# (keyring_component_status, keyring_reader_with_status, keyring_writer) and
+# wires them through the airlock. If the airlock plumbing works, the
+# extension's keyring_store/keyring_read VDFs will round-trip a value via
+# the MySQL service registry vtables.
+
+--source include/have_component_keyring_file.inc
+--source suite/component_keyring_file/inc/setup_component.inc
+
+--echo # Install extension — this exercises the airlock channel: bridge
+--echo # opens "vsql::mysql_service_registry/v1", server-side handler hands
+--echo # back the registry vtable, bridge acquires three services.
+INSTALL EXTENSION vsql_mysql_services_test;
+
+--echo # Round-trip a key through SERVICE_TYPE(keyring_writer) -> SERVICE_TYPE(keyring_reader_with_status)
+SELECT vsql_mysql_services_test.keyring_store('vsql_airlock_key', NULL, 'airlock_round_trip') AS store_status;
+SELECT vsql_mysql_services_test.keyring_read('vsql_airlock_key', NULL) AS read_value;
+
+--echo # Reading a non-existent key returns NULL (proves the path handles
+--echo # "not found" cleanly via the SERVICE_TYPE(reader)->init flow)
+SELECT vsql_mysql_services_test.keyring_read('vsql_no_such_key', NULL) IS NULL AS missing_is_null;
+
+--echo # NULL data_id short-circuits before touching the service vtable
+SELECT vsql_mysql_services_test.keyring_read(NULL, NULL) IS NULL AS null_id_returns_null;
+
+--echo # Uninstall — the airlock teardown calls registry->release() for each
+--echo # acquired service. If teardown is broken, mysqld will leak refs and
+--echo # eventually the keyring component will refuse to unload.
+UNINSTALL EXTENSION vsql_mysql_services_test;
+
+--echo # Re-install after uninstall: proves teardown left a clean slate so
+--echo # the bridge's static state (channel_requested flag, service lists)
+--echo # behaves correctly across load cycles within the same mysqld run.
+INSTALL EXTENSION vsql_mysql_services_test;
+SELECT vsql_mysql_services_test.keyring_read('vsql_airlock_key', NULL) AS read_after_reinstall;
+UNINSTALL EXTENSION vsql_mysql_services_test;
+
+--source suite/component_keyring_file/inc/teardown_component.inc

@@ -115,9 +115,15 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
   // registration, then immediately unload.
   ExtensionRegistration target;
   std::string load_error;
+  // Pre-check inspects the target .so without wiring anything to the live
+  // server, so no airlock services are enforced. An empty manifest refuses
+  // any airlock request; if a future airlock-using extension needs pre-check
+  // inspection to succeed, extend this to skip airlock dispatch entirely.
+  // TODO(villagesql): teach open_vef_extension to skip airlock in inspect mode.
+  villagesql::services::ExtensionManifestServices empty_manifest_services;
   if (open_vef_extension(input.target_so_path,
                          static_cast<vef_protocol_t>(input.server_protocol),
-                         target, load_error)) {
+                         target, empty_manifest_services, load_error)) {
     return fail(std::string("Cannot update extension '") +
                 input.extension_name + "': failed to load target .so at " +
                 input.target_so_path + ": " + load_error);

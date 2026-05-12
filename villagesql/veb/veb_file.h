@@ -20,8 +20,11 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <vector>
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/services/mysql_service_registry.h"
 
 class THD;
 namespace villagesql::services {
@@ -61,9 +64,15 @@ bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex);
 //   non-empty input -> opens {name}-{version}.veb and asserts the manifest
 //                      version matches; on mismatch returns true with a
 //                      diagnostic error.
+// If either *_services_out pointer is non-null, also parses the
+// "required_mysql_services" / "provided_mysql_services" string arrays from
+// the manifest (defaulting to empty if absent).
 // Opens the tar archive using libarchive and parses manifest.json using
 // RapidJSON. Returns false on success, true on error.
-bool load_veb_manifest(const std::string &name, std::string &version);
+bool load_veb_manifest(
+    const std::string &name, std::string &version,
+    std::unordered_set<std::string> *required_services_out = nullptr,
+    std::unordered_set<std::string> *provided_services_out = nullptr);
 
 // Expand VEB archive to directory:
 //   {datadir}/.veb_expansion_cache/{name}/{sha256}/
@@ -119,6 +128,12 @@ struct ExtensionRegistration {
   std::string so_path;
   void *dlhandle;
   vef_unregister_func_t unregister_func;
+
+  // MySQL Services bridge state: handles acquired and impls registered on
+  // behalf of this extension during load. Released / unregistered during
+  // unload in the four-phase teardown order documented in
+  // mysql_service_registry.h.
+  villagesql::services::ExtensionAirlockState airlock_state;
 };
 
 // Load a VEF extension from a .so file and get the registration.
@@ -129,10 +144,12 @@ struct ExtensionRegistration {
 // On success, all fields in registration are populated.
 // On error, a message is written to error_message so that it can be logged,
 // and/or returned to the client.
-bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
-                        const std::string &so_path, vef_protocol_t max_protocol,
-                        ExtensionRegistration &registration,
-                        std::string &error_message);
+bool load_vef_extension(
+    const villagesql::services::PopulateContext &ctx,
+    const std::string &so_path, vef_protocol_t max_protocol,
+    ExtensionRegistration &registration,
+    const villagesql::services::ExtensionManifestServices &manifest_services,
+    std::string &error_message);
 
 // Unload a VEF extension .so file.
 // ctx is passed through to on_depopulate for each capability.
@@ -154,9 +171,11 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
 // populate_capabilities step; use that for the install/startup paths.
 //
 // Returns false on success, true on error (error_message populated).
-bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
-                        ExtensionRegistration &registration,
-                        std::string &error_message);
+bool open_vef_extension(
+    const std::string &so_path, vef_protocol_t max_protocol,
+    ExtensionRegistration &registration,
+    const villagesql::services::ExtensionManifestServices &manifest_services,
+    std::string &error_message);
 
 // Symmetric counterpart to open_vef_extension: vef_unregister + dlclose, no
 // capability depopulate. Pair with open_vef_extension. Calling this on a

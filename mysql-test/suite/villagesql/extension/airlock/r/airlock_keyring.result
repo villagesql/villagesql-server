@@ -1,0 +1,45 @@
+# ----------------------------------------------------------------------
+# Setup
+# Creating local configuration file for keyring component: component_keyring_file
+# Creating manifest file for current MySQL server instance
+# Re-starting mysql server with manifest file
+# ----------------------------------------------------------------------
+# Install extension — this exercises the airlock channel: bridge
+# opens "vsql::mysql_service_registry/v1", server-side handler hands
+# back the registry vtable, bridge acquires three services.
+INSTALL EXTENSION vsql_mysql_services_test;
+# Round-trip a key through SERVICE_TYPE(keyring_writer) -> SERVICE_TYPE(keyring_reader_with_status)
+SELECT vsql_mysql_services_test.keyring_store('vsql_airlock_key', NULL, 'airlock_round_trip') AS store_status;
+store_status
+0
+SELECT vsql_mysql_services_test.keyring_read('vsql_airlock_key', NULL) AS read_value;
+read_value
+airlock_round_trip
+# Reading a non-existent key returns NULL (proves the path handles
+# "not found" cleanly via the SERVICE_TYPE(reader)->init flow)
+SELECT vsql_mysql_services_test.keyring_read('vsql_no_such_key', NULL) IS NULL AS missing_is_null;
+missing_is_null
+1
+# NULL data_id short-circuits before touching the service vtable
+SELECT vsql_mysql_services_test.keyring_read(NULL, NULL) IS NULL AS null_id_returns_null;
+null_id_returns_null
+1
+# Uninstall — the airlock teardown calls registry->release() for each
+# acquired service. If teardown is broken, mysqld will leak refs and
+# eventually the keyring component will refuse to unload.
+UNINSTALL EXTENSION vsql_mysql_services_test;
+# Re-install after uninstall: proves teardown left a clean slate so
+# the bridge's static state (channel_requested flag, service lists)
+# behaves correctly across load cycles within the same mysqld run.
+INSTALL EXTENSION vsql_mysql_services_test;
+SELECT vsql_mysql_services_test.keyring_read('vsql_airlock_key', NULL) AS read_after_reinstall;
+read_after_reinstall
+airlock_round_trip
+UNINSTALL EXTENSION vsql_mysql_services_test;
+# ----------------------------------------------------------------------
+# Teardown
+# Removing manifest file for current MySQL server instance
+# Removing local keyring file for keyring component: component_keyring_file
+# Removing local configuration file for keyring component: component_keyring_file
+# Restarting server without the manifest file
+# ----------------------------------------------------------------------

@@ -87,8 +87,13 @@ endfunction()
 #                   keeps the plain name. CMake target names are suffixed
 #                   with -<VERSION> so multiple versions of the same
 #                   VEB_NAME can coexist.
+#   MYSQL_HEADERS - flag; when present, MYSQL_INCLUDE_DIR is passed to the
+#                   shared template so the fixture can include MySQL component
+#                   service headers (e.g. <mysql/components/services/*.h>).
+#                   The airlock (MySQL Services bridge) test extensions need
+#                   this; ordinary VEF-only extensions don't.
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
-  cmake_parse_arguments(_ext "" "ABI;VERSION" "" ${ARGN})
+  cmake_parse_arguments(_ext "MYSQL_HEADERS" "ABI;VERSION" "" ${ARGN})
 
   if(_ext_ABI STREQUAL "v3")
     set(_vsql_test_ext_include "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk/v3/include")
@@ -126,18 +131,24 @@ macro(vsql_add_test_extension DIR_NAME VEB_NAME)
       "-DCMAKE_EXE_LINKER_FLAGS=--coverage")
   endif()
 
+  set(_ext_cmake_args
+    "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+    "-DVillageSQLExtensionFramework_INCLUDE_DIR=${_vsql_test_ext_include}"
+    "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+    "-DEXTENSION_NAME=${VEB_NAME}"
+    "-DEXTENSION_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/${DIR_NAME}"
+    ${_ext_cov_args}
+  )
+  if(_ext_MYSQL_HEADERS)
+    list(APPEND _ext_cmake_args "-DMYSQL_INCLUDE_DIR=${CMAKE_SOURCE_DIR}/include")
+  endif()
+
   ExternalProject_Add(${_ext_proj_target}
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/shared
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/${DIR_NAME}-shared-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${_vsql_test_ext_include}"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-      "-DEXTENSION_NAME=${VEB_NAME}"
-      "-DEXTENSION_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/${DIR_NAME}"
-      ${_ext_cov_args}
+    CMAKE_ARGS ${_ext_cmake_args}
     DEPENDS sdk
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""

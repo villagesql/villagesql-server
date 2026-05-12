@@ -29,6 +29,13 @@ find_package(VillageSQLExtensionFramework REQUIRED)
 
 include_directories(${VillageSQLExtensionFramework_INCLUDE_DIR})
 
+# MySQL component service headers aren't part of the SDK. The parent's
+# vsql_add_test_extension(... MYSQL_HEADERS) sets MYSQL_INCLUDE_DIR for
+# fixtures (e.g. the airlock tests) that need <mysql/components/services/*.h>.
+if(MYSQL_INCLUDE_DIR)
+  include_directories(${MYSQL_INCLUDE_DIR})
+endif()
+
 add_library(extension SHARED
   ${EXTENSION_SOURCE_DIR}/src/extension.cc
 )

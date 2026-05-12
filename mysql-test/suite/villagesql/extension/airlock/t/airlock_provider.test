@@ -1,0 +1,23 @@
+# Test the ProvidedService side of the MySQL Services airlock bridge.
+#
+# vsql_mysql_services_provider_test defines a custom MySQL service
+# "vsql_self_test_thing", provides an implementation, and consumes the
+# default impl through a RequiredService<>. If both halves of the bridge
+# work, the consumer resolves to the just-registered impl and say_hello()
+# returns the impl's response string.
+
+--echo # Install — register provider impl, then acquire it as the default
+INSTALL EXTENSION vsql_mysql_services_provider_test;
+
+--echo # The VDF call goes: SQL -> consumer (RequiredService) -> impl pointer
+--echo # -> impl_say_hello (lives inside the same .so as the provider).
+SELECT vsql_mysql_services_provider_test.say_hello() AS reply;
+
+--echo # Uninstall — bridge teardown unregisters impl from the service registry
+--echo # (and releases the consumer's handle).
+UNINSTALL EXTENSION vsql_mysql_services_provider_test;
+
+--echo # Reinstall to verify register_impl + acquire round-trip is repeatable.
+INSTALL EXTENSION vsql_mysql_services_provider_test;
+SELECT vsql_mysql_services_provider_test.say_hello() AS reply_again;
+UNINSTALL EXTENSION vsql_mysql_services_provider_test;

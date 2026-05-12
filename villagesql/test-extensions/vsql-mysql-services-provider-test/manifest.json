@@ -1,0 +1,13 @@
+{
+  "name": "vsql_mysql_services_provider_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension exercising the ProvidedService side of the MySQL Services airlock bridge",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0",
+  "required_mysql_services": [
+    "vsql_self_test_thing"
+  ],
+  "provided_mysql_services": [
+    "vsql_self_test_thing.vsql_mysql_services_provider_test"
+  ]
+}

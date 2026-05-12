@@ -115,6 +115,11 @@ add_custom_command(
     "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/"
 
+  # Copy MySQL Services bridge headers (third layer atop the SDK + MySQL).
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/mysql_services/include/vsql"
+    "${SDK_STAGING_DIR}/include-dev/vsql"
+
   # Copy template project
   COMMAND ${CMAKE_COMMAND} -E copy
     "${STABLE_SDK_DIR}/template/CMakeLists.txt"

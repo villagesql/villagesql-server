@@ -45,6 +45,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/services/airlock_registry.h"
 #include "villagesql/services/capability_registry.h"
 #include "villagesql/services/sys_var_access.h"
 #include "villagesql/veb/register.h"
@@ -252,7 +253,9 @@ bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex) {
   return false;
 }
 
-bool load_veb_manifest(const std::string &name, std::string &version) {
+bool load_veb_manifest(const std::string &name, std::string &version,
+                       std::unordered_set<std::string> *required_services_out,
+                       std::unordered_set<std::string> *provided_services_out) {
   LogVSQL(INFORMATION_LEVEL,
           "Loading VEB manifest for extension '%s' version '%s'", name.c_str(),
           version.c_str());
@@ -400,6 +403,35 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
 
   LogVSQL(INFORMATION_LEVEL, "Extension '%s' has version '%s'", name.c_str(),
           version.c_str());
+
+  auto parse_service_array = [&](const char *field,
+                                 std::unordered_set<std::string> *out) -> bool {
+    if (out == nullptr) return false;
+    out->clear();
+    if (!manifest.HasMember(field)) return false;
+    const rapidjson::Value &arr = manifest[field];
+    if (!arr.IsArray()) {
+      villagesql_error("'%s' in manifest.json must be an array of strings",
+                       MYF(0), field);
+      return true;
+    }
+    for (rapidjson::SizeType i = 0; i < arr.Size(); ++i) {
+      if (!arr[i].IsString()) {
+        villagesql_error("entries of '%s' in manifest.json must be strings",
+                         MYF(0), field);
+        return true;
+      }
+      out->insert(arr[i].GetString());
+    }
+    return false;
+  };
+
+  if (parse_service_array("required_mysql_services", required_services_out)) {
+    return true;
+  }
+  if (parse_service_array("provided_mysql_services", provided_services_out)) {
+    return true;
+  }
 
   return false;
 }
@@ -708,7 +740,10 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     veb_version = expected_version;
   }
   std::string actual_version = veb_version;
-  if (load_veb_manifest(extension_name, actual_version)) {
+  villagesql::services::ExtensionManifestServices manifest_services;
+  if (load_veb_manifest(extension_name, actual_version,
+                        &manifest_services.required_services,
+                        &manifest_services.provided_services)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEB manifest for extension '%s'",
             extension_name.c_str());
     return true;
@@ -761,7 +796,7 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
                           .reason = villagesql::services::LoadReason::kStartup,
                           .thd = thd},
                          so_path, vef_server_protocol_version, *registration,
-                         load_error)) {
+                         manifest_services, load_error)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
             extension_name.c_str(), load_error.c_str());
     return true;
@@ -1361,9 +1396,11 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
-bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
-                        ExtensionRegistration &registration,
-                        std::string &error_message) {
+bool open_vef_extension(
+    const std::string &so_path, vef_protocol_t max_protocol,
+    ExtensionRegistration &registration,
+    const villagesql::services::ExtensionManifestServices &manifest_services,
+    std::string &error_message) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -1432,6 +1469,30 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
     return true;
   }
 
+  // Run any airlock requests the extension declared. The scoped TLS makes
+  // the manifest's declared service lists and the airlock-state tracker
+  // visible to the MySQL Services bridge handlers without exposing them in
+  // the airlock handler signature.
+  {
+    villagesql::services::LoadContext load_ctx{&manifest_services,
+                                               &registration.airlock_state};
+    villagesql::services::ScopedLoadContext guard(&load_ctx);
+
+    if (villagesql::services::populate_airlock_requests(reg, error_message)) {
+      // Partial state may have accumulated in registration.airlock_state.
+      // Roll it back in teardown order so the registry is left clean.
+      villagesql::services::release_self_consumed_handles(
+          registration.airlock_state);
+      villagesql::services::unregister_impls(registration.airlock_state);
+      vef_unregister_arg_t unregister_arg = {negotiated_protocol};
+      vef_unregister(&unregister_arg, reg);
+      dlclose(handle);
+      villagesql::services::release_remaining_handles(
+          registration.airlock_state);
+      return true;
+    }
+  }
+
   // TODO(villagesql-beta): Add more validation of the returned registration
   // object (e.g. func/type descriptors, protocol version, null pointers).
 
@@ -1454,21 +1515,45 @@ void close_vef_extension(const ExtensionRegistration &registration) {
     return;
   }
 
+  // Need mutable access to the airlock state for teardown bookkeeping; the
+  // outer registration is passed by const& for convention reasons but the
+  // teardown is the registration's last legitimate user.
+  auto &mut = const_cast<ExtensionRegistration &>(registration);
+
   if (registration.registration != nullptr) {
+    // Phase 1: release acquired handles whose service this extension also
+    // provides. Required so phase 2's unregister can succeed (the registry
+    // refuses to unregister an impl with non-zero refcount).
+    villagesql::services::release_self_consumed_handles(mut.airlock_state);
+
+    // Phase 2: unregister provided impls. Must precede dlclose because the
+    // impl pointers are inside the .so.
+    villagesql::services::unregister_impls(mut.airlock_state);
+
     vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
     LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
             registration.so_path.c_str());
     registration.unregister_func(&unregister_arg, registration.registration);
   }
 
+  // Phase 3: unload the .so.
   dlclose(registration.dlhandle);
+
+  // Phase 4: release any handles not already released in phase 1. These
+  // refer to services implemented by other components, not us; releasing
+  // after dlclose ensures no thread can still be calling through a pointer
+  // stored inside our now-unmapped .so.
+  villagesql::services::release_remaining_handles(mut.airlock_state);
 }
 
-bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
-                        const std::string &so_path, vef_protocol_t max_protocol,
-                        ExtensionRegistration &registration,
-                        std::string &error_message) {
-  if (open_vef_extension(so_path, max_protocol, registration, error_message)) {
+bool load_vef_extension(
+    const villagesql::services::PopulateContext &ctx,
+    const std::string &so_path, vef_protocol_t max_protocol,
+    ExtensionRegistration &registration,
+    const villagesql::services::ExtensionManifestServices &manifest_services,
+    std::string &error_message) {
+  if (open_vef_extension(so_path, max_protocol, registration, manifest_services,
+                         error_message)) {
     return true;
   }
 
