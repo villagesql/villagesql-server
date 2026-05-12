@@ -47,11 +47,14 @@ std::optional<TypeDescriptor> build_type_descriptor_v1(
   if (td->hash_func != nullptr) hash_fn.emplace(td->hash_func);
 
   // 3. Build TypeDescriptor.
+  // V1 ABI doesn't carry max_persisted_length; pass 0 (no inference path for
+  // v1 types — constant-string inference is a v2-only capability).
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
       VEF_PROTOCOL_1, MYSQL_TYPE_VARCHAR, td->persisted_length,
-      td->max_decode_buffer_length, std::move(encode_fn), std::move(decode_fn),
-      std::move(compare_fn), std::move(hash_fn));
+      td->max_decode_buffer_length, /*max_persisted_length=*/0,
+      std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
+      std::move(hash_fn));
 
   // 5. No intrinsic default for protocol-1; encode("") is the fallback.
 

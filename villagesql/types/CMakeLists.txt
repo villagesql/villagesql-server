@@ -14,6 +14,7 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_TYPES_SOURCES
+  from_string_inference.cc
   type_decoder.cc
   type_encoder.cc
   type_function.cc

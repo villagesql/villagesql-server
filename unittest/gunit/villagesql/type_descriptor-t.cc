@@ -87,6 +87,7 @@ TEST_F(TypeDescriptorTest, Construction) {
       1,    // implementation_type
       16,   // persisted_length
       256,  // max_decode_buffer_length
+      0,    // max_persisted_length
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare),
@@ -113,7 +114,9 @@ TEST_F(TypeDescriptorTest, Construction) {
 // Test TypeDescriptor with nullptr hash (optional)
 TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
   villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("NOHASH", "ext", "1.0"), VEF_PROTOCOL_1, 0, 8, 64,
+      villagesql::TypeDescriptorKey("NOHASH", "ext", "1.0"), VEF_PROTOCOL_1, 0,
+      8, 64,
+      0,  // max_persisted_length
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
@@ -128,7 +131,9 @@ TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
 // This verifies the key_type typedef and key() method work correctly
 TEST_F(TypeDescriptorTest, KeyTypeCompatibility) {
   villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("TEST", "ext", "1.0"), VEF_PROTOCOL_1, 0, 8, 64,
+      villagesql::TypeDescriptorKey("TEST", "ext", "1.0"), VEF_PROTOCOL_1, 0, 8,
+      64,
+      0,  // max_persisted_length
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
@@ -254,6 +259,7 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
       1,   // implementation_type
       -1,  // persisted_length (variable-length)
       0,   // max_decode_buffer_length (determined by params)
+      0,   // max_persisted_length (not used by these tests)
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare),

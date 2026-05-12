@@ -26,10 +26,10 @@ namespace vsql {
 // "known" or "unknown" state. It is the first argument to from_string for
 // parameterized custom types in the ::vsql API.
 //
-// At runtime today the SDK constructs MaybeParams<P> in the known state from
-// the cached parsed parameters. The unknown state exists so that a
-// fix_fields-time pre-execute path can ask the extension to infer params from
-// a constant string literal.
+// At row time the SDK constructs MaybeParams<P> in the known state from the
+// cached parsed parameters. The unknown state is used by the fix_fields-time
+// pre-execute path, which asks the extension to infer params from a constant
+// string literal.
 //
 // Usage in an extension's from_string:
 //

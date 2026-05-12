@@ -27,6 +27,7 @@
 #include "sql/sql_udf.h"
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
+#include "villagesql/types/from_string_inference.h"
 #include "villagesql/types/util.h"
 
 namespace villagesql {
@@ -102,6 +103,48 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
           thd, m_udf->name.str, to_string_view(m_udf->extension_name),
           arg_count, m_args, signature, &return_params)) {
     return true;
+  }
+
+  // Constant-string from_string inference.
+  //
+  // If the return type's params are still unknown after type disambiguation
+  // rules and the call matches `<TYPE>::from_string('<literal>')` with a
+  // deterministic VDF, we pre-execute the encode VDF here to learn the params
+  // from the literal. The SDK wrapper writes the inferred canonical params back
+  // through vef_inferred_type_params_t; we bind them to return_params so
+  // SetVDFReturnTypeContext below populates the outer call's return
+  // TypeContext. The VDF re-runs at row time on the original literal, this
+  // time with known params, and encodes normally.
+  if (signature != nullptr && return_params.empty() &&
+      signature->return_type.id == VEF_TYPE_CUSTOM &&
+      m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
+      arguments[0]->type() == Item::STRING_ITEM &&
+      arguments[0]->const_for_execution()) {
+    TypeInferenceSnapshot snap;
+    if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
+                                signature->return_type.custom_type, &snap) &&
+        snap.is_parameterized && snap.max_persisted_length > 0) {
+      String tmp;
+      String *val = arguments[0]->val_str(&tmp);
+      if (val != nullptr && !arguments[0]->null_value) {
+        TypeParameters inferred;
+        std::string encoded_bytes;  // discarded; re-encoded at row time.
+        if (!villagesql::InferFromStringConstant(
+                thd, snap.max_persisted_length, m_udf->vdf_func_desc,
+                std::string_view(val->ptr(), val->length()), &inferred,
+                &encoded_bytes)) {
+          return_params = std::move(inferred);
+        } else if (current_thd->is_error()) {
+          // InferFromStringConstant surfaced a real error (malformed literal,
+          // wrapper bug, etc.).
+          return true;
+        }
+        // Else: inference produced no params (e.g., type didn't register
+        // params_to_strings). Fall through; SetVDFReturnTypeContext below
+        // will receive an empty return_params, and downstream code will
+        // surface the existing ambiguity error if needed.
+      }
+    }
   }
 
   // Call prerun if present

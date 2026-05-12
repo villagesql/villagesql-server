@@ -32,9 +32,9 @@ TypeDescriptorKey::TypeDescriptorKey(std::string type_name,
 
 TypeDescriptor::TypeDescriptor(
     TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
-    int64_t persisted_len, int64_t max_unpersisted_len, EncodeFunction encode,
-    DecodeFunction decode, CompareFunction compare,
-    std::optional<HashFunction> hash,
+    int64_t persisted_len, int64_t max_unpersisted_len,
+    int64_t max_persisted_len, EncodeFunction encode, DecodeFunction decode,
+    CompareFunction compare, std::optional<HashFunction> hash,
     std::optional<IntToParamsFunction> int_to_params,
     std::optional<ResolveParamsFunction> resolve_params,
     std::optional<StorageInterface> storage_intf)
@@ -43,6 +43,7 @@ TypeDescriptor::TypeDescriptor(
       implementation_type_(impl_type),
       persisted_length_(persisted_len),
       max_decode_buffer_length_(max_unpersisted_len),
+      max_persisted_length_(max_persisted_len),
       encode_fn_(std::move(encode)),
       decode_fn_(std::move(decode)),
       compare_fn_(std::move(compare)),

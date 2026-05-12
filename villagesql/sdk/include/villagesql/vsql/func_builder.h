@@ -204,9 +204,9 @@ struct FuncWithMetadata {
 using TypeEncodeFunc = void (*)(std::string_view from, CustomResult out);
 // Parameterized variant: MaybeParams<P> carries the params, which may be
 // known on entry (validate against the string) or unknown (infer from the
-// string and write the inferred values back via p.set()). At runtime today
-// MaybeParams<P> is always known; the unknown case is exercised by a future
-// fix_fields-time pre-execute path for constant string literals.
+// string and write the inferred values back via p.set()). At row time it is
+// always known; the unknown case is exercised by the fix_fields-time
+// pre-execute path for constant string literals.
 //
 // The result wrapper is plain CustomResult (not CustomResultWith<P>) because
 // params come from the MaybeParams<P>& argument.
@@ -493,11 +493,16 @@ struct TypeEncodeWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    // At runtime today the type params are always known by the time the
-    // encode VDF runs. The future pre-execute path for constant literals will
-    // call this wrapper with empty type_params to request inference; the
-    // wrapper construction below will then leave MaybeParams<P> in the unknown
-    // state.
+    // Two call sites reach this wrapper:
+    //   - Row time: the server has already resolved the return type's params,
+    //     and they arrive via result->type_params (count > 0). We construct
+    //     MaybeParams<P> in the known state from the cache.
+    //   - fix_fields-time constant-string inference: the server invokes the
+    //     encode VDF on a literal to learn the params, passing empty
+    //     type_params (count == 0). We leave MaybeParams<P> in the unknown
+    //     state so the extension's from_string can call p.set() to publish
+    //     them; the wrapper then writes them back via result->out_type_params
+    //     below.
     MaybeParams<P> maybe_params;
     const bool input_params_known = result->type_params.count > 0;
     if (input_params_known) {
@@ -1162,6 +1167,7 @@ constexpr StaticFuncDesc<1> make_type_encode(const char *name,
   meta.param_types[0] = to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1181,6 +1187,7 @@ constexpr StaticFuncDesc<1> make_type_decode(const char *name,
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1201,6 +1208,7 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
   meta.param_types[1] = to_vef_type(type_name);
   meta.num_params = 2;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<2>(name, meta);
 }
 
@@ -1220,6 +1228,7 @@ constexpr StaticFuncDesc<1> make_type_hash(const char *name,
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1232,6 +1241,7 @@ constexpr StaticFuncDesc<1> make_int_to_params(const char *name) {
   meta.param_types[0] = to_vef_type(INT);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1244,6 +1254,7 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
   meta.param_types[0] = to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
