@@ -41,20 +41,6 @@ static_assert(VEF_STORAGE_SE_INTF_VERSION == 1,
 
 namespace vsql::preview_storage {
 
-// C++ wrapper around vef_preview_storage_t.
-//
-// Usage:
-//   static auto STORAGE = vsql::preview_storage::StorageCapability();
-//
-// Register with:
-//   make_extension().with(STORAGE)
-//
-class StorageCapability {
- public:
-  static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
-  static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
-};
-
 // Error codes returned by storage ABI functions.
 enum class Error {
   SUCCESS = VEF_STORAGE_SUCCESS,

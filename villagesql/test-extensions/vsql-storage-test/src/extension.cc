@@ -50,6 +50,7 @@
 
 namespace storage = vsql::preview_storage;
 using vsql::preview_storage_builder::make_storage;
+using vsql::preview_storage_builder::StorageCapability;
 
 // Per-column user context. Populated during create/load and used by every
 // subsequent storage call for that column.
@@ -301,7 +302,7 @@ bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
 // Type and extension registration
 // ============================================================================
 
-static auto STORAGE = storage::StorageCapability();
+static auto STORAGE = StorageCapability();
 
 static constexpr vef_type_storage_intf_t kStoredIntStorageIntf =
     make_storage<StoredIntCtx>()

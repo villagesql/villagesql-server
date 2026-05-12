@@ -30,6 +30,28 @@
 
 namespace vsql::preview_storage_builder {
 
+// Token that activates the storage API for this extension.
+//
+// Declare one static instance and pass it to make_extension().with() to
+// enable MtrCtx, Page, Segment, and Arena from storage_api.h. Without
+// this registration, calling any storage API function is undefined behavior.
+//
+// Usage:
+//   static auto STORAGE = vsql::preview_storage_builder::StorageCapability();
+//
+//   VSQL_EXTENSION_INIT {
+//     return make_extension()
+//         .with(STORAGE)
+//         ...
+//         .build();
+//   }
+//
+class StorageCapability {
+ public:
+  static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
+};
+
 // =============================================================================
 // StorageBuilder<UserCtx>
 // =============================================================================
@@ -320,7 +342,7 @@ constexpr StorageBuilder<UserCtx> make_storage() {
 namespace vsql::detail {
 
 template <>
-struct CapabilityTraits<::vsql::preview_storage::StorageCapability> {
+struct CapabilityTraits<::vsql::preview_storage_builder::StorageCapability> {
   static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
   static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
   using AbiType = vef_preview_storage_t;
@@ -329,7 +351,7 @@ struct CapabilityTraits<::vsql::preview_storage::StorageCapability> {
   // inline implementations (MtrCtx, Page, Segment) can call through it
   // without holding a reference to the StorageCapability instance.
   static void *vtable_destination(
-      ::vsql::preview_storage::StorageCapability * /*p*/) noexcept {
+      ::vsql::preview_storage_builder::StorageCapability * /*p*/) noexcept {
     return static_cast<void *>(&::vsql::preview_storage::detail::g_abi);
   }
 };
