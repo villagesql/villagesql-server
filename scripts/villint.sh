@@ -407,8 +407,10 @@ REQUIRED_CLANG_FORMAT_VERSION=$(cat "$SCRIPT_DIR/clang-format-version")
 die_clang_format() {
   echo "Error: $1" >&2
   echo "Please install clang-format $REQUIRED_CLANG_FORMAT_VERSION:" >&2
-  echo "  Any platform: pip install clang-format==$REQUIRED_CLANG_FORMAT_VERSION" >&2
-  echo "  macOS (brew): brew install clang-format" >&2
+  echo "  Linux: pip install clang-format==$REQUIRED_CLANG_FORMAT_VERSION" >&2
+  echo "  macOS: brew install clang-format" >&2
+  echo "         (then verify 'clang-format --version' matches; brew tracks" >&2
+  echo "         LLVM's latest stable so a future bump may drift away)" >&2
   exit 1
 }
 
