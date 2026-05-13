@@ -119,8 +119,15 @@ get_ignored_patterns() {
   local commit_range="$1"
   # Check if we're in a jj workspace or git repo
   if is_jj_workspace; then
-    # Use jj log - get commits from commit_range (which should be like "@" or a revision)
-    jj log -r "::@ ~ ::$commit_range" --no-graph -T description 2>/dev/null | \
+    # The caller passes commit_range in git's `X..HEAD` form.  Translate to
+    # jj's equivalent revset (`X..@`) and use it directly.  Previously this
+    # wrapped the range in `::@ ~ ::$commit_range`, which produced an
+    # invalid jj revset like `::@ ~ ::main@origin..HEAD` (the `..` infix
+    # cannot follow `::` in jj) -- jj returned a parse error that was
+    # silently swallowed by `2>/dev/null`, leaving no ignore directives
+    # visible locally.
+    local jj_range="${commit_range/..HEAD/..@}"
+    jj log -r "$jj_range" --no-graph -T description 2>/dev/null | \
       grep -i "^villint-ignore:" | \
       sed 's/^villint-ignore://i' | \
       tr ',' '\n' | \
@@ -395,22 +402,27 @@ EOF
 
 # Check for required tools
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REQUIRED_CLANG_FORMAT_MAJOR=$(cat "$SCRIPT_DIR/clang-format-version")
+REQUIRED_CLANG_FORMAT_VERSION=$(cat "$SCRIPT_DIR/clang-format-version")
 
 die_clang_format() {
   echo "Error: $1" >&2
-  echo "Please install clang-format version $REQUIRED_CLANG_FORMAT_MAJOR:" >&2
-  echo "  macOS:  brew install clang-format" >&2
-  echo "  Ubuntu: see https://apt.llvm.org/ for clang-format-$REQUIRED_CLANG_FORMAT_MAJOR" >&2
+  echo "Please install clang-format $REQUIRED_CLANG_FORMAT_VERSION:" >&2
+  echo "  Any platform: pip install clang-format==$REQUIRED_CLANG_FORMAT_VERSION" >&2
+  echo "  macOS (brew): brew install clang-format" >&2
   exit 1
 }
 
 if ! command -v clang-format >/dev/null 2>&1; then
   die_clang_format "clang-format is not installed or not in PATH"
 fi
-CLANG_FORMAT_MAJOR=$(clang-format --version | grep -oE '[0-9]+' | head -1)
-if [ "$CLANG_FORMAT_MAJOR" != "$REQUIRED_CLANG_FORMAT_MAJOR" ]; then
-  die_clang_format "clang-format version $CLANG_FORMAT_MAJOR found, expected $REQUIRED_CLANG_FORMAT_MAJOR"
+# Match the full version (major.minor.patch) so we catch formatting drift
+# between point releases.  Patch releases of clang-format are not policy-
+# bound to keep formatting stable, and we have been burned by minor drift
+# (see the bug history of this script's revset and ranges logic for the
+# investigation that surfaced this).
+CLANG_FORMAT_VERSION=$(clang-format --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+if [ "$CLANG_FORMAT_VERSION" != "$REQUIRED_CLANG_FORMAT_VERSION" ]; then
+  die_clang_format "clang-format version $CLANG_FORMAT_VERSION found, expected $REQUIRED_CLANG_FORMAT_VERSION"
 fi
 
 # Determine comparison point if not specified
@@ -538,15 +550,14 @@ for file in $C_FILES; do
 
     # Check if we're in a jj workspace or git repo
     if is_jj_workspace; then
-      # Use jj diff to get changes
-      # Check if file exists in the from revision
-      if jj file show -r "$COMMIT_ISH" "$file" >/dev/null 2>&1; then
-        # File exists in base revision: diff against it
-        ranges_str=$(jj diff --from "$COMMIT_ISH" --git "$file" 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
-      else
-        # New file: treat all lines as added
-        ranges_str=$(jj diff --git "$file" 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
-      fi
+      # `jj diff --from "$COMMIT_ISH"` works whether or not the file
+      # existed at COMMIT_ISH: for a brand-new file it produces a
+      # full-file-added diff, matching what the git path does for
+      # untracked files.  Previously we branched on existence and the
+      # "new file" arm dropped --from, which made jj diff against the
+      # working-copy parent (empty for a clean checkout) and silently
+      # skip the file entirely.
+      ranges_str=$(jj diff --from "$COMMIT_ISH" --git "$file" 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
     else
       # Check if the file is tracked by git to determine the correct diff command.
       if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then

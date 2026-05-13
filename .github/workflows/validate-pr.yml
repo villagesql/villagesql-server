@@ -58,15 +58,13 @@ jobs:
       run: ./scripts/validate-pr-title.sh "$PR_TITLE"
 
     - name: Install clang-format
-      run: |
-        CLANG_VERSION=$(cat scripts/clang-format-version)
-        CODENAME=$(lsb_release -cs)
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-        echo "deb http://apt.llvm.org/${CODENAME}/ llvm-toolchain-${CODENAME}-${CLANG_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list
-        sudo apt-get update
-        sudo apt-get install -y "clang-format-${CLANG_VERSION}"
-        sudo update-alternatives --install /usr/bin/clang-format clang-format "/usr/bin/clang-format-${CLANG_VERSION}" 100
-        sudo update-alternatives --set clang-format "/usr/bin/clang-format-${CLANG_VERSION}"
+      # Pinned via PyPI to a specific release (read from
+      # scripts/clang-format-version) so CI uses a deterministic version.
+      # The previous apt.llvm.org install pulled `clang-format-22` from
+      # `llvm-toolchain-noble-22`, which is a *moving snapshot* of LLVM
+      # main -- two CI runs days apart could see different formatting
+      # behavior even when the package name was unchanged.
+      run: pip install "clang-format==$(cat scripts/clang-format-version)"
 
     - name: Run villint linter
       run: |
