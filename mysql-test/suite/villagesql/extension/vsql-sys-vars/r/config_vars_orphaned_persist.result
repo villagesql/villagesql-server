@@ -1,3 +1,4 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
 # Install extension and persist a variable
 INSTALL EXTENSION vsql_config_vars_test;
 SET PERSIST vsql_config_vars_test.max_items = 42;
@@ -17,3 +18,5 @@ SELECT @@global.vsql_config_vars_test.max_items;
 @@global.vsql_config_vars_test.max_items
 100
 UNINSTALL EXTENSION vsql_config_vars_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

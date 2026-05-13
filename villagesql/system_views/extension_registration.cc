@@ -166,42 +166,13 @@ static std::string registration_to_json(const vef_registration_t *r) {
   }
   w.EndArray();
 
-  if (r->protocol >= VEF_PROTOCOL_2) {
-    w.Key("sys_vars");
-    w.StartArray();
-    for (unsigned int i = 0; i < r->sys_var_count; i++) {
-      const vef_sys_var_desc_t *v = r->sys_vars[i];
-      w.StartObject();
-      w.Key("name");
-      w.String(v->name ? v->name : "");
-      if (v->comment) {
-        w.Key("comment");
-        w.String(v->comment);
-      }
-      const char *var_type;
-      switch (v->type) {
-        case VEF_VAR_BOOL:
-          var_type = "BOOL";
-          break;
-        case VEF_VAR_INT:
-          var_type = "INT";
-          break;
-        case VEF_VAR_DOUBLE:
-          var_type = "DOUBLE";
-          break;
-        case VEF_VAR_STR:
-          var_type = "STRING";
-          break;
-        default:
-          var_type = "UNKNOWN";
-          break;
-      }
-      w.Key("type");
-      w.String(var_type);
-      w.EndObject();
-    }
-    w.EndArray();
-  }
+  // TODO(villagesql-beta): Serialize per-capability data (sys_vars,
+  // status_vars, etc.) into the JSON by adding a to_json callback to
+  // CapabilityRegistration. Each capability provides its own serializer;
+  // extension_registration.cc iterates required_capabilities, looks up the
+  // CapabilityRegistration by name, and calls to_json(extension_data, w) if
+  // present. This keeps this file capability-agnostic and automatically
+  // includes new capabilities.
 
   w.EndObject();
   return buf.GetString();

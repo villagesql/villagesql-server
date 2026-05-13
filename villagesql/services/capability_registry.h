@@ -109,15 +109,15 @@ void register_builtin_capabilities();
 // On failure, sets error_message to a description of what went wrong
 // (missing capability or ABI type mismatch) and returns true.
 // Returns false if all capabilities were satisfied.
-bool populate_capabilities(const vef_registration_t *reg,
-                           std::string &error_message,
-                           const PopulateContext &ctx);
+bool populate_capabilities(const PopulateContext &ctx,
+                           const vef_registration_t *reg,
+                           std::string &error_message);
 
 // Called before vef_unregister() when an extension is being unloaded.
 // Invokes on_depopulate for each capability that registered one, allowing
 // capabilities to stop threads or clean up server-side resources.
-void depopulate_capabilities(const vef_registration_t *reg,
-                             const DepopulateContext &ctx);
+void depopulate_capabilities(const DepopulateContext &ctx,
+                             const vef_registration_t *reg);
 
 }  // namespace villagesql::services
 

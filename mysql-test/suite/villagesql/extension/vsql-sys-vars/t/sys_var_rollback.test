@@ -1,0 +1,28 @@
+# Test that INSTALL EXTENSION rolls back already-registered system variables
+# when a later variable in the same list fails to register. The extension
+# declares good_int (INT, succeeds) then bad_double (DOUBLE, fails because
+# MySQL's component_sys_variable_register does not support PLUGIN_VAR_DOUBLE).
+# After the failed INSTALL EXTENSION, neither variable should be visible.
+
+call mtr.add_suppression("Unknown variable type code");
+call mtr.add_suppression("Failed to register system variable");
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # INSTALL EXTENSION should fail because bad_double cannot be registered
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_sys_var_rollback_test;
+
+--echo # good_int must not be visible — it was rolled back
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_sys_var_rollback_test.good_int;
+
+--echo # bad_double must not be visible either
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_sys_var_rollback_test.bad_double;
+
+--echo # SHOW VARIABLES should list neither variable
+SHOW GLOBAL VARIABLES LIKE 'vsql_sys_var_rollback_test.%';
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

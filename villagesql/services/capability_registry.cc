@@ -26,6 +26,7 @@
 #include "villagesql/services/preview/sql_query.h"
 #include "villagesql/services/preview/status_var.h"
 #include "villagesql/services/preview/storage.h"
+#include "villagesql/services/preview/sys_var.h"
 #include "villagesql/services/preview/thread_worker.h"
 
 bool vsql_allow_preview_extensions = false;
@@ -153,13 +154,22 @@ void register_builtin_capabilities() {
            villagesql::detail::abi_type_hash<vef_preview_status_var_t>(),
        .on_populate = on_populate_status_var,
        .on_depopulate = on_depopulate_status_var});
+  // Sys var: on_populate registers the extension's system variables with MySQL;
+  // on_depopulate unregisters them on extension unload.
+  register_capability(
+      VEF_PREVIEW_SYS_VAR_NAME,
+      {.vtable = preview_sys_var_vtable(),
+       .abi_type_hash =
+           villagesql::detail::abi_type_hash<vef_preview_sys_var_t>(),
+       .on_populate = on_populate_sys_var,
+       .on_depopulate = on_depopulate_sys_var});
 }
 
 // TODO(villagesql-preview): Verify that the capabilities declared in
 // vef_registration_t match those listed in the extension's manifest.
-bool populate_capabilities(const vef_registration_t *reg,
-                           std::string &error_message,
-                           const PopulateContext &ctx) {
+bool populate_capabilities(const PopulateContext &ctx,
+                           const vef_registration_t *reg,
+                           std::string &error_message) {
   if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
@@ -184,6 +194,8 @@ bool populate_capabilities(const vef_registration_t *reg,
     }
     if (!entry->compat_fn(req, entry->vtable, error_message)) return true;
     if (entry->on_populate != nullptr) {
+      // ctx carries shared fields (reason, thd, extension_name); extension_data
+      // is capability-specific and comes from the per-capability req entry.
       PopulateContext cap_ctx = ctx;
       cap_ctx.extension_data = req.extension_data;
       if (entry->on_populate(cap_ctx, error_message)) return true;
@@ -193,8 +205,8 @@ bool populate_capabilities(const vef_registration_t *reg,
   return false;
 }
 
-void depopulate_capabilities(const vef_registration_t *reg,
-                             const DepopulateContext &ctx) {
+void depopulate_capabilities(const DepopulateContext &ctx,
+                             const vef_registration_t *reg) {
   if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
@@ -206,6 +218,7 @@ void depopulate_capabilities(const vef_registration_t *reg,
 
     const CapabilityValue *entry = find_capability_entry(req.name);
     if (entry == nullptr || entry->on_depopulate == nullptr) continue;
+    // Same as populate: ctx carries shared fields, extension_data is per-cap.
     DepopulateContext cap_ctx = ctx;
     cap_ctx.extension_data = req.extension_data;
     entry->on_depopulate(cap_ctx);

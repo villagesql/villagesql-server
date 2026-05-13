@@ -2,6 +2,8 @@
 # Covers: default values, SET GLOBAL, SET PERSIST, restart persistence,
 # and cleanup on UNINSTALL EXTENSION.
 
+SET PERSIST vsql_allow_preview_extensions = ON;
+
 --echo # Install extension
 INSTALL EXTENSION vsql_config_vars_test;
 
@@ -48,6 +50,11 @@ SELECT @@global.vsql_config_vars_test.max_items;
 SELECT vsql_config_vars_test.write_max_items(9999999);
 SELECT @@global.vsql_config_vars_test.max_items;
 
+--echo # Read label via VDF (goes through get() vtable)
+SELECT vsql_config_vars_test.read_label();
+SET GLOBAL vsql_config_vars_test.label = 'via_get';
+SELECT vsql_config_vars_test.read_label();
+
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_config_vars_test;
 
@@ -56,3 +63,6 @@ UNINSTALL EXTENSION vsql_config_vars_test;
 SELECT @@global.vsql_config_vars_test.max_items;
 --error ER_UNKNOWN_SYSTEM_VARIABLE
 SELECT @@global.vsql_config_vars_test.label;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

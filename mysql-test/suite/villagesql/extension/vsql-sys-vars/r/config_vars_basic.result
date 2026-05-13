@@ -1,3 +1,4 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
 # Install extension
 INSTALL EXTENSION vsql_config_vars_test;
 # Verify defaults
@@ -59,6 +60,14 @@ Warning	1292	Truncated incorrect vsql_config_vars_test.max_items value: '9999999
 SELECT @@global.vsql_config_vars_test.max_items;
 @@global.vsql_config_vars_test.max_items
 1000000
+# Read label via VDF (goes through get() vtable)
+SELECT vsql_config_vars_test.read_label();
+vsql_config_vars_test.read_label()
+default_label
+SET GLOBAL vsql_config_vars_test.label = 'via_get';
+SELECT vsql_config_vars_test.read_label();
+vsql_config_vars_test.read_label()
+via_get
 # Uninstall extension
 UNINSTALL EXTENSION vsql_config_vars_test;
 # Variables should no longer exist
@@ -66,3 +75,5 @@ SELECT @@global.vsql_config_vars_test.max_items;
 ERROR HY000: Unknown system variable 'vsql_config_vars_test.max_items'
 SELECT @@global.vsql_config_vars_test.label;
 ERROR HY000: Unknown system variable 'vsql_config_vars_test.label'
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

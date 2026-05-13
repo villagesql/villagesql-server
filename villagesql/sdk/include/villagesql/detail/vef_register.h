@@ -32,15 +32,6 @@
 
 namespace vsql {
 
-// Forward-declare the vsql globals so that name lookup succeeds inside the
-// `if constexpr (Ext::kHasVsqlGlobals)` block even when only the base
-// extension_builder.h (not vsql.h) is included. Clang resolves non-dependent
-// names at parse time regardless of whether the branch is discarded.
-namespace sys_var {
-extern vef_get_variable_fn g_get_variable;
-extern vef_set_variable_fn g_set_variable;
-}  // namespace sys_var
-
 // Define materialize_func_desc here so it is available to both old
 // (villagesql::func_builder) and new (vsql::func_builder) API users without
 // requiring an additional include.  villagesql/func_builder.h re-exports this
@@ -118,15 +109,6 @@ void vef_fill_type_ptrs(vef_type_desc_t **arr, const Ext &e,
    ...);
 }
 
-// Fills arr[I] with the vef_sys_var_desc_t* for each system variable.
-template <typename Ext, size_t... Is>
-void vef_fill_sys_var_ptrs(vef_sys_var_desc_t **arr, const Ext &e,
-                           std::index_sequence<Is...>) {
-  ((arr[Is] =
-        const_cast<vef_sys_var_desc_t *>(&e.template sys_var_at<Is>().desc)),
-   ...);
-}
-
 // has_extension_data<T>: true when CapabilityTraits<T> provides extension_data.
 template <typename Traits, typename Cap, typename = void>
 struct has_extension_data : std::false_type {};
@@ -159,12 +141,15 @@ void vef_fill_one_capability_req(vef_required_capability_t *arr, const Ext &e) {
   arr[I].abi_type_hash =
       villagesql::detail::abi_type_hash<typename Traits::AbiType>();
   arr[I].min_version = Traits::kAbiVersion;
-  if constexpr (has_capability_descriptor<Traits>::value) {
+  if constexpr (has_extension_data<Traits, Capability>::value) {
     arr[I].extension_data = Traits::extension_data(cap_ptr);
+  } else {
+    arr[I].extension_data = nullptr;
+  }
+  if constexpr (has_capability_descriptor<Traits>::value) {
     arr[I].descriptor_abi_hash =
         villagesql::detail::abi_type_hash<typename Traits::DescriptorType>();
   } else {
-    arr[I].extension_data = nullptr;
     arr[I].descriptor_abi_hash = 0;
   }
 }
@@ -231,24 +216,12 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
 // The counts are explicit template parameters so that array sizes are
 // compile-time constants without relying on VLAs.
-template <typename Ext, size_t FuncCount, size_t TypeCount, size_t SysVarCount,
+template <typename Ext, size_t FuncCount, size_t TypeCount,
           size_t RequiredCapabilityCount>
 vef_registration_t *vef_register_impl(vef_registration_t &reg,
                                       bool &initialized,
                                       vef_register_arg_t *arg, const Ext &ext) {
   if (initialized) return &reg;
-
-  // Ext::kHasVsqlGlobals is true for vsql::ExtensionBuilder (which always
-  // includes keyring.h and sys_var_builder.h) and false for the base
-  // extension_builder::ExtensionBuilder (which does not). The if constexpr
-  // guard prunes this block for base extensions so those TUs don't need the
-  // vsql headers in scope.
-  if constexpr (Ext::kHasVsqlGlobals) {
-    if (arg->protocol >= VEF_PROTOCOL_2) {
-      vsql::sys_var::g_get_variable = arg->get_variable;
-      vsql::sys_var::g_set_variable = arg->set_variable;
-    }
-  }
 
   if (arg->protocol < ext.min_protocol()) {
     static char error_buf[128];
@@ -263,7 +236,6 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
 
   static vef_func_desc_t *func_ptrs[FuncCount > 0 ? FuncCount : 1];
   static vef_type_desc_t *type_ptrs[TypeCount > 0 ? TypeCount : 1];
-  static vef_sys_var_desc_t *sys_var_ptrs[SysVarCount > 0 ? SysVarCount : 1];
   static vef_required_capability_t required_capability_reqs
       [RequiredCapabilityCount > 0 ? RequiredCapabilityCount : 1];
 
@@ -274,10 +246,6 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   if constexpr (TypeCount > 0) {
     vef_fill_type_ptrs(type_ptrs, ext, std::make_index_sequence<TypeCount>{});
     vef_init_type_params(ext, std::make_index_sequence<TypeCount>{});
-  }
-  if constexpr (SysVarCount > 0) {
-    vef_fill_sys_var_ptrs(sys_var_ptrs, ext,
-                          std::make_index_sequence<SysVarCount>{});
   }
   if constexpr (RequiredCapabilityCount > 0) {
     vef_fill_required_capability_reqs(
@@ -310,8 +278,6 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   reg.funcs = FuncCount > 0 ? func_ptrs : nullptr;
   reg.type_count = TypeCount;
   reg.types = TypeCount > 0 ? type_ptrs : nullptr;
-  reg.sys_var_count = SysVarCount;
-  reg.sys_vars = SysVarCount > 0 ? sys_var_ptrs : nullptr;
   reg.required_capability_count = RequiredCapabilityCount;
   reg.required_capabilities =
       RequiredCapabilityCount > 0 ? required_capability_reqs : nullptr;

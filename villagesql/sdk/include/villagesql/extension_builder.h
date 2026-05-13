@@ -82,9 +82,7 @@ struct ExtensionBuilder {
 
   static constexpr size_t kFuncCount = std::tuple_size_v<FuncTuple>;
   static constexpr size_t kTypeCount = std::tuple_size_v<TypeTuple>;
-  static constexpr size_t kSysVarCount = 0;
   static constexpr size_t kRequiredCapabilityCount = 0;
-  static constexpr bool kHasVsqlGlobals = false;
 
   constexpr vef_protocol_t min_protocol() const { return min_protocol_; }
 
@@ -122,20 +120,20 @@ constexpr auto make_extension(std::string_view /*name*/,
 // descriptors after registration for testing). Otherwise use
 // VEF_GENERATE_ENTRY_POINTS which generates the full extern "C" entry points.
 
-#define VEF_GENERATE_REGISTRATION(ext)                                   \
-  namespace {                                                            \
-  vef_registration_t _vef_reg;                                           \
-  bool _vef_reg_initialized = false;                                     \
-  }                                                                      \
-                                                                         \
-  static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) { \
-    using namespace villagesql::extension_builder;                       \
-    static constexpr auto kExt = (ext);                                  \
-    using ExtType = decltype(kExt);                                      \
-    return villagesql::detail::vef_register_impl<                        \
-        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,        \
-        ExtType::kSysVarCount, ExtType::kRequiredCapabilityCount>(       \
-        _vef_reg, _vef_reg_initialized, arg, kExt);                      \
+#define VEF_GENERATE_REGISTRATION(ext)                                     \
+  namespace {                                                              \
+  vef_registration_t _vef_reg;                                             \
+  bool _vef_reg_initialized = false;                                       \
+  }                                                                        \
+                                                                           \
+  static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) {   \
+    using namespace villagesql::extension_builder;                         \
+    static constexpr auto kExt = (ext);                                    \
+    using ExtType = decltype(kExt);                                        \
+    return villagesql::detail::vef_register_impl<                          \
+        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,          \
+        ExtType::kRequiredCapabilityCount>(_vef_reg, _vef_reg_initialized, \
+                                           arg, kExt);                     \
   }
 
 // VEF_GENERATE_ENTRY_POINTS
@@ -143,26 +141,26 @@ constexpr auto make_extension(std::string_view /*name*/,
 // Generates the extern "C" vef_register and vef_unregister functions.
 // Must be called in a .cc file, not a header (defines functions/variables).
 
-#define VEF_GENERATE_ENTRY_POINTS(ext)                                   \
-  namespace {                                                            \
-  vef_registration_t vef_reg_;                                           \
-  bool vef_reg_initialized_ = false;                                     \
-  }                                                                      \
-                                                                         \
-  extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) { \
-    using namespace villagesql::extension_builder;                       \
-    static constexpr auto kExt = (ext);                                  \
-    using ExtType = decltype(kExt);                                      \
-    return villagesql::detail::vef_register_impl<                        \
-        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,        \
-        ExtType::kSysVarCount, ExtType::kRequiredCapabilityCount>(       \
-        vef_reg_, vef_reg_initialized_, arg, kExt);                      \
-  }                                                                      \
-                                                                         \
-  extern "C" void vef_unregister(vef_unregister_arg_t *arg,              \
-                                 vef_registration_t *reg) {              \
-    (void)arg;                                                           \
-    (void)reg;                                                           \
+#define VEF_GENERATE_ENTRY_POINTS(ext)                                     \
+  namespace {                                                              \
+  vef_registration_t vef_reg_;                                             \
+  bool vef_reg_initialized_ = false;                                       \
+  }                                                                        \
+                                                                           \
+  extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {   \
+    using namespace villagesql::extension_builder;                         \
+    static constexpr auto kExt = (ext);                                    \
+    using ExtType = decltype(kExt);                                        \
+    return villagesql::detail::vef_register_impl<                          \
+        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,          \
+        ExtType::kRequiredCapabilityCount>(vef_reg_, vef_reg_initialized_, \
+                                           arg, kExt);                     \
+  }                                                                        \
+                                                                           \
+  extern "C" void vef_unregister(vef_unregister_arg_t *arg,                \
+                                 vef_registration_t *reg) {                \
+    (void)arg;                                                             \
+    (void)reg;                                                             \
   }
 
 #endif  // VILLAGESQL_SDK_EXTENSION_BUILDER_H

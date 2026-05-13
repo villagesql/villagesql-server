@@ -52,7 +52,6 @@
 #include "villagesql/schema/systable/extensions.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
-#include "villagesql/services/sys_vars.h"
 #include "villagesql/sql/metadata_modifier.h"
 #include "villagesql/veb/extension_uninstall_checks.h"
 #include "villagesql/veb/register.h"
@@ -223,17 +222,6 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
-  const vef_registration_t *raw_reg = registration.registration;
-  if (raw_reg != nullptr &&
-      registration.negotiated_protocol >= VEF_PROTOCOL_2) {
-    if (raw_reg->sys_var_count > 0 &&
-        villagesql::veb::validate_sys_var_descriptors(extension_name, raw_reg,
-                                                      reg_error)) {
-      villagesql_error("Failed to install extension '%s': %s", MYF(0),
-                       extension_name.c_str(), reg_error.c_str());
-      return end_transaction(thd, true);
-    }
-  }
 
   bool mark_success = true;
   {
@@ -244,12 +232,6 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
       villagesql_error("Failed to install extension '%s': %s", MYF(0),
                        extension_name.c_str(), reg_error.c_str());
       // Rollback should be done after releasing the victionary lock.
-      mark_success = false;
-
-    } else if (villagesql::services::register_sys_vars_from_extension(
-                   extension_name, registration)) {
-      villagesql_error("Failed to register system variables for extension '%s'",
-                       MYF(0), extension_name.c_str());
       mark_success = false;
 
     } else if (victionary.extension_descriptors().MarkForInsertion(

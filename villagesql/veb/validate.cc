@@ -133,18 +133,8 @@ std::optional<ValidatedRegistration> validate_extension_registration(
     }
   }
 
-  // Wire column storage implementations to types via the storage capability
-  // extension descriptor. The descriptor lives in the extension_data field of
-  // the vsql::preview::storage capability entry.
-  if (reg != nullptr && ext_reg.negotiated_protocol >= VEF_PROTOCOL_2 &&
-      reg->required_capability_count > 0) {
-    for (unsigned int i = 0; i < reg->required_capability_count; i++) {
-      const vef_required_capability_t &cap = reg->required_capabilities[i];
-      if (cap.name == nullptr ||
-          strcmp(cap.name, VEF_PREVIEW_COLUMN_STORE_NAME) != 0 ||
-          cap.extension_data == nullptr) {
-        continue;
-      }
+  return result;
+}
 
 }  // namespace veb
 }  // namespace villagesql

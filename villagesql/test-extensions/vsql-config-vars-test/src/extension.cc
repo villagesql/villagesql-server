@@ -24,25 +24,38 @@
 // VillageSQL extension for testing config variable registration.
 // Declares one INT variable and one STRING variable with known defaults.
 //
-// Also demonstrates the two patterns for accessing INT config vars from VDFs:
+// Demonstrates three patterns for accessing config vars from VDFs:
 //   read_max_items()  - reads the global directly (fast path, no locking needed
 //                       for INT variables)
-//   write_max_items() - writes via sys_var::set() so MySQL applies locking,
-//                       validation, and PERSIST support
+//   write_max_items() - writes via SYS_VARS.set() so MySQL applies
+//                       locking, validation, and PERSIST support
+//   read_label()      - reads via SYS_VARS.get() to round-trip through MySQL
 
+#include <string>
+
+#include <villagesql/preview/sys_var.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
+namespace sv = vsql::preview_sys_var;
 
 static long long g_max_items;
 static char *g_label;
+
+static auto SYS_VARS = sv::make_capability({
+    sv::make_int("max_items", "Maximum number of items to process",
+                 &g_max_items, 100, 0, 1000000),
+    sv::make_str("label", "A label string for this extension", &g_label,
+                 "default_label"),
+});
 
 // Returns the current value of max_items by reading the storage global
 // directly. Safe for INT variables — no locking required.
 void read_max_items_impl(IntResult out) { out.set(g_max_items); }
 
-// Sets max_items via sys_var::set so MySQL handles locking, range validation,
-// and persistence. The storage global is updated by MySQL on success.
+// Sets max_items via SYS_VARS.set() so MySQL handles locking, range
+// validation, and persistence. The storage global is updated by MySQL on
+// success.
 //
 // scope controls persistence:
 //   nullptr        - update running value only (GLOBAL), not persisted
@@ -56,22 +69,31 @@ void write_max_items_impl(IntArg value, IntResult out) {
     return;
   }
   out.set(
-      sys_var::set("vsql_config_vars_test", "max_items", nullptr, value.value())
+      SYS_VARS.set("vsql_config_vars_test", "max_items", nullptr, value.value())
           ? 1
           : 0);
 }
 
+// Reads the label variable via SYS_VARS.get() to exercise the get path.
+// Returns NULL if the get fails.
+void read_label_impl(StringResult out) {
+  std::string val;
+  if (SYS_VARS.get("vsql_config_vars_test", "label", val)) {
+    out.set_null();
+    return;
+  }
+  out.set(val);
+}
+
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
-        .sys_var(make_sys_var_int("max_items",
-                                  "Maximum number of items to process",
-                                  &g_max_items, 100, 0, 1000000))
-        .sys_var(make_sys_var_str("label", "A label string for this extension",
-                                  &g_label, "default_label"))
+        .with(SYS_VARS)
         .func(make_func<&read_max_items_impl>("read_max_items")
                   .returns(INT)
                   .build())
         .func(make_func<&write_max_items_impl>("write_max_items")
                   .returns(INT)
                   .param(INT)
-                  .build()))
+                  .build())
+        .func(
+            make_func<&read_label_impl>("read_label").returns(STRING).build()))

@@ -1,0 +1,17 @@
+call mtr.add_suppression("Unknown variable type code");
+call mtr.add_suppression("Failed to register system variable");
+SET PERSIST vsql_allow_preview_extensions = ON;
+# INSTALL EXTENSION should fail because bad_double cannot be registered
+INSTALL EXTENSION vsql_sys_var_rollback_test;
+ERROR HY000: Failed to load VEF extension 'vsql_sys_var_rollback_test': Failed to register system variable 'bad_double' for extension 'vsql_sys_var_rollback_test'
+# good_int must not be visible — it was rolled back
+SELECT @@global.vsql_sys_var_rollback_test.good_int;
+ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.good_int'
+# bad_double must not be visible either
+SELECT @@global.vsql_sys_var_rollback_test.bad_double;
+ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.bad_double'
+# SHOW VARIABLES should list neither variable
+SHOW GLOBAL VARIABLES LIKE 'vsql_sys_var_rollback_test.%';
+Variable_name	Value
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

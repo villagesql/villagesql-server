@@ -15,14 +15,15 @@
 
 SET(VILLAGESQL_SERVICES_SOURCES
   capability_registry.cc
+  sys_var_access.cc
   preview/column_store.cc
   preview/keyring.cc
   preview/ping.cc
   preview/sql_query.cc
   preview/status_var.cc
   preview/storage.cc
+  preview/sys_var.cc
   preview/thread_worker.cc
-  sys_vars.cc
 )
 
 # Object library for compilation into sql_main (avoids circular dependencies)

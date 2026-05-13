@@ -14,7 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "villagesql/services/sys_vars.h"
+#include "villagesql/services/preview/sys_var.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -30,12 +30,20 @@
 #include "mysql/service_plugin_registry.h"
 #include "sql/persisted_variable.h"
 #include "villagesql/include/error.h"
-#include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
+#include "villagesql/services/sys_var_access.h"
 
-namespace villagesql {
-namespace services {
+namespace villagesql::services {
+
+// Forward declaration: set_variable for the vtable, defined below after
+// g_sys_vars (which it needs to look up the variable type).
+static bool sys_var_set(const char *component_name, const char *name,
+                        const char *scope, const char *val);
 
 namespace {
+
+static vef_preview_sys_var_t g_sys_var_vtable{VEF_PREVIEW_SYS_VAR_ABI_VERSION,
+                                              get_variable, sys_var_set};
 
 // A registered system variable together with the extension it belongs to, so
 // we can unregister it on extension uninstall, and with its type so
@@ -48,6 +56,9 @@ struct RegisteredSysVar {
   // as variable_value). Used to look up on_change from the update trampoline.
   void *value_ptr;
   vef_sys_var_on_change_func_t on_change;
+  // Back-pointer to the descriptor list this var came from, used as the
+  // depopulate key.
+  const void *extension_data;
 };
 
 std::mutex g_sys_vars_mutex;
@@ -60,12 +71,18 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
                                           const void *save) {
   vef_sys_var_on_change_func_t on_change = nullptr;
   vef_sys_var_change_t change{};
+  // These copies own the strings so change.var_name and change.str_val remain
+  // valid after the lock is released. A concurrent on_depopulate_sys_var may
+  // erase the g_sys_vars entry (invalidating var_name), and a concurrent SET
+  // may free the old string value (invalidating str_val).
+  std::string var_name_copy;
+  std::string str_val_copy;
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
     for (const RegisteredSysVar &v : g_sys_vars) {
       if (v.value_ptr == val_ptr) {
         on_change = v.on_change;
-        change.var_name = v.var_name.c_str();
+        var_name_copy = v.var_name;
         change.type = v.type;
         // Perform the typed update (mirroring MySQL's update_func_* family)
         // and capture the new value for the callback, all under the lock so
@@ -86,6 +103,7 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
           case VEF_VAR_STR:
             change.str_val = *static_cast<const char *const *>(save);
             *static_cast<const char **>(val_ptr) = change.str_val;
+            if (change.str_val != nullptr) str_val_copy = change.str_val;
             break;
         }
         break;
@@ -93,93 +111,22 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
     }
   }
 
+  change.var_name = var_name_copy.c_str();
+  if (change.type == VEF_VAR_STR && change.str_val != nullptr)
+    change.str_val = str_val_copy.c_str();
   if (on_change != nullptr && change.var_name != nullptr) on_change(&change);
 }
 
 }  // namespace
 
-bool register_one_sys_var(std::string_view extension_name,
-                          vef_sys_var_desc_t *v) {
-  const std::string ext_name(extension_name);
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
-    LogVSQL(ERROR_LEVEL, "register_one_sys_var: failed to acquire registry");
-    return true;
-  }
-
-  my_service<SERVICE_TYPE(component_sys_variable_register)> reg_svc(
-      "component_sys_variable_register", registry);
-  if (!reg_svc.is_valid()) {
-    LogVSQL(
-        ERROR_LEVEL,
-        "register_one_sys_var: component_sys_variable_register unavailable");
-    mysql_plugin_registry_release(registry);
-    return true;
-  }
-
-  int flags = PLUGIN_VAR_RQCMDARG;
-  void *check_arg = nullptr;
-  void *value_ptr = nullptr;
-
-  BOOL_CHECK_ARG(bool) bool_arg;
-  memset(&bool_arg, 0, sizeof(bool_arg));
-
-  switch (v->type) {
-    case VEF_VAR_BOOL:
-      flags |= PLUGIN_VAR_BOOL;
-      bool_arg.def_val = v->boolean.def_val;
-      check_arg = &bool_arg;
-      value_ptr = v->boolean.value_ptr;
-      break;
-    default:
-      LogVSQL(ERROR_LEVEL, "register_one_sys_var: unsupported type for '%s'",
-              v->name);
-      mysql_plugin_registry_release(registry);
-      return true;
-  }
-
-  mysql_sys_var_update_func update_fn =
-      v->on_change != nullptr ? vef_sys_var_update_trampoline : nullptr;
-
-  bool error = false;
-  if (reg_svc->register_variable(ext_name.c_str(), v->name, flags,
-                                 v->comment ? v->comment : "", nullptr,
-                                 update_fn, check_arg, value_ptr)) {
-    LogVSQL(ERROR_LEVEL, "Failed to register system variable '%s' for '%s'",
-            v->name, ext_name.c_str());
-    error = true;
-  } else {
-    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-    g_sys_vars.push_back(
-        {ext_name, std::string(v->name), v->type, value_ptr, v->on_change});
-  }
-
-  mysql_plugin_registry_release(registry);
-  return error;
-}
-
-bool get_variable(const char *component_name, const char *name, void **val,
-                  size_t *val_len) {
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return true;
-
-  my_service<SERVICE_TYPE(component_sys_variable_register)> svc(
-      "component_sys_variable_register", registry);
-  bool result = true;
-  if (svc.is_valid()) {
-    result = svc->get_variable(component_name, name, val, val_len);
-  }
-  mysql_plugin_registry_release(registry);
-  return result;
-}
+vef_preview_sys_var_t *preview_sys_var_vtable() { return &g_sys_var_vtable; }
 
 // Dispatches to the appropriate MySQL update service based on the registered
-// variable type. String and bool variables go through
-// mysql_system_variable_update_string; integer variables go through
-// mysql_system_variable_update_integer (set_signed). All services handle
-// locking and support GLOBAL, PERSIST, and PERSIST_ONLY scopes.
-bool set_variable(const char *component_name, const char *name,
-                  const char *scope, const char *val) {
+// variable type. Integer variables go through
+// mysql_system_variable_update_integer; everything else goes through
+// mysql_system_variable_update_string.
+static bool sys_var_set(const char *component_name, const char *name,
+                        const char *scope, const char *val) {
   if (val == nullptr) return true;
 
   // Look up the variable type so we can pick the right update service.
@@ -260,14 +207,13 @@ bool set_variable(const char *component_name, const char *name,
   return result;
 }
 
-bool register_sys_vars_from_extension(
-    const std::string &extension_name,
-    const veb::ExtensionRegistration &ext_reg) {
-  const vef_registration_t *reg = ext_reg.registration;
-  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_2 ||
-      reg->sys_var_count == 0) {
+bool on_populate_sys_var(const PopulateContext &ctx,
+                         std::string &error_message) {
+  const auto *list =
+      static_cast<const vef_sys_var_descriptor_list_t *>(ctx.extension_data);
+  if (list == nullptr || list->vars == nullptr || list->var_count == 0)
     return false;
-  }
+  const std::string extension_name(ctx.extension_name);
 
   // The plugin registry and component_sys_variable_register service should
   // always be available when an extension is installed, but can be absent
@@ -275,24 +221,23 @@ bool register_sys_vars_from_extension(
   // not yet initialised (or has already been torn down).
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) {
-    LogVSQL(ERROR_LEVEL,
-            "register_sys_vars_from_extension: failed to acquire registry");
+    error_message = "on_populate_sys_var: failed to acquire registry";
+    LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
     return true;
   }
 
   my_service<SERVICE_TYPE(component_sys_variable_register)> reg_svc(
       "component_sys_variable_register", registry);
   if (!reg_svc.is_valid()) {
-    LogVSQL(ERROR_LEVEL,
-            "register_sys_vars_from_extension: "
-            "component_sys_variable_register service unavailable");
+    error_message =
+        "on_populate_sys_var: component_sys_variable_register unavailable";
+    LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
     mysql_plugin_registry_release(registry);
     return true;
   }
 
-  bool error = false;
-  for (unsigned int i = 0; i < reg->sys_var_count; i++) {
-    vef_sys_var_desc_t *v = reg->sys_vars[i];
+  for (uint32_t i = 0; i < list->var_count; i++) {
+    const vef_sys_var_desc_t *v = list->vars[i];
     int flags = PLUGIN_VAR_RQCMDARG;
     void *check_arg = nullptr;
     void *value_ptr = nullptr;
@@ -355,34 +300,64 @@ bool register_sys_vars_from_extension(
     if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
                                    v->comment ? v->comment : "", nullptr,
                                    update_fn, check_arg, value_ptr)) {
-      LogVSQL(ERROR_LEVEL, "Failed to register system variable '%s' for extension '%s'",
+      LogVSQL(ERROR_LEVEL,
+              "Failed to register system variable '%s' for extension '%s'",
               v->name, extension_name.c_str());
-      error = true;
-      break;
+      error_message = std::string("Failed to register system variable '") +
+                      v->name + "' for extension '" + extension_name + "'";
+      // Roll back any variables registered so far.
+      {
+        std::vector<std::string> to_unreg;
+        {
+          std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+          auto it =
+              std::remove_if(g_sys_vars.begin(), g_sys_vars.end(),
+                             [&](const RegisteredSysVar &rv) {
+                               if (rv.extension_data == ctx.extension_data) {
+                                 to_unreg.push_back(rv.var_name);
+                                 return true;
+                               }
+                               return false;
+                             });
+          g_sys_vars.erase(it, g_sys_vars.end());
+        }
+        my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
+            "component_sys_variable_unregister", registry);
+        if (unreg_svc.is_valid()) {
+          for (const auto &name : to_unreg)
+            unreg_svc->unregister_variable(extension_name.c_str(),
+                                           name.c_str());
+        }
+      }
+      mysql_plugin_registry_release(registry);
+      return true;
     }
 
     {
       std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
       g_sys_vars.push_back({extension_name, std::string(v->name), v->type,
-                            value_ptr, v->on_change});
+                            value_ptr, v->on_change, ctx.extension_data});
     }
 
-    LogVSQL(INFORMATION_LEVEL, "Registered system variable '%s' for extension '%s'",
-            v->name, extension_name.c_str());
+    LogVSQL(INFORMATION_LEVEL,
+            "Registered system variable '%s' for extension '%s'", v->name,
+            extension_name.c_str());
   }
 
   mysql_plugin_registry_release(registry);
-  return error;
+  return false;
 }
 
-void unregister_sys_vars_from_extension(const std::string &extension_name,
-                                        THD *thd) {
+void on_depopulate_sys_var(const DepopulateContext &ctx) {
   std::vector<std::string> var_names;
+  std::string extension_name;
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
     auto it = std::remove_if(g_sys_vars.begin(), g_sys_vars.end(),
                              [&](const RegisteredSysVar &v) {
-                               if (v.extension_name == extension_name) {
+                               if (v.extension_data == ctx.extension_data) {
+                                 if (extension_name.empty())
+                                   extension_name = v.extension_name;
                                  var_names.push_back(v.var_name);
                                  return true;
                                }
@@ -396,10 +371,11 @@ void unregister_sys_vars_from_extension(const std::string &extension_name,
   // Remove persisted values from mysqld-auto.cnf. This is done before
   // unregister_variable so that the variable name is still resolvable in
   // reset_persisted_variables (it looks up the alias via
-  // LOCK_system_variables_hash). Only done on explicit UNINSTALL EXTENSION (thd
-  // != nullptr); on server shutdown thd is null and persisted values are
-  // intentionally left intact.
-  if (thd != nullptr) {
+  // LOCK_system_variables_hash). Only done on explicit UNINSTALL EXTENSION
+  // (ctx.thd != nullptr); on server shutdown thd is null and persisted values
+  // are intentionally left intact.
+  if (ctx.reason == villagesql::services::UnloadReason::kUninstall &&
+      ctx.thd != nullptr) {
     Persisted_variables_cache *pvc = Persisted_variables_cache::get_instance();
     if (pvc != nullptr) {
       // Get the set of persisted plugin/component variables once. We check
@@ -419,7 +395,7 @@ void unregister_sys_vars_from_extension(const std::string &extension_name,
                                  });
           if (it == plugin_vars->end()) continue;
         }
-        pvc->reset_persisted_variables(thd, full_name.c_str(), true);
+        pvc->reset_persisted_variables(ctx.thd, full_name.c_str(), true);
       }
     }
   }
@@ -438,5 +414,4 @@ void unregister_sys_vars_from_extension(const std::string &extension_name,
   mysql_plugin_registry_release(registry);
 }
 
-}  // namespace services
-}  // namespace villagesql
+}  // namespace villagesql::services

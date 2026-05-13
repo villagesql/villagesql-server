@@ -44,7 +44,7 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
-#include "villagesql/services/sys_vars.h"
+#include "villagesql/services/sys_var_access.h"
 #include "villagesql/veb/register.h"
 #include "villagesql/veb/sql_extension.h"
 #include "villagesql/veb/validate.h"
@@ -690,13 +690,6 @@ bool load_installed_extensions(THD *thd) {
         return true;
       }
 
-      if (villagesql::services::register_sys_vars_from_extension(
-              extension_name, registration)) {
-        LogVSQL(ERROR_LEVEL,
-                "Failed to register config vars for extension '%s'",
-                extension_name.c_str());
-        return true;
-      }
 
       if (victionary.extension_descriptors().MarkForInsertion(
               *thd, ExtensionDescriptor(ExtensionDescriptorKey(
@@ -855,9 +848,7 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
   vef_register_arg_t register_arg = {
       max_protocol,
       {MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, MYSQL_VERSION_PATCH, nullptr},
-      {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr},
-      villagesql::services::get_variable,
-      villagesql::services::set_variable};
+      {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr}};
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {
@@ -879,7 +870,7 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
   }
 
   // Populate any capabilities the extension requires.
-  if (villagesql::services::populate_capabilities(reg, error_message, ctx)) {
+  if (villagesql::services::populate_capabilities(ctx, reg, error_message)) {
     // Roll back any capabilities that were successfully populated before the
     // failure. Mirror the load reason to its unload counterpart.
     villagesql::services::DepopulateContext depop_ctx;
@@ -887,7 +878,7 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
                            ? villagesql::services::UnloadReason::kShutdown
                            : villagesql::services::UnloadReason::kUninstall;
     depop_ctx.thd = ctx.thd;
-    villagesql::services::depopulate_capabilities(reg, depop_ctx);
+    villagesql::services::depopulate_capabilities(depop_ctx, reg);
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);
     dlclose(handle);
@@ -918,8 +909,8 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
   }
 
   if (registration.registration != nullptr) {
-    villagesql::services::depopulate_capabilities(registration.registration,
-                                                  ctx);
+    villagesql::services::depopulate_capabilities(ctx,
+                                                  registration.registration);
     vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
     LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
             registration.so_path.c_str());

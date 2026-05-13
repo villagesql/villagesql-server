@@ -1,61 +1,58 @@
-INSTALL EXTENSION vsql_range_clamp_test;
-# Verify defaults
-SELECT @@global.vsql_range_clamp_test.min_setting;
-@@global.vsql_range_clamp_test.min_setting
-0
-SELECT @@global.vsql_range_clamp_test.max_setting;
-@@global.vsql_range_clamp_test.max_setting
-100
-SELECT @@global.vsql_range_clamp_test.label;
-@@global.vsql_range_clamp_test.label
+# Test on_change callbacks.
+#
+# min_setting and max_setting share one on_change handler that uses
+# var_name() to identify which variable changed and as_int() for the value.
+#
+# label has its own on_change handler that uses as_str() for the value.
+# Both demonstrate the SysVarChange typed API.
+#
+# Verifies:
+# - Default values (min=0, max=100, label="")
+# - Setting min above max raises max to match
+# - Setting max below min lowers min to match
+# - Independent changes within the current range leave the other unchanged
+# - Setting both to the same value is allowed
+# - Typed on_change callback fires with the new string value
 
-# Setting min above max raises max to match
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+
+--echo # Verify defaults
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+SELECT @@global.vsql_range_clamp_test.label;
+
+--echo # Setting min above max raises max to match
 SET GLOBAL vsql_range_clamp_test.min_setting = 200;
 SELECT @@global.vsql_range_clamp_test.min_setting;
-@@global.vsql_range_clamp_test.min_setting
-200
 SELECT @@global.vsql_range_clamp_test.max_setting;
-@@global.vsql_range_clamp_test.max_setting
-200
-# Setting max below min lowers min to match
+
+--echo # Setting max below min lowers min to match
 SET GLOBAL vsql_range_clamp_test.max_setting = 50;
 SELECT @@global.vsql_range_clamp_test.min_setting;
-@@global.vsql_range_clamp_test.min_setting
-50
 SELECT @@global.vsql_range_clamp_test.max_setting;
-@@global.vsql_range_clamp_test.max_setting
-50
-# Independent change within range leaves other unchanged
+
+--echo # Independent change within range leaves other unchanged
 SET GLOBAL vsql_range_clamp_test.min_setting = 10;
 SELECT @@global.vsql_range_clamp_test.min_setting;
-@@global.vsql_range_clamp_test.min_setting
-10
 SELECT @@global.vsql_range_clamp_test.max_setting;
-@@global.vsql_range_clamp_test.max_setting
-50
+
 SET GLOBAL vsql_range_clamp_test.max_setting = 80;
 SELECT @@global.vsql_range_clamp_test.min_setting;
-@@global.vsql_range_clamp_test.min_setting
-10
 SELECT @@global.vsql_range_clamp_test.max_setting;
-@@global.vsql_range_clamp_test.max_setting
-80
-# Setting both to same value is allowed
+
+--echo # Setting both to same value is allowed
 SET GLOBAL vsql_range_clamp_test.min_setting = 42;
 SET GLOBAL vsql_range_clamp_test.max_setting = 42;
 SELECT @@global.vsql_range_clamp_test.min_setting;
-@@global.vsql_range_clamp_test.min_setting
-42
 SELECT @@global.vsql_range_clamp_test.max_setting;
-@@global.vsql_range_clamp_test.max_setting
-42
-# Typed on_change callback fires with the new string value
+
+--echo # Typed on_change callback fires with the new string value
 SET GLOBAL vsql_range_clamp_test.label = 'hello';
 SELECT vsql_range_clamp_test.last_label();
-vsql_range_clamp_test.last_label()
-hello
 SET GLOBAL vsql_range_clamp_test.label = 'world';
 SELECT vsql_range_clamp_test.last_label();
-vsql_range_clamp_test.last_label()
-world
+
 UNINSTALL EXTENSION vsql_range_clamp_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

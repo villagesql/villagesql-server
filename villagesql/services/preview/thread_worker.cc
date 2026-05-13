@@ -34,7 +34,7 @@
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
 #include "villagesql/include/error.h"
-#include "villagesql/services/sys_vars.h"
+#include "villagesql/services/sys_var_access.h"
 
 #ifdef HAVE_PSI_INTERFACE
 #include "mysql/psi/psi_thread.h"
@@ -84,10 +84,9 @@ struct WorkerState {
   int current_poll_fd{-1};
   unsigned int current_sleep_ms{0};
 
-  // Storage and descriptor for the auto-registered "{suffix}_enabled" sys var.
+  // Storage for the auto-registered "{suffix}_enabled" sys var.
   bool enabled{false};
   char enabled_var_name[64]{};
-  vef_sys_var_desc_t enabled_var_desc{};
 };
 
 // Global map from descriptor pointer to WorkerState. unique_ptr keeps
@@ -313,14 +312,14 @@ static void worker_stop(WorkerState *state) {
   state->thread.join();
 }
 
-static void on_enabled_change(const vef_sys_var_change_t *c) {
-  if (c->var_name == nullptr) return;
+static void on_enabled_change(const char *var_name, bool new_val) {
+  if (var_name == nullptr) return;
 
   WorkerState *state = nullptr;
   {
     std::lock_guard<std::mutex> lock(g_mu);
     for (auto &kv : g_workers) {
-      if (strcmp(kv.second->enabled_var_name, c->var_name) == 0) {
+      if (strcmp(kv.second->enabled_var_name, var_name) == 0) {
         state = kv.second.get();
         break;
       }
@@ -328,7 +327,7 @@ static void on_enabled_change(const vef_sys_var_change_t *c) {
   }
   if (state == nullptr) return;
 
-  if (c->bool_val) {
+  if (new_val) {
     worker_start(state);
   } else {
     worker_stop(state);
@@ -336,7 +335,7 @@ static void on_enabled_change(const vef_sys_var_change_t *c) {
 }
 
 bool on_populate_thread_worker(const PopulateContext &ctx,
-                               std::string & /*error_message*/) {
+                               std::string &error_message) {
   if (ctx.extension_data == nullptr || ctx.extension_name.empty()) return false;
 
   auto *desc =
@@ -355,15 +354,16 @@ bool on_populate_thread_worker(const PopulateContext &ctx,
                   "%s_enabled", suffix);
   }
 
-  state->enabled_var_desc.protocol = VEF_PROTOCOL_2;
-  state->enabled_var_desc.name = state->enabled_var_name;
-  state->enabled_var_desc.comment = "Enable the background worker thread";
-  state->enabled_var_desc.type = VEF_VAR_BOOL;
-  state->enabled_var_desc.on_change = on_enabled_change;
-  state->enabled_var_desc.boolean.value_ptr = &state->enabled;
-  state->enabled_var_desc.boolean.def_val = false;
+  SysVarDesc enabled_desc{state->enabled_var_name,
+                          "Enable the background worker thread",
+                          &state->enabled, false, on_enabled_change};
 
-  register_one_sys_var(ctx.extension_name, &state->enabled_var_desc);
+  if (register_one_sys_var(ctx.extension_name, enabled_desc)) {
+    error_message = std::string("thread_worker: failed to register '") +
+                    state->enabled_var_name + "' for '" +
+                    std::string(ctx.extension_name) + "'";
+    return true;
+  }
 
   std::lock_guard<std::mutex> lock(g_mu);
   g_workers[desc] = std::move(state);
@@ -385,6 +385,8 @@ void on_depopulate_thread_worker(const DepopulateContext &ctx) {
   }
 
   worker_stop(state);
+
+  unregister_one_sys_var(state->extension_name, state->enabled_var_name);
 
   std::lock_guard<std::mutex> lock(g_mu);
   g_workers.erase(desc);

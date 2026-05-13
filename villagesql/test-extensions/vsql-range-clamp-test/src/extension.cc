@@ -52,9 +52,11 @@
 // them under the same lock that protects the write path, so the adjusted value
 // is visible to other sessions on their next read.
 
+#include <villagesql/preview/sys_var.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
+namespace sv = vsql::preview_sys_var;
 
 static long long g_min_setting = 0;
 static long long g_max_setting = 100;
@@ -63,7 +65,7 @@ static char g_last_label[256] = "";
 
 // Shared handler for min_setting and max_setting — uses var_name() to
 // identify which variable changed, and as_int() to read the typed value.
-static void on_range_change(SysVarChange change) {
+static void on_range_change(sv::SysVarChange change) {
   if (change.var_name() == "min_setting") {
     if (change.as_int().value() > g_max_setting)
       g_max_setting = change.as_int().value();
@@ -74,11 +76,11 @@ static void on_range_change(SysVarChange change) {
 }
 
 // Separate handler for label — uses as_str() to read the typed value.
-static void on_label_change(SysVarChange change) {
-  auto sv = change.as_str().value();
-  size_t len = sv.size() < sizeof(g_last_label) - 1 ? sv.size()
-                                                    : sizeof(g_last_label) - 1;
-  memcpy(g_last_label, sv.data(), len);
+static void on_label_change(sv::SysVarChange change) {
+  auto s = change.as_str().value();
+  size_t len =
+      s.size() < sizeof(g_last_label) - 1 ? s.size() : sizeof(g_last_label) - 1;
+  memcpy(g_last_label, s.data(), len);
   g_last_label[len] = '\0';
 }
 
@@ -86,15 +88,18 @@ static void last_label_vdf(StringResult out) {
   out.set(std::string_view(g_last_label));
 }
 
+static auto SYS_VARS = sv::make_capability({
+    sv::make_int("min_setting", "Lower bound of the range", &g_min_setting, 0,
+                 0, 1000)
+        .on_change<&on_range_change>(),
+    sv::make_int("max_setting", "Upper bound of the range", &g_max_setting, 100,
+                 0, 1000)
+        .on_change<&on_range_change>(),
+    sv::make_str("label", "Arbitrary label string", &g_label, "")
+        .on_change<&on_label_change>(),
+});
+
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
-        .sys_var(make_sys_var_int("min_setting", "Lower bound of the range",
-                                  &g_min_setting, 0, 0, 1000)
-                     .on_change<&on_range_change>())
-        .sys_var(make_sys_var_int("max_setting", "Upper bound of the range",
-                                  &g_max_setting, 100, 0, 1000)
-                     .on_change<&on_range_change>())
-        .sys_var(make_sys_var_str("label", "Arbitrary label string", &g_label,
-                                  "")
-                     .on_change<&on_label_change>())
-        .func(make_func<&last_label_vdf>("last_label").returns(STRING).build()))
+        .func(make_func<&last_label_vdf>("last_label").returns(STRING).build())
+        .with(SYS_VARS))
