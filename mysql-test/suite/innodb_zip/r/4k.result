@@ -49,6 +49,8 @@ test/t2	Single	DEFAULT	0	1	1	Compact or Redundant	MYSQLD_DATADIR/test/t2.ibd
 test/t3	Single	DEFAULT	2048	1	1	Compressed	MYSQLD_DATADIR/test/t3.ibd
 test/t4	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/test/t4.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_indexes	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_indexes.ibd
+villagesql/custom_index_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_index_columns.ibd
 villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
@@ -63,6 +65,8 @@ test/t2	TABLESPACE	InnoDB	NORMAL	test/t2	MYSQLD_DATADIR/test/t2.ibd
 test/t3	TABLESPACE	InnoDB	NORMAL	test/t3	MYSQLD_DATADIR/test/t3.ibd
 test/t4	TABLESPACE	InnoDB	NORMAL	test/t4	MYSQLD_DATADIR/test/t4.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_indexes	TABLESPACE	InnoDB	NORMAL	villagesql/custom_indexes	MYSQLD_DATADIR/villagesql/custom_indexes.ibd
+villagesql/custom_index_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_index_columns	MYSQLD_DATADIR/villagesql/custom_index_columns.ibd
 villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd
