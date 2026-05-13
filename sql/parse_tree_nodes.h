@@ -2458,8 +2458,10 @@ typedef PT_traceable_index_option<ha_key_alg, &KEY_CREATE_INFO::algorithm,
                                   &KEY_CREATE_INFO::is_algorithm_explicit>
     PT_index_type;
 
-// Parse tree node for a VillageSQL extension-defined index type name.
-// Created when USING EXTENDED(type) or USING EXTENDED(extension.type) is used.
+// TODO(villagesql-indexing): Move PT_custom_index_type and
+// PT_index_with_options to villagesql/. Parse tree node for a VillageSQL
+// extension-defined index type name. Created when USING EXTENDED(type) or USING
+// EXTENDED(extension.type) is used.
 class PT_custom_index_type final : public PT_base_index_option {
  public:
   PT_custom_index_type(const POS &pos, LEX_CSTRING extension, LEX_CSTRING name)

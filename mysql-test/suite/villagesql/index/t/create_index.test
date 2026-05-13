@@ -1,5 +1,6 @@
 # Test CREATE INDEX ... USING EXTENDED ... syntax paths
 # All cases must parse without error and then fail with "not yet implemented".
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
 # Covers:
 #   - USING EXTENDED(type_name)             -- unqualified type
 #   - USING EXTENDED(extension.type_name)   -- qualified extension.type

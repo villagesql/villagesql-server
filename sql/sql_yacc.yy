@@ -7936,8 +7936,8 @@ opt_index_type_clause:
         ;
 
 index_type_clause:
-          USING index_type                                      { $$= NEW_PTN PT_index_type(@$, $2); }
-        | TYPE_SYM index_type                                   { $$= NEW_PTN PT_index_type(@$, $2); }
+          USING index_type    { $$= NEW_PTN PT_index_type(@$, $2); }
+        | TYPE_SYM index_type { $$= NEW_PTN PT_index_type(@$, $2); }
         | USING EXTENDED_SYM '(' ident ')'                  { $$= NEW_PTN PT_custom_index_type(@$, LEX_CSTRING{}, to_lex_cstring($4)); }
         | USING EXTENDED_SYM '(' ident '.' ident ')'        { $$= NEW_PTN PT_custom_index_type(@$, to_lex_cstring($4), to_lex_cstring($6)); }
         ;

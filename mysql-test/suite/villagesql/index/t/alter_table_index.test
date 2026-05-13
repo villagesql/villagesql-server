@@ -1,5 +1,6 @@
 # Test ALTER TABLE ADD INDEX ... USING EXTENDED ... syntax paths
 # A failed ADD INDEX leaves the table and its existing indexes intact.
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
 
 CREATE TABLE t (id INT PRIMARY KEY, val INT);
 

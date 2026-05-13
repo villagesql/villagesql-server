@@ -1,6 +1,7 @@
 # Test CREATE TABLE with inline USING EXTENDED index definitions
 # Inline index options use the same grammar paths as standalone CREATE INDEX.
 # A failed CREATE TABLE leaves no table behind.
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
 
 # Inline USING EXTENDED -- unqualified type name
 --error ER_VILLAGESQL_GENERIC_ERROR
