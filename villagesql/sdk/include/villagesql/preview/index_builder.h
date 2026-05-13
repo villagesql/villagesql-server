@@ -31,7 +31,9 @@
 //   struct HNSWOptions {
 //     int M = 16;
 //     int ef_construction = 200;
-//     static HNSWOptions parse(const std::map<std::string, std::string>& p);
+//     static bool parse(const vef_index_param_t *params, uint32_t count,
+//                       HNSWOptions *out, char *error_msg,
+//                       uint32_t error_msg_len);
 //   };
 //
 //   struct HNSWContext {
@@ -61,11 +63,12 @@
 //               .save<&hnsw_save>()
 //               .restore<&hnsw_restore>()
 //               .end<&hnsw_end_scan>()
-//           .capabilities(IndexSupport::KNN)
-//           .storage_props(IndexStorage::HAS_COLUMN_REF |
-//                          IndexStorage::REF_LOOKUP)
-//           .options<HNSWOptions, &HNSWOptions::parse>()
-//           .build();
+//           .global()
+//               .capabilities(IndexSupport::KNN)
+//               .storage_props(IndexStorage::HAS_COLUMN_REF |
+//                              IndexStorage::REF_LOOKUP)
+//               .options<HNSWOptions, &HNSWOptions::parse>()
+//               .build();
 //
 // EXTENSION FUNCTION SIGNATURES
 // ------------------------------
@@ -144,7 +147,7 @@
 #include <utility>
 #include <vector>
 
-#include <villagesql/abi/index.h>
+#include <villagesql/abi/preview/index.h>
 #include <villagesql/preview/storage_api.h>
 
 namespace vsql::preview_index_builder {
@@ -185,8 +188,6 @@ enum class IndexOrdering : uint8_t {
   DESC = 1,
 };
 
-// IndexStorageCtx<T> wraps vef_storage_ctx_t with a typed per-index context T.
-// Must be standard layout so the SDK can cast it to/from vef_storage_ctx_t*.
 // The SDK allocates IndexStorageCtx<T> and T from the InnoDB arena before
 // calling create/load, and destroys the arena (which calls ~T) after drop
 // returns. Extensions must not delete ctx, ctx->user(), or the arena directly.
@@ -210,6 +211,9 @@ class IndexStorageCtx {
   Arena *m_arena = nullptr;
   T *m_user = nullptr;
 
+  // IndexStorageCtx<T> wraps vef_storage_ctx_t with a typed per-index context
+  // T. Must be standard layout so the SDK can cast it to/from
+  // vef_storage_ctx_t*.
   static void verify_layout() {
     static_assert(std::is_standard_layout_v<IndexStorageCtx>,
                   "IndexStorageCtx<T> must be standard layout for ABI cast — "
@@ -399,15 +403,34 @@ struct ScanEndWrapper {
   static void invoke(vef_index_cursor_ref_t *cursor) { F(cursor); }
 };
 
+// Adapts a typed parse function to the C ABI's void* options_out.
+// ParseFn must have signature:
+//   bool fn(const vef_index_param_t*, uint32_t, Options*, char*, uint32_t)
+template <typename Options, auto ParseFn>
+struct ParseWrapper {
+  static bool invoke(const vef_index_param_t *params, uint32_t count,
+                     void *options_out, char *error_msg,
+                     uint32_t error_msg_len) {
+    return ParseFn(params, count, static_cast<Options *>(options_out),
+                   error_msg, error_msg_len);
+  }
+};
+
+// always_false<T> is always false but depends on T, so static_assert(
+// always_false<T>, ...) in a function template is only evaluated on
+// instantiation (i.e. when the function is actually called), not eagerly.
+template <typename...>
+inline constexpr bool always_false = false;
+
 }  // namespace detail
 
-// Non-constexpr functions whose names appear in the compiler diagnostic when
-// build() is evaluated in a constant expression with a missing registration.
-void IndexTypeBuilder_all_index_interfaces_must_be_registered();
-void IndexTypeBuilder_capabilities_must_be_set();
+// IndexTypeBuilder_storage_props_must_set_row_or_column_ref is a non-constexpr
+// function whose name appears in the compiler diagnostic when
+// GlobalBuilder::build() is evaluated as a constant expression with a
+// storage_props value that has neither HAS_ROW_REF nor HAS_COLUMN_REF.
 void IndexTypeBuilder_storage_props_must_set_row_or_column_ref();
 
-// Descriptor returned by IndexTypeBuilder::build(). Consumed by the extension
+// Descriptor returned by GlobalBuilder::build(). Consumed by the extension
 // builder (e.g. make_extension().index_type(HNSW_INDEX)).
 // TODO(villagesql-indexing): add index_type() to the extension builder.
 struct IndexTypeDesc {
@@ -415,169 +438,327 @@ struct IndexTypeDesc {
   vef_type_index_intf_t intf;
 };
 
-// IndexTypeBuilder<Name, Context>: fluent builder for vef_type_index_intf_t.
+// make_index_type<Name, Context> builds a vef_type_index_intf_t through four
+// mandatory sections chained in strict order:
+//
+//   .lifecycle()  ->  .dml()  ->  .scan()  ->  .global()  ->  .build()
+//
+// Each section has mandatory methods that must all be called before the chain
+// can advance.  Calling the next section's gate method with any mandatory
+// method missing produces a static_assert naming the missing registration.
+// Methods within a section may appear in any order.
 //
 // Context is the extension-defined per-index storage state. The SDK allocates
 // IndexStorageCtx<Context> from the InnoDB arena before calling create/load,
 // and destroys the arena (which calls ~Context) after drop returns.
-//
-// .lifecycle(), .dml(), .scan() are grouping markers that return *this for
-// readability; all registration methods are on the same builder class.
-template <const char *Name, typename Context>
-class IndexTypeBuilder {
- public:
-  constexpr IndexTypeBuilder() : intf_{} {}
 
-  // Section markers — return *this to allow chaining into sub-groups.
-  constexpr IndexTypeBuilder &lifecycle() { return *this; }
-  constexpr IndexTypeBuilder &dml() { return *this; }
-  constexpr IndexTypeBuilder &scan() { return *this; }
+// Forward declarations.
+template <typename Context, uint32_t Bits>
+class LifecycleBuilder;
+template <typename Context, uint32_t Bits>
+class DMLBuilder;
+template <typename Context, uint32_t Bits>
+class ScanBuilder;
+template <typename Context, uint32_t Bits>
+class GlobalBuilder;
+
+// LifecycleBuilder — entered via IndexTypeRootBuilder::lifecycle().
+// Mandatory before .dml(): create(), load(), drop().
+template <typename Context, uint32_t Bits>
+class LifecycleBuilder {
+  static constexpr uint32_t kCreate = 1u << 0;
+  static constexpr uint32_t kLoad = 1u << 1;
+  static constexpr uint32_t kDrop = 1u << 2;
+
+ public:
+  constexpr LifecycleBuilder(const char *name, vef_type_index_intf_t intf)
+      : name_(name), intf_(intf) {}
 
   template <auto F>
-  constexpr IndexTypeBuilder &create() {
+  constexpr LifecycleBuilder<Context, Bits | kCreate> create() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "create: F must be a plain function pointer");
     intf_.create = detail::CreateWrapper<F, Context>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &drop() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "drop: F must be a plain function pointer");
-    intf_.drop = detail::DropWrapper<F, Context>::invoke;
-    return *this;
-  }
-
-  template <auto F>
-  constexpr IndexTypeBuilder &load() {
+  constexpr LifecycleBuilder<Context, Bits | kLoad> load() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "load: F must be a plain function pointer");
     intf_.load = detail::LoadWrapper<F, Context>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &insert() {
+  constexpr LifecycleBuilder<Context, Bits | kDrop> drop() && {
+    static_assert(std::is_pointer_v<decltype(F)> &&
+                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
+                  "drop: F must be a plain function pointer");
+    intf_.drop = detail::DropWrapper<F, Context>::invoke;
+    return {name_, intf_};
+  }
+
+  constexpr DMLBuilder<Context, 0> dml() && {
+    static_assert(
+        (Bits & kCreate) != 0,
+        "lifecycle: create() must be registered before calling dml()");
+    static_assert((Bits & kLoad) != 0,
+                  "lifecycle: load() must be registered before calling dml()");
+    static_assert((Bits & kDrop) != 0,
+                  "lifecycle: drop() must be registered before calling dml()");
+    return {name_, intf_};
+  }
+
+  template <typename T = void>
+  constexpr ScanBuilder<Context, 0> scan() && {
+    static_assert(detail::always_false<T>,
+                  "dml() section must be entered before scan()");
+    return {name_, intf_};
+  }
+
+  template <typename T = void>
+  constexpr GlobalBuilder<Context, 0> global() && {
+    static_assert(detail::always_false<T>,
+                  "dml() and scan() sections must be entered before global()");
+    return {name_, intf_};
+  }
+
+ private:
+  const char *name_;
+  vef_type_index_intf_t intf_;
+};
+
+// DMLBuilder — entered via LifecycleBuilder::dml().
+// Mandatory before .scan(): insert(), mark_delete(), purge().
+template <typename Context, uint32_t Bits>
+class DMLBuilder {
+  static constexpr uint32_t kInsert = 1u << 0;
+  static constexpr uint32_t kMarkDelete = 1u << 1;
+  static constexpr uint32_t kPurge = 1u << 2;
+
+ public:
+  constexpr DMLBuilder(const char *name, vef_type_index_intf_t intf)
+      : name_(name), intf_(intf) {}
+
+  template <auto F>
+  constexpr DMLBuilder<Context, Bits | kInsert> insert() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "insert: F must be a plain function pointer");
     intf_.insert = detail::InsertWrapper<F, Context>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &mark_delete() {
+  constexpr DMLBuilder<Context, Bits | kMarkDelete> mark_delete() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "mark_delete: F must be a plain function pointer");
     intf_.mark_delete = detail::MarkDeleteWrapper<F, Context>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &purge() {
+  constexpr DMLBuilder<Context, Bits | kPurge> purge() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "purge: F must be a plain function pointer");
     intf_.purge = detail::PurgeWrapper<F, Context>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
+  constexpr ScanBuilder<Context, 0> scan() && {
+    static_assert((Bits & kInsert) != 0,
+                  "dml: insert() must be registered before calling scan()");
+    static_assert(
+        (Bits & kMarkDelete) != 0,
+        "dml: mark_delete() must be registered before calling scan()");
+    static_assert((Bits & kPurge) != 0,
+                  "dml: purge() must be registered before calling scan()");
+    return {name_, intf_};
+  }
+
+  template <typename T = void>
+  constexpr GlobalBuilder<Context, 0> global() && {
+    static_assert(detail::always_false<T>,
+                  "scan() section must be entered before global()");
+    return {name_, intf_};
+  }
+
+ private:
+  const char *name_;
+  vef_type_index_intf_t intf_;
+};
+
+// ScanBuilder — entered via DMLBuilder::scan().
+// Mandatory before .global(): begin(), position(), fetch(), save(), restore(),
+// end().
+template <typename Context, uint32_t Bits>
+class ScanBuilder {
+  static constexpr uint32_t kBegin = 1u << 0;
+  static constexpr uint32_t kPosition = 1u << 1;
+  static constexpr uint32_t kFetch = 1u << 2;
+  static constexpr uint32_t kSave = 1u << 3;
+  static constexpr uint32_t kRestore = 1u << 4;
+  static constexpr uint32_t kEnd = 1u << 5;
+
+ public:
+  constexpr ScanBuilder(const char *name, vef_type_index_intf_t intf)
+      : name_(name), intf_(intf) {}
+
   template <auto F>
-  constexpr IndexTypeBuilder &begin() {
+  constexpr ScanBuilder<Context, Bits | kBegin> begin() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "begin: F must be a plain function pointer");
     intf_.scan_begin = detail::ScanBeginWrapper<F, Context>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &position() {
+  constexpr ScanBuilder<Context, Bits | kPosition> position() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "position: F must be a plain function pointer");
     intf_.scan_position = detail::ScanPositionWrapper<F>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &fetch() {
+  constexpr ScanBuilder<Context, Bits | kFetch> fetch() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "fetch: F must be a plain function pointer");
     intf_.scan_fetch = detail::ScanFetchWrapper<F>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &save() {
+  constexpr ScanBuilder<Context, Bits | kSave> save() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "save: F must be a plain function pointer");
     intf_.scan_save = detail::ScanSaveWrapper<F>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &restore() {
+  constexpr ScanBuilder<Context, Bits | kRestore> restore() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "restore: F must be a plain function pointer");
     intf_.scan_restore = detail::ScanRestoreWrapper<F>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
   template <auto F>
-  constexpr IndexTypeBuilder &end() {
+  constexpr ScanBuilder<Context, Bits | kEnd> end() && {
     static_assert(std::is_pointer_v<decltype(F)> &&
                       std::is_function_v<std::remove_pointer_t<decltype(F)>>,
                   "end: F must be a plain function pointer");
     intf_.scan_end = detail::ScanEndWrapper<F>::invoke;
-    return *this;
+    return {name_, intf_};
   }
 
-  // Set optimizer capability flags (VEF_INDEX_CAP_*).
-  constexpr IndexTypeBuilder &capabilities(IndexSupport caps) {
+  constexpr GlobalBuilder<Context, 0> global() && {
+    static_assert((Bits & kBegin) != 0,
+                  "scan: begin() must be registered before calling global()");
+    static_assert(
+        (Bits & kPosition) != 0,
+        "scan: position() must be registered before calling global()");
+    static_assert((Bits & kFetch) != 0,
+                  "scan: fetch() must be registered before calling global()");
+    static_assert((Bits & kSave) != 0,
+                  "scan: save() must be registered before calling global()");
+    static_assert((Bits & kRestore) != 0,
+                  "scan: restore() must be registered before calling global()");
+    static_assert((Bits & kEnd) != 0,
+                  "scan: end() must be registered before calling global()");
+    return {name_, intf_};
+  }
+
+  template <typename T = void>
+  constexpr IndexTypeDesc build() && {
+    static_assert(detail::always_false<T>,
+                  "global() section must be entered before build()");
+    return {name_, intf_};
+  }
+
+ private:
+  const char *name_;
+  vef_type_index_intf_t intf_;
+};
+
+// GlobalBuilder — entered via ScanBuilder::global().
+// Mandatory before .build(): capabilities(), storage_props().
+// Optional: options().
+template <typename Context, uint32_t Bits>
+class GlobalBuilder {
+  static constexpr uint32_t kCapabilities = 1u << 0;
+  static constexpr uint32_t kStorageProps = 1u << 1;
+
+ public:
+  constexpr GlobalBuilder(const char *name, vef_type_index_intf_t intf)
+      : name_(name), intf_(intf) {}
+
+  constexpr GlobalBuilder<Context, Bits | kCapabilities> capabilities(
+      IndexSupport caps) && {
     intf_.capabilities = static_cast<vef_index_cap_t>(caps);
-    return *this;
+    return {name_, intf_};
   }
 
-  // Set physical storage property flags (VEF_INDEX_STORAGE_*).
-  constexpr IndexTypeBuilder &storage_props(IndexStorage props) {
+  constexpr GlobalBuilder<Context, Bits | kStorageProps> storage_props(
+      IndexStorage props) && {
     intf_.storage_props = static_cast<vef_index_storage_t>(props);
-    return *this;
+    return {name_, intf_};
   }
 
   // Bind a parameterized options struct and its parse function.
-  // TODO(villagesql-indexing): options parsing is not yet supported by the
-  // server ABI. This call is accepted and ignored.
+  // ParseFn must have signature:
+  //   bool fn(const vef_index_param_t*, uint32_t, OptionsStruct*,
+  //           char*, uint32_t)
+  // The server allocates sizeof(OptionsStruct) bytes, calls parse() to fill
+  // them, then passes the result as index_ctx->options to create().
   template <typename OptionsStruct, auto ParseFn>
-  constexpr IndexTypeBuilder &options() {
-    return *this;
+  constexpr GlobalBuilder<Context, Bits> options() && {
+    intf_.options_size = static_cast<uint32_t>(sizeof(OptionsStruct));
+    intf_.parse = detail::ParseWrapper<OptionsStruct, ParseFn>::invoke;
+    return {name_, intf_};
   }
 
-  constexpr IndexTypeDesc build() const {
-    if (!intf_.create || !intf_.drop || !intf_.load || !intf_.insert ||
-        !intf_.mark_delete || !intf_.purge || !intf_.scan_begin ||
-        !intf_.scan_position || !intf_.scan_fetch || !intf_.scan_save ||
-        !intf_.scan_restore || !intf_.scan_end) {
-      IndexTypeBuilder_all_index_interfaces_must_be_registered();
-    }
-    if (intf_.capabilities == VEF_INDEX_CAP_NONE) {
-      IndexTypeBuilder_capabilities_must_be_set();
-    }
-    if (!(intf_.storage_props &
-          (VEF_INDEX_STORAGE_HAS_ROW_REF | VEF_INDEX_STORAGE_HAS_COLUMN_REF))) {
-      IndexTypeBuilder_storage_props_must_set_row_or_column_ref();
+  constexpr IndexTypeDesc build() && {
+    static_assert((Bits & kCapabilities) != 0,
+                  "global: capabilities() must be set before calling build()");
+    static_assert((Bits & kStorageProps) != 0,
+                  "global: storage_props() must be set before calling build()");
+    if constexpr ((Bits & kStorageProps) != 0) {
+      if (!(intf_.storage_props & (VEF_INDEX_STORAGE_HAS_ROW_REF |
+                                   VEF_INDEX_STORAGE_HAS_COLUMN_REF))) {
+        IndexTypeBuilder_storage_props_must_set_row_or_column_ref();
+      }
     }
     vef_type_index_intf_t intf = intf_;
     intf.version = VEF_INDEX_TYPE_INTF_VERSION;
-    return {Name, intf};
+    return {name_, intf};
+  }
+
+ private:
+  const char *name_;
+  vef_type_index_intf_t intf_;
+};
+
+// IndexTypeRootBuilder — returned by make_index_type<Name, Context>().
+// The only available method is .lifecycle(), which begins the section chain.
+template <const char *Name, typename Context>
+class IndexTypeRootBuilder {
+ public:
+  constexpr IndexTypeRootBuilder() : intf_{} {}
+
+  constexpr LifecycleBuilder<Context, 0> lifecycle() && {
+    return {Name, intf_};
   }
 
  private:
@@ -585,8 +766,8 @@ class IndexTypeBuilder {
 };
 
 template <const char *Name, typename Context>
-constexpr IndexTypeBuilder<Name, Context> make_index_type() {
-  return IndexTypeBuilder<Name, Context>{};
+constexpr IndexTypeRootBuilder<Name, Context> make_index_type() {
+  return IndexTypeRootBuilder<Name, Context>{};
 }
 
 // ===========================================================================

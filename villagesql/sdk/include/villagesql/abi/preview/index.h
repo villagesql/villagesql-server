@@ -116,6 +116,11 @@ typedef struct {
   // Get maximum key storage length. Always non-NULL.
   vef_index_max_key_len_fn key_len_fn;
 
+  // Pointer to the options struct filled by parse() at CREATE INDEX time.
+  // Valid only during the create() call; NULL for all other calls and when
+  // the index type declared no options.
+  const void *options;
+
 } vef_index_ctx_t;
 
 // Index scan type. Determines the structure of the keys array in
@@ -432,6 +437,24 @@ typedef bool (*vef_type_index_scan_restore_func_t)(
 //   cursor - Pointer to the cursor to destroy; set to NULL on return.
 typedef void (*vef_type_index_scan_end_func_t)(vef_index_cursor_ref_t *cursor);
 
+// One key=value parameter from a WITH (...) clause on a custom index.
+// Both strings are null-terminated. Numeric literal values (e.g. M = 16) are
+// represented as their decimal string ("16").
+typedef struct {
+  const char *key;
+  const char *value;
+} vef_index_param_t;
+
+// Parse and validate WITH (...) parameters at CREATE INDEX time.
+// The server calls this before creating the index entry. The extension fills
+// options_out (server-allocated, options_size bytes) with the validated result,
+// which the server then passes as index_ctx->options to create().
+// Returns false on success, true on error (writes to error_msg).
+typedef bool (*vef_type_index_parse_func_t)(const vef_index_param_t *params,
+                                            uint32_t count, void *options_out,
+                                            char *error_msg,
+                                            uint32_t error_msg_len);
+
 // Index type interface version constants.
 #define VEF_INDEX_TYPE_INTF_VERSION_1 1
 #define VEF_INDEX_TYPE_INTF_VERSION VEF_INDEX_TYPE_INTF_VERSION_1
@@ -442,7 +465,7 @@ typedef void (*vef_type_index_scan_end_func_t)(vef_index_cursor_ref_t *cursor);
 // later versions. The server reads `version` before accessing any field to
 // determine which fields are present. New fields must always be appended at
 // the end so that older structs remain a valid prefix.
-// All function pointers in this struct must be non-NULL.
+// All function pointers except parse must be non-NULL.
 typedef struct {
   // Version for future extensibility
   uint32_t version;
@@ -475,6 +498,12 @@ typedef struct {
   vef_type_index_scan_save_func_t scan_save;
   vef_type_index_scan_restore_func_t scan_restore;
   vef_type_index_scan_end_func_t scan_end;
+
+  // WITH (...) parameter parsing. Set options_size to sizeof(Options) and
+  // parse to the validation function. Both must be zero/NULL together; either
+  // both are set or neither is.
+  uint32_t options_size;
+  vef_type_index_parse_func_t parse;
 
 } vef_type_index_intf_t;
 

@@ -56,14 +56,24 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <string_view>
 
 using namespace vsql::preview_index_builder;
-using Ctx = IndexStorageCtx<struct DummyHNSWCtx>;
+
+// Options parsed from WITH (...) at CREATE INDEX time.
+// Passed as index_ctx->options during create(); available via index_ctx in
+// every call.
+struct DummyHNSWOptions {
+  uint32_t M = 16;
+  uint32_t ef_construction = 200;
+};
 
 // Per-index dummy state. No real data is stored.
 struct DummyHNSWCtx {};
+
+using Ctx = IndexStorageCtx<DummyHNSWCtx>;
 
 // A minimal stub cursor. begin() sets *cursor to point at this; end() frees it.
 struct DummyCursor {};
@@ -189,12 +199,15 @@ static constexpr const char kDummyHNSWFunc2[] = "dummy_helper_fn";
 template <size_t N>
 inline constexpr int64_t DECODE_BUFFER_SIZE = static_cast<int64_t>(N);
 
-static bool vector_from_string(std::string_view /*from*/,
-                               vsql::Span<unsigned char> buf, size_t *length) {
-  if (buf.size() < 16) return true;
+static void vector_from_string(std::string_view /*from*/,
+                               vsql::CustomResult out) {
+  vsql::Span<unsigned char> buf = out.buffer();
+  if (buf.size() < 16) {
+    out.error("buffer too small");
+    return;
+  }
   memset(buf.data(), 0, 16);
-  *length = 16;
-  return false;
+  out.set_length(16);
 }
 
 static bool vector_to_string(vsql::Span<const unsigned char> /*data*/,
@@ -224,35 +237,73 @@ constexpr auto DUMMY_VECTOR =
         .intrinsic_default_str("[0,0,0,0]")
         .build();
 
+// Parse WITH (...) options for DUMMY_HNSW. Accepts "M" and "ef_construction".
+static bool dummy_parse_options(const vef_index_param_t *params, uint32_t count,
+                                DummyHNSWOptions *out, char *error_msg,
+                                uint32_t error_msg_len) {
+  *out = DummyHNSWOptions{};
+  for (uint32_t i = 0; i < count; ++i) {
+    const char *key = params[i].key;
+    const char *val = params[i].value;
+    char *end;
+    if (strcmp(key, "M") == 0) {
+      unsigned long v = strtoul(val, &end, 10);
+      if (*end != '\0' || v == 0 || v > 65536) {
+        snprintf(error_msg, error_msg_len,
+                 "M must be a positive integer <= 65536, got '%s'", val);
+        return true;
+      }
+      out->M = static_cast<uint32_t>(v);
+    } else if (strcmp(key, "ef_construction") == 0) {
+      unsigned long v = strtoul(val, &end, 10);
+      if (*end != '\0' || v == 0) {
+        snprintf(error_msg, error_msg_len,
+                 "ef_construction must be a positive integer, got '%s'", val);
+        return true;
+      }
+      out->ef_construction = static_cast<uint32_t>(v);
+    } else {
+      snprintf(error_msg, error_msg_len, "unknown option '%s'", key);
+      return true;
+    }
+  }
+  return false;
+}
+
 // Build the index type descriptor. This validates at compile time that all 12
 // hooks are wired, capabilities is non-zero, and storage_props declares at
 // least one reference type.
 //
 // TODO(villagesql-indexing): pass DUMMY_HNSW_INDEX to
 // make_extension().index_type() once that method is implemented.
+// clang-format off
 static constexpr auto DUMMY_HNSW_INDEX =
     make_index_type<kDummyHNSW, DummyHNSWCtx>()
         .lifecycle()
-        .create<&dummy_create>()
-        .load<&dummy_load>()
-        .drop<&dummy_drop>()
+            .create<&dummy_create>()
+            .load<&dummy_load>()
+            .drop<&dummy_drop>()
 
         .dml()
-        .insert<&dummy_insert>()
-        .mark_delete<&dummy_mark_delete>()
-        .purge<&dummy_purge>()
+            .insert<&dummy_insert>()
+            .mark_delete<&dummy_mark_delete>()
+            .purge<&dummy_purge>()
 
         .scan()
-        .begin<&dummy_begin>()
-        .position<&dummy_position>()
-        .fetch<&dummy_fetch>()
-        .save<&dummy_save>()
-        .restore<&dummy_restore>()
-        .end<&dummy_end>()
+            .begin<&dummy_begin>()
+            .position<&dummy_position>()
+            .fetch<&dummy_fetch>()
+            .save<&dummy_save>()
+            .restore<&dummy_restore>()
+            .end<&dummy_end>()
 
-        .capabilities(IndexSupport::KNN)
-        .storage_props(IndexStorage::HAS_COLUMN_REF | IndexStorage::REF_LOOKUP)
+        .global()
+            .capabilities(IndexSupport::KNN)
+            .storage_props(IndexStorage::HAS_COLUMN_REF | IndexStorage::REF_LOOKUP)
+            .options<DummyHNSWOptions, &dummy_parse_options>()
+
         .build();
+// clang-format on
 
 // ============================================================================
 // Index function (stub)
