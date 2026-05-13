@@ -843,6 +843,15 @@ class VictionaryClient {
   // Seed m_next_index_id from the maximum index_id present in m_custom_indexes.
   // Called once after m_custom_indexes is loaded during reload_all_tables.
   // Requires write lock (already held by reload_all_tables).
+  //
+  // We manage the counter explicitly rather than using an AUTO_INCREMENT column
+  // because index_id must be known before the transaction commits: both
+  // custom_indexes and custom_index_columns are staged in memory together and
+  // written atomically at commit. With AUTO_INCREMENT the server only assigns
+  // the id at ha_write_row() time, so we would have to insert custom_indexes
+  // first, read the generated id back from uncommitted storage, and then
+  // stage custom_index_columns — adding complexity and a mid-transaction read.
+  // Pre-allocating via allocate_index_id() avoids that entirely.
   void init_index_id_counter();
 
   // Initialize for unit testing without loading from database tables.
