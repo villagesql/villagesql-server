@@ -55,8 +55,32 @@ file(WRITE "${CMAKE_BINARY_DIR}/villagesql_test_env.sh"
   "VILLAGESQL_DEV_SDK_INCLUDE=${SDK_STAGING_DIR}/include-dev\n"
 )
 
-# SDK packaging target - built by default (ALL)
-add_custom_target(sdk ALL
+# Collect SDK input files for dependency tracking so the sdk target reruns
+# whenever any of these change. GLOB is evaluated at cmake time; adding new
+# header files requires re-running cmake (standard CMake behaviour).
+file(GLOB_RECURSE SDK_STABLE_HEADERS
+  "${STABLE_SDK_DIR}/include/villagesql/*.h"
+)
+file(GLOB_RECURSE SDK_DEV_HEADERS
+  "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/*.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/*.h.in"
+)
+file(GLOB_RECURSE SDK_TEMPLATE_FILES
+  "${STABLE_SDK_DIR}/template/*"
+)
+
+# SDK packaging command - reruns whenever tracked input files change
+add_custom_command(
+  OUTPUT "${CMAKE_BINARY_DIR}/${SDK_NAME}.tar.gz"
+  DEPENDS
+    ${SDK_STABLE_HEADERS}
+    ${SDK_DEV_HEADERS}
+    ${SDK_TEMPLATE_FILES}
+    "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
+    "${CMAKE_BINARY_DIR}/sdk/villagesql_config"
+    "${CMAKE_SOURCE_DIR}/cmake/VillageSQLExtensionFrameworkConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/FindVillageSQL.cmake"
+
   # Clean and create staging directory structure
   COMMAND ${CMAKE_COMMAND} -E remove_directory "${SDK_STAGING_DIR}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/bin"
@@ -112,6 +136,9 @@ add_custom_target(sdk ALL
   COMMENT "Creating VillageSQL Extension SDK: ${SDK_NAME}.tar.gz"
   VERBATIM
 )
+
+# Named target so 'make sdk' still works; depends on tarball for file tracking
+add_custom_target(sdk ALL DEPENDS "${CMAKE_BINARY_DIR}/${SDK_NAME}.tar.gz")
 
 # Install SDK components from the staged SDK directory.
 # This ensures 'make install' installs exactly what the SDK tarball contains.
