@@ -34,7 +34,8 @@ std::optional<TypeDescriptor> build_type_descriptor_v1(
     const std::string &extension_name, const std::string &extension_version);
 
 // Build a TypeDescriptor from a protocol-2 type descriptor.
-// Reads all fields including VDF names, intrinsic_default, storage_intf.
+// Reads all fields including VDF names and intrinsic_default.
+// Storage is wired in separately after all types are loaded.
 // Returns nullopt on error.
 std::optional<TypeDescriptor> build_type_descriptor_v2(
     const vef_type_desc_t *td, const vef_registration_t &reg,

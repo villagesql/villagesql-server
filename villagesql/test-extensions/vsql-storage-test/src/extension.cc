@@ -49,7 +49,8 @@
 #include <string_view>
 
 namespace storage = vsql::preview_storage;
-using vsql::preview_storage_builder::make_storage;
+using vsql::preview_storage_builder::ColumnStoreCapability;
+using vsql::preview_storage_builder::make_column_store;
 using vsql::preview_storage_builder::StorageCapability;
 
 // Per-column user context. Populated during create/load and used by every
@@ -302,19 +303,6 @@ bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
 // Type and extension registration
 // ============================================================================
 
-static auto STORAGE = StorageCapability();
-
-static constexpr vef_type_storage_intf_t kStoredIntStorageIntf =
-    make_storage<StoredIntCtx>()
-        .create<&stored_int_create>()
-        .drop<&stored_int_drop>()
-        .load<&stored_int_load>()
-        .insert<&stored_int_insert>()
-        .select<&stored_int_select>()
-        .mark_delete<&stored_int_mark_delete>()
-        .purge<&stored_int_purge>()
-        .build();
-
 static constexpr const char kStoredIntTypeName[] = "STORED_INT";
 
 constexpr auto STORED_INT =
@@ -325,10 +313,25 @@ constexpr auto STORED_INT =
         .from_string<&stored_int_from_string>()
         .to_string<&stored_int_to_string>()
         .compare<&stored_int_compare>()
-        .column_storage<&kStoredIntStorageIntf>()
         .intrinsic_default_str("0")
         .build();
 
+static constexpr auto kStoredIntStorage =
+    make_column_store<StoredIntCtx>(STORED_INT)
+        .create<&stored_int_create>()
+        .drop<&stored_int_drop>()
+        .load<&stored_int_load>()
+        .insert<&stored_int_insert>()
+        .select<&stored_int_select>()
+        .mark_delete<&stored_int_mark_delete>()
+        .purge<&stored_int_purge>()
+        .build();
+
+static auto STORAGE = StorageCapability{};
+static auto COLUMN_STORE =
+    ColumnStoreCapability().column_store(kStoredIntStorage);
+
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension().with(STORAGE).type(STORED_INT))
+VEF_GENERATE_ENTRY_POINTS(
+    make_extension().with(STORAGE).with(COLUMN_STORE).type(STORED_INT))

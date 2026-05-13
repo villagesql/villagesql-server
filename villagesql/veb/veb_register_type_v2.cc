@@ -315,22 +315,6 @@ std::optional<TypeDescriptor> build_type_descriptor_v2(
     }
   }
 
-  // 5. Resolve storage interface.
-  const vef_type_storage_intf_t *storage_intf = nullptr;
-  if (td->storage_intf != nullptr) {
-    if (!td->storage_intf->create || !td->storage_intf->drop ||
-        !td->storage_intf->load || !td->storage_intf->insert ||
-        !td->storage_intf->select || !td->storage_intf->mark_delete ||
-        !td->storage_intf->purge) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s': Not all column storage"
-              " interface are registered.",
-              type_name.c_str(), extension_name.c_str());
-      return std::nullopt;
-    }
-    storage_intf = td->storage_intf;
-  }
-
   // Validate that int_to_params requires resolve_params.
   if (int_to_params_vdf != nullptr && resolve_params_vdf == nullptr) {
     LogVSQL(ERROR_LEVEL,
@@ -360,17 +344,14 @@ std::optional<TypeDescriptor> build_type_descriptor_v2(
   if (resolve_params_vdf != nullptr)
     resolve_params_fn.emplace(resolve_params_vdf);
 
-  std::optional<StorageInterface> storage_intf_fns;
-  if (storage_intf != nullptr) storage_intf_fns.emplace(*storage_intf);
-
-  // 6. Build TypeDescriptor.
+  // 5. Build TypeDescriptor.
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
       VEF_PROTOCOL_2, MYSQL_TYPE_VARCHAR, td->persisted_length,
       td->max_decode_buffer_length, td->max_persisted_length,
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
       std::move(hash_fn), std::move(int_to_params_fn),
-      std::move(resolve_params_fn), std::move(storage_intf_fns));
+      std::move(resolve_params_fn));
 
   // 7. Set intrinsic default (VDF or string literal, mutually exclusive).
   if (intrinsic_default_vdf != nullptr) {

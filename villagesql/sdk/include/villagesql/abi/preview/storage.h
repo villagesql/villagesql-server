@@ -221,19 +221,28 @@ typedef bool (*vef_type_storage_purge_func_t)(vef_storage_ctx_t *storage,
                                               char *error_msg,
                                               uint32_t error_msg_len);
 
-// Custom type storage interface version constants.
+// Type storage descriptor version constants.
 #define VEF_STORAGE_TYPE_INTF_VERSION_1 1
 #define VEF_STORAGE_TYPE_INTF_VERSION VEF_STORAGE_TYPE_INTF_VERSION_1
 
-// Storage interface provided by an extension for custom column storage.
-// The extension sets version to the storage interface version it implements.
-// The server must check version before accessing any field introduced in
-// later versions. The server reads `version` before accessing any field to
-// determine which fields are present. New fields must always be appended at
-// the end so that older structs remain a valid prefix.
+// Type storage descriptor provided by an extension.
+// Links the extension's storage implementation to the named custom type it
+// manages. Registered as a top-level entry in
+// vef_registration_t.type_storages[]; the server matches type_name to a
+// registered type at load time and wires the storage functions into it.
+//
+// The extension sets version to the descriptor version it implements.
+// The server reads `version` before accessing any field to determine which
+// fields are present. New fields must always be appended at the end so that
+// older structs remain a valid prefix.
 typedef struct {
   // Must be set to one of the VEF_STORAGE_TYPE_INTF_VERSION_* constants above.
   uint32_t version;
+
+  // Name of the custom type this storage manages. Must match the name field
+  // of a vef_type_desc_t registered by the same extension. The pointed-to
+  // string must remain valid for the lifetime of the extension.
+  const char *type_name;
 
   // version >= VEF_STORAGE_TYPE_INTF_VERSION_1
   vef_type_storage_create_func_t create;
@@ -555,6 +564,45 @@ typedef struct {
   vef_storage_page_write_integer_fn page_write_integer;
   vef_storage_page_write_string_fn page_write_string;
 } vef_preview_storage_t;
+
+// Preview capability: "vsql::preview::column_store"
+//
+// Registers column storage implementations for custom types. Extensions that
+// implement custom column storage use this capability to wire their storage
+// functions into registered types. The server matches each descriptor's
+// type_name to a registered type after all types are loaded.
+//
+// Pass a vef_preview_column_store_ext_desc_t as
+// vef_required_capability_t.extension_data when requiring this capability.
+//
+// Capability name: VEF_PREVIEW_COLUMN_STORE_NAME
+
+#define VEF_PREVIEW_COLUMN_STORE_NAME "vsql::preview::column_store"
+
+#define VEF_COLUMN_STORE_INTF_VERSION_1 1
+#define VEF_COLUMN_STORE_INTF_VERSION VEF_COLUMN_STORE_INTF_VERSION_1
+
+// Extension descriptor for vsql::preview::column_store.
+// Pass as vef_required_capability_t.extension_data.
+typedef struct {
+  // Must be set to VEF_COLUMN_STORE_INTF_VERSION.
+  uint32_t version;
+
+  uint32_t type_storage_count;
+
+  // Array of pointers to type storage descriptors. Each descriptor names a
+  // type registered by the same extension and provides its storage functions.
+  // Must remain valid for the lifetime of the extension.
+  const vef_type_storage_intf_t **type_storages;
+} vef_preview_column_store_ext_desc_t;
+
+// Minimal vtable for vsql::preview::column_store.
+// This capability provides no server-callable functions; it exists only to
+// carry the extension descriptor to the server at registration time.
+typedef struct {
+  // Capability ABI version.
+  uint32_t version;
+} vef_preview_column_store_t;
 
 #ifdef __cplusplus
 }

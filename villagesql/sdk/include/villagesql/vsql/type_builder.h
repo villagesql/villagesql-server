@@ -444,20 +444,6 @@ class TypeBuilder {
     return *this;
   }
 
-  // Constexpr-safe overload for use with a storage interface that has a fixed
-  // address (i.e., declared static constexpr at namespace scope). The address
-  // is supplied as a template argument so it is known at compile time, allowing
-  // vef_desc.storage_intf to be set directly without embedding a copy of the
-  // interface inside the TypeDescriptor. This keeps storage_intf.version == 0,
-  // so TypeDescriptor's copy constructor skips the self-referential assignment
-  // `vef_desc.storage_intf = &storage_intf` that GCC rejects in constexpr
-  // context.
-  template <const vef_type_storage_intf_t *Intf>
-  constexpr TypeBuilder &column_storage() {
-    state_.desc.vef_desc.storage_intf = Intf;
-    return *this;
-  }
-
   // -------------------------------------------------------------------------
   // build() — finalize to TypeObject<EFT>
   // -------------------------------------------------------------------------

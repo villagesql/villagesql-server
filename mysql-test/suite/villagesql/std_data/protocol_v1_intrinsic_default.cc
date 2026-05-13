@@ -80,7 +80,6 @@ static vef_type_desc_t g_type_desc = {
     nullptr,   // resolve_params_vdf_name
     nullptr,   // intrinsic_default_vdf_name
     "V1_BUG",  // intrinsic_default_str  <-- the sentinel
-    nullptr,   // storage_intf
 };
 
 static vef_type_desc_t *g_type_ptrs[] = {&g_type_desc};

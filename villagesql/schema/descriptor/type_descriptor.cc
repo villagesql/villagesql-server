@@ -36,8 +36,7 @@ TypeDescriptor::TypeDescriptor(
     int64_t max_persisted_len, EncodeFunction encode, DecodeFunction decode,
     CompareFunction compare, std::optional<HashFunction> hash,
     std::optional<IntToParamsFunction> int_to_params,
-    std::optional<ResolveParamsFunction> resolve_params,
-    std::optional<StorageInterface> storage_intf)
+    std::optional<ResolveParamsFunction> resolve_params)
     : key_(std::move(key)),
       protocol_(protocol),
       implementation_type_(impl_type),
@@ -49,7 +48,6 @@ TypeDescriptor::TypeDescriptor(
       compare_fn_(std::move(compare)),
       hash_fn_(std::move(hash)),
       int_to_params_fn_(std::move(int_to_params)),
-      resolve_params_fn_(std::move(resolve_params)),
-      storage_intf_(std::move(storage_intf)) {}
+      resolve_params_fn_(std::move(resolve_params)) {}
 
 }  // namespace villagesql

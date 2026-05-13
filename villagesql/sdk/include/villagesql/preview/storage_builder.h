@@ -19,9 +19,18 @@
 // TODO(villagesql-beta): Column storage is not ready for external use.
 // See storage_api.h for details.
 //
-// This file provides StorageBuilder for defining the column storage interface.
+// This file provides:
+//   - StorageCapability: capability token passed to make_extension().with().
+//     Declares the InnoDB storage API requirement.
+//   - ColumnStoreCapability<N>: capability token for registering column storage
+//     implementations. Use .column_store(desc) to attach storage descriptors.
+//   - TypeStorageDescriptor: built by StorageBuilder<UserCtx>.build().
+//   - make_column_store<UserCtx>(TypeObject): entry point for building a
+//     type storage descriptor.
+//
 // For full documentation and examples, see extension.h.
 
+#include <cstddef>
 #include <type_traits>
 
 #include <villagesql/abi/preview/storage.h>
@@ -30,26 +39,107 @@
 
 namespace vsql::preview_storage_builder {
 
-// Token that activates the storage API for this extension.
+// =============================================================================
+// TypeStorageDescriptor
+// =============================================================================
 //
-// Declare one static instance and pass it to make_extension().with() to
-// enable MtrCtx, Page, Segment, and Arena from storage_api.h. Without
-// this registration, calling any storage API function is undefined behavior.
+// Thin wrapper around vef_type_storage_intf_t. Produced by
+// StorageBuilder<UserCtx>::build() and passed to
+// ColumnStoreCapability::column_store().
+
+struct TypeStorageDescriptor {
+  vef_type_storage_intf_t intf;
+};
+
+// =============================================================================
+// StorageCapability
+// =============================================================================
+//
+// Capability token that activates the InnoDB storage API for this extension.
 //
 // Usage:
-//   static auto STORAGE = vsql::preview_storage_builder::StorageCapability();
+//   static auto STORAGE = StorageCapability{};
 //
-//   VSQL_EXTENSION_INIT {
-//     return make_extension()
-//         .with(STORAGE)
-//         ...
-//         .build();
-//   }
+//   VEF_GENERATE_ENTRY_POINTS(make_extension().with(STORAGE)...)
 //
+// The STORAGE variable must have static storage duration (declare as
+// `static auto`) so that the server can write the vtable pointer into it
+// at registration time.
+
 class StorageCapability {
  public:
   static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
   static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
+};
+
+// =============================================================================
+// ColumnStoreCapability<N>
+// =============================================================================
+//
+// Capability token that registers column storage implementations for custom
+// types. Separate from StorageCapability: an extension may declare column
+// storage without using the InnoDB API directly, or use the InnoDB API
+// without registering column storage.
+//
+// Usage:
+//   static constexpr auto kMyStorage =
+//       make_column_store<MyCtx>(MY_TYPE)...build();
+//
+//   static auto COLUMN_STORE =
+//   ColumnStoreCapability().column_store(kMyStorage);
+//
+//   VEF_GENERATE_ENTRY_POINTS(
+//       make_extension().with(STORAGE).with(COLUMN_STORE).type(MYTYPE))
+//
+// Each .column_store(desc) call appends one descriptor and returns a new
+// ColumnStoreCapability<N+1>. The COLUMN_STORE variable must have static
+// storage duration (declare as `static auto`) so that the internal pointer
+// array remains valid when the server reads the extension descriptor.
+
+template <size_t N = 0>
+class ColumnStoreCapability {
+ public:
+  static constexpr const char *kName = VEF_PREVIEW_COLUMN_STORE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_COLUMN_STORE_INTF_VERSION_1;
+
+  constexpr ColumnStoreCapability() : ptrs_{} {}
+
+  // Append a type storage descriptor. Returns ColumnStoreCapability<N+1>.
+  constexpr ColumnStoreCapability<N + 1> column_store(
+      const TypeStorageDescriptor &d) const {
+    return ColumnStoreCapability<N + 1>(*this, &d.intf);
+  }
+
+  // Returns the extension descriptor passed to the server as extension_data.
+  // Called once at registration time; COLUMN_STORE must be in static storage
+  // by then so that ptrs_ has a stable address.
+  const vef_preview_column_store_ext_desc_t *extension_desc() {
+    ext_desc_.version = VEF_COLUMN_STORE_INTF_VERSION;
+    ext_desc_.type_storage_count = static_cast<uint32_t>(N);
+    ext_desc_.type_storages = N > 0 ? ptrs_ : nullptr;
+    return &ext_desc_;
+  }
+
+  // Sink for the server-written vtable pointer. Not used by the extension.
+  void *vtable_{nullptr};
+
+  template <size_t M>
+  friend class ColumnStoreCapability;
+
+ private:
+  // Constructor used by column_store() to build ColumnStoreCapability<N> from
+  // ColumnStoreCapability<N-1> plus one new descriptor pointer.
+  template <size_t M>
+  constexpr ColumnStoreCapability(const ColumnStoreCapability<M> &base,
+                                  const vef_type_storage_intf_t *new_ptr)
+      : ptrs_{} {
+    static_assert(M + 1 == N, "internal construction size mismatch");
+    for (size_t i = 0; i < M; i++) ptrs_[i] = base.ptrs_[i];
+    ptrs_[M] = new_ptr;
+  }
+
+  const vef_type_storage_intf_t *ptrs_[N > 0 ? N : 1];
+  vef_preview_column_store_ext_desc_t ext_desc_{};
 };
 
 // =============================================================================
@@ -65,11 +155,12 @@ class StorageCapability {
 // automatically on drop by deleting the Arena (which calls ~UserCtx()).
 // Extensions must not free it manually.
 //
-// Pass the user context type to make_storage<>() and each function as a
-// template argument. The SDK generates the required ABI wrappers automatically.
+// Pass the user context type and a TypeObject to make_column_store<>() and
+// each function as a template argument. The SDK generates the required ABI
+// wrappers automatically.
 //
 // Usage:
-//   make_storage<MyCtx>()
+//   make_column_store<MyCtx>(MY_TYPE)
 //     .create<&MyStorage::create>()
 //     .drop<&MyStorage::drop>()
 //     .load<&MyStorage::load>()
@@ -97,7 +188,6 @@ class StorageCapability {
 //   bool purge(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Ref, char*,
 //   uint32_t);
 //
-
 // All functions return false on success, true on error (writing to error_msg).
 // The drop function only needs to handle InnoDB segment cleanup.
 // The StorageCtx<UserCtx> destructor (~UserCtx) is called automatically
@@ -295,7 +385,8 @@ void StorageBuilder_all_column_storage_interfaces_must_be_registered();
 template <typename UserCtx>
 class StorageBuilder {
  public:
-  constexpr StorageBuilder() : intf_{} {}
+  constexpr explicit StorageBuilder(const char *type_name)
+      : type_name_(type_name), intf_{} {}
 
   // Each setter static_asserts that F exactly matches the expected function
   // pointer type (detail::CreateFn<UserCtx>, etc.), rejecting wrong signatures,
@@ -369,7 +460,7 @@ class StorageBuilder {
     return *this;
   }
 
-  constexpr vef_type_storage_intf_t build() const {
+  constexpr TypeStorageDescriptor build() const {
     if (!intf_.create || !intf_.drop || !intf_.load || !intf_.insert ||
         !intf_.select || !intf_.mark_delete || !intf_.purge) {
       // Calling a non-constexpr function here causes a compile-time error
@@ -379,19 +470,25 @@ class StorageBuilder {
     }
     vef_type_storage_intf_t result = intf_;
     result.version = VEF_STORAGE_TYPE_INTF_VERSION;
-    return result;
+    result.type_name = type_name_;
+    return TypeStorageDescriptor{result};
   }
 
  private:
+  const char *type_name_;
   vef_type_storage_intf_t intf_;
 };
 
-// Returns a StorageBuilder for the given user context type. UserCtx is
-// allocated from the InnoDB arena before create/load and destroyed
-// automatically on drop. See the block comment above for full usage.
-template <typename UserCtx>
-constexpr StorageBuilder<UserCtx> make_storage() {
-  return StorageBuilder<UserCtx>{};
+// Entry point for creating a StorageBuilder.
+//
+// Pass a TypeObject produced by vsql::make_type<Name>().build():
+//   make_column_store<MyCtx>(MY_TYPE)...
+
+template <
+    typename UserCtx, typename TypeObj,
+    typename = decltype(std::declval<const TypeObj &>().descriptor.vef_desc)>
+constexpr StorageBuilder<UserCtx> make_column_store(const TypeObj &type) {
+  return StorageBuilder<UserCtx>{type.name()};
 }
 
 }  // namespace vsql::preview_storage_builder
@@ -404,12 +501,28 @@ struct CapabilityTraits<::vsql::preview_storage_builder::StorageCapability> {
   static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
   using AbiType = vef_preview_storage_t;
 
-  // Write the vtable pointer into the module-level g_abi so that the
-  // inline implementations (MtrCtx, Page, Segment) can call through it
-  // without holding a reference to the StorageCapability instance.
   static void *vtable_destination(
       ::vsql::preview_storage_builder::StorageCapability * /*p*/) noexcept {
     return static_cast<void *>(&::vsql::preview_storage::detail::g_abi);
+  }
+};
+
+template <size_t N>
+struct CapabilityTraits<
+    ::vsql::preview_storage_builder::ColumnStoreCapability<N>> {
+  static constexpr const char *kName = VEF_PREVIEW_COLUMN_STORE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_COLUMN_STORE_INTF_VERSION_1;
+  using AbiType = vef_preview_column_store_t;
+  using DescriptorType = vef_preview_column_store_ext_desc_t;
+
+  static void *vtable_destination(
+      ::vsql::preview_storage_builder::ColumnStoreCapability<N> *p) noexcept {
+    return static_cast<void *>(&p->vtable_);
+  }
+
+  static const void *extension_data(
+      ::vsql::preview_storage_builder::ColumnStoreCapability<N> *p) noexcept {
+    return p->extension_desc();
   }
 };
 

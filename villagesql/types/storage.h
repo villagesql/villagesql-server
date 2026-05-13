@@ -16,7 +16,7 @@
 
 // StorageInterface wraps the storage function pointers from
 // vef_type_storage_intf_t. It lives in TypeDescriptor and is constructed from
-// the ABI struct when an extension registers a type with custom column storage.
+// the ABI struct when an extension registers column storage for a custom type.
 
 #ifndef VILLAGESQL_TYPES_STORAGE_H_
 #define VILLAGESQL_TYPES_STORAGE_H_
@@ -39,8 +39,9 @@ class StorageInterface {
   using MarkDeleteFunc = vef_type_storage_mark_delete_func_t;
   using PurgeFunc = vef_type_storage_purge_func_t;
 
-  // All fields are from VEF_PROTOCOL_2. If new function pointers are added
-  // in future protocol versions, add a version check before assigning them.
+  // Function pointers are from VEF_STORAGE_TYPE_INTF_VERSION_1. If new
+  // function pointers are added in future versions, add a version check
+  // before assigning them.
   explicit StorageInterface(const vef_type_storage_intf_t &intf)
       : create_(intf.create),
         drop_(intf.drop),

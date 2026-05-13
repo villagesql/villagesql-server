@@ -32,32 +32,11 @@ namespace type_builder {
 // =============================================================================
 // TypeDescriptor
 // =============================================================================
-//
-// Wrapper around vef_type_desc_t that owns the storage interface structure
-// and ensures vef_desc.storage_intf points to the local copy after copy/move.
 
 struct TypeDescriptor {
   vef_type_desc_t vef_desc{};
-  vef_type_storage_intf_t storage_intf{};
 
   constexpr TypeDescriptor() = default;
-
-  constexpr TypeDescriptor(const TypeDescriptor &o)
-      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
-    if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
-  }
-
-  constexpr TypeDescriptor(TypeDescriptor &&o)
-      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
-    if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
-  }
-
-  constexpr TypeDescriptor &operator=(const TypeDescriptor &o) {
-    vef_desc = o.vef_desc;
-    storage_intf = o.storage_intf;
-    if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
-    return *this;
-  }
 };
 
 // =============================================================================
@@ -97,8 +76,7 @@ class TypeBuilder {
         int_to_params_vdf_name_(nullptr),
         resolve_params_vdf_name_(nullptr),
         intrinsic_default_vdf_name_(nullptr),
-        intrinsic_default_str_(nullptr),
-        storage_intf_{} {}
+        intrinsic_default_str_(nullptr) {}
 
   constexpr TypeBuilder &persisted_length(int64_t len) {
     persisted_length_ = len;
@@ -172,14 +150,8 @@ class TypeBuilder {
     return *this;
   }
 
-  constexpr TypeBuilder &column_storage(const vef_type_storage_intf_t &intf) {
-    storage_intf_ = intf;
-    return *this;
-  }
-
   constexpr TypeDescriptor build() const {
     TypeDescriptor desc{};
-    desc.storage_intf = storage_intf_;
     const bool use_raw_ptrs = encode_func_ != nullptr ||
                               decode_func_ != nullptr ||
                               compare_func_ != nullptr;
@@ -200,7 +172,6 @@ class TypeBuilder {
         resolve_params_vdf_name_,
         intrinsic_default_vdf_name_,
         intrinsic_default_str_,
-        storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
         0,  // max_persisted_length: only set via the v2+ API
     };
     return desc;
@@ -222,7 +193,6 @@ class TypeBuilder {
   const char *resolve_params_vdf_name_;
   const char *intrinsic_default_vdf_name_;
   const char *intrinsic_default_str_;
-  vef_type_storage_intf_t storage_intf_;
 };
 
 // Entry point: make_type("name")

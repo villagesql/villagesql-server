@@ -19,6 +19,7 @@
 #include <unordered_map>
 
 #include "villagesql/sdk/include/villagesql/detail/capability_hash.h"
+#include "villagesql/services/preview/column_store.h"
 #include "villagesql/services/preview/keyring.h"
 #include "villagesql/services/preview/ping.h"
 #include "villagesql/services/preview/sql_query.h"
@@ -121,6 +122,13 @@ void register_builtin_capabilities() {
       {.vtable = preview_storage_vtable(),
        .abi_type_hash =
            villagesql::detail::abi_type_hash<vef_preview_storage_t>()});
+  register_capability(
+      VEF_PREVIEW_COLUMN_STORE_NAME,
+      {.vtable = preview_column_store_vtable(),
+       .abi_type_hash =
+           villagesql::detail::abi_type_hash<vef_preview_column_store_t>(),
+       .descriptor_abi_hash = villagesql::detail::abi_type_hash<
+           vef_preview_column_store_ext_desc_t>()});
   register_capability(
       VEF_PREVIEW_THREAD_WORKER_NAME,
       {.vtable = preview_thread_worker_vtable(),

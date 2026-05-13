@@ -163,7 +163,6 @@ typedef enum : unsigned int {
                    //   vef_type_desc_t.
                    // + Add int_to_params and resolve_params VDF name fields to
                    //   vef_type_desc_t.
-                   // + Add storage interface to vef_type_desc_t.
                    // + Replace vef_vdf_args_t.values_v1 flat array with
                    //   vef_vdf_args_t.values pointer array (allows
                    //   vef_invalue_t to grow in future protocol versions).
@@ -767,12 +766,6 @@ typedef struct {
   // no string default is provided; the server falls back to encode("").
   // Only used when protocol >= VEF_PROTOCOL_2.
   const char *intrinsic_default_str;
-
-  // OPTIONAL: Storage interface. Set to a non-NULL pointer if columns of this
-  // type are stored by the extension. The pointed-to struct must remain valid
-  // for the lifetime of the extension. The server reads storage_intf->version
-  // to determine which fields are available.
-  const vef_type_storage_intf_t *storage_intf;
 
   // Upper bound on persisted_length across all valid parameterizations of
   // this type. Required for parameterized types; ignored for non-parameterized

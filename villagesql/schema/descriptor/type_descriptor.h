@@ -118,16 +118,16 @@ class TypeDescriptor {
   // testing)
   explicit TypeDescriptor(TypeDescriptorKey key) : key_(std::move(key)) {}
 
-  // Full constructor. hash, int_to_params, resolve_params, intrinsic_default,
-  // and storage_intf are optional.
+  // Full constructor. hash, int_to_params, and resolve_params are optional.
+  // Storage is wired in separately via set_storage_intf() after all types
+  // and column storage descriptors are loaded.
   TypeDescriptor(
       TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
       int64_t persisted_len, int64_t max_unpersisted_len,
       int64_t max_persisted_len, EncodeFunction encode, DecodeFunction decode,
       CompareFunction compare, std::optional<HashFunction> hash = std::nullopt,
       std::optional<IntToParamsFunction> int_to_params = std::nullopt,
-      std::optional<ResolveParamsFunction> resolve_params = std::nullopt,
-      std::optional<StorageInterface> storage_intf = std::nullopt);
+      std::optional<ResolveParamsFunction> resolve_params = std::nullopt);
 
   // Disable copy (descriptors should not be copied)
   TypeDescriptor(const TypeDescriptor &) = delete;
@@ -227,6 +227,12 @@ class TypeDescriptor {
   // not manage its own column storage.
   const std::optional<StorageInterface> &storage_intf() const {
     return storage_intf_;
+  }
+
+  // Wire in column storage after construction (called during extension loading
+  // once all types and storage descriptors have been loaded).
+  void set_storage_intf(StorageInterface intf) {
+    storage_intf_ = std::move(intf);
   }
 
  private:

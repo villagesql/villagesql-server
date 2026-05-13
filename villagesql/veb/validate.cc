@@ -16,6 +16,7 @@
 
 #include "villagesql/veb/validate.h"
 
+#include <cstring>
 #include <optional>
 #include <string>
 
@@ -23,7 +24,9 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/types/storage.h"
 #include "villagesql/veb/veb_file.h"
 #include "villagesql/veb/veb_register_type.h"
 
@@ -127,6 +130,62 @@ std::optional<ValidatedRegistration> validate_extension_registration(
       result.funcs.push_back(FuncDescriptor(key, extension_version, func_desc,
                                             ext_reg.negotiated_protocol,
                                             return_type));
+    }
+  }
+
+  // Wire column storage implementations to types via the storage capability
+  // extension descriptor. The descriptor lives in the extension_data field of
+  // the vsql::preview::storage capability entry.
+  if (reg != nullptr && ext_reg.negotiated_protocol >= VEF_PROTOCOL_2 &&
+      reg->required_capability_count > 0) {
+    for (unsigned int i = 0; i < reg->required_capability_count; i++) {
+      const vef_required_capability_t &cap = reg->required_capabilities[i];
+      if (cap.name == nullptr ||
+          strcmp(cap.name, VEF_PREVIEW_COLUMN_STORE_NAME) != 0 ||
+          cap.extension_data == nullptr) {
+        continue;
+      }
+
+      const auto *ext_desc =
+          static_cast<const vef_preview_column_store_ext_desc_t *>(
+              cap.extension_data);
+
+      for (unsigned int j = 0; j < ext_desc->type_storage_count; j++) {
+        const vef_type_storage_intf_t *sd = ext_desc->type_storages[j];
+        if (sd == nullptr || sd->type_name == nullptr) {
+          error_out = "NULL type storage descriptor at index " +
+                      std::to_string(j) + " in storage capability";
+          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                  error_out.c_str());
+          return std::nullopt;
+        }
+
+        if (!sd->create || !sd->drop || !sd->load || !sd->insert ||
+            !sd->select || !sd->mark_delete || !sd->purge) {
+          error_out = std::string("type storage for '") + sd->type_name +
+                      "': not all storage functions are registered";
+          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                  error_out.c_str());
+          return std::nullopt;
+        }
+
+        bool found = false;
+        for (auto &descriptor : result.types) {
+          if (descriptor.type_name() == sd->type_name) {
+            descriptor.set_storage_intf(StorageInterface(*sd));
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          error_out = std::string("type storage refers to unknown type '") +
+                      sd->type_name + "'";
+          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                  error_out.c_str());
+          return std::nullopt;
+        }
+      }
+      break;
     }
   }
 
