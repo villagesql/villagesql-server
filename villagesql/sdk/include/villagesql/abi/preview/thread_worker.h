@@ -87,7 +87,7 @@ typedef struct {
   const char *var_name;
 } vef_thread_worker_descriptor_t;
 
-// Preview capability: "vsql::thread_worker"
+// Preview capability: "vsql::preview::thread_worker"
 //
 // The extension sets extension_data = &descriptor in vef_required_capability_t.
 // The server registers a control sys var on the extension's behalf at load
@@ -96,9 +96,9 @@ typedef struct {
 //
 // Capability name: VEF_PREVIEW_THREAD_WORKER_NAME
 
-#define VEF_PREVIEW_THREAD_WORKER_NAME "vsql::thread_worker"
+#define VEF_PREVIEW_THREAD_WORKER_NAME "vsql::preview::thread_worker"
 
-// Current ABI version for the "vsql::thread_worker" capability.
+// Current ABI version for the "vsql::preview::thread_worker" capability.
 #define VEF_PREVIEW_THREAD_WORKER_ABI_VERSION 1
 
 // Server-side vtable. The version field is always first, matching the

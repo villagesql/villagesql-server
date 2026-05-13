@@ -892,9 +892,8 @@ typedef struct {
   // was compiled against.
   uint32_t min_version;
   // Optional. Capability-specific descriptor supplied by the extension to the
-  // server. For VEF_PREVIEW_THREAD_WORKER_NAME this points to a
-  // vef_thread_worker_descriptor_t. NULL for capabilities that do not need it.
-  // Must remain valid for the lifetime of the extension.
+  // server. Its type is capability-specific. NULL for capabilities that do not
+  // need it. Must remain valid for the lifetime of the extension.
   const void *extension_data;
   // Compile-time hash of the descriptor struct type pointed to by
   // extension_data, computed via

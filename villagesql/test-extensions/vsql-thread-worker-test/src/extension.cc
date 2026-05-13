@@ -56,7 +56,7 @@ static int open_socket() {
   int reuse = 1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
-  struct sockaddr_in addr {};
+  struct sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_port = 0;  // let OS pick
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -68,7 +68,7 @@ static int open_socket() {
   }
 
   // Read back the port the OS assigned.
-  struct sockaddr_in bound {};
+  struct sockaddr_in bound{};
   socklen_t len = sizeof(bound);
   if (getsockname(fd, reinterpret_cast<struct sockaddr *>(&bound), &len) == 0)
     g_state.active_port.store(ntohs(bound.sin_port));

@@ -107,8 +107,7 @@ void register_builtin_capabilities() {
   register_capability(
       VEF_PREVIEW_PING_NAME,
       {.vtable = preview_ping_vtable(),
-       .abi_type_hash =
-           villagesql::detail::abi_type_hash<vef_preview_ping_t>(),
+       .abi_type_hash = villagesql::detail::abi_type_hash<vef_preview_ping_t>(),
        .compat_fn = preview_ping_compat});
   // Keyring uses the default compat function: strict ABI hash match required.
   register_capability(
@@ -131,7 +130,7 @@ void register_builtin_capabilities() {
        .on_server_startup = init_thread_worker_psi_keys,
        .on_populate = on_populate_thread_worker,
        .on_depopulate = on_depopulate_thread_worker});
-  // TODO(villagesql-beta): register "vsql::thread_worker" and "vsql::sql" here
+  // TODO(villagesql-beta): register "vsql::sql" here
 }
 
 // TODO(villagesql-preview): Verify that the capabilities declared in
