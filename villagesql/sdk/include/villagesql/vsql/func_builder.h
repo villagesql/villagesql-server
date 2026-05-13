@@ -510,13 +510,14 @@ struct TypeEncodeWithCacheVdfWrapper {
     // Inference-path write-back: when the server invoked us with no input
     // type_params (signalling "please infer"), the wrapper publishes the
     // canonical "k=v,k=v" form of the resulting MaybeParams<P> back to the
-    // server via args->out_type_params. All four guards must hold:
-    //   1. server opted in by setting args->out_type_params
+    // server via result->out_type_params. All four guards must hold:
+    //   1. server opted in by setting result->out_type_params
     //   2. encode succeeded (no warning/error)
     //   3. we were on the inference path (input type_params was empty)
     //   4. the extension actually inferred params and registered to_strings
-    if (args->out_type_params != nullptr && result->type == VEF_RESULT_VALUE &&
-        !input_params_known && maybe_params.is_known() &&
+    if (result->out_type_params != nullptr &&
+        result->type == VEF_RESULT_VALUE && !input_params_known &&
+        maybe_params.is_known() &&
         type_params_cache_for<P>().has_to_strings()) {
       std::map<std::string, std::string> m;
       type_params_cache_for<P>().to_strings(maybe_params.value(), m);
@@ -525,8 +526,8 @@ struct TypeEncodeWithCacheVdfWrapper {
       // its leading comma if not first) won't fit, stop writing but keep
       // iterating to accumulate `needed` for the snprintf-style overflow
       // signal. Caller retries with a larger buffer.
-      char *const buf_begin = args->out_type_params->buf;
-      const size_t cap = args->out_type_params->max_buf_len;
+      char *const buf_begin = result->out_type_params->buf;
+      const size_t cap = result->out_type_params->max_buf_len;
       char *p = buf_begin;
       size_t needed = 0;
       bool ok = true;
@@ -546,8 +547,8 @@ struct TypeEncodeWithCacheVdfWrapper {
         needed += pair_size;
         first = false;
       }
-      args->out_type_params->actual_len = needed;
-      args->out_type_params->overflow = !ok;
+      result->out_type_params->actual_len = needed;
+      result->out_type_params->overflow = !ok;
     }
   }
 };

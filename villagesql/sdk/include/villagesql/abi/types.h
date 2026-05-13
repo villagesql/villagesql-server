@@ -299,7 +299,7 @@ typedef struct {
 // unknown to known during the call.
 //
 // Used only on the constant-string inference path. NULL on the normal
-// row-time path; see vef_vdf_args_t::out_type_params.
+// row-time path; see vef_vdf_result_t::out_type_params.
 //
 // Overflow contract (snprintf-style): the wrapper always sets actual_len to
 // the number of bytes that *would* have been written. If actual_len exceeds
@@ -439,6 +439,16 @@ typedef struct {
     // For INT return type
     long long int_value;
   };
+
+  // protocol >= VEF_PROTOCOL_2
+  //
+  // Optional out-channel for constant-string from_string inference at
+  // fix_fields time. NULL on the normal row-time path. When non-NULL AND the
+  // extension's parameterized from_string transitions MaybeParams<P> from
+  // unknown to known, the SDK wrapper writes the inferred params as a
+  // canonical "k=v,k=v" string via the type's registered params_to_strings
+  // callback. See vef_inferred_type_params_t for the overflow contract.
+  vef_inferred_type_params_t *out_type_params;
 } vef_vdf_result_t;
 
 // =============================================================================
@@ -478,16 +488,6 @@ typedef struct {
     // protocol versions.
     vef_invalue_t **values;
   };
-
-  // protocol >= VEF_PROTOCOL_2
-  //
-  // Optional out-channel for constant-string from_string inference at
-  // fix_fields time. NULL on the normal row-time path. When non-NULL AND the
-  // extension's parameterized from_string transitions MaybeParams<P> from
-  // unknown to known, the SDK wrapper writes the inferred params as a
-  // canonical "k=v,k=v" string via the type's registered params_to_strings
-  // callback. See vef_inferred_type_params_t for the overflow contract.
-  vef_inferred_type_params_t *out_type_params;
 } vef_vdf_args_t;
 
 typedef struct {
