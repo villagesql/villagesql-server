@@ -178,8 +178,8 @@ else
     log_info "Step 5: Skipping bundled extensions (set BUILD_BUNDLED_EXTENSIONS=1 to include)"
 fi
 
-# Step 5: Add convenience scripts
-log_step "Step 5: Adding convenience scripts..."
+# Step 6: Add convenience scripts
+log_step "Step 6: Adding convenience scripts..."
 
 # Copy script from source directory
 TEMPLATE_DIR="$SOURCE_DIR/villagesql/dev_server"
@@ -193,8 +193,8 @@ fi
 
 log_info "Convenience scripts added"
 
-# Step 6: Create comprehensive README
-log_step "Step 6: Creating documentation..."
+# Step 7: Create comprehensive README
+log_step "Step 7: Creating documentation..."
 
 # Generate test documentation (always included with stripped MySQL tests)
 TEST_NOTE="**Note:** This package includes the test framework (mysql-test-run.pl, lib/, include/) without any bundled test suites. You can create your own test suites for your extensions."
@@ -220,8 +220,8 @@ Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Package Type: Development Server
 EOF
 
-# Step 7: Create the final tarball
-log_step "Step 7: Creating final tarball..."
+# Step 8: Create the final tarball
+log_step "Step 8: Creating final tarball..."
 cd "$STAGING_DIR"
 tar czf "$TARBALL_NAME" "$PACKAGE_NAME"
 
