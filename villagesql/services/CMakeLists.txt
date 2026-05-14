@@ -18,9 +18,9 @@ SET(VILLAGESQL_SERVICES_SOURCES
   preview/keyring.cc
   preview/ping.cc
   preview/sql_query.cc
+  preview/status_var.cc
   preview/storage.cc
   preview/thread_worker.cc
-  status_vars.cc
   sys_vars.cc
 )
 

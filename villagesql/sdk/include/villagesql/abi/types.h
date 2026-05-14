@@ -877,30 +877,6 @@ typedef struct {
   };
 } vef_sys_var_desc_t;
 
-// Status variable type. Unlike system variables (which are configurable),
-// status variables are read-only counters and gauges exposed via SHOW STATUS.
-typedef enum {
-  VEF_STATUS_VAR_INT = 0,     // long long counter/gauge (shown as unsigned)
-  VEF_STATUS_VAR_DOUBLE = 1,  // double gauge
-} vef_status_var_type_t;
-
-typedef struct {
-  vef_protocol_t protocol;
-
-  // Variable name (without extension prefix). Encoded using UTF-8.
-  const char *name;
-
-  vef_status_var_type_t type;
-
-  // Pointer to storage in the extension .so. Must remain valid for the
-  // lifetime of the extension. The extension writes to this; the server reads
-  // it at SHOW STATUS time.
-  union {
-    long long *integer_ptr;
-    double *double_ptr;
-  };
-} vef_status_var_desc_t;
-
 // Forward declaration so vef_required_capability_t can reference it.
 typedef struct vef_registration_t vef_registration_t;
 
@@ -965,10 +941,6 @@ typedef struct vef_registration_t {
   // protocol >= VEF_PROTOCOL_2
   unsigned int sys_var_count;
   vef_sys_var_desc_t **sys_vars;
-
-  // protocol >= VEF_PROTOCOL_2
-  unsigned int status_var_count;
-  vef_status_var_desc_t **status_vars;
 
   // protocol >= VEF_PROTOCOL_2
   // Preview capabilities required by this extension. Each entry names a

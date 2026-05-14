@@ -1,13 +1,17 @@
 # Test status variable increments for vsql_usage_counter extension.
-# Verifies that add_calls increases by exactly 1 for each add() invocation
-# and returns to zero after reinstall.
+# Verifies that add_calls and null_calls increment correctly and are
+# gone after uninstall.
 
+SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_usage_counter;
 
---echo # Counter starts at zero
+--echo # Both counters start at zero
 SELECT VARIABLE_VALUE = 0 AS add_calls_starts_at_zero
 FROM performance_schema.global_status
 WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+SELECT VARIABLE_VALUE = 0 AS null_calls_starts_at_zero
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.null_calls';
 
 --echo # Basic addition works
 SELECT vsql_usage_counter.add(3, 4);
@@ -26,20 +30,26 @@ SELECT VARIABLE_VALUE = 3 AS add_calls_is_three
 FROM performance_schema.global_status
 WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
 
---echo # NULL input returns NULL but still increments counter
+--echo # NULL input returns NULL, increments both counters
 SELECT vsql_usage_counter.add(NULL, 1) IS NULL AS null_returns_null;
 
---echo # Counter is now 4
+--echo # add_calls is now 4, null_calls is now 1
 SELECT VARIABLE_VALUE = 4 AS add_calls_is_four
 FROM performance_schema.global_status
 WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+SELECT VARIABLE_VALUE = 1 AS null_calls_is_one
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.null_calls';
 
---echo # Counter visible in SHOW GLOBAL STATUS
-SHOW GLOBAL STATUS LIKE 'vsql_usage_counter.add_calls';
+--echo # Both counters visible in SHOW GLOBAL STATUS
+SHOW GLOBAL STATUS LIKE 'vsql_usage_counter.%';
 
 UNINSTALL EXTENSION vsql_usage_counter;
 
---echo # Status variable gone after uninstall
-SELECT COUNT(*) = 0 AS no_status_var_after_uninstall
+--echo # Status variables gone after uninstall
+SELECT COUNT(*) = 0 AS no_status_vars_after_uninstall
 FROM performance_schema.global_status
-WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
+WHERE VARIABLE_NAME LIKE 'vsql_usage_counter.%';
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

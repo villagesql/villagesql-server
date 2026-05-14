@@ -16,11 +16,12 @@
 #ifndef VILLAGESQL_SERVICES_PREVIEW_THREAD_WORKER_H
 #define VILLAGESQL_SERVICES_PREVIEW_THREAD_WORKER_H
 
-#include <string_view>
+#include <string>
 
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/thread_worker.h"
+#include "villagesql/services/capability_registry.h"
 
 // Full definition of the opaque handle type. Defined here (not in the ABI
 // header) so that the server-side implementation can see the complete type,
@@ -47,12 +48,12 @@ void init_thread_worker_psi_keys();
 
 // Called at extension load time (via capability on_populate) to store the
 // descriptor and extension name so the server can start the thread later.
-void on_populate_thread_worker(std::string_view extension_name,
-                               const void *extension_data);
+bool on_populate_thread_worker(const PopulateContext &ctx,
+                               std::string &error_message);
 
 // Called at extension unload time to stop any running thread and remove the
 // worker state for the given descriptor.
-void on_depopulate_thread_worker(const void *extension_data);
+void on_depopulate_thread_worker(const DepopulateContext &ctx);
 
 // Returns the server-side vtable for the "vsql::thread_worker" capability.
 vef_preview_thread_worker_t *preview_thread_worker_vtable();

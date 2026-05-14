@@ -24,6 +24,10 @@
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
 class THD;
+namespace villagesql::services {
+struct PopulateContext;
+struct DepopulateContext;
+}  // namespace villagesql::services
 
 namespace villagesql {
 namespace veb {
@@ -104,18 +108,18 @@ struct ExtensionRegistration {
 //
 // Returns false on success, true on error.
 // On success, all fields in registration are populated.
-// On error, a message is written to error_out so that it can be logged, and/or
-// returned to the client.
+// On error, a message is written to error_message so that it can be logged,
+// and/or returned to the client.
 bool load_vef_extension(const std::string &so_path,
-                        std::string_view extension_name,
                         ExtensionRegistration &registration,
-                        vef_protocol_t max_protocol,
-                        std::string &error_message);
+                        vef_protocol_t max_protocol, std::string &error_message,
+                        const villagesql::services::PopulateContext &ctx);
 
-// Unload a VEF extension .so file
-//
+// Unload a VEF extension .so file.
+// ctx is passed through to on_depopulate for each capability.
 // After this call, the ExtensionRegistration should not be used.
-void unload_vef_extension(const ExtensionRegistration &registration);
+void unload_vef_extension(const ExtensionRegistration &registration,
+                          const villagesql::services::DepopulateContext &ctx);
 
 // Get the path to the .so file for an extension
 // Uses the convention:

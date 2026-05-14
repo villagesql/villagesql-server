@@ -29,20 +29,31 @@
 // performance_schema.global_status.
 //
 // Status variables:
-//   vsql_usage_counter.add_calls  INT  total number of add() invocations
+//   vsql_usage_counter.add_calls   INT  total number of add() invocations
+//   vsql_usage_counter.null_calls  INT  invocations where at least one arg was
+//   NULL
 
+#include <villagesql/preview/status_var.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
+namespace sv = vsql::preview_status_var;
 
-// Counter incremented on every add() call. Concurrent increments from
+// Counters incremented on every add() call. Concurrent increments from
 // multiple query threads may occasionally be lost (non-atomic ++), which is
-// acceptable for an approximate call counter exposed via SHOW STATUS.
+// acceptable for approximate counters exposed via SHOW STATUS.
 static long long g_add_calls = 0;
+static long long g_null_calls = 0;
+
+static auto g_status_vars = sv::make_capability({
+    sv::make_int("add_calls", &g_add_calls),
+    sv::make_int("null_calls", &g_null_calls),
+});
 
 void add_impl(IntArg a, IntArg b, IntResult out) {
   g_add_calls++;
   if (a.is_null() || b.is_null()) {
+    g_null_calls++;
     out.set_null();
     return;
   }
@@ -55,5 +66,4 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .param(INT)
                                         .param(INT)
                                         .build())
-                              .status_var(make_status_var_int("add_calls",
-                                                              &g_add_calls)))
+                              .with(g_status_vars))

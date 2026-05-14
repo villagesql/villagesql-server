@@ -1,9 +1,15 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_usage_counter;
-# Counter starts at zero
+# Both counters start at zero
 SELECT VARIABLE_VALUE = 0 AS add_calls_starts_at_zero
 FROM performance_schema.global_status
 WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
 add_calls_starts_at_zero
+1
+SELECT VARIABLE_VALUE = 0 AS null_calls_starts_at_zero
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.null_calls';
+null_calls_starts_at_zero
 1
 # Basic addition works
 SELECT vsql_usage_counter.add(3, 4);
@@ -28,24 +34,32 @@ FROM performance_schema.global_status
 WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
 add_calls_is_three
 1
-# NULL input returns NULL but still increments counter
+# NULL input returns NULL, increments both counters
 SELECT vsql_usage_counter.add(NULL, 1) IS NULL AS null_returns_null;
 null_returns_null
 1
-# Counter is now 4
+# add_calls is now 4, null_calls is now 1
 SELECT VARIABLE_VALUE = 4 AS add_calls_is_four
 FROM performance_schema.global_status
 WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
 add_calls_is_four
 1
-# Counter visible in SHOW GLOBAL STATUS
-SHOW GLOBAL STATUS LIKE 'vsql_usage_counter.add_calls';
+SELECT VARIABLE_VALUE = 1 AS null_calls_is_one
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'vsql_usage_counter.null_calls';
+null_calls_is_one
+1
+# Both counters visible in SHOW GLOBAL STATUS
+SHOW GLOBAL STATUS LIKE 'vsql_usage_counter.%';
 Variable_name	Value
 vsql_usage_counter.add_calls	4
+vsql_usage_counter.null_calls	1
 UNINSTALL EXTENSION vsql_usage_counter;
-# Status variable gone after uninstall
-SELECT COUNT(*) = 0 AS no_status_var_after_uninstall
+# Status variables gone after uninstall
+SELECT COUNT(*) = 0 AS no_status_vars_after_uninstall
 FROM performance_schema.global_status
-WHERE VARIABLE_NAME = 'vsql_usage_counter.add_calls';
-no_status_var_after_uninstall
+WHERE VARIABLE_NAME LIKE 'vsql_usage_counter.%';
+no_status_vars_after_uninstall
 1
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

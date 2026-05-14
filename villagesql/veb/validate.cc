@@ -133,22 +133,6 @@ std::optional<ValidatedRegistration> validate_extension_registration(
   return result;
 }
 
-bool validate_status_var_descriptors(const std::string &extension_name,
-                                     const vef_registration_t *reg,
-                                     std::string &error_out) {
-  for (unsigned int i = 0; i < reg->status_var_count; i++) {
-    const vef_status_var_desc_t *v = reg->status_vars[i];
-    if (v == nullptr || v->name == nullptr) {
-      error_out =
-          "NULL status variable descriptor at index " + std::to_string(i);
-      LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-              error_out.c_str());
-      return true;
-    }
-  }
-  return false;
-}
-
 bool validate_sys_var_descriptors(const std::string &extension_name,
                                   const vef_registration_t *reg,
                                   std::string &error_out) {

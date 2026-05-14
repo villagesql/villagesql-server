@@ -15,6 +15,7 @@
 
 #include "villagesql/services/capability_registry.h"
 
+#include <string>
 #include <string_view>
 #include <unordered_map>
 
@@ -22,6 +23,7 @@
 #include "villagesql/services/preview/keyring.h"
 #include "villagesql/services/preview/ping.h"
 #include "villagesql/services/preview/sql_query.h"
+#include "villagesql/services/preview/status_var.h"
 #include "villagesql/services/preview/storage.h"
 #include "villagesql/services/preview/thread_worker.h"
 
@@ -37,15 +39,13 @@ struct CapabilityValue {
   size_t descriptor_abi_hash;  // 0 if capability has no descriptor
   cap_compat_fn compat_fn;
   // Optional. Called after the compat check for each extension that requires
-  // this capability. Receives the extension name and extension_data pointer.
-  // NULL for capabilities that need no post-populate setup.
-  void (*on_populate)(std::string_view extension_name,
-                      const void *extension_data);
+  // this capability. Returns true on error. NULL for capabilities that need
+  // no post-populate setup.
+  bool (*on_populate)(const PopulateContext &ctx, std::string &error_message);
   // Optional. Called before unloading an extension that required this
-  // capability. Receives the extension_data pointer. Used to stop threads or
-  // clean up server-side resources before the extension is removed.
-  // NULL for capabilities that need no cleanup.
-  void (*on_depopulate)(const void *extension_data);
+  // capability. Used to stop threads or clean up server-side resources before
+  // the extension is removed. NULL for capabilities that need no cleanup.
+  void (*on_depopulate)(const DepopulateContext &ctx);
 };
 
 std::unordered_map<std::string, CapabilityValue> g_registry;
@@ -136,13 +136,22 @@ void register_builtin_capabilities() {
       {.vtable = preview_sql_query_vtable(),
        .abi_type_hash =
            villagesql::detail::abi_type_hash<vef_preview_sql_query_t>()});
+  // Status var: on_populate registers the extension's variables with MySQL;
+  // on_depopulate unregisters them on extension unload.
+  register_capability(
+      VEF_PREVIEW_STATUS_VAR_NAME,
+      {.vtable = preview_status_var_vtable(),
+       .abi_type_hash =
+           villagesql::detail::abi_type_hash<vef_preview_status_var_t>(),
+       .on_populate = on_populate_status_var,
+       .on_depopulate = on_depopulate_status_var});
 }
 
 // TODO(villagesql-preview): Verify that the capabilities declared in
 // vef_registration_t match those listed in the extension's manifest.
 bool populate_capabilities(const vef_registration_t *reg,
-                           std::string_view extension_name,
-                           std::string &error_message) {
+                           std::string &error_message,
+                           const PopulateContext &ctx) {
   if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
@@ -167,14 +176,17 @@ bool populate_capabilities(const vef_registration_t *reg,
     }
     if (!entry->compat_fn(req, entry->vtable, error_message)) return true;
     if (entry->on_populate != nullptr) {
-      entry->on_populate(extension_name, req.extension_data);
+      PopulateContext cap_ctx = ctx;
+      cap_ctx.extension_data = req.extension_data;
+      if (entry->on_populate(cap_ctx, error_message)) return true;
     }
   }
 
   return false;
 }
 
-void depopulate_capabilities(const vef_registration_t *reg) {
+void depopulate_capabilities(const vef_registration_t *reg,
+                             const DepopulateContext &ctx) {
   if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
@@ -186,7 +198,9 @@ void depopulate_capabilities(const vef_registration_t *reg) {
 
     const CapabilityValue *entry = find_capability_entry(req.name);
     if (entry == nullptr || entry->on_depopulate == nullptr) continue;
-    entry->on_depopulate(req.extension_data);
+    DepopulateContext cap_ctx = ctx;
+    cap_ctx.extension_data = req.extension_data;
+    entry->on_depopulate(cap_ctx);
   }
 }
 

@@ -88,9 +88,6 @@
 // System variable builder: make_sys_var_int(), make_sys_var_str(), etc.
 #include <villagesql/vsql/sys_var_builder.h>
 
-// Status variable builder: make_status_var_int(), make_status_var_double()
-#include <villagesql/vsql/status_var_builder.h>
-
 // vsql ExtensionBuilder, make_extension(), and VEF_GENERATE_ENTRY_POINTS
 #include <villagesql/vsql/extension_builder.h>
 
@@ -109,9 +106,7 @@ using func_builder::make_type_hash;
 using func_builder::REAL;
 using func_builder::STRING;
 
-// Re-export from sys_var_builder and status_var_builder sub-namespaces
-using status_var_builder::make_status_var_double;
-using status_var_builder::make_status_var_int;
+// Re-export from sys_var_builder sub-namespace
 using sys_var_builder::make_sys_var_bool;
 using sys_var_builder::make_sys_var_double;
 using sys_var_builder::make_sys_var_int;

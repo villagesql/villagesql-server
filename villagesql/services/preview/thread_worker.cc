@@ -335,16 +335,16 @@ static void on_enabled_change(const vef_sys_var_change_t *c) {
   }
 }
 
-void on_populate_thread_worker(std::string_view extension_name,
-                               const void *extension_data) {
-  if (extension_data == nullptr || extension_name.empty()) return;
+bool on_populate_thread_worker(const PopulateContext &ctx,
+                               std::string & /*error_message*/) {
+  if (ctx.extension_data == nullptr || ctx.extension_name.empty()) return false;
 
   auto *desc =
-      static_cast<const vef_thread_worker_descriptor_t *>(extension_data);
+      static_cast<const vef_thread_worker_descriptor_t *>(ctx.extension_data);
 
   auto state = std::make_unique<WorkerState>();
   state->descriptor = desc;
-  state->extension_name = extension_name;
+  state->extension_name = ctx.extension_name;
 
   const char *suffix = (desc->suffix != nullptr) ? desc->suffix : "worker";
   if (desc->var_name != nullptr) {
@@ -363,17 +363,18 @@ void on_populate_thread_worker(std::string_view extension_name,
   state->enabled_var_desc.boolean.value_ptr = &state->enabled;
   state->enabled_var_desc.boolean.def_val = false;
 
-  register_one_sys_var(extension_name, &state->enabled_var_desc);
+  register_one_sys_var(ctx.extension_name, &state->enabled_var_desc);
 
   std::lock_guard<std::mutex> lock(g_mu);
   g_workers[desc] = std::move(state);
+  return false;
 }
 
-void on_depopulate_thread_worker(const void *extension_data) {
-  if (extension_data == nullptr) return;
+void on_depopulate_thread_worker(const DepopulateContext &ctx) {
+  if (ctx.extension_data == nullptr) return;
 
   auto *desc =
-      static_cast<const vef_thread_worker_descriptor_t *>(extension_data);
+      static_cast<const vef_thread_worker_descriptor_t *>(ctx.extension_data);
 
   WorkerState *state = nullptr;
   {

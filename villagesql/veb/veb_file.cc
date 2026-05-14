@@ -44,7 +44,6 @@
 #include "villagesql/include/version.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
-#include "villagesql/services/status_vars.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/register.h"
 #include "villagesql/veb/sql_extension.h"
@@ -664,8 +663,11 @@ bool load_installed_extensions(THD *thd) {
 
       ExtensionRegistration registration;
       std::string load_error;
-      if (load_vef_extension(so_path, extension_name, registration,
-                             vef_server_protocol_version, load_error)) {
+      if (load_vef_extension(
+              so_path, registration, vef_server_protocol_version, load_error,
+              {.extension_name = extension_name,
+               .reason = villagesql::services::LoadReason::kStartup,
+               .thd = thd})) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -692,14 +694,6 @@ bool load_installed_extensions(THD *thd) {
               extension_name, registration)) {
         LogVSQL(ERROR_LEVEL,
                 "Failed to register config vars for extension '%s'",
-                extension_name.c_str());
-        return true;
-      }
-
-      if (villagesql::services::register_status_vars_from_extension(
-              extension_name, registration)) {
-        LogVSQL(ERROR_LEVEL,
-                "Failed to register status vars for extension '%s'",
                 extension_name.c_str());
         return true;
       }
@@ -824,10 +818,9 @@ static T lookup_symbol(void *handle, const char *symbol_name,
 }
 
 bool load_vef_extension(const std::string &so_path,
-                        std::string_view extension_name,
                         ExtensionRegistration &registration,
-                        vef_protocol_t max_protocol,
-                        std::string &error_message) {
+                        vef_protocol_t max_protocol, std::string &error_message,
+                        const villagesql::services::PopulateContext &ctx) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -886,8 +879,15 @@ bool load_vef_extension(const std::string &so_path,
   }
 
   // Populate any capabilities the extension requires.
-  if (villagesql::services::populate_capabilities(reg, extension_name,
-                                                  error_message)) {
+  if (villagesql::services::populate_capabilities(reg, error_message, ctx)) {
+    // Roll back any capabilities that were successfully populated before the
+    // failure. Mirror the load reason to its unload counterpart.
+    villagesql::services::DepopulateContext depop_ctx;
+    depop_ctx.reason = ctx.reason == villagesql::services::LoadReason::kStartup
+                           ? villagesql::services::UnloadReason::kShutdown
+                           : villagesql::services::UnloadReason::kUninstall;
+    depop_ctx.thd = ctx.thd;
+    villagesql::services::depopulate_capabilities(reg, depop_ctx);
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);
     dlclose(handle);
@@ -911,13 +911,15 @@ bool load_vef_extension(const std::string &so_path,
   return false;
 }
 
-void unload_vef_extension(const ExtensionRegistration &registration) {
+void unload_vef_extension(const ExtensionRegistration &registration,
+                          const villagesql::services::DepopulateContext &ctx) {
   if (registration.dlhandle == nullptr) {
     return;
   }
 
   if (registration.registration != nullptr) {
-    villagesql::services::depopulate_capabilities(registration.registration);
+    villagesql::services::depopulate_capabilities(registration.registration,
+                                                  ctx);
     vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
     LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
             registration.so_path.c_str());
