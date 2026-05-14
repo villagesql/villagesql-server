@@ -21,6 +21,7 @@
 #include "villagesql/sdk/include/villagesql/detail/capability_hash.h"
 #include "villagesql/services/preview/keyring.h"
 #include "villagesql/services/preview/ping.h"
+#include "villagesql/services/preview/sql_query.h"
 #include "villagesql/services/preview/storage.h"
 #include "villagesql/services/preview/thread_worker.h"
 
@@ -130,7 +131,11 @@ void register_builtin_capabilities() {
        .on_server_startup = init_thread_worker_psi_keys,
        .on_populate = on_populate_thread_worker,
        .on_depopulate = on_depopulate_thread_worker});
-  // TODO(villagesql-beta): register "vsql::sql" here
+  register_capability(
+      VEF_PREVIEW_SQL_QUERY_NAME,
+      {.vtable = preview_sql_query_vtable(),
+       .abi_type_hash =
+           villagesql::detail::abi_type_hash<vef_preview_sql_query_t>()});
 }
 
 // TODO(villagesql-preview): Verify that the capabilities declared in

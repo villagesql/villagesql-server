@@ -1,0 +1,75 @@
+# Test thread_worker sql_query capability.
+#
+# Verifies:
+# - Worker accepts "SQL_FOR_EACH <sql>" commands (for_each interface)
+# - Worker accepts "SQL_EXECUTE <sql>" commands (execute+next interface)
+# - last_monitor_result() VDF returns the first column of the first row
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_thread_worker_test;
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+
+--let $port_file = $MYSQLTEST_VARDIR/tmp/tw_sq_port.txt
+
+--echo # Send SQL_FOR_EACH SELECT 42
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SELECT vsql_thread_worker_test.active_port() INTO OUTFILE '$port_file';
+--perl
+use IO::Socket::INET;
+open(my $fh, '<', $ENV{MYSQLTEST_VARDIR} . '/tmp/tw_sq_port.txt') or die $!;
+my $port = <$fh>; chomp $port;
+close($fh);
+my $sock = IO::Socket::INET->new(
+  PeerAddr => "127.0.0.1",
+  PeerPort => $port,
+  Proto    => "tcp",
+  Timeout  => 5,
+) or die "connect failed: $!";
+$sock->autoflush(1);
+print $sock "SQL_FOR_EACH SELECT 42\n";
+shutdown($sock, 1);
+close($sock);
+EOF
+--remove_file $port_file
+
+--let $wait_condition = SELECT vsql_thread_worker_test.last_monitor_result() = '42'
+--source include/wait_condition.inc
+
+--echo # last_monitor_result should be 42
+SELECT vsql_thread_worker_test.last_monitor_result();
+
+--echo # Send SQL_EXECUTE SELECT 'hello'
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SELECT vsql_thread_worker_test.active_port() INTO OUTFILE '$port_file';
+--perl
+use IO::Socket::INET;
+open(my $fh, '<', $ENV{MYSQLTEST_VARDIR} . '/tmp/tw_sq_port.txt') or die $!;
+my $port = <$fh>; chomp $port;
+close($fh);
+my $sock = IO::Socket::INET->new(
+  PeerAddr => "127.0.0.1",
+  PeerPort => $port,
+  Proto    => "tcp",
+  Timeout  => 5,
+) or die "connect failed: $!";
+$sock->autoflush(1);
+print $sock "SQL_EXECUTE SELECT 'hello'\n";
+shutdown($sock, 1);
+close($sock);
+EOF
+--remove_file $port_file
+
+--let $wait_condition = SELECT vsql_thread_worker_test.last_monitor_result() = 'hello'
+--source include/wait_condition.inc
+
+--echo # last_monitor_result should be hello
+SELECT vsql_thread_worker_test.last_monitor_result();
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+
+UNINSTALL EXTENSION vsql_thread_worker_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
