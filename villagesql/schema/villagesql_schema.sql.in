@@ -62,6 +62,33 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_sp_params (
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL stored procedure/function parameters that use custom types';
 
+CREATE TABLE IF NOT EXISTS villagesql.custom_indexes (
+  index_id               BIGINT UNSIGNED NOT NULL COMMENT 'Server-assigned unique index identifier',
+  db_name                VARCHAR(64) NOT NULL COMMENT 'Database name',
+  table_name             VARCHAR(64) NOT NULL COMMENT 'Table name',
+  index_name             VARCHAR(64) NOT NULL COMMENT 'Index name',
+  extension_name         VARCHAR(64) NOT NULL COMMENT 'Extension providing the index type',
+  extension_version      VARCHAR(64) NOT NULL COMMENT 'Version of the extension',
+  index_type_name        VARCHAR(64) NOT NULL COMMENT 'Custom index type name from the extension',
+  index_type_parameters  JSON NOT NULL COMMENT 'Index type instantiation parameters as JSON',
+  PRIMARY KEY (index_id),
+  UNIQUE KEY idx_natural (db_name, table_name, index_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ROW_FORMAT=DYNAMIC
+COMMENT='VillageSQL indexes that use custom index types';
+
+CREATE TABLE IF NOT EXISTS villagesql.custom_index_columns (
+  index_id          BIGINT UNSIGNED NOT NULL COMMENT 'FK to custom_indexes.index_id',
+  key_position      INT UNSIGNED NOT NULL COMMENT '0-based position of this column in the index key',
+  column_name       VARCHAR(64) NOT NULL COMMENT 'Name of the indexed column',
+  extension_name    VARCHAR(64) NOT NULL COMMENT 'Extension providing the index profile',
+  extension_version VARCHAR(64) NOT NULL COMMENT 'Version of the extension',
+  profile_name      VARCHAR(64) NOT NULL COMMENT 'Index profile name binding type to index algorithm',
+  PRIMARY KEY (index_id, key_position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ROW_FORMAT=DYNAMIC
+COMMENT='Per-column profile bindings for VillageSQL custom indexes';
+
 -- Store VillageSQL system properties (version, configuration, etc.)
 -- NOTE: THIS MUST BE THE FINAL TABLE IN THIS FILE!
 -- Reason: we detect a partial install by seeing the schema exists but

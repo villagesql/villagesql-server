@@ -1,0 +1,64 @@
+# Test CREATE INDEX ... USING EXTENDED ... syntax paths
+# All cases must parse without error and then fail with "not yet implemented".
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
+# Covers:
+#   - USING EXTENDED(type_name)             -- unqualified type
+#   - USING EXTENDED(extension.type_name)   -- qualified extension.type
+#   - WITH (key = ulong_num)                -- numeric parameter
+#   - WITH (key = 'string')                 -- quoted string parameter
+#   - WITH (key = ident)                    -- unquoted identifier parameter
+#   - WITH (k1 = v1, k2 = v2, ...)         -- multiple parameters
+#   - WITH (...) without USING EXTENDED     -- standalone WITH (PT_index_with_options path)
+#   - (col profile)                         -- unqualified per-column index profile
+#   - (col extension.profile)               -- qualified per-column index profile
+
+CREATE TABLE t (id INT PRIMARY KEY, val INT);
+
+# USING EXTENDED -- unqualified type name
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(hnsw);
+
+# USING EXTENDED -- qualified extension.type_name
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(myext.hnsw);
+
+# USING EXTENDED + WITH -- numeric parameter (ulong_num path)
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(hnsw) WITH (M = 16);
+
+# USING EXTENDED + WITH -- quoted string parameter (TEXT_STRING_sys path)
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(hnsw) WITH (metric = 'l2');
+
+# USING EXTENDED + WITH -- unquoted identifier parameter (ident path)
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(hnsw) WITH (metric = l2);
+
+# USING EXTENDED + WITH -- multiple parameters covering all value kinds
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(myext.hnsw) WITH (M = 16, ef_construction = 200, metric = 'l2', space = cosine);
+
+# WITH standalone without USING EXTENDED -- exercises PT_index_with_options path directly
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) WITH (M = 16);
+
+# Column with index profile (opt_index_profile) + USING EXTENDED
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id hnsw_l2_profile) USING EXTENDED(hnsw);
+
+# Column with index profile + qualified extension.type + WITH params
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2');
+
+# Column with qualified extension.profile (extension.profile_name syntax)
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id myext.hnsw_l2_profile) USING EXTENDED(hnsw);
+
+# Qualified profile + qualified extension type + WITH params
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id myext.hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2');
+
+# Table must be unaffected by all the failed CREATE INDEX statements above
+SHOW CREATE TABLE t;
+
+DROP TABLE t;

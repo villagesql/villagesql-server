@@ -43,7 +43,7 @@
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/victionary_client.h"
-#include "villagesql/services/keyring.h"
+#include "villagesql/services/capability_registry.h"
 #include "villagesql/services/status_vars.h"
 #include "villagesql/services/sys_vars.h"
 #include "villagesql/veb/register.h"
@@ -664,8 +664,8 @@ bool load_installed_extensions(THD *thd) {
 
       ExtensionRegistration registration;
       std::string load_error;
-      if (load_vef_extension(so_path, registration, vef_server_protocol_version,
-                             load_error)) {
+      if (load_vef_extension(so_path, extension_name, registration,
+                             vef_server_protocol_version, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -824,6 +824,7 @@ static T lookup_symbol(void *handle, const char *symbol_name,
 }
 
 bool load_vef_extension(const std::string &so_path,
+                        std::string_view extension_name,
                         ExtensionRegistration &registration,
                         vef_protocol_t max_protocol,
                         std::string &error_message) {
@@ -863,9 +864,7 @@ bool load_vef_extension(const std::string &so_path,
       {MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, MYSQL_VERSION_PATCH, nullptr},
       {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr},
       villagesql::services::get_variable,
-      villagesql::services::set_variable,
-      villagesql::services::read_keyring,
-      villagesql::services::write_keyring};
+      villagesql::services::set_variable};
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {
@@ -880,6 +879,15 @@ bool load_vef_extension(const std::string &so_path,
   if (reg->error_msg != nullptr) {
     error_message =
         std::string("vef_register returned an error: ") + reg->error_msg;
+    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
+    vef_unregister(&unregister_arg, reg);
+    dlclose(handle);
+    return true;
+  }
+
+  // Populate any capabilities the extension requires.
+  if (villagesql::services::populate_capabilities(reg, extension_name,
+                                                  error_message)) {
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);
     dlclose(handle);
@@ -909,6 +917,7 @@ void unload_vef_extension(const ExtensionRegistration &registration) {
   }
 
   if (registration.registration != nullptr) {
+    villagesql::services::depopulate_capabilities(registration.registration);
     vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
     LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
             registration.so_path.c_str());

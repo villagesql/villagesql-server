@@ -25,8 +25,7 @@
 
 static const size_t kTestTypeLen = 16;
 
-bool encode_testtype(std::string_view from, vsql::Span<unsigned char> to,
-                     size_t *length) {
+void encode_testtype(std::string_view from, vsql::CustomResult out) {
   double real = 0, imag = 0;
   char temp[256];
   size_t copy_len =
@@ -34,10 +33,10 @@ bool encode_testtype(std::string_view from, vsql::Span<unsigned char> to,
   memcpy(temp, from.data(), copy_len);
   temp[copy_len] = '\0';
   sscanf(temp, " ( %lf , %lf )", &real, &imag);
+  auto to = out.buffer();
   memcpy(to.data(), &real, 8);
   memcpy(to.data() + 8, &imag, 8);
-  *length = kTestTypeLen;
-  return false;
+  out.set_length(kTestTypeLen);
 }
 
 bool decode_testtype_full(vsql::Span<const unsigned char> from,

@@ -200,7 +200,7 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   }
 #endif
   std::string load_error;
-  if (villagesql::veb::load_vef_extension(so_path, registration,
+  if (villagesql::veb::load_vef_extension(so_path, extension_name, registration,
                                           server_protocol, load_error)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
             extension_name.c_str(), load_error.c_str());
@@ -386,8 +386,14 @@ bool check_for_sp_params_of_extension(
 
 // If the transaction commits, then `to_unregister` is used to unregister the
 // .so file.
+//
+// If `expected_version` is non-empty, the installed extension's version must
+// match exactly or uninstall is rejected. Callers pass an empty string when no
+// VERSION clause was specified, falling back to whichever version is currently
+// installed.
 bool remove_extension_from_victionary(
     THD *thd, VictionaryClient &victionary, const std::string &extension_name,
+    const std::string &expected_version,
     std::optional<veb::ExtensionRegistration> &to_unregister) {
   auto write_lock = victionary.get_write_lock();
 
@@ -397,6 +403,16 @@ bool remove_extension_from_victionary(
     villagesql_error("Extension '%s' is not installed", MYF(0),
                      extension_name.c_str());
 
+    return true;
+  }
+
+  if (!expected_version.empty() &&
+      ext_entry->extension_version != expected_version) {
+    villagesql_error(
+        "Cannot uninstall extension '%s': installed version is '%s' but "
+        "VERSION '%s' was specified",
+        MYF(0), extension_name.c_str(), ext_entry->extension_version.c_str(),
+        expected_version.c_str());
     return true;
   }
 
@@ -514,6 +530,8 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
     return true;
 
   std::string extension_name(m_name.str, m_name.length);
+  std::string expected_version =
+      m_version.str ? to_string(m_version) : std::string();
 
   // Acquire X MDL lock with statement duration on the normalized extension
   // name to synchronize with following operations. All such operations must
@@ -559,7 +577,7 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
   std::optional<villagesql::veb::ExtensionRegistration> to_unregister;
   // Phase 1: Do all lookups and mark operations while holding lock
   if (villagesql::remove_extension_from_victionary(
-          thd, victionary, extension_name, to_unregister)) {
+          thd, victionary, extension_name, expected_version, to_unregister)) {
     return end_transaction(thd, true);
   }
 

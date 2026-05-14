@@ -57,6 +57,7 @@ jobs:
         PARALLEL_JOBS: 16
         BUILD_TYPE: ${{ inputs.build-type }}
 
+
     - name: Run tests
       uses: ./source/.github/actions/run-tests
       with:

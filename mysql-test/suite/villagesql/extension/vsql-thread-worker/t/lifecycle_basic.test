@@ -1,0 +1,51 @@
+# Test thread_worker lifecycle: enable/disable via sys var.
+#
+# Verifies:
+# - INSTALL EXTENSION registers the extension; thread does NOT start yet
+# - Setting monitor_enabled = ON starts the background thread
+# - The thread appears in performance_schema.processlist while enabled
+# - tick_count() advances (thread is actually looping)
+# - Setting monitor_enabled = OFF stops the thread
+# - UNINSTALL EXTENSION cleans up cleanly
+
+# The processlist checks require PSI thread instrumentation.
+if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
+{
+  skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
+}
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_lifecycle_test;
+
+--echo # Thread should NOT be running yet (enabled defaults to OFF)
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+
+SET GLOBAL vsql_lifecycle_test.monitor_enabled = ON;
+
+--let $wait_condition = SELECT COUNT(*) > 0 FROM performance_schema.processlist WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+--source include/wait_condition.inc
+
+--echo # Thread should appear in processlist after enable
+--replace_column 1 <id>
+SELECT id, user, info FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+ORDER BY id;
+
+--let $wait_condition = SELECT vsql_lifecycle_test.tick_count() > 0
+--source include/wait_condition.inc
+
+--echo # Tick count should be positive (thread ticks every 100ms)
+SELECT vsql_lifecycle_test.tick_count() > 0;
+
+SET GLOBAL vsql_lifecycle_test.monitor_enabled = OFF;
+
+--echo # Thread is gone from processlist after disable
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+
+UNINSTALL EXTENSION vsql_lifecycle_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

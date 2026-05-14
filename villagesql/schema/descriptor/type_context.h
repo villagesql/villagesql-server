@@ -242,6 +242,12 @@ class TypeContext {
     return descriptor_->is_parameterized() && parameters().empty();
   }
 
+  // Types are compatible if they have the same key (type name, extension,
+  // version, and parameters). This ensures e.g. TVECTOR(3) != TVECTOR(4).
+  bool is_compatible_with(const TypeContext &other) const {
+    return key() == other.key();
+  }
+
   // Convenience accessors for frequently used fields
   const std::string &extension_name() const {
     return descriptor_->extension_name();

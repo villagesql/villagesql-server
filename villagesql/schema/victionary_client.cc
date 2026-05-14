@@ -16,6 +16,7 @@
 
 #include "villagesql/schema/victionary_client.h"
 
+#include "my_inttypes.h"
 #include "scope_guard.h"
 #include "sql/auth/auth_common.h"
 #include "sql/auth/sql_security_ctx.h"
@@ -153,6 +154,8 @@ void VictionaryClient::commit_all_tables(THD *thd) {
   m_extension_descriptors.commit(thd);
   m_type_contexts.commit(thd);
   m_funcs.commit(thd);
+  m_custom_indexes.commit(thd);
+  m_custom_index_columns.commit(thd);
 }
 
 void VictionaryClient::rollback_all_tables(THD *thd) {
@@ -168,6 +171,8 @@ void VictionaryClient::rollback_all_tables(THD *thd) {
   m_extension_descriptors.rollback(thd);
   m_type_contexts.rollback(thd);
   m_funcs.rollback(thd);
+  m_custom_indexes.rollback(thd);
+  m_custom_index_columns.rollback(thd);
 }
 
 bool VictionaryClient::write_all_uncommitted_entries(THD *thd) {
@@ -215,6 +220,18 @@ bool VictionaryClient::write_all_uncommitted_entries(THD *thd) {
           SchemaManager::EXTENSIONS_TABLE_NAME)) {
     error = true;
   }
+  // custom_indexes must be written before custom_index_columns so the parent
+  // row exists when the per-column rows reference it.
+  if (m_custom_indexes.write_uncommitted_to_table(
+          thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
+          SchemaManager::INDEXES_TABLE_NAME)) {
+    error = true;
+  }
+  if (m_custom_index_columns.write_uncommitted_to_table(
+          thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
+          SchemaManager::INDEX_COLUMNS_TABLE_NAME)) {
+    error = true;
+  }
 
   // Errors are already set by write_uncommitted_to_table and TableTraits
   // functions
@@ -253,8 +270,47 @@ bool VictionaryClient::reload_all_tables(THD *thd) {
                                     SchemaManager::SP_PARAMS_TABLE_NAME)) {
     error = true;
   }
+  if (m_custom_indexes.reload_from_table(thd,
+                                         SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                                         SchemaManager::INDEXES_TABLE_NAME)) {
+    error = true;
+  }
+  // Seed the index_id counter from the maximum existing id so that
+  // allocate_index_id() always produces a value greater than any persisted id.
+  init_index_id_counter();
+  if (m_custom_index_columns.reload_from_table(
+          thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
+          SchemaManager::INDEX_COLUMNS_TABLE_NAME)) {
+    error = true;
+  }
 
   return error;
+}
+
+std::vector<const IndexEntry *> VictionaryClient::GetCustomIndexesForTable(
+    const std::string &db_name, const std::string &table_name) const {
+  if (!m_initialized.load()) return {};
+  return m_custom_indexes.get_prefix_committed(
+      IndexKeyPrefix(db_name, table_name));
+}
+
+std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
+    uint64_t index_id) const {
+  if (!m_initialized.load()) return {};
+  return m_custom_index_columns.get_prefix_committed(
+      IndexColumnKeyPrefix(index_id));
+}
+
+void VictionaryClient::init_index_id_counter() {
+  // Must be called while holding write lock (reload_all_tables holds it).
+  uint64_t max_id = 0;
+  for (const IndexEntry *entry : m_custom_indexes.get_all_committed()) {
+    if (entry->index_id > max_id) max_id = entry->index_id;
+  }
+  m_next_index_id.store(max_id);
+  LogVSQL(INFORMATION_LEVEL,
+          "Index ID counter initialized to %" PRIu64 " (max existing id)",
+          max_id);
 }
 
 void VictionaryClient::clear_all_tables() {
@@ -272,6 +328,8 @@ void VictionaryClient::clear_all_tables() {
   m_extension_descriptors.clear();
   m_type_contexts.clear();
   m_funcs.clear();
+  m_custom_indexes.clear();
+  m_custom_index_columns.clear();
 
   LogVSQL(INFORMATION_LEVEL, "Cleared all system table metadata");
 }

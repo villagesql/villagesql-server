@@ -54,8 +54,9 @@
 //   const char *intrinsic_default_vdf_name;         // +112 (protocol >= 2)
 //   const char *intrinsic_default_str;              // +120 (protocol >= 2)
 //   vef_type_storage_intf_t *storage_intf;          // +128 (protocol >= 2)
+//   int64_t max_persisted_length;                   // +136 (protocol >= 2)
 // ---------------------------------------------------------------------------
-static_assert(sizeof(vef_type_desc_t) == 136,
+static_assert(sizeof(vef_type_desc_t) == 144,
               "ABI v2 break: vef_type_desc_t size changed");
 static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 64,
               "ABI v2 break: vef_type_desc_t::encode_vdf_name offset changed");
@@ -79,6 +80,9 @@ static_assert(
     "ABI v2 break: vef_type_desc_t::intrinsic_default_str offset changed");
 static_assert(offsetof(vef_type_desc_t, storage_intf) == 128,
               "ABI v2 break: vef_type_desc_t::storage_intf offset changed");
+static_assert(offsetof(vef_type_desc_t, max_persisted_length) == 136,
+              "ABI v2 break: vef_type_desc_t::max_persisted_length offset "
+              "changed");
 
 // ---------------------------------------------------------------------------
 // vef_type_params_t (protocol >= VEF_PROTOCOL_2)
@@ -110,19 +114,49 @@ static_assert(offsetof(vef_invalue_t, type_params) == 24,
               "ABI v2 break: vef_invalue_t::type_params offset changed");
 
 // ---------------------------------------------------------------------------
-// vef_vdf_result_t (protocol >= VEF_PROTOCOL_2 adds type_params in CUSTOM)
-//   vef_return_value_type_t type;             // +0
+// vef_vdf_result_t (protocol >= VEF_PROTOCOL_2 adds type_params in CUSTOM
+// and appends out_type_params)
+//   vef_return_value_type_t type;                     // +0
 //   [4 bytes padding]
-//   size_t actual_len;                        // +8
-//   char *error_msg;                          // +16
-//   union { ... };                            // +24  (48 bytes: CUSTOM has
-//                                             //   bin_buf + max_bin_len +
-//                                             //   alt_bin_buf + type_params)
+//   size_t actual_len;                                // +8
+//   char *error_msg;                                  // +16
+//   union { ... };                                    // +24  (48 bytes:
+//                                                     //   CUSTOM has bin_buf
+//                                                     //   + max_bin_len +
+//                                                     //   alt_bin_buf +
+//                                                     //   type_params)
+//   vef_inferred_type_params_t *out_type_params;      // +72  (8 bytes)
 // ---------------------------------------------------------------------------
-static_assert(sizeof(vef_vdf_result_t) == 72,
+static_assert(sizeof(vef_vdf_result_t) == 80,
               "ABI v2 break: vef_vdf_result_t size changed");
 static_assert(offsetof(vef_vdf_result_t, type_params) == 48,
               "ABI v2 break: vef_vdf_result_t::type_params offset changed");
+static_assert(offsetof(vef_vdf_result_t, out_type_params) == 72,
+              "ABI v2 break: vef_vdf_result_t::out_type_params offset changed");
+
+// ---------------------------------------------------------------------------
+// vef_inferred_type_params_t (protocol >= VEF_PROTOCOL_2)
+//   char *buf;             // +0   (8 bytes)
+//   size_t max_buf_len;    // +8   (8 bytes)
+//   size_t actual_len;     // +16  (8 bytes)
+//   bool overflow;         // +24  (1 byte, +7 padding)
+// ---------------------------------------------------------------------------
+static_assert(sizeof(vef_inferred_type_params_t) == 32,
+              "ABI v2 break: vef_inferred_type_params_t size changed");
+static_assert(offsetof(vef_inferred_type_params_t, buf) == 0,
+              "ABI v2 break: vef_inferred_type_params_t::buf offset changed");
+static_assert(
+    offsetof(vef_inferred_type_params_t, max_buf_len) == 8,
+    "ABI v2 break: vef_inferred_type_params_t::max_buf_len offset changed");
+static_assert(
+    offsetof(vef_inferred_type_params_t, actual_len) == 16,
+    "ABI v2 break: vef_inferred_type_params_t::actual_len offset changed");
+static_assert(
+    offsetof(vef_inferred_type_params_t, overflow) == 24,
+    "ABI v2 break: vef_inferred_type_params_t::overflow offset changed");
+
+// vef_vdf_args_t has no v2-specific layout additions; its size and field
+// offsets are covered by abi_v1_check-t.cc.
 
 // Placeholder test so the binary links and runs.
 TEST(AbiV2Check, StaticAssertsPass) {}

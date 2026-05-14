@@ -10,6 +10,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	14	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -60,6 +62,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	1	4	Compact	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -88,6 +92,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -112,6 +118,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -124,6 +132,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	1	5	Compact	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -139,6 +149,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	41	5	Compressed	8192	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -154,6 +166,8 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/tab	test/tab	33	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single

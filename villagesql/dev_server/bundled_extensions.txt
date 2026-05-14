@@ -1,9 +1,13 @@
 # Bundled extensions included in the dev server release tarball.
 # Also tested against the HEAD SDK in extension-compat.yml.
 #
-# Format: <url> [branch-or-tag]
+# Format: <url> [branch-or-tag] [key=value ...]
 #   url:           Full URL or local filesystem path. git clone accepts both.
 #   branch-or-tag: Optional. Omit to clone the default branch.
+#   abi=<abi>:     Optional. ABI to test against: "stable" or "dev".
+#                  Omit to test against both.
+#   bundle=false:  Optional. Omit (or bundle=true) to include in dev server.
+#                  Set bundle=false to run compat tests only — not shipped.
 #
 # Examples:
 #   https://github.com/villagesql/vsql-ai
@@ -13,6 +17,8 @@
 # Comments and blank lines are ignored.
 https://github.com/villagesql/vsql-ai main
 https://github.com/villagesql/vsql-crypto main
+https://github.com/villagesql/vsql-cube main abi=dev
 https://github.com/villagesql/vsql-http main
 https://github.com/villagesql/vsql-network-address main
 https://github.com/villagesql/vsql-uuid main
+https://github.com/villagesql/vsql-vector main abi=dev bundle=false

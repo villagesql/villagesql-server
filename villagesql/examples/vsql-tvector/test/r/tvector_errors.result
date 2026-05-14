@@ -10,7 +10,7 @@ ERROR 42000: Empty parameter string for type 'vsql_tvector.TVECTOR' near 'TVECTO
 CREATE TABLE t_err (v TVECTOR('invalid'));
 ERROR 42000: Invalid parameter string for type 'vsql_tvector.TVECTOR' near 'TVECTOR('invalid'))' at line 1
 CREATE TABLE t_err (v TVECTOR('dimension=0'));
-ERROR 42000: TVECTOR: dimension must be a positive integer near 'TVECTOR('dimension=0'))' at line 1
+ERROR 42000: TVECTOR: dimension must be in 1..4096, got 0 near 'TVECTOR('dimension=0'))' at line 1
 CREATE TABLE t_err (v TVECTOR('unknown_key=5'));
 ERROR 42000: TVECTOR: dimension must be a positive integer near 'TVECTOR('unknown_key=5'))' at line 1
 SELECT vsql_tvector.tvector_dot_product('[1,2,3]', '[4,5,6]');

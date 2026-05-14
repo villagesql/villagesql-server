@@ -23,7 +23,8 @@
 #include "db0err.h"
 #include "mem0mem.h"
 #include "trx0types.h"
-#include "villagesql/sdk/include/villagesql/abi/storage.h"
+
+#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/types/storage.h"
 
 // Forward declarations
@@ -35,7 +36,9 @@ struct dict_field_t;
 struct dfield_t;
 struct dtuple_t;
 struct upd_t;
+struct TABLE;
 
+class Alter_inplace_info;
 class Field;
 
 namespace dd {
@@ -85,6 +88,10 @@ class Custom_column {
 
   // Returns true if the column storage is managed by an extension.
   bool stored_by_extension() const { return storage_interface().has_value(); }
+
+  // Returns true if ha_alter_info adds or drops a column with extended storage.
+  static bool alter_add_drop_with_extended_storage(
+      const Alter_inplace_info *ha_alter_info, const TABLE *table);
 
   // Compare two values using the registered compare implementation.
   int compare(const unsigned char *data1, size_t len1,

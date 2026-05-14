@@ -3,7 +3,7 @@ name: Bug report
 about: Create a report to help us improve
 title: "[Bug]: "
 labels: ["bug"]
-assignees: 
+assignees:
   - villagesql-adam
 type: bug
 ---
@@ -11,22 +11,19 @@ type: bug
 **Describe the bug**
 A clear and concise description of what the bug is.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**Minimal repro**
+The smallest query or sequence of statements that reproduces the issue.
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Actual behavior**
+What actually happened. Include the full error message or unexpected output.
 
-**Setup (please complete the following information):**
- - OS: [e.g. macOS, Linux]
- - Version [e.g. 8.4.6-villageql-0.0.3]
+**Setup**
+- OS: [e.g. macOS, Linux]
+- VillageSQL version: [e.g. 8.4.6-villagesql-0.0.4]
+- Extensions installed: [e.g. vsql_ai 0.0.1, none]
 
 **Additional context**
-Add any other context about the problem here.
+Relevant server logs, EXPLAIN output, or other context.

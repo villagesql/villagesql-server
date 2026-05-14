@@ -50,6 +50,7 @@
 
 namespace storage = vsql::preview_storage;
 using vsql::preview_storage_builder::make_storage;
+using vsql::preview_storage_builder::StorageCapability;
 
 // Per-column user context. Populated during create/load and used by every
 // subsequent storage call for that column.
@@ -116,22 +117,21 @@ static int64_t read_be64(const unsigned char *src) {
                               static_cast<uint64_t>(src[7]));
 }
 
-bool stored_int_from_string(std::string_view s,
-                            villagesql::Span<unsigned char> buf, size_t *len) {
-  if (buf.size() < kFieldSize) return true;
+void stored_int_from_string(std::string_view s, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kFieldSize) return;  // wrapper default warning
   int64_t val = 0;
   auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-  if (ec != std::errc{} || ptr != s.data() + s.size()) return true;
+  if (ec != std::errc{} || ptr != s.data() + s.size()) return;
   // [0..7]: zero placeholder for Column::Ref (server fills this after insert).
   memset(buf.data(), 0, kRefSize);
   // [8..15]: big-endian encoded integer value (becomes col_data for insert).
   write_be64(buf.data() + kRefSize, val);
-  *len = kFieldSize;
-  return false;
+  out.set_length(kFieldSize);
 }
 
-bool stored_int_to_string(villagesql::Span<const unsigned char> data,
-                          villagesql::Span<char> out, size_t *out_len) {
+bool stored_int_to_string(vsql::Span<const unsigned char> data,
+                          vsql::Span<char> out, size_t *out_len) {
   // Receives the full persisted field (16 bytes: ref + value). Read the value
   // from the second half, skipping the Column::Ref prefix.
   if (data.size() < kFieldSize) return true;
@@ -142,8 +142,8 @@ bool stored_int_to_string(villagesql::Span<const unsigned char> data,
   return false;
 }
 
-int stored_int_compare(villagesql::Span<const unsigned char> a,
-                       villagesql::Span<const unsigned char> b) {
+int stored_int_compare(vsql::Span<const unsigned char> a,
+                       vsql::Span<const unsigned char> b) {
   // Receives the full persisted field (16 bytes: ref + value). The value is
   // in the last 8 bytes regardless of whether the ref has been written yet.
   if (a.size() < kFieldSize || b.size() < kFieldSize) return 0;
@@ -302,6 +302,8 @@ bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
 // Type and extension registration
 // ============================================================================
 
+static auto STORAGE = StorageCapability();
+
 static constexpr vef_type_storage_intf_t kStoredIntStorageIntf =
     make_storage<StoredIntCtx>()
         .create<&stored_int_create>()
@@ -329,4 +331,4 @@ constexpr auto STORED_INT =
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension().type(STORED_INT))
+VEF_GENERATE_ENTRY_POINTS(make_extension().with(STORAGE).type(STORED_INT))

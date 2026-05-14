@@ -342,8 +342,8 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         // Custom → custom: types must be compatible.
         Field *old_field = find_field_in_table_sef(table, field.change);
         assert(old_field);
-        if (!AreTypesCompatible(*old_field->get_type_context(),
-                                *field.custom_type_context)) {
+        if (!old_field->get_type_context()->is_compatible_with(
+                *field.custom_type_context)) {
           villagesql_error(
               "Cannot convert between incompatible custom types '%s' and '%s'",
               MYF(0), old_field->get_type_context()->qualified_name().c_str(),

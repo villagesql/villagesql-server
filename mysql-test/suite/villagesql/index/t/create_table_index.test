@@ -1,0 +1,72 @@
+# Test CREATE TABLE with inline USING EXTENDED index definitions
+# Inline index options use the same grammar paths as standalone CREATE INDEX.
+# A failed CREATE TABLE leaves no table behind.
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
+
+# Inline USING EXTENDED -- unqualified type name
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, INDEX idx (id) USING EXTENDED(hnsw));
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+
+# Inline USING EXTENDED -- qualified extension.type_name
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t2 (id INT PRIMARY KEY, INDEX idx (id) USING EXTENDED(myext.hnsw));
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t2;
+
+# Inline USING EXTENDED + WITH -- numeric and string params
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  INDEX idx (id) USING EXTENDED(hnsw) WITH (M = 16, metric = 'l2')
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t3;
+
+# Inline WITH standalone -- exercises PT_index_with_options path in CREATE TABLE context
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t4 (id INT PRIMARY KEY, INDEX idx (id) WITH (M = 16));
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t4;
+
+# Inline column with index profile + USING EXTENDED
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t5 (id INT PRIMARY KEY, INDEX idx (id hnsw_l2_profile) USING EXTENDED(hnsw));
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t5;
+
+# Inline column with index profile + qualified type + WITH params
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t6 (
+  id INT PRIMARY KEY,
+  INDEX idx (id hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16)
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t6;
+
+# Inline column with qualified extension.profile
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t7 (
+  id INT PRIMARY KEY,
+  INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(hnsw)
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t7;
+
+# Qualified profile + qualified type + WITH params
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t8 (
+  id INT PRIMARY KEY,
+  INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2')
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t8;

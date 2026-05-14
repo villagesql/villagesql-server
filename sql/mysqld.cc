@@ -2439,6 +2439,15 @@ static void close_connections(void) {
     scheduler object(static member in Events class)
   */
   Events::deinit();
+
+  // Unload VEF extensions. All client connections are now closed so no VDF
+  // calls are in flight. depopulate_capabilities() joins background threads
+  // (via on_depopulate) and removes their THDs from Global_THD_manager so
+  // wait_till_no_thd() can complete. Must run before plugin_shutdown() so
+  // the component_sys_variable_unregister service is still available for
+  // on_depopulate to unregister sys/status variables.
+  villagesql::deinit_extension_infrastructure();
+
   DBUG_PRINT("quit", ("Waiting for threads to die (count=%u)",
                       thd_manager->get_thd_count()));
   /*
@@ -2756,7 +2765,6 @@ static void clean_up(bool print_message) {
   lex_free(); /* Free some memory */
   item_create_cleanup();
   if (!opt_noacl) udf_unload_udfs();
-  villagesql::deinit_extension_infrastructure();
   table_def_start_shutdown();
   delegates_shutdown();
   plugin_shutdown();

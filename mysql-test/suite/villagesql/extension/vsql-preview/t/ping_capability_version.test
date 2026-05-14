@@ -1,0 +1,21 @@
+# Test that an extension compiled against a future capability version (ping v2)
+# fails to load against a server that only provides ping v1.
+#
+# The extension uses a local ping_abi_v2.h (with pong()) and declares
+# min_version=2. The server's preview_ping_compat function checks min_version
+# against its vtable version field (1) and rejects loading with a clear error.
+
+call mtr.add_suppression("capability version too old");
+call mtr.add_suppression("capability rejected by extension");
+call mtr.add_suppression("vsql_allow_preview_extensions");
+
+--echo # With preview capabilities blocked (default), install fails immediately
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_preview_ping_v2_test;
+
+--echo # With preview capabilities allowed, install fails due to version mismatch
+SET PERSIST vsql_allow_preview_extensions = ON;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_preview_ping_v2_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

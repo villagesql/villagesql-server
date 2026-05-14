@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -518,6 +519,12 @@ union MY_SQL_PARSER_STYPE {
   } index_name_and_type;
   PT_base_index_option *index_option;
   Mem_root_array_YY<PT_base_index_option *> index_options;
+  IndexWithParam *index_with_param;
+  Mem_root_array<IndexWithParam> *index_with_params;
+  struct {
+    LEX_CSTRING extension;
+    LEX_CSTRING name;
+  } index_profile_ref;
   Mem_root_array_YY<LEX_STRING> lex_str_list;
   bool visibility;
   PT_with_clause *with_clause;

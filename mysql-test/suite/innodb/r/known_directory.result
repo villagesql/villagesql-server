@@ -355,6 +355,8 @@ test/tp4#p#p1#sp#s2	test/tp4#p#p1#sp#s2	97	5	Dynamic	0	Single
 test/tp4#p#p2#sp#s3	test/tp4#p#p2#sp#s3	97	5	Dynamic	0	Single
 test/tp4#p#p2#sp#s4	test/tp4#p#p2#sp#s4	97	5	Dynamic	0	Single
 villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
+villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
+villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
@@ -385,6 +387,8 @@ test/tp4#p#p2#sp#s4	Single	DEFAULT	0	1	1	Dynamic	MYSQL_TMP_DIR/known_dir/test/tp
 ts1	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/known_dir/ts1.ibd
 ts2	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/undo_dir/ts2.ibd
 villagesql/custom_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_indexes	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_indexes.ibd
+villagesql/custom_index_columns	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_index_columns.ibd
 villagesql/custom_sp_params	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/villagesql/properties.ibd
@@ -415,6 +419,8 @@ test/tp4#p#p2#sp#s4	TABLESPACE	InnoDB	NORMAL	test/tp4#p#p2#sp#s4	MYSQL_TMP_DIR/k
 ts1	TABLESPACE	InnoDB	NORMAL	ts1	MYSQL_TMP_DIR/known_dir/ts1.ibd
 ts2	TABLESPACE	InnoDB	NORMAL	ts2	MYSQL_TMP_DIR/undo_dir/ts2.ibd
 villagesql/custom_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_columns	MYSQLD_DATADIR/villagesql/custom_columns.ibd
+villagesql/custom_indexes	TABLESPACE	InnoDB	NORMAL	villagesql/custom_indexes	MYSQLD_DATADIR/villagesql/custom_indexes.ibd
+villagesql/custom_index_columns	TABLESPACE	InnoDB	NORMAL	villagesql/custom_index_columns	MYSQLD_DATADIR/villagesql/custom_index_columns.ibd
 villagesql/custom_sp_params	TABLESPACE	InnoDB	NORMAL	villagesql/custom_sp_params	MYSQLD_DATADIR/villagesql/custom_sp_params.ibd
 villagesql/extensions	TABLESPACE	InnoDB	NORMAL	villagesql/extensions	MYSQLD_DATADIR/villagesql/extensions.ibd
 villagesql/properties	TABLESPACE	InnoDB	NORMAL	villagesql/properties	MYSQLD_DATADIR/villagesql/properties.ibd

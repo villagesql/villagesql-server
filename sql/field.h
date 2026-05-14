@@ -1900,7 +1900,15 @@ class Field {
   const villagesql::TypeContext *get_type_context() const {
     return custom_type;
   }
-  void set_type_context(const villagesql::TypeContext *tc) { custom_type = tc; }
+  void set_type_context(const villagesql::TypeContext *tc) {
+    // Debug-only invariant: if a TypeContext is already set, the incoming one
+    // must be compatible. Re-setting with an incompatible TypeContext would
+    // silently break downstream encode/decode; in release builds we still
+    // overwrite to avoid undefined behavior if the assertion would fire.
+    assert(custom_type == nullptr || tc == nullptr ||
+           custom_type->is_compatible_with(*tc));
+    custom_type = tc;
+  }
   bool has_type_context() const { return nullptr != custom_type; }
 
   villagesql::TypeEncoder *get_type_encoder() const { return type_encoder_; }

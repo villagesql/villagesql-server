@@ -1,0 +1,282 @@
+// Copyright (c) 2026 VillageSQL Contributors
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, see <https://www.gnu.org/licenses/>.
+
+#include "villagesql/services/preview/sql_query.h"
+
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "mysql/service_command.h"
+#include "mysql/service_srv_session.h"
+#include "mysql/strings/m_ctype.h"
+#include "sql/sql_class.h"
+#include "sql/srv_session.h"
+#include "villagesql/include/error.h"
+#include "villagesql/services/preview/thread_worker.h"
+
+// Full definitions of the opaque ABI types, in the global namespace to match
+// their forward declarations in abi/preview/sql_query.h.
+
+// Stores the thread handle so that sql_execute can create a fresh Srv_session
+// per query. The borrowed-THD Srv_session transitions through
+// ASSOCIATE → ASSOCIATED → DISASSOCIATED on each execute and cannot be reused.
+struct vef_sql_session_t {
+  vef_thread_handle_t *handle{nullptr};
+};
+
+struct vef_sql_result_t {
+  unsigned int num_columns{0};
+
+  struct Cell {
+    std::string value;
+    bool is_null{false};
+  };
+  std::vector<std::vector<Cell>> rows;
+  size_t current_row{0};
+
+  std::vector<const char *> row_ptrs;
+  std::vector<unsigned long> row_lengths;
+};
+
+namespace villagesql::services {
+
+namespace {
+
+struct ExecCtx {
+  vef_sql_result_t *result;
+  unsigned int col_idx{0};
+};
+
+static int cb_start_result_metadata(void *ctx, uint num_cols, uint,
+                                    const CHARSET_INFO *) {
+  static_cast<ExecCtx *>(ctx)->result->num_columns = num_cols;
+  return 0;
+}
+
+static int cb_field_metadata(void *, struct st_send_field *,
+                             const CHARSET_INFO *) {
+  return 0;
+}
+
+static int cb_end_result_metadata(void *, uint, uint) { return 0; }
+
+static int cb_start_row(void *ctx) {
+  auto *c = static_cast<ExecCtx *>(ctx);
+  c->result->rows.emplace_back(c->result->num_columns);
+  c->col_idx = 0;
+  return 0;
+}
+
+static int cb_end_row(void *ctx) {
+  auto *c = static_cast<ExecCtx *>(ctx);
+  auto &row = c->result->rows.back();
+  while (c->col_idx < row.size()) {
+    row[c->col_idx].is_null = true;
+    ++c->col_idx;
+  }
+  return 0;
+}
+
+static void cb_abort_row(void *ctx) {
+  auto *c = static_cast<ExecCtx *>(ctx);
+  if (!c->result->rows.empty()) c->result->rows.pop_back();
+}
+
+static ulong cb_get_client_capabilities(void *) { return 0; }
+
+static int cb_get_null(void *ctx) {
+  auto *c = static_cast<ExecCtx *>(ctx);
+  auto &row = c->result->rows.back();
+  if (c->col_idx < row.size()) {
+    row[c->col_idx].is_null = true;
+    ++c->col_idx;
+  }
+  return 0;
+}
+
+static int cb_get_string(void *ctx, const char *value, size_t length,
+                         const CHARSET_INFO *) {
+  auto *c = static_cast<ExecCtx *>(ctx);
+  auto &row = c->result->rows.back();
+  if (c->col_idx < row.size()) {
+    row[c->col_idx].value.assign(value, length);
+    row[c->col_idx].is_null = false;
+    ++c->col_idx;
+  }
+  return 0;
+}
+
+static int cb_get_longlong(void *ctx, longlong value, uint is_unsigned) {
+  char buf[32];
+  if (is_unsigned)
+    snprintf(buf, sizeof(buf), "%llu", static_cast<unsigned long long>(value));
+  else
+    snprintf(buf, sizeof(buf), "%lld", value);
+  return cb_get_string(ctx, buf, strlen(buf), nullptr);
+}
+
+static int cb_get_integer(void *ctx, longlong value) {
+  return cb_get_longlong(ctx, value, 0);
+}
+
+static int cb_get_double(void *ctx, double value, uint32) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%.17g", value);
+  return cb_get_string(ctx, buf, strlen(buf), nullptr);
+}
+
+static int cb_get_decimal(void *, const decimal_t *) { return 0; }
+static int cb_get_date(void *, const MYSQL_TIME *) { return 0; }
+static int cb_get_time(void *, const MYSQL_TIME *, uint) { return 0; }
+static int cb_get_datetime(void *, const MYSQL_TIME *, uint) { return 0; }
+
+static void cb_handle_ok(void *, uint, uint, ulonglong, ulonglong,
+                         const char *) {}
+
+static void cb_handle_error(void *ctx, uint sql_errno, const char *err_msg,
+                            const char *) {
+  (void)ctx;
+  LogVSQL(ERROR_LEVEL, "sql_query: query error %u: %s", sql_errno,
+          err_msg ? err_msg : "(unknown)");
+}
+
+static void cb_shutdown(void *, int) {}
+static bool cb_connection_alive(void *) { return true; }
+
+static const struct st_command_service_cbs kCallbacks = {
+    cb_start_result_metadata,
+    cb_field_metadata,
+    cb_end_result_metadata,
+    cb_start_row,
+    cb_end_row,
+    cb_abort_row,
+    cb_get_client_capabilities,
+    cb_get_null,
+    cb_get_integer,
+    cb_get_longlong,
+    cb_get_decimal,
+    cb_get_double,
+    cb_get_date,
+    cb_get_time,
+    cb_get_datetime,
+    cb_get_string,
+    cb_handle_ok,
+    cb_handle_error,
+    cb_shutdown,
+    cb_connection_alive,
+};
+
+}  // namespace
+
+static vef_sql_session_t *sql_open_session(vef_thread_handle_t *handle) {
+  if (handle == nullptr || handle->thd == nullptr) return nullptr;
+  auto *session = new (std::nothrow) vef_sql_session_t;
+  if (session == nullptr) return nullptr;
+  session->handle = handle;
+  return session;
+}
+
+static void sql_close_session(vef_sql_session_t *session) { delete session; }
+
+static vef_sql_result_t *sql_execute(vef_sql_session_t *session,
+                                     const char *sql, size_t sql_len) {
+  if (session == nullptr || session->handle == nullptr ||
+      session->handle->thd == nullptr)
+    return nullptr;
+
+  // Create a fresh Srv_session per execute. The borrowed-THD Srv_session
+  // transitions ASSOCIATE → ASSOCIATED → DISASSOCIATED on each use and cannot
+  // be reused across calls. Creating it here preserves the worker THD's
+  // skip_grants() security context for each query.
+  static auto noop_cb = [](void *, unsigned int, const char *) noexcept {};
+  MYSQL_SESSION srv =
+      new (std::nothrow) Srv_session(static_cast<srv_session_error_cb>(noop_cb),
+                                     nullptr, session->handle->thd);
+  if (srv == nullptr) {
+    LogVSQL(ERROR_LEVEL, "sql_query: failed to create Srv_session");
+    return nullptr;
+  }
+
+  auto *result = new (std::nothrow) vef_sql_result_t;
+  if (result == nullptr) {
+    delete srv;
+    return nullptr;
+  }
+
+  ExecCtx ctx{result};
+
+  COM_DATA cmd;
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.com_query.query = sql;
+  cmd.com_query.length = static_cast<unsigned int>(sql_len);
+
+  command_service_run_command(srv, COM_QUERY, &cmd,
+                              &my_charset_utf8mb4_general_ci, &kCallbacks,
+                              CS_TEXT_REPRESENTATION, &ctx);
+
+  delete srv;
+  return result;
+}
+
+static bool sql_fetch_row(vef_sql_result_t *result, const char ***row_out,
+                          const unsigned long **lengths_out) {
+  if (result == nullptr || result->current_row >= result->rows.size())
+    return false;
+
+  const auto &row = result->rows[result->current_row];
+  unsigned int n = static_cast<unsigned int>(row.size());
+
+  result->row_ptrs.resize(n);
+  result->row_lengths.resize(n);
+
+  for (unsigned int i = 0; i < n; ++i) {
+    if (row[i].is_null) {
+      result->row_ptrs[i] = nullptr;
+      result->row_lengths[i] = 0;
+    } else {
+      result->row_ptrs[i] = row[i].value.c_str();
+      result->row_lengths[i] = static_cast<unsigned long>(row[i].value.size());
+    }
+  }
+
+  *row_out = result->row_ptrs.data();
+  *lengths_out = result->row_lengths.data();
+  ++result->current_row;
+  return true;
+}
+
+static unsigned int sql_num_columns(vef_sql_result_t *result) {
+  if (result == nullptr) return 0;
+  return result->num_columns;
+}
+
+static void sql_close_result(vef_sql_result_t *result) { delete result; }
+
+namespace {
+vef_preview_sql_query_t g_sql_query_vtable{VEF_PREVIEW_SQL_QUERY_ABI_VERSION,
+                                           &sql_open_session,
+                                           &sql_close_session,
+                                           &sql_execute,
+                                           &sql_fetch_row,
+                                           &sql_num_columns,
+                                           &sql_close_result};
+}  // namespace
+
+vef_preview_sql_query_t *preview_sql_query_vtable() {
+  return &g_sql_query_vtable;
+}
+
+}  // namespace villagesql::services

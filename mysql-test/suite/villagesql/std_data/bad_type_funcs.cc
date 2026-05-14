@@ -23,18 +23,14 @@
 #include <string_view>
 
 // Generic FROM_STRING function
-bool f1_impl(std::string_view from, vsql::Span<unsigned char> buf,
-             size_t *length) {
+void f1_impl(std::string_view from, vsql::CustomResult out) {
   (void)from;
 
-  if (buf.size() < 16) {
-    *length = 0;
-    return true;
-  }
+  auto buf = out.buffer();
+  if (buf.size() < 16) return;  // wrapper default warning
 
   memset(buf.data(), 0, 16);
-  *length = 16;
-  return false;
+  out.set_length(16);
 }
 
 // Generic TO_STRING function

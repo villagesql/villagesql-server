@@ -46,9 +46,10 @@
 
 #include <villagesql/abi/types.h>
 #include <villagesql/vsql/func_types.h>
+#include <villagesql/vsql/maybe_params.h>
 #include <villagesql/vsql/type_params_cache.h>
 
-namespace villagesql {
+namespace vsql {
 
 // Storage characteristics resolved from type parameters.
 struct ResolvedTypeParams {
@@ -133,6 +134,35 @@ struct is_context_param : std::false_type {};
 template <>
 struct is_context_param<vef_context_t *> : std::true_type {};
 
+// True for result wrapper types. Used by build() to detect the typed aggregate
+// result function pattern: void(const State&, ResultWrapper).
+template <typename T>
+struct is_result_wrapper : std::false_type {};
+template <>
+struct is_result_wrapper<IntResult> : std::true_type {};
+template <>
+struct is_result_wrapper<RealResult> : std::true_type {};
+template <>
+struct is_result_wrapper<StringResult> : std::true_type {};
+template <>
+struct is_result_wrapper<CustomResult> : std::true_type {};
+template <typename P>
+struct is_result_wrapper<CustomResultWith<P>> : std::true_type {};
+
+// Validates that AllParams matches void(const State&, ResultWrapper) for
+// make_aggregate_func. Specialized only for exactly 2-element tuples.
+template <typename State, typename AllParams,
+          size_t = std::tuple_size_v<AllParams>>
+struct is_agg_result_for_state : std::false_type {};
+template <typename State, typename P0, typename P1>
+struct is_agg_result_for_state<State, std::tuple<P0, P1>, 2>
+    : std::bool_constant<
+          std::is_lvalue_reference_v<P0> &&
+          std::is_const_v<std::remove_reference_t<P0>> &&
+          std::is_same_v<std::remove_const_t<std::remove_reference_t<P0>>,
+                         State> &&
+          is_result_wrapper<P1>::value> {};
+
 // =============================================================================
 // FuncWithMetadata
 // =============================================================================
@@ -168,13 +198,22 @@ struct FuncWithMetadata {
 // Extension Author Function Signatures
 // =============================================================================
 
-// Encode: string -> binary. false=success, true=error. SIZE_MAX length = NULL.
-using TypeEncodeFunc = bool (*)(std::string_view from, Span<unsigned char> buf,
-                                size_t *length);
+// Encode: string -> custom binary. The function reports its outcome by
+// calling out.set_length(n), out.set_null(), out.warning(msg), or
+// out.error(msg). If none is called, the result is undefined.
+using TypeEncodeFunc = void (*)(std::string_view from, CustomResult out);
+// Parameterized variant: If known, MaybeParams<P> carries the params, to
+// be used when parsing the string value. This may also be called on strings
+// where the type parameters are not know before this call, and this
+// function must infer the type parameters from the string, and set them via
+// MaybeParams<P> so that the type can be correctly carried through the rest
+// of the SQL statement.
+//
+// The result wrapper is plain CustomResult (not CustomResultWith<P>) because
+// params come from the MaybeParams<P>& argument.
 template <typename P>
-using TypeEncodeWithParamsFunc = bool (*)(const P &, std::string_view from,
-                                          Span<unsigned char> buf,
-                                          size_t *length);
+using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
+                                          std::string_view from, CustomResult);
 
 // Decode: binary -> string. false=success, true=error.
 using TypeDecodeFunc = bool (*)(Span<const unsigned char> data, Span<char> out,
@@ -212,7 +251,25 @@ using IntToTypeParamsFunc = bool (*)(int64_t value,
 // resolve_params: validates type parameters and computes storage sizes.
 using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
-             villagesql::ResolvedTypeParams *result, char *error_msg);
+             vsql::ResolvedTypeParams *result, char *error_msg);
+
+// params_to_strings: converts the typed params struct P into its canonical
+// key/value string form (e.g., SVectorParams{6} -> {"dimension":"6"}). This
+// is the inverse direction of the parse callback an extension registers via
+// `.params<P, &Parse>()` on the type builder, whose signature is
+//   P parse(const std::map<std::string,std::string>&)
+// — Parse turns server-supplied strings into a typed P; params_to_strings
+// turns a typed P back into strings the server can read.
+//
+// Used by inference paths (e.g. constant-string from_string pre-execute at
+// fix_fields time) that produce a P and need to publish the equivalent
+// string-form params back to the server.
+//
+// The map keys/values are subject to the same rules as int_to_params: keys
+// are non-empty and free of ',' and '='; values are free of ',' and '='.
+template <typename P>
+using ParamsToStringsFunc = void (*)(const P &,
+                                     std::map<std::string, std::string> &);
 
 // =============================================================================
 // Aggregate Callback Wrappers
@@ -250,52 +307,13 @@ struct AggAccumulateWrapper {
   }
 };
 
-// Wraps T(const State&) or optional<T>(const State&) -> vef_vdf_func_t
-template <typename State, auto Func>
-struct AggResultWrapper {
+// Wraps void(const State&, ResultWrapper) -> vef_vdf_func_t
+template <typename State, typename ResultWrapper, auto Func>
+struct AggResultWithOutputWrapper {
   static void invoke(vef_context_t *, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
-    const auto &state = *static_cast<State *>(args->user_data);
-    write_result(Func(state), result);
-  }
-
- private:
-  template <typename T>
-  static void write_result(const std::optional<T> &val,
-                           vef_vdf_result_t *result) {
-    if (!val.has_value()) {
-      result->type = VEF_RESULT_NULL;
-    } else {
-      write_scalar(*val, result);
-    }
-  }
-
-  template <typename T>
-  static void write_result(const T &val, vef_vdf_result_t *result) {
-    write_scalar(val, result);
-  }
-
-  static void write_scalar(long long v, vef_vdf_result_t *r) {
-    r->int_value = v;
-    r->type = VEF_RESULT_VALUE;
-  }
-
-  static void write_scalar(double v, vef_vdf_result_t *r) {
-    r->real_value = v;
-    r->type = VEF_RESULT_VALUE;
-  }
-
-  static void write_scalar(const std::string &v, vef_vdf_result_t *r) {
-    if (v.size() > r->max_str_len) {
-      r->type = VEF_RESULT_ERROR;
-      snprintf(r->error_msg, VEF_MAX_ERROR_LEN,
-               "aggregate result (%zu bytes) exceeds buffer (%zu bytes)",
-               v.size(), r->max_str_len);
-      return;
-    }
-    memcpy(r->str_buf, v.data(), v.size());
-    r->actual_len = v.size();
-    r->type = VEF_RESULT_VALUE;
+    const auto &state = *static_cast<const State *>(args->user_data);
+    Func(state, ResultWrapper(result));
   }
 };
 
@@ -345,8 +363,41 @@ struct Wrapper {
 // Type Operation VDF Wrappers
 // =============================================================================
 
+// Pre-fills result->type / result->error_msg with a default
+// "failed to encode '<input>'" warning, truncating long inputs. Both encode
+// wrappers call this before invoking the extension's from_string so that an
+// extension that early-returns without setting an outcome still surfaces a
+// useful warning.
+//
+// TODO(villagesql-beta): tighten the contract so every from_string (and
+// every other wrapped type-op once they're migrated to typed result
+// wrappers) is expected to explicitly call out.set_length / set_null /
+// warning / error on every path. This default-WARNING fallback exists today
+// because some in-tree extensions (vsql-complex, vsql-simple, vsql-test-only,
+// vsql-storage-test) early-return on failure paths without calling anything;
+// once they're updated to be explicit, drop this synthesis and treat
+// "extension didn't set a result" as an SDK bug.
+inline void set_default_encode_failure(vef_vdf_result_t *result,
+                                       const vef_invalue_t &arg) {
+  result->type = VEF_RESULT_WARNING;
+  constexpr size_t kMaxInputDisplay = 64;
+  size_t display_len = arg.str_len;
+  const char *ellipsis = "";
+  if (display_len > kMaxInputDisplay) {
+    display_len = kMaxInputDisplay;
+    ellipsis = "...";
+  }
+  snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to encode '%.*s%s'",
+           static_cast<int>(display_len), arg.str_value, ellipsis);
+}
+
 // TypeEncodeVdfWrapper: wraps TypeEncodeFunc into a VDF.
 // VDF signature: (STRING) -> CUSTOM(type).
+//
+// Pre-sets the result to VEF_RESULT_WARNING with a default
+// "failed to encode '<input>'" message; the extension can override by calling
+// out.set_length(), out.set_null(), out.warning(), or out.error(); any early
+// return without such a call surfaces the default warning.
 template <auto Func>
 struct TypeEncodeVdfWrapper {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
@@ -356,29 +407,8 @@ struct TypeEncodeVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    size_t length;
-    bool failed = Func({arg.str_value, arg.str_len},
-                       {result->bin_buf, result->max_bin_len}, &length);
-    if (failed) {
-      result->type = VEF_RESULT_WARNING;
-      constexpr size_t kMaxInputDisplay = 64;
-      size_t display_len = arg.str_len;
-      const char *ellipsis = "";
-      if (display_len > kMaxInputDisplay) {
-        display_len = kMaxInputDisplay;
-        ellipsis = "...";
-      }
-      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-               "failed to encode '%.*s%s'", static_cast<int>(display_len),
-               arg.str_value, ellipsis);
-      return;
-    }
-    if (length == SIZE_MAX) {
-      result->type = VEF_RESULT_NULL;
-      return;
-    }
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = length;
+    set_default_encode_failure(result, arg);
+    Func({arg.str_value, arg.str_len}, CustomResult(result));
   }
 };
 
@@ -441,12 +471,21 @@ struct TypeHashVdfWrapper {
   }
 };
 
-// Cache-aware wrappers for parameterized types.
+// Cache-aware wrapper for parameterized types.
 
 template <auto Func>
 struct TypeEncodeWithCacheVdfWrapper {
-  using P = std::remove_cv_t<std::remove_reference_t<
+  // Func signature: void(MaybeParams<P>&, string_view, CustomResult).
+  // Recover P from the first argument's MaybeParams<P>.
+  using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
+  template <typename T>
+  struct ExtractP;
+  template <typename P_>
+  struct ExtractP<MaybeParams<P_>> {
+    using type = P_;
+  };
+  using P = typename ExtractP<FirstArgStripped>::type;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -455,30 +494,68 @@ struct TypeEncodeWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    const P &p = type_params_cache_for<P>().get(result->type_params);
-    size_t length;
-    bool failed = Func(p, {arg.str_value, arg.str_len},
-                       {result->bin_buf, result->max_bin_len}, &length);
-    if (failed) {
-      result->type = VEF_RESULT_ERROR;
-      constexpr size_t kMaxInputDisplay = 64;
-      size_t display_len = arg.str_len;
-      const char *ellipsis = "";
-      if (display_len > kMaxInputDisplay) {
-        display_len = kMaxInputDisplay;
-        ellipsis = "...";
+    // Two call sites reach this wrapper:
+    //   - Row time: the server has already resolved the return type's params,
+    //     and they arrive via result->type_params (count > 0). We construct
+    //     MaybeParams<P> in the known state from the cache.
+    //   - fix_fields-time constant-string inference: the server invokes the
+    //     encode VDF on a literal to learn the params, passing empty
+    //     type_params (count == 0). We leave MaybeParams<P> in the unknown
+    //     state so the extension's from_string can call p.set() to publish
+    //     them; the wrapper then writes them back via result->out_type_params
+    //     below.
+    MaybeParams<P> maybe_params;
+    const bool input_params_known = result->type_params.count > 0;
+    if (input_params_known) {
+      maybe_params =
+          MaybeParams<P>(type_params_cache_for<P>().get(result->type_params));
+    }
+    set_default_encode_failure(result, arg);
+    Func(maybe_params, {arg.str_value, arg.str_len}, CustomResult(result));
+
+    // Inference-path write-back: when the server invoked us with no input
+    // type_params (signalling "please infer"), the wrapper publishes the
+    // canonical "k=v,k=v" form of the resulting MaybeParams<P> back to the
+    // server via result->out_type_params. All four guards must hold:
+    //   1. server opted in by setting result->out_type_params
+    //   2. encode succeeded (no warning/error)
+    //   3. we were on the inference path (input type_params was empty)
+    //   4. the extension actually inferred params and registered to_strings
+    if (result->out_type_params != nullptr &&
+        result->type == VEF_RESULT_VALUE && !input_params_known &&
+        maybe_params.is_known() &&
+        type_params_cache_for<P>().has_to_strings()) {
+      std::map<std::string, std::string> m;
+      type_params_cache_for<P>().to_strings(maybe_params.value(), m);
+
+      // Single-pass greedy write into the caller's buffer. If a pair (with
+      // its leading comma if not first) won't fit, stop writing but keep
+      // iterating to accumulate `needed` for the snprintf-style overflow
+      // signal. Caller retries with a larger buffer.
+      char *const buf_begin = result->out_type_params->buf;
+      const size_t cap = result->out_type_params->max_buf_len;
+      char *p = buf_begin;
+      size_t needed = 0;
+      bool ok = true;
+      bool first = true;
+      for (const auto &[k, v] : m) {
+        const size_t pair_size = (first ? 0u : 1u) + k.size() + 1u + v.size();
+        if (ok && static_cast<size_t>(p - buf_begin) + pair_size <= cap) {
+          if (!first) *p++ = ',';
+          std::memcpy(p, k.data(), k.size());
+          p += k.size();
+          *p++ = '=';
+          std::memcpy(p, v.data(), v.size());
+          p += v.size();
+        } else {
+          ok = false;
+        }
+        needed += pair_size;
+        first = false;
       }
-      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-               "failed to encode '%.*s%s'", static_cast<int>(display_len),
-               arg.str_value, ellipsis);
-      return;
+      result->out_type_params->actual_len = needed;
+      result->out_type_params->overflow = !ok;
     }
-    if (length == SIZE_MAX) {
-      result->type = VEF_RESULT_NULL;
-      return;
-    }
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = length;
   }
 };
 
@@ -671,7 +748,7 @@ struct ResolveParamsWrapper {
       start = comma + 1;
     }
 
-    villagesql::ResolvedTypeParams resolved = {};
+    vsql::ResolvedTypeParams resolved = {};
     if (Func(params, &resolved, result->error_msg)) {
       result->type = VEF_RESULT_ERROR;
       return;
@@ -746,30 +823,6 @@ struct StaticFuncDesc {
   // vef_init_auto_names() in extension_builder.h compiles for any func type.
   constexpr void init_name() const {}
 };
-
-template <typename FuncData, size_t Index>
-__attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
-    const FuncData &func_data) {
-  static vef_signature_t signature;
-  static vef_func_desc_t desc;
-
-  signature.param_count = static_cast<unsigned int>(func_data.num_params());
-  signature.params = func_data.num_params() > 0 ? func_data.params() : nullptr;
-  signature.return_type = func_data.return_type();
-
-  desc.protocol = VEF_PROTOCOL_2;
-  desc.name = func_data.name();
-  desc.signature = &signature;
-  desc.vdf = func_data.vdf();
-  desc.prerun = func_data.prerun();
-  desc.postrun = func_data.postrun();
-  desc.buffer_size = func_data.buffer_size();
-  desc.deterministic = func_data.deterministic();
-  desc.clear = func_data.clear();
-  desc.accumulate = func_data.accumulate();
-
-  return &desc;
-}
 
 // =============================================================================
 // params_type_of / unique_params_types
@@ -846,8 +899,6 @@ struct FuncBuilder {
         buffer_size_(0),
         prerun_(nullptr),
         postrun_(nullptr),
-        clear_(nullptr),
-        accumulate_(nullptr),
         deterministic_(false) {}
 
   const char *name_;
@@ -856,8 +907,6 @@ struct FuncBuilder {
   size_t buffer_size_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
-  vef_vdf_clear_func_t clear_;
-  vef_vdf_accumulate_func_t accumulate_;
   bool deterministic_;
 
   constexpr FuncBuilder<Func, NumParams> &returns(const char *t) {
@@ -872,8 +921,6 @@ struct FuncBuilder {
     next.buffer_size_ = buffer_size_;
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
-    next.clear_ = clear_;
-    next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
@@ -904,80 +951,17 @@ struct FuncBuilder {
     return *this;
   }
 
-  // Aggregate callbacks — typed C++ functions only.
-  //
-  //   .clear<&my_clear>()       // void(MyState&)
-  //   .accumulate<&my_acc>()    // void(MyState&, IntArg, ...)
-  //
-  // Use with .state<T>() for automatic prerun/postrun.
-  template <auto Fn>
-  constexpr FuncBuilder<Func, NumParams> &clear() {
-    if constexpr (std::is_same_v<decltype(Fn), vef_vdf_clear_func_t>) {
-      // TODO(villagesql-beta): raw vef_vdf_clear_func_t should be converted to
-      // typed void(State&). For now pass through directly.
-      clear_ = Fn;
-    } else {
-      using Params = typename FuncParamTypes<decltype(Fn)>::type;
-      using State = std::remove_reference_t<std::tuple_element_t<0, Params>>;
-      clear_ = &agg_clear_wrapper<State, Fn>;
-    }
-    return *this;
-  }
-
-  template <auto Fn>
-  constexpr FuncBuilder<Func, NumParams> &accumulate() {
-    if constexpr (std::is_same_v<decltype(Fn), vef_vdf_accumulate_func_t>) {
-      // TODO(villagesql-beta): raw vef_vdf_accumulate_func_t should be
-      // converted to typed void(State&, TypedArgs...). For now pass through.
-      accumulate_ = Fn;
-    } else {
-      using Params = typename FuncParamTypes<decltype(Fn)>::type;
-      using State = std::remove_reference_t<std::tuple_element_t<0, Params>>;
-      accumulate_ = &AggAccumulateWrapper<State, Fn, NumParams>::invoke;
-    }
-    return *this;
-  }
-
-  template <typename State>
-  constexpr FuncBuilder<Func, NumParams> &state() {
-    prerun_ = &auto_prerun<State>;
-    postrun_ = &auto_postrun<State>;
-    return *this;
-  }
-
   constexpr StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
-    if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
-      config_error__aggregate_must_set_both_clear_and_accumulate();
-    }
 
     using AllParams = typename FuncParamTypes<decltype(Func)>::type;
     using UniquePTuple = typename unique_params_types<AllParams>::type;
 
     FuncWithMetadata meta{};
-    if constexpr (std::is_same_v<decltype(Func), vef_vdf_func_t>) {
-      // TODO(villagesql-beta): raw vef_vdf_func_t aggregate result functions
-      // should be converted to typed style: void(const State&, ResultWrapper).
-      // For now pass through directly.
-      meta.f = Func;
-    } else if constexpr (std::tuple_size_v<AllParams> == 1 &&
-                         std::is_lvalue_reference_v<
-                             std::tuple_element_t<0, AllParams>> &&
-                         std::is_const_v<std::remove_reference_t<
-                             std::tuple_element_t<0, AllParams>>>) {
-      // Typed aggregate result: T(const State&) or optional<T>(const State&).
-      using State = std::remove_const_t<
-          std::remove_reference_t<std::tuple_element_t<0, AllParams>>>;
-      meta.f = &AggResultWrapper<State, Func>::invoke;
-    } else {
-      // Typed scalar VDF.
-      meta.f = &Wrapper<Func, NumParams>::invoke;
-    }
+    meta.f = &Wrapper<Func, NumParams>::invoke;
     meta.prerun = prerun_;
     meta.postrun = postrun_;
-    meta.clear = clear_;
-    meta.accumulate = accumulate_;
     meta.return_type = to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
@@ -995,43 +979,196 @@ struct FuncBuilder {
 };
 
 // =============================================================================
+// AggFuncBuilder
+// =============================================================================
+//
+// Builder for aggregate VDFs. Use make_aggregate_func<State, &result_fn>().
+// The State type is explicit, and clear/accumulate signatures are validated
+// against State at compile time.
+
+template <typename State, auto Func, size_t NumParams>
+struct AggFuncBuilder {
+  constexpr AggFuncBuilder()
+      : name_(nullptr),
+        return_type_(nullptr),
+        param_types_{},
+        buffer_size_(0),
+        clear_(nullptr),
+        accumulate_(nullptr),
+        deterministic_(false) {}
+
+  const char *name_;
+  const char *return_type_;
+  std::array<const char *, NumParams> param_types_;
+  size_t buffer_size_;
+  vef_vdf_clear_func_t clear_;
+  vef_vdf_accumulate_func_t accumulate_;
+  bool deterministic_;
+
+  constexpr AggFuncBuilder<State, Func, NumParams> &returns(const char *t) {
+    return_type_ = t;
+    return *this;
+  }
+
+  constexpr AggFuncBuilder<State, Func, NumParams + 1> param(
+      const char *t) const {
+    AggFuncBuilder<State, Func, NumParams + 1> next;
+    next.name_ = name_;
+    next.return_type_ = return_type_;
+    next.buffer_size_ = buffer_size_;
+    next.clear_ = clear_;
+    next.accumulate_ = accumulate_;
+    next.deterministic_ = deterministic_;
+    for (size_t i = 0; i < NumParams; ++i) {
+      next.param_types_[i] = param_types_[i];
+    }
+    next.param_types_[NumParams] = t;
+    return next;
+  }
+
+  constexpr AggFuncBuilder<State, Func, NumParams> &buffer_size(size_t s) {
+    buffer_size_ = s;
+    return *this;
+  }
+
+  constexpr AggFuncBuilder<State, Func, NumParams> &deterministic(
+      bool d = true) {
+    deterministic_ = d;
+    return *this;
+  }
+
+  // void(State&) — first parameter must match the State type declared in
+  // make_aggregate_func<State, ...>.
+  template <auto Fn>
+  constexpr AggFuncBuilder<State, Func, NumParams> &clear() {
+    using Params = typename FuncParamTypes<decltype(Fn)>::type;
+    using DeducedState =
+        std::remove_reference_t<std::tuple_element_t<0, Params>>;
+    static_assert(std::is_same_v<DeducedState, State>,
+                  "clear: first parameter must be State& matching the "
+                  "make_aggregate_func State type");
+    clear_ = &agg_clear_wrapper<State, Fn>;
+    return *this;
+  }
+
+  // void(State&, TypedArgs...) — first parameter must match State; remaining
+  // parameters must match the SQL param count declared via .param() calls.
+  // Call .accumulate() after all .param() calls.
+  template <auto Fn>
+  constexpr AggFuncBuilder<State, Func, NumParams> &accumulate() {
+    using Params = typename FuncParamTypes<decltype(Fn)>::type;
+    using DeducedState =
+        std::remove_reference_t<std::tuple_element_t<0, Params>>;
+    static_assert(std::is_same_v<DeducedState, State>,
+                  "accumulate: first parameter must be State& matching the "
+                  "make_aggregate_func State type");
+    static_assert(
+        std::tuple_size_v<Params> == NumParams + 1,
+        "accumulate: typed arg count after State& must match the SQL "
+        "parameter count; ensure .accumulate() is called after .param()");
+    accumulate_ = &AggAccumulateWrapper<State, Fn, NumParams>::invoke;
+    return *this;
+  }
+
+  constexpr StaticFuncDesc<NumParams> build() const {
+    static_assert(NumParams <= kMaxParams,
+                  "Too many parameters (max is kMaxParams)");
+    if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
+      config_error__aggregate_must_set_both_clear_and_accumulate();
+    }
+
+    using AllParams = typename FuncParamTypes<decltype(Func)>::type;
+    using UniquePTuple = typename unique_params_types<AllParams>::type;
+
+    FuncWithMetadata meta{};
+    // void(const State&, ResultWrapper).
+    using ResultWrapper = std::tuple_element_t<1, AllParams>;
+    meta.f = &AggResultWithOutputWrapper<State, ResultWrapper, Func>::invoke;
+    meta.prerun = &auto_prerun<State>;
+    meta.postrun = &auto_postrun<State>;
+    meta.clear = clear_;
+    meta.accumulate = accumulate_;
+    meta.return_type = to_vef_type(return_type_);
+    meta.num_params = NumParams;
+    meta.buffer_size = buffer_size_;
+    meta.deterministic = deterministic_;
+    for (size_t i = 0; i < NumParams; ++i) {
+      meta.param_types[i] = to_vef_type(param_types_[i]);
+    }
+    if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
+      meta.check_params_cache_bound =
+          &apply_params_cache_checker<UniquePTuple>::check;
+    }
+    return StaticFuncDesc<NumParams>(name_, meta);
+  }
+};
+
+// =============================================================================
 // Entry Points
 // =============================================================================
 
-// make_func<&impl>("name") — typed functions preferred.
-// TODO(villagesql-beta): reject raw vef_vdf_func_t once all aggregate result
-// functions have been converted to typed style (void(const State&,
-// ResultWrapper)). The deprecated vef_context_t* first param is still rejected.
+// make_aggregate_func<State, &result_fn>("name")
+//
+// Entry point for aggregate VDFs. State is the per-group accumulation type.
+// The result function must be: void(const State&, ResultWrapper)
+// where ResultWrapper is one of IntResult, RealResult, StringResult,
+// CustomResult, or CustomResultWith<P>.
+//
+// prerun/postrun are auto-generated: prerun allocates State via
+// value-initialization, postrun deletes it.
+template <typename State, auto Func>
+constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
+  using AllParams = typename FuncParamTypes<decltype(Func)>::type;
+  static_assert(
+      is_agg_result_for_state<State, AllParams>::value,
+      "make_aggregate_func: result function must be "
+      "void(const State&, ResultWrapper) where ResultWrapper is IntResult, "
+      "RealResult, StringResult, CustomResult, or CustomResultWith<P>");
+  AggFuncBuilder<State, Func, 0> builder;
+  builder.name_ = name;
+  return builder;
+}
+
+// make_func<&impl>("name")
 template <auto Func>
 constexpr FuncBuilder<Func, 0> make_func(const char *name) {
   using AllParams = typename FuncParamTypes<decltype(Func)>::type;
   static_assert(
-      std::is_same_v<decltype(Func), vef_vdf_func_t> ||
-          std::tuple_size_v<AllParams> == 0 ||
+      std::tuple_size_v<AllParams> == 0 ||
           !is_context_param<std::tuple_element_t<0, AllParams>>::value,
       "vsql make_func: deprecated vef_context_t* first parameter not "
-      "supported; write a typed function without the context parameter");
+      "supported; use a typed function or make_aggregate_func (see "
+      "extension.h)");
   FuncBuilder<Func, 0> builder;
   builder.name_ = name;
   return builder;
 }
 
 // make_type_encode<&fn>("name", TYPE) — (STRING) -> CUSTOM(type).
+//
+// Accepts two signatures:
+//   TypeEncodeFunc              (non-parameterized)
+//   TypeEncodeWithParamsFunc<P> (parameterized)
 template <auto Func>
 constexpr StaticFuncDesc<1> make_type_encode(const char *name,
                                              const char *type_name) {
+  using F = decltype(Func);
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeEncodeFunc>) {
+  if constexpr (std::is_same_v<F, TypeEncodeFunc>) {
     meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
   } else {
+    using P = typename TypeEncodeWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeEncodeWithParamsFunc<P>>,
+                  "make_type_encode: function must match either "
+                  "TypeEncodeFunc or TypeEncodeWithParamsFunc<P>.");
     meta.f = &TypeEncodeWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound =
-        &is_params_cache_bound<typename TypeEncodeWithCacheVdfWrapper<Func>::P>;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = to_vef_type(type_name);
   meta.param_types[0] = to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1051,6 +1188,7 @@ constexpr StaticFuncDesc<1> make_type_decode(const char *name,
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1071,6 +1209,7 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
   meta.param_types[1] = to_vef_type(type_name);
   meta.num_params = 2;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<2>(name, meta);
 }
 
@@ -1090,6 +1229,7 @@ constexpr StaticFuncDesc<1> make_type_hash(const char *name,
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1102,6 +1242,7 @@ constexpr StaticFuncDesc<1> make_int_to_params(const char *name) {
   meta.param_types[0] = to_vef_type(INT);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1114,6 +1255,7 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
   meta.param_types[0] = to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  meta.deterministic = true;
   return StaticFuncDesc<1>(name, meta);
 }
 
@@ -1147,6 +1289,6 @@ constexpr vef_type_t to_vef_type(const char *name) {
 }
 
 }  // namespace func_builder
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_FUNC_BUILDER_H

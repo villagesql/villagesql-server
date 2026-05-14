@@ -321,6 +321,8 @@ InnoDB	ts4
 InnoDB	undo_003
 InnoDB	undo_004
 InnoDB	villagesql/custom_columns
+InnoDB	villagesql/custom_index_columns
+InnoDB	villagesql/custom_indexes
 InnoDB	villagesql/custom_sp_params
 InnoDB	villagesql/extensions
 InnoDB	villagesql/properties

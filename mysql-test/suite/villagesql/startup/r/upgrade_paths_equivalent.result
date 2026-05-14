@@ -9,7 +9,7 @@ SELECT COUNT(*) AS properties_table_exists
 FROM mysql.tables
 WHERE schema_id = @villagesql_schema_id;
 properties_table_exists
-4
+6
 # Dump fresh state (excluding timestamp columns)
 # Verify INFORMATION_SCHEMA.EXTENSIONS view exists and is queryable
 # Verify INFORMATION_SCHEMA.COLUMNS view depends on villagesql.custom_columns
@@ -29,7 +29,7 @@ SELECT COUNT(*) AS properties_table_exists
 FROM mysql.tables
 WHERE schema_id = @villagesql_schema_id;
 properties_table_exists
-4
+6
 # Dump fresh install state (excluding timestamp columns)
 # Verify INFORMATION_SCHEMA.EXTENSIONS view exists and is queryable
 # Verify INFORMATION_SCHEMA.COLUMNS view depends on villagesql.custom_columns

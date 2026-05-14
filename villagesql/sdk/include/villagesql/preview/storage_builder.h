@@ -24,10 +24,33 @@
 
 #include <type_traits>
 
-#include <villagesql/abi/storage.h>
+#include <villagesql/abi/preview/storage.h>
 #include <villagesql/preview/storage_api.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::preview_storage_builder {
+
+// Token that activates the storage API for this extension.
+//
+// Declare one static instance and pass it to make_extension().with() to
+// enable MtrCtx, Page, Segment, and Arena from storage_api.h. Without
+// this registration, calling any storage API function is undefined behavior.
+//
+// Usage:
+//   static auto STORAGE = vsql::preview_storage_builder::StorageCapability();
+//
+//   VSQL_EXTENSION_INIT {
+//     return make_extension()
+//         .with(STORAGE)
+//         ...
+//         .build();
+//   }
+//
+class StorageCapability {
+ public:
+  static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
+};
 
 // =============================================================================
 // StorageBuilder<UserCtx>
@@ -92,6 +115,56 @@ namespace detail {
 template <typename UserCtx>
 using StorageCtx = vsql::preview_storage::Column::StorageCtx<UserCtx>;
 using Arena = vsql::preview_storage::Arena;
+
+// Expected extension function pointer types. Each StorageBuilder setter
+// static_asserts that F exactly matches the corresponding type alias.
+
+template <typename UserCtx>
+using CreateFn = bool (*)(StorageCtx<UserCtx> *,
+                          vsql::preview_storage::Space::Ref,
+                          vsql::preview_storage::Segment::TrxRef, uint32_t,
+                          char *, uint32_t);
+
+template <typename UserCtx>
+using DropFn = bool (*)(StorageCtx<UserCtx> *,
+                        vsql::preview_storage::Segment::TrxRef, char *,
+                        uint32_t);
+
+template <typename UserCtx>
+using LoadFn = bool (*)(StorageCtx<UserCtx> *,
+                        vsql::preview_storage::Column::StorageRef, char *,
+                        uint32_t);
+
+template <typename UserCtx>
+using InsertFn = bool (*)(StorageCtx<UserCtx> *,
+                          vsql::preview_storage::MtrCtx::Ref,
+                          vsql::preview_storage::Segment::TrxRef,
+                          vsql::preview_storage::Column::Data,
+                          vsql::preview_storage::Column::Data,
+                          vsql::preview_storage::Column::Ref *, char *,
+                          uint32_t);
+
+template <typename UserCtx>
+using SelectFn = bool (*)(StorageCtx<UserCtx> *,
+                          vsql::preview_storage::MtrCtx::Ref,
+                          vsql::preview_storage::Column::Ref,
+                          vsql::preview_storage::Column::Data *,
+                          vsql::preview_storage::Column::Data *,
+                          vsql::preview_storage::Segment::TrxRef *, bool *,
+                          char *, uint32_t);
+
+template <typename UserCtx>
+using MarkDeleteFn = bool (*)(StorageCtx<UserCtx> *,
+                              vsql::preview_storage::MtrCtx::Ref,
+                              vsql::preview_storage::Segment::TrxRef,
+                              vsql::preview_storage::Column::Ref, bool, char *,
+                              uint32_t);
+
+template <typename UserCtx>
+using PurgeFn = bool (*)(StorageCtx<UserCtx> *,
+                         vsql::preview_storage::MtrCtx::Ref,
+                         vsql::preview_storage::Segment::TrxRef,
+                         vsql::preview_storage::Column::Ref, char *, uint32_t);
 
 template <auto F, typename UserCtx>
 struct CreateWrapper {
@@ -224,67 +297,74 @@ class StorageBuilder {
  public:
   constexpr StorageBuilder() : intf_{} {}
 
-  // Each setter requires F to be a plain function pointer. This rejects
-  // lambdas and functors at the call site with a clear message.
+  // Each setter static_asserts that F exactly matches the expected function
+  // pointer type (detail::CreateFn<UserCtx>, etc.), rejecting wrong signatures,
+  // lambdas, and member function pointers at compile time.
   template <auto F>
   constexpr StorageBuilder &create() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "create: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::CreateFn<UserCtx>>,
+                  "create: expected bool(*)(StorageCtx<UserCtx>*, Space::Ref, "
+                  "Segment::TrxRef, uint32_t col_len, char*, uint32_t)");
     intf_.create = detail::CreateWrapper<F, UserCtx>::invoke;
     return *this;
   }
 
   template <auto F>
   constexpr StorageBuilder &drop() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "drop: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::DropFn<UserCtx>>,
+        "drop: expected bool(*)(StorageCtx<UserCtx>*, Segment::TrxRef, "
+        "char*, uint32_t)");
     intf_.drop = detail::DropWrapper<F, UserCtx>::invoke;
     return *this;
   }
 
   template <auto F>
   constexpr StorageBuilder &load() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "load: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::LoadFn<UserCtx>>,
+        "load: expected bool(*)(StorageCtx<UserCtx>*, Column::StorageRef, "
+        "char*, uint32_t)");
     intf_.load = detail::LoadWrapper<F, UserCtx>::invoke;
     return *this;
   }
 
   template <auto F>
   constexpr StorageBuilder &insert() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "insert: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::InsertFn<UserCtx>>,
+                  "insert: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+                  "Segment::TrxRef, Column::Data, Column::Data, Column::Ref*, "
+                  "char*, uint32_t)");
     intf_.insert = detail::InsertWrapper<F, UserCtx>::invoke;
     return *this;
   }
 
   template <auto F>
   constexpr StorageBuilder &select() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "select: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::SelectFn<UserCtx>>,
+        "select: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+        "Column::Ref, Column::Data*, Column::Data*, Segment::TrxRef*, "
+        "bool*, char*, uint32_t)");
     intf_.select = detail::SelectWrapper<F, UserCtx>::invoke;
     return *this;
   }
 
   template <auto F>
   constexpr StorageBuilder &mark_delete() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "mark_delete: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::MarkDeleteFn<UserCtx>>,
+        "mark_delete: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+        "Segment::TrxRef, Column::Ref, bool delete_mark, char*, uint32_t)");
     intf_.mark_delete = detail::MarkDeleteWrapper<F, UserCtx>::invoke;
     return *this;
   }
 
   template <auto F>
   constexpr StorageBuilder &purge() {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "purge: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::PurgeFn<UserCtx>>,
+                  "purge: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
+                  "Segment::TrxRef, Column::Ref, char*, uint32_t)");
     intf_.purge = detail::PurgeWrapper<F, UserCtx>::invoke;
     return *this;
   }
@@ -315,5 +395,24 @@ constexpr StorageBuilder<UserCtx> make_storage() {
 }
 
 }  // namespace vsql::preview_storage_builder
+
+namespace vsql::detail {
+
+template <>
+struct CapabilityTraits<::vsql::preview_storage_builder::StorageCapability> {
+  static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
+  using AbiType = vef_preview_storage_t;
+
+  // Write the vtable pointer into the module-level g_abi so that the
+  // inline implementations (MtrCtx, Page, Segment) can call through it
+  // without holding a reference to the StorageCapability instance.
+  static void *vtable_destination(
+      ::vsql::preview_storage_builder::StorageCapability * /*p*/) noexcept {
+    return static_cast<void *>(&::vsql::preview_storage::detail::g_abi);
+  }
+};
+
+}  // namespace vsql::detail
 
 #endif  // VILLAGESQL_PREVIEW_STORAGE_BUILDER_H

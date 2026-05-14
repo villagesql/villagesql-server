@@ -1,0 +1,17 @@
+# Test that requesting an unknown preview capability fails at install time.
+# The extension requests "vsql::nonexistent" which is never registered.
+# INSTALL EXTENSION should fail with an error naming the missing capability.
+
+call mtr.add_suppression("required capability not registered");
+call mtr.add_suppression("vsql_allow_preview_extensions");
+
+--echo # With preview capabilities blocked (default), install fails immediately
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_preview_unknown_cap_test;
+
+--echo # With preview capabilities allowed, install fails due to missing capability
+SET PERSIST vsql_allow_preview_extensions = ON;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_preview_unknown_cap_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

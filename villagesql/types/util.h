@@ -246,11 +246,6 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
                      const uchar *data2, size_t len2, size_t min_len,
                      bool reverse);
 
-// Check if two TypeContexts represent compatible types for comparison
-// operations Types are compatible if they have the same type name, extension
-// name, and version Returns true if compatible, false if incompatible
-bool AreTypesCompatible(const TypeContext &tc1, const TypeContext &tc2);
-
 // Validate custom type compatibility for UNION operations.
 // Checks if the accumulator (Item_aggregate_type) and incoming item have
 // compatible custom types. Propagates type context to the accumulator as
@@ -378,14 +373,14 @@ extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 // the same as those matching arguements of the same abstract type). Returns
 // false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
-                                           const LEX_STRING &extension_name,
+                                           std::string_view extension_name,
                                            uint arg_count, Item **args,
                                            const vef_signature_t *signature,
                                            TypeParameters *out_return_params);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.
-extern void SetVDFReturnTypeContext(THD *thd, const LEX_STRING &extension_name,
+extern void SetVDFReturnTypeContext(THD *thd, std::string_view extension_name,
                                     const vef_signature_t *signature,
                                     Item *result_item,
                                     const TypeParameters *return_params);

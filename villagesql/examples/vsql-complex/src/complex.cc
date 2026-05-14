@@ -104,42 +104,39 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
 // STRING -> COMPLEX
-bool complex_from_string(std::string_view from,
-                         villagesql::Span<unsigned char> buf, size_t *length) {
-  if (buf.size() < kComplexSize) return true;
+//
+// Early returns surface the wrapper's default "failed to encode '<input>'"
+// warning.
+void complex_from_string(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kComplexSize) return;
   Complex cx;
   std::string from_str(from);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    return true;
-  }
+  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) return;
   cx.canonicalize();
   store_complex(buf.data(), cx);
-  *length = kComplexSize;
-  return false;
+  out.set_length(kComplexSize);
 }
 
 // COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
 // preserves -0.0 in binary form)
 // STRING -> COMPLEX2
-bool complex2_from_string(std::string_view from,
-                          villagesql::Span<unsigned char> buf, size_t *length) {
-  if (buf.size() < kComplexSize) return true;
+void complex2_from_string(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < kComplexSize) return;
   Complex cx;
   std::string from_str(from);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    return true;
-  }
+  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) return;
   // No canonicalization - -0.0 is preserved in binary representation.
   // The custom hash function will canonicalize on the fly.
   store_complex(buf.data(), cx);
-  *length = kComplexSize;
-  return false;
+  out.set_length(kComplexSize);
 }
 
 // Decode: 16 bytes -> "(real,imag)" string
 // COMPLEX -> STRING
-bool complex_to_string(villagesql::Span<const unsigned char> data,
-                       villagesql::Span<char> out, size_t *out_len) {
+bool complex_to_string(vsql::Span<const unsigned char> data,
+                       vsql::Span<char> out, size_t *out_len) {
   if (data.size() != kComplexSize) return true;
   Complex cx = load_complex(data.data());
   int written = snprintf(out.data(), out.size(), "(%g,%g)", cx.re, cx.im);
@@ -149,8 +146,8 @@ bool complex_to_string(villagesql::Span<const unsigned char> data,
 }
 
 // Compare: (COMPLEX, COMPLEX) -> INT for ORDER BY, indexes
-int complex_compare(villagesql::Span<const unsigned char> a,
-                    villagesql::Span<const unsigned char> b) {
+int complex_compare(vsql::Span<const unsigned char> a,
+                    vsql::Span<const unsigned char> b) {
   if (a.size() != kComplexSize || b.size() != kComplexSize) return 0;
   Complex lhs = load_complex(a.data());
   Complex rhs = load_complex(b.data());
@@ -168,7 +165,7 @@ int complex_compare(villagesql::Span<const unsigned char> a,
 // Canonicalizes -0 to +0 before hashing so that -0.0 and +0.0 hash to the
 // same bucket. This allows COMPLEX2 to preserve -0 in storage while still
 // working correctly with hash joins and EXCEPT operations.
-size_t complex2_hash(villagesql::Span<const unsigned char> data) {
+size_t complex2_hash(vsql::Span<const unsigned char> data) {
   if (data.size() != kComplexSize) return 0;
   Complex cx = load_complex(data.data());
   cx.canonicalize();
@@ -361,25 +358,15 @@ void complex_sum_accumulate(ComplexSumState &state, CustomArg val) {
   state = total;
 }
 
-// TODO(villagesql-beta): convert to typed style: void(const ComplexSumState&,
-// CustomResult)
-void complex_sum_result(vef_context_t *ctx, vef_vdf_args_t *args,
-                        vef_vdf_result_t *out) {
-  auto *state = static_cast<ComplexSumState *>(args->user_data);
-  if (!state->has_value()) {
-    out->type = VEF_RESULT_NULL;
+void complex_sum_result(const ComplexSumState &state, CustomResult out) {
+  if (!state.has_value()) {
+    out.set_null();
     return;
   }
-  if (out->max_bin_len < kComplexSize) {
-    out->type = VEF_RESULT_ERROR;
-    snprintf(out->error_msg, VEF_MAX_ERROR_LEN, "response buffer too small");
-    return;
-  }
-  Complex total = state->value();
+  Complex total = state.value();
   total.canonicalize();
-  store_complex(out->bin_buf, total);
-  out->actual_len = kComplexSize;
-  out->type = VEF_RESULT_VALUE;
+  store_complex(out.buffer().data(), total);
+  out.set_length(kComplexSize);
 }
 
 // Type name NTTPs — required for auto-generating VDF names like
@@ -470,10 +457,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .deterministic()
                   .build())
         // Aggregate functions
-        .func(make_func<&complex_sum_result>("complex_sum")
+        .func(make_aggregate_func<ComplexSumState, &complex_sum_result>(
+                  "complex_sum")
                   .returns(COMPLEX)
                   .param(COMPLEX)
-                  .state<ComplexSumState>()
                   .clear<&complex_sum_clear>()
                   .accumulate<&complex_sum_accumulate>()
                   .build()))

@@ -26,9 +26,11 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/capability_hash.h>
 #include <villagesql/sdk_version.h>
+#include <villagesql/vsql/capability_traits.h>
 
-namespace villagesql {
+namespace vsql {
 
 // Forward-declare the vsql globals so that name lookup succeeds inside the
 // `if constexpr (Ext::kHasVsqlGlobals)` block even when only the base
@@ -38,25 +40,70 @@ namespace sys_var {
 extern vef_get_variable_fn g_get_variable;
 extern vef_set_variable_fn g_set_variable;
 }  // namespace sys_var
-namespace keyring {
-extern vef_read_keyring_fn g_read_keyring;
-extern vef_write_keyring_fn g_write_keyring;
-}  // namespace keyring
 
-// Forward-declare materialize_func_desc so the helpers below can reference it
-// without requiring func_builder.h to be included first.
+// Define materialize_func_desc here so it is available to both old
+// (villagesql::func_builder) and new (vsql::func_builder) API users without
+// requiring an additional include.  villagesql/func_builder.h re-exports this
+// as villagesql::func_builder::materialize_func_desc via a using-declaration,
+// so ADL on old-API types and the explicit using in vef_fill_func_ptrs both
+// resolve to the same entity — eliminating overload ambiguity.
 namespace func_builder {
 template <typename FuncData, size_t Index>
-vef_func_desc_t *materialize_func_desc(const FuncData &func_data);
+__attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
+    const FuncData &func_data) {
+  static vef_signature_t signature;
+  static vef_func_desc_t desc;
+
+  signature.param_count = static_cast<unsigned int>(func_data.num_params());
+  signature.params = func_data.num_params() > 0 ? func_data.params() : nullptr;
+  signature.return_type = func_data.return_type();
+
+  desc.protocol = VEF_PROTOCOL_2;
+  desc.name = func_data.name();
+  desc.signature = &signature;
+  desc.vdf = func_data.vdf();
+  desc.prerun = func_data.prerun();
+  desc.postrun = func_data.postrun();
+  desc.buffer_size = func_data.buffer_size();
+  desc.deterministic = func_data.deterministic();
+  desc.clear = func_data.clear();
+  desc.accumulate = func_data.accumulate();
+
+  return &desc;
+}
 }  // namespace func_builder
 
+}  // namespace vsql
+
+namespace villagesql {
 namespace detail {
+
+// has_descriptor<T>: true when T has a .descriptor member (the vsql TypeObject
+// shape produced by vsql::make_type<>().build()). False for the low-level
+// type_builder::TypeDescriptor which stores vef_desc directly.
+template <typename T, typename = void>
+struct has_descriptor : std::false_type {};
+template <typename T>
+struct has_descriptor<T, std::void_t<decltype(std::declval<T>().descriptor)>>
+    : std::true_type {};
+
+// Uniform accessor for the underlying vef_type_desc_t regardless of which
+// shape (TypeObject or TypeDescriptor) the typed-API or low-level extension
+// builder stored in its types_ tuple.
+template <typename T>
+inline const vef_type_desc_t &get_vef_desc(const T &t) {
+  if constexpr (has_descriptor<T>::value) {
+    return t.descriptor.vef_desc;
+  } else {
+    return t.vef_desc;
+  }
+}
 
 // Fills arr[I] with the materialized vef_func_desc_t* for each function.
 template <typename Ext, size_t... Is>
 void vef_fill_func_ptrs(vef_func_desc_t **arr, const Ext &e,
                         std::index_sequence<Is...>) {
-  using villagesql::func_builder::materialize_func_desc;
+  using vsql::func_builder::materialize_func_desc;
   ((arr[Is] = materialize_func_desc<decltype(e.template func_at<Is>()), Is>(
         e.template func_at<Is>())),
    ...);
@@ -67,7 +114,7 @@ template <typename Ext, size_t... Is>
 void vef_fill_type_ptrs(vef_type_desc_t **arr, const Ext &e,
                         std::index_sequence<Is...>) {
   ((arr[Is] =
-        const_cast<vef_type_desc_t *>(&e.template type_at<Is>().vef_desc)),
+        const_cast<vef_type_desc_t *>(&get_vef_desc(e.template type_at<Is>()))),
    ...);
 }
 
@@ -89,13 +136,62 @@ void vef_fill_status_var_ptrs(vef_status_var_desc_t **arr, const Ext &e,
    ...);
 }
 
-// Calls params_init_fn() for each type that has one.
+// Detection idiom: true if CapabilityTraits has a DescriptorType member.
+template <typename T, typename = void>
+struct has_capability_descriptor : std::false_type {};
+template <typename T>
+struct has_capability_descriptor<T, std::void_t<typename T::DescriptorType>>
+    : std::true_type {};
+
+// Fill arr[I] with the wire entry for this Capability. The vtable_dest
+// points at the abi-pointer slot inside the extension's wrapper, as
+// determined by the trait specialization; the server writes the vtable
+// pointer there at registration time if all compat checks pass.
+template <size_t I, typename Ext>
+void vef_fill_one_capability_req(vef_required_capability_t *arr, const Ext &e) {
+  auto *cap_ptr = e.template required_capability_at<I>();
+  using Capability = std::remove_cv_t<std::remove_pointer_t<decltype(cap_ptr)>>;
+  using Traits = ::vsql::detail::CapabilityTraits<Capability>;
+
+  arr[I].name = Traits::kName;
+  arr[I].vtable_dest =
+      static_cast<void **>(Traits::vtable_destination(cap_ptr));
+  arr[I].abi_type_hash =
+      villagesql::detail::abi_type_hash<typename Traits::AbiType>();
+  arr[I].min_version = Traits::kAbiVersion;
+  if constexpr (has_capability_descriptor<Traits>::value) {
+    arr[I].extension_data = Traits::extension_data(cap_ptr);
+    arr[I].descriptor_abi_hash =
+        villagesql::detail::abi_type_hash<typename Traits::DescriptorType>();
+  } else {
+    arr[I].extension_data = nullptr;
+    arr[I].descriptor_abi_hash = 0;
+  }
+}
+
+template <typename Ext, size_t... Is>
+void vef_fill_required_capability_reqs(vef_required_capability_t *arr,
+                                       const Ext &e,
+                                       std::index_sequence<Is...>) {
+  (vef_fill_one_capability_req<Is>(arr, e), ...);
+}
+
+// Calls params_init_fn() and params_to_strings_init_fn() for each type that
+// has one. These fields live on the vsql TypeObject only (parameterized types
+// flow through the typed C++ API); low-level type_builder::TypeDescriptor has
+// no init fns. has_descriptor<> gates the access so low-level extensions
+// compile and run with a no-op loop body.
+template <typename T>
+inline void call_type_init_fns(const T &t) {
+  if constexpr (has_descriptor<T>::value) {
+    if (t.params_init_fn) t.params_init_fn();
+    if (t.params_to_strings_init_fn) t.params_to_strings_init_fn();
+  }
+}
+
 template <typename Ext, size_t... Is>
 void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
-  ((e.template type_at<Is>().params_init_fn
-        ? e.template type_at<Is>().params_init_fn()
-        : void()),
-   ...);
+  (call_type_init_fns(e.template type_at<Is>()), ...);
 }
 
 // Calls init_name() on any func that has it (auto-named VDFs from the vsql
@@ -133,11 +229,10 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
 }
 
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
-// FuncCount, TypeCount, SysVarCount, and StatusVarCount are explicit template
-// parameters so that array sizes are compile-time constants without relying on
-// VLAs.
+// The counts are explicit template parameters so that array sizes are
+// compile-time constants without relying on VLAs.
 template <typename Ext, size_t FuncCount, size_t TypeCount, size_t SysVarCount,
-          size_t StatusVarCount>
+          size_t StatusVarCount, size_t RequiredCapabilityCount>
 vef_registration_t *vef_register_impl(vef_registration_t &reg,
                                       bool &initialized,
                                       vef_register_arg_t *arg, const Ext &ext) {
@@ -150,10 +245,8 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   // vsql headers in scope.
   if constexpr (Ext::kHasVsqlGlobals) {
     if (arg->protocol >= VEF_PROTOCOL_2) {
-      villagesql::sys_var::g_get_variable = arg->get_variable;
-      villagesql::sys_var::g_set_variable = arg->set_variable;
-      villagesql::keyring::g_read_keyring = arg->read_keyring;
-      villagesql::keyring::g_write_keyring = arg->write_keyring;
+      vsql::sys_var::g_get_variable = arg->get_variable;
+      vsql::sys_var::g_set_variable = arg->set_variable;
     }
   }
 
@@ -173,6 +266,8 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   static vef_sys_var_desc_t *sys_var_ptrs[SysVarCount > 0 ? SysVarCount : 1];
   static vef_status_var_desc_t
       *status_var_ptrs[StatusVarCount > 0 ? StatusVarCount : 1];
+  static vef_required_capability_t required_capability_reqs
+      [RequiredCapabilityCount > 0 ? RequiredCapabilityCount : 1];
 
   if constexpr (FuncCount > 0) {
     vef_init_auto_names(ext, std::make_index_sequence<FuncCount>{});
@@ -189,6 +284,11 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   if constexpr (StatusVarCount > 0) {
     vef_fill_status_var_ptrs(status_var_ptrs, ext,
                              std::make_index_sequence<StatusVarCount>{});
+  }
+  if constexpr (RequiredCapabilityCount > 0) {
+    vef_fill_required_capability_reqs(
+        required_capability_reqs, ext,
+        std::make_index_sequence<RequiredCapabilityCount>{});
   }
 
   if constexpr (FuncCount > 0) {
@@ -220,6 +320,9 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   reg.sys_vars = SysVarCount > 0 ? sys_var_ptrs : nullptr;
   reg.status_var_count = StatusVarCount;
   reg.status_vars = StatusVarCount > 0 ? status_var_ptrs : nullptr;
+  reg.required_capability_count = RequiredCapabilityCount;
+  reg.required_capabilities =
+      RequiredCapabilityCount > 0 ? required_capability_reqs : nullptr;
 
   initialized = true;
   return &reg;

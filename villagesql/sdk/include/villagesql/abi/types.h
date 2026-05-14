@@ -21,7 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "storage.h"
+#include "preview/storage.h"
 
 // Protocol Versioning
 //
@@ -170,9 +170,14 @@ typedef enum : unsigned int {
                    // + Extension system variables (vef_sys_var_desc_t):
                    //   server registers these as MySQL component system
                    //   variables on the extension's behalf.
-                   // + get_variable/set_variable/read_keyring/write_keyring
-                   //   function pointers in vef_register_arg_t: access to
-                   //   MySQL system variables and keyring component.
+                   // + get_variable/set_variable function pointers in
+                   //   vef_register_arg_t: access to MySQL system variables.
+                   // + Preview capability system: extensions declare named
+                   //   capabilities they require in vef_registration_t;
+                   //   the server populates their function pointers before
+                   //   vef_register() returns.
+                   //   (vef_required_capability_t, required_capabilities,
+                   //   required_capability_count in vef_registration_t)
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -224,35 +229,6 @@ typedef bool (*vef_set_variable_fn)(const char *component_name,
                                     const char *name, const char *scope,
                                     const char *val);
 
-typedef enum {
-  VEF_KEYRING_OK = 0,
-  VEF_KEYRING_NOT_FOUND = 1,    // key does not exist
-  VEF_KEYRING_UNAVAILABLE = 2,  // no keyring component is installed
-  VEF_KEYRING_ERROR = 3,        // other error
-} vef_keyring_result_t;
-
-// read_keyring: read a secret from the MySQL keyring component.
-//   data_id:  identifier for the secret.
-//   auth_id:  owner of the secret, or NULL for internal keys.
-//   buf:      caller-provided buffer to receive the secret bytes.
-//   buf_len:  size of buf in bytes.
-//   out_len:  set to the actual number of bytes written on success.
-typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
-                                                    const char *auth_id,
-                                                    unsigned char *buf,
-                                                    size_t buf_len,
-                                                    size_t *out_len);
-
-// write_keyring: write a secret to the MySQL keyring component.
-//   data_id:   identifier for the secret.
-//   auth_id:   owner of the secret, or NULL for internal keys.
-//   data:      secret bytes to store.
-//   data_len:  length of data in bytes.
-typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
-                                                     const char *auth_id,
-                                                     const unsigned char *data,
-                                                     size_t data_len);
-
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -262,14 +238,12 @@ typedef struct {
 
   // protocol >= VEF_PROTOCOL_2
   // TODO(villagesql-beta): How do extension authors opt into requiring these
-  // APIs? An extension that uses get_variable/set_variable/read_keyring/
-  // write_keyring should be able to declare that dependency so the server can
-  // reject loading it with a clear error on older servers that do not provide
-  // these functions (where these pointers would be nullptr).
+  // APIs? An extension that uses get_variable/set_variable should be able to
+  // declare that dependency so the server can reject loading it with a clear
+  // error on older servers that do not provide these functions (where these
+  // pointers would be nullptr).
   vef_get_variable_fn get_variable;
   vef_set_variable_fn set_variable;
-  vef_read_keyring_fn read_keyring;
-  vef_write_keyring_fn write_keyring;
 } vef_register_arg_t;
 
 typedef struct {
@@ -317,6 +291,35 @@ typedef struct {
   const char *const *keys;
   const char *const *values;
 } vef_type_params_t;
+
+// Server-supplied output channel for at-parse-time (fix_fields) inference of
+// from_string parameters from a constant string literal. The SDK wrapper
+// writes the canonical "k=v,k=v" form of the inferred params here when the
+// extension's parameterized from_string transitions MaybeParams<P> from
+// unknown to known during the call.
+//
+// Used only on the constant-string inference path. NULL on the normal
+// row-time path; see vef_vdf_result_t::out_type_params.
+//
+// Overflow contract (snprintf-style): the wrapper always sets actual_len to
+// the number of bytes that *would* have been written. If actual_len exceeds
+// max_buf_len, overflow is true and the contents of buf are undefined; the
+// caller should re-invoke with a heap-allocated buffer sized to
+// actual_len + 1 and try again.
+typedef struct {
+  // INPUT: caller-supplied buffer for the canonical "k=v,k=v" params string.
+  char *buf;
+  // INPUT: capacity of buf in bytes.
+  size_t max_buf_len;
+  // OUTPUT: number of bytes that would have been written (no NUL). 0 means
+  // no params were inferred (e.g., the extension's from_string did not call
+  // p.set(), the call errored, or the type does not register
+  // params_to_strings).
+  size_t actual_len;
+  // OUTPUT: true if actual_len > max_buf_len. When true, buf is not safe to
+  // read; the caller should retry with a larger buffer.
+  bool overflow;
+} vef_inferred_type_params_t;
 
 // Input value for VDF function arguments.
 // The `type` field indicates which union member to read.
@@ -436,6 +439,16 @@ typedef struct {
     // For INT return type
     long long int_value;
   };
+
+  // protocol >= VEF_PROTOCOL_2
+  //
+  // Optional out-channel for constant-string from_string inference at
+  // fix_fields time. NULL on the normal row-time path. When non-NULL AND the
+  // extension's parameterized from_string transitions MaybeParams<P> from
+  // unknown to known, the SDK wrapper writes the inferred params as a
+  // canonical "k=v,k=v" string via the type's registered params_to_strings
+  // callback. See vef_inferred_type_params_t for the overflow contract.
+  vef_inferred_type_params_t *out_type_params;
 } vef_vdf_result_t;
 
 // =============================================================================
@@ -760,6 +773,22 @@ typedef struct {
   // for the lifetime of the extension. The server reads storage_intf->version
   // to determine which fields are available.
   const vef_type_storage_intf_t *storage_intf;
+
+  // Upper bound on persisted_length across all valid parameterizations of
+  // this type. Required for parameterized types; ignored for non-parameterized
+  // types (where persisted_length already gives the answer). Placed at the
+  // end of the struct so that adding it does not shift earlier offsets,
+  // preserving binary compatibility for v1 extensions.
+  //
+  // Used only on the fix_fields-time constant-string inference path: the
+  // server doesn't yet know the parameters (those are about to be inferred),
+  // so it cannot consult resolve_params to size the encode buffer. It
+  // allocates max_persisted_length bytes, runs from_string with
+  // MaybeParams<P> unknown, then trims the result to actual_len.
+  //
+  // Example: for SVECTOR with max dimension 3072, this is
+  //   sizeof(vef_storage_ref_t) + 3072 * sizeof(float).
+  int64_t max_persisted_length;
 } vef_type_desc_t;
 
 // Config Variables
@@ -872,7 +901,48 @@ typedef struct {
   };
 } vef_status_var_desc_t;
 
+// Forward declaration so vef_required_capability_t can reference it.
+typedef struct vef_registration_t vef_registration_t;
+
+// A single capability request in vef_registration_t.required_capabilities.
+// The extension sets name, vtable_dest, abi_type_hash, and min_version. If the
+// capability is registered and passes all server-side checks, the server
+// writes the vtable pointer directly to *vtable_dest before vef_register
+// returns.
+//
+// Server-side compatibility logic (ABI hash check, min_version floor, and the
+// option to override both per capability) lives in cap_compat_fn in
+// capability_registry.h and is not visible to extension authors.
 typedef struct {
+  // Capability name, e.g. "vsql::preview::ping". Must remain valid for the
+  // lifetime of the extension (use a string literal).
+  const char *name;
+  // Address of the abi-pointer slot inside the extension's capability
+  // wrapper. The server writes the vtable pointer here on success. Must
+  // remain valid for the lifetime of the extension.
+  void **vtable_dest;
+  // Compile-time hash of the ABI struct type, computed via
+  // villagesql::detail::abi_type_hash<AbiType>(). The server compares this
+  // against its own hash for the same name to detect ABI struct mismatches.
+  size_t abi_type_hash;
+  // Minimum capability ABI version the extension requires. The server reads
+  // the version field from its vtable and fails loading if it is less than
+  // this value. Set to the VEF_PREVIEW_*_ABI_VERSION constant the extension
+  // was compiled against.
+  uint32_t min_version;
+  // Optional. Capability-specific descriptor supplied by the extension to the
+  // server. Its type is capability-specific. NULL for capabilities that do not
+  // need it. Must remain valid for the lifetime of the extension.
+  const void *extension_data;
+  // Compile-time hash of the descriptor struct type pointed to by
+  // extension_data, computed via
+  // villagesql::detail::abi_type_hash<DescriptorType>(). 0 if extension_data
+  // is NULL. The server compares this against its own hash to detect
+  // descriptor ABI mismatches.
+  size_t descriptor_abi_hash;
+} vef_required_capability_t;
+
+typedef struct vef_registration_t {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
 
@@ -899,6 +969,15 @@ typedef struct {
   // protocol >= VEF_PROTOCOL_2
   unsigned int status_var_count;
   vef_status_var_desc_t **status_vars;
+
+  // protocol >= VEF_PROTOCOL_2
+  // Preview capabilities required by this extension. Each entry names a
+  // capability the extension needs (e.g. "vsql::ping"). The server populates
+  // the capability struct pointed to by each entry before vef_register()
+  // returns. If a capability is unavailable or there is an ABI struct
+  // mismatch, loading the extension fails with an error.
+  unsigned int required_capability_count;
+  const vef_required_capability_t *required_capabilities;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the

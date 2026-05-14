@@ -1,0 +1,19 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_thread_worker_test;
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+# Send SQL_FOR_EACH SELECT 42
+SELECT vsql_thread_worker_test.active_port() INTO OUTFILE 'MYSQLTEST_VARDIR/tmp/tw_sq_port.txt';
+# last_monitor_result should be 42
+SELECT vsql_thread_worker_test.last_monitor_result();
+vsql_thread_worker_test.last_monitor_result()
+42
+# Send SQL_EXECUTE SELECT 'hello'
+SELECT vsql_thread_worker_test.active_port() INTO OUTFILE 'MYSQLTEST_VARDIR/tmp/tw_sq_port.txt';
+# last_monitor_result should be hello
+SELECT vsql_thread_worker_test.last_monitor_result();
+vsql_thread_worker_test.last_monitor_result()
+hello
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+UNINSTALL EXTENSION vsql_thread_worker_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -1,0 +1,7 @@
+{
+  "name": "vsql_preview_unknown_cap_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension for unknown preview capability handling",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

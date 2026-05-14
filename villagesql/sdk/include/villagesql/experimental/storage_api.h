@@ -23,7 +23,7 @@
 #ifndef VILLAGESQL_EXPERIMENTAL_STORAGE_API_H_
 #define VILLAGESQL_EXPERIMENTAL_STORAGE_API_H_
 
-#include <villagesql/abi/storage.h>
+#include <villagesql/abi/preview/storage.h>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>

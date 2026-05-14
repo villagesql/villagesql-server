@@ -783,6 +783,7 @@ static const SYMBOL symbols[] = {
     {SYM("VARCHARACTER", VARCHAR_SYM)},
     {SYM("VARIABLES", VARIABLES)},
     {SYM("VARYING", VARYING)},
+    {SYM("VERSION", VERSION_SYM)},
     {SYM("WAIT", WAIT_SYM)},
     {SYM("WARNINGS", WARNINGS)},
     {SYM("WEEK", WEEK_SYM)},

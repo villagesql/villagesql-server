@@ -1,0 +1,109 @@
+# Exercises constant-string inference for the parameterized
+# `TVECTOR::from_string('<literal>')` syntax. Before A1 case 1 this would
+# error with "cannot determine type parameters"; now the params are inferred
+# at fix_fields time from the literal.
+
+INSTALL EXTENSION vsql_tvector;
+
+# Test: bare TVECTOR::from_string with a well-formed literal
+# Result type is inferred to TVECTOR(3); the value round-trips through
+# to_string for display.
+SELECT TVECTOR::from_string('[1,2,3]') AS v;
+
+# Fully-qualified spelling.
+SELECT vsql_tvector.TVECTOR::from_string('[4,5,6]') AS v;
+
+# Test: chained TD2 — outer VDF's return type binds from the inferred arg
+#
+# tvector_scale(TVECTOR, REAL) -> TVECTOR. The inferred TVECTOR(3) from the
+# inner call propagates as the return TypeContext of the outer call.
+SELECT vsql_tvector.tvector_scale(
+    TVECTOR::from_string('[1,2,3]'),
+    2.0) AS scaled;
+
+# Test: TD1 with two inferred args — same dimension passes
+#
+# Before A1 case 1 this errored "cannot determine type parameters" because
+# neither arg carried a TypeContext. Now both infer TVECTOR(3) and TD1
+# accepts them.
+SELECT vsql_tvector.tvector_dot_product(
+    TVECTOR::from_string('[1,2,3]'),
+    TVECTOR::from_string('[4,5,6]')) AS dot;
+
+# Test: TD1 with two inferred args — different dimensions conflict
+#
+# Each arg infers its own dimension (3 and 2), then TD1's conflict check
+# rejects the mismatch.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dot_product(
+    TVECTOR::from_string('[1,2,3]'),
+    TVECTOR::from_string('[4,5]')) AS dot;
+
+# Test: malformed literal surfaces at fix_fields
+#
+# Without the column-validation path's INSERT IGNORE wrapping, a bad
+# literal here has nowhere to "store NULL" — the helper reports a
+# fix_fields error and the query never runs.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string('[1,2,') AS v;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string('[abc,2,3]') AS v;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string('not a vector') AS v;
+
+# Test: INSERT with from_string into a matching TVECTOR(N) column
+CREATE TABLE t_dim3 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v TVECTOR(3)
+);
+
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[1,2,3]'));
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[4,5,6]'));
+
+SELECT id, v FROM t_dim3 ORDER BY id;
+
+# Test: UPDATE with from_string into a matching TVECTOR(N) column
+UPDATE t_dim3 SET v = TVECTOR::from_string('[7,8,9]') WHERE id = 1;
+SELECT id, v FROM t_dim3 ORDER BY id;
+
+# Test: INSERT with from_string whose inferred dimension does NOT match
+# the column's declared dimension.
+#
+# The inferred TVECTOR(2) literal cannot be stored into a TVECTOR(3) column.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[1,2]'));
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[1,2,3,4]'));
+
+# Row count is unchanged by the failed inserts.
+SELECT COUNT(*) FROM t_dim3;
+
+# Test: UPDATE with from_string whose inferred dimension does NOT match.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE t_dim3 SET v = TVECTOR::from_string('[9,9]') WHERE id = 1;
+
+SELECT id, v FROM t_dim3 ORDER BY id;
+
+# Test: double-typed TVECTOR — inference defaults to the type's default
+# precision (float). An override or matching column would be needed to
+# write into a `type=double` column; verify that path errors when the
+# inferred precision differs from the column's declared precision.
+CREATE TABLE t_double3 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v TVECTOR('dimension=3,type=double')
+);
+
+# Inferred params default to type=float; column is type=double. Mismatch
+# at fix_fields.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_double3 (v) VALUES (TVECTOR::from_string('[1,2,3]'));
+
+DROP TABLE t_double3;
+
+# Clean up
+DROP TABLE t_dim3;
+
+UNINSTALL EXTENSION vsql_tvector;

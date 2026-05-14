@@ -1,0 +1,17 @@
+# Test that omitting .with<preview_ping<>> causes the capability to be
+# unavailable, and that the extension degrades gracefully (returns NULL/0).
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_preview_ping_no_cap_test;
+
+--echo # ping was not registered, so it is unavailable
+SELECT vsql_preview_ping_no_cap_test.ping_available() AS ping_available;
+
+--echo # ping_value() returns NULL when capability is unavailable
+SELECT vsql_preview_ping_no_cap_test.ping_value() IS NULL AS ping_is_null;
+
+UNINSTALL EXTENSION vsql_preview_ping_no_cap_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

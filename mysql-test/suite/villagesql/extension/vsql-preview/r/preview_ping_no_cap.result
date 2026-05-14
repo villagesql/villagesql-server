@@ -1,0 +1,13 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_preview_ping_no_cap_test;
+# ping was not registered, so it is unavailable
+SELECT vsql_preview_ping_no_cap_test.ping_available() AS ping_available;
+ping_available
+0
+# ping_value() returns NULL when capability is unavailable
+SELECT vsql_preview_ping_no_cap_test.ping_value() IS NULL AS ping_is_null;
+ping_is_null
+1
+UNINSTALL EXTENSION vsql_preview_ping_no_cap_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

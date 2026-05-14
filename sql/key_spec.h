@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -64,6 +65,17 @@ enum fk_match_opt {
 
 enum enum_order : int { ORDER_NOT_RELEVANT = 1, ORDER_ASC, ORDER_DESC };
 
+// One key=value pair from a WITH (...) clause on a custom index.
+// is_string controls JSON encoding: false → bare number, true → quoted string.
+struct IndexWithParam {
+  LEX_CSTRING key{nullptr, 0};
+  bool is_string{false};
+  union {
+    LEX_CSTRING str;  // valid when is_string=true
+    uint64_t num;     // valid when is_string=false
+  } value{};
+};
+
 class KEY_CREATE_INFO {
  public:
   enum ha_key_alg algorithm = HA_KEY_ALG_SE_SPECIFIC;
@@ -72,6 +84,14 @@ class KEY_CREATE_INFO {
     by user.
   */
   bool is_algorithm_explicit = false;
+  // Set when a VillageSQL extension-defined index type is specified via
+  // USING EXTENDED(index_type) or USING EXTENDED(extension.index_type).
+  LEX_CSTRING custom_index_type = {nullptr, 0};
+  LEX_CSTRING custom_index_extension = {nullptr, 0};
+  // Raw parameters from WITH (key=value, ...) clause, to be passed to the
+  // extension's parse function for validation before JSON serialization.
+  // Null when no WITH clause was specified.
+  Mem_root_array<IndexWithParam> *custom_index_params{nullptr};
   ulong block_size = 0;
   LEX_CSTRING parser_name = {NullS, 0};
   LEX_CSTRING comment = {NullS, 0};

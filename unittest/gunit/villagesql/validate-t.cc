@@ -287,6 +287,108 @@ TEST_F(ValidateExtensionRegistrationTest,
   EXPECT_EQ(result->funcs.size(), 1u);
 }
 
+// A v2 type whose encode_vdf_name is malformed fails validation.
+TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
+  struct TestCase {
+    const char *bad_name;
+    const char *expected_error;
+  };
+
+  const TestCase cases[] = {
+      {"MYTYPE::transform",
+       "type 'MYTYPE' failed validation"},  // unrecognised method suffix
+      {"WRONGTYPE::from_string",
+       "type 'MYTYPE' failed validation"},  // prefix does not match type name
+      {"::MYTPE::transform", "type 'MYTYPE' failed validation"},
+      {"MYTPE::::transform", "type 'MYTYPE' failed validation"},
+  };
+
+  for (const auto &tc : cases) {
+    SCOPED_TRACE(std::string("bad_name=") + tc.bad_name);
+
+    vef_type_desc_t td = {};
+    td.protocol = VEF_PROTOCOL_2;
+    td.name = "MYTYPE";
+    td.persisted_length = 16;
+    td.max_decode_buffer_length = 256;
+    td.encode_vdf_name = tc.bad_name;
+
+    vef_type_desc_t *types[] = {&td};
+    vef_registration_t reg = {};
+    reg.protocol = VEF_PROTOCOL_2;
+    reg.deprecated_extension_name = "my_ext";
+    reg.type_count = 1;
+    reg.types = types;
+
+    std::string error;
+    auto result = villagesql::veb::validate_extension_registration(
+        make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(error, tc.expected_error);
+  }
+}
+
+// A v2 type registration using valid VDF names succeeds end-to-end.
+TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
+  vef_type_desc_t td = {};
+  td.protocol = VEF_PROTOCOL_2;
+  td.name = "MYTYPE";
+  td.persisted_length = 16;
+  td.max_decode_buffer_length = 256;
+  td.encode_vdf_name = "MYTYPE::from_string";
+  td.decode_vdf_name = "MYTYPE::to_string";
+  td.compare_vdf_name = "MYTYPE::compare";
+
+  vef_type_t str_type = {VEF_TYPE_STRING, nullptr};
+  vef_type_t int_type = {VEF_TYPE_INT, nullptr};
+  vef_type_t custom_mytype = {VEF_TYPE_CUSTOM, "MYTYPE"};
+
+  vef_type_t encode_params[] = {str_type};
+  vef_signature_t encode_sig = {1, encode_params, custom_mytype};
+  vef_func_desc_t encode_fd = {};
+  encode_fd.protocol = VEF_PROTOCOL_2;
+  encode_fd.name = "MYTYPE::from_string";
+  encode_fd.signature = &encode_sig;
+  encode_fd.vdf = stub_vdf;
+
+  vef_type_t decode_params[] = {custom_mytype};
+  vef_signature_t decode_sig = {1, decode_params, str_type};
+  vef_func_desc_t decode_fd = {};
+  decode_fd.protocol = VEF_PROTOCOL_2;
+  decode_fd.name = "MYTYPE::to_string";
+  decode_fd.signature = &decode_sig;
+  decode_fd.vdf = stub_vdf;
+
+  vef_type_t compare_params[] = {custom_mytype, custom_mytype};
+  vef_signature_t compare_sig = {2, compare_params, int_type};
+  vef_func_desc_t compare_fd = {};
+  compare_fd.protocol = VEF_PROTOCOL_2;
+  compare_fd.name = "MYTYPE::compare";
+  compare_fd.signature = &compare_sig;
+  compare_fd.vdf = stub_vdf;
+
+  vef_type_desc_t *types[] = {&td};
+  vef_func_desc_t *funcs[] = {&encode_fd, &decode_fd, &compare_fd};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.func_count = 3;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::validate_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(error.empty());
+  ASSERT_EQ(result->types.size(), 1u);
+  EXPECT_EQ(result->types[0].type_name(), "MYTYPE");
+}
+
 // Multiple types and funcs are all validated and returned.
 TEST_F(ValidateExtensionRegistrationTest, MultipleTypesAndFuncs) {
   vef_type_desc_t td1 = make_v1_type("TYPE_A");

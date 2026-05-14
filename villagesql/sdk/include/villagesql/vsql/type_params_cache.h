@@ -30,7 +30,7 @@
 
 #include <villagesql/abi/types.h>
 
-namespace villagesql {
+namespace vsql {
 
 // Memoizes parsed type parameters to avoid re-parsing strings on every VDF
 // call. There is one cache instance per Type Parameter C++ type. The cache is
@@ -47,14 +47,30 @@ template <typename T>
 class TypeParamsCache {
  public:
   using ParseFn = T (*)(const std::map<std::string, std::string> &);
+  using ToStringsFn = void (*)(const T &, std::map<std::string, std::string> &);
 
   // Binds the parse function used by the no-arg get() overload. Called once
   // during extension initialization (vef_register), before any VDF calls.
   // Not safe to call after registration.
   void bind(ParseFn fn) { parse_fn_ = fn; }
 
+  // Binds the inverse-of-parse function used by inference paths (e.g.
+  // constant-string from_string at fix_fields time). Optional; only required
+  // for parameterized types whose params are inferable at runtime.
+  // Called once during extension initialization, before any VDF calls.
+  void bind_to_strings(ToStringsFn fn) { to_strings_fn_ = fn; }
+
   // Returns true if the parse function has been bound via bind().
   bool is_bound() const { return parse_fn_ != nullptr; }
+
+  // Returns true if a to_strings function has been bound for this type.
+  bool has_to_strings() const { return to_strings_fn_ != nullptr; }
+
+  // Invokes the bound to_strings function. has_to_strings() must be true.
+  void to_strings(const T &p, std::map<std::string, std::string> &out) const {
+    assert(to_strings_fn_ != nullptr);
+    to_strings_fn_(p, out);
+  }
 
   // Returns a reference to the cached T using the bound parse function.
   // bind() must have been called before this overload is used.
@@ -85,6 +101,7 @@ class TypeParamsCache {
 
  private:
   ParseFn parse_fn_ = nullptr;
+  ToStringsFn to_strings_fn_ = nullptr;
   mutable std::shared_mutex mu_;
   // Values are heap-allocated so their addresses remain stable across rehashes.
   // A rehash moves the unordered_map buckets, not the pointed-to T objects,
@@ -186,6 +203,6 @@ __attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
   return type_params_cache_for<T>().is_bound();
 }
 
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_TYPE_PARAMS_CACHE_H

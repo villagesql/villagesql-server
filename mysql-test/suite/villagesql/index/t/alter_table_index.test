@@ -1,0 +1,42 @@
+# Test ALTER TABLE ADD INDEX ... USING EXTENDED ... syntax paths
+# A failed ADD INDEX leaves the table and its existing indexes intact.
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
+
+CREATE TABLE t (id INT PRIMARY KEY, val INT);
+
+# ADD INDEX USING EXTENDED -- unqualified type name
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id) USING EXTENDED(hnsw);
+
+# ADD INDEX USING EXTENDED -- qualified extension.type_name
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id) USING EXTENDED(myext.hnsw);
+
+# ADD INDEX USING EXTENDED + WITH -- numeric and string params
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id) USING EXTENDED(hnsw) WITH (M = 16, metric = 'l2');
+
+# ADD INDEX WITH standalone -- exercises PT_index_with_options path in ALTER TABLE context
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id) WITH (M = 16);
+
+# Column with index profile + USING EXTENDED
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id hnsw_l2_profile) USING EXTENDED(hnsw);
+
+# Column with index profile + qualified type + WITH params
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2');
+
+# Column with qualified extension.profile (extension.profile_name syntax)
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(hnsw);
+
+# Qualified profile + qualified extension type + WITH params
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2');
+
+# Table must be unaffected by the failed ALTER TABLE statements above
+SHOW CREATE TABLE t;
+
+DROP TABLE t;

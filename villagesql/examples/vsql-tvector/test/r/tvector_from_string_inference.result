@@ -1,0 +1,64 @@
+INSTALL EXTENSION vsql_tvector;
+SELECT TVECTOR::from_string('[1,2,3]') AS v;
+v
+[1,2,3]
+SELECT vsql_tvector.TVECTOR::from_string('[4,5,6]') AS v;
+v
+[4,5,6]
+SELECT vsql_tvector.tvector_scale(
+TVECTOR::from_string('[1,2,3]'),
+2.0) AS scaled;
+scaled
+[2,4,6]
+SELECT vsql_tvector.tvector_dot_product(
+TVECTOR::from_string('[1,2,3]'),
+TVECTOR::from_string('[4,5,6]')) AS dot;
+dot
+32
+SELECT vsql_tvector.tvector_dot_product(
+TVECTOR::from_string('[1,2,3]'),
+TVECTOR::from_string('[4,5]')) AS dot;
+ERROR HY000: Cannot initialize function 'tvector_dot_product': conflicting type parameters for vsql_tvector.TVECTOR in arguments 1 and 2
+SELECT TVECTOR::from_string('[1,2,') AS v;
+ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: missing ']'
+SELECT TVECTOR::from_string('[abc,2,3]') AS v;
+ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: parse error
+SELECT TVECTOR::from_string('not a vector') AS v;
+ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: missing '['
+CREATE TABLE t_dim3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v TVECTOR(3)
+);
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[1,2,3]'));
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[4,5,6]'));
+SELECT id, v FROM t_dim3 ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+UPDATE t_dim3 SET v = TVECTOR::from_string('[7,8,9]') WHERE id = 1;
+SELECT id, v FROM t_dim3 ORDER BY id;
+id	v
+1	[7,8,9]
+2	[4,5,6]
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[1,2]'));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string('[1,2,3,4]'));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(4) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+SELECT COUNT(*) FROM t_dim3;
+COUNT(*)
+2
+UPDATE t_dim3 SET v = TVECTOR::from_string('[9,9]') WHERE id = 1;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+SELECT id, v FROM t_dim3 ORDER BY id;
+id	v
+1	[7,8,9]
+2	[4,5,6]
+CREATE TABLE t_double3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v TVECTOR('dimension=3,type=double')
+);
+INSERT INTO t_double3 (v) VALUES (TVECTOR::from_string('[1,2,3]'));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(3) to vsql_tvector.TVECTOR('dimension=3,type=double') for column 'v' at row 1
+DROP TABLE t_double3;
+DROP TABLE t_dim3;
+UNINSTALL EXTENSION vsql_tvector;

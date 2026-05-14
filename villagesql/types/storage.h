@@ -23,7 +23,7 @@
 
 #include <cstdint>
 
-#include "villagesql/sdk/include/villagesql/abi/storage.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 
 namespace villagesql {
 

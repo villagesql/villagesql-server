@@ -1,0 +1,7 @@
+{
+  "name": "vsql_thread_worker_test",
+  "version": "0.0.1",
+  "description": "Tests dynamic poll_fd and sleep_ms return from work_fn, including port change at runtime",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

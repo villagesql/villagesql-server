@@ -51,8 +51,13 @@ class Sql_cmd_install_extension : public Sql_cmd {
 // This class implements the UNINSTALL EXTENSION statement.
 class Sql_cmd_uninstall_extension : public Sql_cmd {
  public:
-  explicit Sql_cmd_uninstall_extension(const LEX_CSTRING &name)
-      : m_name(name) {}
+  // @param name     Extension name to uninstall.
+  // @param version  Expected installed version (m_version.str == nullptr if no
+  //                 VERSION clause was specified). When set, uninstall fails
+  //                 unless the installed version matches exactly.
+  Sql_cmd_uninstall_extension(const LEX_CSTRING &name,
+                              const LEX_CSTRING &version)
+      : m_name(name), m_version(version) {}
 
   enum_sql_command sql_command_code() const override {
     return SQLCOM_UNINSTALL_EXTENSION;
@@ -65,6 +70,7 @@ class Sql_cmd_uninstall_extension : public Sql_cmd {
 
  private:
   LEX_CSTRING m_name;
+  LEX_CSTRING m_version;
 };
 
 #endif  // VILLAGESQL_VEB_SQL_EXTENSION_H_

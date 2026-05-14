@@ -40,8 +40,8 @@
 // Example - binary transform with no params (ROT13 on a fixed-size BYTEARRAY):
 //   void rot13(CustomArg in, CustomResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
-//     auto src = in.value();          // villagesql::Span<const unsigned char>
-//     auto dst = out.buffer();        // villagesql::Span<unsigned char>
+//     auto src = in.value();          // vsql::Span<const unsigned char>
+//     auto dst = out.buffer();        // vsql::Span<unsigned char>
 //     for (size_t i = 0; i < src.size(); i++) {
 //       dst[i] = transform(src[i]);
 //     }
@@ -69,13 +69,13 @@
 #include <villagesql/vsql/type_params_cache.h>
 
 // In C++20, Span<T> is std::span<T>. In C++17, it is a minimal compatible
-// implementation. User code written against villagesql::Span<T> works in
+// implementation. User code written against vsql::Span<T> works in
 // either standard.
 #if __cplusplus >= 202002L
 #include <span>
 #endif
 
-namespace villagesql {
+namespace vsql {
 
 // =============================================================================
 // Span<T>
@@ -89,7 +89,7 @@ using Span = std::span<T>;
 #else
 
 // Non-owning view over a contiguous sequence of T, compatible with C++17.
-// Mirrors the std::span interface so code written against villagesql::Span<T>
+// Mirrors the std::span interface so code written against vsql::Span<T>
 // compiles unchanged under C++20 (where Span<T> aliases std::span<T>).
 template <typename T>
 class Span {
@@ -353,6 +353,6 @@ class CustomResultWith {
   vef_vdf_result_t *r_;
 };
 
-}  // namespace villagesql
+}  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_FUNC_TYPES_H

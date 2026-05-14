@@ -19,6 +19,7 @@
 
 #include <set>
 #include <string>
+#include <string_view>
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
@@ -106,6 +107,7 @@ struct ExtensionRegistration {
 // On error, a message is written to error_out so that it can be logged, and/or
 // returned to the client.
 bool load_vef_extension(const std::string &so_path,
+                        std::string_view extension_name,
                         ExtensionRegistration &registration,
                         vef_protocol_t max_protocol,
                         std::string &error_message);

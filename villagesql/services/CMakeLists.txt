@@ -14,7 +14,12 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_SERVICES_SOURCES
-  keyring.cc
+  capability_registry.cc
+  preview/keyring.cc
+  preview/ping.cc
+  preview/sql_query.cc
+  preview/storage.cc
+  preview/thread_worker.cc
   status_vars.cc
   sys_vars.cc
 )

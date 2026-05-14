@@ -122,9 +122,9 @@ class TypeDescriptor {
   // and storage_intf are optional.
   TypeDescriptor(
       TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
-      int64_t persisted_len, int64_t max_unpersisted_len, EncodeFunction encode,
-      DecodeFunction decode, CompareFunction compare,
-      std::optional<HashFunction> hash = std::nullopt,
+      int64_t persisted_len, int64_t max_unpersisted_len,
+      int64_t max_persisted_len, EncodeFunction encode, DecodeFunction decode,
+      CompareFunction compare, std::optional<HashFunction> hash = std::nullopt,
       std::optional<IntToParamsFunction> int_to_params = std::nullopt,
       std::optional<ResolveParamsFunction> resolve_params = std::nullopt,
       std::optional<StorageInterface> storage_intf = std::nullopt);
@@ -163,6 +163,11 @@ class TypeDescriptor {
   unsigned char implementation_type() const { return implementation_type_; }
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
+  // Upper bound on persisted_length across all valid parameterizations.
+  // 0 for non-parameterized types (use persisted_length()) and for
+  // parameterized types that have not declared the upper bound yet (these
+  // will not be eligible for fix_fields constant-string inference).
+  int64_t max_persisted_length() const { return max_persisted_length_; }
 
   // TypeFunction accessors.
   // encode_fn, decode_fn, compare_fn assert that the function is set
@@ -233,6 +238,7 @@ class TypeDescriptor {
   unsigned char implementation_type_{0};
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
+  int64_t max_persisted_length_{0};
 
   // Type functions (encode/decode/compare required; hash optional)
   std::optional<EncodeFunction> encode_fn_;

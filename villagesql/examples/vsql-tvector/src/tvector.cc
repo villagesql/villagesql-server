@@ -42,6 +42,11 @@
 #include <string>
 #include <string_view>
 
+// Largest dimension a TVECTOR may declare. Enforced in resolve_params and
+// int_to_params; also drives kTVectorMaxPersistedLength below for the
+// constant-string inference path.
+constexpr int64_t kTVectorMaxDimension = 4096;
+
 // Parsed representation of TVECTOR type parameters.
 // The static parse() method is used automatically by make_type_encode,
 // make_type_decode, and make_intrinsic_default when the operation function
@@ -57,6 +62,16 @@ struct TVectorParams {
     auto type_it = params.find("type");
     if (type_it != params.end() && type_it->second == "double") bytes = 8;
     return TVectorParams{.dimension = dim, .bytes_per_elem = bytes};
+  }
+
+  // Inverse of parse: render a typed TVectorParams back into the canonical
+  // key/value string form. Used by the SDK when the server needs to publish
+  // inferred params (e.g., from a constant-string from_string) back in the
+  // same shape that parse() consumes.
+  static void to_strings(const TVectorParams &p,
+                         std::map<std::string, std::string> &out) {
+    out["dimension"] = std::to_string(p.dimension);
+    out["type"] = (p.bytes_per_elem == 8) ? "double" : "float";
   }
 };
 
@@ -123,10 +138,10 @@ size_t bytes_per_element(const std::map<std::string, std::string> &params) {
 bool tvector_int_to_params(int64_t value,
                            std::map<std::string, std::string> &params,
                            char *error_msg) {
-  if (value <= 0) {
+  if (value <= 0 || value > kTVectorMaxDimension) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TVECTOR dimension must be a positive integer, got %" PRId64,
-             value);
+             "TVECTOR dimension must be in 1..%" PRId64 ", got %" PRId64,
+             kTVectorMaxDimension, value);
     return true;
   }
   params["dimension"] = std::to_string(value);
@@ -136,8 +151,7 @@ bool tvector_int_to_params(int64_t value,
 
 // Validate type parameters and compute storage characteristics.
 bool tvector_resolve_params(const std::map<std::string, std::string> &params,
-                            villagesql::ResolvedTypeParams *result,
-                            char *error_msg) {
+                            vsql::ResolvedTypeParams *result, char *error_msg) {
   auto it = params.find("dimension");
   if (it == params.end()) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
@@ -151,9 +165,10 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
              "TVECTOR: invalid dimension value '%s'", it->second.c_str());
     return true;
   }
-  if (dimension <= 0) {
+  if (dimension <= 0 || dimension > kTVectorMaxDimension) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TVECTOR: dimension must be a positive integer");
+             "TVECTOR: dimension must be in 1..%" PRId64 ", got %" PRId64,
+             kTVectorMaxDimension, dimension);
     return true;
   }
 
@@ -174,63 +189,91 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
   return false;
 }
 
-// Encode: "[v1,v2,...,vN]" -> N * bpe bytes binary.
-// STRING -> TVECTOR
-// Dimension and element type are read from type parameters.
-bool tvector_from_string(const TVectorParams &p, std::string_view from,
-                         villagesql::Span<unsigned char> buf, size_t *length) {
-  // Computed values could be cached in the TVectorParams
-  size_t byte_size = static_cast<size_t>(p.dimension) * p.bytes_per_elem;
-  if (buf.size() < byte_size) return true;
-
+// When p is known, dimension and element type are taken from p; the parsed
+// element count must match p.dimension. When p is unknown, the element count
+// from the string is used to set p.dimension, and bytes_per_elem defaults to 4
+// (float) since the string itself does not disambiguate float from double.
+//
+// Single-pass: each parsed element is written directly into out.buffer().
+// The loop only checks against max_supportable (what the buffer can hold).
+// Mismatch with the expected dimension is checked once at the end.
+void tvector_from_string(vsql::MaybeParams<TVectorParams> &p,
+                         std::string_view from, vsql::CustomResult out) {
   // strtof/strtod require a null-terminated string.
   std::string input(from);
   const char *s = input.c_str();
-
-  // Skip leading whitespace
   while (*s == ' ') s++;
-  if (*s != '[') return true;
+  if (*s != '[') {
+    out.warning("tvector_from_string: missing '['");
+    return;
+  }
   s++;
+
+  auto buf = out.buffer();
+  // bpe is fixed if known; defaults to 4 (float) when inferring.
+  const size_t bpe = (p.is_known() && p.value().bytes_per_elem > 0)
+                         ? p.value().bytes_per_elem
+                         : 4;
+  // Cap the loop on what the output buffer can hold; expected-dimension
+  // mismatch is reported once at the end.
+  const size_t max_supportable = buf.size() / bpe;
 
   size_t count = 0;
   while (*s != '\0') {
-    // Skip whitespace
     while (*s == ' ') s++;
     if (*s == ']') break;
 
-    if (count >= static_cast<size_t>(p.dimension)) return true;
+    if (count >= max_supportable) {
+      out.warning("tvector_from_string: buffer too small");
+      return;
+    }
 
     char *endptr = nullptr;
-    if (p.bytes_per_elem == 8) {
+    if (bpe == 8) {
       double val = strtod(s, &endptr);
-      if (endptr == s) return true;
-      store_double(buf.data() + count * p.bytes_per_elem, val);
+      if (endptr == s) {
+        out.warning("tvector_from_string: parse error");
+        return;
+      }
+      store_double(buf.data() + count * 8, val);
     } else {
       float val = strtof(s, &endptr);
-      if (endptr == s) return true;
-      store_float(buf.data() + count * p.bytes_per_elem, val);
+      if (endptr == s) {
+        out.warning("tvector_from_string: parse error");
+        return;
+      }
+      store_float(buf.data() + count * 4, val);
     }
     count++;
     s = endptr;
 
-    // Skip whitespace and comma
     while (*s == ' ') s++;
     if (*s == ',') s++;
   }
+  if (*s != ']') {
+    out.warning("tvector_from_string: missing ']'");
+    return;
+  }
 
-  if (*s != ']') return true;
-  if (count != static_cast<size_t>(p.dimension)) return true;
+  if (p.is_known()) {
+    if (count != static_cast<size_t>(p.value().dimension)) {
+      out.warning("tvector_from_string: dimension mismatch");
+      return;
+    }
+  } else {
+    p.set(TVectorParams{.dimension = static_cast<int64_t>(count),
+                        .bytes_per_elem = 4});
+  }
 
-  *length = byte_size;
-  return false;
+  out.set_length(count * bpe);
 }
 
 // Decode: N * bpe bytes binary -> "[v1,v2,...,vN]" string.
 // TVECTOR -> STRING
 // Dimension and element type are read from type parameters.
 bool tvector_to_string(const TVectorParams &p,
-                       villagesql::Span<const unsigned char> data,
-                       villagesql::Span<char> out, size_t *out_len) {
+                       vsql::Span<const unsigned char> data,
+                       vsql::Span<char> out, size_t *out_len) {
   const size_t bpe = p.bytes_per_elem;
   if (data.size() != static_cast<size_t>(p.dimension) * bpe) return true;
 
@@ -268,9 +311,8 @@ bool tvector_to_string(const TVectorParams &p,
 // TODO(villagesql-performance): we can also consider having templated versions
 // of these functions instead of using branches, then selecting the version to
 // use with one branch.
-int tvector_compare(const TVectorParams &p,
-                    villagesql::Span<const unsigned char> a,
-                    villagesql::Span<const unsigned char> b) {
+int tvector_compare(const TVectorParams &p, vsql::Span<const unsigned char> a,
+                    vsql::Span<const unsigned char> b) {
   for (int64_t i = 0; i < p.dimension; i++) {
     if (p.bytes_per_elem == 8) {
       double v1 = load_double(a.data() + i * p.bytes_per_elem);
@@ -301,9 +343,9 @@ std::string tvector_default(const TVectorParams &p, char * /*error_msg*/) {
 
 // Dot product: (TVECTOR, TVECTOR) -> REAL
 // Returns the sum of element-wise products of two vectors of the same type.
-void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
-                         villagesql::CustomArgWith<TVectorParams> b,
-                         villagesql::RealResult out) {
+void tvector_dot_product(vsql::CustomArgWith<TVectorParams> a,
+                         vsql::CustomArgWith<TVectorParams> b,
+                         vsql::RealResult out) {
   if (a.is_null() || b.is_null()) {
     out.set_null();
     return;
@@ -331,9 +373,9 @@ void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
 
 // Element-wise add: (TVECTOR, TVECTOR) -> TVECTOR
 // Vectors must have the same dimension and element type.
-void tvector_add(villagesql::CustomArgWith<TVectorParams> a,
-                 villagesql::CustomArgWith<TVectorParams> b,
-                 villagesql::CustomResultWith<TVectorParams> out) {
+void tvector_add(vsql::CustomArgWith<TVectorParams> a,
+                 vsql::CustomArgWith<TVectorParams> b,
+                 vsql::CustomResultWith<TVectorParams> out) {
   if (a.is_null() || b.is_null()) {
     out.set_null();
     return;
@@ -365,9 +407,8 @@ void tvector_add(villagesql::CustomArgWith<TVectorParams> a,
 }
 
 // Scalar multiply: (TVECTOR, REAL) -> TVECTOR
-void tvector_scale(villagesql::CustomArgWith<TVectorParams> a,
-                   villagesql::RealArg scalar,
-                   villagesql::CustomResultWith<TVectorParams> out) {
+void tvector_scale(vsql::CustomArgWith<TVectorParams> a, vsql::RealArg scalar,
+                   vsql::CustomResultWith<TVectorParams> out) {
   if (a.is_null() || scalar.is_null()) {
     out.set_null();
     return;
@@ -395,10 +436,19 @@ void tvector_scale(villagesql::CustomArgWith<TVectorParams> a,
 
 static constexpr const char kTVectorTypeName[] = "TVECTOR";
 
+// Upper bound on TVECTOR's persisted byte size: kTVectorMaxDimension
+// elements at 8 bytes each (double, the wider of the two supported element
+// types). Used only on the fix_fields-time constant-string inference path;
+// row-time encoding uses the params-resolved persisted_length set by
+// tvector_resolve_params.
+constexpr int64_t kTVectorMaxPersistedLength = kTVectorMaxDimension * 8;
+
 constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
                              .persisted_length(-1)
                              .max_decode_buffer_length(16)
-                             .params<TVectorParams, &TVectorParams::parse>()
+                             .max_persisted_length(kTVectorMaxPersistedLength)
+                             .params<TVectorParams, &TVectorParams::parse,
+                                     &TVectorParams::to_strings>()
                              .int_to_params<&tvector_int_to_params>()
                              .resolve_params<&tvector_resolve_params>()
                              .from_string<&tvector_from_string>()

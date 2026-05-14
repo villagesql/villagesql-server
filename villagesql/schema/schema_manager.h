@@ -37,6 +37,8 @@ class SchemaManager {
   static const char *COLUMNS_TABLE_NAME;
   static const char *SP_PARAMS_TABLE_NAME;
   static const char *EXTENSIONS_TABLE_NAME;
+  static const char *INDEXES_TABLE_NAME;
+  static const char *INDEX_COLUMNS_TABLE_NAME;
 
   // Maximum length of a name (extension name, type name, etc.) as stored in
   // the schema (matches the VARCHAR(64) columns in the system tables).

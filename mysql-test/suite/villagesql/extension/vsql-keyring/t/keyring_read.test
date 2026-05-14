@@ -1,0 +1,37 @@
+# Test keyring_read and keyring_store VDFs from vsql_keyring_reader extension.
+# Requires the keyring_file component to be available.
+
+--source include/have_component_keyring_file.inc
+--source suite/component_keyring_file/inc/setup_component.inc
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Install extension
+--let $veb_dir = `SELECT @@veb_dir`
+INSTALL EXTENSION vsql_keyring_reader;
+
+--echo # Store a secret in the keyring
+SELECT vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value');
+
+--echo # Read it back
+SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
+
+--echo # Restart server - keyring component reloads from its backing file
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR $KEYRING_FILE_COMPONENT_DIR KEYRING_FILE_COMPONENT_DIR
+--let $restart_parameters = restart: $KEYRING_FILE_COMPONENT_OPT
+--source include/restart_mysqld.inc
+
+--echo # Secret should survive restart
+SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
+
+--echo # Read a non-existent key returns NULL
+SELECT vsql_keyring_reader.keyring_read('vsql_no_such_key', NULL) IS NULL;
+
+--echo # NULL data_id returns NULL
+SELECT vsql_keyring_reader.keyring_read(NULL, NULL) IS NULL;
+
+--echo # Uninstall extension
+UNINSTALL EXTENSION vsql_keyring_reader;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--source suite/component_keyring_file/inc/teardown_component.inc

@@ -55,8 +55,32 @@ file(WRITE "${CMAKE_BINARY_DIR}/villagesql_test_env.sh"
   "VILLAGESQL_DEV_SDK_INCLUDE=${SDK_STAGING_DIR}/include-dev\n"
 )
 
-# SDK packaging target - built by default (ALL)
-add_custom_target(sdk ALL
+# Collect SDK input files for dependency tracking so the sdk target reruns
+# whenever any of these change. GLOB is evaluated at cmake time; adding new
+# header files requires re-running cmake (standard CMake behaviour).
+file(GLOB_RECURSE SDK_STABLE_HEADERS
+  "${STABLE_SDK_DIR}/include/villagesql/*.h"
+)
+file(GLOB_RECURSE SDK_DEV_HEADERS
+  "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/*.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/*.h.in"
+)
+file(GLOB_RECURSE SDK_TEMPLATE_FILES
+  "${STABLE_SDK_DIR}/template/*"
+)
+
+# SDK packaging command - reruns whenever tracked input files change
+add_custom_command(
+  OUTPUT "${CMAKE_BINARY_DIR}/${SDK_NAME}.tar.gz"
+  DEPENDS
+    ${SDK_STABLE_HEADERS}
+    ${SDK_DEV_HEADERS}
+    ${SDK_TEMPLATE_FILES}
+    "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
+    "${CMAKE_BINARY_DIR}/sdk/villagesql_config"
+    "${CMAKE_SOURCE_DIR}/cmake/VillageSQLExtensionFrameworkConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/FindVillageSQL.cmake"
+
   # Clean and create staging directory structure
   COMMAND ${CMAKE_COMMAND} -E remove_directory "${SDK_STAGING_DIR}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/bin"
@@ -113,6 +137,9 @@ add_custom_target(sdk ALL
   VERBATIM
 )
 
+# Named target so 'make sdk' still works; depends on tarball for file tracking
+add_custom_target(sdk ALL DEPENDS "${CMAKE_BINARY_DIR}/${SDK_NAME}.tar.gz")
+
 # Install SDK components from the staged SDK directory.
 # This ensures 'make install' installs exactly what the SDK tarball contains.
 # NOTE: If you add a new top-level directory to the SDK staging target above,
@@ -130,256 +157,46 @@ install(PROGRAMS "${SDK_STAGING_DIR}/bin/villagesql_config"
   DESTINATION "${INSTALL_BINDIR}"
 )
 
-# Add VillageSQL example extensions
+# Add VillageSQL example and test extensions
 IF(NOT WITHOUT_SERVER)
   include(ExternalProject)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/VsqlExtension.cmake)
 
-  ExternalProject_Add(vsql_simple_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-simple
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-simple-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
+  # Example extensions (each has its own CMakeLists.txt for standalone use)
+  vsql_add_extension(
+    DIR_NAME    vsql-simple
+    EXT_TARGET  vsql_simple_extension
+    VEB_NAME    vsql_simple
+    SOURCE_BASE ${CMAKE_CURRENT_SOURCE_DIR}/examples
+    BINARY_BASE ${CMAKE_CURRENT_BINARY_DIR}/examples
+    INSTALL_DEST      ${INSTALL_VEBDIR}
+    INSTALL_COMPONENT ExampleVebs
+  )
+  vsql_add_extension(
+    DIR_NAME    vsql-complex
+    EXT_TARGET  vsql_complex_extension
+    VEB_NAME    vsql_complex
+    SOURCE_BASE ${CMAKE_CURRENT_SOURCE_DIR}/examples
+    BINARY_BASE ${CMAKE_CURRENT_BINARY_DIR}/examples
+    INSTALL_DEST      ${INSTALL_VEBDIR}
+    INSTALL_COMPONENT ExampleVebs
+  )
+  vsql_add_extension(
+    DIR_NAME    vsql-tvector
+    EXT_TARGET  vsql_tvector_extension
+    VEB_NAME    vsql_tvector
+    SOURCE_BASE ${CMAKE_CURRENT_SOURCE_DIR}/examples
+    BINARY_BASE ${CMAKE_CURRENT_BINARY_DIR}/examples
+    INSTALL_DEST ${INSTALL_VEBDIR}
   )
 
-  add_custom_target(copy_vsql_simple_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-simple-build/vsql_simple.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_simple_extension
-    COMMENT "Copying vsql_simple.veb to veb_output_directory"
-  )
+  # Test extensions (share a single CMakeLists.txt template)
+  vsql_add_test_extension(vsql-config-vars-test  vsql_config_vars_test)
+  vsql_add_test_extension(vsql-usage-counter      vsql_usage_counter)
+  vsql_add_test_extension(vsql-range-clamp-test   vsql_range_clamp_test)
+  vsql_add_test_extension(vsql-test-only          vsql_test_only)
+  vsql_add_test_extension(vsql-storage-test       vsql_storage_test)
+  vsql_add_test_extension(vsql-index-test         vsql_index_test)
 
-  add_custom_target(simple_veb ALL)
-  add_dependencies(simple_veb copy_vsql_simple_veb)
-
-  # Install VEB to lib/veb directory
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-simple-build/vsql_simple.veb
-    DESTINATION ${INSTALL_VEBDIR}
-    COMPONENT ExampleVebs
-  )
-
-  ExternalProject_Add(vsql_complex_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-complex
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-complex-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_complex_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-complex-build/vsql_complex.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_complex_extension
-    COMMENT "Copying vsql_complex.veb to veb_output_directory"
-  )
-
-  add_custom_target(complex_veb ALL)
-  add_dependencies(complex_veb copy_vsql_complex_veb)
-
-  # Install VEB to lib/veb directory
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-complex-build/vsql_complex.veb
-    DESTINATION ${INSTALL_VEBDIR}
-    COMPONENT ExampleVebs
-  )
-
-  ExternalProject_Add(vsql_tvector_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-tvector
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-tvector-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_tvector_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-tvector-build/vsql_tvector.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_tvector_extension
-    COMMENT "Copying vsql_tvector.veb to veb_output_directory"
-  )
-
-  add_custom_target(tvector_veb ALL)
-  add_dependencies(tvector_veb copy_vsql_tvector_veb)
-
-  # Install VEB to lib/veb directory
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-tvector-build/vsql_tvector.veb
-    DESTINATION ${INSTALL_VEBDIR}
-  )
-
-  ExternalProject_Add(vsql_config_vars_test_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-config-vars-test
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-config-vars-test-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  ExternalProject_Add(vsql_keyring_reader_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-keyring-reader
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-keyring-reader-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_config_vars_test_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-config-vars-test-build/vsql_config_vars_test.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_config_vars_test_extension
-    COMMENT "Copying vsql_config_vars_test.veb to veb_output_directory"
-  )
-
-  add_custom_target(config_vars_test_veb ALL)
-  add_dependencies(config_vars_test_veb copy_vsql_config_vars_test_veb)
-
-  ExternalProject_Add(vsql_usage_counter_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-usage-counter
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-usage-counter-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_usage_counter_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-usage-counter-build/vsql_usage_counter.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_usage_counter_extension
-    COMMENT "Copying vsql_usage_counter.veb to veb_output_directory"
-  )
-
-  add_custom_target(usage_counter_veb ALL)
-  add_dependencies(usage_counter_veb copy_vsql_usage_counter_veb)
-
-  ExternalProject_Add(vsql_range_clamp_test_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-range-clamp-test
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-range-clamp-test-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_range_clamp_test_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-range-clamp-test-build/vsql_range_clamp_test.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_range_clamp_test_extension
-    COMMENT "Copying vsql_range_clamp_test.veb to veb_output_directory"
-  )
-
-  add_custom_target(range_clamp_test_veb ALL)
-  add_dependencies(range_clamp_test_veb copy_vsql_range_clamp_test_veb)
-
-  add_custom_target(copy_vsql_keyring_reader_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-keyring-reader-build/vsql_keyring_reader.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_keyring_reader_extension
-    COMMENT "Copying vsql_keyring_reader.veb to veb_output_directory"
-  )
-
-  add_custom_target(keyring_reader_veb ALL)
-  add_dependencies(keyring_reader_veb copy_vsql_keyring_reader_veb)
-
-  ExternalProject_Add(vsql_test_only_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-test-only
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-test-only-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_test_only_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-test-only-build/vsql_test_only.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_test_only_extension
-    COMMENT "Copying vsql_test_only.veb to veb_output_directory"
-  )
-
-  add_custom_target(test_only_veb ALL)
-  add_dependencies(test_only_veb copy_vsql_test_only_veb)
-
-  ExternalProject_Add(vsql_storage_test_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-storage-test
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-storage-test-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-    DEPENDS sdk
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_storage_test_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-storage-test-build/vsql_storage_test.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_storage_test_extension
-    COMMENT "Copying vsql_storage_test.veb to veb_output_directory"
-  )
-
-  add_custom_target(storage_test_veb ALL)
-  add_dependencies(storage_test_veb copy_vsql_storage_test_veb)
+  include(test-extensions/CMakeLists.txt)
 ENDIF()

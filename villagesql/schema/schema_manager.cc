@@ -65,6 +65,8 @@ const char *SchemaManager::PROPERTIES_TABLE_NAME = "properties";
 const char *SchemaManager::COLUMNS_TABLE_NAME = "custom_columns";
 const char *SchemaManager::SP_PARAMS_TABLE_NAME = "custom_sp_params";
 const char *SchemaManager::EXTENSIONS_TABLE_NAME = "extensions";
+const char *SchemaManager::INDEXES_TABLE_NAME = "custom_indexes";
+const char *SchemaManager::INDEX_COLUMNS_TABLE_NAME = "custom_index_columns";
 
 // Define expected structures for all VillageSQL system tables
 namespace {
@@ -240,12 +242,65 @@ static const TABLE_FIELD_TYPE extensions_fields[] = {
      {nullptr, 0}}};
 static const TABLE_FIELD_DEF extensions_def = {3, extensions_fields};
 
+// Define expected structure for custom_indexes table
+static const TABLE_FIELD_TYPE custom_indexes_fields[] = {
+    {{STRING_WITH_LEN("index_id")},
+     {STRING_WITH_LEN("bigint unsigned")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("db_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("table_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("index_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("extension_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("extension_version")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("index_type_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("index_type_parameters")},
+     {STRING_WITH_LEN("json")},
+     {nullptr, 0}}};
+static const TABLE_FIELD_DEF custom_indexes_def = {8, custom_indexes_fields};
+
+// Define expected structure for custom_index_columns table
+static const TABLE_FIELD_TYPE custom_index_columns_fields[] = {
+    {{STRING_WITH_LEN("index_id")},
+     {STRING_WITH_LEN("bigint unsigned")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("key_position")},
+     {STRING_WITH_LEN("int unsigned")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("column_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("extension_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("extension_version")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("profile_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}}};
+static const TABLE_FIELD_DEF custom_index_columns_def = {
+    6, custom_index_columns_fields};
+
 // List of all VillageSQL tables to validate and mark as hidden.
 static const VillageSQL_table tables_to_check[] = {
     {SchemaManager::PROPERTIES_TABLE_NAME, &properties_def},
     {SchemaManager::COLUMNS_TABLE_NAME, &columns_def},
     {SchemaManager::SP_PARAMS_TABLE_NAME, &sp_params_def},
-    {SchemaManager::EXTENSIONS_TABLE_NAME, &extensions_def}};
+    {SchemaManager::EXTENSIONS_TABLE_NAME, &extensions_def},
+    {SchemaManager::INDEXES_TABLE_NAME, &custom_indexes_def},
+    {SchemaManager::INDEX_COLUMNS_TABLE_NAME, &custom_index_columns_def}};
 
 /**
  * Validate all VillageSQL system tables exist and have the correct structure
