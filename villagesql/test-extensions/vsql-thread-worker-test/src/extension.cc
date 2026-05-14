@@ -24,6 +24,13 @@
 //   3. last_command() VDF returns the received string.
 //   4. DISABLE closes the socket cleanly; active_port() returns 0.
 //
+// SQL queries are issued from the worker thread rather than from a VDF because
+// the sql_query capability requires a vef_thread_handle_t, which is only
+// available inside the worker callback.  While it is technically possible to
+// call SQL from a VDF, doing so creates a nested statement context (a statement
+// executing inside another statement), which is not recommended.  The worker
+// thread is the intended place for extension-initiated SQL.
+//
 // Commands accepted over TCP:
 //   SQL_FOR_EACH <sql>   Run query via for_each; store first column of first
 //   row

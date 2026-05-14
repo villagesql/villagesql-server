@@ -30,6 +30,13 @@ extern "C" {
 // MySQL's command service interface behind this vtable so that extensions
 // require no MySQL plugin service headers.
 //
+// Note: the current implementation buffers the entire result set in memory
+// before the first row is returned, regardless of whether for_each or
+// execute+fetch_row is used.  Avoid large result sets.
+//
+// TODO(villagesql-preview): Return richer error information to the extension
+// rather than logging to the server error log and returning NULL.
+//
 // Capability name: VEF_PREVIEW_SQL_QUERY_NAME
 
 #define VEF_PREVIEW_SQL_QUERY_NAME "vsql::preview::sql_query"
