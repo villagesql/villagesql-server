@@ -263,7 +263,7 @@ void TypeParameters::build_entries() {
   }
 }
 
-TypeParameters TypeParameters::from_raw(const std::string &raw) {
+TypeParameters TypeParameters::from_raw(const std::string_view raw) {
   if (raw.empty()) return TypeParameters();
 
   // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
@@ -274,29 +274,30 @@ TypeParameters TypeParameters::from_raw(const std::string &raw) {
   size_t start = 0;
   while (start < raw.size()) {
     size_t comma = raw.find(',', start);
-    if (comma == std::string::npos) comma = raw.size();
+    if (comma == std::string_view::npos) comma = raw.size();
     size_t eq = raw.find('=', start);
-    if (eq == std::string::npos || eq >= comma) {
+    if (eq == std::string_view::npos || eq >= comma) {
       start = comma + 1;
       continue;
     }
-    std::string key = raw.substr(start, eq - start);
-    std::string value = raw.substr(eq + 1, comma - eq - 1);
+    std::string_view key = raw.substr(start, eq - start);
+    std::string_view value = raw.substr(eq + 1, comma - eq - 1);
 
     // Trim whitespace
-    auto trim = [](std::string &s) {
+    auto trim = [](std::string_view &s) {
       size_t b = s.find_first_not_of(' ');
       size_t e = s.find_last_not_of(' ');
       s = (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
     };
     trim(key);
     trim(value);
-
+    std::string key_str{key};
+    std::string value_str{value};
     // Lowercase
-    key = casedn(cs, std::move(key));
-    value = casedn(cs, std::move(value));
+    key_str = casedn(cs, std::move(key_str));
+    value_str = casedn(cs, std::move(value_str));
 
-    pairs.emplace_back(std::move(key), std::move(value));
+    pairs.emplace_back(std::move(key_str), std::move(value_str));
     start = comma + 1;
   }
 
