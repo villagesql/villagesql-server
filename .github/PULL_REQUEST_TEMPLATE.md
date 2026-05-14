@@ -13,6 +13,6 @@
 ## Checklist
 
 - [ ] I have signed the CLA
-- [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [ ] I have read [CONTRIBUTING.md](https://github.com/villagesql/villagesql-server/blob/main/CONTRIBUTING.md)
 - [ ] I have added or updated tests as appropriate
 - [ ] My changes maintain compatibility with upstream MySQL 8.4
