@@ -39,6 +39,16 @@ while IFS= read -r line; do
     BRANCH="${FIELDS[1]:-}"
     REPO_NAME="${SOURCE##*/}"
 
+    # Confirm the extension is bundled
+    BUNDLE=true
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == "bundle=false" || "$FIELD" == "bundle=no" ]] && BUNDLE=false
+    done
+    if [[ "$BUNDLE" == "false" ]]; then
+        log_info "Skipping $REPO_NAME (bundle=false)"
+        continue
+    fi
+
     # Convert all dashes to underscores
     EXT_FILE="${REPO_NAME//-/_}.veb"
     EXT_SRC_VEB="$VEB_SRC_DIR/$EXT_FILE"

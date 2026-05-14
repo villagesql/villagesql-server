@@ -175,7 +175,7 @@ if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
     log_info "Bundled extensions added to release"
 
 else
-    log_info "Step 6: Skipping bundled extensions (set BUILD_BUNDLED_EXTENSIONS=1 to include)"
+    log_info "Step 5: Skipping bundled extensions (set BUILD_BUNDLED_EXTENSIONS=1 to include)"
 fi
 
 # Step 5: Add convenience scripts
