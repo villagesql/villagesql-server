@@ -788,6 +788,7 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
   // returns the start of the field including the length prefix area, so we must
   // manually encode the length prefix.
   // TODO(villagesql-blob): needs update for blob implementation.
+  assert(from->get_type_context()->is_compatible_with(*to->get_type_context()));
   assert(from->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
   assert(to->get_type_context()->descriptor()->implementation_type() ==
@@ -805,8 +806,10 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
     int2store(to_ptr, static_cast<uint16>(data_len));
   }
 
-  // Ensure data fits in destination field
-  // TODO(villagesql-beta): review this for variable length types
+  // Ensure data fits in destination field. Compatible TypeContexts share the
+  // same persisted_length (parameters are part of the key), so from and to
+  // have matching field_length, and data_len <= from->field_length holds by
+  // construction.
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);
