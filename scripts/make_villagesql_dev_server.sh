@@ -165,6 +165,19 @@ if [[ -d "mysql-test" ]]; then
     log_info "mysql-test framework size after cleanup: $MYSQL_TEST_SIZE"
 fi
 
+if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
+    log_step "Step 5: Adding bundled extensions..."
+
+    "$SOURCE_DIR/scripts/include_bundled_extensions.sh" \
+            "lib/veb" \
+            "$BUILD_DIR/veb_output_directory"
+
+    log_info "Bundled extensions added to release"
+
+else
+    log_info "Step 6: Skipping bundled extensions (set BUILD_BUNDLED_EXTENSIONS=1 to include)"
+fi
+
 # Step 5: Add convenience scripts
 log_step "Step 5: Adding convenience scripts..."
 
