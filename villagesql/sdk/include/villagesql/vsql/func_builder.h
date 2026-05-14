@@ -202,11 +202,12 @@ struct FuncWithMetadata {
 // calling out.set_length(n), out.set_null(), out.warning(msg), or
 // out.error(msg). If none is called, the result is undefined.
 using TypeEncodeFunc = void (*)(std::string_view from, CustomResult out);
-// Parameterized variant: MaybeParams<P> carries the params, which may be
-// known on entry (validate against the string) or unknown (infer from the
-// string and write the inferred values back via p.set()). At row time it is
-// always known; the unknown case is exercised by the fix_fields-time
-// pre-execute path for constant string literals.
+// Parameterized variant: If known, MaybeParams<P> carries the params, to
+// be used when parsing the string value. This may also be called on strings
+// where the type parameters are not know before this call, and this
+// function must infer the type parameters from the string, and set them via
+// MaybeParams<P> so that the type can be correctly carried through the rest
+// of the SQL statement.
 //
 // The result wrapper is plain CustomResult (not CustomResultWith<P>) because
 // params come from the MaybeParams<P>& argument.

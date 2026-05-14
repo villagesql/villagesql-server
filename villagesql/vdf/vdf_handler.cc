@@ -128,7 +128,13 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
       String *val = arguments[0]->val_str(&tmp);
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
-        std::string encoded_bytes;  // discarded; re-encoded at row time.
+        // We will discard the encoded bytes when we infer the parameters so as
+        // not to handle this as a special case when the data would have
+        // encoded. That is, the buffer presented then would have pre-encoded
+        // data, and thus try to encode it again, resulting in corrupted data.
+        // The cost of this simpler code execution flow is a single call to the
+        // encode function.
+        std::string encoded_bytes;
         if (!villagesql::InferFromStringConstant(
                 thd, snap.max_persisted_length, m_udf->vdf_func_desc,
                 std::string_view(val->ptr(), val->length()), &inferred,
