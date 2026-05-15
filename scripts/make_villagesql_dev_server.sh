@@ -178,7 +178,6 @@ else
     log_info "Step 5: Skipping bundled extensions (set BUILD_BUNDLED_EXTENSIONS=1 to include)"
 fi
 
-# Step 6: Add convenience scripts
 log_step "Step 6: Adding convenience scripts..."
 
 # Copy script from source directory
@@ -193,7 +192,6 @@ fi
 
 log_info "Convenience scripts added"
 
-# Step 7: Create comprehensive README
 log_step "Step 7: Creating documentation..."
 
 # Generate test documentation (always included with stripped MySQL tests)
@@ -220,7 +218,6 @@ Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Package Type: Development Server
 EOF
 
-# Step 8: Create the final tarball
 log_step "Step 8: Creating final tarball..."
 cd "$STAGING_DIR"
 tar czf "$TARBALL_NAME" "$PACKAGE_NAME"
