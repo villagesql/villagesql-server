@@ -131,27 +131,28 @@ void stored_int_from_string(std::string_view s, vsql::CustomResult out) {
   out.set_length(kFieldSize);
 }
 
-bool stored_int_to_string(vsql::Span<const unsigned char> data,
-                          vsql::Span<char> out, size_t *out_len) {
+void stored_int_to_string(vsql::CustomArg in, vsql::StringResult out) {
   // Receives the full persisted field (16 bytes: ref + value). Read the value
   // from the second half, skipping the Column::Ref prefix.
-  if (data.size() < kFieldSize) return true;
+  auto data = in.value();
+  if (data.size() < kFieldSize) return;  // wrapper default ERROR
   int64_t val = read_be64(data.data() + kRefSize);
-  auto [ptr, ec] = std::to_chars(out.data(), out.data() + out.size(), val);
-  if (ec != std::errc{}) return true;
-  *out_len = static_cast<size_t>(ptr - out.data());
-  return false;
+  auto buf = out.buffer();
+  auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), val);
+  if (ec != std::errc{}) return;
+  out.set_length(static_cast<size_t>(ptr - buf.data()));
 }
 
-int stored_int_compare(vsql::Span<const unsigned char> a,
-                       vsql::Span<const unsigned char> b) {
+int stored_int_compare(vsql::CustomArg a, vsql::CustomArg b) {
   // Receives the full persisted field (16 bytes: ref + value). The value is
   // in the last 8 bytes regardless of whether the ref has been written yet.
-  if (a.size() < kFieldSize || b.size() < kFieldSize) return 0;
-  int64_t va = read_be64(a.data() + kRefSize);
-  int64_t vb = read_be64(b.data() + kRefSize);
-  if (va < vb) return -1;
-  if (va > vb) return 1;
+  auto va = a.value();
+  auto vb = b.value();
+  if (va.size() < kFieldSize || vb.size() < kFieldSize) return 0;
+  int64_t v_a = read_be64(va.data() + kRefSize);
+  int64_t v_b = read_be64(vb.data() + kRefSize);
+  if (v_a < v_b) return -1;
+  if (v_a > v_b) return 1;
   return 0;
 }
 

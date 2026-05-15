@@ -99,10 +99,10 @@ void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   abort();
 }
 
-bool fault_blob_decode(vsql::Span<const unsigned char> data,
-                       vsql::Span<char> out, size_t *out_len) {
+void fault_blob_decode(vsql::CustomArg in, vsql::StringResult out) {
+  auto data = in.value();
   if (data.size() < static_cast<size_t>(kFaultBlobSize)) {
-    return true;  // error: truncated value
+    return;  // error: truncated value (wrapper default ERROR)
   }
 
   // Reconstruct the string by stripping trailing zero padding.
@@ -112,25 +112,26 @@ bool fault_blob_decode(vsql::Span<const unsigned char> data,
   std::string_view stored(reinterpret_cast<const char *>(data.data()), len);
 
   if (stored == kDecodeFail) {
-    return true;  // decode failure - this is the path under test
+    return;  // decode failure - this is the path under test
   }
 
-  if (out.size() < len) {
-    return true;  // error: output buffer too small
+  auto buf = out.buffer();
+  if (buf.size() < len) {
+    return;  // error: output buffer too small
   }
 
-  memcpy(out.data(), data.data(), len);
-  *out_len = len;
-  return false;  // success
+  memcpy(buf.data(), data.data(), len);
+  out.set_length(len);
 }
 
-int fault_blob_compare(vsql::Span<const unsigned char> a,
-                       vsql::Span<const unsigned char> b) {
-  size_t cmp_len = a.size() < b.size() ? a.size() : b.size();
-  int r = memcmp(a.data(), b.data(), cmp_len);
+int fault_blob_compare(vsql::CustomArg a, vsql::CustomArg b) {
+  auto va = a.value();
+  auto vb = b.value();
+  size_t cmp_len = va.size() < vb.size() ? va.size() : vb.size();
+  int r = memcmp(va.data(), vb.data(), cmp_len);
   if (r != 0) return r;
-  if (a.size() < b.size()) return -1;
-  if (a.size() > b.size()) return 1;
+  if (va.size() < vb.size()) return -1;
+  if (va.size() > vb.size()) return 1;
   return 0;
 }
 

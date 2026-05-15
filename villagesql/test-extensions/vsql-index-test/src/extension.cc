@@ -210,17 +210,11 @@ static void vector_from_string(std::string_view /*from*/,
   out.set_length(16);
 }
 
-static bool vector_to_string(vsql::Span<const unsigned char> /*data*/,
-                             vsql::Span<char> out, size_t *out_len) {
-  static constexpr std::string_view kFixed = "[0,0,0,0]";
-  if (out.size() < kFixed.size()) return true;
-  memcpy(out.data(), kFixed.data(), kFixed.size());
-  *out_len = kFixed.size();
-  return false;
+static void vector_to_string(vsql::CustomArg /*in*/, vsql::StringResult out) {
+  out.set(std::string_view("[0,0,0,0]"));
 }
 
-static int vector_compare(vsql::Span<const unsigned char> /*a*/,
-                          vsql::Span<const unsigned char> /*b*/) {
+static int vector_compare(vsql::CustomArg /*a*/, vsql::CustomArg /*b*/) {
   return 0;
 }
 
