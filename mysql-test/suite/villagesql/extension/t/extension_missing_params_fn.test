@@ -1,26 +1,11 @@
-# Test that INSTALL EXTENSION fails when a parameterized VDF is registered
-# without a corresponding .params<P, &parse_fn>() call in the type builder.
-# vef_register detects the unbound params cache and returns an error rather
-# than letting the server crash on the first VDF invocation.
-
---let $veb_dir = $MYSQLTEST_VARDIR/veb
---exec mkdir -p $veb_dir
-
-call mtr.add_suppression("Orphaned expansion directory found but not removed");
-call mtr.add_suppression("vef_register returned an error");
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---let $restart_parameters = restart: --veb-dir=$veb_dir
---source include/restart_mysqld.inc
+# Test that a TypeBuilder extension fails to compile when a parameterized
+# operation function is used without a preceding .params<P>() call.
+#
+# Before the ParamsType type-state change this compiled successfully and
+# produced a runtime error on INSTALL EXTENSION. The static_assert now
+# catches it at build time so the extension never reaches the server.
 
 --let $extension_name = missing_params_fn
---let $extension_version = 1.0.0
 --let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/missing_params_fn.cc
---source include/villagesql/create_extension_sdk.inc
-
---echo # Attempt to install extension with parameterized VDF but no parse function
---echo # (should fail: vef_register detects unbound params cache)
---error ER_VILLAGESQL_GENERIC_ERROR
-INSTALL EXTENSION missing_params_fn;
-
---echo # Verify extension was NOT installed
-SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+--let $build_failure_grep = TypeBuilder::from_string
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

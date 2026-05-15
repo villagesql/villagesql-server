@@ -1,12 +1,2 @@
-call mtr.add_suppression("Orphaned expansion directory found but not removed");
-call mtr.add_suppression("vef_register returned an error");
-# restart: --veb-dir=MYSQLTEST_VARDIR/veb
-Creating extension missing_params_fn using SDK...
-Created missing_params_fn.veb
-# Attempt to install extension with parameterized VDF but no parse function
-# (should fail: vef_register detects unbound params cache)
-INSTALL EXTENSION missing_params_fn;
-ERROR HY000: Failed to load VEF extension 'missing_params_fn': vef_register returned an error: VDF 'FAKETYPE::from_string' uses a parameterized type cache but no .params<P, &parse_fn>() was registered for that params type; add .params<P, &parse_fn>() to the type builder
-# Verify extension was NOT installed
-SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+Attempting to build missing_params_fn (expecting build failure)...
+Build failed as expected.

@@ -220,8 +220,11 @@ struct TypeObject {
 // Template parameters:
 //   HasFromString / HasToString / HasCompare — set by the corresponding
 //     builder methods; build() static_asserts all three are true.
-//   HasParams — set by .params<P, &ParseFn>(); build() requires this when
-//     HasIntToParams or HasResolveParams is true.
+//   ParamsType — the params struct type P set by .params<P, &ParseFn>(); void
+//     when no params are declared. Operations registered after .params<P>()
+//     must use the WithParams variants whose params type matches P; build()
+//     requires ParamsType != void when HasIntToParams or HasResolveParams is
+//     true.
 //   HasIntToParams / HasResolveParams — set by the corresponding template
 //     methods.
 //   EFT — accumulates embedded SQL-callable VDFs (StaticFuncDesc values)
@@ -234,7 +237,7 @@ struct TypeObject {
 //     rather than tracked via a TypeBuilder template parameter.
 
 template <bool HasFromString = false, bool HasToString = false,
-          bool HasCompare = false, bool HasParams = false,
+          bool HasCompare = false, typename ParamsType = void,
           bool HasIntToParams = false, bool HasResolveParams = false,
           bool HasMaxPersistedLength = false, typename EFT = std::tuple<>,
           const char *Name = nullptr>
@@ -264,7 +267,7 @@ class TypeBuilder {
   constexpr auto max_persisted_length(int64_t len) const {
     detail::TypeBuilderState s = state_;
     s.desc.vef_desc.max_persisted_length = len;
-    return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams,
                        /*HasMaxPersistedLength=*/true, EFT, Name>{
         s, embedded_funcs_};
@@ -289,6 +292,9 @@ class TypeBuilder {
   // string-form params back to the server.
   template <typename P, auto ParseFunc, auto ParamsToStringsFunc>
   constexpr auto params() const {
+    static_assert(!HasFromString && !HasToString && !HasCompare,
+                  "vsql::TypeBuilder: .params<P>() must be called before "
+                  ".from_string(), .to_string(), and .compare()");
     static_assert(
         std::is_same_v<decltype(ParamsToStringsFunc),
                        func_builder::ParamsToStringsFunc<P>>,
@@ -299,7 +305,7 @@ class TypeBuilder {
     s.params_to_strings_init_fn =
         &detail::bind_params_to_strings_cache<P, ParamsToStringsFunc>;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
-    return TypeBuilder<HasFromString, HasToString, HasCompare, true,
+    return TypeBuilder<HasFromString, HasToString, HasCompare, P,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        EFT, Name>{s, embedded_funcs_};
   }
@@ -322,7 +328,7 @@ class TypeBuilder {
     s.desc.vef_desc.int_to_params_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
-    return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams, true,
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType, true,
                        HasResolveParams, HasMaxPersistedLength,
                        decltype(new_embedded), Name>{s, new_embedded};
   }
@@ -347,7 +353,7 @@ class TypeBuilder {
     s.desc.vef_desc.resolve_params_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
-    return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, true, HasMaxPersistedLength,
                        decltype(new_embedded), Name>{s, new_embedded};
   }
@@ -363,8 +369,13 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto from_string() const {
     using namespace detail;
-    // Accepts TypeEncodeFunc or TypeEncodeWithParamsFunc<P> (MaybeParams<P>&
-    // as first arg). Signature validation is handled by make_type_encode<Func>.
+    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    static_assert(
+        std::is_same_v<OpP, ParamsType>,
+        "vsql::TypeBuilder::from_string(): function params type is "
+        "inconsistent with the declared params type — if the type uses "
+        ".params<P>(), from_string must use TypeEncodeWithParamsFunc<P>; "
+        "otherwise use TypeEncodeFunc");
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kEncode>.buf;
     auto inner = func_builder::make_type_encode<Func>(
         vdf_name, state_.desc.vef_desc.name);
@@ -372,16 +383,21 @@ class TypeBuilder {
     s.desc.vef_desc.encode_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
-    return TypeBuilder<true, HasToString, HasCompare, HasParams, HasIntToParams,
-                       HasResolveParams, HasMaxPersistedLength,
+    return TypeBuilder<true, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        decltype(new_embedded), Name>{s, new_embedded};
   }
 
   template <auto Func>
   constexpr auto to_string() const {
     using namespace detail;
-    // Accepts TypeDecodeFunc or TypeDecodeWithParamsFunc<P>.
-    // Signature validation is handled by make_type_decode<Func>.
+    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    static_assert(
+        std::is_same_v<OpP, ParamsType>,
+        "vsql::TypeBuilder::to_string(): function params type is inconsistent "
+        "with the declared params type — if the type uses .params<P>(), "
+        "to_string must use TypeDecodeWithParamsFunc<P>; otherwise use "
+        "TypeDecodeFunc");
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kDecode>.buf;
     auto inner = func_builder::make_type_decode<Func>(
         vdf_name, state_.desc.vef_desc.name);
@@ -389,7 +405,7 @@ class TypeBuilder {
     s.desc.vef_desc.decode_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
-    return TypeBuilder<HasFromString, true, HasCompare, HasParams,
+    return TypeBuilder<HasFromString, true, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        decltype(new_embedded), Name>{s, new_embedded};
   }
@@ -397,8 +413,13 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto compare() const {
     using namespace detail;
-    // Accepts TypeCompareFunc or TypeCompareWithParamsFunc<P>.
-    // Signature validation is handled by make_type_compare<Func>.
+    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    static_assert(
+        std::is_same_v<OpP, ParamsType>,
+        "vsql::TypeBuilder::compare(): function params type is inconsistent "
+        "with the declared params type — if the type uses .params<P>(), "
+        "compare must use TypeCompareWithParamsFunc<P>; otherwise use "
+        "TypeCompareFunc");
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kCompare>.buf;
     auto inner = func_builder::make_type_compare<Func>(
         vdf_name, state_.desc.vef_desc.name);
@@ -406,7 +427,7 @@ class TypeBuilder {
     s.desc.vef_desc.compare_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
-    return TypeBuilder<HasFromString, HasToString, true, HasParams,
+    return TypeBuilder<HasFromString, HasToString, true, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        decltype(new_embedded), Name>{s, new_embedded};
   }
@@ -414,8 +435,12 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto hash() const {
     using namespace detail;
-    // Accepts TypeHashFunc or TypeHashWithParamsFunc<P>.
-    // Signature validation is handled by make_type_hash<Func>.
+    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    static_assert(
+        std::is_same_v<OpP, ParamsType>,
+        "vsql::TypeBuilder::hash(): function params type is inconsistent with "
+        "the declared params type — if the type uses .params<P>(), hash must "
+        "use TypeHashWithParamsFunc<P>; otherwise use TypeHashFunc");
     constexpr const char *vdf_name = kTypeOpVdfName<Name, TypeOp::kHash>.buf;
     auto inner =
         func_builder::make_type_hash<Func>(vdf_name, state_.desc.vef_desc.name);
@@ -423,7 +448,7 @@ class TypeBuilder {
     s.desc.vef_desc.hash_vdf_name = vdf_name;
     s.desc.vef_desc.protocol = VEF_PROTOCOL_2;
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
-    return TypeBuilder<HasFromString, HasToString, HasCompare, HasParams,
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        decltype(new_embedded), Name>{s, new_embedded};
   }
@@ -452,8 +477,6 @@ class TypeBuilder {
   // -------------------------------------------------------------------------
 
   constexpr TypeObject<EFT> build() const {
-    // TODO(villagesql-beta): Static check that the operation take type params
-    // if they are registered with param functions.
     static_assert(
         HasFromString,
         "vsql::TypeBuilder: from_string() is required before build()");
@@ -461,14 +484,14 @@ class TypeBuilder {
                   "vsql::TypeBuilder: to_string() is required before build()");
     static_assert(HasCompare,
                   "vsql::TypeBuilder: compare() is required before build()");
-    static_assert(!HasIntToParams || HasParams,
+    static_assert(!HasIntToParams || !std::is_void_v<ParamsType>,
                   "vsql::TypeBuilder: params<P, &parse_fn>() is required when "
                   "int_to_params() is used");
-    static_assert(!HasResolveParams || HasParams,
+    static_assert(!HasResolveParams || !std::is_void_v<ParamsType>,
                   "vsql::TypeBuilder: params<P, &parse_fn>() is required when "
                   "resolve_params() is used");
     static_assert(
-        !HasParams || HasMaxPersistedLength,
+        std::is_void_v<ParamsType> || HasMaxPersistedLength,
         "vsql::TypeBuilder: parameterized types must call "
         ".max_persisted_length(N) before build() — required so constant-string "
         "type parameter inference can size its encode buffer. Pass the upper "
@@ -478,11 +501,12 @@ class TypeBuilder {
   }
 
   // Cross-specialization and make_type access.
-  template <bool, bool, bool, bool, bool, bool, bool, typename, const char *>
+  template <bool, bool, bool, typename, bool, bool, bool, typename,
+            const char *>
   friend class TypeBuilder;
 
   template <const char *N>
-  friend constexpr TypeBuilder<false, false, false, false, false, false, false,
+  friend constexpr TypeBuilder<false, false, false, void, false, false, false,
                                std::tuple<>, N>
   make_type();
 
@@ -506,13 +530,13 @@ class TypeBuilder {
 //   constexpr auto MYTYPE = vsql::make_type<kMyTypeName>()...build();
 
 template <const char *Name>
-constexpr TypeBuilder<false, false, false, false, false, false, false,
+constexpr TypeBuilder<false, false, false, void, false, false, false,
                       std::tuple<>, Name>
 make_type() {
   detail::TypeBuilderState s{};
   s.desc.vef_desc.name = Name;
   s.desc.vef_desc.protocol = VEF_PROTOCOL_1;
-  return TypeBuilder<false, false, false, false, false, false, false,
+  return TypeBuilder<false, false, false, void, false, false, false,
                      std::tuple<>, Name>{s};
 }
 
