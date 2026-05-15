@@ -110,16 +110,16 @@ struct ExtensionRegistration {
 // On success, all fields in registration are populated.
 // On error, a message is written to error_message so that it can be logged,
 // and/or returned to the client.
-bool load_vef_extension(const std::string &so_path,
+bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
+                        const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
-                        vef_protocol_t max_protocol, std::string &error_message,
-                        const villagesql::services::PopulateContext &ctx);
+                        std::string &error_message);
 
 // Unload a VEF extension .so file.
 // ctx is passed through to on_depopulate for each capability.
 // After this call, the ExtensionRegistration should not be used.
-void unload_vef_extension(const ExtensionRegistration &registration,
-                          const villagesql::services::DepopulateContext &ctx);
+void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
+                          const ExtensionRegistration &registration);
 
 // Get the path to the .so file for an extension
 // Uses the convention:

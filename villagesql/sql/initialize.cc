@@ -251,8 +251,8 @@ void deinit_extension_infrastructure() {
               desc->extension_version().c_str());
       services::unregister_sys_vars_from_extension(desc->extension_name(),
                                                    nullptr);
-      veb::unload_vef_extension(desc->registration(),
-                                {.reason = services::UnloadReason::kShutdown});
+      veb::unload_vef_extension({.reason = services::UnloadReason::kShutdown},
+                                desc->registration());
     }
   }
 

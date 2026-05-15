@@ -201,10 +201,10 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
 #endif
   std::string load_error;
   if (villagesql::veb::load_vef_extension(
-          so_path, registration, server_protocol, load_error,
           {.extension_name = extension_name,
            .reason = villagesql::services::LoadReason::kInstall,
-           .thd = thd})) {
+           .thd = thd},
+          so_path, server_protocol, registration, load_error)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
             extension_name.c_str(), load_error.c_str());
     villagesql_error("Failed to load VEF extension '%s': %s", MYF(0),
@@ -586,8 +586,8 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
     villagesql::services::unregister_sys_vars_from_extension(extension_name,
                                                              thd);
     villagesql::veb::unload_vef_extension(
-        *to_unregister,
-        {.reason = villagesql::services::UnloadReason::kUninstall, .thd = thd});
+        {.reason = villagesql::services::UnloadReason::kUninstall, .thd = thd},
+        *to_unregister);
   }
 
   LogVSQL(INFORMATION_LEVEL, "Extension '%s' uninstalled successfully",

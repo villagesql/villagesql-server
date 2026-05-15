@@ -45,7 +45,7 @@ namespace sv = vsql::preview_status_var;
 static long long g_add_calls = 0;
 static long long g_null_calls = 0;
 
-static auto g_status_vars = sv::make_capability({
+static auto STATUS_VARS = sv::make_capability({
     sv::make_int("add_calls", &g_add_calls),
     sv::make_int("null_calls", &g_null_calls),
 });
@@ -66,4 +66,4 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .param(INT)
                                         .param(INT)
                                         .build())
-                              .with(g_status_vars))
+                              .with(STATUS_VARS))

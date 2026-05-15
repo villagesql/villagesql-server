@@ -664,10 +664,10 @@ bool load_installed_extensions(THD *thd) {
       ExtensionRegistration registration;
       std::string load_error;
       if (load_vef_extension(
-              so_path, registration, vef_server_protocol_version, load_error,
               {.extension_name = extension_name,
                .reason = villagesql::services::LoadReason::kStartup,
-               .thd = thd})) {
+               .thd = thd},
+              so_path, vef_server_protocol_version, registration, load_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
                 extension_name.c_str(), load_error.c_str());
         return true;
@@ -817,10 +817,10 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
-bool load_vef_extension(const std::string &so_path,
+bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
+                        const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
-                        vef_protocol_t max_protocol, std::string &error_message,
-                        const villagesql::services::PopulateContext &ctx) {
+                        std::string &error_message) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -911,8 +911,8 @@ bool load_vef_extension(const std::string &so_path,
   return false;
 }
 
-void unload_vef_extension(const ExtensionRegistration &registration,
-                          const villagesql::services::DepopulateContext &ctx) {
+void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
+                          const ExtensionRegistration &registration) {
   if (registration.dlhandle == nullptr) {
     return;
   }
