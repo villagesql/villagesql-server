@@ -157,7 +157,8 @@ class Result {
       : cap_(other.cap_),
         handle_(other.handle_),
         row_(other.row_),
-        lengths_(other.lengths_) {
+        lengths_(other.lengths_),
+        num_columns_(other.num_columns_) {
     other.handle_ = nullptr;
   }
 
@@ -169,6 +170,7 @@ class Result {
       handle_ = other.handle_;
       row_ = other.row_;
       lengths_ = other.lengths_;
+      num_columns_ = other.num_columns_;
       other.handle_ = nullptr;
     }
     return *this;
@@ -187,10 +189,11 @@ class Result {
 
   // Number of columns in the result set.
   unsigned int num_columns() const {
-    if (handle_ == nullptr || cap_.abi == nullptr ||
-        cap_.abi->num_columns == nullptr)
-      return 0;
-    return cap_.abi->num_columns(handle_);
+    if (handle_ != nullptr) {
+      if (cap_.abi == nullptr || cap_.abi->num_columns == nullptr) return 0;
+      return cap_.abi->num_columns(handle_);
+    }
+    return num_columns_;
   }
 
   // Column value as a string_view. Valid until the next next() call.
@@ -213,10 +216,24 @@ class Result {
   }
 
  private:
+  friend class SqlQuery;
+
+  // Constructor for the streaming (for_each) path. No owned handle;
+  // row_/lengths_ point into ForEachCtx storage valid for the callback
+  // duration.
+  Result(const SqlQueryCapability &cap, const char **row,
+         const unsigned long *lengths, unsigned int num_columns)
+      : cap_(cap),
+        handle_(nullptr),
+        row_(row),
+        lengths_(lengths),
+        num_columns_(num_columns) {}
+
   const SqlQueryCapability &cap_;
   vef_sql_result_t *handle_{nullptr};
   const char **row_{nullptr};
   const unsigned long *lengths_{nullptr};
+  unsigned int num_columns_{0};
 };
 
 // A SQL query bound to a session. Obtained via session.sql("...").
@@ -236,11 +253,30 @@ class SqlQuery {
     return Result{session_.cap(), h};
   }
 
-  // Execute the query and invoke fn once per row.
+  // Execute the query and invoke fn once per row, without buffering the full
+  // result set. fn receives a const Result& valid only for the duration of
+  // the call; do not store it across rows.
   template <typename F>
   void for_each(F &&fn) const {
-    Result result = execute();
-    while (result.next()) fn(result);
+    if (session_.cap().abi == nullptr ||
+        session_.cap().abi->for_each_row == nullptr)
+      return;
+
+    struct Ctx {
+      const SqlQueryCapability &cap;
+      F &fn;
+    } ctx{session_.cap(), fn};
+
+    session_.cap().abi->for_each_row(
+        session_.handle(), sql_.data(), sql_.size(),
+        [](const char **row, const unsigned long *lengths,
+           unsigned int num_columns, void *raw) -> bool {
+          auto *c = static_cast<Ctx *>(raw);
+          Result r{c->cap, row, lengths, num_columns};
+          c->fn(r);
+          return true;
+        },
+        &ctx);
   }
 
  private:

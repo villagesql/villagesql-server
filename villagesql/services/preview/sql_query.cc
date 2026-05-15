@@ -51,6 +51,21 @@ struct vef_sql_result_t {
   std::vector<unsigned long> row_lengths;
 };
 
+// Context for the streaming for_each_row path.
+struct ForEachCtx {
+  unsigned int num_columns{0};
+  unsigned int col_idx{0};
+  vef_sql_row_cb cb{nullptr};
+  void *user_ctx{nullptr};
+  bool stop{false};
+
+  // Per-row storage reused each row (avoids per-row allocation).
+  std::vector<std::string> values;
+  std::vector<bool> is_null;
+  std::vector<const char *> row_ptrs;
+  std::vector<unsigned long> row_lengths;
+};
+
 namespace villagesql::services {
 
 namespace {
@@ -156,6 +171,120 @@ static void cb_handle_error(void *ctx, uint sql_errno, const char *err_msg,
 static void cb_shutdown(void *, int) {}
 static bool cb_connection_alive(void *) { return true; }
 
+// Streaming callbacks for for_each_row.
+
+static int fe_start_result_metadata(void *ctx, uint num_cols, uint,
+                                    const CHARSET_INFO *) {
+  auto *c = static_cast<ForEachCtx *>(ctx);
+  c->num_columns = num_cols;
+  c->values.assign(num_cols, std::string{});
+  c->is_null.assign(num_cols, false);
+  c->row_ptrs.resize(num_cols);
+  c->row_lengths.resize(num_cols);
+  return 0;
+}
+
+static int fe_field_metadata(void *, struct st_send_field *,
+                             const CHARSET_INFO *) {
+  return 0;
+}
+
+static int fe_end_result_metadata(void *, uint, uint) { return 0; }
+
+static int fe_start_row(void *ctx) {
+  auto *c = static_cast<ForEachCtx *>(ctx);
+  c->col_idx = 0;
+  for (unsigned int i = 0; i < c->num_columns; ++i) {
+    c->values[i].clear();
+    c->is_null[i] = false;
+  }
+  return 0;
+}
+
+static int fe_end_row(void *ctx) {
+  auto *c = static_cast<ForEachCtx *>(ctx);
+  // MySQL provides no way to abort a running query mid-result; set stop=true
+  // and discard remaining rows until command_service_run_command returns.
+  if (c->stop) return 0;
+  for (unsigned int i = 0; i < c->num_columns; ++i) {
+    if (c->is_null[i]) {
+      c->row_ptrs[i] = nullptr;
+      c->row_lengths[i] = 0;
+    } else {
+      c->row_ptrs[i] = c->values[i].c_str();
+      c->row_lengths[i] = static_cast<unsigned long>(c->values[i].size());
+    }
+  }
+  if (!c->cb(c->row_ptrs.data(), c->row_lengths.data(), c->num_columns,
+             c->user_ctx))
+    c->stop = true;
+  return 0;
+}
+
+static void fe_abort_row(void *) {}
+
+static int fe_get_null(void *ctx) {
+  auto *c = static_cast<ForEachCtx *>(ctx);
+  if (c->col_idx < c->num_columns) {
+    c->is_null[c->col_idx] = true;
+    ++c->col_idx;
+  }
+  return 0;
+}
+
+static int fe_get_string(void *ctx, const char *value, size_t length,
+                         const CHARSET_INFO *) {
+  auto *c = static_cast<ForEachCtx *>(ctx);
+  if (c->col_idx < c->num_columns) {
+    c->values[c->col_idx].assign(value, length);
+    c->is_null[c->col_idx] = false;
+    ++c->col_idx;
+  }
+  return 0;
+}
+
+static int fe_get_longlong(void *ctx, longlong value, uint is_unsigned) {
+  char buf[32];
+  if (is_unsigned)
+    snprintf(buf, sizeof(buf), "%llu", static_cast<unsigned long long>(value));
+  else
+    snprintf(buf, sizeof(buf), "%lld", value);
+  return fe_get_string(ctx, buf, strlen(buf), nullptr);
+}
+
+static int fe_get_integer(void *ctx, longlong value) {
+  return fe_get_longlong(ctx, value, 0);
+}
+
+static int fe_get_double(void *ctx, double value, uint32) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%.17g", value);
+  return fe_get_string(ctx, buf, strlen(buf), nullptr);
+}
+
+static const struct st_command_service_cbs kForEachCallbacks = {
+    fe_start_result_metadata,
+    fe_field_metadata,
+    fe_end_result_metadata,
+    fe_start_row,
+    fe_end_row,
+    fe_abort_row,
+    cb_get_client_capabilities,
+    fe_get_null,
+    fe_get_integer,
+    fe_get_longlong,
+    cb_get_decimal,
+    fe_get_double,
+    cb_get_date,
+    cb_get_time,
+    cb_get_datetime,
+    fe_get_string,
+    cb_handle_ok,
+    cb_handle_error,
+    cb_shutdown,
+    cb_connection_alive,
+};
+
 static const struct st_command_service_cbs kCallbacks = {
     cb_start_result_metadata,
     cb_field_metadata,
@@ -231,6 +360,37 @@ static vef_sql_result_t *sql_execute(vef_sql_session_t *session,
   return result;
 }
 
+static bool sql_for_each_row(vef_sql_session_t *session, const char *sql,
+                             size_t sql_len, vef_sql_row_cb cb, void *ctx) {
+  if (session == nullptr || session->handle == nullptr ||
+      session->handle->thd == nullptr || cb == nullptr)
+    return false;
+
+  static auto noop_cb = [](void *, unsigned int, const char *) noexcept {};
+  MYSQL_SESSION srv =
+      new (std::nothrow) Srv_session(static_cast<srv_session_error_cb>(noop_cb),
+                                     nullptr, session->handle->thd);
+  if (srv == nullptr) {
+    LogVSQL(ERROR_LEVEL, "sql_query: failed to create Srv_session");
+    return false;
+  }
+
+  ForEachCtx fe_ctx;
+  fe_ctx.cb = cb;
+  fe_ctx.user_ctx = ctx;
+
+  COM_DATA cmd;
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.com_query.query = sql;
+  cmd.com_query.length = static_cast<unsigned int>(sql_len);
+
+  command_service_run_command(
+      srv, COM_QUERY, &cmd, &my_charset_utf8mb4_general_ci, &kForEachCallbacks,
+      CS_TEXT_REPRESENTATION, &fe_ctx);
+  delete srv;
+  return true;
+}
+
 static bool sql_fetch_row(vef_sql_result_t *result, const char ***row_out,
                           const unsigned long **lengths_out) {
   if (result == nullptr || result->current_row >= result->rows.size())
@@ -272,7 +432,8 @@ vef_preview_sql_query_t g_sql_query_vtable{VEF_PREVIEW_SQL_QUERY_ABI_VERSION,
                                            &sql_execute,
                                            &sql_fetch_row,
                                            &sql_num_columns,
-                                           &sql_close_result};
+                                           &sql_close_result,
+                                           &sql_for_each_row};
 }  // namespace
 
 vef_preview_sql_query_t *preview_sql_query_vtable() {

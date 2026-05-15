@@ -30,9 +30,11 @@ extern "C" {
 // MySQL's command service interface behind this vtable so that extensions
 // require no MySQL plugin service headers.
 //
-// Note: the current implementation buffers the entire result set in memory
-// before the first row is returned, regardless of whether for_each or
-// execute+fetch_row is used.  Avoid large result sets.
+// Two execution modes are provided:
+//   execute + fetch_row  — buffers the full result set; suitable for small
+//                          result sets or when random access is needed.
+//   for_each_row         — invokes a callback per row as rows are produced,
+//                          without buffering the full result set.
 //
 // TODO(villagesql-preview): Return richer error information to the extension
 // rather than logging to the server error log and returning NULL.
@@ -61,9 +63,22 @@ typedef void (*vef_sql_close_session_fn)(vef_sql_session_t *session);
 
 // Execute a SQL statement. sql is UTF-8, sql_len bytes.
 // Returns a result handle on success, NULL on error.
+// The entire result set is buffered before returning.
 typedef vef_sql_result_t *(*vef_sql_execute_fn)(vef_sql_session_t *session,
                                                 const char *sql,
                                                 size_t sql_len);
+
+// Row callback for for_each_row. Called once per row with the same row/lengths
+// pointers as fetch_row. Return true to continue, false to stop early.
+typedef bool (*vef_sql_row_cb)(const char **row, const unsigned long *lengths,
+                               unsigned int num_columns, void *ctx);
+
+// Execute a SQL statement and invoke cb once per row as rows are produced,
+// without buffering the full result set. sql is UTF-8, sql_len bytes.
+// Returns true on success (even if zero rows), false on error.
+typedef bool (*vef_sql_for_each_row_fn)(vef_sql_session_t *session,
+                                        const char *sql, size_t sql_len,
+                                        vef_sql_row_cb cb, void *ctx);
 
 // Fetch the next row. Returns true when a row was fetched; row_out and
 // lengths_out are then valid until the next fetch_row or close_result call.
@@ -90,6 +105,8 @@ typedef struct {
   vef_sql_fetch_row_fn fetch_row;
   vef_sql_num_columns_fn num_columns;
   vef_sql_close_result_fn close_result;
+
+  vef_sql_for_each_row_fn for_each_row;
 } vef_preview_sql_query_t;
 
 #ifdef __cplusplus
