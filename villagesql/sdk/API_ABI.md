@@ -149,19 +149,7 @@ more.
    receive the buffer from the extension. Instead if it were typed as a char*,
    the extension can just write the pointer to the struct.
 
-### 1. Provide idiomatic C++ builders/signatures
-
-Currently a large number of the builders take only functions with signatures
-based on the C ABI:
-
-- `encode()`
-- `decode()`
-- `compare()`
-- `hash()`
-- `prerun()`
-- `postrun()`
-
-### 2. Remove old ABI style calls
+### 1. Remove old ABI style calls
 
 The original calling convention exposed `vef_*_t*` argument types to VDF
 functions. This ABI-era pattern leaked into the API surface and is still
@@ -169,7 +157,7 @@ supported by `func_builder.h`. Using it couples extension code directly to ABI
 types.
 
 
-### 3. Drop support for protocol v1
+### 2. Drop support for protocol v1
 
 There is very little usage of v1, and we expect the ABI and API to continue to
 evolve before Beta. Because of this we expect the cost of supporting v1 will
@@ -177,12 +165,12 @@ outweigh the benefit of maintaining it. Sufficient notice will be given to
 extension authors.
 
 
-### 4. Controls to prevent ABI breakages
+### 3. Controls to prevent ABI breakages
 
 Add presubmit checks to warn contributors if they have broken ABI compatibility.
 
 
-### 5. Compatibility testing with extensions in other repos
+### 4. Compatibility testing with extensions in other repos
 
 As part of the release process we should test server binaries with existing
 extensions that are outside of the development repo.
