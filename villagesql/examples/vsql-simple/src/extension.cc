@@ -42,18 +42,17 @@ void bytearray_from_string(std::string_view from, CustomResult out) {
 }
 
 // to_string: binary -> string (copy 8 bytes)
-bool bytearray_to_string(Span<const unsigned char> data, Span<char> out,
-                         size_t *out_len) {
-  if (data.size() < kBytearrayLen || out.size() < kBytearrayLen) return true;
-  memcpy(out.data(), data.data(), kBytearrayLen);
-  *out_len = kBytearrayLen;
-  return false;  // success
+void bytearray_to_string(CustomArg in, StringResult out) {
+  auto data = in.value();
+  auto buf = out.buffer();
+  if (data.size() < kBytearrayLen || buf.size() < kBytearrayLen) return;
+  memcpy(buf.data(), data.data(), kBytearrayLen);
+  out.set_length(kBytearrayLen);
 }
 
 // Compare: lexicographic byte comparison
-int bytearray_compare(Span<const unsigned char> a,
-                      Span<const unsigned char> b) {
-  return memcmp(a.data(), b.data(), kBytearrayLen);
+int bytearray_compare(CustomArg a, CustomArg b) {
+  return memcmp(a.value().data(), b.value().data(), kBytearrayLen);
 }
 
 // ROT13: apply ROT13 cipher to ASCII letters

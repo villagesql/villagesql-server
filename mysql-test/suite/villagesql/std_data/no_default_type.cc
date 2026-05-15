@@ -41,19 +41,16 @@ void no_default_encode(std::string_view from, vsql::CustomResult out) {
   out.set_length(static_cast<size_t>(kLen));
 }
 
-bool no_default_decode(vsql::Span<const unsigned char> buffer,
-                       vsql::Span<char> out, size_t *out_len) {
-  if (buffer.size() < static_cast<size_t>(kLen)) return true;
-  int written = snprintf(out.data(), out.size(), "(%u)", buffer[0]);
-  if (written < 0) return true;
-  *out_len = static_cast<size_t>(written);
-  return false;
+void no_default_decode(vsql::CustomArg in, vsql::StringResult out) {
+  auto buffer = in.value();
+  if (buffer.size() < static_cast<size_t>(kLen)) return;  // default ERROR
+  auto buf = out.buffer();
+  int written = snprintf(buf.data(), buf.size(), "(%u)", buffer[0]);
+  if (written < 0) return;
+  out.set_length(static_cast<size_t>(written));
 }
 
-int no_default_compare(vsql::Span<const unsigned char>,
-                       vsql::Span<const unsigned char>) {
-  return 0;
-}
+int no_default_compare(vsql::CustomArg, vsql::CustomArg) { return 0; }
 
 static constexpr const char kNoDefaultTypeName[] = "NO_DEFAULT_TYPE";
 

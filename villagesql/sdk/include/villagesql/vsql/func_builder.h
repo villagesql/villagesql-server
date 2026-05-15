@@ -215,27 +215,52 @@ template <typename P>
 using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
                                           std::string_view from, CustomResult);
 
-// Decode: binary -> string. false=success, true=error.
-using TypeDecodeFunc = bool (*)(Span<const unsigned char> data, Span<char> out,
-                                size_t *out_len);
+// Decode: custom -> string. The function reports its outcome by calling
+// out.set_length(n), out.set(sv), out.set_null(), out.warning(msg), or
+// out.error(msg). If none is called the wrapper falls back to a default
+// "failed to decode value" ERROR.
+using TypeDecodeFunc = void (*)(CustomArg in, StringResult out);
+// Parameterized variant: params come from the CustomArgWith<P> input.
 template <typename P>
-using TypeDecodeWithParamsFunc = bool (*)(const P &,
-                                          Span<const unsigned char> data,
-                                          Span<char> out, size_t *out_len);
+using TypeDecodeWithParamsFunc = void (*)(CustomArgWith<P> in,
+                                          StringResult out);
 
 // Compare: returns <0, 0, or >0.
-using TypeCompareFunc = int (*)(Span<const unsigned char> a,
-                                Span<const unsigned char> b);
+using TypeCompareFunc = int (*)(CustomArg a, CustomArg b);
 template <typename P>
-using TypeCompareWithParamsFunc = int (*)(const P &,
-                                          Span<const unsigned char> a,
-                                          Span<const unsigned char> b);
+using TypeCompareWithParamsFunc = int (*)(CustomArgWith<P> a,
+                                          CustomArgWith<P> b);
 
 // Hash: returns hash code.
-using TypeHashFunc = size_t (*)(Span<const unsigned char> data);
+using TypeHashFunc = size_t (*)(CustomArg in);
 template <typename P>
-using TypeHashWithParamsFunc = size_t (*)(const P &,
-                                          Span<const unsigned char> data);
+using TypeHashWithParamsFunc = size_t (*)(CustomArgWith<P> in);
+
+// Backward-compat (deprecated) signatures. New extensions should use the
+// typed shapes above; these aliases let in-tree and external extensions
+// migrate over multiple PRs.
+//
+// TODO(villagesql-beta): drop these once all bundled extensions and the
+// vsql-cube / vsql-vector extensions migrate to the typed CustomArg /
+// StringResult shapes.
+using TypeDecodeFuncOld = bool (*)(Span<const unsigned char> data,
+                                   Span<char> out, size_t *out_len);
+template <typename P>
+using TypeDecodeWithParamsFuncOld = bool (*)(const P &,
+                                             Span<const unsigned char> data,
+                                             Span<char> out, size_t *out_len);
+
+using TypeCompareFuncOld = int (*)(Span<const unsigned char> a,
+                                   Span<const unsigned char> b);
+template <typename P>
+using TypeCompareWithParamsFuncOld = int (*)(const P &,
+                                             Span<const unsigned char> a,
+                                             Span<const unsigned char> b);
+
+using TypeHashFuncOld = size_t (*)(Span<const unsigned char> data);
+template <typename P>
+using TypeHashWithParamsFuncOld = size_t (*)(const P &,
+                                             Span<const unsigned char> data);
 
 // intrinsic_default: returns string representation of the default value.
 using IntrinsicDefaultFunc = std::string (*)(char *error_msg);
@@ -412,8 +437,30 @@ struct TypeEncodeVdfWrapper {
   }
 };
 
-// TypeDecodeVdfWrapper: wraps TypeDecodeFunc into a VDF.
+// Pre-fills result->type / result->error_msg with a default "failed to
+// decode value" ERROR. The decode wrappers call this before
+// invoking the extension's to_string so that an extension that early-returns
+// without setting an outcome still surfaces a useful error.
+//
+// TODO(villagesql-beta): tighten the contract so every to_string explicitly
+// sets an outcome (set_length / set / set_null / warning / error) on every
+// path, then drop this synthesis and treat the silent-return case as an SDK
+// bug. Mirrors the same TODO on set_default_encode_failure.
+inline void set_default_decode_failure(vef_vdf_result_t *result) {
+  result->type = VEF_RESULT_ERROR;
+  snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
+}
+
+// TypeDecodeVdfWrapper: wraps TypeDecodeFunc / TypeDecodeFuncOld into a VDF.
 // VDF signature: (CUSTOM(type)) -> STRING.
+//
+// New signature (TypeDecodeFunc): pre-sets the result to VEF_RESULT_ERROR
+// with a default "failed to decode value" message; the extension can override
+// by calling out.set_length / out.set / out.set_null / out.warning /
+// out.error.
+//
+// Old signature (TypeDecodeFuncOld): bool return is treated as true=error
+// (synthesizes the same default error), false=success.
 template <auto Func>
 struct TypeDecodeVdfWrapper {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
@@ -423,21 +470,25 @@ struct TypeDecodeVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    size_t out_len;
-    bool failed = Func({arg.bin_value, arg.bin_len},
-                       {result->str_buf, result->max_str_len}, &out_len);
-    if (failed) {
-      result->type = VEF_RESULT_ERROR;
-      snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
-      return;
+    if constexpr (std::is_same_v<decltype(Func), TypeDecodeFuncOld>) {
+      size_t out_len;
+      bool failed = Func({arg.bin_value, arg.bin_len},
+                         {result->str_buf, result->max_str_len}, &out_len);
+      if (failed) {
+        set_default_decode_failure(result);
+        return;
+      }
+      result->type = VEF_RESULT_VALUE;
+      result->actual_len = out_len;
+    } else {
+      set_default_decode_failure(result);
+      Func(CustomArg(&arg), StringResult(result));
     }
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = out_len;
   }
 };
 
-// TypeCompareVdfWrapper: wraps TypeCompareFunc into a VDF.
-// VDF signature: (CUSTOM(type), CUSTOM(type)) -> INT.
+// TypeCompareVdfWrapper: wraps TypeCompareFunc / TypeCompareFuncOld into a
+// VDF. VDF signature: (CUSTOM(type), CUSTOM(type)) -> INT.
 template <auto Func>
 struct TypeCompareVdfWrapper {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
@@ -448,13 +499,17 @@ struct TypeCompareVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    result->int_value =
-        Func({a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    if constexpr (std::is_same_v<decltype(Func), TypeCompareFuncOld>) {
+      result->int_value =
+          Func({a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    } else {
+      result->int_value = Func(CustomArg(&a), CustomArg(&b));
+    }
     result->type = VEF_RESULT_VALUE;
   }
 };
 
-// TypeHashVdfWrapper: wraps TypeHashFunc into a VDF.
+// TypeHashVdfWrapper: wraps TypeHashFunc / TypeHashFuncOld into a VDF.
 // VDF signature: (CUSTOM(type)) -> INT.
 template <auto Func>
 struct TypeHashVdfWrapper {
@@ -465,8 +520,12 @@ struct TypeHashVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    result->int_value =
-        static_cast<long long>(Func({arg.bin_value, arg.bin_len}));
+    if constexpr (std::is_same_v<decltype(Func), TypeHashFuncOld>) {
+      result->int_value =
+          static_cast<long long>(Func({arg.bin_value, arg.bin_len}));
+    } else {
+      result->int_value = static_cast<long long>(Func(CustomArg(&arg)));
+    }
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -559,10 +618,24 @@ struct TypeEncodeWithCacheVdfWrapper {
   }
 };
 
+// Recovers P from the first argument of a decode/compare/hash-with-params
+// function. After cv/ref stripping the first arg is either:
+//   New: CustomArgWith<P>  -> extracts P
+//   Old: P (from const P&) -> identity
+template <typename T>
+struct ExtractDchParamsType {
+  using type = T;
+};
+template <typename P>
+struct ExtractDchParamsType<CustomArgWith<P>> {
+  using type = P;
+};
+
 template <auto Func>
 struct TypeDecodeWithCacheVdfWrapper {
-  using P = std::remove_cv_t<std::remove_reference_t<
+  using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
+  using P = typename ExtractDchParamsType<FirstArgStripped>::type;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -571,24 +644,30 @@ struct TypeDecodeWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    const P &p = type_params_cache_for<P>().get(arg.type_params);
-    size_t out_len;
-    bool failed = Func(p, {arg.bin_value, arg.bin_len},
-                       {result->str_buf, result->max_str_len}, &out_len);
-    if (failed) {
-      result->type = VEF_RESULT_ERROR;
-      snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
-      return;
+    if constexpr (std::is_same_v<decltype(Func),
+                                 TypeDecodeWithParamsFuncOld<P>>) {
+      const P &p = type_params_cache_for<P>().get(arg.type_params);
+      size_t out_len;
+      bool failed = Func(p, {arg.bin_value, arg.bin_len},
+                         {result->str_buf, result->max_str_len}, &out_len);
+      if (failed) {
+        set_default_decode_failure(result);
+        return;
+      }
+      result->type = VEF_RESULT_VALUE;
+      result->actual_len = out_len;
+    } else {
+      set_default_decode_failure(result);
+      Func(CustomArgWith<P>(&arg), StringResult(result));
     }
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = out_len;
   }
 };
 
 template <auto Func>
 struct TypeCompareWithCacheVdfWrapper {
-  using P = std::remove_cv_t<std::remove_reference_t<
+  using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
+  using P = typename ExtractDchParamsType<FirstArgStripped>::type;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -598,17 +677,23 @@ struct TypeCompareWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    const P &p = type_params_cache_for<P>().get(a.type_params);
-    result->int_value =
-        Func(p, {a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    if constexpr (std::is_same_v<decltype(Func),
+                                 TypeCompareWithParamsFuncOld<P>>) {
+      const P &p = type_params_cache_for<P>().get(a.type_params);
+      result->int_value =
+          Func(p, {a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    } else {
+      result->int_value = Func(CustomArgWith<P>(&a), CustomArgWith<P>(&b));
+    }
     result->type = VEF_RESULT_VALUE;
   }
 };
 
 template <auto Func>
 struct TypeHashWithCacheVdfWrapper {
-  using P = std::remove_cv_t<std::remove_reference_t<
+  using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
+  using P = typename ExtractDchParamsType<FirstArgStripped>::type;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -617,9 +702,14 @@ struct TypeHashWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    const P &p = type_params_cache_for<P>().get(arg.type_params);
-    result->int_value =
-        static_cast<long long>(Func(p, {arg.bin_value, arg.bin_len}));
+    if constexpr (std::is_same_v<decltype(Func),
+                                 TypeHashWithParamsFuncOld<P>>) {
+      const P &p = type_params_cache_for<P>().get(arg.type_params);
+      result->int_value =
+          static_cast<long long>(Func(p, {arg.bin_value, arg.bin_len}));
+    } else {
+      result->int_value = static_cast<long long>(Func(CustomArgWith<P>(&arg)));
+    }
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -1173,16 +1263,30 @@ constexpr StaticFuncDesc<1> make_type_encode(const char *name,
 }
 
 // make_type_decode<&fn>("name", TYPE) — (CUSTOM(type)) -> STRING.
+//
+// Accepts four signatures:
+//   TypeDecodeFunc                 (new, non-parameterized)
+//   TypeDecodeFuncOld              (deprecated, non-parameterized)
+//   TypeDecodeWithParamsFunc<P>    (new, parameterized)
+//   TypeDecodeWithParamsFuncOld<P> (deprecated, parameterized)
 template <auto Func>
 constexpr StaticFuncDesc<1> make_type_decode(const char *name,
                                              const char *type_name) {
+  using F = decltype(Func);
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeDecodeFunc>) {
+  if constexpr (std::is_same_v<F, TypeDecodeFunc> ||
+                std::is_same_v<F, TypeDecodeFuncOld>) {
     meta.f = &TypeDecodeVdfWrapper<Func>::invoke;
   } else {
+    using P = typename TypeDecodeWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeDecodeWithParamsFunc<P>> ||
+                      std::is_same_v<F, TypeDecodeWithParamsFuncOld<P>>,
+                  "make_type_decode: function must match one of "
+                  "TypeDecodeFunc, TypeDecodeFuncOld, "
+                  "TypeDecodeWithParamsFunc<P>, or "
+                  "TypeDecodeWithParamsFuncOld<P>.");
     meta.f = &TypeDecodeWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound =
-        &is_params_cache_bound<typename TypeDecodeWithCacheVdfWrapper<Func>::P>;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = to_vef_type(STRING);
   meta.param_types[0] = to_vef_type(type_name);
@@ -1193,16 +1297,26 @@ constexpr StaticFuncDesc<1> make_type_decode(const char *name,
 }
 
 // make_type_compare<&fn>("name", TYPE) — (CUSTOM, CUSTOM) -> INT.
+//
+// Accepts four signatures, mirroring make_type_decode.
 template <auto Func>
 constexpr StaticFuncDesc<2> make_type_compare(const char *name,
                                               const char *type_name) {
+  using F = decltype(Func);
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeCompareFunc>) {
+  if constexpr (std::is_same_v<F, TypeCompareFunc> ||
+                std::is_same_v<F, TypeCompareFuncOld>) {
     meta.f = &TypeCompareVdfWrapper<Func>::invoke;
   } else {
+    using P = typename TypeCompareWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeCompareWithParamsFunc<P>> ||
+                      std::is_same_v<F, TypeCompareWithParamsFuncOld<P>>,
+                  "make_type_compare: function must match one of "
+                  "TypeCompareFunc, TypeCompareFuncOld, "
+                  "TypeCompareWithParamsFunc<P>, or "
+                  "TypeCompareWithParamsFuncOld<P>.");
     meta.f = &TypeCompareWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound = &is_params_cache_bound<
-        typename TypeCompareWithCacheVdfWrapper<Func>::P>;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = to_vef_type(INT);
   meta.param_types[0] = to_vef_type(type_name);
@@ -1214,16 +1328,26 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
 }
 
 // make_type_hash<&fn>("name", TYPE) — (CUSTOM(type)) -> INT.
+//
+// Accepts four signatures, mirroring make_type_decode.
 template <auto Func>
 constexpr StaticFuncDesc<1> make_type_hash(const char *name,
                                            const char *type_name) {
+  using F = decltype(Func);
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeHashFunc>) {
+  if constexpr (std::is_same_v<F, TypeHashFunc> ||
+                std::is_same_v<F, TypeHashFuncOld>) {
     meta.f = &TypeHashVdfWrapper<Func>::invoke;
   } else {
+    using P = typename TypeHashWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeHashWithParamsFunc<P>> ||
+                      std::is_same_v<F, TypeHashWithParamsFuncOld<P>>,
+                  "make_type_hash: function must match one of "
+                  "TypeHashFunc, TypeHashFuncOld, "
+                  "TypeHashWithParamsFunc<P>, or "
+                  "TypeHashWithParamsFuncOld<P>.");
     meta.f = &TypeHashWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound =
-        &is_params_cache_bound<typename TypeHashWithCacheVdfWrapper<Func>::P>;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = to_vef_type(INT);
   meta.param_types[0] = to_vef_type(type_name);

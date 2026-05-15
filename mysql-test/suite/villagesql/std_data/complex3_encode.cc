@@ -37,25 +37,13 @@ void complex3_from_string(std::string_view from, vsql::CustomResult out) {
 }
 
 // TO_STRING: always return "(0,0)"
-bool complex3_to_string(vsql::Span<const unsigned char> buf,
-                        vsql::Span<char> to, size_t *to_length) {
-  (void)buf;  // Unused - always return "(0,0)"
-
-  const char *result = "(0,0)";
-  size_t len = strlen(result);
-
-  if (to.size() < len + 1) {
-    return true;  // Error
-  }
-
-  memcpy(to.data(), result, len);
-  *to_length = len;
-  return false;  // Success
+void complex3_to_string(vsql::CustomArg in, vsql::StringResult out) {
+  (void)in;  // Unused - always return "(0,0)"
+  out.set("(0,0)");
 }
 
 // COMPARE: always returns 0 (equal)
-int complex3_compare(vsql::Span<const unsigned char> a,
-                     vsql::Span<const unsigned char> b) {
+int complex3_compare(vsql::CustomArg a, vsql::CustomArg b) {
   (void)a;
   (void)b;
   return 0;

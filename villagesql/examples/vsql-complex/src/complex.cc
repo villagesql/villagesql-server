@@ -135,22 +135,23 @@ void complex2_from_string(std::string_view from, vsql::CustomResult out) {
 
 // Decode: 16 bytes -> "(real,imag)" string
 // COMPLEX -> STRING
-bool complex_to_string(vsql::Span<const unsigned char> data,
-                       vsql::Span<char> out, size_t *out_len) {
-  if (data.size() != kComplexSize) return true;
+void complex_to_string(CustomArg in, StringResult out) {
+  auto data = in.value();
+  if (data.size() != kComplexSize) return;  // wrapper default ERROR
   Complex cx = load_complex(data.data());
-  int written = snprintf(out.data(), out.size(), "(%g,%g)", cx.re, cx.im);
-  if (written < 0 || static_cast<size_t>(written) >= out.size()) return true;
-  *out_len = static_cast<size_t>(written);
-  return false;
+  auto buf = out.buffer();
+  int written = snprintf(buf.data(), buf.size(), "(%g,%g)", cx.re, cx.im);
+  if (written < 0 || static_cast<size_t>(written) >= buf.size()) return;
+  out.set_length(static_cast<size_t>(written));
 }
 
 // Compare: (COMPLEX, COMPLEX) -> INT for ORDER BY, indexes
-int complex_compare(vsql::Span<const unsigned char> a,
-                    vsql::Span<const unsigned char> b) {
-  if (a.size() != kComplexSize || b.size() != kComplexSize) return 0;
-  Complex lhs = load_complex(a.data());
-  Complex rhs = load_complex(b.data());
+int complex_compare(CustomArg a, CustomArg b) {
+  auto da = a.value();
+  auto db = b.value();
+  if (da.size() != kComplexSize || db.size() != kComplexSize) return 0;
+  Complex lhs = load_complex(da.data());
+  Complex rhs = load_complex(db.data());
 
   // Compare real parts first
   if (lhs.re < rhs.re) return -1;
@@ -165,7 +166,8 @@ int complex_compare(vsql::Span<const unsigned char> a,
 // Canonicalizes -0 to +0 before hashing so that -0.0 and +0.0 hash to the
 // same bucket. This allows COMPLEX2 to preserve -0 in storage while still
 // working correctly with hash joins and EXCEPT operations.
-size_t complex2_hash(vsql::Span<const unsigned char> data) {
+size_t complex2_hash(CustomArg in) {
+  auto data = in.value();
   if (data.size() != kComplexSize) return 0;
   Complex cx = load_complex(data.data());
   cx.canonicalize();

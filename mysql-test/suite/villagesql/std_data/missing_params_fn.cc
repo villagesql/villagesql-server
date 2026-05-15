@@ -43,20 +43,21 @@ void faketype_encode(vsql::MaybeParams<FakeParams> &, std::string_view from,
   out.set_length(n);
 }
 
-bool faketype_decode(vsql::Span<const unsigned char> data,
-                     vsql::Span<char> out, size_t *out_len) {
-  size_t n = data.size() < out.size() ? data.size() : out.size();
-  memcpy(out.data(), data.data(), n);
-  *out_len = n;
-  return false;
+void faketype_decode(vsql::CustomArg in, vsql::StringResult out) {
+  auto data = in.value();
+  auto buf = out.buffer();
+  size_t n = data.size() < buf.size() ? data.size() : buf.size();
+  memcpy(buf.data(), data.data(), n);
+  out.set_length(n);
 }
 
-int faketype_compare(vsql::Span<const unsigned char> a,
-                     vsql::Span<const unsigned char> b) {
-  size_t n = a.size() < b.size() ? a.size() : b.size();
-  int r = memcmp(a.data(), b.data(), n);
+int faketype_compare(vsql::CustomArg a, vsql::CustomArg b) {
+  auto va = a.value();
+  auto vb = b.value();
+  size_t n = va.size() < vb.size() ? va.size() : vb.size();
+  int r = memcmp(va.data(), vb.data(), n);
   if (r != 0) return r;
-  return static_cast<int>(a.size()) - static_cast<int>(b.size());
+  return static_cast<int>(va.size()) - static_cast<int>(vb.size());
 }
 
 static constexpr const char kFakeTypeName[] = "FAKETYPE";

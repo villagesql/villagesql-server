@@ -271,39 +271,39 @@ void tvector_from_string(vsql::MaybeParams<TVectorParams> &p,
 // Decode: N * bpe bytes binary -> "[v1,v2,...,vN]" string.
 // TVECTOR -> STRING
 // Dimension and element type are read from type parameters.
-bool tvector_to_string(const TVectorParams &p,
-                       vsql::Span<const unsigned char> data,
-                       vsql::Span<char> out, size_t *out_len) {
+void tvector_to_string(vsql::CustomArgWith<TVectorParams> in,
+                       vsql::StringResult out) {
+  const TVectorParams &p = in.params();
+  auto data = in.value();
   const size_t bpe = p.bytes_per_elem;
-  if (data.size() != static_cast<size_t>(p.dimension) * bpe) return true;
+  if (data.size() != static_cast<size_t>(p.dimension) * bpe) return;
 
+  auto buf = out.buffer();
   size_t pos = 0;
-  if (pos >= out.size()) return true;
-  out[pos++] = '[';
+  if (pos >= buf.size()) return;
+  buf[pos++] = '[';
 
   for (size_t i = 0; i < static_cast<size_t>(p.dimension); i++) {
     if (i > 0) {
-      if (pos >= out.size()) return true;
-      out[pos++] = ',';
+      if (pos >= buf.size()) return;
+      buf[pos++] = ',';
     }
     int written;
     if (bpe == 8) {
       double val = load_double(data.data() + i * bpe);
-      written = snprintf(out.data() + pos, out.size() - pos, "%.17g", val);
+      written = snprintf(buf.data() + pos, buf.size() - pos, "%.17g", val);
     } else {
       float val = load_float(data.data() + i * bpe);
-      written = snprintf(out.data() + pos, out.size() - pos, "%g", val);
+      written = snprintf(buf.data() + pos, buf.size() - pos, "%g", val);
     }
-    if (written < 0 || pos + static_cast<size_t>(written) >= out.size())
-      return true;
+    if (written < 0 || pos + static_cast<size_t>(written) >= buf.size()) return;
     pos += static_cast<size_t>(written);
   }
 
-  if (pos >= out.size()) return true;
-  out[pos++] = ']';
+  if (pos >= buf.size()) return;
+  buf[pos++] = ']';
 
-  *out_len = pos;
-  return false;
+  out.set_length(pos);
 }
 
 // Compare: (TVECTOR, TVECTOR) -> INT for ORDER BY, indexes.
@@ -311,17 +311,20 @@ bool tvector_to_string(const TVectorParams &p,
 // TODO(villagesql-performance): we can also consider having templated versions
 // of these functions instead of using branches, then selecting the version to
 // use with one branch.
-int tvector_compare(const TVectorParams &p, vsql::Span<const unsigned char> a,
-                    vsql::Span<const unsigned char> b) {
+int tvector_compare(vsql::CustomArgWith<TVectorParams> a,
+                    vsql::CustomArgWith<TVectorParams> b) {
+  const TVectorParams &p = a.params();
+  const unsigned char *da = a.value().data();
+  const unsigned char *db = b.value().data();
   for (int64_t i = 0; i < p.dimension; i++) {
     if (p.bytes_per_elem == 8) {
-      double v1 = load_double(a.data() + i * p.bytes_per_elem);
-      double v2 = load_double(b.data() + i * p.bytes_per_elem);
+      double v1 = load_double(da + i * p.bytes_per_elem);
+      double v2 = load_double(db + i * p.bytes_per_elem);
       if (v1 < v2) return -1;
       if (v1 > v2) return 1;
     } else {
-      float v1 = load_float(a.data() + i * p.bytes_per_elem);
-      float v2 = load_float(b.data() + i * p.bytes_per_elem);
+      float v1 = load_float(da + i * p.bytes_per_elem);
+      float v2 = load_float(db + i * p.bytes_per_elem);
       if (v1 < v2) return -1;
       if (v1 > v2) return 1;
     }

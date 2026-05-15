@@ -34,23 +34,14 @@ void f1_impl(std::string_view from, vsql::CustomResult out) {
 }
 
 // Generic TO_STRING function
-bool f2_impl(vsql::Span<const unsigned char> buf,
-             vsql::Span<char> to, size_t *to_length) {
-  (void)buf;
-
-  if (to.size() < 4) {
-    return true;
-  }
-
-  strcpy(to.data(), "val");
-  *to_length = 3;
-  return false;
+void f2_impl(vsql::CustomArg in, vsql::StringResult out) {
+  (void)in;
+  out.set("val");
 }
 
 // Generic COMPARE function
-int f3_impl(vsql::Span<const unsigned char> a,
-            vsql::Span<const unsigned char> b) {
-  return memcmp(a.data(), b.data(), 16);
+int f3_impl(vsql::CustomArg a, vsql::CustomArg b) {
+  return memcmp(a.value().data(), b.value().data(), 16);
 }
 
 static constexpr const char kTestBadTypeName[] = "TESTBADTYPE";

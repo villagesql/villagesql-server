@@ -39,18 +39,18 @@ void encode_testtype(std::string_view from, vsql::CustomResult out) {
   out.set_length(kTestTypeLen);
 }
 
-bool decode_testtype_short(vsql::Span<const unsigned char> from,
-                           vsql::Span<char> to, size_t *to_length) {
+void decode_testtype_short(vsql::CustomArg in, vsql::StringResult out) {
+  auto from = in.value();
   double real, imag;
   memcpy(&real, from.data(), 8);
   memcpy(&imag, from.data() + 8, 8);
-  *to_length = snprintf(to.data(), to.size(), "(%.6g,%.6g)", real, imag);
-  return false;
+  auto to = out.buffer();
+  size_t len = snprintf(to.data(), to.size(), "(%.6g,%.6g)", real, imag);
+  out.set_length(len);
 }
 
-int cmp_testtype(vsql::Span<const unsigned char> a,
-                 vsql::Span<const unsigned char> b) {
-  return memcmp(a.data(), b.data(), kTestTypeLen);
+int cmp_testtype(vsql::CustomArg a, vsql::CustomArg b) {
+  return memcmp(a.value().data(), b.value().data(), kTestTypeLen);
 }
 
 static constexpr const char kTestTypeName[] = "TESTTYPE";
