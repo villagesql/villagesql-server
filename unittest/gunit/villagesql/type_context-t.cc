@@ -303,6 +303,8 @@ TEST_F(TypeContextTest, SameKeysAreCompatible) {
   villagesql::TypeContext b = make_context(key, &desc);
   EXPECT_TRUE(a.is_compatible_with(b));
   EXPECT_TRUE(b.is_compatible_with(a));
+  EXPECT_TRUE(a.is_assignable_with(b));
+  EXPECT_TRUE(b.is_assignable_with(a));
 }
 
 TEST_F(TypeContextTest, DifferentTypeNamesAreNotCompatible) {
@@ -324,6 +326,8 @@ TEST_F(TypeContextTest, DifferentTypeNamesAreNotCompatible) {
       villagesql::TypeContextKey("OTHER", "test_ext", "1.0.0"), &desc_b);
   EXPECT_FALSE(a.is_compatible_with(b));
   EXPECT_FALSE(b.is_compatible_with(a));
+  EXPECT_FALSE(a.is_assignable_with(b));
+  EXPECT_FALSE(b.is_assignable_with(a));
 }
 
 TEST_F(TypeContextTest, DifferentParametersAreNotCompatible) {
@@ -347,6 +351,58 @@ TEST_F(TypeContextTest, DifferentParametersAreNotCompatible) {
   villagesql::TypeContext v4 = make_context(key_4, &desc);
   EXPECT_FALSE(v3.is_compatible_with(v4));
   EXPECT_FALSE(v4.is_compatible_with(v3));
+  EXPECT_FALSE(v3.is_assignable_with(v4));
+  EXPECT_FALSE(v4.is_assignable_with(v3));
+}
+
+TEST_F(TypeContextTest, UnknownParametersAreAssignableWithKnown) {
+  static auto rp_ok_fd =
+      make_resolve_params_fd("rp_ok_compat", &resolve_params_ok_vdf);
+
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_2, 1, -1, 0, /*max_persisted_length=*/0,
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsFunction(&rp_ok_fd));
+  villagesql::TypeContextKey key_unknown(
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      villagesql::TypeParameters(""));
+  villagesql::TypeContextKey key_4(
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      villagesql::TypeParameters("dimension=4"));
+  villagesql::TypeContext v_unknown = make_context(key_unknown, &desc);
+  villagesql::TypeContext v4 = make_context(key_4, &desc);
+  EXPECT_FALSE(v_unknown.is_compatible_with(v4));
+  EXPECT_FALSE(v4.is_compatible_with(v_unknown));
+  EXPECT_TRUE(v_unknown.is_assignable_with(v4));
+  EXPECT_FALSE(v4.is_assignable_with(v_unknown));
+}
+
+TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
+  static auto rp_ok_fd =
+      make_resolve_params_fd("rp_ok_compat", &resolve_params_ok_vdf);
+
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_2, 1, -1, 0, /*max_persisted_length=*/0,
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsFunction(&rp_ok_fd));
+  villagesql::TypeContextKey key_unknown(
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      villagesql::TypeParameters(""));
+  villagesql::TypeContextKey key_unknown2(
+      villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
+      villagesql::TypeParameters(""));
+  villagesql::TypeContext v_unknown = make_context(key_unknown, &desc);
+  villagesql::TypeContext v_unknown2 = make_context(key_unknown2, &desc);
+  EXPECT_TRUE(v_unknown.is_compatible_with(v_unknown2));
+  EXPECT_TRUE(v_unknown2.is_compatible_with(v_unknown));
+  EXPECT_TRUE(v_unknown.is_assignable_with(v_unknown2));
+  EXPECT_TRUE(v_unknown2.is_assignable_with(v_unknown));
 }
 
 }  // namespace villagesql_unittest
