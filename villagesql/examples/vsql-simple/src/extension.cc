@@ -112,6 +112,28 @@ void odd_chars(CustomArg in, CustomResult out) {
   out.set_length(kBytearrayLen);
 }
 
+// BA_CALL_INDEX: return the 1-based index of this call within the current
+// statement. Demonstrates the typed prerun/postrun + State& pattern: prerun
+// allocates a counter, each row reads-and-increments via the VDF's State&
+// first parameter, and postrun frees.
+
+struct CallCounter {
+  long long n = 0;
+};
+
+void ba_call_index_prerun(PrerunArgs, PrerunResult out) {
+  out.set_user_data(new CallCounter{});
+}
+
+void ba_call_index(CallCounter &state, IntResult out) {
+  state.n++;
+  out.set(state.n);
+}
+
+void ba_call_index_postrun(PostrunArgs args) {
+  args.delete_state<CallCounter>();
+}
+
 // BA_CONCAT: concatenate two bytearrays (returns STRING with 16 bytes)
 void ba_concat(CustomArg a, CustomArg b, StringResult out) {
   if (a.is_null() || b.is_null()) {
@@ -204,6 +226,12 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(STRING)
                   .param(BYTEARRAY)
                   .param(BYTEARRAY)
+                  .build())
+        .func(make_func<&ba_call_index>("ba_call_index")
+                  .returns(INT)
+                  .param()
+                  .prerun<&ba_call_index_prerun>()
+                  .postrun<&ba_call_index_postrun>()
                   .build())
         .func(make_func<&ba_len>("ba_len").returns(INT).param().build())
         .func(make_func<&ba_concat_all>("ba_concat_all")

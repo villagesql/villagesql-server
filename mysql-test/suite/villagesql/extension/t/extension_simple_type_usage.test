@@ -79,6 +79,9 @@ FROM test_bytearray t1 WHERE t1.id = 1;
 SELECT vsql_simple.ba_concat_all(t1.data, 'abc') AS with_str
 FROM test_bytearray t1 WHERE t1.id = 1;
 
+--echo # Test ba_call_index (exercises typed prerun/postrun + state-passing VDF)
+SELECT vsql_simple.ba_call_index() as idx FROM test_bytearray ORDER BY id;
+
 --echo # Clean up
 DROP TABLE test_bytearray;
 

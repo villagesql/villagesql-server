@@ -33,6 +33,7 @@
 
 #include <villagesql/abi/types.h>
 #include <villagesql/vsql/func_types.h>
+#include <villagesql/vsql/pre_post_run.h>
 #include <villagesql/vsql/type_params.h>
 #include <villagesql/vsql/var_args.h>
 
@@ -378,6 +379,47 @@ struct AggResultWithOutputWrapper {
   }
 };
 
+// Wrappers that convert a typed user prerun/postrun (void(PrerunArgs,
+// PrerunResult) / void(PostrunArgs)) into the raw vef_*_func_t ABI shape.
+// Used by FuncBuilder::prerun/postrun when the user's hook is typed.
+
+template <auto Hook>
+void typed_prerun_wrapper(vef_context_t *, vef_prerun_args_t *args,
+                          vef_prerun_result_t *result) {
+  Hook(PrerunArgs(args), PrerunResult(result));
+}
+
+template <auto Hook>
+void typed_postrun_wrapper(vef_context_t *, vef_postrun_args_t *args,
+                           vef_postrun_result_t *) {
+  Hook(PostrunArgs(args));
+}
+
+// Predicates used by FuncBuilder::prerun/postrun to decide which wrapper
+// (if any) to install. Each is true exactly when the hook's signature
+// matches the typed shape for its slot.
+
+template <auto Hook>
+constexpr bool is_typed_prerun() {
+  using Params = typename FuncParamTypes<decltype(Hook)>::type;
+  if constexpr (std::tuple_size_v<Params> != 2) {
+    return false;
+  } else {
+    return std::is_same_v<std::tuple_element_t<0, Params>, PrerunArgs> &&
+           std::is_same_v<std::tuple_element_t<1, Params>, PrerunResult>;
+  }
+}
+
+template <auto Hook>
+constexpr bool is_typed_postrun() {
+  using Params = typename FuncParamTypes<decltype(Hook)>::type;
+  if constexpr (std::tuple_size_v<Params> != 1) {
+    return false;
+  } else {
+    return std::is_same_v<std::tuple_element_t<0, Params>, PostrunArgs>;
+  }
+}
+
 // Generates a vef_vdf_func_t that unpacks vef_vdf_args_t and adapts each
 // argument and result to the declared typed wrapper parameter of Func.
 //
@@ -440,6 +482,80 @@ struct VarArgsWrapper {
   static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     Func(::vsql::VarArgs(args), ResultParam(result));
+  }
+};
+
+// Wrapper for VDFs whose first parameter is `State&` — typed per-statement
+// state allocated in prerun via PrerunResult::emplace_state<State>. The
+// wrapper dereferences args->user_data as State* and forwards a reference.
+//
+// Param tuple shape: <State&, TypedArg..., ResultWrapper>. NumParams is the
+// SQL argument count (not counting state or result), so typed args live at
+// indices [1, NumParams].
+template <auto Func, typename State, size_t NumParams>
+struct WrapperTypedState {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    invoke_impl(ctx, args, result, std::make_index_sequence<NumParams>{});
+  }
+
+ private:
+  template <size_t... Is>
+  static void invoke_impl(vef_context_t *ctx, vef_vdf_args_t *args,
+                          vef_vdf_result_t *result,
+                          std::index_sequence<Is...>) {
+    using Params = typename FuncParamTypes<decltype(Func)>::type;
+    State &state = *static_cast<State *>(args->user_data);
+    std::array<vef_invalue_t, NumParams> vals{
+        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+    Func(state, make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
+         make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
+  }
+
+  template <typename T>
+  static T make_arg(vef_invalue_t *v) {
+    return T(v);
+  }
+  template <typename T>
+  static T make_result(vef_vdf_result_t *r) {
+    return T(r);
+  }
+};
+
+// Wrapper for VDFs whose first parameter is `void*` — raw escape hatch for
+// extensions that manage state with custom allocators, polymorphic state,
+// or anything that doesn't fit emplace_state<T>. The wrapper forwards
+// args->user_data straight through.
+//
+// Param tuple shape: <void*, TypedArg..., ResultWrapper>. Same indexing as
+// WrapperTypedState.
+template <auto Func, size_t NumParams>
+struct WrapperVoidState {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    invoke_impl(ctx, args, result, std::make_index_sequence<NumParams>{});
+  }
+
+ private:
+  template <size_t... Is>
+  static void invoke_impl(vef_context_t *ctx, vef_vdf_args_t *args,
+                          vef_vdf_result_t *result,
+                          std::index_sequence<Is...>) {
+    using Params = typename FuncParamTypes<decltype(Func)>::type;
+    std::array<vef_invalue_t, NumParams> vals{
+        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+    Func(args->user_data,
+         make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
+         make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
+  }
+
+  template <typename T>
+  static T make_arg(vef_invalue_t *v) {
+    return T(v);
+  }
+  template <typename T>
+  static T make_result(vef_vdf_result_t *r) {
+    return T(r);
   }
 };
 

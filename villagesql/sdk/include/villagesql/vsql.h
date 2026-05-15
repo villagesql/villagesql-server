@@ -60,7 +60,9 @@
 //           .build()))
 //
 // For aggregate VDFs (SQL SUM, COUNT, etc.), see make_aggregate_func in
-// vsql/func_builder.h. For full documentation see the individual headers below.
+// vsql/func_builder.h. For per-statement lifecycle hooks (prerun/postrun),
+// see vsql/pre_post_run.h. For full documentation see the individual
+// headers below.
 
 // Typed function and type-operation builders (rejects raw ABI signatures).
 #include <villagesql/vsql/func_builder.h>

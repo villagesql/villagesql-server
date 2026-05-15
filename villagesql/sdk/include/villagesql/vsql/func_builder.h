@@ -39,6 +39,7 @@
 #include <type_traits>
 
 #include <villagesql/vsql/func_types.h>
+#include <villagesql/vsql/pre_post_run.h>
 #include <villagesql/vsql/type_params.h>
 
 // Storage characteristics resolved from type parameters.
@@ -139,9 +140,12 @@ template <typename P>
 using ParamsToStringsFunc = void (*)(const P &,
                                      std::map<std::string, std::string> &);
 
-// =============================================================================
 // FuncBuilder
-// =============================================================================
+//
+// HasPrerun is set to true by .prerun<>(). build() requires it when Func's
+// signature reads state from user_data (void(State&,...) / void(void*,...)),
+// so that registering a state-style VDF without a prerun is a compile error
+// rather than a runtime null dereference.
 
 // Selects between fixed-arity and varargs builders. A builder starts in
 // kUnset; .param(TYPE) (or .param() zero-arity) transitions to kFixed,
@@ -149,23 +153,25 @@ using ParamsToStringsFunc = void (*)(const P &,
 // enforced by static_assert.
 enum class ParamMode { kUnset, kFixed, kVarargs };
 
-template <auto Func, size_t NumParams, ParamMode Mode = ParamMode::kUnset>
+template <auto Func, size_t NumParams, ParamMode Mode = ParamMode::kUnset,
+          bool HasPrerun = false>
 class FuncBuilder {
  public:
-  constexpr FuncBuilder<Func, NumParams, Mode> &returns(const char *t) {
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &returns(
+      const char *t) {
     return_type_ = t;
     return *this;
   }
 
   // Add a typed parameter. Once called, no further .varargs() is allowed.
-  constexpr FuncBuilder<Func, NumParams + 1, ParamMode::kFixed> param(
-      const char *t) const {
+  constexpr FuncBuilder<Func, NumParams + 1, ParamMode::kFixed, HasPrerun>
+  param(const char *t) const {
     static_assert(Mode != ParamMode::kVarargs,
                   ".param(TYPE) and .varargs() are mutually exclusive");
     static_assert(Mode != ParamMode::kFixed || NumParams > 0,
                   ".param(TYPE) and .param() (zero-arity) are mutually "
                   "exclusive");
-    FuncBuilder<Func, NumParams + 1, ParamMode::kFixed> next;
+    FuncBuilder<Func, NumParams + 1, ParamMode::kFixed, HasPrerun> next;
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
@@ -182,14 +188,14 @@ class FuncBuilder {
   // Explicitly declare zero-arity. Useful for functions that read only
   // session state or return a constant. Mutually exclusive with .param(TYPE)
   // and .varargs().
-  constexpr FuncBuilder<Func, 0, ParamMode::kFixed> param() const {
+  constexpr FuncBuilder<Func, 0, ParamMode::kFixed, HasPrerun> param() const {
     static_assert(NumParams == 0,
                   ".param() (zero-arity) and .param(TYPE) are mutually "
                   "exclusive");
     static_assert(Mode != ParamMode::kVarargs,
                   ".param() (zero-arity) and .varargs() are mutually "
                   "exclusive");
-    FuncBuilder<Func, 0, ParamMode::kFixed> next;
+    FuncBuilder<Func, 0, ParamMode::kFixed, HasPrerun> next;
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
@@ -203,11 +209,12 @@ class FuncBuilder {
   //   void(vsql::VarArgs, ResultWrapper)
   // The prerun hook is responsible for validating argument count and types.
   // Mutually exclusive with .param() / .param(TYPE).
-  constexpr FuncBuilder<Func, 0, ParamMode::kVarargs> varargs() const {
+  constexpr FuncBuilder<Func, 0, ParamMode::kVarargs, HasPrerun> varargs()
+      const {
     static_assert(Mode != ParamMode::kFixed,
                   ".varargs() is mutually exclusive with .param() and "
                   ".param(TYPE)");
-    FuncBuilder<Func, 0, ParamMode::kVarargs> next;
+    FuncBuilder<Func, 0, ParamMode::kVarargs, HasPrerun> next;
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
@@ -217,7 +224,8 @@ class FuncBuilder {
     return next;
   }
 
-  constexpr FuncBuilder<Func, NumParams, Mode> &buffer_size(size_t s) {
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &buffer_size(
+      size_t s) {
     buffer_size_ = s;
     return *this;
   }
@@ -225,20 +233,36 @@ class FuncBuilder {
   // Marks the function as deterministic: identical inputs always produce
   // identical outputs. The optimizer may cache or elide calls for
   // constant-folding and query rewriting. Defaults to false.
-  constexpr FuncBuilder<Func, NumParams, Mode> &deterministic(bool d = true) {
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &deterministic(
+      bool d = true) {
     deterministic_ = d;
     return *this;
   }
 
-  template <vef_prerun_func_t Hook>
-  constexpr FuncBuilder<Func, NumParams, Mode> &prerun() {
-    prerun_ = Hook;
-    return *this;
+  template <auto Hook>
+  constexpr FuncBuilder<Func, NumParams, Mode, true> prerun() const {
+    static_assert(detail::is_typed_prerun<Hook>(),
+                  "prerun<Hook>(): Hook must be void(PrerunArgs, "
+                  "PrerunResult). Raw ABI signatures are not accepted.");
+    FuncBuilder<Func, NumParams, Mode, true> next;
+    next.name_ = name_;
+    next.return_type_ = return_type_;
+    next.buffer_size_ = buffer_size_;
+    next.prerun_ = &detail::typed_prerun_wrapper<Hook>;
+    next.postrun_ = postrun_;
+    next.deterministic_ = deterministic_;
+    for (size_t i = 0; i < NumParams; ++i) {
+      next.param_types_[i] = param_types_[i];
+    }
+    return next;
   }
 
-  template <vef_postrun_func_t Hook>
-  constexpr FuncBuilder<Func, NumParams, Mode> &postrun() {
-    postrun_ = Hook;
+  template <auto Hook>
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &postrun() {
+    static_assert(detail::is_typed_postrun<Hook>(),
+                  "postrun<Hook>(): Hook must be void(PostrunArgs). Raw ABI "
+                  "signatures are not accepted.");
+    postrun_ = &detail::typed_postrun_wrapper<Hook>;
     return *this;
   }
 
@@ -253,31 +277,86 @@ class FuncBuilder {
 
     using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
     using ReturnType = typename detail::FuncReturnType<decltype(Func)>::type;
-    using Shape = detail::func_signature_shape<AllParams, NumParams>;
     static_assert(std::is_void_v<ReturnType>,
                   "make_func: C++ function must return void and set the SQL "
                   "result through the final typed result wrapper parameter");
-    static_assert(Mode == ParamMode::kVarargs ||
-                      std::tuple_size_v<AllParams> == NumParams + 1,
-                  "make_func: C++ function must have one typed result wrapper "
-                  "after the declared SQL parameters; check the number of "
-                  ".param(...) calls");
-    static_assert(
-        std::tuple_size_v<AllParams> != NumParams + 1 || Shape::args_ok,
-        "make_func: every C++ function parameter before the result "
-        "must be a typed argument wrapper such as IntArg, RealArg, "
-        "StringArg, CustomArg, or CustomArgWith<P>");
-    static_assert(
-        std::tuple_size_v<AllParams> != NumParams + 1 || Shape::result_ok,
-        "make_func: final C++ function parameter must be a typed "
-        "result wrapper such as IntResult, RealResult, StringResult, "
-        "CustomResult, or CustomResultWith<P>");
+
+    // Detect state-style signatures: first parameter is `void*` or any
+    // lvalue reference (State& / const State&). Aggregate result-shape
+    // functions also have a `const State&` first parameter but go through
+    // AggFuncBuilder, not here. Varargs VDFs do not use state.
+    constexpr bool has_state_param = []() constexpr {
+      if constexpr (std::tuple_size_v<AllParams> >= 1) {
+        using First = std::tuple_element_t<0, AllParams>;
+        return std::is_same_v<First, void *> ||
+               std::is_lvalue_reference_v<First>;
+      } else {
+        return false;
+      }
+    }();
 
     detail::FuncWithMetadata meta{};
     if constexpr (Mode == ParamMode::kVarargs) {
       meta.f = &detail::VarArgsWrapper<Func>::invoke;
       meta.is_varargs = true;
+    } else if constexpr (has_state_param) {
+      // Shapes:
+      //   void(State&, TypedArgs..., ResultWrapper)     — typed state, mutable
+      //   void(const State&, TypedArgs..., ResultWrapper) — typed state, const
+      //   void(void*, TypedArgs..., ResultWrapper)      — raw state
+      static_assert(HasPrerun,
+                    "VDF declares state (State& or void*) but no prerun is "
+                    "configured. user_data would be nullptr at every call. "
+                    "Attach a .prerun<>() that calls set_user_data(), or "
+                    "drop the state parameter.");
+      static_assert(std::tuple_size_v<AllParams> == NumParams + 2,
+                    "make_func: state-style VDF must have one State (or "
+                    "void*) parameter, then the declared SQL parameters, "
+                    "then a typed result wrapper");
+      // TODO(villagesql-beta): also run args/result shape and runtime
+      // signature checks (declared .param/.returns vs C++ wrappers) for
+      // state-style VDFs. Today these run only for stateless shapes.
+      using First = std::tuple_element_t<0, AllParams>;
+      if constexpr (std::is_same_v<First, void *>) {
+        meta.f = &detail::WrapperVoidState<Func, NumParams>::invoke;
+      } else {
+        // Both `State&` and `const State&` route to WrapperTypedState; the
+        // implicit conversion from `State&` to `const State&` happens at
+        // the call site if the user opted for read-only.
+        using State = std::remove_const_t<std::remove_reference_t<First>>;
+        meta.f = &detail::WrapperTypedState<Func, State, NumParams>::invoke;
+      }
+    } else {
+      using Shape = detail::func_signature_shape<AllParams, NumParams>;
+      static_assert(
+          std::tuple_size_v<AllParams> == NumParams + 1,
+          "make_func: C++ function must have one typed result wrapper "
+          "after the declared SQL parameters; check the number of "
+          ".param(...) calls");
+      static_assert(
+          std::tuple_size_v<AllParams> != NumParams + 1 || Shape::args_ok,
+          "make_func: every C++ function parameter before the result "
+          "must be a typed argument wrapper such as IntArg, RealArg, "
+          "StringArg, CustomArg, or CustomArgWith<P>");
+      static_assert(
+          std::tuple_size_v<AllParams> != NumParams + 1 || Shape::result_ok,
+          "make_func: final C++ function parameter must be a typed "
+          "result wrapper such as IntResult, RealResult, StringResult, "
+          "CustomResult, or CustomResultWith<P>");
+      if constexpr (std::tuple_size_v<AllParams> == NumParams + 1 &&
+                    Shape::args_ok && Shape::result_ok) {
+        using UniquePTuple =
+            typename detail::unique_params_types<AllParams>::type;
+        meta.f = &detail::Wrapper<Func, NumParams>::invoke;
+        if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
+          meta.check_params_cache_bound =
+              &detail::apply_params_cache_checker<UniquePTuple>::check;
+        }
+        meta.check_signature =
+            &detail::signature_checker<AllParams, NumParams>::check;
+      }
     }
+
     meta.prerun = prerun_;
     meta.postrun = postrun_;
     meta.return_type = detail::to_vef_type(return_type_);
@@ -286,18 +365,6 @@ class FuncBuilder {
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
-    }
-    if constexpr (std::tuple_size_v<AllParams> == NumParams + 1 &&
-                  Shape::args_ok && Shape::result_ok) {
-      using UniquePTuple =
-          typename detail::unique_params_types<AllParams>::type;
-      meta.f = &detail::Wrapper<Func, NumParams>::invoke;
-      if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
-        meta.check_params_cache_bound =
-            &detail::apply_params_cache_checker<UniquePTuple>::check;
-      }
-      meta.check_signature =
-          &detail::signature_checker<AllParams, NumParams>::check;
     }
 
     return detail::StaticFuncDesc<NumParams>(name_, meta);
@@ -321,11 +388,12 @@ class FuncBuilder {
   vef_postrun_func_t postrun_;
   bool deterministic_;
 
-  template <auto F, size_t M, ParamMode N>
+  template <auto F, size_t M, ParamMode N, bool HP>
   friend class FuncBuilder;
 
   template <auto F>
-  friend constexpr FuncBuilder<F, 0> make_func(const char *);
+  friend constexpr FuncBuilder<F, 0, ParamMode::kUnset, false> make_func(
+      const char *);
 };
 
 // =============================================================================
@@ -504,7 +572,8 @@ constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
 
 // make_func<&impl>("name")
 template <auto Func>
-constexpr FuncBuilder<Func, 0> make_func(const char *name) {
+constexpr FuncBuilder<Func, 0, ParamMode::kUnset, false> make_func(
+    const char *name) {
   using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
   static_assert(
       std::tuple_size_v<AllParams> == 0 ||
@@ -512,7 +581,7 @@ constexpr FuncBuilder<Func, 0> make_func(const char *name) {
       "vsql make_func: deprecated vef_context_t* first parameter not "
       "supported; use a typed function or make_aggregate_func (see "
       "extension.h)");
-  FuncBuilder<Func, 0> builder;
+  FuncBuilder<Func, 0, ParamMode::kUnset, false> builder;
   builder.name_ = name;
   return builder;
 }
