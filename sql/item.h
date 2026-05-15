@@ -3769,7 +3769,7 @@ class Item : public Parse_tree_node {
     // silently break downstream encode/decode; in release builds we still
     // overwrite to avoid undefined behavior if the assertion would fire.
     assert(custom_type == nullptr || tc == nullptr ||
-           custom_type->is_compatible_with(*tc));
+           custom_type->is_assignable_with(*tc));
     custom_type = tc;
   }
   virtual bool has_type_context() const { return nullptr != custom_type; }

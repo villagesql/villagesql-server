@@ -247,6 +247,15 @@ class TypeContext {
     return key() == other.key();
   }
 
+  // This is assignable with other if they are either compatible with each
+  // other, or this is unknown and other is known (of the same base type). So
+  // TVECTOR is assignable with TVECTOR(3), but not the other way.
+  bool is_assignable_with(const TypeContext &other) const {
+    return is_compatible_with(other) ||
+           (is_unknown() && !other.is_unknown() &&
+            key().descriptor_key() == other.key().descriptor_key());
+  }
+
   // Convenience accessors for frequently used fields
   const std::string &extension_name() const {
     return descriptor_->extension_name();
