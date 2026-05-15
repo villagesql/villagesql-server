@@ -433,8 +433,12 @@ if [ -z "$COMMIT_ISH" ]; then
   if is_jj_workspace; then
     # In jj workspace, use git.push config or default to "origin"
     # User can set: jj config set git.push "github"
+    # We diff against the fork point with main@<remote>, not the tip — so when
+    # upstream main is ahead of our branch's base, upstream commits do not
+    # appear as "reverse-modified" files in our changed-file set (which would
+    # otherwise cause villint to lint unrelated upstream-only files).
     VILLINT_REMOTE=$(jj config get git.push 2>/dev/null || echo "origin")
-    COMMIT_ISH="main@$VILLINT_REMOTE"
+    COMMIT_ISH="fork_point(@ | main@$VILLINT_REMOTE)"
     echo "Using jj workspace, comparing against: $COMMIT_ISH"
   else
     # Default: compare against merge-base with origin/main
