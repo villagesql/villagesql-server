@@ -22,8 +22,8 @@
 #include <cctype>
 #include <memory>
 #include <string>
-#include <vector>
 #include <string_view>
+#include <vector>
 
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/types/type_op.h"
