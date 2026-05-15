@@ -17,6 +17,8 @@
 # Comments and blank lines are ignored.
 https://github.com/villagesql/vsql-ai main
 https://github.com/villagesql/vsql-crypto main
+https://github.com/villagesql/vsql-cube main abi=dev
 https://github.com/villagesql/vsql-http main
 https://github.com/villagesql/vsql-network-address main
 https://github.com/villagesql/vsql-uuid main
+https://github.com/villagesql/vsql-vector main abi=dev bundle=false
