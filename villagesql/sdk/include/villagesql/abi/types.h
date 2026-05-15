@@ -754,10 +754,6 @@ typedef struct {
   // signature (INT) -> STRING, where the INT argument is the resolved
   // persisted_length in bytes (allowing variable-size types to produce the
   // correct number of bytes). NULL means the type has no intrinsic default.
-  // TODO(villagesql-beta): change strategy for intrinsic default value,
-  // probably by allowing non-parameterized types to use a string (such as
-  // "(0,0)") in the API, and havin parameterized types build a string up. The
-  // string would get processed and validated by the from_string function.
   const char *intrinsic_default_vdf_name;
 
   // OPTIONAL: A string literal to encode as the intrinsic default value.
