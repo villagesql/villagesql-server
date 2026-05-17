@@ -11,7 +11,6 @@ if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
   skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
 }
 
-SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_lifecycle_test;
 SET PERSIST vsql_lifecycle_test.monitor_enabled = ON;
 
@@ -41,7 +40,6 @@ SELECT vsql_lifecycle_test.tick_count() >= 0;
 
 SET PERSIST vsql_lifecycle_test.monitor_enabled = OFF;
 UNINSTALL EXTENSION vsql_lifecycle_test;
-SET PERSIST vsql_allow_preview_extensions = OFF;
 
 --echo # Thread is gone from processlist after uninstall
 SELECT COUNT(*) FROM performance_schema.processlist

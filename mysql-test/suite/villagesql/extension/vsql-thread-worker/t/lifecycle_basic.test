@@ -14,8 +14,6 @@ if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
   skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
 }
 
-SET PERSIST vsql_allow_preview_extensions = ON;
-
 INSTALL EXTENSION vsql_lifecycle_test;
 
 --echo # Thread should NOT be running yet (enabled defaults to OFF)
@@ -46,6 +44,3 @@ SELECT COUNT(*) FROM performance_schema.processlist
 WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
 
 UNINSTALL EXTENSION vsql_lifecycle_test;
-
-SET PERSIST vsql_allow_preview_extensions = OFF;
-RESET PERSIST vsql_allow_preview_extensions;

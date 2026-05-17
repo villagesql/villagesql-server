@@ -1,4 +1,3 @@
-SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_lifecycle_test;
 SET PERSIST vsql_lifecycle_test.monitor_enabled = ON;
 # Tick count should be positive: thread is running
@@ -19,7 +18,6 @@ vsql_lifecycle_test.tick_count() >= 0
 1
 SET PERSIST vsql_lifecycle_test.monitor_enabled = OFF;
 UNINSTALL EXTENSION vsql_lifecycle_test;
-SET PERSIST vsql_allow_preview_extensions = OFF;
 # Thread is gone from processlist after uninstall
 SELECT COUNT(*) FROM performance_schema.processlist
 WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';

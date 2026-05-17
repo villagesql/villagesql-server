@@ -1,0 +1,2 @@
+--let $tw_port= query_get_value(SELECT vsql_thread_worker_test.active_port() AS port, port, 1)
+--let $tw_pl= perl $MYSQL_TEST_DIR/suite/villagesql/extension/vsql-thread-worker/t/thread_worker_cmd.pl $tw_port
