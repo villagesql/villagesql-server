@@ -1829,10 +1829,11 @@ bool PT_intersect::do_contextualize(Parse_context *pc [[maybe_unused]]) {
 
 bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->algorithm = HA_KEY_ALG_SE_SPECIFIC;
-  pc->key_create_info->is_algorithm_explicit = true;
+  pc->key_create_info->is_algorithm_explicit = false;
   pc->key_create_info->custom_index_type = m_name;
   pc->key_create_info->custom_index_extension = m_extension;
   // TODO(villagesql-indexing): Execute extended index type.
+  DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
   villagesql_error("Extended Index feature not yet implemented", MYF(0));
   return true;
 }
@@ -1840,6 +1841,7 @@ bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
 bool PT_index_with_options::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_params = m_params;
   // TODO(villagesql-indexing): Execute extended index WITH parameters.
+  DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
   villagesql_error("Extended Index feature not yet implemented", MYF(0));
   return true;
 }
@@ -1877,8 +1879,9 @@ static bool setup_index(keytype key_type, const LEX_STRING name,
       spec =
           new (pc->mem_root) Key_part_spec(kp.get_expression(), kp.get_order());
     } else {
-      spec = new (pc->mem_root) Key_part_spec(
-          kp.get_column_name(), kp.get_prefix_length(), kp.get_order());
+      spec = new (pc->mem_root)
+          Key_part_spec(kp.get_column_name(), kp.get_prefix_length(),
+                        kp.get_order(), kp.get_index_profile());
     }
     if (spec == nullptr || cols.push_back(spec)) {
       return true; /* purecov: deadcode */

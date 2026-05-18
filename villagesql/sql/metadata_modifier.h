@@ -23,6 +23,8 @@
 
 #include "sql/mdl.h"
 #include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/systable/custom_index_columns.h"
+#include "villagesql/schema/systable/custom_indexes.h"
 #include "villagesql/sql/custom_vdf.h"
 
 class Alter_info;
@@ -151,11 +153,12 @@ class Metadata_modifier {
                                        const std::string &extension_name,
                                        enum_mdl_duration duration);
 
-  // Returns true if there are custom column entries to process, false
-  // otherwise.
+  // Returns true if there are custom column or index entries to process.
   bool has_entries() const {
     return !to_add_.empty() || !to_remove_.empty() || !to_rename_.empty() ||
-           !to_call_.empty();
+           !to_call_.empty() || !to_add_indexes_.empty() ||
+           !to_add_index_columns_.empty() || !to_remove_indexes_.empty() ||
+           !to_remove_index_columns_.empty();
   }
 
  private:
@@ -166,6 +169,24 @@ class Metadata_modifier {
   // Returns false on success, true on error.
   bool add_columns(THD *thd, Table_name db_table,
                    const List<Create_field> &create_fields);
+
+  // Collect custom index entries from alter_info->key_list into
+  // to_add_indexes_ and to_add_index_columns_. Only processes Key_spec entries
+  // whose KEY_CREATE_INFO::custom_index_type is set.
+  // Returns false on success, true on error.
+  bool add_indexes(THD *thd, const char *db, const char *table_name,
+                   const Alter_info *alter_info);
+
+  // Stage removal of custom indexes named in alter_info->drop_list (DROP INDEX
+  // via ALTER TABLE). Looks up each dropped key in VictionaryClient and queues
+  // its IndexKey and all child IndexColumnKeys for deletion.
+  // Returns false on success, true on error.
+  bool remove_indexes(THD *thd, const char *db, const char *table_name,
+                      const Alter_info *alter_info);
+
+  // Stage removal of all custom indexes for a table (DROP TABLE path).
+  // Returns false on success, true on error.
+  bool remove_all_indexes(THD *thd, const char *db, const char *table_name);
 
   // Remove a column entry to the list of columns to be removed.
   // Returns false on success, true on error.
@@ -195,13 +216,17 @@ class Metadata_modifier {
   bool validate_entries();
 
   // Mark all pending column modifications in VictionaryClient.
-  // Sets marked to true if any entries were marked.
+  // Sets marked_column to true if any column entries were marked.
+  // Sets marked_index to true if any index entries were marked.
   // Returns false on success, true on error.
-  bool mark_victionary_modifications(THD *thd, bool &marked);
+  bool mark_victionary_modifications(THD *thd, bool &marked_column,
+                                     bool &marked_index);
 
-  // Add system table for custom columns to query list.
+  // Add system tables for staged modifications to the query list.
+  // Opens COLUMNS_TABLE_NAME only if marked_column, and INDEXES_TABLE_NAME
+  // and INDEX_COLUMNS_TABLE_NAME only if marked_index.
   // Returns false on success, true on error.
-  bool add_system_table(THD *thd);
+  bool add_system_tables(THD *thd, bool marked_column, bool marked_index);
 
   // Add custom function entries.
   // Returns false on success, true on error.
@@ -219,20 +244,29 @@ class Metadata_modifier {
   std::vector<std::pair<ColumnEntry, ColumnKey>> to_rename_;
   // Custom functions to be called
   std::vector<Croutine_entry> to_call_;
+  // Custom index entries staged for insertion
+  std::vector<IndexEntry> to_add_indexes_;
+  std::vector<IndexColumnEntry> to_add_index_columns_;
+  // Custom index entries staged for deletion
+  std::vector<IndexKey> to_remove_indexes_;
+  std::vector<IndexColumnKey> to_remove_index_columns_;
 };
 
 // Template implementation for process_drop
 template <typename TableContainer>
 bool Metadata_modifier::process_drop(THD *thd, const TableContainer &tables) {
-  Metadata_modifier custom_columns;
+  Metadata_modifier modifier;
   for (auto *table : tables) {
     Table_name db_table = {table->db, table->table_name};
-    if (custom_columns.remove_columns(thd, db_table)) {
+    if (modifier.remove_columns(thd, db_table)) {
+      return true;
+    }
+    if (modifier.remove_all_indexes(thd, table->db, table->table_name)) {
       return true;
     }
   }
 
-  if (custom_columns.lock_and_apply(thd)) {
+  if (modifier.lock_and_apply(thd)) {
     return true;
   }
 

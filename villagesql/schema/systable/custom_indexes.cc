@@ -16,7 +16,13 @@
 
 #include "villagesql/schema/systable/custom_indexes.h"
 
+#include <memory>
+#include <string>
+
+#include "include/sql_string.h"
 #include "scope_guard.h"
+#include "sql-common/json_dom.h"
+#include "sql-common/json_error_handler.h"
 #include "sql/field.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
@@ -220,6 +226,29 @@ bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
   }
 
   return false;
+}
+
+std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
+  Json_object_ptr obj(new (std::nothrow) Json_object());
+  if (!obj) return "{}";
+
+  for (const IndexWithParam &p : params) {
+    std::string key(p.key.str, p.key.length);
+    Json_dom_ptr val;
+    if (p.is_string) {
+      val.reset(new (std::nothrow) Json_string(
+          std::string(p.value.str.str, p.value.str.length)));
+    } else {
+      val.reset(new (std::nothrow) Json_uint(p.value.num));
+    }
+    if (!val || obj->add_alias(key, std::move(val))) return "{}";  // OOM
+  }
+
+  Json_wrapper wrapper(obj.release());
+  StringBuffer<256> buf;
+  if (wrapper.to_string(&buf, false, "params_to_json", JsonDepthErrorHandler))
+    return "{}";
+  return std::string(buf.ptr(), buf.length());
 }
 
 }  // namespace villagesql

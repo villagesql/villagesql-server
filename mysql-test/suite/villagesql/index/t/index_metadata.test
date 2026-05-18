@@ -1,0 +1,81 @@
+# Test custom index metadata lifecycle: CREATE INDEX, DROP INDEX, ALTER TABLE
+# ADD/DROP INDEX, and DROP TABLE all correctly update villagesql.custom_indexes
+# and villagesql.custom_index_columns.
+#
+# villagesql_custom_index_proceed bypasses the "not yet implemented" guard in
+# PT_custom_index_type::do_contextualize() so that the full DDL path runs and
+# metadata is committed.
+#
+# Covers:
+#   CREATE TABLE with inline custom index
+#   CREATE INDEX and ALTER TABLE ADD INDEX
+#   DROP INDEX and ALTER TABLE DROP INDEX (single and multiple)
+#   DROP TABLE
+
+# TODO(villagesql-indexing): Once index type and profile registration is fully
+# implemented, use test extension and update the result file to reflect real
+# extension_name, extension_version, and profile_name values instead of EMPTY.
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+--echo # --- Initial state: empty ---
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CREATE TABLE with inline custom index ---
+CREATE TABLE t (id INT PRIMARY KEY, a INT,
+  INDEX idx_inline (a) USING EXTENDED(hnsw));
+--source include/villagesql/query_custom_indexes.inc
+
+DROP TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, c INT, d INT, e INT);
+
+--echo # --- CREATE INDEX: unqualified type, no params ---
+CREATE INDEX idx_hnsw ON t (a) USING EXTENDED(hnsw);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CREATE INDEX: qualified ext.type + WITH params ---
+CREATE INDEX idx_ext ON t (b) USING EXTENDED(myext.hnsw)
+  WITH (M = 16, ef_construction = 200, label = 'primary', mode = fast);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CREATE INDEX: per-column profile ---
+CREATE INDEX idx_prof ON t (c profile1) USING EXTENDED(hnsw);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CREATE INDEX: multi-column ---
+CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(hnsw);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- ALTER TABLE ADD INDEX ---
+ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(hnsw) WITH (M = 8);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- DROP INDEX: removes metadata for that index ---
+DROP INDEX idx_hnsw ON t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- ALTER TABLE DROP INDEX ---
+ALTER TABLE t DROP INDEX idx_ext;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- ALTER TABLE DROP INDEX: multiple at once ---
+ALTER TABLE t DROP INDEX idx_prof, DROP INDEX idx_multi;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- DROP INDEX: mixed-case name removes metadata ---
+CREATE INDEX idx_case ON t (a) USING EXTENDED(hnsw);
+--source include/villagesql/query_custom_indexes.inc
+DROP INDEX IDX_CASE ON t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- DROP TABLE: removes all remaining custom index metadata ---
+DROP TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
