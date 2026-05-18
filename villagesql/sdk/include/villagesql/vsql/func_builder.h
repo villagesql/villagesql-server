@@ -270,6 +270,30 @@ template <typename P>
 using ParamsToStringsFunc = void (*)(const P &,
                                      std::map<std::string, std::string> &);
 
+// Extracts the params type P from a type operation function pointer,
+// or void for non-parameterized signatures.
+template <typename F>
+struct TypeOpParamsType {
+  using type = void;
+};
+template <typename P>
+struct TypeOpParamsType<void (*)(MaybeParams<P> &, std::string_view,
+                                 CustomResult)> {
+  using type = P;
+};
+template <typename P>
+struct TypeOpParamsType<void (*)(CustomArgWith<P>, StringResult)> {
+  using type = P;
+};
+template <typename P>
+struct TypeOpParamsType<int (*)(CustomArgWith<P>, CustomArgWith<P>)> {
+  using type = P;
+};
+template <typename P>
+struct TypeOpParamsType<size_t (*)(CustomArgWith<P>)> {
+  using type = P;
+};
+
 // =============================================================================
 // Aggregate Callback Wrappers
 // =============================================================================

@@ -17,18 +17,22 @@
 #define VILLAGESQL_PREVIEW_PING_H
 
 #include <villagesql/abi/preview/ping.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::preview_ping {
 
 // Declare a PingCapability by value in your extension and pass it to
-// .with(). VEF populates `abi` during registration.
+// .with(). VEF populates the capability during registration.
 class PingCapability {
  public:
   long long ping() const;
+  bool available() const noexcept;
 
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_ping_t *abi = nullptr;
+ private:
+  template <typename Capability>
+  friend struct ::vsql::detail::CapabilityTraits;
+
+  const vef_preview_ping_t *abi_ = nullptr;
 };
 
 }  // namespace vsql::preview_ping

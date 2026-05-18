@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_THREAD_WORKER_H
 
 #include <villagesql/abi/preview/thread_worker.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::preview_thread_worker {
 
@@ -42,14 +43,16 @@ class ThreadWorkerCapability {
   ThreadWorkerCapability(const char *suffix,
                          const char *var_name = nullptr) noexcept;
 
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_thread_worker_t *abi = nullptr;
-
   // One static descriptor per WorkFn instantiation. The constructor
   // populates it. The trait's extension_data() returns its address so
   // the wire format carries a pointer to it.
   static inline vef_thread_worker_descriptor_t descriptor{};
+
+ private:
+  template <typename Capability>
+  friend struct ::vsql::detail::CapabilityTraits;
+
+  const vef_preview_thread_worker_t *abi_ = nullptr;
 };
 
 }  // namespace vsql::preview_thread_worker

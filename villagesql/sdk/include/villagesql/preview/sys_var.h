@@ -26,6 +26,7 @@
 
 #include <villagesql/abi/preview/sys_var.h>
 #include <villagesql/abi/types.h>
+#include <villagesql/vsql/capability_traits.h>
 #include <villagesql/vsql/func_types.h>
 
 namespace vsql::preview_sys_var {
@@ -153,8 +154,9 @@ struct SysVarDescriptor {
 //           .func(...)
 //           .with(g_sys_vars));
 //
-// The server populates `abi` during registration and reads `descriptor_list`
-// in the on_populate callback to register the variables with MySQL.
+// The server populates the capability during registration and reads
+// `descriptor_list` in the on_populate callback to register the variables
+// with MySQL.
 template <size_t N>
 class SysVarCapability {
  public:
@@ -201,10 +203,10 @@ class SysVarCapability {
   // Returns false on success, true on error.
   bool get(std::string_view extension_name, std::string_view var_name,
            std::string &out) const {
-    if (abi == nullptr || abi->get == nullptr) return true;
+    if (abi_ == nullptr || abi_->get == nullptr) return true;
     void *val = nullptr;
     size_t val_len = 0;
-    if (abi->get(extension_name.data(), var_name.data(), &val, &val_len))
+    if (abi_->get(extension_name.data(), var_name.data(), &val, &val_len))
       return true;
     out.assign(static_cast<const char *>(val), val_len);
     free(val);
@@ -222,31 +224,32 @@ class SysVarCapability {
   // Returns false on success, true on error.
   bool set(std::string_view extension_name, std::string_view var_name,
            const char *scope, long long value) const {
-    if (abi == nullptr || abi->set == nullptr) return true;
+    if (abi_ == nullptr || abi_->set == nullptr) return true;
     char buf[32];
     snprintf(buf, sizeof(buf), "%lld", value);
-    return abi->set(extension_name.data(), var_name.data(), scope, buf);
+    return abi_->set(extension_name.data(), var_name.data(), scope, buf);
   }
 
   // Set a STRING system variable.
   bool set(std::string_view extension_name, std::string_view var_name,
            const char *scope, std::string_view value) const {
-    if (abi == nullptr || abi->set == nullptr) return true;
+    if (abi_ == nullptr || abi_->set == nullptr) return true;
     // ABI requires null-terminated string; string_view may not be.
     std::string val_str(value);
-    return abi->set(extension_name.data(), var_name.data(), scope,
-                    val_str.c_str());
+    return abi_->set(extension_name.data(), var_name.data(), scope,
+                     val_str.c_str());
   }
-
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_sys_var_t *abi = nullptr;
 
   // Read by the server's on_populate callback. Public so CapabilityTraits
   // can return its address as extension_data.
   vef_sys_var_descriptor_list_t descriptor_list{};
 
  private:
+  template <typename Capability>
+  friend struct ::vsql::detail::CapabilityTraits;
+
+  const vef_preview_sys_var_t *abi_ = nullptr;
+
   std::array<vef_sys_var_desc_t, N> descs_;
   std::array<const vef_sys_var_desc_t *, N> ptrs_;
 };

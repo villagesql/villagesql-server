@@ -21,6 +21,7 @@
 
 #include <villagesql/abi/preview/status_var.h>
 #include <villagesql/abi/types.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::preview_status_var {
 
@@ -64,8 +65,9 @@ struct StatusVarDescriptor {
 //           .func(...)
 //           .with(g_status_vars));
 //
-// The server populates `abi` during registration and reads `descriptor_list`
-// in the on_populate callback to register the variables with MySQL.
+// The server populates the capability during registration and reads
+// `descriptor_list` in the on_populate callback to register the variables
+// with MySQL.
 template <size_t N>
 class StatusVarCapability {
  public:
@@ -87,15 +89,16 @@ class StatusVarCapability {
     descriptor_list.var_count = static_cast<uint32_t>(N);
   }
 
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_status_var_t *abi = nullptr;
-
   // Read by the server's on_populate callback. Public so CapabilityTraits
   // can return its address as extension_data.
   vef_status_var_descriptor_list_t descriptor_list{};
 
  private:
+  template <typename Capability>
+  friend struct ::vsql::detail::CapabilityTraits;
+
+  const vef_preview_status_var_t *abi_ = nullptr;
+
   std::array<vef_status_var_desc_t, N> descs_;
   std::array<const vef_status_var_desc_t *, N> ptrs_;
 };

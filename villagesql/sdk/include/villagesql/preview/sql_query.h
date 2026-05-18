@@ -26,7 +26,9 @@
 namespace vsql::preview_sql_query {
 
 // Forward declaration.
+class Result;
 class Session;
+class SqlQuery;
 
 // SqlQueryCapability is the extension-side wrapper for the
 // "vsql::preview::sql_query" preview capability. Declare one static instance
@@ -65,9 +67,14 @@ class SqlQueryCapability {
   // Returns an invalid Session (operator bool == false) on failure.
   Session open(vef_thread_handle_t *handle) const;
 
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_sql_query_t *abi = nullptr;
+ private:
+  template <typename Capability>
+  friend struct ::vsql::detail::CapabilityTraits;
+  friend class Result;
+  friend class Session;
+  friend class SqlQuery;
+
+  const vef_preview_sql_query_t *abi_ = nullptr;
 };
 
 }  // namespace vsql::preview_sql_query
@@ -82,16 +89,13 @@ struct CapabilityTraits<::vsql::preview_sql_query::SqlQueryCapability> {
 
   static constexpr void *vtable_destination(
       ::vsql::preview_sql_query::SqlQueryCapability *p) noexcept {
-    return static_cast<void *>(&p->abi);
+    return static_cast<void *>(&p->abi_);
   }
 };
 
 }  // namespace vsql::detail
 
 namespace vsql::preview_sql_query {
-
-// Forward declaration.
-class SqlQuery;
 
 // RAII wrapper around vef_sql_session_t.
 // Obtain via cap.open(handle); check with operator bool before use.
@@ -100,15 +104,15 @@ class Session {
   static Session open(const SqlQueryCapability &cap,
                       vef_thread_handle_t *handle) {
     vef_sql_session_t *s = nullptr;
-    if (cap.abi != nullptr && cap.abi->open_session != nullptr)
-      s = cap.abi->open_session(handle);
+    if (cap.abi_ != nullptr && cap.abi_->open_session != nullptr)
+      s = cap.abi_->open_session(handle);
     return Session{cap, s};
   }
 
   ~Session() {
-    if (handle_ != nullptr && cap_.abi != nullptr &&
-        cap_.abi->close_session != nullptr)
-      cap_.abi->close_session(handle_);
+    if (handle_ != nullptr && cap_.abi_ != nullptr &&
+        cap_.abi_->close_session != nullptr)
+      cap_.abi_->close_session(handle_);
   }
 
   Session(const Session &) = delete;
@@ -145,9 +149,9 @@ class Result {
       : cap_(cap), handle_(handle) {}
 
   ~Result() {
-    if (handle_ != nullptr && cap_.abi != nullptr &&
-        cap_.abi->close_result != nullptr)
-      cap_.abi->close_result(handle_);
+    if (handle_ != nullptr && cap_.abi_ != nullptr &&
+        cap_.abi_->close_result != nullptr)
+      cap_.abi_->close_result(handle_);
   }
 
   Result(const Result &) = delete;
@@ -164,9 +168,9 @@ class Result {
 
   Result &operator=(Result &&other) noexcept {
     if (this != &other) {
-      if (handle_ != nullptr && cap_.abi != nullptr &&
-          cap_.abi->close_result != nullptr)
-        cap_.abi->close_result(handle_);
+      if (handle_ != nullptr && cap_.abi_ != nullptr &&
+          cap_.abi_->close_result != nullptr)
+        cap_.abi_->close_result(handle_);
       handle_ = other.handle_;
       row_ = other.row_;
       lengths_ = other.lengths_;
@@ -178,10 +182,10 @@ class Result {
 
   // Fetch the next row. Returns true if a row was fetched.
   bool next() {
-    if (handle_ == nullptr || cap_.abi == nullptr ||
-        cap_.abi->fetch_row == nullptr)
+    if (handle_ == nullptr || cap_.abi_ == nullptr ||
+        cap_.abi_->fetch_row == nullptr)
       return false;
-    return cap_.abi->fetch_row(handle_, &row_, &lengths_);
+    return cap_.abi_->fetch_row(handle_, &row_, &lengths_);
   }
 
   // Returns true if the result handle is valid (execute succeeded).
@@ -190,8 +194,8 @@ class Result {
   // Number of columns in the result set.
   unsigned int num_columns() const {
     if (handle_ != nullptr) {
-      if (cap_.abi == nullptr || cap_.abi->num_columns == nullptr) return 0;
-      return cap_.abi->num_columns(handle_);
+      if (cap_.abi_ == nullptr || cap_.abi_->num_columns == nullptr) return 0;
+      return cap_.abi_->num_columns(handle_);
     }
     return num_columns_;
   }
@@ -246,10 +250,11 @@ class SqlQuery {
   // Execute the query. Returns an invalid Result (operator bool == false)
   // on error.
   Result execute() const {
-    if (session_.cap().abi == nullptr || session_.cap().abi->execute == nullptr)
+    if (session_.cap().abi_ == nullptr ||
+        session_.cap().abi_->execute == nullptr)
       return Result{session_.cap(), nullptr};
-    vef_sql_result_t *h = session_.cap().abi->execute(session_.handle(),
-                                                      sql_.data(), sql_.size());
+    vef_sql_result_t *h = session_.cap().abi_->execute(
+        session_.handle(), sql_.data(), sql_.size());
     return Result{session_.cap(), h};
   }
 
@@ -258,8 +263,8 @@ class SqlQuery {
   // the call; do not store it across rows.
   template <typename F>
   void for_each(F &&fn) const {
-    if (session_.cap().abi == nullptr ||
-        session_.cap().abi->for_each_row == nullptr)
+    if (session_.cap().abi_ == nullptr ||
+        session_.cap().abi_->for_each_row == nullptr)
       return;
 
     struct Ctx {
@@ -267,7 +272,7 @@ class SqlQuery {
       F &fn;
     } ctx{session_.cap(), fn};
 
-    session_.cap().abi->for_each_row(
+    session_.cap().abi_->for_each_row(
         session_.handle(), sql_.data(), sql_.size(),
         [](const char **row, const unsigned long *lengths,
            unsigned int num_columns, void *raw) -> bool {

@@ -22,6 +22,7 @@ SET(VILLAGESQL_UNIT_TESTS
   custom_indexes-t
   extension_uninstall_checks-t
   semver-t
+  type_builder-t
   type_context-t
   type_descriptor-t
   validate-t
@@ -42,6 +43,10 @@ MACRO(ADD_VILLAGESQL_TEST test_name)
     SKIP_INSTALL
     DEPENDENCIES ${GTEST_LIBRARIES}
     ADD_TEST ${test_name}
+  )
+
+  TARGET_INCLUDE_DIRECTORIES(${test_name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/villagesql/sdk/include
   )
 
   TARGET_LINK_LIBRARIES(${test_name}
@@ -66,6 +71,7 @@ ADD_VILLAGESQL_TEST(abi_v2_check-t)
 ADD_VILLAGESQL_TEST(custom_indexes-t)
 ADD_VILLAGESQL_TEST(extension_uninstall_checks-t)
 ADD_VILLAGESQL_TEST(semver-t)
+ADD_VILLAGESQL_TEST(type_builder-t)
 ADD_VILLAGESQL_TEST(type_context-t)
 ADD_VILLAGESQL_TEST(type_descriptor-t)
 ADD_VILLAGESQL_TEST(validate-t)
