@@ -6,6 +6,7 @@ mysql
 performance_schema
 sys
 test
+villagesql
 select count(*) from performance_schema.performance_timers;
 count(*)
 5
