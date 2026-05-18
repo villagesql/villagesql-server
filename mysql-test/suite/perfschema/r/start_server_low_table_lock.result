@@ -139,7 +139,7 @@ COUNT_STAR	OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME
 select variable_value from performance_schema.global_status
 where variable_name like 'PERFORMANCE_SCHEMA_TABLE_LOCK_STAT_LOST';
 variable_value
-4
+7
 create table db1.t2 (a int, b char(10) default 'default',
 unique key uidx(a));
 insert into db1.t1 values('3', 'abc');
