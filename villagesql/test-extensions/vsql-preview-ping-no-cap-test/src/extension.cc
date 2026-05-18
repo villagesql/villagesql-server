@@ -14,8 +14,8 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 // vsql_preview_ping_no_cap_test extension: verifies that omitting .with()
-// for a capability causes it to be unavailable (abi stays null), and that
-// the extension degrades gracefully rather than crashing.
+// for a capability causes it to be unavailable, and that the extension
+// degrades gracefully rather than crashing.
 //
 // VDFs provided:
 //   ping_available() -> INT   Returns 1 if ping cap was populated, else 0.
@@ -26,16 +26,15 @@
 
 using namespace vsql;
 
-// g_ping is never registered via .with(g_ping), so
-// abi stays null.
+// g_ping is never registered via .with(g_ping).
 static vsql::preview_ping::PingCapability g_ping;
 
 static void ping_available_impl(IntResult out) {
-  out.set(g_ping.abi != nullptr ? 1 : 0);
+  out.set(g_ping.available() ? 1 : 0);
 }
 
 static void ping_value_impl(IntResult out) {
-  if (g_ping.abi == nullptr) {
+  if (!g_ping.available()) {
     out.set_null();
     return;
   }

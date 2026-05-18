@@ -20,11 +20,12 @@
 #include <string_view>
 
 #include <villagesql/abi/preview/keyring.h>
+#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::preview_keyring {
 
 // Declare a KeyringCapability by value in your extension and pass it to
-// .with(). VEF populates `abi` during registration.
+// .with(). VEF populates the capability during registration.
 class KeyringCapability {
  public:
   enum class Status {
@@ -51,9 +52,11 @@ class KeyringCapability {
   [[nodiscard]] Status write(std::string_view data_id, std::string_view auth_id,
                              std::string_view data) const;
 
-  // VEF writes this during registration. Public for the registration
-  // glue; do not access from extension code.
-  const vef_preview_keyring_t *abi = nullptr;
+ private:
+  template <typename Capability>
+  friend struct ::vsql::detail::CapabilityTraits;
+
+  const vef_preview_keyring_t *abi_ = nullptr;
 };
 
 }  // namespace vsql::preview_keyring

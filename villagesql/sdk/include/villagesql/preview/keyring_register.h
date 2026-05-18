@@ -30,7 +30,7 @@ struct CapabilityTraits<::vsql::preview_keyring::KeyringCapability> {
 
   static constexpr void *vtable_destination(
       ::vsql::preview_keyring::KeyringCapability *p) noexcept {
-    return static_cast<void *>(&p->abi);
+    return static_cast<void *>(&p->abi_);
   }
 };
 

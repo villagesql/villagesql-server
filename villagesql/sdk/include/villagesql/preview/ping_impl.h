@@ -22,7 +22,11 @@
 namespace vsql::preview_ping {
 
 inline long long PingCapability::ping() const {
-  return static_cast<long long>(abi->ping());
+  return static_cast<long long>(abi_->ping());
+}
+
+inline bool PingCapability::available() const noexcept {
+  return abi_ != nullptr;
 }
 
 }  // namespace vsql::preview_ping

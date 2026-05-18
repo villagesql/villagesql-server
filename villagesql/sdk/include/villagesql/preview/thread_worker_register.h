@@ -32,7 +32,7 @@ struct CapabilityTraits<
   using DescriptorType = vef_thread_worker_descriptor_t;
 
   static constexpr void *vtable_destination(Cap *p) noexcept {
-    return static_cast<void *>(&p->abi);
+    return static_cast<void *>(&p->abi_);
   }
 
   static const void *extension_data(Cap * /*p*/) noexcept {

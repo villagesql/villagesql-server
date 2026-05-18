@@ -30,7 +30,7 @@ struct CapabilityTraits<::vsql::preview_status_var::StatusVarCapability<N>> {
 
   static constexpr void *vtable_destination(
       ::vsql::preview_status_var::StatusVarCapability<N> *p) noexcept {
-    return static_cast<void *>(&p->abi);
+    return static_cast<void *>(&p->abi_);
   }
 
   // Returns a pointer to the descriptor list so the server's on_populate

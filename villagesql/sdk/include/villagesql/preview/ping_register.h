@@ -30,7 +30,7 @@ struct CapabilityTraits<::vsql::preview_ping::PingCapability> {
 
   static constexpr void *vtable_destination(
       ::vsql::preview_ping::PingCapability *p) noexcept {
-    return static_cast<void *>(&p->abi);
+    return static_cast<void *>(&p->abi_);
   }
 };
 
