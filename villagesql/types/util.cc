@@ -179,6 +179,7 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   const TypeContext *tc = vclient.type_contexts().acquire_or_create(
       type_context_key, share.mem_root, type_descriptor);
   if (should_assert_if_null(tc)) {
+    if (thd->is_error()) return true;
     // The size required (3rd param) could be wrong, but we have no way of
     // knowing because acquire_or_create performed other allocations and thus we
     // can't be sure of what the shortfall is (e.g. TypeContext or shared_ptr).

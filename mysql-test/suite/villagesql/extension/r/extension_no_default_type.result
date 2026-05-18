@@ -2,7 +2,6 @@
 Creating extension no_default_type using SDK...
 Created no_default_type.veb
 INSTALL EXTENSION no_default_type;
-call mtr.add_suppression("VillageSQL.*intrinsic_default for type.*failed");
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
-ERROR HY000: Type 'no_default_type.NO_DEFAULT_TYPE' failed to initialize; check the error log for details
+ERROR HY000: Type 'no_default_type.NO_DEFAULT_TYPE' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
 UNINSTALL EXTENSION no_default_type;
