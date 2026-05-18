@@ -92,6 +92,7 @@ Database: information_schema
 | ENABLED_ROLES                         |
 | ENGINES                               |
 | EVENTS                                |
+| EXTENSION_REGISTRATION                |
 | EXTENSIONS                            |
 | FILES                                 |
 | INNODB_BUFFER_PAGE                    |
@@ -176,6 +177,7 @@ Database: INFORMATION_SCHEMA
 | ENABLED_ROLES                         |
 | ENGINES                               |
 | EVENTS                                |
+| EXTENSION_REGISTRATION                |
 | EXTENSIONS                            |
 | FILES                                 |
 | INNODB_BUFFER_PAGE                    |

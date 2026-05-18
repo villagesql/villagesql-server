@@ -1588,6 +1588,15 @@ The following options may be given as the first argument:
  --veb-dir=name      Directory for VillageSQL Extension Bundle (VEB) files
  -v, --verbose       Used with --help option for detailed help.
  -V, --version       Output version information and exit.
+ --villagesql-allow-unsafe-dev-upgrade 
+ Allow upgrading a database initialized with a development
+ build (one whose VillageSQL version has a pre-release
+ suffix, e.g. '-dev'). Upgrading from a dev build is
+ disallowed by default.
+ --vsql-allow-preview-extensions 
+ Allow loading extensions that use preview capabilities.
+ Preview capabilities are unstable and may change or be
+ removed without notice.
  --wait-timeout=#    The number of seconds the server waits for activity on a
  connection before closing it
  --windowing-use-high-precision 
@@ -2017,6 +2026,8 @@ upgrade AUTO
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
+villagesql-allow-unsafe-dev-upgrade FALSE
+vsql-allow-preview-extensions FALSE
 wait-timeout 28800
 windowing-use-high-precision TRUE
 xa-detach-on-prepare TRUE

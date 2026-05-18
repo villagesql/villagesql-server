@@ -178,6 +178,10 @@ tls_certificates_enforced_validation
 tls_ciphersuites
 tls_ciphersuites
 use_secondary_engine
+villagesql_vef_server_protocol
+villagesql_vef_server_protocol
+vsql_allow_preview_extensions
+vsql_allow_preview_extensions
 xa_detach_on_prepare
 xa_detach_on_prepare
 drop table t1;
