@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2026, Oracle and/or its affiliates.
    Copyright (c) 2026 VillageSQL Contributors
 
   This program is free software; you can redistribute it and/or modify
@@ -73,13 +73,13 @@ void set_field_utiny(Field *f, ulong value) {
 
 long get_field_tiny(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_TINY);
-  auto *f2 = (Field_tiny *)f;
+  const auto *f2 = (Field_tiny *)f;
   return f2->val_int();
 }
 
 ulong get_field_utiny(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_TINY);
-  auto *f2 = (Field_tiny *)f;
+  const auto *f2 = (Field_tiny *)f;
   return f2->val_int();
 }
 
@@ -98,13 +98,13 @@ void set_field_ushort(Field *f, ulong value) {
 
 long get_field_short(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_SHORT);
-  auto *f2 = (Field_short *)f;
+  const auto *f2 = (Field_short *)f;
   return f2->val_int();
 }
 
 ulong get_field_ushort(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_SHORT);
-  auto *f2 = (Field_short *)f;
+  const auto *f2 = (Field_short *)f;
   return f2->val_int();
 }
 
@@ -123,13 +123,13 @@ void set_field_umedium(Field *f, ulong value) {
 
 long get_field_medium(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_INT24);
-  auto *f2 = (Field_medium *)f;
+  const auto *f2 = (Field_medium *)f;
   return f2->val_int();
 }
 
 ulong get_field_umedium(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_INT24);
-  auto *f2 = (Field_medium *)f;
+  const auto *f2 = (Field_medium *)f;
   return f2->val_int();
 }
 
@@ -148,13 +148,13 @@ void set_field_ulong(Field *f, ulong value) {
 
 long get_field_long(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_LONG);
-  auto *f2 = (Field_long *)f;
+  const auto *f2 = (Field_long *)f;
   return f2->val_int();
 }
 
 ulong get_field_ulong(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_LONG);
-  auto *f2 = (Field_long *)f;
+  const auto *f2 = (Field_long *)f;
   return f2->val_int();
 }
 
@@ -173,13 +173,13 @@ void set_field_ulonglong(Field *f, ulonglong value) {
 
 longlong get_field_longlong(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_LONGLONG);
-  auto *f2 = (Field_longlong *)f;
+  const auto *f2 = (Field_longlong *)f;
   return f2->val_int();
 }
 
 ulonglong get_field_ulonglong(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_LONGLONG);
-  auto *f2 = (Field_longlong *)f;
+  const auto *f2 = (Field_longlong *)f;
   return f2->val_int();
 }
 
@@ -192,7 +192,7 @@ void set_field_decimal(Field *f, double value) {
 
 double get_field_decimal(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_NEWDECIMAL);
-  auto *f2 = (Field_new_decimal *)f;
+  const auto *f2 = (Field_new_decimal *)f;
   return f2->val_real();
 }
 
@@ -205,7 +205,7 @@ void set_field_float(Field *f, double value) {
 
 double get_field_float(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_FLOAT);
-  auto *f2 = (Field_float *)f;
+  const auto *f2 = (Field_float *)f;
   return f2->val_real();
 }
 
@@ -218,7 +218,7 @@ void set_field_double(Field *f, double value) {
 
 double get_field_double(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_DOUBLE);
-  auto *f2 = (Field_double *)f;
+  const auto *f2 = (Field_double *)f;
   return f2->val_real();
 }
 
@@ -231,7 +231,7 @@ void set_field_char_utf8mb4(Field *f, const char *str, uint len) {
 
 String *get_field_char_utf8mb4(Field *f, String *val) {
   assert(f->real_type() == MYSQL_TYPE_STRING);
-  auto *f2 = (Field_string *)f;
+  const auto *f2 = (Field_string *)f;
   val = f2->val_str(nullptr, val);
   return val;
 }
@@ -239,7 +239,7 @@ String *get_field_char_utf8mb4(Field *f, String *val) {
 char *get_field_char_utf8mb4(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_STRING);
   String temp;
-  auto *f2 = (Field_string *)f;
+  const auto *f2 = (Field_string *)f;
   f2->val_str(nullptr, &temp);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -256,14 +256,14 @@ void set_field_varchar(Field *f, const CHARSET_INFO *cs, const char *str,
 
 String *get_field_varchar_utf8mb4(Field *f, String *val) {
   assert(f->real_type() == MYSQL_TYPE_VARCHAR);
-  auto *f2 = (Field_varstring *)f;
+  const auto *f2 = (Field_varstring *)f;
   val = f2->val_str(nullptr, val);
   return val;
 }
 char *get_field_varchar_utf8mb4(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_VARCHAR);
   String temp;
-  auto *f2 = (Field_varstring *)f;
+  const auto *f2 = (Field_varstring *)f;
   f2->val_str(nullptr, &temp);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -300,7 +300,7 @@ void set_field_text(Field *f, const char *val, size_t len,
 char *get_field_blob(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_BLOB);
   String temp;
-  auto *f2 = (Field_blob *)f;
+  const auto *f2 = (Field_blob *)f;
   f2->val_str(nullptr, &temp);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -316,7 +316,7 @@ void set_field_enum(Field *f, ulonglong value) {
 
 ulonglong get_field_enum(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_ENUM);
-  auto *f2 = (Field_enum *)f;
+  const auto *f2 = (Field_enum *)f;
   return f2->val_int();
 }
 
@@ -329,7 +329,7 @@ void set_field_set(Field *f, ulonglong value) {
 
 ulonglong get_field_set(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_SET);
-  auto *f2 = (Field_set *)f;
+  const auto *f2 = (Field_set *)f;
   return f2->val_int();
 }
 
@@ -343,7 +343,7 @@ void set_field_date(Field *f, const char *value, uint len) {
 char *get_field_date(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_NEWDATE);
   String temp;
-  auto *f2 = (Field_newdate *)f;
+  const auto *f2 = (Field_newdate *)f;
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -360,7 +360,7 @@ void set_field_time(Field *f, const char *value, uint len) {
 char *get_field_time(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_TIME2);
   String temp;
-  auto *f2 = (Field_timef *)f;
+  const auto *f2 = (Field_timef *)f;
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -377,7 +377,7 @@ void set_field_datetime(Field *f, const char *value, uint len) {
 char *get_field_datetime(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_DATETIME2);
   String temp;
-  auto *f2 = (Field_datetimef *)f;
+  const auto *f2 = (Field_datetimef *)f;
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -394,7 +394,7 @@ void set_field_timestamp(Field *f, const char *value, uint len) {
 char *get_field_timestamp(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_TIMESTAMP2);
   String temp;
-  auto *f2 = (Field_timestampf *)f;
+  const auto *f2 = (Field_timestampf *)f;
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -418,7 +418,7 @@ void set_field_year(Field *f, ulong value) {
 
 ulong get_field_year(Field *f) {
   assert(f->real_type() == MYSQL_TYPE_YEAR);
-  auto *f2 = (Field_year *)f;
+  const auto *f2 = (Field_year *)f;
   return f2->val_int();
 }
 
@@ -1663,20 +1663,18 @@ bool PFS_key_ulonglong::stateless_match(bool record_null,
 }
 
 bool PFS_key_ulong::do_match(bool record_null, ulong record_value) {
-  int cmp = 0;
+  int cmp;
 
   if (m_is_null) {
     cmp = (record_null ? 0 : 1);
+  } else if (record_null) {
+    cmp = -1;
+  } else if (record_value < m_key_value) {
+    cmp = -1;
+  } else if (record_value > m_key_value) {
+    cmp = +1;
   } else {
-    if (record_null) {
-      cmp = -1;
-    } else if (record_value < m_key_value) {
-      cmp = -1;
-    } else if (record_value > m_key_value) {
-      cmp = +1;
-    } else {
-      cmp = 0;
-    }
+    cmp = 0;
   }
 
   switch (m_find_flag) {
@@ -1697,20 +1695,18 @@ bool PFS_key_ulong::do_match(bool record_null, ulong record_value) {
 }
 
 bool PFS_key_ulonglong::do_match(bool record_null, ulonglong record_value) {
-  int cmp = 0;
+  int cmp;
 
   if (m_is_null) {
     cmp = (record_null ? 0 : 1);
+  } else if (record_null) {
+    cmp = -1;
+  } else if (record_value < m_key_value) {
+    cmp = -1;
+  } else if (record_value > m_key_value) {
+    cmp = +1;
   } else {
-    if (record_null) {
-      cmp = -1;
-    } else if (record_value < m_key_value) {
-      cmp = -1;
-    } else if (record_value > m_key_value) {
-      cmp = +1;
-    } else {
-      cmp = 0;
-    }
+    cmp = 0;
   }
 
   switch (m_find_flag) {
@@ -1753,16 +1749,14 @@ bool PFS_key_pstring::stateless_match(bool record_null,
                                m_key_value_length) == 0);
   }
 
-  int cmp = 0;
+  int cmp;
 
   if (is_null) {
     cmp = record_null ? 0 : 1;
+  } else if (record_null) {
+    cmp = -1;
   } else {
-    if (record_null) {
-      cmp = -1;
-    } else {
-      cmp = native_strncasecmp(record_string, m_key_value, m_key_value_length);
-    }
+    cmp = native_strncasecmp(record_string, m_key_value, m_key_value_length);
   }
 
   switch (find_flag) {
@@ -1811,7 +1805,7 @@ bool PFS_key_thread_id::match(const PFS_thread *pfs) {
 }
 
 bool PFS_key_thread_id::match_owner(const PFS_table *pfs) {
-  PFS_thread *thread = sanitize_thread(pfs->m_thread_owner);
+  const PFS_thread *thread = sanitize_thread(pfs->m_thread_owner);
 
   if (thread == nullptr) {
     return do_match(true, 0);
@@ -1822,7 +1816,7 @@ bool PFS_key_thread_id::match_owner(const PFS_table *pfs) {
 }
 
 bool PFS_key_thread_id::match_owner(const PFS_socket *pfs) {
-  PFS_thread *thread = sanitize_thread(pfs->m_thread_owner);
+  const PFS_thread *thread = sanitize_thread(pfs->m_thread_owner);
 
   if (thread == nullptr) {
     return do_match(true, 0);
@@ -1832,7 +1826,7 @@ bool PFS_key_thread_id::match_owner(const PFS_socket *pfs) {
 }
 
 bool PFS_key_thread_id::match_owner(const PFS_mutex *pfs) {
-  PFS_thread *thread = sanitize_thread(pfs->m_owner);
+  const PFS_thread *thread = sanitize_thread(pfs->m_owner);
 
   if (thread == nullptr) {
     return do_match(true, 0);
@@ -1852,7 +1846,7 @@ bool PFS_key_thread_id::match_owner(const PFS_metadata_lock *pfs) {
 }
 
 bool PFS_key_thread_id::match_writer(const PFS_rwlock *pfs) {
-  PFS_thread *thread = sanitize_thread(pfs->m_writer);
+  const PFS_thread *thread = sanitize_thread(pfs->m_writer);
 
   if (thread == nullptr) {
     return do_match(true, 0);
@@ -1922,11 +1916,10 @@ bool PFS_key_socket_id::match(const PFS_socket *pfs) {
 bool PFS_key_port::match(const PFS_socket *pfs) {
   bool record_null = (pfs->m_addr_len == 0);
   uint port = 0;
-  char ip[INET6_ADDRSTRLEN + 1];
-  uint ip_len = 0;
   if (!record_null) {
-    ip_len = pfs_get_socket_address(ip, sizeof(ip), &port, &pfs->m_sock_addr,
-                                    pfs->m_addr_len);
+    char ip[INET6_ADDRSTRLEN + 1];
+    const uint ip_len = pfs_get_socket_address(
+        ip, sizeof(ip), &port, &pfs->m_sock_addr, pfs->m_addr_len);
     record_null = (ip_len == 0);
   }
   return do_match(record_null, (int32)port);
@@ -1948,7 +1941,7 @@ bool PFS_key_error_number::match_error_index(uint error_index) {
 }
 
 bool PFS_key_thread_name::match(const PFS_thread *pfs) {
-  PFS_thread_class *klass = sanitize_thread_class(pfs->m_class);
+  const PFS_thread_class *klass = sanitize_thread_class(pfs->m_class);
   if (klass == nullptr) {
     return false;
   }
@@ -1965,7 +1958,7 @@ bool PFS_key_event_name::match(const PFS_instr_class *pfs) {
 }
 
 bool PFS_key_event_name::match(const PFS_mutex *pfs) {
-  PFS_mutex_class *safe_class = sanitize_mutex_class(pfs->m_class);
+  const PFS_mutex_class *safe_class = sanitize_mutex_class(pfs->m_class);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -1974,7 +1967,7 @@ bool PFS_key_event_name::match(const PFS_mutex *pfs) {
 }
 
 bool PFS_key_event_name::match(const PFS_rwlock *pfs) {
-  PFS_rwlock_class *safe_class = sanitize_rwlock_class(pfs->m_class);
+  const PFS_rwlock_class *safe_class = sanitize_rwlock_class(pfs->m_class);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -1982,7 +1975,7 @@ bool PFS_key_event_name::match(const PFS_rwlock *pfs) {
 }
 
 bool PFS_key_event_name::match(const PFS_cond *pfs) {
-  PFS_cond_class *safe_class = sanitize_cond_class(pfs->m_class);
+  const PFS_cond_class *safe_class = sanitize_cond_class(pfs->m_class);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -1990,7 +1983,7 @@ bool PFS_key_event_name::match(const PFS_cond *pfs) {
 }
 
 bool PFS_key_event_name::match(const PFS_file *pfs) {
-  PFS_file_class *safe_class = sanitize_file_class(pfs->m_class);
+  const PFS_file_class *safe_class = sanitize_file_class(pfs->m_class);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -1998,7 +1991,7 @@ bool PFS_key_event_name::match(const PFS_file *pfs) {
 }
 
 bool PFS_key_event_name::match(const PFS_socket *pfs) {
-  PFS_socket_class *safe_class = sanitize_socket_class(pfs->m_class);
+  const PFS_socket_class *safe_class = sanitize_socket_class(pfs->m_class);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -2083,7 +2076,7 @@ bool PFS_key_event_name::match_view(uint view) {
 }
 
 bool PFS_key_meter_name::match(PFS_meter_class *pfs) {
-  PFS_meter_class *safe_class = sanitize_meter_class(pfs);
+  const PFS_meter_class *safe_class = sanitize_meter_class(pfs);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -2091,7 +2084,7 @@ bool PFS_key_meter_name::match(PFS_meter_class *pfs) {
 }
 
 bool PFS_key_metric_name::match(PFS_metric_class *pfs) {
-  PFS_metric_class *safe_class = sanitize_metric_class(pfs);
+  const PFS_metric_class *safe_class = sanitize_metric_class(pfs);
   if (unlikely(safe_class == nullptr)) {
     return false;
   }
@@ -2210,7 +2203,7 @@ bool PFS_key_group_name::match(PFS_thread *pfs) {
 }
 
 bool PFS_key_variable_name::match(const System_variable *pfs) {
-  return do_match(false, pfs->m_name, pfs->m_name_length);
+  return do_match(false, pfs->m_name_str, pfs->m_name_length);
 }
 
 bool PFS_key_variable_name::match(const Status_variable *pfs) {
@@ -2294,20 +2287,18 @@ bool PFS_key_object_type::match(const PFS_program *pfs) {
 
 bool PFS_key_object_type::do_match(bool record_null,
                                    enum_object_type record_value) {
-  int cmp = 0;
+  int cmp;
 
   if (m_is_null) {
     cmp = (record_null ? 0 : 1);
+  } else if (record_null) {
+    cmp = -1;
+  } else if (record_value < m_object_type) {
+    cmp = -1;
+  } else if (record_value > m_object_type) {
+    cmp = +1;
   } else {
-    if (record_null) {
-      cmp = -1;
-    } else if (record_value < m_object_type) {
-      cmp = -1;
-    } else if (record_value > m_object_type) {
-      cmp = +1;
-    } else {
-      cmp = 0;
-    }
+    cmp = 0;
   }
 
   switch (m_find_flag) {
@@ -2362,20 +2353,18 @@ bool PFS_key_object_type_enum::match(const PFS_program *pfs) {
 
 bool PFS_key_object_type_enum::do_match(bool record_null,
                                         enum_object_type record_value) {
-  int cmp = 0;
+  int cmp;
 
   if (m_is_null) {
     cmp = (record_null ? 0 : 1);
+  } else if (record_null) {
+    cmp = -1;
+  } else if (record_value < m_object_type) {
+    cmp = -1;
+  } else if (record_value > m_object_type) {
+    cmp = +1;
   } else {
-    if (record_null) {
-      cmp = -1;
-    } else if (record_value < m_object_type) {
-      cmp = -1;
-    } else if (record_value > m_object_type) {
-      cmp = +1;
-    } else {
-      cmp = 0;
-    }
+    cmp = 0;
   }
 
   switch (m_find_flag) {

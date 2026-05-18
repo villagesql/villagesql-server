@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+Copyright (c) 2000, 2026, Oracle and/or its affiliates.
 Copyright (c) 2026 VillageSQL Contributors
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.

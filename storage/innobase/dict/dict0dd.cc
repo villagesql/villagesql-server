@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+Copyright (c) 2017, 2026, Oracle and/or its affiliates.
 Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
@@ -2658,7 +2658,7 @@ void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
       // Write storage reference, if stored in extended column storage.
       villagesql::innodb::Custom_column::save_ref(col, dd_column);
 
-      /* Write physical post only for tables having row versions */
+      /* Write physical pos only for tables having row versions */
       if (!has_row_versions || dd_column->is_virtual()) {
         continue;
       }
