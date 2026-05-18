@@ -102,7 +102,11 @@ struct Key_sort_buffer : private ut::Non_copyable {
   dfield_t *alloc(size_t n) noexcept {
     const auto sz = sizeof(dfield_t) * n;
     m_total_size += sz;
-    return static_cast<dfield_t *>(mem_heap_alloc(m_heap, sz));
+    // Zero-fill so dtype_t::extended_storage and other unset bitfields start
+    // at zero; some callers (the FTS aux key in doc_tokenize) populate only a
+    // subset of dfield_t/dtype_t members and would otherwise inherit stale
+    // bits from prior heap use. See data0type.h:dtype_t::extended_storage.
+    return static_cast<dfield_t *>(mem_heap_zalloc(m_heap, sz));
   }
 
   /** Pops the unfinished tuple which was allocated with alloc(), but
