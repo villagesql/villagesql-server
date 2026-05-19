@@ -1,0 +1,30 @@
+# Regression test for an assertion in make_field (sql/field.cc) that fired
+# when a stored procedure DECLAREs a local variable of a variable-length
+# custom type (persisted_length = -1).
+#
+# CALL on such a procedure triggers sp_rcontext::init_var_table ->
+# create_tmp_table_from_fields -> make_field, where the assertion
+#   f->field_length == create_field.custom_type_context->persisted_length()
+# failed because field_length is derived from max_display_width_in_bytes()
+# while the type's custom_type_context reports persisted_length = -1.
+#
+# Originally observed with the third-party vsql_roaring_bitmap extension's
+# ROARING64 type. Reproduced here with the in-tree vsql_test_only extension's
+# VARLEN_TEST type for regression coverage.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Procedure with a single variable-length custom type local
+delimiter //;
+CREATE PROCEDURE p_varlen_local()
+BEGIN
+  DECLARE v vsql_test_only.VARLEN_TEST;
+  SELECT 1 AS ok;
+END//
+delimiter ;//
+
+--echo # CALL exercises sp_rcontext::init_var_table -> make_field
+CALL p_varlen_local();
+
+DROP PROCEDURE p_varlen_local;
+UNINSTALL EXTENSION vsql_test_only;

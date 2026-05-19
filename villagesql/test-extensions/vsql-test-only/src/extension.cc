@@ -50,6 +50,10 @@
 //
 //                 Any other input is rejected by encode with an assert-style
 //                 error, so tests cannot silently pass unexpected values.
+//
+//   VARLEN_TEST - A variable-length type that stores and decodes the input
+//                 string verbatim. Used for tests that need custom VARCHAR
+//                 storage without extension-specific semantics.
 
 #include <villagesql/vsql.h>
 
@@ -178,6 +182,50 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .compare<&fault_blob_compare>()
                                 .build();
 
+// VARLEN_TEST: a minimal variable-length custom type (persisted_length == -1).
+// Stores the input string verbatim and echoes it back on decode. Used as the
+// smallest possible regression case for the make_field assertion that fired
+// when a variable-length custom type is used as a stored procedure local
+// variable.
+
+constexpr int64_t kVarlenMaxLength = 65535;
+
+void varlen_test_encode(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (from.size() > buf.size()) return;  // input too long
+  memcpy(buf.data(), from.data(), from.size());
+  out.set_length(static_cast<int64_t>(from.size()));
+}
+
+void varlen_test_decode(vsql::CustomArg in, vsql::StringResult out) {
+  auto data = in.value();
+  auto buf = out.buffer();
+  if (buf.size() < data.size()) return;
+  memcpy(buf.data(), data.data(), data.size());
+  out.set_length(data.size());
+}
+
+int varlen_test_compare(vsql::CustomArg a, vsql::CustomArg b) {
+  auto va = a.value();
+  auto vb = b.value();
+  size_t cmp_len = va.size() < vb.size() ? va.size() : vb.size();
+  int r = memcmp(va.data(), vb.data(), cmp_len);
+  if (r != 0) return r;
+  if (va.size() < vb.size()) return -1;
+  if (va.size() > vb.size()) return 1;
+  return 0;
+}
+
+static constexpr const char kVarlenTestTypeName[] = "VARLEN_TEST";
+
+constexpr auto VARLEN_TEST = vsql::make_type<kVarlenTestTypeName>()
+                                 .persisted_length(-1)
+                                 .max_decode_buffer_length(kVarlenMaxLength)
+                                 .from_string<&varlen_test_encode>()
+                                 .to_string<&varlen_test_decode>()
+                                 .compare<&varlen_test_compare>()
+                                 .build();
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -185,6 +233,9 @@ VEF_GENERATE_ENTRY_POINTS(
         // FAULT_BLOB type: behaviour controlled by
         // "OK"/"DECODE_FAIL"/"ENCODE_FAIL" prefix
         .type(FAULT_BLOB)
+        // VARLEN_TEST: minimal variable-length custom type for regression
+        // testing variable-length code paths.
+        .type(VARLEN_TEST)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)

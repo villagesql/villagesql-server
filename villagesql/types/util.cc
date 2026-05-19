@@ -77,9 +77,14 @@ static const char *ER_INCOMPATIBLE_TYPES =
     "Cannot compare values of incompatible types '%s' and '%s'";
 
 // Verify that the Field's storage length matches the TypeContext's
-// persisted_length.
+// persisted_length. Variable-length custom types (persisted_length == -1)
+// piggyback on the underlying VARCHAR storage and have field_length set to a
+// declared cap, so the equality check does not apply to them.
 static bool CheckFieldLengthMatchesType(const Field *field,
                                         const TypeContext *tc) {
+  if (tc->persisted_length() == -1) {
+    return false;
+  }
   if (should_assert_if_false(static_cast<int64_t>(field->field_length) ==
                              tc->persisted_length())) {
     LogVSQL(ERROR_LEVEL,

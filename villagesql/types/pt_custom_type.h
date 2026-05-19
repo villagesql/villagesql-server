@@ -88,8 +88,16 @@ class PT_custom_type : public PT_type {
     // persisted_length. For fixed-length types this comes from the descriptor.
     // For variable-length types with parameters, this was computed by
     // resolve_params at TypeContext construction time.
+    //
+    // For variable-length types whose persisted length remains -1, fall back
+    // to the context's max_decode_buffer_length so the underlying VARCHAR
+    // storage has a declared cap. The Field's field_length will reflect this
+    // cap rather than persisted_length == -1.
     if (nullptr == length_spec) {
       int64_t len = type_context->persisted_length();
+      if (len == -1) {
+        len = type_context->max_decode_buffer_length();
+      }
       if (len > 0) {
         snprintf(length_buffer, sizeof(length_buffer), "%" PRId64, len);
         length_spec = length_buffer;
@@ -209,6 +217,8 @@ class PT_custom_type : public PT_type {
                                qname.c_str());
           return nullptr;
         }
+        // Variable-length type without explicit length: the constructor uses
+        // max_decode_buffer_length as the underlying VARCHAR cap.
       }
     }
 

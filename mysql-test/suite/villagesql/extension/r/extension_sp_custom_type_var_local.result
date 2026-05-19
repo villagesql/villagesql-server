@@ -1,0 +1,13 @@
+INSTALL EXTENSION vsql_test_only;
+# Procedure with a single variable-length custom type local
+CREATE PROCEDURE p_varlen_local()
+BEGIN
+DECLARE v vsql_test_only.VARLEN_TEST;
+SELECT 1 AS ok;
+END//
+# CALL exercises sp_rcontext::init_var_table -> make_field
+CALL p_varlen_local();
+ok
+1
+DROP PROCEDURE p_varlen_local;
+UNINSTALL EXTENSION vsql_test_only;

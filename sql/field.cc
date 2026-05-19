@@ -9633,8 +9633,12 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
       create_field.m_srid, create_field.is_array);
   if (f && create_field.custom_type_context) {
     f->set_type_context(create_field.custom_type_context);
-    assert(static_cast<int64_t>(f->field_length) ==
-           create_field.custom_type_context->persisted_length());
+    // For variable-length custom types (persisted_length == -1), the
+    // underlying VARCHAR's field_length is the declared storage cap, not
+    // persisted_length.
+    // For fixed-length types, field_length must equal persisted_length.
+    const int64_t pl = create_field.custom_type_context->persisted_length();
+    assert(pl == -1 || static_cast<int64_t>(f->field_length) == pl);
   }
   return f;
 }
