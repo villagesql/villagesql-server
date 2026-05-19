@@ -14,7 +14,9 @@ permissions:
 jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.pull_request.labels.*.name, 'upstream-merge')"
+    if: >
+      !contains(github.event.pull_request.labels.*.name, 'upstream-merge') &&
+      !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
     steps:
       - name: "CLA Assistant"
         if: >
