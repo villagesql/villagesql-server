@@ -1,29 +1,28 @@
-# restart: --veb-dir=MYSQLTEST_VARDIR/veb
-Creating extension noop using SDK...
-Created noop.veb
 call mtr.add_suppression("extension uses obsolete unstable protocol version");
-# Simulate server at protocol 4 (new unstable); extension uses protocol 2 (old unstable)
-SET @vef_debug_protocol_override = 4;
-INSTALL EXTENSION noop;
-ERROR HY000: Failed to load VEF extension 'noop': extension uses obsolete unstable protocol version 2 (current: 4)
+SET @next_unstable = @@GLOBAL.villagesql_vef_server_protocol + 2;
+SET @next_stable = @@GLOBAL.villagesql_vef_server_protocol + 1;
+# Simulate server at next unstable protocol; extension uses current (old unstable)
+SET @vef_debug_protocol_override = @next_unstable;
+INSTALL EXTENSION vsql_noop_test;
+ERROR HY000: Failed to load VEF extension 'vsql_noop_test': extension uses obsolete unstable protocol version CURRENT_PROTOCOL (current: NEXT_PROTOCOL)
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-# Simulate server at protocol 3 (stable); extension uses protocol 2 (old unstable)
-SET @vef_debug_protocol_override = 3;
-INSTALL EXTENSION noop;
-ERROR HY000: Failed to load VEF extension 'noop': extension uses obsolete unstable protocol version 2 (current: 3)
+# Simulate server at next stable protocol; extension uses current (old unstable)
+SET @vef_debug_protocol_override = @next_stable;
+INSTALL EXTENSION vsql_noop_test;
+ERROR HY000: Failed to load VEF extension 'vsql_noop_test': extension uses obsolete unstable protocol version CURRENT_PROTOCOL (current: NEXT_PROTOCOL)
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-# Current server protocol (2); extension uses protocol 2 (current unstable) -- should succeed
+# Current server protocol; extension uses current unstable -- should succeed
 SET @vef_debug_protocol_override = NULL;
-INSTALL EXTENSION noop;
+INSTALL EXTENSION vsql_noop_test;
 # Verify extension is installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-noop	1.0.0
-UNINSTALL EXTENSION noop;
+vsql_noop_test	0.0.1
+UNINSTALL EXTENSION vsql_noop_test;
 # Verify extension was removed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
