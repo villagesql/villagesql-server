@@ -869,6 +869,21 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
     return true;
   }
 
+  // Reject extensions compiled against an old unstable protocol version.
+  // Even-numbered protocol versions are unstable; only the current one
+  // (max_protocol) is accepted. Odd versions are stable and always accepted.
+  if (reg->protocol % 2 == 0 && reg->protocol != max_protocol) {
+    error_message =
+        "extension uses obsolete unstable protocol version " +
+        std::to_string(static_cast<unsigned>(reg->protocol)) +
+        " (current: " + std::to_string(static_cast<unsigned>(max_protocol)) +
+        ")";
+    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
+    vef_unregister(&unregister_arg, reg);
+    dlclose(handle);
+    return true;
+  }
+
   // Populate any capabilities the extension requires.
   if (villagesql::services::populate_capabilities(ctx, reg, error_message)) {
     // Roll back any capabilities that were successfully populated before the

@@ -1,0 +1,53 @@
+# Test that extensions compiled against an old unstable protocol version are
+# rejected, while extensions using the current unstable version are accepted.
+#
+# Even-numbered protocol versions are unstable. Only the current server
+# protocol version is accepted; older even versions are rejected. Odd versions
+# are stable and always accepted.
+#
+# This test is debug-only: it relies on @vef_debug_protocol_override to
+# simulate the server being at a higher protocol version.
+
+--source include/have_debug.inc
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = noop
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+call mtr.add_suppression("extension uses obsolete unstable protocol version");
+
+--echo # Simulate server at protocol 4 (new unstable); extension uses protocol 2 (old unstable)
+SET @vef_debug_protocol_override = 4;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION noop;
+
+--echo # Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Simulate server at protocol 3 (stable); extension uses protocol 2 (old unstable)
+SET @vef_debug_protocol_override = 3;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION noop;
+
+--echo # Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Current server protocol (2); extension uses protocol 2 (current unstable) -- should succeed
+SET @vef_debug_protocol_override = NULL;
+INSTALL EXTENSION noop;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+UNINSTALL EXTENSION noop;
+
+--echo # Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
