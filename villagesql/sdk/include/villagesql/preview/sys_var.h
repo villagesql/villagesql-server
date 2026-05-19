@@ -26,6 +26,7 @@
 
 #include <villagesql/abi/preview/sys_var.h>
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/vsql/func_types.h>
 
@@ -158,7 +159,8 @@ struct SysVarDescriptor {
 // `descriptor_list` in the on_populate callback to register the variables
 // with MySQL.
 template <size_t N>
-class SysVarCapability {
+class SysVarCapability
+    : public ::vsql::detail::CapabilityBase<SysVarCapability<N>> {
  public:
   explicit SysVarCapability(SysVarDescriptor const (&descs)[N]) {
     for (size_t i = 0; i < N; ++i) {

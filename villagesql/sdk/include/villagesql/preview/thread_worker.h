@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_THREAD_WORKER_H
 
 #include <villagesql/abi/preview/thread_worker.h>
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_thread_worker {
@@ -36,7 +37,8 @@ namespace vsql::preview_thread_worker {
 //   VEF_GENERATE_ENTRY_POINTS(make_extension().with(g_cap))
 
 template <auto WorkFn>
-class ThreadWorkerCapability {
+class ThreadWorkerCapability
+    : public ::vsql::detail::CapabilityBase<ThreadWorkerCapability<WorkFn>> {
  public:
   // Constructor populates the per-WorkFn static descriptor. Runs at
   // static-init time (before vef_register).

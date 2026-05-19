@@ -22,6 +22,7 @@
 // exposes no VDFs.
 
 #include <villagesql/vsql.h>
+#include <villagesql/vsql/capability_base.h>
 
 using namespace vsql;
 
@@ -31,7 +32,9 @@ struct NonexistentAbi {
   void (*fn)();
 };
 
-struct NonexistentCap {
+struct NonexistentCap : public ::vsql::detail::CapabilityBase<NonexistentCap> {
+  NonexistentCap() {}
+
   const NonexistentAbi *abi = nullptr;
 };
 

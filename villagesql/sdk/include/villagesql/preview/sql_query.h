@@ -21,6 +21,7 @@
 
 #include <villagesql/abi/preview/sql_query.h>
 #include <villagesql/abi/preview/thread_worker.h>
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_sql_query {
@@ -75,7 +76,8 @@ class SqlQuery;
 //       make_extension()
 //           .with(g_worker_cap)
 //           .with(g_sql_query_cap))
-class SqlQueryCapability {
+class SqlQueryCapability
+    : public ::vsql::detail::CapabilityBase<SqlQueryCapability> {
  public:
   // Open a SQL session bound to the given background thread handle.
   // Returns an invalid Session (operator bool == false) on failure.

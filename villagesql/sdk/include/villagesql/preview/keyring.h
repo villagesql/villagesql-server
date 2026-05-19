@@ -20,13 +20,15 @@
 #include <string_view>
 
 #include <villagesql/abi/preview/keyring.h>
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_keyring {
 
 // Declare a KeyringCapability by value in your extension and pass it to
 // .with(). VEF populates the capability during registration.
-class KeyringCapability {
+class KeyringCapability
+    : public ::vsql::detail::CapabilityBase<KeyringCapability> {
  public:
   enum class Status {
     OK = VEF_KEYRING_OK,

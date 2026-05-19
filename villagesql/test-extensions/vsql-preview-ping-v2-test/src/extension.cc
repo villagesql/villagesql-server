@@ -25,12 +25,16 @@
 
 #include <cstdint>
 
-#include <villagesql/detail/capability_traits.h>
 #include <villagesql/vsql.h>
+#include <villagesql/detail/capability_base.h>
+#include <villagesql/detail/capability_traits.h>
 
 using namespace vsql;
 
-struct PingV2Capability {
+struct PingV2Capability
+    : public ::vsql::detail::CapabilityBase<PingV2Capability> {
+  PingV2Capability() {}
+
   const vef_preview_ping_v2_t *abi = nullptr;
 };
 
