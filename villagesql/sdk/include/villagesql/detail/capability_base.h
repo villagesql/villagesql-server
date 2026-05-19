@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_VSQL_CAPABILITY_BASE_H
-#define VILLAGESQL_VSQL_CAPABILITY_BASE_H
+#ifndef VILLAGESQL_DETAIL_CAPABILITY_BASE_H
+#define VILLAGESQL_DETAIL_CAPABILITY_BASE_H
 
 #include <cstddef>
 
@@ -103,4 +103,4 @@ class CapabilityBase {
 
 }  // namespace vsql::detail
 
-#endif  // VILLAGESQL_VSQL_CAPABILITY_BASE_H
+#endif  // VILLAGESQL_DETAIL_CAPABILITY_BASE_H

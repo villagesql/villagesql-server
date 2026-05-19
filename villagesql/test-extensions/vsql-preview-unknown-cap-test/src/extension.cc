@@ -21,8 +21,8 @@
 // registered" error before any user-visible code runs, so the extension
 // exposes no VDFs.
 
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/vsql.h>
-#include <villagesql/vsql/capability_base.h>
 
 using namespace vsql;
 
