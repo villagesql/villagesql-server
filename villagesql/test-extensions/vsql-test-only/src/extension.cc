@@ -184,11 +184,10 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
 
 // VARLEN_TEST: a minimal variable-length custom type (persisted_length == -1).
 // Stores the input string verbatim and echoes it back on decode. Used as the
-// smallest possible regression case for the make_field assertion that fired
-// when a variable-length custom type is used as a stored procedure local
-// variable.
+// smallest possible regression case for code paths that must treat
+// persisted_length == -1 as "variable length", not as a concrete storage size.
 
-constexpr int64_t kVarlenMaxLength = 65535;
+constexpr int64_t kVarlenMaxLength = 1024;
 
 void varlen_test_encode(std::string_view from, vsql::CustomResult out) {
   auto buf = out.buffer();

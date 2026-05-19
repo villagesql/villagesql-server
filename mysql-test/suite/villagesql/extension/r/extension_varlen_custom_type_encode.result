@@ -1,0 +1,27 @@
+INSTALL EXTENSION vsql_test_only;
+# Regular table: INSERT exercises Field TypeEncoder
+CREATE TABLE t_varlen (v vsql_test_only.VARLEN_TEST);
+INSERT INTO t_varlen VALUES ('regular');
+SELECT v FROM t_varlen;
+v
+regular
+DROP TABLE t_varlen;
+# Temporary table: INSERT exercises temporary Field TypeEncoder
+CREATE TEMPORARY TABLE tmp_varlen (v vsql_test_only.VARLEN_TEST);
+INSERT INTO tmp_varlen VALUES ('temporary');
+SELECT v FROM tmp_varlen;
+v
+temporary
+DROP TEMPORARY TABLE tmp_varlen;
+# Stored procedure local: assignment exercises Item/Field encode path
+CREATE PROCEDURE p_varlen_assign()
+BEGIN
+DECLARE v vsql_test_only.VARLEN_TEST;
+SET v = 'procedure';
+SELECT v AS v;
+END//
+CALL p_varlen_assign();
+v
+procedure
+DROP PROCEDURE p_varlen_assign;
+UNINSTALL EXTENSION vsql_test_only;

@@ -33,8 +33,8 @@ namespace villagesql {
 // from the owning object's mem_root on first encode and reused for all
 // subsequent encodes within the same lifetime.
 //
-// It pre-allocates a scratch buffer (persisted_length bytes) and a String
-// wrapper once, eliminating per-row allocations during INSERT/UPDATE.
+// It pre-allocates a scratch buffer sized by the caller and a String wrapper
+// once, eliminating per-row allocations during INSERT/UPDATE.
 //
 // For regular-table Fields the buffer is owned by TABLE::mem_root and freed
 // when the TABLE is evicted. For tmp-table Fields it is owned by
@@ -50,7 +50,7 @@ class TypeEncoder {
  public:
   // Construct from mem_root: pre-fills VDF/fn_ state. Does not allocate the
   // encode buffer; call Init() before encode(). mem_root must outlive this.
-  TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root);
+  TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root, size_t buffer_size);
 
   // Allocate the encode buffer from mem_root_. Must be called once before
   // encode(). On OOM calls my_error and returns true.
@@ -72,7 +72,7 @@ class TypeEncoder {
  private:
   MEM_ROOT *mem_root_{nullptr};  // owning mem_root, used for overflow growth
   char *buffer_{nullptr};        // pre-allocated from mem_root_
-  size_t buffer_size_{0};        // = tc->persisted_length()
+  size_t buffer_size_{0};
   String result_;                // reused String wrapper pointing into buffer_
 
   // Overflow path: reused when VDF output exceeds buffer_size_ (rare).

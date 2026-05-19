@@ -311,7 +311,15 @@ static TypeEncoder *GetTypeEncoderFor(Field *field) {
     MEM_ROOT &mem_root = (field->table->s->tmp_table == NO_TMP_TABLE)
                              ? field->table->mem_root
                              : field->table->s->mem_root;
-    encoder = new (&mem_root) TypeEncoder(field->get_type_context(), mem_root);
+    const TypeContext *tc = field->get_type_context();
+    const int64_t persisted_length = tc->persisted_length();
+    // For bare variable-length custom types, persisted_length == -1 and the
+    // concrete storage cap lives on the underlying VARCHAR Field.
+    const size_t buffer_size = persisted_length > 0
+                                   ? static_cast<size_t>(persisted_length)
+                                   : field->field_length;
+    assert(buffer_size > 0);
+    encoder = new (&mem_root) TypeEncoder(tc, mem_root, buffer_size);
     if (encoder == nullptr) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
       return nullptr;
@@ -330,8 +338,18 @@ static TypeEncoder *GetTypeEncoderFor(Field *field) {
 static TypeEncoder *GetTypeEncoderFor(Item *item) {
   TypeEncoder *encoder = item->get_type_encoder();
   if (encoder == nullptr) {
+    const TypeContext *tc = item->get_type_context();
+    const int64_t persisted_length = tc->persisted_length();
+    const int64_t max_decode_buffer_length = tc->max_decode_buffer_length();
+    assert(persisted_length > 0 || max_decode_buffer_length > 0);
+    // Items have no Field storage cap, so bare variable-length custom types use
+    // the existing max_decode_buffer_length bound as their encode buffer cap.
+    const size_t buffer_size =
+        persisted_length > 0 ? static_cast<size_t>(persisted_length)
+                             : static_cast<size_t>(max_decode_buffer_length);
+    assert(buffer_size > 0);
     encoder = new (current_thd->mem_root)
-        TypeEncoder(item->get_type_context(), *current_thd->mem_root);
+        TypeEncoder(tc, *current_thd->mem_root, buffer_size);
     if (encoder == nullptr) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
       return nullptr;
@@ -811,10 +829,10 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
     int2store(to_ptr, static_cast<uint16>(data_len));
   }
 
-  // Ensure data fits in destination field. Compatible TypeContexts share the
-  // same persisted_length (parameters are part of the key), so from and to
-  // have matching field_length, and data_len <= from->field_length holds by
-  // construction.
+  // Ensure data fits in destination field. Compatible TypeContexts have the
+  // same type key (including parameters); for fixed-size types this implies the
+  // same persisted length, and for bare variable-length types both Fields use
+  // the same declared storage cap.
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);

@@ -28,9 +28,9 @@
 
 namespace villagesql {
 
-TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
-    : mem_root_(&mem_root),
-      buffer_size_(static_cast<size_t>(tc->persisted_length())) {
+TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root,
+                         size_t buffer_size)
+    : mem_root_(&mem_root), buffer_size_(buffer_size) {
   assert(tc != nullptr);
   assert(buffer_size_ > 0);
 

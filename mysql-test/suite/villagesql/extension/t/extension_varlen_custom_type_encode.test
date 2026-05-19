@@ -1,0 +1,32 @@
+# Regression coverage for bare variable-length custom types reaching TypeEncoder
+# with persisted_length = -1. These cases must size the encode buffer from a
+# concrete storage cap, not from persisted_length.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Regular table: INSERT exercises Field TypeEncoder
+CREATE TABLE t_varlen (v vsql_test_only.VARLEN_TEST);
+INSERT INTO t_varlen VALUES ('regular');
+SELECT v FROM t_varlen;
+DROP TABLE t_varlen;
+
+--echo # Temporary table: INSERT exercises temporary Field TypeEncoder
+CREATE TEMPORARY TABLE tmp_varlen (v vsql_test_only.VARLEN_TEST);
+INSERT INTO tmp_varlen VALUES ('temporary');
+SELECT v FROM tmp_varlen;
+DROP TEMPORARY TABLE tmp_varlen;
+
+--echo # Stored procedure local: assignment exercises Item/Field encode path
+delimiter //;
+CREATE PROCEDURE p_varlen_assign()
+BEGIN
+  DECLARE v vsql_test_only.VARLEN_TEST;
+  SET v = 'procedure';
+  SELECT v AS v;
+END//
+delimiter ;//
+
+CALL p_varlen_assign();
+DROP PROCEDURE p_varlen_assign;
+
+UNINSTALL EXTENSION vsql_test_only;
