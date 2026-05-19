@@ -1,7 +1,8 @@
-# restart: --veb-dir=MYSQLTEST_VARDIR/veb
-Creating extension no_default_type using SDK...
-Created no_default_type.veb
-INSTALL EXTENSION no_default_type;
+INSTALL EXTENSION vsql_test_only;
+SELECT NO_DEFAULT_TYPE::from_string('whatever');
+ERROR HY000: Type 'vsql_test_only.NO_DEFAULT_TYPE' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
-ERROR HY000: Type 'no_default_type.NO_DEFAULT_TYPE' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
-UNINSTALL EXTENSION no_default_type;
+ERROR HY000: Type 'vsql_test_only.NO_DEFAULT_TYPE' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4) NOT NULL);
+ERROR HY000: Type 'vsql_test_only.NO_DEFAULT_PARAM_TYPE(4)' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
+UNINSTALL EXTENSION vsql_test_only;
