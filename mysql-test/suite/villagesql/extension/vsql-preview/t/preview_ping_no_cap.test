@@ -1,17 +1,18 @@
-# Test that omitting .with<preview_ping<>> causes the capability to be
-# unavailable, and that the extension degrades gracefully (returns NULL/0).
+# Test that declaring a CapabilityBase-derived capability statically
+# without passing it to .with() causes INSTALL EXTENSION to fail with a
+# clear, named diagnostic from the SDK's per-.so capability registry,
+# rather than loading an extension whose vtable would be null at call
+# time.
+#
+# This extension's builder has no .with() call, so required_capability_count
+# is 0 and the server's "preview capabilities OFF" gate does not fire.
+# The SDK-side registry check fires regardless of that setting, since it
+# only looks at CapabilityBase-derived statics declared in the .so.
 
-SET PERSIST vsql_allow_preview_extensions = ON;
+call mtr.add_suppression("vef_register returned an error");
+call mtr.add_suppression("was declared but never passed to .with");
 
+--echo # PingCapability was declared but never passed to .with(): INSTALL EXTENSION
+--echo # fails at vef_register time with a named diagnostic.
+--error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION vsql_preview_ping_no_cap_test;
-
---echo # ping was not registered, so it is unavailable
-SELECT vsql_preview_ping_no_cap_test.ping_available() AS ping_available;
-
---echo # ping_value() returns NULL when capability is unavailable
-SELECT vsql_preview_ping_no_cap_test.ping_value() IS NULL AS ping_is_null;
-
-UNINSTALL EXTENSION vsql_preview_ping_no_cap_test;
-
-SET PERSIST vsql_allow_preview_extensions = OFF;
-RESET PERSIST vsql_allow_preview_extensions;

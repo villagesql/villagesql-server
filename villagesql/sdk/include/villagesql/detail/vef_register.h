@@ -29,6 +29,8 @@
 #include <villagesql/detail/capability_hash.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/sdk_version.h>
+#include <villagesql/detail/capability_base.h>
+#include <villagesql/detail/capability_traits.h>
 
 namespace vsql {
 
@@ -161,6 +163,58 @@ void vef_fill_required_capability_reqs(vef_required_capability_t *arr,
   (vef_fill_one_capability_req<Is>(arr, e), ...);
 }
 
+// Walk the builder's RequiredCapabilityTuple and consume the matching
+// PendingCapability registry entry for each. Returns a const char* error
+// (a string literal or static-buffer pointer) on the first problem:
+//   * pointer passed to .with() is not a CapabilityBase (or is from
+//     another .so) — registry lookup misses.
+//   * same instance passed to .with() more than once — registry entry is
+//     already consumed.
+// Returns nullptr on success.
+template <size_t I, typename Ext>
+const char *vef_consume_one_capability(const Ext &e) {
+  const void *cap_ptr =
+      static_cast<const void *>(e.template required_capability_at<I>());
+  ::vsql::detail::PendingCapability *node =
+      ::vsql::detail::find_pending(cap_ptr);
+  static char error_buf[192];
+  if (node == nullptr) {
+    snprintf(error_buf, sizeof(error_buf),
+             ".with() received an object that does not inherit "
+             "vsql::detail::CapabilityBase; not a registered capability");
+    return error_buf;
+  }
+  if (node->consumed) {
+    snprintf(error_buf, sizeof(error_buf),
+             "capability '%s' passed to .with() more than once",
+             node->name ? node->name : "(unknown)");
+    return error_buf;
+  }
+  node->consumed = true;
+  return nullptr;
+}
+
+template <typename Ext, size_t... Is>
+const char *vef_consume_required_capabilities(const Ext &e,
+                                              std::index_sequence<Is...>) {
+  const char *err = nullptr;
+  // Short-circuit on first error using fold expression.
+  (void)((err = vef_consume_one_capability<Is>(e), err != nullptr) || ...);
+  return err;
+}
+
+// After every .with() has marked its matching entry consumed, any entry
+// still unconsumed is a declared-but-never-registered capability.
+// Returns the name of the first such entry, or nullptr if all consumed.
+inline const char *vef_first_unconsumed_capability() {
+  for (::vsql::detail::PendingCapability *node =
+           ::vsql::detail::pending_capabilities_head();
+       node != nullptr; node = node->next) {
+    if (!node->consumed) return node->name ? node->name : "(unknown)";
+  }
+  return nullptr;
+}
+
 // Calls params_init_fn() and params_to_strings_init_fn() for each type that
 // has one. These fields live on the vsql TypeObject only (parameterized types
 // flow through the typed C++ API); low-level type_builder::TypeDescriptor has
@@ -248,6 +302,32 @@ vef_registration_t *vef_register_impl(
     vef_fill_required_capability_reqs(
         required_capability_reqs, ext,
         std::make_index_sequence<RequiredCapabilityCount>{});
+  }
+
+  // Reset all CapabilityBase entries so that an extension reload (a second
+  // vef_register call against the same statics) re-validates from scratch
+  // rather than carrying consumed=true forward from the previous load.
+  ::vsql::detail::reset_pending_consumed();
+
+  if constexpr (RequiredCapabilityCount > 0) {
+    if (const char *err = vef_consume_required_capabilities(
+            ext, std::make_index_sequence<RequiredCapabilityCount>{})) {
+      reg.protocol = arg->protocol;
+      reg.error_msg = const_cast<char *>(err);
+      return &reg;
+    }
+  }
+
+  if (const char *unregistered = vef_first_unconsumed_capability()) {
+    static char unreg_error_buf[192];
+    snprintf(unreg_error_buf, sizeof(unreg_error_buf),
+             "capability '%s' was declared but never passed to .with(); "
+             "every CapabilityBase-derived static must be registered via "
+             ".with(cap) in the extension builder",
+             unregistered);
+    reg.protocol = arg->protocol;
+    reg.error_msg = unreg_error_buf;
+    return &reg;
   }
 
   if constexpr (FuncCount > 0) {

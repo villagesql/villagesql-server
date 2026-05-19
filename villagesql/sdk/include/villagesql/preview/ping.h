@@ -17,16 +17,19 @@
 #define VILLAGESQL_PREVIEW_PING_H
 
 #include <villagesql/abi/preview/ping.h>
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_ping {
 
 // Declare a PingCapability by value in your extension and pass it to
-// .with(). VEF populates the capability during registration.
-class PingCapability {
+// .with(). VEF populates the capability during registration. Inheriting
+// CapabilityBase enrolls each declared instance in a per-.so registry; the
+// extension fails to load if any instance is not registered via .with()
+// or if the same instance is passed to .with() more than once.
+class PingCapability : public ::vsql::detail::CapabilityBase<PingCapability> {
  public:
   long long ping() const;
-  bool available() const noexcept;
 
  private:
   template <typename Capability>

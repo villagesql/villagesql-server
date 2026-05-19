@@ -1,13 +1,6 @@
-SET PERSIST vsql_allow_preview_extensions = ON;
+call mtr.add_suppression("vef_register returned an error");
+call mtr.add_suppression("was declared but never passed to .with");
+# PingCapability was declared but never passed to .with(): INSTALL EXTENSION
+# fails at vef_register time with a named diagnostic.
 INSTALL EXTENSION vsql_preview_ping_no_cap_test;
-# ping was not registered, so it is unavailable
-SELECT vsql_preview_ping_no_cap_test.ping_available() AS ping_available;
-ping_available
-0
-# ping_value() returns NULL when capability is unavailable
-SELECT vsql_preview_ping_no_cap_test.ping_value() IS NULL AS ping_is_null;
-ping_is_null
-1
-UNINSTALL EXTENSION vsql_preview_ping_no_cap_test;
-SET PERSIST vsql_allow_preview_extensions = OFF;
-RESET PERSIST vsql_allow_preview_extensions;
+ERROR HY000: Failed to load VEF extension 'vsql_preview_ping_no_cap_test': vef_register returned an error: capability 'vsql::preview::ping' was declared but never passed to .with(); every CapabilityBase-derived static must be registered via .with(cap) in the extension builder

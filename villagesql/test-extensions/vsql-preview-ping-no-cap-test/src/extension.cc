@@ -13,37 +13,18 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// vsql_preview_ping_no_cap_test extension: verifies that omitting .with()
-// for a capability causes it to be unavailable, and that the extension
-// degrades gracefully rather than crashing.
-//
-// VDFs provided:
-//   ping_available() -> INT   Returns 1 if ping cap was populated, else 0.
-//   ping_value()     -> INT   Returns ping counter, or NULL if unavailable.
+// vsql_preview_ping_no_cap_test extension: declares a PingCapability without
+// ever passing it to .with(). The SDK's per-.so capability registry detects
+// this at extension load time and fails vef_register, so INSTALL EXTENSION
+// must report a clear "capability declared but never passed to .with()"
+// error rather than silently producing an extension with a null vtable.
 
 #include <villagesql/preview/ping.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
 
-// g_ping is never registered via .with(g_ping).
+// Declared but never registered via .with(g_ping).
 static vsql::preview_ping::PingCapability g_ping;
 
-static void ping_available_impl(IntResult out) {
-  out.set(g_ping.available() ? 1 : 0);
-}
-
-static void ping_value_impl(IntResult out) {
-  if (!g_ping.available()) {
-    out.set_null();
-    return;
-  }
-  out.set(g_ping.ping());
-}
-
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension()
-        .func(make_func<&ping_available_impl>("ping_available")
-                  .returns(INT)
-                  .build())
-        .func(make_func<&ping_value_impl>("ping_value").returns(INT).build()))
+VEF_GENERATE_ENTRY_POINTS(make_extension())
