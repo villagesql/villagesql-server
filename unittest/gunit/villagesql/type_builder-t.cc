@@ -82,56 +82,51 @@ static constexpr const char kParamsName[] = "TESTPARAMS";
 namespace trait_tests {
 
 // Non-parameterized: all four operations should yield void.
-static_assert(std::is_void_v<vsql::func_builder::TypeOpParamsType<
+static_assert(std::is_void_v<vsql::func_builder::detail::TypeOpParamsType<
                   vsql::func_builder::TypeEncodeFunc>::type>);
-static_assert(std::is_void_v<vsql::func_builder::TypeOpParamsType<
+static_assert(std::is_void_v<vsql::func_builder::detail::TypeOpParamsType<
                   vsql::func_builder::TypeDecodeFunc>::type>);
-static_assert(std::is_void_v<vsql::func_builder::TypeOpParamsType<
+static_assert(std::is_void_v<vsql::func_builder::detail::TypeOpParamsType<
                   vsql::func_builder::TypeCompareFunc>::type>);
-static_assert(std::is_void_v<vsql::func_builder::TypeOpParamsType<
+static_assert(std::is_void_v<vsql::func_builder::detail::TypeOpParamsType<
                   vsql::func_builder::TypeHashFunc>::type>);
 
 // Parameterized: all four operations should yield the params type.
 static_assert(
     std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<
+        vsql::func_builder::detail::TypeOpParamsType<
             vsql::func_builder::TypeEncodeWithParamsFunc<TestParams>>::type,
         TestParams>);
 static_assert(
     std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<
+        vsql::func_builder::detail::TypeOpParamsType<
             vsql::func_builder::TypeDecodeWithParamsFunc<TestParams>>::type,
         TestParams>);
 static_assert(
     std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<
+        vsql::func_builder::detail::TypeOpParamsType<
             vsql::func_builder::TypeCompareWithParamsFunc<TestParams>>::type,
         TestParams>);
 static_assert(std::is_same_v<
-              vsql::func_builder::TypeOpParamsType<
+              vsql::func_builder::detail::TypeOpParamsType<
                   vsql::func_builder::TypeHashWithParamsFunc<TestParams>>::type,
               TestParams>);
 
 // Concrete function pointers: verify trait works on actual function addresses.
-static_assert(
-    std::is_void_v<
-        vsql::func_builder::TypeOpParamsType<decltype(&plain_encode)>::type>);
-static_assert(
-    std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<decltype(&params_encode)>::type,
-        TestParams>);
-static_assert(
-    std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<decltype(&params_decode)>::type,
-        TestParams>);
-static_assert(
-    std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<decltype(&params_compare)>::type,
-        TestParams>);
-static_assert(
-    std::is_same_v<
-        vsql::func_builder::TypeOpParamsType<decltype(&params_hash)>::type,
-        TestParams>);
+static_assert(std::is_void_v<vsql::func_builder::detail::TypeOpParamsType<
+                  decltype(&plain_encode)>::type>);
+static_assert(std::is_same_v<vsql::func_builder::detail::TypeOpParamsType<
+                                 decltype(&params_encode)>::type,
+                             TestParams>);
+static_assert(std::is_same_v<vsql::func_builder::detail::TypeOpParamsType<
+                                 decltype(&params_decode)>::type,
+                             TestParams>);
+static_assert(std::is_same_v<vsql::func_builder::detail::TypeOpParamsType<
+                                 decltype(&params_compare)>::type,
+                             TestParams>);
+static_assert(std::is_same_v<vsql::func_builder::detail::TypeOpParamsType<
+                                 decltype(&params_hash)>::type,
+                             TestParams>);
 
 }  // namespace trait_tests
 

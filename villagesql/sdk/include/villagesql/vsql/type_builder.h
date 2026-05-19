@@ -169,8 +169,13 @@ struct TypeOpVdfName {
 
 // One constexpr instance per (TypeName, Op) pair — inline ensures a single
 // definition across translation units (C++17 inline variable).
+// hidden visibility prevents weak-symbol coalescing across DSO boundaries on
+// Linux, ensuring the pointer value in the extension DSO is stable after
+// dlopen.
 template <const char *TypeName, TypeOp Op>
-inline constexpr TypeOpVdfName<TypeName, Op> kTypeOpVdfName{};
+inline constexpr
+    __attribute__((visibility("hidden"))) TypeOpVdfName<TypeName, Op>
+        kTypeOpVdfName{};
 
 // Shared builder state passed by value between TypeBuilder specializations.
 //
@@ -369,7 +374,8 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto from_string() const {
     using namespace detail;
-    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    using OpP =
+        typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
     static_assert(
         std::is_same_v<OpP, ParamsType>,
         "vsql::TypeBuilder::from_string(): function params type is "
@@ -391,7 +397,8 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto to_string() const {
     using namespace detail;
-    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    using OpP =
+        typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
     static_assert(
         std::is_same_v<OpP, ParamsType>,
         "vsql::TypeBuilder::to_string(): function params type is inconsistent "
@@ -413,7 +420,8 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto compare() const {
     using namespace detail;
-    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    using OpP =
+        typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
     static_assert(
         std::is_same_v<OpP, ParamsType>,
         "vsql::TypeBuilder::compare(): function params type is inconsistent "
@@ -435,7 +443,8 @@ class TypeBuilder {
   template <auto Func>
   constexpr auto hash() const {
     using namespace detail;
-    using OpP = typename func_builder::TypeOpParamsType<decltype(Func)>::type;
+    using OpP =
+        typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
     static_assert(
         std::is_same_v<OpP, ParamsType>,
         "vsql::TypeBuilder::hash(): function params type is inconsistent with "

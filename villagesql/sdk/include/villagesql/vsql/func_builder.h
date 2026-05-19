@@ -59,16 +59,11 @@ struct ResolvedTypeParams {
 
 namespace func_builder {
 
-template <size_t NumParams>
-struct StaticFuncDesc;
-
 // =============================================================================
 // Type Definitions
 // =============================================================================
 
 constexpr size_t kMaxParams = 8;
-
-using ExtFunc = vef_vdf_func_t;
 
 // =============================================================================
 // Type Constants
@@ -77,6 +72,8 @@ using ExtFunc = vef_vdf_func_t;
 constexpr const char *STRING = "STRING";
 constexpr const char *INT = "INT";
 constexpr const char *REAL = "REAL";
+
+namespace detail {
 
 constexpr vef_type_t to_vef_type(const char *name);
 
@@ -181,7 +178,7 @@ struct FuncWithMetadata {
         deterministic(false),
         check_params_cache_bound(nullptr) {}
 
-  ExtFunc f;
+  vef_vdf_func_t f;
   vef_prerun_func_t prerun;
   vef_postrun_func_t postrun;
   vef_vdf_clear_func_t clear;
@@ -193,6 +190,8 @@ struct FuncWithMetadata {
   bool deterministic;
   bool (*check_params_cache_bound)();
 };
+
+}  // namespace detail
 
 // =============================================================================
 // Extension Author Function Signatures
@@ -269,6 +268,8 @@ using ResolveTypeParamsFunc =
 template <typename P>
 using ParamsToStringsFunc = void (*)(const P &,
                                      std::map<std::string, std::string> &);
+
+namespace detail {
 
 // Extracts the params type P from a type operation function pointer,
 // or void for non-parameterized signatures.
@@ -804,13 +805,20 @@ struct ResolveParamsWrapper {
 // =============================================================================
 // StaticFuncDesc
 // =============================================================================
+//
+// StaticFuncDesc lives in the detail namespace. Extension authors pass
+// instances to .func() on the extension builder but never name or call
+// methods on this type directly. Keeping it here means ABI-typed members are
+// not part of the public SDK surface, without requiring private/friend
+// (which would strip the visibility("hidden") attribute from
+// materialize_func_desc and re-introduce the func_desc sharing bug).
 
 template <size_t NumParams>
 struct StaticFuncDesc {
   const char *name_;
   vef_type_t params_[NumParams > 0 ? NumParams : 1];
   vef_type_t return_type_;
-  ExtFunc vdf_;
+  vef_vdf_func_t vdf_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   vef_vdf_clear_func_t clear_;
@@ -818,6 +826,22 @@ struct StaticFuncDesc {
   size_t buffer_size_;
   bool deterministic_;
   bool (*check_params_cache_bound_)();
+
+  constexpr const char *name() const { return name_; }
+  constexpr size_t num_params() const { return NumParams; }
+  constexpr size_t buffer_size() const { return buffer_size_; }
+  constexpr bool deterministic() const { return deterministic_; }
+  constexpr auto check_params_cache_bound() const -> bool (*)() {
+    return check_params_cache_bound_;
+  }
+  constexpr void init_name() const {}
+  constexpr const vef_type_t *params() const { return params_; }
+  constexpr vef_type_t return_type() const { return return_type_; }
+  constexpr vef_vdf_func_t vdf() const { return vdf_; }
+  constexpr vef_prerun_func_t prerun() const { return prerun_; }
+  constexpr vef_postrun_func_t postrun() const { return postrun_; }
+  constexpr vef_vdf_clear_func_t clear() const { return clear_; }
+  constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -835,25 +859,6 @@ struct StaticFuncDesc {
       params_[i] = meta.param_types[i];
     }
   }
-
-  constexpr const char *name() const { return name_; }
-  constexpr size_t num_params() const { return NumParams; }
-  constexpr const vef_type_t *params() const { return params_; }
-  constexpr vef_type_t return_type() const { return return_type_; }
-  constexpr ExtFunc vdf() const { return vdf_; }
-  constexpr vef_prerun_func_t prerun() const { return prerun_; }
-  constexpr vef_postrun_func_t postrun() const { return postrun_; }
-  constexpr vef_vdf_clear_func_t clear() const { return clear_; }
-  constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
-  constexpr size_t buffer_size() const { return buffer_size_; }
-  constexpr bool deterministic() const { return deterministic_; }
-  constexpr auto check_params_cache_bound() const -> bool (*)() {
-    return check_params_cache_bound_;
-  }
-
-  // init_name() is a no-op for regular StaticFuncDesc; present so that
-  // vef_init_auto_names() in extension_builder.h compiles for any func type.
-  constexpr void init_name() const {}
 };
 
 // =============================================================================
@@ -918,29 +923,15 @@ template <typename... Ps>
 struct apply_params_cache_checker<std::tuple<Ps...>>
     : params_cache_checker<Ps...> {};
 
+}  // namespace detail
+
 // =============================================================================
 // FuncBuilder
 // =============================================================================
 
 template <auto Func, size_t NumParams>
-struct FuncBuilder {
-  constexpr FuncBuilder()
-      : name_(nullptr),
-        return_type_(nullptr),
-        param_types_{},
-        buffer_size_(0),
-        prerun_(nullptr),
-        postrun_(nullptr),
-        deterministic_(false) {}
-
-  const char *name_;
-  const char *return_type_;
-  std::array<const char *, NumParams> param_types_;
-  size_t buffer_size_;
-  vef_prerun_func_t prerun_;
-  vef_postrun_func_t postrun_;
-  bool deterministic_;
-
+class FuncBuilder {
+ public:
   constexpr FuncBuilder<Func, NumParams> &returns(const char *t) {
     return_type_ = t;
     return *this;
@@ -983,31 +974,55 @@ struct FuncBuilder {
     return *this;
   }
 
-  constexpr StaticFuncDesc<NumParams> build() const {
+  constexpr detail::StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
 
-    using AllParams = typename FuncParamTypes<decltype(Func)>::type;
-    using UniquePTuple = typename unique_params_types<AllParams>::type;
+    using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
+    using UniquePTuple = typename detail::unique_params_types<AllParams>::type;
 
-    FuncWithMetadata meta{};
-    meta.f = &Wrapper<Func, NumParams>::invoke;
+    detail::FuncWithMetadata meta{};
+    meta.f = &detail::Wrapper<Func, NumParams>::invoke;
     meta.prerun = prerun_;
     meta.postrun = postrun_;
-    meta.return_type = to_vef_type(return_type_);
+    meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
-      meta.param_types[i] = to_vef_type(param_types_[i]);
+      meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
     if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
       meta.check_params_cache_bound =
-          &apply_params_cache_checker<UniquePTuple>::check;
+          &detail::apply_params_cache_checker<UniquePTuple>::check;
     }
 
-    return StaticFuncDesc<NumParams>(name_, meta);
+    return detail::StaticFuncDesc<NumParams>(name_, meta);
   }
+
+ private:
+  constexpr FuncBuilder()
+      : name_(nullptr),
+        return_type_(nullptr),
+        param_types_{},
+        buffer_size_(0),
+        prerun_(nullptr),
+        postrun_(nullptr),
+        deterministic_(false) {}
+
+  const char *name_;
+  const char *return_type_;
+  std::array<const char *, NumParams> param_types_;
+  size_t buffer_size_;
+  vef_prerun_func_t prerun_;
+  vef_postrun_func_t postrun_;
+  bool deterministic_;
+
+  template <auto F, size_t M>
+  friend class FuncBuilder;
+
+  template <auto F>
+  friend constexpr FuncBuilder<F, 0> make_func(const char *);
 };
 
 // =============================================================================
@@ -1019,24 +1034,8 @@ struct FuncBuilder {
 // against State at compile time.
 
 template <typename State, auto Func, size_t NumParams>
-struct AggFuncBuilder {
-  constexpr AggFuncBuilder()
-      : name_(nullptr),
-        return_type_(nullptr),
-        param_types_{},
-        buffer_size_(0),
-        clear_(nullptr),
-        accumulate_(nullptr),
-        deterministic_(false) {}
-
-  const char *name_;
-  const char *return_type_;
-  std::array<const char *, NumParams> param_types_;
-  size_t buffer_size_;
-  vef_vdf_clear_func_t clear_;
-  vef_vdf_accumulate_func_t accumulate_;
-  bool deterministic_;
-
+class AggFuncBuilder {
+ public:
   constexpr AggFuncBuilder<State, Func, NumParams> &returns(const char *t) {
     return_type_ = t;
     return *this;
@@ -1073,13 +1072,13 @@ struct AggFuncBuilder {
   // make_aggregate_func<State, ...>.
   template <auto Fn>
   constexpr AggFuncBuilder<State, Func, NumParams> &clear() {
-    using Params = typename FuncParamTypes<decltype(Fn)>::type;
+    using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
     using DeducedState =
         std::remove_reference_t<std::tuple_element_t<0, Params>>;
     static_assert(std::is_same_v<DeducedState, State>,
                   "clear: first parameter must be State& matching the "
                   "make_aggregate_func State type");
-    clear_ = &agg_clear_wrapper<State, Fn>;
+    clear_ = &detail::agg_clear_wrapper<State, Fn>;
     return *this;
   }
 
@@ -1088,7 +1087,7 @@ struct AggFuncBuilder {
   // Call .accumulate() after all .param() calls.
   template <auto Fn>
   constexpr AggFuncBuilder<State, Func, NumParams> &accumulate() {
-    using Params = typename FuncParamTypes<decltype(Fn)>::type;
+    using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
     using DeducedState =
         std::remove_reference_t<std::tuple_element_t<0, Params>>;
     static_assert(std::is_same_v<DeducedState, State>,
@@ -1098,41 +1097,66 @@ struct AggFuncBuilder {
         std::tuple_size_v<Params> == NumParams + 1,
         "accumulate: typed arg count after State& must match the SQL "
         "parameter count; ensure .accumulate() is called after .param()");
-    accumulate_ = &AggAccumulateWrapper<State, Fn, NumParams>::invoke;
+    accumulate_ = &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
     return *this;
   }
 
-  constexpr StaticFuncDesc<NumParams> build() const {
+  constexpr detail::StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
     if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
-      config_error__aggregate_must_set_both_clear_and_accumulate();
+      detail::config_error__aggregate_must_set_both_clear_and_accumulate();
     }
 
-    using AllParams = typename FuncParamTypes<decltype(Func)>::type;
-    using UniquePTuple = typename unique_params_types<AllParams>::type;
+    using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
+    using UniquePTuple = typename detail::unique_params_types<AllParams>::type;
 
-    FuncWithMetadata meta{};
+    detail::FuncWithMetadata meta{};
     // void(const State&, ResultWrapper).
     using ResultWrapper = std::tuple_element_t<1, AllParams>;
-    meta.f = &AggResultWithOutputWrapper<State, ResultWrapper, Func>::invoke;
-    meta.prerun = &auto_prerun<State>;
-    meta.postrun = &auto_postrun<State>;
+    meta.f =
+        &detail::AggResultWithOutputWrapper<State, ResultWrapper, Func>::invoke;
+    meta.prerun = &detail::auto_prerun<State>;
+    meta.postrun = &detail::auto_postrun<State>;
     meta.clear = clear_;
     meta.accumulate = accumulate_;
-    meta.return_type = to_vef_type(return_type_);
+    meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
-      meta.param_types[i] = to_vef_type(param_types_[i]);
+      meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
     if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
       meta.check_params_cache_bound =
-          &apply_params_cache_checker<UniquePTuple>::check;
+          &detail::apply_params_cache_checker<UniquePTuple>::check;
     }
-    return StaticFuncDesc<NumParams>(name_, meta);
+    return detail::StaticFuncDesc<NumParams>(name_, meta);
   }
+
+ private:
+  constexpr AggFuncBuilder()
+      : name_(nullptr),
+        return_type_(nullptr),
+        param_types_{},
+        buffer_size_(0),
+        deterministic_(false),
+        clear_(nullptr),
+        accumulate_(nullptr) {}
+
+  const char *name_;
+  const char *return_type_;
+  std::array<const char *, NumParams> param_types_;
+  size_t buffer_size_;
+  bool deterministic_;
+  vef_vdf_clear_func_t clear_;
+  vef_vdf_accumulate_func_t accumulate_;
+
+  template <typename S, auto F, size_t M>
+  friend class AggFuncBuilder;
+
+  template <typename S, auto F>
+  friend constexpr AggFuncBuilder<S, F, 0> make_aggregate_func(const char *);
 };
 
 // =============================================================================
@@ -1150,9 +1174,9 @@ struct AggFuncBuilder {
 // value-initialization, postrun deletes it.
 template <typename State, auto Func>
 constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
-  using AllParams = typename FuncParamTypes<decltype(Func)>::type;
+  using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
   static_assert(
-      is_agg_result_for_state<State, AllParams>::value,
+      detail::is_agg_result_for_state<State, AllParams>::value,
       "make_aggregate_func: result function must be "
       "void(const State&, ResultWrapper) where ResultWrapper is IntResult, "
       "RealResult, StringResult, CustomResult, or CustomResultWith<P>");
@@ -1164,10 +1188,10 @@ constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
 // make_func<&impl>("name")
 template <auto Func>
 constexpr FuncBuilder<Func, 0> make_func(const char *name) {
-  using AllParams = typename FuncParamTypes<decltype(Func)>::type;
+  using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
   static_assert(
       std::tuple_size_v<AllParams> == 0 ||
-          !is_context_param<std::tuple_element_t<0, AllParams>>::value,
+          !detail::is_context_param<std::tuple_element_t<0, AllParams>>::value,
       "vsql make_func: deprecated vef_context_t* first parameter not "
       "supported; use a typed function or make_aggregate_func (see "
       "extension.h)");
@@ -1182,26 +1206,26 @@ constexpr FuncBuilder<Func, 0> make_func(const char *name) {
 //   TypeEncodeFunc              (non-parameterized)
 //   TypeEncodeWithParamsFunc<P> (parameterized)
 template <auto Func>
-constexpr StaticFuncDesc<1> make_type_encode(const char *name,
-                                             const char *type_name) {
+constexpr detail::StaticFuncDesc<1> make_type_encode(const char *name,
+                                                     const char *type_name) {
   using F = decltype(Func);
-  FuncWithMetadata meta{};
+  detail::FuncWithMetadata meta{};
   if constexpr (std::is_same_v<F, TypeEncodeFunc>) {
-    meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeEncodeVdfWrapper<Func>::invoke;
   } else {
-    using P = typename TypeEncodeWithCacheVdfWrapper<Func>::P;
+    using P = typename detail::TypeEncodeWithCacheVdfWrapper<Func>::P;
     static_assert(std::is_same_v<F, TypeEncodeWithParamsFunc<P>>,
                   "make_type_encode: function must match either "
                   "TypeEncodeFunc or TypeEncodeWithParamsFunc<P>.");
-    meta.f = &TypeEncodeWithCacheVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeEncodeWithCacheVdfWrapper<Func>::invoke;
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
-  meta.return_type = to_vef_type(type_name);
-  meta.param_types[0] = to_vef_type(STRING);
+  meta.return_type = detail::to_vef_type(type_name);
+  meta.param_types[0] = detail::to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = 0;
   meta.deterministic = true;
-  return StaticFuncDesc<1>(name, meta);
+  return detail::StaticFuncDesc<1>(name, meta);
 }
 
 // make_type_decode<&fn>("name", TYPE) — (CUSTOM(type)) -> STRING.
@@ -1210,127 +1234,129 @@ constexpr StaticFuncDesc<1> make_type_encode(const char *name,
 //   TypeDecodeFunc              (non-parameterized)
 //   TypeDecodeWithParamsFunc<P> (parameterized)
 template <auto Func>
-constexpr StaticFuncDesc<1> make_type_decode(const char *name,
-                                             const char *type_name) {
+constexpr detail::StaticFuncDesc<1> make_type_decode(const char *name,
+                                                     const char *type_name) {
   using F = decltype(Func);
-  FuncWithMetadata meta{};
+  detail::FuncWithMetadata meta{};
   if constexpr (std::is_same_v<F, TypeDecodeFunc>) {
-    meta.f = &TypeDecodeVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeDecodeVdfWrapper<Func>::invoke;
   } else {
-    using P = typename TypeDecodeWithCacheVdfWrapper<Func>::P;
+    using P = typename detail::TypeDecodeWithCacheVdfWrapper<Func>::P;
     static_assert(std::is_same_v<F, TypeDecodeWithParamsFunc<P>>,
                   "make_type_decode: function must match either "
                   "TypeDecodeFunc or TypeDecodeWithParamsFunc<P>.");
-    meta.f = &TypeDecodeWithCacheVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeDecodeWithCacheVdfWrapper<Func>::invoke;
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
-  meta.return_type = to_vef_type(STRING);
-  meta.param_types[0] = to_vef_type(type_name);
+  meta.return_type = detail::to_vef_type(STRING);
+  meta.param_types[0] = detail::to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
   meta.deterministic = true;
-  return StaticFuncDesc<1>(name, meta);
+  return detail::StaticFuncDesc<1>(name, meta);
 }
 
 // make_type_compare<&fn>("name", TYPE) — (CUSTOM, CUSTOM) -> INT.
 //
 // Accepts two signatures, mirroring make_type_decode.
 template <auto Func>
-constexpr StaticFuncDesc<2> make_type_compare(const char *name,
-                                              const char *type_name) {
+constexpr detail::StaticFuncDesc<2> make_type_compare(const char *name,
+                                                      const char *type_name) {
   using F = decltype(Func);
-  FuncWithMetadata meta{};
+  detail::FuncWithMetadata meta{};
   if constexpr (std::is_same_v<F, TypeCompareFunc>) {
-    meta.f = &TypeCompareVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeCompareVdfWrapper<Func>::invoke;
   } else {
-    using P = typename TypeCompareWithCacheVdfWrapper<Func>::P;
+    using P = typename detail::TypeCompareWithCacheVdfWrapper<Func>::P;
     static_assert(std::is_same_v<F, TypeCompareWithParamsFunc<P>>,
                   "make_type_compare: function must match either "
                   "TypeCompareFunc or TypeCompareWithParamsFunc<P>.");
-    meta.f = &TypeCompareWithCacheVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeCompareWithCacheVdfWrapper<Func>::invoke;
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
-  meta.return_type = to_vef_type(INT);
-  meta.param_types[0] = to_vef_type(type_name);
-  meta.param_types[1] = to_vef_type(type_name);
+  meta.return_type = detail::to_vef_type(INT);
+  meta.param_types[0] = detail::to_vef_type(type_name);
+  meta.param_types[1] = detail::to_vef_type(type_name);
   meta.num_params = 2;
   meta.buffer_size = 0;
   meta.deterministic = true;
-  return StaticFuncDesc<2>(name, meta);
+  return detail::StaticFuncDesc<2>(name, meta);
 }
 
 // make_type_hash<&fn>("name", TYPE) — (CUSTOM(type)) -> INT.
 //
 // Accepts two signatures, mirroring make_type_decode.
 template <auto Func>
-constexpr StaticFuncDesc<1> make_type_hash(const char *name,
-                                           const char *type_name) {
+constexpr detail::StaticFuncDesc<1> make_type_hash(const char *name,
+                                                   const char *type_name) {
   using F = decltype(Func);
-  FuncWithMetadata meta{};
+  detail::FuncWithMetadata meta{};
   if constexpr (std::is_same_v<F, TypeHashFunc>) {
-    meta.f = &TypeHashVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeHashVdfWrapper<Func>::invoke;
   } else {
-    using P = typename TypeHashWithCacheVdfWrapper<Func>::P;
+    using P = typename detail::TypeHashWithCacheVdfWrapper<Func>::P;
     static_assert(std::is_same_v<F, TypeHashWithParamsFunc<P>>,
                   "make_type_hash: function must match either "
                   "TypeHashFunc or TypeHashWithParamsFunc<P>.");
-    meta.f = &TypeHashWithCacheVdfWrapper<Func>::invoke;
+    meta.f = &detail::TypeHashWithCacheVdfWrapper<Func>::invoke;
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
-  meta.return_type = to_vef_type(INT);
-  meta.param_types[0] = to_vef_type(type_name);
+  meta.return_type = detail::to_vef_type(INT);
+  meta.param_types[0] = detail::to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
   meta.deterministic = true;
-  return StaticFuncDesc<1>(name, meta);
+  return detail::StaticFuncDesc<1>(name, meta);
 }
 
 // make_int_to_params<&fn>("name") — (INT) -> STRING.
 template <IntToTypeParamsFunc Func>
-constexpr StaticFuncDesc<1> make_int_to_params(const char *name) {
-  FuncWithMetadata meta{};
-  meta.f = &IntToParamsWrapper<Func>::invoke;
-  meta.return_type = to_vef_type(STRING);
-  meta.param_types[0] = to_vef_type(INT);
+constexpr detail::StaticFuncDesc<1> make_int_to_params(const char *name) {
+  detail::FuncWithMetadata meta{};
+  meta.f = &detail::IntToParamsWrapper<Func>::invoke;
+  meta.return_type = detail::to_vef_type(STRING);
+  meta.param_types[0] = detail::to_vef_type(INT);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
   meta.deterministic = true;
-  return StaticFuncDesc<1>(name, meta);
+  return detail::StaticFuncDesc<1>(name, meta);
 }
 
 // make_resolve_params<&fn>("name") — (STRING) -> STRING.
 template <ResolveTypeParamsFunc Func>
-constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
-  FuncWithMetadata meta{};
-  meta.f = &ResolveParamsWrapper<Func>::invoke;
-  meta.return_type = to_vef_type(STRING);
-  meta.param_types[0] = to_vef_type(STRING);
+constexpr detail::StaticFuncDesc<1> make_resolve_params(const char *name) {
+  detail::FuncWithMetadata meta{};
+  meta.f = &detail::ResolveParamsWrapper<Func>::invoke;
+  meta.return_type = detail::to_vef_type(STRING);
+  meta.param_types[0] = detail::to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
   meta.deterministic = true;
-  return StaticFuncDesc<1>(name, meta);
+  return detail::StaticFuncDesc<1>(name, meta);
 }
 
 // make_intrinsic_default<&fn>("name") — () -> STRING.
 template <auto Func>
-constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name) {
-  FuncWithMetadata meta{};
+constexpr detail::StaticFuncDesc<0> make_intrinsic_default(const char *name) {
+  detail::FuncWithMetadata meta{};
   if constexpr (std::is_same_v<decltype(Func), IntrinsicDefaultFunc>) {
-    meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
+    meta.f = &detail::IntrinsicDefaultWrapper<Func>::invoke;
   } else {
-    meta.f = &IntrinsicDefaultWithCacheWrapper<Func>::invoke;
+    meta.f = &detail::IntrinsicDefaultWithCacheWrapper<Func>::invoke;
     meta.check_params_cache_bound = &is_params_cache_bound<
-        typename IntrinsicDefaultWithCacheWrapper<Func>::P>;
+        typename detail::IntrinsicDefaultWithCacheWrapper<Func>::P>;
   }
-  meta.return_type = to_vef_type(STRING);
+  meta.return_type = detail::to_vef_type(STRING);
   meta.num_params = 0;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
-  return StaticFuncDesc<0>(name, meta);
+  return detail::StaticFuncDesc<0>(name, meta);
 }
 
 // =============================================================================
 // Internal Implementation
 // =============================================================================
+
+namespace detail {
 
 constexpr vef_type_t to_vef_type(const char *name) {
   std::string_view sv(name);
@@ -1339,6 +1365,8 @@ constexpr vef_type_t to_vef_type(const char *name) {
   if (sv == "REAL") return vef_type_t{VEF_TYPE_REAL, nullptr};
   return vef_type_t{VEF_TYPE_CUSTOM, name};
 }
+
+}  // namespace detail
 
 }  // namespace func_builder
 }  // namespace vsql
