@@ -44,15 +44,20 @@ struct PendingCapability {
   PendingCapability *next;  // intrusive list link
 };
 
-// TU-local registry head. Each .so gets its own copy because this is a
-// function-local static; no cross-.so coupling.
-inline PendingCapability *&pending_capabilities_head() {
+// Per-.so registry head. The hidden visibility attribute prevents the
+// dynamic linker from merging this weak (inline) symbol across .so's on
+// ELF platforms — otherwise every loaded extension would share one head
+// pointer and one static, causing capabilities enrolled by other loaded
+// extensions to appear unconsumed during this extension's vef_register.
+__attribute__((visibility("hidden"))) inline PendingCapability *&
+pending_capabilities_head() {
   static PendingCapability *head = nullptr;
   return head;
 }
 
 // Push a node onto the registry. Called from CapabilityBase's constructor.
-inline void enroll_capability(PendingCapability *node) {
+__attribute__((visibility("hidden"))) inline void enroll_capability(
+    PendingCapability *node) {
   PendingCapability *&head = pending_capabilities_head();
   node->next = head;
   head = node;
@@ -61,7 +66,7 @@ inline void enroll_capability(PendingCapability *node) {
 // Reset all consumed flags. Called at the top of vef_register_impl so that
 // extension reload (a second call to vef_register) re-validates against the
 // existing static objects, which are not reconstructed on reload.
-inline void reset_pending_consumed() {
+__attribute__((visibility("hidden"))) inline void reset_pending_consumed() {
   for (PendingCapability *p = pending_capabilities_head(); p != nullptr;
        p = p->next) {
     p->consumed = false;
@@ -71,7 +76,8 @@ inline void reset_pending_consumed() {
 // Look up the registry entry for a capability pointer. Returns nullptr if
 // not enrolled (i.e. the caller passed a non-CapabilityBase object to
 // .with(), or some object from another .so).
-inline PendingCapability *find_pending(const void *cap_ptr) {
+__attribute__((visibility("hidden"))) inline PendingCapability *find_pending(
+    const void *cap_ptr) {
   for (PendingCapability *p = pending_capabilities_head(); p != nullptr;
        p = p->next) {
     if (p->cap_ptr == cap_ptr) return p;
@@ -85,7 +91,12 @@ template <typename Derived>
 class CapabilityBase {
  protected:
   CapabilityBase() {
-    node_.cap_ptr = static_cast<const void *>(this);
+    // Cast through Derived* so cap_ptr matches what .with(derived_obj)
+    // sees (&derived_obj). With single inheritance the addresses are
+    // equal anyway, but going through Derived* keeps the contract
+    // correct if a future capability uses multiple inheritance.
+    node_.cap_ptr =
+        static_cast<const void *>(static_cast<const Derived *>(this));
     node_.name = CapabilityTraits<Derived>::kName;
     node_.consumed = false;
     node_.next = nullptr;
