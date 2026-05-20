@@ -64,9 +64,9 @@ __attribute__((visibility("hidden"))) inline void enroll_capability(
   head = node;
 }
 
-// Reset all consumed flags. Called at the top of vef_register_impl so that
-// extension reload (a second call to vef_register) re-validates against the
-// existing static objects, which are not reconstructed on reload.
+// Reset all consumed flags. Called at the top of each vef_register_impl
+// invocation so repeated registration of the same loaded object re-validates
+// against the existing static objects, which are not reconstructed.
 __attribute__((visibility("hidden"))) inline void reset_pending_consumed() {
   for (PendingCapability *p = pending_capabilities_head(); p != nullptr;
        p = p->next) {
@@ -86,8 +86,9 @@ __attribute__((visibility("hidden"))) inline PendingCapability *find_pending(
   return nullptr;
 }
 
-// CRTP base for capability wrappers. Adding ": public CapabilityBase<Self>"
-// to a capability class is the entire opt-in.
+// Base for capability wrappers. The template parameter is the wrapper class
+// itself; adding ": public CapabilityBase<Self>" to a capability class is the
+// entire opt-in.
 template <typename Derived>
 class CapabilityBase {
  protected:

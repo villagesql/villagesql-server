@@ -307,9 +307,10 @@ vef_registration_t *vef_register_impl(
         std::make_index_sequence<RequiredCapabilityCount>{});
   }
 
-  // Reset all CapabilityBase entries so that an extension reload (a second
-  // vef_register call against the same statics) re-validates from scratch
-  // rather than carrying consumed=true forward from the previous load.
+  // Reset all CapabilityBase entries for this registration attempt. The
+  // capability objects are static, so a repeated vef_register invocation for
+  // the same loaded object must not inherit consumed=true from an earlier
+  // invocation.
   ::vsql::detail::reset_pending_consumed();
 
   if constexpr (RequiredCapabilityCount > 0) {
