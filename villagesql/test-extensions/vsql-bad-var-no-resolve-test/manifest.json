@@ -1,0 +1,7 @@
+{
+  "name": "vsql_bad_var_no_resolve_test",
+  "version": "0.0.1",
+  "description": "Bad-registration test: variable-length type (persisted_length=-1) without resolve_params. INSTALL EXTENSION must fail.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

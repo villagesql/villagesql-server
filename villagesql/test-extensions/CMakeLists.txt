@@ -33,3 +33,4 @@ vsql_add_test_extension(vsql-preview-ping-no-cap-test  vsql_preview_ping_no_cap_
 vsql_add_test_extension(vsql-preview-ping-v2-test      vsql_preview_ping_v2_test)
 vsql_add_test_extension(vsql-sys-var-rollback-test     vsql_sys_var_rollback_test)
 vsql_add_test_extension(vsql-noop-test                 vsql_noop_test)
+vsql_add_test_extension(vsql-bad-var-no-resolve-test   vsql_bad_var_no_resolve_test)

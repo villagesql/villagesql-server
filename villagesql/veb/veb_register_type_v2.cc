@@ -223,6 +223,71 @@ std::optional<TypeDescriptor> build_type_descriptor_v2(
     const std::string &extension_version) {
   bool error = false;
 
+  // persisted_length must be either -1 (variable-length, parameterized) or a
+  // positive value (fixed-length). 0 and other negatives are invalid.
+  if (td->persisted_length != -1 && td->persisted_length <= 0) {
+    LogVSQL(ERROR_LEVEL,
+            "Type '%s' in extension '%s' has invalid persisted_length %lld "
+            "(must be -1 for variable-length or > 0 for fixed-length)",
+            type_name.c_str(), extension_name.c_str(),
+            static_cast<long long>(td->persisted_length));
+    return std::nullopt;
+  }
+
+  if (td->persisted_length == -1) {
+    // Variable-length / parameterized type: resolve_params_vdf_name and
+    // max_persisted_length are both required.
+    if (td->resolve_params_vdf_name == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has persisted_length=-1 "
+              "(variable-length) but does not set resolve_params_vdf_name",
+              type_name.c_str(), extension_name.c_str());
+      return std::nullopt;
+    }
+    if (td->max_persisted_length <= 0) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has persisted_length=-1 "
+              "(variable-length) but max_persisted_length is %lld "
+              "(must be > 0)",
+              type_name.c_str(), extension_name.c_str(),
+              static_cast<long long>(td->max_persisted_length));
+      return std::nullopt;
+    }
+  } else {
+    // Fixed-length type (persisted_length > 0): resolve_params_vdf_name,
+    // int_to_params_vdf_name, and max_persisted_length must not be set.
+    if (td->resolve_params_vdf_name != nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has fixed persisted_length=%lld "
+              "but also sets resolve_params_vdf_name '%s' (only valid for "
+              "variable-length types with persisted_length=-1)",
+              type_name.c_str(), extension_name.c_str(),
+              static_cast<long long>(td->persisted_length),
+              td->resolve_params_vdf_name);
+      return std::nullopt;
+    }
+    if (td->int_to_params_vdf_name != nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has fixed persisted_length=%lld "
+              "but also sets int_to_params_vdf_name '%s' (only valid for "
+              "variable-length types with persisted_length=-1)",
+              type_name.c_str(), extension_name.c_str(),
+              static_cast<long long>(td->persisted_length),
+              td->int_to_params_vdf_name);
+      return std::nullopt;
+    }
+    if (td->max_persisted_length != 0) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has fixed persisted_length=%lld "
+              "but also sets max_persisted_length=%lld (only valid for "
+              "variable-length types with persisted_length=-1)",
+              type_name.c_str(), extension_name.c_str(),
+              static_cast<long long>(td->persisted_length),
+              static_cast<long long>(td->max_persisted_length));
+      return std::nullopt;
+    }
+  }
+
   const vef_type_id custom_id[] = {VEF_TYPE_CUSTOM};
   const char *custom_name[] = {td->name};
   const vef_type_id two_custom_ids[] = {VEF_TYPE_CUSTOM, VEF_TYPE_CUSTOM};
