@@ -218,9 +218,11 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
 // compile-time constants without relying on VLAs.
 template <typename Ext, size_t FuncCount, size_t TypeCount,
           size_t RequiredCapabilityCount>
-vef_registration_t *vef_register_impl(vef_registration_t &reg,
-                                      bool &initialized,
-                                      vef_register_arg_t *arg, const Ext &ext) {
+vef_registration_t *vef_register_impl(
+    vef_registration_t &reg, bool &initialized, vef_func_desc_t **func_ptrs,
+    vef_type_desc_t **type_ptrs,
+    vef_required_capability_t *required_capability_reqs,
+    vef_register_arg_t *arg, const Ext &ext) {
   if (initialized) return &reg;
 
   if (arg->protocol < ext.min_protocol()) {
@@ -233,11 +235,6 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
     reg.error_msg = error_buf;
     return &reg;
   }
-
-  static vef_func_desc_t *func_ptrs[FuncCount > 0 ? FuncCount : 1];
-  static vef_type_desc_t *type_ptrs[TypeCount > 0 ? TypeCount : 1];
-  static vef_required_capability_t required_capability_reqs
-      [RequiredCapabilityCount > 0 ? RequiredCapabilityCount : 1];
 
   if constexpr (FuncCount > 0) {
     vef_init_auto_names(ext, std::make_index_sequence<FuncCount>{});

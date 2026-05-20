@@ -1,0 +1,7 @@
+{
+  "name": "vsql_preview_ping_alt_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension for multi-extension preview capability registration",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

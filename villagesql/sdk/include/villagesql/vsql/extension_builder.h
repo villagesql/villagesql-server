@@ -131,20 +131,29 @@ constexpr auto make_extension() {
 // descriptors after registration for testing). Otherwise use
 // VEF_GENERATE_ENTRY_POINTS which generates the full extern "C" entry points.
 
-#define VEF_GENERATE_REGISTRATION(ext)                                     \
-  namespace {                                                              \
-  vef_registration_t _vef_reg;                                             \
-  bool _vef_reg_initialized = false;                                       \
-  }                                                                        \
-                                                                           \
-  static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) {   \
-    using namespace vsql;                                                  \
-    static constexpr auto kExt = (ext);                                    \
-    using ExtType = decltype(kExt);                                        \
-    return villagesql::detail::vef_register_impl<                          \
-        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,          \
-        ExtType::kRequiredCapabilityCount>(_vef_reg, _vef_reg_initialized, \
-                                           arg, kExt);                     \
+#define VEF_GENERATE_REGISTRATION(ext)                                   \
+  namespace {                                                            \
+  vef_registration_t _vef_reg;                                           \
+  bool _vef_reg_initialized = false;                                     \
+  }                                                                      \
+                                                                         \
+  static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) { \
+    using namespace vsql;                                                \
+    static constexpr auto kExt = (ext);                                  \
+    using ExtType = decltype(kExt);                                      \
+    static vef_func_desc_t                                               \
+        *func_ptrs[ExtType::kFuncCount > 0 ? ExtType::kFuncCount : 1];   \
+    static vef_type_desc_t                                               \
+        *type_ptrs[ExtType::kTypeCount > 0 ? ExtType::kTypeCount : 1];   \
+    static vef_required_capability_t                                     \
+        required_capability_reqs[ExtType::kRequiredCapabilityCount > 0   \
+                                     ? ExtType::kRequiredCapabilityCount \
+                                     : 1];                               \
+    return villagesql::detail::vef_register_impl<                        \
+        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,        \
+        ExtType::kRequiredCapabilityCount>(                              \
+        _vef_reg, _vef_reg_initialized, func_ptrs, type_ptrs,            \
+        required_capability_reqs, arg, kExt);                            \
   }
 
 // VEF_GENERATE_ENTRY_POINTS (vsql variant)
@@ -152,26 +161,35 @@ constexpr auto make_extension() {
 // Generates the extern "C" vef_register and vef_unregister functions.
 // Must be called in a .cc file, not a header (defines functions/variables).
 
-#define VEF_GENERATE_ENTRY_POINTS(ext)                                     \
-  namespace {                                                              \
-  vef_registration_t vef_reg_;                                             \
-  bool vef_reg_initialized_ = false;                                       \
-  }                                                                        \
-                                                                           \
-  extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {   \
-    using namespace vsql;                                                  \
-    static constexpr auto kExt = (ext);                                    \
-    using ExtType = decltype(kExt);                                        \
-    return villagesql::detail::vef_register_impl<                          \
-        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,          \
-        ExtType::kRequiredCapabilityCount>(vef_reg_, vef_reg_initialized_, \
-                                           arg, kExt);                     \
-  }                                                                        \
-                                                                           \
-  extern "C" void vef_unregister(vef_unregister_arg_t *arg,                \
-                                 vef_registration_t *reg) {                \
-    (void)arg;                                                             \
-    (void)reg;                                                             \
+#define VEF_GENERATE_ENTRY_POINTS(ext)                                   \
+  namespace {                                                            \
+  vef_registration_t vef_reg_;                                           \
+  bool vef_reg_initialized_ = false;                                     \
+  }                                                                      \
+                                                                         \
+  extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) { \
+    using namespace vsql;                                                \
+    static constexpr auto kExt = (ext);                                  \
+    using ExtType = decltype(kExt);                                      \
+    static vef_func_desc_t                                               \
+        *func_ptrs[ExtType::kFuncCount > 0 ? ExtType::kFuncCount : 1];   \
+    static vef_type_desc_t                                               \
+        *type_ptrs[ExtType::kTypeCount > 0 ? ExtType::kTypeCount : 1];   \
+    static vef_required_capability_t                                     \
+        required_capability_reqs[ExtType::kRequiredCapabilityCount > 0   \
+                                     ? ExtType::kRequiredCapabilityCount \
+                                     : 1];                               \
+    return villagesql::detail::vef_register_impl<                        \
+        decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,        \
+        ExtType::kRequiredCapabilityCount>(                              \
+        vef_reg_, vef_reg_initialized_, func_ptrs, type_ptrs,            \
+        required_capability_reqs, arg, kExt);                            \
+  }                                                                      \
+                                                                         \
+  extern "C" void vef_unregister(vef_unregister_arg_t *arg,              \
+                                 vef_registration_t *reg) {              \
+    (void)arg;                                                           \
+    (void)reg;                                                           \
   }
 
 #endif  // VILLAGESQL_VSQL_EXTENSION_BUILDER_H

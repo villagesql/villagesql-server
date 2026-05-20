@@ -24,6 +24,7 @@
 #   3. Add a vsql_add_test_extension() line below.
 
 vsql_add_test_extension(vsql-preview-ping-test         vsql_preview_ping_test)
+vsql_add_test_extension(vsql-preview-ping-alt-test     vsql_preview_ping_alt_test)
 vsql_add_test_extension(vsql-preview-unknown-cap-test  vsql_preview_unknown_cap_test)
 vsql_add_test_extension(vsql-keyring-reader            vsql_keyring_reader)
 vsql_add_test_extension(vsql-lifecycle-test            vsql_lifecycle_test)
