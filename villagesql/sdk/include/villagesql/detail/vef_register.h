@@ -186,7 +186,7 @@ const char *vef_consume_one_capability(const Ext &e) {
   if (node->consumed) {
     snprintf(error_buf, sizeof(error_buf),
              "capability '%s' passed to .with() more than once",
-             node->name ? node->name : "(unknown)");
+             node->cpp_type_name ? node->cpp_type_name : "(unknown)");
     return error_buf;
   }
   node->consumed = true;
@@ -204,13 +204,16 @@ const char *vef_consume_required_capabilities(const Ext &e,
 
 // After every .with() has marked its matching entry consumed, any entry
 // still unconsumed is a declared-but-never-registered capability.
-// Returns the name of the first such entry, or nullptr if all consumed.
+// Returns the C++ type name of the first such entry, or nullptr if all
+// consumed.
 __attribute__((visibility("hidden"))) inline const char *
 vef_first_unconsumed_capability() {
   for (::vsql::detail::PendingCapability *node =
            ::vsql::detail::pending_capabilities_head();
        node != nullptr; node = node->next) {
-    if (!node->consumed) return node->name ? node->name : "(unknown)";
+    if (!node->consumed) {
+      return node->cpp_type_name ? node->cpp_type_name : "(unknown)";
+    }
   }
   return nullptr;
 }

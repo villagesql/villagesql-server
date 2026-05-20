@@ -43,6 +43,7 @@ namespace vsql::detail {
 template <>
 struct CapabilityTraits<PingV2Capability> {
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
+  static constexpr const char *kCppTypeName = "PingV2Capability";
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_PING_V2_ABI_VERSION;
   using AbiType = vef_preview_ping_v2_t;
 

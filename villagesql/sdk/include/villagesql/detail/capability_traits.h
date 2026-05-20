@@ -22,6 +22,11 @@ namespace vsql::detail {
 // specialization that defines:
 //   static constexpr const char* kName;
 //       The capability name the server looks up.
+//   static constexpr const char* kCppTypeName;
+//       The fully-qualified C++ type spelling of the wrapper class. Used
+//       only for diagnostic messages from the per-.so CapabilityBase
+//       registry (verify-with check), so authors see the same name they
+//       wrote in source rather than the ABI string.
 //   static constexpr uint32_t kAbiVersion;
 //       The ABI version this extension was compiled against. Sent as
 //       min_version in the wire entry; the server fails the load if its

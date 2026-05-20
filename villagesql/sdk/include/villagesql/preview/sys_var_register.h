@@ -24,6 +24,8 @@ namespace vsql::detail {
 template <size_t N>
 struct CapabilityTraits<::vsql::preview_sys_var::SysVarCapability<N>> {
   static constexpr const char *kName = VEF_PREVIEW_SYS_VAR_NAME;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_sys_var::SysVarCapability";
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_SYS_VAR_ABI_VERSION;
   using AbiType = vef_preview_sys_var_t;
 

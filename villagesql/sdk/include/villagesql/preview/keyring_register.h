@@ -25,6 +25,8 @@ namespace vsql::detail {
 template <>
 struct CapabilityTraits<::vsql::preview_keyring::KeyringCapability> {
   static constexpr const char *kName = VEF_PREVIEW_KEYRING_NAME;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_keyring::KeyringCapability";
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_KEYRING_ABI_VERSION;
   using AbiType = vef_preview_keyring_t;
 

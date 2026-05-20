@@ -24,6 +24,8 @@ namespace vsql::detail {
 template <size_t N>
 struct CapabilityTraits<::vsql::preview_status_var::StatusVarCapability<N>> {
   static constexpr const char *kName = VEF_PREVIEW_STATUS_VAR_NAME;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_status_var::StatusVarCapability";
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_STATUS_VAR_ABI_VERSION;
   using AbiType = vef_preview_status_var_t;
   using DescriptorType = vef_status_var_descriptor_list_t;

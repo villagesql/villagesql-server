@@ -38,10 +38,11 @@ namespace vsql::detail {
 // in-place inside CapabilityBase (no heap, no std::vector), so static-init
 // order has no global initializers to fight with.
 struct PendingCapability {
-  const void *cap_ptr;      // identity: address of the capability object
-  const char *name;         // CapabilityTraits<Derived>::kName for diagnostics
-  bool consumed;            // flipped to true by ExtensionBuilder::with()
-  PendingCapability *next;  // intrusive list link
+  const void *cap_ptr;        // identity: address of the capability object
+  const char *name;           // CapabilityTraits<Derived>::kName
+  const char *cpp_type_name;  // CapabilityTraits<Derived>::kCppTypeName
+  bool consumed;              // flipped to true by ExtensionBuilder::with()
+  PendingCapability *next;    // intrusive list link
 };
 
 // Per-.so registry head. The hidden visibility attribute prevents the
@@ -98,6 +99,7 @@ class CapabilityBase {
     node_.cap_ptr =
         static_cast<const void *>(static_cast<const Derived *>(this));
     node_.name = CapabilityTraits<Derived>::kName;
+    node_.cpp_type_name = CapabilityTraits<Derived>::kCppTypeName;
     node_.consumed = false;
     node_.next = nullptr;
     enroll_capability(&node_);

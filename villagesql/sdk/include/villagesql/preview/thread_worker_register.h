@@ -27,6 +27,8 @@ struct CapabilityTraits<
     ::vsql::preview_thread_worker::ThreadWorkerCapability<WorkFn>> {
   using Cap = ::vsql::preview_thread_worker::ThreadWorkerCapability<WorkFn>;
   static constexpr const char *kName = VEF_PREVIEW_THREAD_WORKER_NAME;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_thread_worker::ThreadWorkerCapability";
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_THREAD_WORKER_ABI_VERSION;
   using AbiType = vef_preview_thread_worker_t;
   using DescriptorType = vef_thread_worker_descriptor_t;

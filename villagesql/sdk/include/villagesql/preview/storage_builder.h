@@ -506,6 +506,8 @@ namespace vsql::detail {
 template <>
 struct CapabilityTraits<::vsql::preview_storage_builder::StorageCapability> {
   static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_storage_builder::StorageCapability";
   static constexpr uint32_t kAbiVersion = VEF_STORAGE_SE_INTF_VERSION_1;
   using AbiType = vef_preview_storage_t;
 
@@ -519,6 +521,8 @@ template <size_t N>
 struct CapabilityTraits<
     ::vsql::preview_storage_builder::ColumnStoreCapability<N>> {
   static constexpr const char *kName = VEF_PREVIEW_COLUMN_STORE_NAME;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_storage_builder::ColumnStoreCapability";
   static constexpr uint32_t kAbiVersion = VEF_COLUMN_STORE_INTF_VERSION_1;
   using AbiType = vef_preview_column_store_t;
   using DescriptorType = vef_preview_column_store_ext_desc_t;
