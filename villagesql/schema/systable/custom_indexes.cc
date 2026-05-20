@@ -232,6 +232,9 @@ std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
   Json_object_ptr obj(new (std::nothrow) Json_object());
   if (!obj) return "{}";
 
+  // Parameters are stored in Json_object using a std::map ordered by
+  // Json_key_comparator (length first, then memcmp), producing a
+  // deterministic canonical serialization order.
   for (const IndexWithParam &p : params) {
     std::string key(p.key.str, p.key.length);
     Json_dom_ptr val;

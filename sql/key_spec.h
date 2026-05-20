@@ -202,7 +202,9 @@ class Key_part_spec {
   bool has_expression() const { return m_has_expression; }
 
   LEX_CSTRING get_index_profile() const { return m_index_profile; }
-  bool has_index_profile() const { return m_index_profile.str != nullptr; }
+  bool has_index_profile() const {
+    return m_index_profile.str != nullptr && m_index_profile.length != 0;
+  }
 
  private:
   /// true <=> ascending, false <=> descending.

@@ -27,7 +27,7 @@ SET SESSION debug='+d,villagesql_custom_index_proceed';
 
 --echo # --- CREATE TABLE with inline custom index ---
 CREATE TABLE t (id INT PRIMARY KEY, a INT,
-  INDEX idx_inline (a) USING EXTENDED(hnsw));
+  INDEX idx_inline (a) USING EXTENDED(dummy_index_type));
 --source include/villagesql/query_custom_indexes.inc
 
 DROP TABLE t;
@@ -36,28 +36,28 @@ DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, c INT, d INT, e INT);
 
 --echo # --- CREATE INDEX: unqualified type, no params ---
-CREATE INDEX idx_hnsw ON t (a) USING EXTENDED(hnsw);
+CREATE INDEX idx_dummy_index_type ON t (a) USING EXTENDED(dummy_index_type);
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- CREATE INDEX: qualified ext.type + WITH params ---
-CREATE INDEX idx_ext ON t (b) USING EXTENDED(myext.hnsw)
+CREATE INDEX idx_ext ON t (b) USING EXTENDED(myext.dummy_index_type)
   WITH (M = 16, ef_construction = 200, label = 'primary', mode = fast);
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- CREATE INDEX: per-column profile ---
-CREATE INDEX idx_prof ON t (c profile1) USING EXTENDED(hnsw);
+CREATE INDEX idx_prof ON t (c profile1) USING EXTENDED(dummy_index_type);
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- CREATE INDEX: multi-column ---
-CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(hnsw);
+CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_type);
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- ALTER TABLE ADD INDEX ---
-ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(hnsw) WITH (M = 8);
+ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(dummy_index_type) WITH (M = 8);
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- DROP INDEX: removes metadata for that index ---
-DROP INDEX idx_hnsw ON t;
+DROP INDEX idx_dummy_index_type ON t;
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- ALTER TABLE DROP INDEX ---
@@ -69,7 +69,7 @@ ALTER TABLE t DROP INDEX idx_prof, DROP INDEX idx_multi;
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- DROP INDEX: mixed-case name removes metadata ---
-CREATE INDEX idx_case ON t (a) USING EXTENDED(hnsw);
+CREATE INDEX idx_case ON t (a) USING EXTENDED(dummy_index_type);
 --source include/villagesql/query_custom_indexes.inc
 DROP INDEX IDX_CASE ON t;
 --source include/villagesql/query_custom_indexes.inc

@@ -2351,7 +2351,9 @@ class PT_key_part_specification : public Parse_tree_node {
 
   /// @returns true if an explicit index profile was specified for this key
   /// part.
-  bool has_index_profile() const { return m_index_profile.str != nullptr; }
+  bool has_index_profile() const {
+    return m_index_profile.str != nullptr && m_index_profile.length != 0;
+  }
 
   /// @returns The optional extension name of the index profile, or empty if
   /// unqualified.

@@ -4,9 +4,9 @@ db_name	table_name	index_name	extension_name	extension_version	index_type_name	i
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 # --- CREATE TABLE with inline custom index ---
 CREATE TABLE t (id INT PRIMARY KEY, a INT,
-INDEX idx_inline (a) USING EXTENDED(hnsw));
+INDEX idx_inline (a) USING EXTENDED(dummy_index_type));
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_inline	EMPTY	EMPTY	hnsw	{}
+test	t	idx_inline	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_inline	0	a	EMPTY	EMPTY	EMPTY
 DROP TABLE t;
@@ -14,65 +14,65 @@ db_name	table_name	index_name	extension_name	extension_version	index_type_name	i
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, c INT, d INT, e INT);
 # --- CREATE INDEX: unqualified type, no params ---
-CREATE INDEX idx_hnsw ON t (a) USING EXTENDED(hnsw);
+CREATE INDEX idx_dummy_index_type ON t (a) USING EXTENDED(dummy_index_type);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_hnsw	EMPTY	EMPTY	hnsw	{}
+test	t	idx_dummy_index_type	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_hnsw	0	a	EMPTY	EMPTY	EMPTY
+t	idx_dummy_index_type	0	a	EMPTY	EMPTY	EMPTY
 # --- CREATE INDEX: qualified ext.type + WITH params ---
-CREATE INDEX idx_ext ON t (b) USING EXTENDED(myext.hnsw)
+CREATE INDEX idx_ext ON t (b) USING EXTENDED(myext.dummy_index_type)
 WITH (M = 16, ef_construction = 200, label = 'primary', mode = fast);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_ext	myext	EMPTY	hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_hnsw	EMPTY	EMPTY	hnsw	{}
+test	t	idx_dummy_index_type	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_ext	myext	EMPTY	dummy_index_type	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_dummy_index_type	0	a	EMPTY	EMPTY	EMPTY
 t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_hnsw	0	a	EMPTY	EMPTY	EMPTY
 # --- CREATE INDEX: per-column profile ---
-CREATE INDEX idx_prof ON t (c profile1) USING EXTENDED(hnsw);
+CREATE INDEX idx_prof ON t (c profile1) USING EXTENDED(dummy_index_type);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_ext	myext	EMPTY	hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_hnsw	EMPTY	EMPTY	hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	hnsw	{}
+test	t	idx_dummy_index_type	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_ext	myext	EMPTY	dummy_index_type	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_prof	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_dummy_index_type	0	a	EMPTY	EMPTY	EMPTY
 t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_hnsw	0	a	EMPTY	EMPTY	EMPTY
 t	idx_prof	0	c	EMPTY	EMPTY	profile1
 # --- CREATE INDEX: multi-column ---
-CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(hnsw);
+CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_type);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_ext	myext	EMPTY	hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_hnsw	EMPTY	EMPTY	hnsw	{}
-test	t	idx_multi	EMPTY	EMPTY	hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	hnsw	{}
+test	t	idx_dummy_index_type	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_ext	myext	EMPTY	dummy_index_type	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_multi	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_prof	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_dummy_index_type	0	a	EMPTY	EMPTY	EMPTY
 t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_hnsw	0	a	EMPTY	EMPTY	EMPTY
 t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
 t	idx_multi	1	e	EMPTY	EMPTY	EMPTY
 t	idx_prof	0	c	EMPTY	EMPTY	profile1
 # --- ALTER TABLE ADD INDEX ---
-ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(hnsw) WITH (M = 8);
+ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(dummy_index_type) WITH (M = 8);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	hnsw	{"M": 8}
-test	t	idx_ext	myext	EMPTY	hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_hnsw	EMPTY	EMPTY	hnsw	{}
-test	t	idx_multi	EMPTY	EMPTY	hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	hnsw	{}
+test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
+test	t	idx_dummy_index_type	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_ext	myext	EMPTY	dummy_index_type	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_multi	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_prof	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
+t	idx_dummy_index_type	0	a	EMPTY	EMPTY	EMPTY
 t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_hnsw	0	a	EMPTY	EMPTY	EMPTY
 t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
 t	idx_multi	1	e	EMPTY	EMPTY	EMPTY
 t	idx_prof	0	c	EMPTY	EMPTY	profile1
 # --- DROP INDEX: removes metadata for that index ---
-DROP INDEX idx_hnsw ON t;
+DROP INDEX idx_dummy_index_type ON t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	hnsw	{"M": 8}
-test	t	idx_ext	myext	EMPTY	hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_multi	EMPTY	EMPTY	hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	hnsw	{}
+test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
+test	t	idx_ext	myext	EMPTY	dummy_index_type	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_multi	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_prof	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
 t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
@@ -82,9 +82,9 @@ t	idx_prof	0	c	EMPTY	EMPTY	profile1
 # --- ALTER TABLE DROP INDEX ---
 ALTER TABLE t DROP INDEX idx_ext;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	hnsw	{"M": 8}
-test	t	idx_multi	EMPTY	EMPTY	hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	hnsw	{}
+test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
+test	t	idx_multi	EMPTY	EMPTY	dummy_index_type	{}
+test	t	idx_prof	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
 t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
@@ -93,21 +93,21 @@ t	idx_prof	0	c	EMPTY	EMPTY	profile1
 # --- ALTER TABLE DROP INDEX: multiple at once ---
 ALTER TABLE t DROP INDEX idx_prof, DROP INDEX idx_multi;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	hnsw	{"M": 8}
+test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
 # --- DROP INDEX: mixed-case name removes metadata ---
-CREATE INDEX idx_case ON t (a) USING EXTENDED(hnsw);
+CREATE INDEX idx_case ON t (a) USING EXTENDED(dummy_index_type);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	hnsw	{"M": 8}
-test	t	idx_case	EMPTY	EMPTY	hnsw	{}
+test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
+test	t	idx_case	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
 t	idx_case	0	a	EMPTY	EMPTY	EMPTY
 DROP INDEX IDX_CASE ON t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	hnsw	{"M": 8}
-test	t	idx_case	EMPTY	EMPTY	hnsw	{}
+test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
+test	t	idx_case	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
 t	idx_case	0	a	EMPTY	EMPTY	EMPTY
