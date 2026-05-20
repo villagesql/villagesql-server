@@ -27,8 +27,8 @@
 
 #include <villagesql/abi/types.h>
 #include <villagesql/detail/capability_hash.h>
+#include <villagesql/detail/capability_traits.h>
 #include <villagesql/sdk_version.h>
-#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql {
 

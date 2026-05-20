@@ -20,7 +20,7 @@
 #include <tuple>
 #include <utility>
 
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 
 #include <villagesql/detail/vef_register.h>
 

@@ -25,8 +25,8 @@
 
 #include <cstdint>
 
+#include <villagesql/detail/capability_traits.h>
 #include <villagesql/vsql.h>
-#include <villagesql/vsql/capability_traits.h>
 
 using namespace vsql;
 

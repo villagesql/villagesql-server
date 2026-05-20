@@ -17,8 +17,8 @@
 #define VILLAGESQL_PREVIEW_KEYRING_REGISTER_H
 
 #include <villagesql/abi/preview/keyring.h>
+#include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/keyring.h>
-#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::detail {
 

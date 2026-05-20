@@ -17,7 +17,7 @@
 #define VILLAGESQL_PREVIEW_THREAD_WORKER_H
 
 #include <villagesql/abi/preview/thread_worker.h>
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_thread_worker {
 

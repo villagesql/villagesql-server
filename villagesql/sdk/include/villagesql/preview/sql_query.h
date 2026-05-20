@@ -21,7 +21,7 @@
 
 #include <villagesql/abi/preview/sql_query.h>
 #include <villagesql/abi/preview/thread_worker.h>
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_sql_query {
 

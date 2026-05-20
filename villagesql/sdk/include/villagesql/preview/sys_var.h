@@ -26,7 +26,7 @@
 
 #include <villagesql/abi/preview/sys_var.h>
 #include <villagesql/abi/types.h>
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 #include <villagesql/vsql/func_types.h>
 
 namespace vsql::preview_sys_var {

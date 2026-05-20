@@ -20,7 +20,7 @@
 #include <string_view>
 
 #include <villagesql/abi/preview/keyring.h>
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_keyring {
 

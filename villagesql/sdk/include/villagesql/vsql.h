@@ -72,12 +72,8 @@
 // Object-based type builder: vsql::make_type<Name>()
 #include <villagesql/vsql/type_builder.h>
 
-// MaybeParams<P>: known/unknown parameter wrapper for parameterized
-// from_string.
-#include <villagesql/vsql/maybe_params.h>
-
-// Parameterized type cache: TypeParamsCache<P>, type_params_cache_for<P>()
-#include <villagesql/vsql/type_params_cache.h>
+// MaybeParams<P>, TypeParamsCache<P>, type_params_cache_for<P>()
+#include <villagesql/vsql/type_params.h>
 
 // vsql ExtensionBuilder, make_extension(), and VEF_GENERATE_ENTRY_POINTS
 #include <villagesql/vsql/extension_builder.h>

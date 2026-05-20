@@ -66,7 +66,7 @@
 #include <string_view>
 
 #include <villagesql/abi/types.h>
-#include <villagesql/vsql/type_params_cache.h>
+#include <villagesql/vsql/type_params.h>
 
 // In C++20, Span<T> is std::span<T>. In C++17, it is a minimal compatible
 // implementation. User code written against vsql::Span<T> works in

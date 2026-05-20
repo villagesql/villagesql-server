@@ -17,8 +17,8 @@
 #define VILLAGESQL_PREVIEW_PING_REGISTER_H
 
 #include <villagesql/abi/preview/ping.h>
+#include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/ping.h>
-#include <villagesql/vsql/capability_traits.h>
 
 namespace vsql::detail {
 

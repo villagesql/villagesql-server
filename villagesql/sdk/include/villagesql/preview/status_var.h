@@ -21,7 +21,7 @@
 
 #include <villagesql/abi/preview/status_var.h>
 #include <villagesql/abi/types.h>
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 
 namespace vsql::preview_status_var {
 
