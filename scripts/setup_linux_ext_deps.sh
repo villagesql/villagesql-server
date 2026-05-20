@@ -7,8 +7,9 @@
 
 set -e
 
-apt-get update
-apt-get install -y --no-install-recommends \
+APT_OPTS=(-o Acquire::Retries=5)
+apt-get "${APT_OPTS[@]}" update
+apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
   build-essential \
   cmake \
   libssl-dev \
