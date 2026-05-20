@@ -1,10 +1,13 @@
 INSTALL EXTENSION vsql_thread_worker_test;
 SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
-RESULT: 42
+RESULT: 
 WARNING: 
+ERROR: 1146:Table 'test.no_such_table_xyz' doesn't exist
+RESULT: 0
+WARNING: 1292:Truncated incorrect INTEGER value: 'abc'
 ERROR: 
-RESULT: hello
+RESULT: 
 WARNING: 
-ERROR: 
+ERROR: 1146:Table 'test.no_such_table_xyz' doesn't exist
 SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
 UNINSTALL EXTENSION vsql_thread_worker_test;

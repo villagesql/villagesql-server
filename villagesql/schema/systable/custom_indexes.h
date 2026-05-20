@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <string>
 
+#include "sql/key_spec.h"
 #include "villagesql/schema/systable/helpers.h"
 
 struct TABLE;
@@ -144,6 +145,13 @@ struct TableTraits<IndexEntry> {
                               const std::string &old_key);
   static bool delete_from_table(TABLE &table, const IndexEntry &entry);
 };
+
+// Serialize a WITH-clause parameter list to a JSON object string.
+// Mirrors TypeParameters::to_json() for the index parameter pipeline.
+// Numeric params (is_string=false) are emitted unquoted; string/identifier
+// params are emitted quoted with backslash and double-quote escaping.
+// An empty list produces "{}".
+std::string params_to_json(const Mem_root_array<IndexWithParam> &params);
 
 }  // namespace villagesql
 

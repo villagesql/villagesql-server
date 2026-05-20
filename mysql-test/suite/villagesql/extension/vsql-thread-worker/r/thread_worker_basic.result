@@ -1,27 +1,15 @@
-SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_thread_worker_test;
 # Thread should NOT be running yet
 SELECT vsql_thread_worker_test.active_port();
 vsql_thread_worker_test.active_port()
 0
 SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
-# Connect and send PING
-SELECT vsql_thread_worker_test.active_port() INTO OUTFILE 'MYSQLTEST_VARDIR/tmp/tw_port.txt';
-# last_command should be PING
-SELECT vsql_thread_worker_test.last_command();
-vsql_thread_worker_test.last_command()
-PING
-# Connect and send HELLO
-SELECT vsql_thread_worker_test.active_port() INTO OUTFILE 'MYSQLTEST_VARDIR/tmp/tw_port.txt';
-# last_command should now be HELLO
-SELECT vsql_thread_worker_test.last_command();
-vsql_thread_worker_test.last_command()
-HELLO
+RESULT: 1
+WARNING: 
+ERROR: 
 SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
 # After disable: active_port should be 0
 SELECT vsql_thread_worker_test.active_port();
 vsql_thread_worker_test.active_port()
 0
 UNINSTALL EXTENSION vsql_thread_worker_test;
-SET PERSIST vsql_allow_preview_extensions = OFF;
-RESET PERSIST vsql_allow_preview_extensions;

@@ -34,8 +34,12 @@ class SqlQuery;
 // "vsql::preview::sql_query" preview capability. Declare one static instance
 // and register it with .with(g_sql_query_cap).
 //
-// After loading, use g_sql_query_cap.open(handle) to run SQL queries from a
-// background thread.
+// After loading, call g_sql_query_cap.open(handle) from a thread-worker
+// callback using that callback's vef_thread_handle_t*. Opening a SQL session
+// requires the thread-worker handle because it supplies the worker THD/session
+// context; open() is not valid from VDFs or arbitrary extension-created
+// threads. The capability wrapper is populated during extension registration
+// and then read-only; each valid open() call returns an independent Session.
 //
 // Usage:
 //   static vsql::preview_sql_query::SqlQueryCapability g_sql_query_cap;
@@ -45,14 +49,24 @@ class SqlQuery;
 //     auto session = g_sql_query_cap.open(handle);
 //     if (!session) return {};
 //
-//     // Option A: for_each — runs fn once per row.
-//     session.sql("SELECT 1").for_each([](const auto &r) { ... });
+//     // Option A: for_each — runs fn once per row. Returned Result holds
+//     // no buffered rows; use it for diagnostics only.
+//     auto status = session.sql("SELECT 1").for_each(
+//         [](const auto &row) { /* ... */ });
+//     if (status.has_error()) { /* status.error().message */ }
+//     for (unsigned i = 0; i < status.warning_count(); ++i) {
+//       auto w = status.warning(i);  // w.errno_, w.severity, w.message
+//     }
 //
 //     // Option B: execute + next — iterate manually.
 //     auto result = session.sql("SELECT id, name FROM t").execute();
+//     if (result.has_error()) { /* result.error().message */ return {}; }
 //     while (result.next()) {
 //       auto id   = result.column_int(0);
 //       auto name = result.column_str(1);
+//     }
+//     for (unsigned i = 0; i < result.warning_count(); ++i) {
+//       auto w = result.warning(i);
 //     }
 //     return {};
 //   }
@@ -140,9 +154,23 @@ inline Session SqlQueryCapability::open(vef_thread_handle_t *handle) const {
   return Session::open(*this, handle);
 }
 
-// Owns a buffered query result. Rows are fetched one at a time via next().
-// Column values from column_str() are valid only until the next next() call or
-// until Result goes out of scope — copy them if a longer lifetime is needed.
+// One diagnostic (statement error or warning/note) returned from a query.
+// The server copies diagnostic strings into the result handle; the string_view
+// members stay valid until the parent Result is destroyed. Copy them if a
+// longer lifetime is needed.
+struct Diag {
+  uint32_t errno_{0};
+  vef_sql_diag_severity_t severity{VEF_SQL_DIAG_ERROR};
+  std::string_view sqlstate;
+  std::string_view message;
+};
+
+// Owns a query result handle. Returned from both execute() (buffered rows
+// + diagnostics) and for_each() (diagnostics only — rows are delivered via
+// the callback). For the buffered case, rows are fetched one at a time via
+// next(), and column values from column_str() are valid only until the next
+// next() call or until Result goes out of scope — copy them if a longer
+// lifetime is needed.
 class Result {
  public:
   Result(const SqlQueryCapability &cap, vef_sql_result_t *handle)
@@ -161,8 +189,7 @@ class Result {
       : cap_(other.cap_),
         handle_(other.handle_),
         row_(other.row_),
-        lengths_(other.lengths_),
-        num_columns_(other.num_columns_) {
+        lengths_(other.lengths_) {
     other.handle_ = nullptr;
   }
 
@@ -174,7 +201,6 @@ class Result {
       handle_ = other.handle_;
       row_ = other.row_;
       lengths_ = other.lengths_;
-      num_columns_ = other.num_columns_;
       other.handle_ = nullptr;
     }
     return *this;
@@ -188,16 +214,17 @@ class Result {
     return cap_.abi_->fetch_row(handle_, &row_, &lengths_);
   }
 
-  // Returns true if the result handle is valid (execute succeeded).
+  // Returns true if the result handle is valid (the query reached the server
+  // and was scheduled — not whether it succeeded). Use has_error() to check
+  // whether the statement itself failed.
   explicit operator bool() const { return handle_ != nullptr; }
 
   // Number of columns in the result set.
   unsigned int num_columns() const {
-    if (handle_ != nullptr) {
-      if (cap_.abi_ == nullptr || cap_.abi_->num_columns == nullptr) return 0;
-      return cap_.abi_->num_columns(handle_);
-    }
-    return num_columns_;
+    if (handle_ == nullptr || cap_.abi_ == nullptr ||
+        cap_.abi_->num_columns == nullptr)
+      return 0;
+    return cap_.abi_->num_columns(handle_);
   }
 
   // Column value as a string_view. Valid until the next next() call.
@@ -219,25 +246,64 @@ class Result {
     return std::strtod(row_[i], nullptr);
   }
 
+  // True if the statement produced an error.
+  bool has_error() const {
+    if (handle_ == nullptr || cap_.abi_ == nullptr ||
+        cap_.abi_->has_error == nullptr)
+      return false;
+    return cap_.abi_->has_error(handle_);
+  }
+
+  // Statement error, if any. Returns a default-constructed Diag (errno_ == 0)
+  // when the statement succeeded.
+  Diag error() const {
+    Diag d;
+    if (handle_ == nullptr || cap_.abi_ == nullptr ||
+        cap_.abi_->get_error == nullptr)
+      return d;
+    vef_sql_diag_t raw;
+    if (!cap_.abi_->get_error(handle_, &raw)) return d;
+    d.errno_ = raw.errno_;
+    d.severity = raw.severity;
+    d.sqlstate =
+        raw.sqlstate ? std::string_view{raw.sqlstate} : std::string_view{};
+    d.message = (raw.message != nullptr)
+                    ? std::string_view{raw.message, raw.message_len}
+                    : std::string_view{};
+    return d;
+  }
+
+  // Number of warnings/notes attached to the result.
+  unsigned int warning_count() const {
+    if (handle_ == nullptr || cap_.abi_ == nullptr ||
+        cap_.abi_->warning_count == nullptr)
+      return 0;
+    return cap_.abi_->warning_count(handle_);
+  }
+
+  // i-th warning (0-based). Returns a default Diag if i is out of range.
+  Diag warning(unsigned int i) const {
+    Diag d;
+    if (handle_ == nullptr || cap_.abi_ == nullptr ||
+        cap_.abi_->get_warning == nullptr)
+      return d;
+    vef_sql_diag_t raw;
+    if (!cap_.abi_->get_warning(handle_, i, &raw)) return d;
+    d.errno_ = raw.errno_;
+    d.severity = raw.severity;
+    d.sqlstate =
+        raw.sqlstate ? std::string_view{raw.sqlstate} : std::string_view{};
+    d.message = (raw.message != nullptr)
+                    ? std::string_view{raw.message, raw.message_len}
+                    : std::string_view{};
+    return d;
+  }
+
  private:
-  friend class SqlQuery;
-
-  // Constructor for the streaming (for_each) path. No owned handle;
-  // row_/lengths_ point into ForEachCtx storage valid for the callback
-  // duration.
-  Result(const SqlQueryCapability &cap, const char **row,
-         const unsigned long *lengths, unsigned int num_columns)
-      : cap_(cap),
-        handle_(nullptr),
-        row_(row),
-        lengths_(lengths),
-        num_columns_(num_columns) {}
-
   const SqlQueryCapability &cap_;
   vef_sql_result_t *handle_{nullptr};
   const char **row_{nullptr};
   const unsigned long *lengths_{nullptr};
-  unsigned int num_columns_{0};
 };
 
 // A SQL query bound to a session. Obtained via session.sql("...").
@@ -248,7 +314,8 @@ class SqlQuery {
       : session_(session), sql_(sql) {}
 
   // Execute the query. Returns an invalid Result (operator bool == false)
-  // on error.
+  // only on setup failure (no session, OOM). A valid Result may still
+  // represent a failed query — check has_error() / warning_count().
   Result execute() const {
     if (session_.cap().abi_ == nullptr ||
         session_.cap().abi_->execute == nullptr)
@@ -258,30 +325,65 @@ class SqlQuery {
     return Result{session_.cap(), h};
   }
 
+  // Streaming row passed to the for_each callback. Valid only for the
+  // duration of the callback; do not store across rows.
+  class Row {
+   public:
+    Row(const char **row, const unsigned long *lengths,
+        unsigned int num_columns)
+        : row_(row), lengths_(lengths), num_columns_(num_columns) {}
+
+    unsigned int num_columns() const { return num_columns_; }
+
+    std::string_view column_str(unsigned int i) const {
+      if (row_ == nullptr || row_[i] == nullptr) return {};
+      return {row_[i], lengths_[i]};
+    }
+
+    long long column_int(unsigned int i) const {
+      if (row_ == nullptr || row_[i] == nullptr) return 0;
+      return std::strtoll(row_[i], nullptr, 10);
+    }
+
+    double column_real(unsigned int i) const {
+      if (row_ == nullptr || row_[i] == nullptr) return 0.0;
+      return std::strtod(row_[i], nullptr);
+    }
+
+   private:
+    const char **row_{nullptr};
+    const unsigned long *lengths_{nullptr};
+    unsigned int num_columns_{0};
+  };
+
   // Execute the query and invoke fn once per row, without buffering the full
-  // result set. fn receives a const Result& valid only for the duration of
+  // result set. fn receives a const Row& valid only for the duration of
   // the call; do not store it across rows.
+  //
+  // Returns a Result that carries diagnostics (error + warnings) only — it
+  // holds no buffered rows. Check result.has_error() / result.warning_count()
+  // after for_each returns.
   template <typename F>
-  void for_each(F &&fn) const {
+  Result for_each(F &&fn) const {
     if (session_.cap().abi_ == nullptr ||
         session_.cap().abi_->for_each_row == nullptr)
-      return;
+      return Result{session_.cap(), nullptr};
 
     struct Ctx {
-      const SqlQueryCapability &cap;
       F &fn;
-    } ctx{session_.cap(), fn};
+    } ctx{fn};
 
-    session_.cap().abi_->for_each_row(
+    vef_sql_result_t *h = session_.cap().abi_->for_each_row(
         session_.handle(), sql_.data(), sql_.size(),
         [](const char **row, const unsigned long *lengths,
            unsigned int num_columns, void *raw) -> bool {
           auto *c = static_cast<Ctx *>(raw);
-          Result r{c->cap, row, lengths, num_columns};
+          Row r{row, lengths, num_columns};
           c->fn(r);
           return true;
         },
         &ctx);
+    return Result{session_.cap(), h};
   }
 
  private:

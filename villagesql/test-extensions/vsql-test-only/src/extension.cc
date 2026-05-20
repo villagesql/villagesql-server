@@ -54,13 +54,23 @@
 //   VARLEN_TEST - A variable-length type that stores and decodes the input
 //                 string verbatim. Used for tests that need custom VARCHAR
 //                 storage without extension-specific semantics.
+//   NO_DEFAULT_TYPE
+//              - A fixed 4-byte type with no intrinsic default. Its
+//                from_string accepts only "(N)" and rejects empty string.
+//
+//   NO_DEFAULT_PARAM_TYPE(N)
+//              - Parameterized version of NO_DEFAULT_TYPE for exercising
+//                parameterized intrinsic-default failures.
 
 #include <villagesql/vsql.h>
 
 #include <cassert>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <string>
 #include <string_view>
 
 // Storage layout: 16 bytes, zero-padded.
@@ -139,6 +149,101 @@ int fault_blob_compare(vsql::CustomArg a, vsql::CustomArg b) {
   return 0;
 }
 
+constexpr int64_t kNoDefaultSize = 4;
+
+void no_default_encode(std::string_view from, vsql::CustomResult out) {
+  unsigned int nn = 0;
+  char tmp[64];
+  size_t copy = from.size() < sizeof(tmp) - 1 ? from.size() : sizeof(tmp) - 1;
+  memcpy(tmp, from.data(), copy);
+  tmp[copy] = '\0';
+  if (sscanf(tmp, "(%u)", &nn) != 1) return;
+  auto buffer = out.buffer();
+  if (buffer.size() < static_cast<size_t>(kNoDefaultSize)) return;
+  buffer[0] = static_cast<unsigned char>(nn);
+  buffer[1] = buffer[2] = buffer[3] = 0;
+  out.set_length(static_cast<size_t>(kNoDefaultSize));
+}
+
+void no_default_decode(vsql::CustomArg in, vsql::StringResult out) {
+  auto buffer = in.value();
+  if (buffer.size() < static_cast<size_t>(kNoDefaultSize)) return;
+  auto buf = out.buffer();
+  int written = snprintf(buf.data(), buf.size(), "(%u)", buffer[0]);
+  if (written < 0) return;
+  out.set_length(static_cast<size_t>(written));
+}
+
+int no_default_compare(vsql::CustomArg, vsql::CustomArg) { return 0; }
+
+struct NoDefaultParams {
+  int64_t length;
+
+  static NoDefaultParams parse(
+      const std::map<std::string, std::string> &params) {
+    auto it = params.find("length");
+    return NoDefaultParams{std::stoll(it->second)};
+  }
+
+  static void to_strings(const NoDefaultParams &p,
+                         std::map<std::string, std::string> &out) {
+    out["length"] = std::to_string(p.length);
+  }
+};
+
+bool no_default_int_to_params(int64_t value,
+                              std::map<std::string, std::string> &params,
+                              char *error_msg) {
+  if (value <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "NO_DEFAULT_PARAM_TYPE length must be positive");
+    return true;
+  }
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool no_default_resolve_params(const std::map<std::string, std::string> &params,
+                               vsql::ResolvedTypeParams *result,
+                               char *error_msg) {
+  auto it = params.find("length");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "NO_DEFAULT_PARAM_TYPE length is required");
+    return true;
+  }
+  int64_t length = std::stoll(it->second);
+  if (length <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "NO_DEFAULT_PARAM_TYPE length must be positive");
+    return true;
+  }
+  result->persisted_length = length;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+void no_default_param_encode(vsql::MaybeParams<NoDefaultParams> &params,
+                             std::string_view from, vsql::CustomResult out) {
+  if (!params.is_known()) params.set(NoDefaultParams{kNoDefaultSize});
+  no_default_encode(from, out);
+}
+
+void no_default_param_decode(vsql::CustomArgWith<NoDefaultParams> in,
+                             vsql::StringResult out) {
+  auto buffer = in.value();
+  if (buffer.size() < static_cast<size_t>(kNoDefaultSize)) return;
+  auto buf = out.buffer();
+  int written = snprintf(buf.data(), buf.size(), "(%u)", buffer[0]);
+  if (written < 0) return;
+  out.set_length(static_cast<size_t>(written));
+}
+
+int no_default_param_compare(vsql::CustomArgWith<NoDefaultParams>,
+                             vsql::CustomArgWith<NoDefaultParams>) {
+  return 0;
+}
+
 // test_result_kind: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR.
 //
 // Input string controls the outcome:
@@ -173,6 +278,8 @@ static void test_result_kind(vsql::StringArg input, vsql::IntResult out) {
 }
 
 static constexpr const char kFaultBlobTypeName[] = "FAULT_BLOB";
+static constexpr const char kNoDefaultTypeName[] = "NO_DEFAULT_TYPE";
+static constexpr const char kNoDefaultParamTypeName[] = "NO_DEFAULT_PARAM_TYPE";
 
 constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .persisted_length(kFaultBlobSize)
@@ -224,6 +331,27 @@ constexpr auto VARLEN_TEST = vsql::make_type<kVarlenTestTypeName>()
                                  .to_string<&varlen_test_decode>()
                                  .compare<&varlen_test_compare>()
                                  .build();
+constexpr auto NO_DEFAULT_TYPE = vsql::make_type<kNoDefaultTypeName>()
+                                     .persisted_length(kNoDefaultSize)
+                                     .max_decode_buffer_length(16)
+                                     .from_string<&no_default_encode>()
+                                     .to_string<&no_default_decode>()
+                                     .compare<&no_default_compare>()
+                                     .build();
+
+constexpr auto NO_DEFAULT_PARAM_TYPE =
+    vsql::make_type<kNoDefaultParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kNoDefaultSize)
+        .params<NoDefaultParams, &NoDefaultParams::parse,
+                &NoDefaultParams::to_strings>()
+        .int_to_params<&no_default_int_to_params>()
+        .resolve_params<&no_default_resolve_params>()
+        .from_string<&no_default_param_encode>()
+        .to_string<&no_default_param_decode>()
+        .compare<&no_default_param_compare>()
+        .build();
 
 using namespace vsql;
 
@@ -235,6 +363,8 @@ VEF_GENERATE_ENTRY_POINTS(
         // VARLEN_TEST: minimal variable-length custom type for regression
         // testing variable-length code paths.
         .type(VARLEN_TEST)
+        .type(NO_DEFAULT_TYPE)
+        .type(NO_DEFAULT_PARAM_TYPE)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)

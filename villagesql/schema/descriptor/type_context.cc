@@ -51,7 +51,9 @@ TypeContext::TypeContext(const TypeContextKey &key,
   resolve_cached_values();
 }
 
-bool TypeContext::init_intrinsic_default() {
+bool TypeContext::init_intrinsic_default(std::string &error_out) {
+  error_out.clear();
+
   // Protocol-1 types do not define intrinsic defaults; MySQL's built-in default
   // handling is used instead. Nothing to initialize.
   if (descriptor_->protocol() < VEF_PROTOCOL_2) return false;
@@ -87,8 +89,8 @@ bool TypeContext::init_intrinsic_default() {
     char error_msg[VEF_MAX_ERROR_LEN] = {};
     if (descriptor_->intrinsic_default_fn()->invoke(tp, &input_str,
                                                     error_msg)) {
-      LogVSQL(ERROR_LEVEL, "intrinsic_default for type '%s' failed: %s",
-              qualified_name_.c_str(), error_msg);
+      error_out =
+          std::string("intrinsic_default function failed: ") + error_msg;
       return true;
     }
   } else if (descriptor_->intrinsic_default_str().has_value()) {
@@ -96,9 +98,7 @@ bool TypeContext::init_intrinsic_default() {
   }
 
   if (!encode_op_.has_value()) {
-    LogVSQL(ERROR_LEVEL,
-            "intrinsic_default for type '%s': no encode function available",
-            qualified_name_.c_str());
+    error_out = "no encode function available";
     return true;
   }
 
@@ -120,15 +120,14 @@ bool TypeContext::init_intrinsic_default() {
       return false;
     }
     if (!r) {
-      LogVSQL(ERROR_LEVEL,
-              "intrinsic_default for type '%s': VDF encode failed for "
-              "input '%s' (storage_size=%zu)",
-              qualified_name_.c_str(), input_str.c_str(), storage_size);
+      error_out = "from_string VDF failed to encode intrinsic default input '" +
+                  input_str + "' (expected persisted_length=" +
+                  std::to_string(storage_size) + ")";
     } else {
-      LogVSQL(ERROR_LEVEL,
-              "intrinsic_default for type '%s': VDF encode returned wrong "
-              "size %zu for input '%s' (expected storage_size=%zu)",
-              qualified_name_.c_str(), *r, input_str.c_str(), storage_size);
+      error_out =
+          "from_string VDF encoded intrinsic default input '" + input_str +
+          "' to " + std::to_string(*r) +
+          " bytes, expected persisted_length=" + std::to_string(storage_size);
     }
   } else if (op.fn() != nullptr) {
     bool fn_failed = op.fn()(buffer.data(), storage_size, input_str.c_str(),
@@ -139,22 +138,20 @@ bool TypeContext::init_intrinsic_default() {
       return false;
     }
     if (fn_failed) {
-      LogVSQL(ERROR_LEVEL,
-              "intrinsic_default for type '%s': encode function failed for "
-              "input '%s' (storage_size=%zu)",
-              qualified_name_.c_str(), input_str.c_str(), storage_size);
+      error_out =
+          "encode function failed for intrinsic default input '" + input_str +
+          "' (expected persisted_length=" + std::to_string(storage_size) + ")";
     } else {
-      LogVSQL(ERROR_LEVEL,
-              "intrinsic_default for type '%s': encode function returned wrong "
-              "size %zu for input '%s' (expected storage_size=%zu)",
-              qualified_name_.c_str(), encoded_length, input_str.c_str(),
-              storage_size);
+      error_out =
+          "encode function encoded intrinsic default input '" + input_str +
+          "' to " + std::to_string(encoded_length) +
+          " bytes, expected persisted_length=" + std::to_string(storage_size);
     }
   } else {
-    LogVSQL(ERROR_LEVEL,
-            "intrinsic_default for type '%s': encode op has neither VDF nor "
-            "function for input '%s'",
-            qualified_name_.c_str(), input_str.c_str());
+    error_out =
+        "encode op has neither VDF nor function for intrinsic default "
+        "input '" +
+        input_str + "'";
   }
   return true;
 }

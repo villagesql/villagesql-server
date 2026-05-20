@@ -16,6 +16,7 @@
 #include "villagesql/services/preview/sql_query.h"
 
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,7 @@
 #include "mysql/service_srv_session.h"
 #include "mysql/strings/m_ctype.h"
 #include "sql/sql_class.h"
+#include "sql/sql_error.h"
 #include "sql/srv_session.h"
 #include "villagesql/include/error.h"
 #include "villagesql/services/preview/thread_worker.h"
@@ -49,10 +51,27 @@ struct vef_sql_result_t {
 
   std::vector<const char *> row_ptrs;
   std::vector<unsigned long> row_lengths;
+
+  struct Diag {
+    uint32_t errno_{0};
+    vef_sql_diag_severity_t severity{VEF_SQL_DIAG_ERROR};
+    char sqlstate[6]{"00000"};
+    std::string message;
+  };
+  bool has_error{false};
+  Diag error;
+  std::vector<Diag> warnings;
+};
+
+// Common base for ExecCtx and ForEachCtx so the shared cb_handle_error
+// callback can recover the result handle from either ctx type via a single
+// static_cast from void*.
+struct CtxBase {
+  vef_sql_result_t *result{nullptr};
 };
 
 // Context for the streaming for_each_row path.
-struct ForEachCtx {
+struct ForEachCtx : CtxBase {
   unsigned int num_columns{0};
   unsigned int col_idx{0};
   vef_sql_row_cb cb{nullptr};
@@ -70,8 +89,7 @@ namespace villagesql::services {
 
 namespace {
 
-struct ExecCtx {
-  vef_sql_result_t *result;
+struct ExecCtx : CtxBase {
   unsigned int col_idx{0};
 };
 
@@ -161,11 +179,63 @@ static int cb_get_datetime(void *, const MYSQL_TIME *, uint) { return 0; }
 static void cb_handle_ok(void *, uint, uint, ulonglong, ulonglong,
                          const char *) {}
 
+static vef_sql_result_t *result_from_ctx(void *ctx) {
+  return static_cast<CtxBase *>(ctx)->result;
+}
+
 static void cb_handle_error(void *ctx, uint sql_errno, const char *err_msg,
-                            const char *) {
-  (void)ctx;
-  LogVSQL(ERROR_LEVEL, "sql_query: query error %u: %s", sql_errno,
-          err_msg ? err_msg : "(unknown)");
+                            const char *sqlstate) {
+  vef_sql_result_t *r = result_from_ctx(ctx);
+  if (should_assert_if_null(r)) {
+    LogVSQL(ERROR_LEVEL, "sql_query: query error %u: %s", sql_errno,
+            err_msg ? err_msg : "(unknown)");
+    return;
+  }
+  r->has_error = true;
+  r->error.errno_ = sql_errno;
+  r->error.severity = VEF_SQL_DIAG_ERROR;
+  if (sqlstate != nullptr) {
+    std::strncpy(r->error.sqlstate, sqlstate, sizeof(r->error.sqlstate) - 1);
+    r->error.sqlstate[sizeof(r->error.sqlstate) - 1] = '\0';
+  }
+  if (err_msg != nullptr) r->error.message.assign(err_msg);
+}
+
+// Iterate the THD's Diagnostics_area and copy warning/note conditions into
+// the result. Errors are already captured via cb_handle_error.
+static void collect_warnings(THD *thd, vef_sql_result_t *result) {
+  if (thd == nullptr || result == nullptr) return;
+  Diagnostics_area *da = thd->get_stmt_da();
+  if (da == nullptr) return;
+  Diagnostics_area::Sql_condition_iterator it = da->sql_conditions();
+  const Sql_condition *cond;
+  while ((cond = it++) != nullptr) {
+    Sql_condition::enum_severity_level lvl = cond->severity();
+    vef_sql_diag_severity_t sev;
+    switch (lvl) {
+      case Sql_condition::SL_NOTE:
+        sev = VEF_SQL_DIAG_NOTE;
+        break;
+      case Sql_condition::SL_WARNING:
+        sev = VEF_SQL_DIAG_WARNING;
+        break;
+      default:
+        // SL_ERROR conditions are already surfaced via cb_handle_error;
+        // skip them here so they aren't reported twice.
+        continue;
+    }
+    vef_sql_result_t::Diag d;
+    d.errno_ = cond->mysql_errno();
+    d.severity = sev;
+    const char *ss = cond->returned_sqlstate();
+    if (ss != nullptr) {
+      std::strncpy(d.sqlstate, ss, sizeof(d.sqlstate) - 1);
+      d.sqlstate[sizeof(d.sqlstate) - 1] = '\0';
+    }
+    const char *msg = cond->message_text();
+    if (msg != nullptr) d.message.assign(msg, cond->message_octet_length());
+    result->warnings.push_back(std::move(d));
+  }
 }
 
 static void cb_shutdown(void *, int) {}
@@ -177,6 +247,7 @@ static int fe_start_result_metadata(void *ctx, uint num_cols, uint,
                                     const CHARSET_INFO *) {
   auto *c = static_cast<ForEachCtx *>(ctx);
   c->num_columns = num_cols;
+  c->result->num_columns = num_cols;
   c->values.assign(num_cols, std::string{});
   c->is_null.assign(num_cols, false);
   c->row_ptrs.resize(num_cols);
@@ -331,51 +402,59 @@ static vef_sql_result_t *sql_execute(vef_sql_session_t *session,
   // be reused across calls. Creating it here preserves the worker THD's
   // skip_grants() security context for each query.
   static auto noop_cb = [](void *, unsigned int, const char *) noexcept {};
-  MYSQL_SESSION srv =
+  std::unique_ptr<Srv_session> srv(
       new (std::nothrow) Srv_session(static_cast<srv_session_error_cb>(noop_cb),
-                                     nullptr, session->handle->thd);
+                                     nullptr, session->handle->thd));
   if (srv == nullptr) {
     LogVSQL(ERROR_LEVEL, "sql_query: failed to create Srv_session");
     return nullptr;
   }
 
-  auto *result = new (std::nothrow) vef_sql_result_t;
+  std::unique_ptr<vef_sql_result_t> result(new (std::nothrow) vef_sql_result_t);
   if (result == nullptr) {
-    delete srv;
     return nullptr;
   }
 
-  ExecCtx ctx{result};
+  ExecCtx ctx;
+  ctx.result = result.get();
 
   COM_DATA cmd;
   memset(&cmd, 0, sizeof(cmd));
   cmd.com_query.query = sql;
   cmd.com_query.length = static_cast<unsigned int>(sql_len);
 
-  command_service_run_command(srv, COM_QUERY, &cmd,
+  command_service_run_command(srv.get(), COM_QUERY, &cmd,
                               &my_charset_utf8mb4_general_ci, &kCallbacks,
                               CS_TEXT_REPRESENTATION, &ctx);
 
-  delete srv;
-  return result;
+  collect_warnings(session->handle->thd, result.get());
+
+  return result.release();
 }
 
-static bool sql_for_each_row(vef_sql_session_t *session, const char *sql,
-                             size_t sql_len, vef_sql_row_cb cb, void *ctx) {
+static vef_sql_result_t *sql_for_each_row(vef_sql_session_t *session,
+                                          const char *sql, size_t sql_len,
+                                          vef_sql_row_cb cb, void *ctx) {
   if (session == nullptr || session->handle == nullptr ||
       session->handle->thd == nullptr || cb == nullptr)
-    return false;
+    return nullptr;
 
   static auto noop_cb = [](void *, unsigned int, const char *) noexcept {};
-  MYSQL_SESSION srv =
+  std::unique_ptr<Srv_session> srv(
       new (std::nothrow) Srv_session(static_cast<srv_session_error_cb>(noop_cb),
-                                     nullptr, session->handle->thd);
+                                     nullptr, session->handle->thd));
   if (srv == nullptr) {
     LogVSQL(ERROR_LEVEL, "sql_query: failed to create Srv_session");
-    return false;
+    return nullptr;
+  }
+
+  std::unique_ptr<vef_sql_result_t> result(new (std::nothrow) vef_sql_result_t);
+  if (result == nullptr) {
+    return nullptr;
   }
 
   ForEachCtx fe_ctx;
+  fe_ctx.result = result.get();
   fe_ctx.cb = cb;
   fe_ctx.user_ctx = ctx;
 
@@ -385,10 +464,12 @@ static bool sql_for_each_row(vef_sql_session_t *session, const char *sql,
   cmd.com_query.length = static_cast<unsigned int>(sql_len);
 
   command_service_run_command(
-      srv, COM_QUERY, &cmd, &my_charset_utf8mb4_general_ci, &kForEachCallbacks,
-      CS_TEXT_REPRESENTATION, &fe_ctx);
-  delete srv;
-  return true;
+      srv.get(), COM_QUERY, &cmd, &my_charset_utf8mb4_general_ci,
+      &kForEachCallbacks, CS_TEXT_REPRESENTATION, &fe_ctx);
+
+  collect_warnings(session->handle->thd, result.get());
+
+  return result.release();
 }
 
 static bool sql_fetch_row(vef_sql_result_t *result, const char ***row_out,
@@ -425,6 +506,37 @@ static unsigned int sql_num_columns(vef_sql_result_t *result) {
 
 static void sql_close_result(vef_sql_result_t *result) { delete result; }
 
+static void fill_diag(const vef_sql_result_t::Diag &src, vef_sql_diag_t *out) {
+  out->errno_ = src.errno_;
+  out->severity = src.severity;
+  out->sqlstate = src.sqlstate;
+  out->message = src.message.c_str();
+  out->message_len = src.message.size();
+}
+
+static bool sql_has_error(const vef_sql_result_t *result) {
+  return result != nullptr && result->has_error;
+}
+
+static bool sql_get_error(const vef_sql_result_t *result, vef_sql_diag_t *out) {
+  if (result == nullptr || !result->has_error || out == nullptr) return false;
+  fill_diag(result->error, out);
+  return true;
+}
+
+static unsigned int sql_warning_count(const vef_sql_result_t *result) {
+  if (result == nullptr) return 0;
+  return static_cast<unsigned int>(result->warnings.size());
+}
+
+static bool sql_get_warning(const vef_sql_result_t *result, unsigned int i,
+                            vef_sql_diag_t *out) {
+  if (result == nullptr || out == nullptr || i >= result->warnings.size())
+    return false;
+  fill_diag(result->warnings[i], out);
+  return true;
+}
+
 namespace {
 vef_preview_sql_query_t g_sql_query_vtable{VEF_PREVIEW_SQL_QUERY_ABI_VERSION,
                                            &sql_open_session,
@@ -433,7 +545,11 @@ vef_preview_sql_query_t g_sql_query_vtable{VEF_PREVIEW_SQL_QUERY_ABI_VERSION,
                                            &sql_fetch_row,
                                            &sql_num_columns,
                                            &sql_close_result,
-                                           &sql_for_each_row};
+                                           &sql_for_each_row,
+                                           &sql_has_error,
+                                           &sql_get_error,
+                                           &sql_warning_count,
+                                           &sql_get_warning};
 }  // namespace
 
 vef_preview_sql_query_t *preview_sql_query_vtable() {

@@ -1,4 +1,3 @@
-SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_lifecycle_test;
 # Thread should NOT be running yet (enabled defaults to OFF)
 SELECT COUNT(*) FROM performance_schema.processlist
@@ -23,5 +22,3 @@ WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
 COUNT(*)
 0
 UNINSTALL EXTENSION vsql_lifecycle_test;
-SET PERSIST vsql_allow_preview_extensions = OFF;
-RESET PERSIST vsql_allow_preview_extensions;

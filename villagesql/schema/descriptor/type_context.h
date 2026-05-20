@@ -25,6 +25,7 @@
 #include <string_view>
 #include <vector>
 
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/types/type_op.h"
 
@@ -328,7 +329,7 @@ class TypeContext {
   // (2) intrinsic_default_str, (3) encode(""). Skipped for variable-length
   // types where persisted_length_ <= 0 (no storage size known yet — these
   // types require parameters before use).
-  bool init_intrinsic_default();
+  bool init_intrinsic_default(std::string &error_out);
 
   void resolve_cached_values();
 
@@ -376,7 +377,14 @@ struct TableTraits<TypeContext> {
     // Use new directly: make_shared constructs via the allocator which doesn't
     // have friend access to the private constructor.
     std::shared_ptr<TypeContext> tc(new TypeContext(key, descriptor));
-    if (tc->init_intrinsic_default()) return std::shared_ptr<TypeContext>();
+    std::string error;
+    if (tc->init_intrinsic_default(error)) {
+      if (!error.empty()) {
+        villagesql_error("Type '%s' failed to initialize: %s", MYF(0),
+                         tc->qualified_name().c_str(), error.c_str());
+      }
+      return std::shared_ptr<TypeContext>();
+    }
     return tc;
   }
 };

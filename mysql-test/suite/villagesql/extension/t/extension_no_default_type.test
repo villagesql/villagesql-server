@@ -1,23 +1,15 @@
-# Test that CREATE TABLE with a column of a type with no intrinsic default
-# fails at CREATE TABLE time.
+# Test that direct from_string calls and CREATE TABLE with a NOT NULL column
+# both fail when a type has no valid intrinsic default.
 
---let $veb_dir = $MYSQLTEST_VARDIR/veb
---exec mkdir -p $veb_dir
+INSTALL EXTENSION vsql_test_only;
 
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---let $restart_parameters = restart: --veb-dir=$veb_dir
---source include/restart_mysqld.inc
-
---let $extension_name = no_default_type
---let $extension_version = 1.0.0
---let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/no_default_type.cc
---source include/villagesql/create_extension_sdk.inc
-
-INSTALL EXTENSION no_default_type;
-
-call mtr.add_suppression("VillageSQL.*intrinsic_default for type.*failed");
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT NO_DEFAULT_TYPE::from_string('whatever');
 
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
 
-UNINSTALL EXTENSION no_default_type;
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4) NOT NULL);
+
+UNINSTALL EXTENSION vsql_test_only;
