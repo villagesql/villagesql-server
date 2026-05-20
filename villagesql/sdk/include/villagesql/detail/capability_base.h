@@ -18,7 +18,7 @@
 
 #include <cstddef>
 
-#include <villagesql/vsql/capability_traits.h>
+#include <villagesql/detail/capability_traits.h>
 
 // Lifecycle enforcement for extension capability wrappers.
 //

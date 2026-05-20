@@ -13,35 +13,38 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_PREVIEW_SYS_VAR_REGISTER_H
-#define VILLAGESQL_PREVIEW_SYS_VAR_REGISTER_H
+#ifndef VILLAGESQL_PREVIEW_DETAIL_STATUS_VAR_REGISTER_H
+#define VILLAGESQL_PREVIEW_DETAIL_STATUS_VAR_REGISTER_H
 
-#include <villagesql/abi/preview/sys_var.h>
+#include <villagesql/abi/preview/status_var.h>
 #include <villagesql/detail/capability_traits.h>
+#include <villagesql/preview/status_var.h>
 
 namespace vsql::detail {
 
 template <size_t N>
-struct CapabilityTraits<::vsql::preview_sys_var::SysVarCapability<N>> {
-  static constexpr const char *kName = VEF_PREVIEW_SYS_VAR_NAME;
+struct CapabilityTraits<::vsql::preview_status_var::StatusVarCapability<N>> {
+  static constexpr const char *kName = VEF_PREVIEW_STATUS_VAR_NAME;
   static constexpr const char *kCppTypeName =
-      "vsql::preview_sys_var::SysVarCapability";
-  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_SYS_VAR_ABI_VERSION;
-  using AbiType = vef_preview_sys_var_t;
+      "vsql::preview_status_var::StatusVarCapability";
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_STATUS_VAR_ABI_VERSION;
+  using AbiType = vef_preview_status_var_t;
+  using DescriptorType = vef_status_var_descriptor_list_t;
 
   static constexpr void *vtable_destination(
-      ::vsql::preview_sys_var::SysVarCapability<N> *p) noexcept {
+      ::vsql::preview_status_var::StatusVarCapability<N> *p) noexcept {
     return static_cast<void *>(&p->abi_);
   }
 
   // Returns a pointer to the descriptor list so the server's on_populate
-  // callback can reach the variable descriptors.
-  static constexpr void *extension_data(
-      ::vsql::preview_sys_var::SysVarCapability<N> *p) noexcept {
-    return static_cast<void *>(&p->descriptor_list);
+  // callback can reach the variable descriptors. The server receives this
+  // as extension_data in the CapabilityValue callbacks.
+  static constexpr const void *extension_data(
+      ::vsql::preview_status_var::StatusVarCapability<N> *p) noexcept {
+    return static_cast<const void *>(&p->descriptor_list);
   }
 };
 
 }  // namespace vsql::detail
 
-#endif  // VILLAGESQL_PREVIEW_SYS_VAR_REGISTER_H
+#endif  // VILLAGESQL_PREVIEW_DETAIL_STATUS_VAR_REGISTER_H

@@ -56,16 +56,15 @@ file(WRITE "${CMAKE_BINARY_DIR}/villagesql_test_env.sh"
 )
 
 # Collect SDK input files for dependency tracking so the sdk target reruns
-# whenever any of these change. GLOB is evaluated at cmake time; adding new
-# header files requires re-running cmake (standard CMake behaviour).
-file(GLOB_RECURSE SDK_STABLE_HEADERS
+# whenever any of these change.
+file(GLOB_RECURSE SDK_STABLE_HEADERS CONFIGURE_DEPENDS
   "${STABLE_SDK_DIR}/include/villagesql/*.h"
 )
-file(GLOB_RECURSE SDK_DEV_HEADERS
+file(GLOB_RECURSE SDK_DEV_HEADERS CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/*.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/*.h.in"
 )
-file(GLOB_RECURSE SDK_TEMPLATE_FILES
+file(GLOB_RECURSE SDK_TEMPLATE_FILES CONFIGURE_DEPENDS
   "${STABLE_SDK_DIR}/template/*"
 )
 

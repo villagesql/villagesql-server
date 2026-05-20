@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_PREVIEW_THREAD_WORKER_REGISTER_H
-#define VILLAGESQL_PREVIEW_THREAD_WORKER_REGISTER_H
+#ifndef VILLAGESQL_PREVIEW_DETAIL_THREAD_WORKER_REGISTER_H
+#define VILLAGESQL_PREVIEW_DETAIL_THREAD_WORKER_REGISTER_H
 
 #include <villagesql/abi/preview/thread_worker.h>
 #include <villagesql/detail/capability_traits.h>
@@ -25,7 +25,6 @@ namespace vsql::detail {
 template <auto WorkFn>
 struct CapabilityTraits<
     ::vsql::preview_thread_worker::ThreadWorkerCapability<WorkFn>> {
-  using Cap = ::vsql::preview_thread_worker::ThreadWorkerCapability<WorkFn>;
   static constexpr const char *kName = VEF_PREVIEW_THREAD_WORKER_NAME;
   static constexpr const char *kCppTypeName =
       "vsql::preview_thread_worker::ThreadWorkerCapability";
@@ -33,15 +32,20 @@ struct CapabilityTraits<
   using AbiType = vef_preview_thread_worker_t;
   using DescriptorType = vef_thread_worker_descriptor_t;
 
-  static constexpr void *vtable_destination(Cap *p) noexcept {
+  static constexpr void *vtable_destination(
+      ::vsql::preview_thread_worker::ThreadWorkerCapability<WorkFn>
+          *p) noexcept {
     return static_cast<void *>(&p->abi_);
   }
 
-  static const void *extension_data(Cap * /*p*/) noexcept {
-    return &Cap::descriptor;
+  static const void *extension_data(
+      ::vsql::preview_thread_worker::ThreadWorkerCapability<WorkFn>
+          * /*p*/) noexcept {
+    return &::vsql::preview_thread_worker::ThreadWorkerCapability<
+        WorkFn>::descriptor;
   }
 };
 
 }  // namespace vsql::detail
 
-#endif  // VILLAGESQL_PREVIEW_THREAD_WORKER_REGISTER_H
+#endif  // VILLAGESQL_PREVIEW_DETAIL_THREAD_WORKER_REGISTER_H

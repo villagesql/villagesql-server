@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_PREVIEW_PING_REGISTER_H
-#define VILLAGESQL_PREVIEW_PING_REGISTER_H
+#ifndef VILLAGESQL_PREVIEW_DETAIL_PING_REGISTER_H
+#define VILLAGESQL_PREVIEW_DETAIL_PING_REGISTER_H
 
 #include <villagesql/abi/preview/ping.h>
 #include <villagesql/detail/capability_traits.h>
@@ -38,4 +38,4 @@ struct CapabilityTraits<::vsql::preview_ping::PingCapability> {
 
 }  // namespace vsql::detail
 
-#endif  // VILLAGESQL_PREVIEW_PING_REGISTER_H
+#endif  // VILLAGESQL_PREVIEW_DETAIL_PING_REGISTER_H

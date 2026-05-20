@@ -334,6 +334,6 @@ auto make_capability(SysVarDescriptor const (&descs)[N]) {
 
 }  // namespace vsql::preview_sys_var
 
-#include <villagesql/preview/sys_var_register.h>
+#include <villagesql/preview/detail/sys_var_register.h>
 
 #endif  // VILLAGESQL_PREVIEW_SYS_VAR_H

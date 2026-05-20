@@ -95,23 +95,7 @@ class SqlQueryCapability
 
 }  // namespace vsql::preview_sql_query
 
-namespace vsql::detail {
-
-template <>
-struct CapabilityTraits<::vsql::preview_sql_query::SqlQueryCapability> {
-  static constexpr const char *kName = VEF_PREVIEW_SQL_QUERY_NAME;
-  static constexpr const char *kCppTypeName =
-      "vsql::preview_sql_query::SqlQueryCapability";
-  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_SQL_QUERY_ABI_VERSION;
-  using AbiType = vef_preview_sql_query_t;
-
-  static constexpr void *vtable_destination(
-      ::vsql::preview_sql_query::SqlQueryCapability *p) noexcept {
-    return static_cast<void *>(&p->abi_);
-  }
-};
-
-}  // namespace vsql::detail
+#include <villagesql/preview/detail/sql_query_register.h>
 
 namespace vsql::preview_sql_query {
 

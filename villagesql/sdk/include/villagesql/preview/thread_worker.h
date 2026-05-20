@@ -59,7 +59,7 @@ class ThreadWorkerCapability
 
 }  // namespace vsql::preview_thread_worker
 
+#include <villagesql/preview/detail/thread_worker_register.h>
 #include <villagesql/preview/thread_worker_impl.h>
-#include <villagesql/preview/thread_worker_register.h>
 
 #endif  // VILLAGESQL_PREVIEW_THREAD_WORKER_H

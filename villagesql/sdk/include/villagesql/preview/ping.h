@@ -40,7 +40,7 @@ class PingCapability : public ::vsql::detail::CapabilityBase<PingCapability> {
 
 }  // namespace vsql::preview_ping
 
+#include <villagesql/preview/detail/ping_register.h>
 #include <villagesql/preview/ping_impl.h>
-#include <villagesql/preview/ping_register.h>
 
 #endif  // VILLAGESQL_PREVIEW_PING_H

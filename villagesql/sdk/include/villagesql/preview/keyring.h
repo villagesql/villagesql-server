@@ -63,7 +63,7 @@ class KeyringCapability
 
 }  // namespace vsql::preview_keyring
 
+#include <villagesql/preview/detail/keyring_register.h>
 #include <villagesql/preview/keyring_impl.h>
-#include <villagesql/preview/keyring_register.h>
 
 #endif  // VILLAGESQL_PREVIEW_KEYRING_H

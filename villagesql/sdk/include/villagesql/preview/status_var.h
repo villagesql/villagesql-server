@@ -143,6 +143,6 @@ auto make_capability(StatusVarDescriptor const (&descs)[N]) {
 
 }  // namespace vsql::preview_status_var
 
-#include <villagesql/preview/status_var_register.h>
+#include <villagesql/preview/detail/status_var_register.h>
 
 #endif  // VILLAGESQL_PREVIEW_STATUS_VAR_H
