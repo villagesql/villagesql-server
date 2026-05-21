@@ -21,8 +21,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "preview/storage.h"
-
 // Protocol Versioning
 //
 // The protocol is incremented when the binary layout or function signatures of
