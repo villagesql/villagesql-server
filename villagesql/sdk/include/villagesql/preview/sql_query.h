@@ -24,10 +24,6 @@
 #include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 
-// vef_sql_session_t, vef_sql_result_t and vef_thread_handle_t (reached
-// transitively through open_session) are forward-declared server-only
-// handles that extensions only see by pointer.
-
 namespace vsql::preview_sql_query {
 
 // Forward declaration.
