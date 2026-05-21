@@ -29,6 +29,8 @@
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/thread_worker.h"
 #include "villagesql/services/preview/column_store.h"
+#include "villagesql/services/preview/index_profile.h"
+#include "villagesql/services/preview/index_type.h"
 #include "villagesql/services/preview/keyring.h"
 #include "villagesql/services/preview/ping.h"
 #include "villagesql/services/preview/sql_query.h"
@@ -152,6 +154,14 @@ void register_builtin_capabilities() {
                        .on_depopulate = on_depopulate_thread_worker});
   register_capability(VEF_PREVIEW_COLUMN_STORE_NAME,
                       {.vtable = preview_column_store_vtable(),
+                       .vtable_hash = "ver-1",
+                       .capability_config_hash = "ver-1"});
+  register_capability(VEF_PREVIEW_INDEX_TYPE_NAME,
+                      {.vtable = preview_index_type_vtable(),
+                       .vtable_hash = "ver-1",
+                       .capability_config_hash = "ver-1"});
+  register_capability(VEF_PREVIEW_INDEX_PROFILE_NAME,
+                      {.vtable = preview_index_profile_vtable(),
                        .vtable_hash = "ver-1",
                        .capability_config_hash = "ver-1"});
   register_capability(
