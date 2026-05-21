@@ -193,10 +193,27 @@ class FuncBuilder {
                   "Too many parameters (max is kMaxParams)");
 
     using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
-    using UniquePTuple = typename detail::unique_params_types<AllParams>::type;
+    using ReturnType = typename detail::FuncReturnType<decltype(Func)>::type;
+    using Shape = detail::func_signature_shape<AllParams, NumParams>;
+    static_assert(std::is_void_v<ReturnType>,
+                  "make_func: C++ function must return void and set the SQL "
+                  "result through the final typed result wrapper parameter");
+    static_assert(std::tuple_size_v<AllParams> == NumParams + 1,
+                  "make_func: C++ function must have one typed result wrapper "
+                  "after the declared SQL parameters; check the number of "
+                  ".param(...) calls");
+    static_assert(
+        std::tuple_size_v<AllParams> != NumParams + 1 || Shape::args_ok,
+        "make_func: every C++ function parameter before the result "
+        "must be a typed argument wrapper such as IntArg, RealArg, "
+        "StringArg, CustomArg, or CustomArgWith<P>");
+    static_assert(
+        std::tuple_size_v<AllParams> != NumParams + 1 || Shape::result_ok,
+        "make_func: final C++ function parameter must be a typed "
+        "result wrapper such as IntResult, RealResult, StringResult, "
+        "CustomResult, or CustomResultWith<P>");
 
     detail::FuncWithMetadata meta{};
-    meta.f = &detail::Wrapper<Func, NumParams>::invoke;
     meta.prerun = prerun_;
     meta.postrun = postrun_;
     meta.return_type = detail::to_vef_type(return_type_);
@@ -206,9 +223,17 @@ class FuncBuilder {
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
-    if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
-      meta.check_params_cache_bound =
-          &detail::apply_params_cache_checker<UniquePTuple>::check;
+    if constexpr (std::tuple_size_v<AllParams> == NumParams + 1 &&
+                  Shape::args_ok && Shape::result_ok) {
+      using UniquePTuple =
+          typename detail::unique_params_types<AllParams>::type;
+      meta.f = &detail::Wrapper<Func, NumParams>::invoke;
+      if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
+        meta.check_params_cache_bound =
+            &detail::apply_params_cache_checker<UniquePTuple>::check;
+      }
+      meta.check_signature =
+          &detail::signature_checker<AllParams, NumParams>::check;
     }
 
     return detail::StaticFuncDesc<NumParams>(name_, meta);
@@ -287,8 +312,11 @@ class AggFuncBuilder {
   template <auto Fn>
   constexpr AggFuncBuilder<State, Func, NumParams> &clear() {
     using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
+    using ReturnType = typename detail::FuncReturnType<decltype(Fn)>::type;
     using DeducedState =
         std::remove_reference_t<std::tuple_element_t<0, Params>>;
+    static_assert(std::is_void_v<ReturnType>,
+                  "clear: C++ function must return void");
     static_assert(std::is_same_v<DeducedState, State>,
                   "clear: first parameter must be State& matching the "
                   "make_aggregate_func State type");
@@ -302,8 +330,11 @@ class AggFuncBuilder {
   template <auto Fn>
   constexpr AggFuncBuilder<State, Func, NumParams> &accumulate() {
     using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
+    using ReturnType = typename detail::FuncReturnType<decltype(Fn)>::type;
     using DeducedState =
         std::remove_reference_t<std::tuple_element_t<0, Params>>;
+    static_assert(std::is_void_v<ReturnType>,
+                  "accumulate: C++ function must return void");
     static_assert(std::is_same_v<DeducedState, State>,
                   "accumulate: first parameter must be State& matching the "
                   "make_aggregate_func State type");
@@ -311,6 +342,12 @@ class AggFuncBuilder {
         std::tuple_size_v<Params> == NumParams + 1,
         "accumulate: typed arg count after State& must match the SQL "
         "parameter count; ensure .accumulate() is called after .param()");
+    static_assert(
+        std::tuple_size_v<Params> != NumParams + 1 ||
+            detail::accumulate_signature_shape<Params, NumParams>::args_ok,
+        "accumulate: every C++ parameter after State& must be a typed argument "
+        "wrapper such as IntArg, RealArg, StringArg, CustomArg, or "
+        "CustomArgWith<P>");
     accumulate_ = &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
     return *this;
   }
@@ -389,8 +426,10 @@ class AggFuncBuilder {
 template <typename State, auto Func>
 constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
   using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
+  using ReturnType = typename detail::FuncReturnType<decltype(Func)>::type;
   static_assert(
-      detail::is_agg_result_for_state<State, AllParams>::value,
+      std::is_void_v<ReturnType> &&
+          detail::is_agg_result_for_state<State, AllParams>::value,
       "make_aggregate_func: result function must be "
       "void(const State&, ResultWrapper) where ResultWrapper is IntResult, "
       "RealResult, StringResult, CustomResult, or CustomResultWith<P>");

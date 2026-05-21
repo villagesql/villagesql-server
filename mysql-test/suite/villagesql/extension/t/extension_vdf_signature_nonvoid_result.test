@@ -1,0 +1,7 @@
+# Test that make_func catches functions that return a value while also using
+# the typed result wrapper output parameter.
+
+--let $extension_name = vdf_signature_nonvoid_result
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_signature_nonvoid_result.cc
+--let $build_failure_grep = make_func: C++ function must return void
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

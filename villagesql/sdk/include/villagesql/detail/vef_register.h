@@ -213,6 +213,36 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
   return unbound;
 }
 
+template <typename T, typename = void>
+struct has_check_signature : std::false_type {};
+template <typename T>
+struct has_check_signature<
+    T, std::void_t<decltype(std::declval<const T &>().check_signature())>>
+    : std::true_type {};
+
+template <typename Ext, size_t... Is>
+const char *vef_check_func_signatures(const Ext &e,
+                                      std::index_sequence<Is...>) {
+  static char error_buf[512];
+  const char *invalid = nullptr;
+  auto check_one = [&invalid](const auto &func) {
+    if (invalid) return;
+    using F = std::decay_t<decltype(func)>;
+    if constexpr (has_check_signature<F>::value) {
+      auto check_fn = func.check_signature();
+      if (check_fn == nullptr) return;
+      if (const char *err =
+              check_fn(func.params(), func.num_params(), func.return_type())) {
+        snprintf(error_buf, sizeof(error_buf), "VDF '%s': %s", func.name(),
+                 err);
+        invalid = error_buf;
+      }
+    }
+  };
+  (check_one(e.template func_at<Is>()), ...);
+  return invalid;
+}
+
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
 // The counts are explicit template parameters so that array sizes are
 // compile-time constants without relying on VLAs.
@@ -251,6 +281,16 @@ vef_registration_t *vef_register_impl(
   }
 
   if constexpr (FuncCount > 0) {
+    const char *invalid_signature =
+        vef_check_func_signatures(ext, std::make_index_sequence<FuncCount>{});
+    if (invalid_signature) {
+      static char error_buf[256];
+      snprintf(error_buf, sizeof(error_buf), "%s", invalid_signature);
+      reg.protocol = arg->protocol;
+      reg.error_msg = error_buf;
+      return &reg;
+    }
+
     const char *unbound_vdf =
         vef_check_params_cache(ext, std::make_index_sequence<FuncCount>{});
     if (unbound_vdf) {

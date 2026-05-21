@@ -1,0 +1,6 @@
+# Test that make_func catches non-wrapper C++ VDF parameters at build time.
+
+--let $extension_name = vdf_signature_bad_plain_arg
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_signature_bad_plain_arg.cc
+--let $build_failure_grep = make_func: every C++ function parameter before the result
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

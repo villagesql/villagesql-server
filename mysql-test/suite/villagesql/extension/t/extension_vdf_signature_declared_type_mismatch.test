@@ -1,0 +1,17 @@
+# Test that SDK registration rejects a mismatch between the builder-declared
+# VEF type and the C++ wrapper type.
+#
+# This compiles because .param(INT) is runtime descriptor data in the current
+# builder API, but vef_register catches it before the extension can install.
+
+--let $extension_name = vdf_signature_declared_type_mismatch
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_signature_declared_type_mismatch.cc
+--source include/villagesql/create_extension_sdk.inc
+
+call mtr.add_suppression("VDF 'bad_declared_type': VDF declared");
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vdf_signature_declared_type_mismatch;
+
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vdf_signature_declared_type_mismatch';

@@ -1,0 +1,8 @@
+Creating extension vdf_signature_declared_type_mismatch using SDK...
+Created vdf_signature_declared_type_mismatch.veb
+call mtr.add_suppression("VDF 'bad_declared_type': VDF declared");
+INSTALL EXTENSION vdf_signature_declared_type_mismatch;
+ERROR HY000: Failed to load VEF extension 'vdf_signature_declared_type_mismatch': vef_register returned an error: VDF 'bad_declared_type': VDF declared .param(...) type does not match the C++ argument wrapper type
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vdf_signature_declared_type_mismatch';
+EXTENSION_NAME	EXTENSION_VERSION

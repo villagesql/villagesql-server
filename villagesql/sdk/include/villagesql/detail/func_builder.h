@@ -88,6 +88,14 @@ struct FuncParamTypes<R (*)(Args...)> {
   using type = std::tuple<Args...>;
 };
 
+template <typename F>
+struct FuncReturnType;
+
+template <typename R, typename... Args>
+struct FuncReturnType<R (*)(Args...)> {
+  using type = R;
+};
+
 // True for the deprecated ABI-style context parameter. Used by make_func to
 // reject functions that still have vef_context_t* as their first parameter.
 template <typename T>
@@ -110,6 +118,149 @@ template <>
 struct is_result_wrapper<CustomResult> : std::true_type {};
 template <typename P>
 struct is_result_wrapper<CustomResultWith<P>> : std::true_type {};
+
+// True for input wrapper types accepted by make_func and aggregate accumulate.
+template <typename T>
+struct is_arg_wrapper : std::false_type {};
+template <>
+struct is_arg_wrapper<IntArg> : std::true_type {};
+template <>
+struct is_arg_wrapper<RealArg> : std::true_type {};
+template <>
+struct is_arg_wrapper<StringArg> : std::true_type {};
+template <>
+struct is_arg_wrapper<CustomArg> : std::true_type {};
+template <typename P>
+struct is_arg_wrapper<CustomArgWith<P>> : std::true_type {};
+
+template <typename T>
+struct wrapper_vef_type;
+template <>
+struct wrapper_vef_type<IntArg> {
+  static constexpr vef_type_id id = VEF_TYPE_INT;
+};
+template <>
+struct wrapper_vef_type<RealArg> {
+  static constexpr vef_type_id id = VEF_TYPE_REAL;
+};
+template <>
+struct wrapper_vef_type<StringArg> {
+  static constexpr vef_type_id id = VEF_TYPE_STRING;
+};
+template <>
+struct wrapper_vef_type<CustomArg> {
+  static constexpr vef_type_id id = VEF_TYPE_CUSTOM;
+};
+template <typename P>
+struct wrapper_vef_type<CustomArgWith<P>> {
+  static constexpr vef_type_id id = VEF_TYPE_CUSTOM;
+};
+template <>
+struct wrapper_vef_type<IntResult> {
+  static constexpr vef_type_id id = VEF_TYPE_INT;
+};
+template <>
+struct wrapper_vef_type<RealResult> {
+  static constexpr vef_type_id id = VEF_TYPE_REAL;
+};
+template <>
+struct wrapper_vef_type<StringResult> {
+  static constexpr vef_type_id id = VEF_TYPE_STRING;
+};
+template <>
+struct wrapper_vef_type<CustomResult> {
+  static constexpr vef_type_id id = VEF_TYPE_CUSTOM;
+};
+template <typename P>
+struct wrapper_vef_type<CustomResultWith<P>> {
+  static constexpr vef_type_id id = VEF_TYPE_CUSTOM;
+};
+
+template <typename Tuple, size_t... Is>
+constexpr bool all_func_args_are_wrappers(std::index_sequence<Is...>) {
+  return (
+      is_arg_wrapper<std::remove_cv_t<
+          std::remove_reference_t<std::tuple_element_t<Is, Tuple>>>>::value &&
+      ...);
+}
+
+template <typename Tuple, size_t... Is>
+constexpr bool all_accumulate_args_are_wrappers(std::index_sequence<Is...>) {
+  return (is_arg_wrapper<std::remove_cv_t<std::remove_reference_t<
+              std::tuple_element_t<Is + 1, Tuple>>>>::value &&
+          ...);
+}
+
+template <typename Wrapper>
+bool declared_type_matches_wrapper(const vef_type_t &declared) {
+  using W = std::remove_cv_t<std::remove_reference_t<Wrapper>>;
+  return declared.id == wrapper_vef_type<W>::id;
+}
+
+template <typename Tuple, size_t I, size_t N>
+struct signature_checker_impl {
+  static const char *check_params(const vef_type_t *params) {
+    using Wrapper = std::tuple_element_t<I, Tuple>;
+    if (!declared_type_matches_wrapper<Wrapper>(params[I])) {
+      return "VDF declared .param(...) type does not match the C++ argument "
+             "wrapper type";
+    }
+    return signature_checker_impl<Tuple, I + 1, N>::check_params(params);
+  }
+};
+
+template <typename Tuple, size_t N>
+struct signature_checker_impl<Tuple, N, N> {
+  static const char *check_params(const vef_type_t *) { return nullptr; }
+};
+
+template <typename Tuple, size_t NumParams>
+struct signature_checker {
+  static const char *check(const vef_type_t *params, size_t param_count,
+                           const vef_type_t &return_type) {
+    if (param_count != NumParams) {
+      return "VDF declared parameter count does not match the C++ function "
+             "signature";
+    }
+    if (const char *err =
+            signature_checker_impl<Tuple, 0, NumParams>::check_params(params)) {
+      return err;
+    }
+    using ResultWrapper = std::tuple_element_t<NumParams, Tuple>;
+    if (!declared_type_matches_wrapper<ResultWrapper>(return_type)) {
+      return "VDF declared .returns(...) type does not match the C++ result "
+             "wrapper type";
+    }
+    return nullptr;
+  }
+};
+
+template <typename Tuple, size_t NumParams,
+          bool ArityOk = (std::tuple_size_v<Tuple> == NumParams + 1)>
+struct func_signature_shape {
+  static constexpr bool args_ok = false;
+  static constexpr bool result_ok = false;
+};
+
+template <typename Tuple, size_t NumParams>
+struct func_signature_shape<Tuple, NumParams, true> {
+  static constexpr bool args_ok =
+      all_func_args_are_wrappers<Tuple>(std::make_index_sequence<NumParams>{});
+  static constexpr bool result_ok = is_result_wrapper<std::remove_cv_t<
+      std::remove_reference_t<std::tuple_element_t<NumParams, Tuple>>>>::value;
+};
+
+template <typename Tuple, size_t NumParams,
+          bool ArityOk = (std::tuple_size_v<Tuple> == NumParams + 1)>
+struct accumulate_signature_shape {
+  static constexpr bool args_ok = false;
+};
+
+template <typename Tuple, size_t NumParams>
+struct accumulate_signature_shape<Tuple, NumParams, true> {
+  static constexpr bool args_ok = all_accumulate_args_are_wrappers<Tuple>(
+      std::make_index_sequence<NumParams>{});
+};
 
 // Validates that AllParams matches void(const State&, ResultWrapper) for
 // make_aggregate_func. Specialized only for exactly 2-element tuples.
@@ -137,7 +288,8 @@ struct FuncWithMetadata {
         num_params(0),
         buffer_size(0),
         deterministic(false),
-        check_params_cache_bound(nullptr) {}
+        check_params_cache_bound(nullptr),
+        check_signature(nullptr) {}
 
   vef_vdf_func_t f;
   vef_prerun_func_t prerun;
@@ -150,6 +302,8 @@ struct FuncWithMetadata {
   size_t buffer_size;
   bool deterministic;
   bool (*check_params_cache_bound)();
+  const char *(*check_signature)(const vef_type_t *, size_t,
+                                 const vef_type_t &);
 };
 
 // Extracts the params type P from a type operation function pointer,
@@ -689,6 +843,8 @@ struct StaticFuncDesc {
   size_t buffer_size_;
   bool deterministic_;
   bool (*check_params_cache_bound_)();
+  const char *(*check_signature_)(const vef_type_t *, size_t,
+                                  const vef_type_t &);
 
   constexpr const char *name() const { return name_; }
   constexpr size_t num_params() const { return NumParams; }
@@ -696,6 +852,10 @@ struct StaticFuncDesc {
   constexpr bool deterministic() const { return deterministic_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
     return check_params_cache_bound_;
+  }
+  constexpr auto check_signature() const -> const
+      char *(*)(const vef_type_t *, size_t, const vef_type_t &) {
+    return check_signature_;
   }
   constexpr void init_name() const {}
   constexpr const vef_type_t *params() const { return params_; }
@@ -717,7 +877,8 @@ struct StaticFuncDesc {
         accumulate_(meta.accumulate),
         buffer_size_(meta.buffer_size),
         deterministic_(meta.deterministic),
-        check_params_cache_bound_(meta.check_params_cache_bound) {
+        check_params_cache_bound_(meta.check_params_cache_bound),
+        check_signature_(meta.check_signature) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }
