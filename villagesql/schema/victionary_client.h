@@ -43,6 +43,8 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/extension_descriptor.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
+#include "villagesql/schema/descriptor/index_profile_descriptor.h"
+#include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/systable/custom_columns.h"
@@ -684,6 +686,12 @@ class VictionaryClient {
   }
   ExtensionObjectMap<TypeContext> &type_contexts() { return m_type_contexts; }
   ExtensionObjectMap<FuncDescriptor> &funcs() { return m_funcs; }
+  ExtensionObjectMap<IndexTypeDescriptor> &index_type_descriptors() {
+    return m_index_type_descriptors;
+  }
+  ExtensionObjectMap<IndexProfileDescriptor> &index_profile_descriptors() {
+    return m_index_profile_descriptors;
+  }
   SystemTableMap<IndexEntry> &custom_indexes() { return m_custom_indexes; }
   SystemTableMap<IndexColumnEntry> &custom_index_columns() {
     return m_custom_index_columns;
@@ -707,6 +715,14 @@ class VictionaryClient {
     return m_type_contexts;
   }
   const ExtensionObjectMap<FuncDescriptor> &funcs() const { return m_funcs; }
+  const ExtensionObjectMap<IndexTypeDescriptor> &index_type_descriptors()
+      const {
+    return m_index_type_descriptors;
+  }
+  const ExtensionObjectMap<IndexProfileDescriptor> &index_profile_descriptors()
+      const {
+    return m_index_profile_descriptors;
+  }
   const SystemTableMap<IndexEntry> &custom_indexes() const {
     return m_custom_indexes;
   }
@@ -828,6 +844,8 @@ class VictionaryClient {
         m_extension_descriptors(&m_lock),
         m_type_contexts(&m_lock),
         m_funcs(&m_lock),
+        m_index_type_descriptors(&m_lock),
+        m_index_profile_descriptors(&m_lock),
         m_custom_indexes(&m_lock),
         m_custom_index_columns(&m_lock) {}
   ~VictionaryClient();
@@ -903,6 +921,8 @@ class VictionaryClient {
   ExtensionObjectMap<ExtensionDescriptor> m_extension_descriptors;
   ExtensionObjectMap<TypeContext> m_type_contexts;
   ExtensionObjectMap<FuncDescriptor> m_funcs;
+  ExtensionObjectMap<IndexTypeDescriptor> m_index_type_descriptors;
+  ExtensionObjectMap<IndexProfileDescriptor> m_index_profile_descriptors;
 
   // Custom index maps
   SystemTableMap<IndexEntry> m_custom_indexes;
