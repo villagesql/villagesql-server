@@ -53,14 +53,17 @@ RUN mkdir /build && cd /build && \
 # Build bundled extensions and install .veb files to /install/usr/lib/veb
 ARG VSQL_DEV_ABI=ON
 COPY docker/server/build-bundled-extension.sh /usr/local/bin/
+COPY docker/server/build-bundled-extensions.sh /usr/local/bin/
 RUN mkdir -p /install/usr/lib/veb
+
 # In-tree extensions track the dev API, always use dev ABI
 RUN VSQL_DEV_ABI=ON build-bundled-extension.sh vsql-complex
+
 # Out-of-tree extensions use the configured ABI (stable for release builds)
-RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-uuid
-RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-network-address
-RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-ai
-RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-crypto
+# and have additional dependencies
+COPY scripts/setup_linux_ext_deps.sh /tmp/
+RUN /tmp/setup_linux_ext_deps.sh && rm -rf /var/lib/apt/lists/*
+RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extensions.sh
 
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime image
