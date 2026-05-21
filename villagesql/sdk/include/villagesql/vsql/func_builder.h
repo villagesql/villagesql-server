@@ -83,7 +83,7 @@ constexpr const char *REAL = "REAL";
 using TypeEncodeFunc = void (*)(std::string_view from, CustomResult out);
 // Parameterized variant: If known, MaybeParams<P> carries the params, to
 // be used when parsing the string value. This may also be called on strings
-// where the type parameters are not know before this call, and this
+// where the type parameters are not known before this call, and this
 // function must infer the type parameters from the string, and set them via
 // MaybeParams<P> so that the type can be correctly carried through the rest
 // of the SQL statement.
@@ -171,6 +171,9 @@ class FuncBuilder {
     return *this;
   }
 
+  // Marks the function as deterministic: identical inputs always produce
+  // identical outputs. The optimizer may cache or elide calls for
+  // constant-folding and query rewriting. Defaults to false.
   constexpr FuncBuilder<Func, NumParams> &deterministic(bool d = true) {
     deterministic_ = d;
     return *this;
@@ -509,9 +512,11 @@ constexpr detail::StaticFuncDesc<1> make_type_decode(const char *name,
   return detail::StaticFuncDesc<1>(name, meta);
 }
 
-// make_type_compare<&fn>("name", TYPE) — (CUSTOM, CUSTOM) -> INT.
+// make_type_compare<&fn>("name", TYPE) — (CUSTOM(type), CUSTOM(type)) -> INT.
 //
-// Accepts two signatures, mirroring make_type_decode.
+// Accepts two signatures:
+//   TypeCompareFunc              (non-parameterized)
+//   TypeCompareWithParamsFunc<P> (parameterized)
 template <auto Func>
 constexpr detail::StaticFuncDesc<2> make_type_compare(const char *name,
                                                       const char *type_name) {
@@ -538,7 +543,9 @@ constexpr detail::StaticFuncDesc<2> make_type_compare(const char *name,
 
 // make_type_hash<&fn>("name", TYPE) — (CUSTOM(type)) -> INT.
 //
-// Accepts two signatures, mirroring make_type_decode.
+// Accepts two signatures:
+//   TypeHashFunc              (non-parameterized)
+//   TypeHashWithParamsFunc<P> (parameterized)
 template <auto Func>
 constexpr detail::StaticFuncDesc<1> make_type_hash(const char *name,
                                                    const char *type_name) {

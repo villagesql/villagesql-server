@@ -33,10 +33,8 @@
 //
 //   // 1. Implement your type operations
 //   void complex_from_string(std::string_view s, vsql::CustomResult out);
-//   bool complex_to_string(vsql::Span<const unsigned char> data,
-//                          vsql::Span<char> out, size_t* out_len);
-//   int  complex_compare(vsql::Span<const unsigned char> a,
-//                        vsql::Span<const unsigned char> b);
+//   void complex_to_string(vsql::CustomArg in, vsql::StringResult out);
+//   int  complex_compare(vsql::CustomArg a, vsql::CustomArg b);
 //
 //   // 2. Define the type as a constexpr object
 //   static constexpr const char kComplexTypeName[] = "COMPLEX";
@@ -61,7 +59,8 @@
 //           .param(COMPLEX)
 //           .build()))
 //
-// For full documentation see the individual headers below.
+// For aggregate VDFs (SQL SUM, COUNT, etc.), see make_aggregate_func in
+// vsql/func_builder.h. For full documentation see the individual headers below.
 
 // Typed function and type-operation builders (rejects raw ABI signatures).
 #include <villagesql/vsql/func_builder.h>
@@ -82,6 +81,7 @@ namespace vsql {
 
 // Re-export from func_builder sub-namespace into the flat vsql:: namespace
 using func_builder::INT;
+using func_builder::make_aggregate_func;
 using func_builder::make_func;
 using func_builder::make_int_to_params;
 using func_builder::make_intrinsic_default;

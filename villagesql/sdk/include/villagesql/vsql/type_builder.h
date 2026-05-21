@@ -63,7 +63,7 @@
 //   .resolve_params<&fn>()   ->  VDF name "MYTYPE::resolve_params"
 //
 // Two types sharing the same function pointer still get independent VDF name
-// buffers because the (the kMyTypeName pointer value) differs per type.
+// buffers because the kMyTypeName pointer value differs per type.
 //
 // The resulting TypeObject converts implicitly to const char* so it can be
 // passed directly to .returns() and .param() on FuncBuilder:
@@ -105,8 +105,8 @@ struct TypeObject {
   villagesql::type_builder::TypeDescriptor descriptor;
   EmbeddedFuncsTuple embedded_funcs;
   // Init fns bound to TypeParamsCache<P> at extension registration. Set by
-  // the two- and three-argument forms of .params<P, &Parse[, &ToStrings]>();
-  // read by the registration loop in detail/vef_register.h.
+  // .params<P, &Parse, &ToStrings>(); read by the registration loop in
+  // detail/vef_register.h.
   void (*params_init_fn)() = nullptr;
   void (*params_to_strings_init_fn)() = nullptr;
 
@@ -119,25 +119,6 @@ struct TypeObject {
 // =============================================================================
 // TypeBuilder
 // =============================================================================
-//
-// Template parameters:
-//   HasFromString / HasToString / HasCompare — set by the corresponding
-//     builder methods; build() static_asserts all three are true.
-//   ParamsType — the params struct type P set by .params<P, &ParseFn>(); void
-//     when no params are declared. Operations registered after .params<P>()
-//     must use the WithParams variants whose params type matches P; build()
-//     requires ParamsType != void when HasIntToParams or HasResolveParams is
-//     true.
-//   HasIntToParams / HasResolveParams — set by the corresponding template
-//     methods.
-//   EFT — accumulates embedded SQL-callable VDFs (StaticFuncDesc values)
-//     produced by the template methods.
-//   Name — const char* NTTP from make_type<kName>(); drives selection of the
-//     per-(Name,Op) constexpr VDF name buffers via kTypeOpVdfName<Name,Op>.
-//
-//     NB - there is no HasHash because it is optional. params_to_strings is
-//     also optional (for now); it's bound through a separate init-fn slot
-//     rather than tracked via a TypeBuilder template parameter.
 
 template <bool HasFromString = false, bool HasToString = false,
           bool HasCompare = false, typename ParamsType = void,
@@ -360,7 +341,11 @@ class TypeBuilder {
                        decltype(new_embedded), Name>{s, new_embedded};
   }
 
-  // intrinsic_default_str:
+  // intrinsic_default_str: literal string representation of the default value
+  // for NOT NULL columns receiving NULL with IGNORE (e.g., "0" for an integer
+  // type). The server encodes it via the type's from_string VDF at first use of
+  // the type. Use intrinsic_default_vdf() instead when the default must be
+  // computed.
   constexpr TypeBuilder &intrinsic_default_str(const char *str) {
     state_.desc.vef_desc.intrinsic_default_str = str;
     state_.desc.vef_desc.protocol = VEF_PROTOCOL_2;

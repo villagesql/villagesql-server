@@ -84,12 +84,16 @@ class MaybeParams {
   std::optional<P> params_ = std::nullopt;
 };
 
+// Internal cache class used by the SDK framework. Extension authors do not
+// call these methods directly — use MaybeParams<P>, CustomArgWith<P>, and
+// CustomResultWith<P> instead.
+//
 // Memoizes parsed type parameters to avoid re-parsing strings on every VDF
 // call. There is one cache instance per Type Parameter C++ type. The cache is
-// wired up automatically when using make_type_encode (and the other
-// make_type_* entry points) with a const P& first parameter.  Requires the
-// parse function to be registered via .params<P, &parse_fn>() in the type
-// builder. See PARAMETERIZED TYPES in extension.h for full usage.
+// wired up automatically when using the vsql type builder (.from_string(),
+// .to_string(), etc.) with a parameterized type. Requires the parse function
+// to be registered via .params<P, &parse_fn, &to_strings_fn>() in the type
+// builder. See villagesql/vsql/type_builder.h for full usage.
 //
 // Thread-safe: concurrent readers do not block each other. Entries are only
 // evicted when the extension is uninstalled because type parameters are

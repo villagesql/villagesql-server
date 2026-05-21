@@ -96,12 +96,10 @@ struct ExtensionBuilder {
   // vef_register_impl() runs should wrap ExtensionBuilder and override this.
   void init() const {}
 
-  // Capability registration. The user's wrapper is captured into the
-  // builder's tuple as a typed Capability*. At registration time
-  // vef_register_impl emits a wire entry whose vtable_dest points at the
-  // abi-pointer slot inside *cap (located via CapabilityTraits<>::
-  // vtable_destination); the server writes the vtable pointer there if
-  // all compat checks pass.
+  // Registers a capability requirement. Pass a capability object declared in
+  // your extension (e.g., a PingCapability or StorageCapability) by reference.
+  // If the server does not support the capability, the extension will fail to
+  // load.
   template <typename Capability>
   constexpr auto with(Capability &cap) const {
     auto new_caps =
@@ -118,6 +116,9 @@ struct ExtensionBuilder {
   }
 };
 
+// make_extension() — creates an empty ExtensionBuilder. Chain .type(), .func(),
+// and .with() calls to register types, functions, and capabilities, then pass
+// the result to VEF_GENERATE_ENTRY_POINTS.
 constexpr auto make_extension() {
   return ExtensionBuilder<std::tuple<>, std::tuple<>, std::tuple<>>{
       {}, {}, {}, VEF_PROTOCOL_1};

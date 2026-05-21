@@ -48,6 +48,12 @@
 //     out.set_length(src.size());
 //   }
 //
+// Result methods available on all result wrappers:
+//   set / set_length / set_null  — produce the SQL output value
+//   warning(msg)  — emit a diagnostic note but still return a value
+//   error(msg)    — abort the current statement with an error; no value
+//                   is produced
+//
 // Example - VDF with parameterized type (TVECTOR(N)):
 //   void tvector_dot(CustomArgWith<TVectorParams> a,
 //                    CustomArgWith<TVectorParams> b,
@@ -169,7 +175,8 @@ class CustomArg {
 // The parse result is memoized per unique canonical params string, so parsing
 // runs at most once per type instantiation.
 //
-// NOTE: Do not call params() when is_null() is true.
+// NOTE: Do not call params() when is_null() is true — NULL values carry no
+// type_params in the ABI, so the cache lookup has no key to work with.
 // TODO(villagesql-beta): remove this restriction.
 template <typename P>
 class CustomArgWith {
