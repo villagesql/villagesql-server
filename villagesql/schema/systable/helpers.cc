@@ -201,10 +201,9 @@ std::string normalize_type_name(const std::string &name) {
 }
 
 std::string normalize_index_name(const std::string &name) {
-  if (::lower_case_table_names == 0) {
-    return name;
-  }
-  return casedn(get_identifier_charset(), name);
+  // Index names are always case-insensitive in MySQL, regardless of
+  // lower_case_table_names (which only governs table/database identifiers).
+  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
 }
 
 // ===== Test utilities =====

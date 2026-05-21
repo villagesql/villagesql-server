@@ -107,10 +107,8 @@ t	idx_case	0	a	EMPTY	EMPTY	EMPTY
 DROP INDEX IDX_CASE ON t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
 test	t	idx_alt	EMPTY	EMPTY	dummy_index_type	{"M": 8}
-test	t	idx_case	EMPTY	EMPTY	dummy_index_type	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
-t	idx_case	0	a	EMPTY	EMPTY	EMPTY
 # --- DROP TABLE: removes all remaining custom index metadata ---
 DROP TABLE t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters

@@ -49,10 +49,12 @@ TEST_F(CustomIndexesTest, IndexKeyNormalization) {
 }
 
 TEST_F(CustomIndexesTest, IndexKeyCaseSensitive) {
+  // lower_case_table_names=0 keeps db/table case but index names are always
+  // case-folded since MySQL index names are case-insensitive regardless.
   villagesql::test_set_lower_case_table_names(0);
 
   IndexKey key("MyDB", "MyTable", "MyIndex");
-  EXPECT_EQ(key.str(), "MyDB.MyTable.MyIndex");
+  EXPECT_EQ(key.str(), "MyDB.MyTable.myindex");
 }
 
 TEST_F(CustomIndexesTest, IndexKeyPrefix) {
