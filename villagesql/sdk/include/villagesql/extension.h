@@ -16,6 +16,10 @@
 #ifndef VILLAGESQL_SDK_EXTENSION_H
 #define VILLAGESQL_SDK_EXTENSION_H
 
+// Do not write new code against this header. It is included only for backward
+// compatibility and will be removed before Beta. Use the C++ API in
+// <villagesql/vsql.h> instead.
+
 // =============================================================================
 // VillageSQL Extension Framework
 // =============================================================================

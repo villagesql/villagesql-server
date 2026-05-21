@@ -16,6 +16,10 @@
 #ifndef VILLAGESQL_SDK_FUNC_BUILDER_H
 #define VILLAGESQL_SDK_FUNC_BUILDER_H
 
+// Do not write new code against this header. It is included only for backward
+// compatibility and will be removed before Beta. Use the C++ API in
+// <villagesql/vsql.h> instead.
+
 // V1 function builder — supports raw ABI (vef_vdf_func_t) VDFs only.
 //
 // For the typed C++ API (IntArg, RealArg, Span<>, aggregate support, etc.)
