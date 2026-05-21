@@ -222,11 +222,22 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  std::optional<villagesql::veb::ValidatedPreviewCapabilities> preview =
+      villagesql::veb::parse_preview_capabilities(registration, extension_name,
+                                                  version, reg_error);
+  if (!preview) {
+    villagesql_error("Failed to install extension '%s': %s", MYF(0),
+                     extension_name.c_str(), reg_error.c_str());
+    return end_transaction(thd, true);
+  }
+
   bool mark_success = true;
   {
     auto write_lock = victionary.get_write_lock();
 
-    if (villagesql::veb::register_validated_extension(
+    if (villagesql::veb::register_preview_capabilities(
+            *thd, std::move(*preview), *validated, reg_error) ||
+        villagesql::veb::register_validated_extension(
             *thd, std::move(*validated), reg_error)) {
       villagesql_error("Failed to install extension '%s': %s", MYF(0),
                        extension_name.c_str(), reg_error.c_str());

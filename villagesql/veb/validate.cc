@@ -23,7 +23,10 @@
 #include "sql/field.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
+#include "villagesql/schema/descriptor/index_profile_descriptor.h"
+#include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/types/storage.h"
@@ -204,6 +207,155 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       }
       break;
     }
+  }
+
+  return result;
+}
+
+std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
+    const ExtensionRegistration &ext_reg, const std::string &extension_name,
+    const std::string &extension_version, std::string &error_out) {
+  ValidatedPreviewCapabilities result;
+  const vef_registration_t *reg = ext_reg.registration;
+
+  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_2 ||
+      reg->required_capability_count == 0) {
+    return result;
+  }
+
+  // Parse vsql::preview::index_type capability.
+  for (unsigned int i = 0; i < reg->required_capability_count; i++) {
+    const vef_required_capability_t &cap = reg->required_capabilities[i];
+    if (cap.name == nullptr ||
+        strcmp(cap.name, VEF_PREVIEW_INDEX_TYPE_NAME) != 0 ||
+        cap.capability_config == nullptr) {
+      continue;
+    }
+
+    const auto *ext_desc =
+        static_cast<const vef_preview_index_type_ext_desc_t *>(
+            cap.capability_config);
+
+    if (ext_desc->version != VEF_PREVIEW_INDEX_TYPE_ABI_VERSION) {
+      error_out = "index_type capability has unsupported version " +
+                  std::to_string(ext_desc->version) + " (expected " +
+                  std::to_string(VEF_PREVIEW_INDEX_TYPE_ABI_VERSION) + ")";
+      LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+              error_out.c_str());
+      return std::nullopt;
+    }
+
+    for (unsigned int j = 0; j < ext_desc->count; j++) {
+      const vef_index_type_reg_t &reg_entry = ext_desc->types[j];
+      if (reg_entry.name == nullptr || reg_entry.intf == nullptr) {
+        error_out = "NULL index type entry at index " + std::to_string(j) +
+                    " in index_type capability";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
+      const vef_type_index_intf_t *intf = reg_entry.intf;
+      if (!intf->create || !intf->drop || !intf->load || !intf->insert ||
+          !intf->mark_delete || !intf->purge || !intf->scan_begin ||
+          !intf->scan_position || !intf->scan_fetch || !intf->scan_save ||
+          !intf->scan_restore || !intf->scan_end) {
+        error_out = std::string("index type '") + reg_entry.name +
+                    "': not all required function pointers are set";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
+      result.index_types.emplace_back(
+          IndexTypeDescriptorKey(reg_entry.name, extension_name,
+                                 extension_version),
+          *intf);
+    }
+    break;
+  }
+
+  // Parse vsql::preview::index_profile capability.
+  for (unsigned int i = 0; i < reg->required_capability_count; i++) {
+    const vef_required_capability_t &cap = reg->required_capabilities[i];
+    if (cap.name == nullptr ||
+        strcmp(cap.name, VEF_PREVIEW_INDEX_PROFILE_NAME) != 0 ||
+        cap.capability_config == nullptr) {
+      continue;
+    }
+
+    const auto *ext_desc =
+        static_cast<const vef_preview_index_profile_ext_desc_t *>(
+            cap.capability_config);
+
+    if (ext_desc->version != VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION) {
+      error_out = "index_profile capability has unsupported version " +
+                  std::to_string(ext_desc->version) + " (expected " +
+                  std::to_string(VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION) + ")";
+      LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+              error_out.c_str());
+      return std::nullopt;
+    }
+
+    for (unsigned int j = 0; j < ext_desc->count; j++) {
+      const vef_index_profile_reg_t &profile = ext_desc->profiles[j];
+      if (profile.name == nullptr || profile.type_name == nullptr ||
+          profile.index_type_name == nullptr) {
+        error_out = "NULL index profile entry at index " + std::to_string(j) +
+                    " in index_profile capability";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
+      std::vector<vef_index_profile_fn_binding_t> functions;
+      functions.reserve(profile.function_count);
+      for (unsigned int k = 0; k < profile.function_count; k++) {
+        const vef_index_profile_fn_binding_t &fn = profile.functions[k];
+        if (fn.name == nullptr) {
+          error_out = std::string("index profile '") + profile.name +
+                      "': function binding at index " + std::to_string(k) +
+                      " has NULL name";
+          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                  error_out.c_str());
+          return std::nullopt;
+        }
+        if (fn.vdf == nullptr) {
+          error_out = std::string("index profile '") + profile.name +
+                      "': function '" + fn.name + "' has NULL vdf pointer";
+          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                  error_out.c_str());
+          return std::nullopt;
+        }
+        if (fn.num_params > VEF_INDEX_PROFILE_MAX_FN_PARAMS) {
+          error_out = std::string("index profile '") + profile.name +
+                      "': function '" + fn.name + "' declares " +
+                      std::to_string(fn.num_params) + " params, max is " +
+                      std::to_string(VEF_INDEX_PROFILE_MAX_FN_PARAMS);
+          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                  error_out.c_str());
+          return std::nullopt;
+        }
+        functions.push_back(fn);
+      }
+
+      auto [type_ext, type_bare] = parse_qualified_name(profile.type_name);
+      TypeDescriptorKeyPrefix type_ref =
+          type_ext.empty() ? TypeDescriptorKeyPrefix(type_bare)
+                           : TypeDescriptorKeyPrefix(type_bare, type_ext);
+
+      auto [idx_ext, idx_bare] = parse_qualified_name(profile.index_type_name);
+      IndexTypeDescriptorKeyPrefix index_type_ref =
+          idx_ext.empty() ? IndexTypeDescriptorKeyPrefix(idx_bare)
+                          : IndexTypeDescriptorKeyPrefix(idx_bare, idx_ext);
+
+      result.index_profiles.emplace_back(
+          IndexProfileDescriptorKey(profile.name, extension_name,
+                                    extension_version),
+          std::move(type_ref), std::move(index_type_ref), std::move(functions),
+          profile.ordering_asc != 0, profile.default_for_type != 0);
+    }
+    break;
   }
 
   return result;

@@ -40,6 +40,17 @@ namespace veb {
 bool register_validated_extension(THD &thd, ValidatedRegistration validated,
                                   std::string &error_out);
 
+// Registers index types and index profiles into the victionary.
+// validated is used read-only to resolve same-batch data-type references
+// during profile validation; it must not have been moved-from yet.
+// REQUIRES: Caller must hold victionary write lock.
+// Returns false on success, true on error; error_out is set to a descriptive
+// message.
+bool register_preview_capabilities(THD &thd,
+                                   ValidatedPreviewCapabilities preview,
+                                   const ValidatedRegistration &validated,
+                                   std::string &error_out);
+
 }  // namespace veb
 }  // namespace villagesql
 
