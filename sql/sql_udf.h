@@ -162,7 +162,7 @@ class udf_handler {
   // author.
   bool is_vdf_deterministic() const {
     if (!is_vdf()) return false;
-    return u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_2 &&
+    return u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
            u_d->vdf_func_desc->deterministic;
   }
 

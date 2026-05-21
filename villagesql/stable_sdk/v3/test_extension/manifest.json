@@ -1,0 +1,7 @@
+{
+  "name": "abi_v3_test",
+  "version": "0.0.1",
+  "description": "ABI v3 compliance test extension",
+  "author": "VillageSQL Contributors",
+  "license": "GPL-2.0"
+}

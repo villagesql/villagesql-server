@@ -14,7 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Test extension that requires VEF_PROTOCOL_2.
+// Test extension that requires VEF_PROTOCOL_3.
 // Used to verify that extensions can reject servers offering a lower protocol.
 
 #include <villagesql/vsql.h>
@@ -22,4 +22,4 @@
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension().test_only_require_protocol(VEF_PROTOCOL_2))
+    make_extension().test_only_require_protocol(VEF_PROTOCOL_3))

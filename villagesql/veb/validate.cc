@@ -79,10 +79,10 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         return std::nullopt;
       }
 
-      bool is_v2 = td->protocol >= VEF_PROTOCOL_2 &&
-                   ext_reg.negotiated_protocol >= VEF_PROTOCOL_2;
+      bool is_v3 = td->protocol >= VEF_PROTOCOL_3 &&
+                   ext_reg.negotiated_protocol >= VEF_PROTOCOL_3;
       std::optional<TypeDescriptor> maybe_descriptor =
-          is_v2 ? build_type_descriptor_v2(td, *reg, type_name, extension_name,
+          is_v3 ? build_type_descriptor_v3(td, *reg, type_name, extension_name,
                                            extension_version)
                 : build_type_descriptor_v1(td, type_name, extension_name,
                                            extension_version);
@@ -109,9 +109,9 @@ std::optional<ValidatedRegistration> parse_extension_registration(
 
       std::string func_name(func_desc->name);
 
-      // clear/accumulate fields were added in PROTOCOL_2; older extensions
+      // clear/accumulate fields were added in PROTOCOL_3; older extensions
       // don't initialize them so we must not read them.
-      if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
+      if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
         bool has_clear = (func_desc->clear != nullptr);
         bool has_accumulate = (func_desc->accumulate != nullptr);
         if (has_clear != has_accumulate) {
@@ -136,7 +136,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
   // Wire column storage implementations to types via the storage capability
   // extension descriptor. The descriptor lives in the capability_config field
   // of the vsql::preview::column_store capability entry.
-  if (reg != nullptr && ext_reg.negotiated_protocol >= VEF_PROTOCOL_2 &&
+  if (reg != nullptr && ext_reg.negotiated_protocol >= VEF_PROTOCOL_3 &&
       reg->required_capability_count > 0) {
     for (unsigned int i = 0; i < reg->required_capability_count; i++) {
       const vef_required_capability_t &cap = reg->required_capabilities[i];

@@ -229,7 +229,7 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
   // Build mock VDF descriptors for int_to_params and resolve_params.
   static vef_type_t itp_param = {VEF_TYPE_INT, nullptr};
   static vef_signature_t itp_sig = {1, &itp_param, {VEF_TYPE_STRING, nullptr}};
-  static vef_func_desc_t itp_fd = {VEF_PROTOCOL_2,
+  static vef_func_desc_t itp_fd = {VEF_PROTOCOL_3,
                                    "dummy_int_to_params",
                                    &itp_sig,
                                    &dummy_int_to_params_vdf,
@@ -242,7 +242,7 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
 
   static vef_type_t rp_param = {VEF_TYPE_STRING, nullptr};
   static vef_signature_t rp_sig = {1, &rp_param, {VEF_TYPE_STRING, nullptr}};
-  static vef_func_desc_t rp_fd = {VEF_PROTOCOL_2,
+  static vef_func_desc_t rp_fd = {VEF_PROTOCOL_3,
                                   "dummy_resolve_params",
                                   &rp_sig,
                                   &dummy_resolve_params_vdf,
@@ -255,7 +255,7 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_2,
+      VEF_PROTOCOL_3,
       1,   // implementation_type
       -1,  // persisted_length (variable-length)
       0,   // max_decode_buffer_length (determined by params)

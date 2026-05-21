@@ -16,7 +16,7 @@
 // Bad-registration test extension: declares a type with
 // persisted_length = -1 (variable-length / parameterized) but does not
 // provide resolve_params. The server must reject this at INSTALL EXTENSION
-// time with a clear error from build_type_descriptor_v2.
+// time with a clear error from build_type_descriptor_v3.
 
 #include <villagesql/vsql.h>
 

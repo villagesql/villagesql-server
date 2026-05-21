@@ -1,7 +1,7 @@
 # Variable reflects the server's highest supported VEF protocol version
 SELECT @@GLOBAL.villagesql_vef_server_protocol AS vef_server_protocol;
 vef_server_protocol
-2
+4
 # Variable cannot be set at runtime
 SET GLOBAL villagesql_vef_server_protocol = 1;
 ERROR HY000: Variable 'villagesql_vef_server_protocol' is a read only variable

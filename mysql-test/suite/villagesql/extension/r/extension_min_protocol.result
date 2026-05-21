@@ -2,14 +2,14 @@
 Creating extension min_protocol_test using SDK...
 Created min_protocol_test.veb
 call mtr.add_suppression("vef_register returned an error: requires VEF protocol");
-# Attempt to install with protocol 1 (too low, extension requires protocol 2)
+# Attempt to install with protocol 1 (too low, extension requires protocol 3)
 SET @vef_debug_protocol_override = 1;
 INSTALL EXTENSION min_protocol_test;
-ERROR HY000: Failed to load VEF extension 'min_protocol_test': vef_register returned an error: requires VEF protocol 2, server offered 1
+ERROR HY000: Failed to load VEF extension 'min_protocol_test': vef_register returned an error: requires VEF protocol 3, server offered 1
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-# Install with default protocol (protocol 2, meets the requirement)
+# Install with default protocol (protocol 4, meets the requirement)
 SET @vef_debug_protocol_override = NULL;
 INSTALL EXTENSION min_protocol_test;
 # Verify extension is installed

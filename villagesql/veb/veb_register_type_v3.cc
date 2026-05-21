@@ -14,11 +14,11 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Protocol-2 type registration: builds a TypeDescriptor from a
+// Protocol-3 type registration: builds a TypeDescriptor from a
 // vef_type_desc_t that may use VDF names in addition to (or instead
 // of) direct function pointers.
 //
-// All protocol-1 and protocol-2 fields are read from td.
+// All protocol-1 and protocol-3 fields are read from td.
 
 #include "villagesql/veb/veb_register_type.h"
 
@@ -217,7 +217,7 @@ static const vef_func_desc_t *resolve_type_vdf(
   return vdf;
 }
 
-std::optional<TypeDescriptor> build_type_descriptor_v2(
+std::optional<TypeDescriptor> build_type_descriptor_v3(
     const vef_type_desc_t *td, const vef_registration_t &reg,
     const std::string &type_name, const std::string &extension_name,
     const std::string &extension_version) {
@@ -373,9 +373,9 @@ std::optional<TypeDescriptor> build_type_descriptor_v2(
               td->intrinsic_default_vdf_name);
       return std::nullopt;
     }
-    if (validate_type_vdf_signature(
-            intrinsic_default_vdf, "intrinsic_default", td->name, 0, nullptr,
-            nullptr, VEF_TYPE_STRING, nullptr, extension_name)) {
+    if (validate_type_vdf_signature(intrinsic_default_vdf, "intrinsic_default",
+                                    td->name, 0, nullptr, nullptr,
+                                    VEF_TYPE_STRING, nullptr, extension_name)) {
       return std::nullopt;
     }
   }
@@ -412,7 +412,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v2(
   // 5. Build TypeDescriptor.
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
-      VEF_PROTOCOL_2, MYSQL_TYPE_VARCHAR, td->persisted_length,
+      VEF_PROTOCOL_3, MYSQL_TYPE_VARCHAR, td->persisted_length,
       td->max_decode_buffer_length, td->max_persisted_length,
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
       std::move(hash_fn), std::move(int_to_params_fn),

@@ -218,20 +218,20 @@ TEST_F(ValidateExtensionRegistrationTest, ClearWithoutAccumulate) {
   vef_type_t ret = {VEF_TYPE_INT, nullptr};
   vef_signature_t sig = {0, nullptr, ret};
   vef_func_desc_t fd = make_scalar_func("bad_agg", &sig);
-  fd.protocol = VEF_PROTOCOL_2;
+  fd.protocol = VEF_PROTOCOL_3;
   fd.clear = stub_clear;
   fd.accumulate = nullptr;
   vef_func_desc_t *funcs[] = {&fd};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.func_count = 1;
   reg.funcs = funcs;
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("bad_agg"), std::string::npos);
@@ -244,20 +244,20 @@ TEST_F(ValidateExtensionRegistrationTest, AccumulateWithoutClear) {
   vef_type_t ret = {VEF_TYPE_INT, nullptr};
   vef_signature_t sig = {0, nullptr, ret};
   vef_func_desc_t fd = make_scalar_func("bad_agg", &sig);
-  fd.protocol = VEF_PROTOCOL_2;
+  fd.protocol = VEF_PROTOCOL_3;
   fd.clear = nullptr;
   fd.accumulate = stub_accumulate;
   vef_func_desc_t *funcs[] = {&fd};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.func_count = 1;
   reg.funcs = funcs;
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("bad_agg"), std::string::npos);
@@ -308,7 +308,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
     SCOPED_TRACE(std::string("bad_name=") + tc.bad_name);
 
     vef_type_desc_t td = {};
-    td.protocol = VEF_PROTOCOL_2;
+    td.protocol = VEF_PROTOCOL_3;
     td.name = "MYTYPE";
     td.persisted_length = 16;
     td.max_decode_buffer_length = 256;
@@ -316,14 +316,14 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
 
     vef_type_desc_t *types[] = {&td};
     vef_registration_t reg = {};
-    reg.protocol = VEF_PROTOCOL_2;
+    reg.protocol = VEF_PROTOCOL_3;
     reg.deprecated_extension_name = "my_ext";
     reg.type_count = 1;
     reg.types = types;
 
     std::string error;
     auto result = villagesql::veb::parse_extension_registration(
-        make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+        make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(error, tc.expected_error);
@@ -333,7 +333,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
 // A v2 type registration using valid VDF names succeeds end-to-end.
 TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
   vef_type_desc_t td = {};
-  td.protocol = VEF_PROTOCOL_2;
+  td.protocol = VEF_PROTOCOL_3;
   td.name = "MYTYPE";
   td.persisted_length = 16;
   td.max_decode_buffer_length = 256;
@@ -348,7 +348,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
   vef_type_t encode_params[] = {str_type};
   vef_signature_t encode_sig = {1, encode_params, custom_mytype};
   vef_func_desc_t encode_fd = {};
-  encode_fd.protocol = VEF_PROTOCOL_2;
+  encode_fd.protocol = VEF_PROTOCOL_3;
   encode_fd.name = "MYTYPE::from_string";
   encode_fd.signature = &encode_sig;
   encode_fd.vdf = stub_vdf;
@@ -356,7 +356,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
   vef_type_t decode_params[] = {custom_mytype};
   vef_signature_t decode_sig = {1, decode_params, str_type};
   vef_func_desc_t decode_fd = {};
-  decode_fd.protocol = VEF_PROTOCOL_2;
+  decode_fd.protocol = VEF_PROTOCOL_3;
   decode_fd.name = "MYTYPE::to_string";
   decode_fd.signature = &decode_sig;
   decode_fd.vdf = stub_vdf;
@@ -364,7 +364,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
   vef_type_t compare_params[] = {custom_mytype, custom_mytype};
   vef_signature_t compare_sig = {2, compare_params, int_type};
   vef_func_desc_t compare_fd = {};
-  compare_fd.protocol = VEF_PROTOCOL_2;
+  compare_fd.protocol = VEF_PROTOCOL_3;
   compare_fd.name = "MYTYPE::compare";
   compare_fd.signature = &compare_sig;
   compare_fd.vdf = stub_vdf;
@@ -373,7 +373,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
   vef_func_desc_t *funcs[] = {&encode_fd, &decode_fd, &compare_fd};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -382,7 +382,7 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
   EXPECT_TRUE(error.empty());
@@ -466,7 +466,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageWiredToType) {
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -475,7 +475,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageWiredToType) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value());
   EXPECT_TRUE(error.empty());
@@ -502,7 +502,7 @@ TEST_F(ValidateExtensionRegistrationTest,
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -536,7 +536,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageUnknownTypeFails) {
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -545,7 +545,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageUnknownTypeFails) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("OTHERTYPE"), std::string::npos);
@@ -570,7 +570,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageMissingFunctionFails) {
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -579,7 +579,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageMissingFunctionFails) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("MYTYPE"), std::string::npos);
@@ -601,7 +601,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageNullDescriptorFails) {
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -610,7 +610,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageNullDescriptorFails) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("NULL"), std::string::npos);
@@ -633,7 +633,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageVersionMismatchFails) {
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -642,7 +642,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageVersionMismatchFails) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("unsupported version"), std::string::npos);
@@ -666,7 +666,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageDuplicateTypeFails) {
   cap.name = VEF_PREVIEW_COLUMN_STORE_NAME;
   cap.capability_config = &ext_desc;
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_3;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -675,7 +675,7 @@ TEST_F(ValidateExtensionRegistrationTest, ColumnStorageDuplicateTypeFails) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_2), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("duplicate"), std::string::npos);

@@ -55,7 +55,7 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
                          : nullptr;
   signature.return_type = func_data.return_type();
 
-  desc.protocol = VEF_PROTOCOL_2;
+  desc.protocol = VEF_PROTOCOL_4;
   desc.name = func_data.name();
   desc.signature = &signature;
   desc.vdf = func_data.vdf();
@@ -383,7 +383,7 @@ vef_registration_t *vef_register_impl(
     }
   }
 
-  reg.protocol = VEF_PROTOCOL_2;
+  reg.protocol = VEF_PROTOCOL_4;
   reg.error_msg = nullptr;
   reg.deprecated_extension_name = nullptr;
   reg.deprecated_extension_version = nullptr;

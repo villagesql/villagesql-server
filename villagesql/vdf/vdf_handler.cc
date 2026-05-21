@@ -65,7 +65,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
 
   // Allocate invalues array for argument marshaling
   if (arg_count > 0) {
-    if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {
+    if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
       m_invalues = pointer_cast<vef_invalue_t *>(
           (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
       if (!m_invalues) return true;
@@ -119,7 +119,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   m_context.protocol = m_udf->vdf_protocol;
   m_vdf_args.user_data = nullptr;
   m_vdf_args.value_count = static_cast<int>(arg_count);
-  if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {
+  if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
     m_vdf_args.values = m_invalues_ptrs;
   } else {
     m_vdf_args.values_v1 = m_invalues_v1;
@@ -401,7 +401,7 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
 
 void vdf_handler::marshal_args() {
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
-  if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {
+  if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
     marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
                        m_invalues);
   } else {

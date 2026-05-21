@@ -47,7 +47,7 @@ while (<$fh>) {
 }
 close $fh;
 
-for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK VILLAGESQL_DEV_SDK_INCLUDE)) {
+for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK_V1 VILLAGESQL_DEV_SDK_INCLUDE)) {
     unless (defined $sdk{$key} && -e $sdk{$key}) {
         print "$key not found: " . ($sdk{$key} // "(not set)") . "\n";
         exit(1);
@@ -56,7 +56,7 @@ for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK VILLAGESQL_DEV_SDK_I
 
 my %out_files = (
     'vsql_source_dir.txt'      => $sdk{'VILLAGESQL_SOURCE_DIR'},
-    'vsql_stable_sdk.txt'      => $sdk{'VILLAGESQL_STABLE_SDK'},
+    'vsql_stable_sdk.txt'      => $sdk{'VILLAGESQL_STABLE_SDK_V1'},
     'vsql_dev_sdk_include.txt' => $sdk{'VILLAGESQL_DEV_SDK_INCLUDE'},
 );
 for my $name (keys %out_files) {

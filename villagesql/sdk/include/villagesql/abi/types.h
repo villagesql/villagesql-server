@@ -165,7 +165,10 @@
 typedef enum : unsigned int {
   VEF_PROTOCOL_0,  // Not used
   VEF_PROTOCOL_1,  // Stable as of v0.0.1, likely to be deprecated.
-  VEF_PROTOCOL_2,  // Under development, not stable. Adds:
+  VEF_PROTOCOL_2,  // Deprecated. Was the unstable development version before
+                   // being promoted to VEF_PROTOCOL_3. The server rejects
+                   // extensions that declare this version.
+  VEF_PROTOCOL_3,  // Stable as of v0.0.4. Adds:
                    // + Add deterministic VDF attribute.
                    // + Add encode/decode/compare/hash VDF name fields to
                    //   vef_type_desc_t.
@@ -180,6 +183,7 @@ typedef enum : unsigned int {
                    //   vef_register() returns.
                    //   (vef_required_capability_t, required_capabilities,
                    //   required_capability_count in vef_registration_t)
+  VEF_PROTOCOL_4,  // Under development, not stable.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -233,7 +237,7 @@ typedef enum : int {
 } vef_type_id;
 
 // Snapshot of vef_invalue_t as of VEF_PROTOCOL_1. Used as the element type of
-// vef_vdf_args_t.values_v1 to preserve the correct stride when a v2 extension
+// vef_vdf_args_t.values_v1 to preserve the correct stride when a v3+ extension
 // is called by a v1 server. Do NOT add fields here.
 typedef struct {
   vef_type_id type;
@@ -311,7 +315,7 @@ typedef struct {
       size_t bin_len;
       const unsigned char *bin_value;
 
-      // protocol >= VEF_PROTOCOL_2
+      // protocol >= VEF_PROTOCOL_3
       // Read-only: the extension must not overwrite these parameters.
       // TODO(villagesql-beta): Optimize this to pass a token so that the
       // extension can cache these values in a language-specific way.
@@ -399,7 +403,7 @@ typedef struct {
       // as alt_str_buf above.
       unsigned char **alt_bin_buf;
 
-      // protocol >= VEF_PROTOCOL_2
+      // protocol >= VEF_PROTOCOL_3
       // Read-only: the extension must not overwrite these parameters.
       vef_type_params_t type_params;
     };
@@ -411,7 +415,7 @@ typedef struct {
     long long int_value;
   };
 
-  // protocol >= VEF_PROTOCOL_2
+  // protocol >= VEF_PROTOCOL_3
   //
   // Optional out-channel for constant-string from_string inference at
   // fix_fields time. NULL on the normal row-time path. When non-NULL AND the
@@ -453,7 +457,7 @@ typedef struct {
     // protocol == VEF_PROTOCOL_1: flat array of value_count vef_invalue_v1_t.
     vef_invalue_v1_t *values_v1;
 
-    // protocol >= VEF_PROTOCOL_2: array of value_count pointers to
+    // protocol >= VEF_PROTOCOL_3: array of value_count pointers to
     // vef_invalue_t. Using a pointer array decouples extensions from
     // vef_invalue_t's binary layout, allowing the struct to grow in future
     // protocol versions.
@@ -606,7 +610,7 @@ typedef struct {
   // Minimum buffer size requested for string results (0 = use default)
   size_t buffer_size;
 
-  // protocol >= VEF_PROTOCOL_2
+  // protocol >= VEF_PROTOCOL_3
   // If true, the function always returns the same result for the same inputs
   // and has no side effects. The optimizer may use this to cache results.
   bool deterministic;
@@ -699,7 +703,7 @@ typedef struct {
   // OPTIONAL (NULL if not provided)
   vef_hash_func_t hash_func;
 
-  // protocol >= VEF_PROTOCOL_2
+  // protocol >= VEF_PROTOCOL_3
 
   // OPTIONAL: Names of VDFs (from this extension's funcs[]) to use as
   // encode/decode/compare/hash implementations. When set, the named VDF is
@@ -738,7 +742,7 @@ typedef struct {
   // The server runs the type's encode function on this string to produce the
   // binary default. Ignored if intrinsic_default_vdf_name is set. NULL means
   // no string default is provided; the server falls back to encode("").
-  // Only used when protocol >= VEF_PROTOCOL_2.
+  // Only used when protocol >= VEF_PROTOCOL_3.
   const char *intrinsic_default_str;
 
   // Upper bound on persisted_length across all valid parameterizations of
@@ -822,7 +826,7 @@ typedef struct vef_registration_t {
   unsigned int type_count;
   vef_type_desc_t **types;
 
-  // protocol >= VEF_PROTOCOL_2
+  // protocol >= VEF_PROTOCOL_3
   // Preview capabilities required by this extension. Each entry names a
   // capability the extension needs (e.g. "vsql::ping"). The server populates
   // the capability struct pointed to by each entry before vef_register()

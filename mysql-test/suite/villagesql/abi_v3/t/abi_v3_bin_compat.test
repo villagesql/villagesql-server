@@ -1,0 +1,44 @@
+# ABI v3 Binary Compatibility Test
+#
+# Compiles an extension against villagesql/stable_sdk/v3/ headers and verifies
+# it loads and runs correctly against the current server.  This test catches ABI
+# regressions: if the server breaks binary compatibility with v3, the
+# extension will fail to load or produce wrong results.
+#
+# Complements abi_v3_src_compat.test which checks source compatibility by
+# building against the current dev SDK headers.
+#
+# Requires: cmake in PATH, C++ compiler in PATH
+
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # ABI v3 Binary Compatibility Test
+
+--let $veb_dir = `SELECT @@veb_dir`
+--let $test_dir = $MYSQLTEST_VARDIR/tmp/abi_v3_bin_compat_test
+
+--exec mkdir -p $MYSQLTEST_VARDIR/tmp
+--source abi_v3_find_sdk.inc
+
+--echo # Building test extension against stable v3 SDK
+--exec rm -rf $test_dir
+--exec mkdir -p $test_dir/build
+--exec sh -c "stable_sdk=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_stable_sdk.txt) && cmake -S \$stable_sdk/test_extension -B $test_dir/build -DCMAKE_PREFIX_PATH=\$stable_sdk > $test_dir/cmake_out.txt 2>&1"
+--exec sh -c "cmake --build $test_dir/build > $test_dir/make_out.txt 2>&1"
+
+--echo # Verify VEB was created
+--file_exists $test_dir/build/abi_v3_test.veb
+
+--echo # Copy VEB to server's VEB directory
+--exec cp $test_dir/build/abi_v3_test.veb $veb_dir/
+
+--source abi_v3_test_logic.inc
+
+--echo # Cleanup
+--exec rm -rf $test_dir
+--exec rm -f $veb_dir/abi_v3_test.veb
+--exec rm -f $MYSQLTEST_VARDIR/tmp/vsql_source_dir.txt
+--exec rm -f $MYSQLTEST_VARDIR/tmp/vsql_stable_sdk.txt
+--exec rm -f $MYSQLTEST_VARDIR/tmp/vsql_dev_sdk_include.txt
+
+--source include/villagesql/binlog_check_end.inc

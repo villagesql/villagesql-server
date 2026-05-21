@@ -19,7 +19,7 @@
 --source include/villagesql/create_extension_sdk.inc
 
 call mtr.add_suppression("vef_register returned an error: requires VEF protocol");
---echo # Attempt to install with protocol 1 (too low, extension requires protocol 2)
+--echo # Attempt to install with protocol 1 (too low, extension requires protocol 3)
 SET @vef_debug_protocol_override = 1;
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION min_protocol_test;
@@ -27,7 +27,7 @@ INSTALL EXTENSION min_protocol_test;
 --echo # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
---echo # Install with default protocol (protocol 2, meets the requirement)
+--echo # Install with default protocol (protocol 4, meets the requirement)
 SET @vef_debug_protocol_override = NULL;
 INSTALL EXTENSION min_protocol_test;
 

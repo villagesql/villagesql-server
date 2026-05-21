@@ -31,7 +31,7 @@ set(SDK_STAGING_DIR "${CMAKE_BINARY_DIR}/${SDK_NAME}")
 
 # The stable SDK snapshot to package and use for ABI compliance tests.
 # Update this variable when cutting a new stable ABI version.
-set(STABLE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stable_sdk/v1")
+set(STABLE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stable_sdk/v3")
 
 # Generate villagesql_config script with version substituted
 configure_file(
@@ -52,6 +52,7 @@ configure_file(
 file(WRITE "${CMAKE_BINARY_DIR}/villagesql_test_env.sh"
   "VILLAGESQL_SOURCE_DIR=${CMAKE_SOURCE_DIR}\n"
   "VILLAGESQL_STABLE_SDK=${STABLE_SDK_DIR}\n"
+  "VILLAGESQL_STABLE_SDK_V1=${CMAKE_CURRENT_SOURCE_DIR}/stable_sdk/v1\n"
   "VILLAGESQL_DEV_SDK_INCLUDE=${SDK_STAGING_DIR}/include-dev\n"
 )
 
@@ -84,9 +85,8 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E remove_directory "${SDK_STAGING_DIR}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/bin"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/lib/cmake/VillageSQLExtensionFramework"
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include/villagesql/abi"
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include-dev/villagesql/abi"
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include-dev/villagesql/vsql"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include/villagesql"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include-dev/villagesql"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/template/src"
 
   # Copy villagesql_config script and make executable
@@ -101,16 +101,10 @@ add_custom_command(
     "${CMAKE_SOURCE_DIR}/cmake/FindVillageSQL.cmake"
     "${SDK_STAGING_DIR}/lib/cmake/VillageSQLExtensionFramework/"
 
-  # Copy stable SDK headers
-  COMMAND ${CMAKE_COMMAND} -E copy
-    "${STABLE_SDK_DIR}/include/villagesql/extension.h"
-    "${STABLE_SDK_DIR}/include/villagesql/extension_builder.h"
-    "${STABLE_SDK_DIR}/include/villagesql/func_builder.h"
-    "${STABLE_SDK_DIR}/include/villagesql/type_builder.h"
-    "${SDK_STAGING_DIR}/include/villagesql/"
-  COMMAND ${CMAKE_COMMAND} -E copy
-    "${STABLE_SDK_DIR}/include/villagesql/abi/types.h"
-    "${SDK_STAGING_DIR}/include/villagesql/abi/"
+  # Copy stable SDK headers (v3 includes the full feature set with subdirectories)
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${STABLE_SDK_DIR}/include/villagesql"
+    "${SDK_STAGING_DIR}/include/villagesql"
 
   # Copy dev (unstable) SDK headers (all subdirectories picked up automatically)
   COMMAND ${CMAKE_COMMAND} -E copy_directory

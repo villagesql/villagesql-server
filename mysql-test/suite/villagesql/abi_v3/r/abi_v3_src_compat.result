@@ -1,0 +1,43 @@
+# ABI v3 Source Compatibility Test
+Found VillageSQL SDK paths
+# Building test extension against current SDK
+# Verify VEB was created
+# Copy VEB to server's VEB directory
+# Install the extension
+INSTALL EXTENSION abi_v3_test;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'abi_v3_test';
+EXTENSION_NAME	EXTENSION_VERSION
+abi_v3_test	0.0.1
+#
+# FAULT_BLOB type: encode/decode round-trip via type-method VDFs (v3 feature)
+#
+# Round-trip via type-method syntax (v3: :: syntax works for named VDF types)
+SELECT abi_v3_test.FAULT_BLOB::to_string(abi_v3_test.FAULT_BLOB::from_string('OK hello')) AS roundtrip;
+roundtrip
+OK hello
+#
+# test_result_kind VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
+#
+# Normal result
+SELECT abi_v3_test.test_result_kind('anything') AS result;
+result
+42
+# WARNING result
+SELECT abi_v3_test.test_result_kind('WARN something went sideways') AS result;
+result
+NULL
+Warnings:
+Warning	3200	VDF error in function 'test_result_kind': something went sideways
+# ERROR result
+SELECT abi_v3_test.test_result_kind('ERROR fatal problem') AS result;
+ERROR HY000: VDF error in function 'test_result_kind': fatal problem
+# Uninstall extension
+UNINSTALL EXTENSION abi_v3_test;
+# Verify extension was removed
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'abi_v3_test';
+EXTENSION_NAME
+# Cleanup
+include/rpl/deprecated/show_binlog_events.inc

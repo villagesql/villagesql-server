@@ -164,7 +164,7 @@ class SpecialVdfCall {
     ctx_.protocol = fd->protocol;
     vdf_args_.user_data = nullptr;
     vdf_args_.value_count = static_cast<unsigned int>(kN);
-    if (fd->protocol >= VEF_PROTOCOL_2) {
+    if (fd->protocol >= VEF_PROTOCOL_3) {
       for (size_t i = 0; i < kN; i++) input_ptrs_[i] = &inputs_[i];
       vdf_args_.values = input_ptrs_.data();
     } else {
@@ -282,7 +282,7 @@ class SpecialVdfCall {
 
  private:
   void init_arg_slots(typename ArgTags::init_t... init_args) {
-    if (ctx_.protocol >= VEF_PROTOCOL_2) {
+    if (ctx_.protocol >= VEF_PROTOCOL_3) {
       unsigned int i = 0;
       ((ArgTags::init(inputs_[i++], init_args)), ...);
     } else {
@@ -292,7 +292,7 @@ class SpecialVdfCall {
   }
 
   void fill_inputs(typename ArgTags::cpp_t... args) {
-    if (ctx_.protocol >= VEF_PROTOCOL_2) {
+    if (ctx_.protocol >= VEF_PROTOCOL_3) {
       unsigned int i = 0;
       ((ArgTags::fill(inputs_[i++], args)), ...);
     } else {

@@ -109,7 +109,7 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
   result.out_type_params = &inferred_workspace;
 
   vef_context_t ctx{};
-  ctx.protocol = VEF_PROTOCOL_2;
+  ctx.protocol = VEF_PROTOCOL_3;
 
   encode_vdf->vdf(&ctx, &vdf_args, &result);
 

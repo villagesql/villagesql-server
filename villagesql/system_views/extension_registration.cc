@@ -111,7 +111,7 @@ static std::string registration_to_json(const vef_registration_t *r) {
         w.EndArray();
       }
     }
-    if (f->protocol >= VEF_PROTOCOL_2) {
+    if (f->protocol >= VEF_PROTOCOL_3) {
       w.Key("deterministic");
       w.Bool(f->deterministic);
       w.Key("is_aggregate");
@@ -132,7 +132,7 @@ static std::string registration_to_json(const vef_registration_t *r) {
     w.Int64(t->persisted_length);
     w.Key("max_decode_buffer_length");
     w.Int64(t->max_decode_buffer_length);
-    if (t->protocol >= VEF_PROTOCOL_2) {
+    if (t->protocol >= VEF_PROTOCOL_3) {
       if (t->encode_vdf_name) {
         w.Key("encode_vdf");
         w.String(t->encode_vdf_name);

@@ -20,7 +20,7 @@ SET(VILLAGESQL_VEB_SOURCES
   validate.cc
   veb_file.cc
   veb_register_type_v1.cc
-  veb_register_type_v2.cc
+  veb_register_type_v3.cc
 )
 
 # Object library for compilation into sql_main (avoids circular dependencies)

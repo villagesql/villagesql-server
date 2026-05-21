@@ -180,7 +180,7 @@ void register_builtin_capabilities() {
 bool populate_capabilities(const PopulateContext &ctx,
                            const vef_registration_t *reg,
                            std::string &error_message) {
-  if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
+  if (reg == nullptr || reg->protocol < VEF_PROTOCOL_3 ||
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
     return false;
@@ -242,7 +242,7 @@ bool populate_capabilities(const PopulateContext &ctx,
 
 void depopulate_capabilities(const DepopulateContext &ctx,
                              const vef_registration_t *reg) {
-  if (reg == nullptr || reg->protocol < VEF_PROTOCOL_2 ||
+  if (reg == nullptr || reg->protocol < VEF_PROTOCOL_3 ||
       reg->required_capabilities == nullptr ||
       reg->required_capability_count == 0)
     return;
