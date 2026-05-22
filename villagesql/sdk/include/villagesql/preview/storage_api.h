@@ -14,11 +14,14 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Interface to InnoDB for extensions
-//
-// TODO(villagesql-beta): Column storage is not ready for external use. The ABI
-// and API are under active development and will change without notice. Do not
-// use this in production extensions.
+// =============================================================================
+// PREVIEW CAPABILITY — UNSTABLE API
+// =============================================================================
+// This header is part of the VEF preview surface. Its API and ABI may change
+// or be removed without notice. See villagesql/preview/README.md for details.
+// =============================================================================
+
+// Interface to InnoDB for extensions.
 
 #ifndef VILLAGESQL_PREVIEW_STORAGE_API_H_
 #define VILLAGESQL_PREVIEW_STORAGE_API_H_

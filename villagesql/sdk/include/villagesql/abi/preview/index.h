@@ -14,6 +14,16 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
+// =============================================================================
+// VEF PREVIEW ABI HEADER — UNSTABLE BINARY INTERFACE
+// =============================================================================
+// This header is both:
+//   - an ABI header — extension authors should use the C++ API in
+//     <villagesql/vsql.h>, not these raw types. See villagesql/abi/README.md.
+//   - a preview capability — API and ABI may change or be removed without
+//     notice. See villagesql/preview/README.md.
+// =============================================================================
+
 #ifndef VILLAGESQL_ABI_INDEX_H_
 #define VILLAGESQL_ABI_INDEX_H_
 

@@ -14,6 +14,15 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
+// =============================================================================
+// VEF ABI HEADER — DO NOT WRITE CODE AGAINST THIS DIRECTLY
+// =============================================================================
+// This file defines the binary interface between the server and extension
+// .so files. Extension authors should use the C++ API in
+// <villagesql/vsql.h>, not these raw types. See villagesql/abi/README.md
+// for details.
+// =============================================================================
+
 #ifndef VILLAGESQL_ABI_TYPES_H_
 #define VILLAGESQL_ABI_TYPES_H_
 

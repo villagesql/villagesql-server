@@ -13,6 +13,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
+// =============================================================================
+// PREVIEW CAPABILITY — UNSTABLE API
+// =============================================================================
+// This header is part of the VEF preview surface. Its API and ABI may change
+// or be removed without notice. See villagesql/preview/README.md for details.
+// =============================================================================
+
 #ifndef VILLAGESQL_PREVIEW_SYS_VAR_H
 #define VILLAGESQL_PREVIEW_SYS_VAR_H
 
