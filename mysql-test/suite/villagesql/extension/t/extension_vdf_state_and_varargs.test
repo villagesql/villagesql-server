@@ -1,0 +1,58 @@
+# Exercises VDF behaviors that combine the typed prerun/postrun + state
+# machinery (#551) with the varargs machinery (#563). The combined-surface
+# VDFs (counter_add, varargs_indexed) live in a test-only extension built
+# from std_data/state_and_varargs_vdf.cc. The coexistence test also pulls
+# in vsql_simple for its bytearray type, ba_call_index, and ba_concat_all.
+#
+# Tests:
+#   - counter_add: state-style VDF with an SQL parameter
+#   - coexistence: state-style and varargs VDFs in one statement
+#   - varargs_indexed: varargs VDF reading state set by typed prerun
+
+--source include/villagesql/binlog_check_begin.inc
+
+# Build and install the combined-surface test extension via the SDK. It
+# lands in the default @@veb_dir alongside vsql_simple.veb so both
+# extensions can be installed at once.
+--let $extension_name = state_and_varargs
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/state_and_varargs_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION state_and_varargs;
+INSTALL EXTENSION vsql_simple;
+
+CREATE TABLE test_bytearray (
+  id INT PRIMARY KEY,
+  data BYTEARRAY
+);
+INSERT INTO test_bytearray VALUES (1, 'hello');
+INSERT INTO test_bytearray VALUES (2, 'world123');
+INSERT INTO test_bytearray VALUES (3, 'abcdefgh');
+
+--echo # counter_add: state-style VDF with an SQL parameter
+--echo # (exercises WrapperTypedState forwarding SQL args alongside State&)
+SELECT state_and_varargs.counter_add(10) AS sum
+FROM test_bytearray ORDER BY id;
+
+--echo # Coexistence: state-style and varargs VDFs from two different
+--echo # extensions in one statement. ba_call_index has its own counter,
+--echo # counter_add has its own counter, ba_concat_all is varargs/stateless.
+SELECT vsql_simple.ba_call_index() AS idx,
+       state_and_varargs.counter_add(100) AS running,
+       vsql_simple.ba_concat_all(t.data, t.data) AS twice
+FROM test_bytearray t ORDER BY t.id;
+
+--echo # varargs_indexed: varargs VDF reading per-statement state from typed
+--echo # prerun via VarArgs::state<T>(). Combines #551 (set_user_data) with
+--echo # #563 (varargs). Output is "N:" prefix plus concatenation of bytes.
+SELECT state_and_varargs.varargs_indexed(t1.data, t2.data) AS indexed
+FROM test_bytearray t1, test_bytearray t2
+WHERE t1.id = 1 AND t2.id IN (2, 3)
+ORDER BY t2.id;
+
+DROP TABLE test_bytearray;
+UNINSTALL EXTENSION vsql_simple;
+UNINSTALL EXTENSION state_and_varargs;
+
+--source include/villagesql/binlog_check_end.inc
