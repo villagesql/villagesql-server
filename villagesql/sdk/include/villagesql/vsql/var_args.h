@@ -62,46 +62,6 @@ namespace vsql {
 // time. Used inside a varargs VDF body where each argument may be a
 // different SQL type. Always check type() (or is_int/is_real/is_str/
 // is_custom) before reading the typed value.
-//
-// Parity with classic MySQL UDFs
-// ==============================
-//
-// VEF varargs VDFs are strictly less ergonomic than UDFs on a few axes
-// because the prerun hook is observation-only — the server populates the
-// fields and never reads them back. Specifically, none of these UDF
-// features exist in VEF today:
-//
-//   1. Input-type coercion. UDF xxx_init can write back to
-//      UDF_ARGS::arg_type[i] and the server coerces inputs accordingly
-//      (e.g., the body sees a long long when init asked for INT_RESULT,
-//      even if the SQL caller wrote the string "123"). VEF prerun's
-//      arg_types is read-only; an AnyArg reports whatever natural type
-//      the caller passed, and the body must dispatch on type() or the
-//      prerun must reject mismatches and require CAST.
-//
-//   2. Per-argument nullability hints (UDF_ARGS::maybe_null). UDF init
-//      sees which args may be NULL at this call site, useful for picking
-//      a fast path. VEF prerun has no equivalent.
-//
-//   3. Output-shape hints surfaced to the planner: UDF_INIT::maybe_null,
-//      max_length, decimals. VEF prerun has result_buffer_size (a
-//      buffer-allocation request, not a planner hint) but no maybe_null
-//      or max_length signal that propagates to query planning.
-//
-//   4. Per-call-site determinism. UDF_INIT::const_item lets init declare
-//      "for this call, my output is constant" (e.g., when all args are
-//      constants). VEF has only registration-time .deterministic(); it
-//      cannot upgrade or downgrade per call site.
-//
-//   5. Argument-expression attributes (UDF_ARGS::attributes /
-//      attribute_lengths). UDF init can read the textual form of each
-//      argument expression — used by a few UDFs that want to know which
-//      column was passed. VEF prerun does not expose this.
-//
-// TODO(villagesql-beta): consider letting prerun rewrite arg_types[i] so
-// the server can coerce varargs inputs the way UDF init does. The other
-// gaps (2)-(5) are smaller and likely belong in a separate prerun-result
-// expansion.
 class AnyArg {
  public:
   explicit AnyArg(const vef_invalue_t *v) : v_(v) {}

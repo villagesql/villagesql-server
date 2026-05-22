@@ -267,9 +267,6 @@ struct StaticFuncDesc {
 
   constexpr const char *name() const { return name_; }
   constexpr size_t num_params() const { return NumParams; }
-  // v1 builder has no varargs support, so any v1 function is fine on
-  // protocol 1.
-  constexpr vef_protocol_t required_protocol() const { return VEF_PROTOCOL_1; }
   constexpr const vef_type_t *params() const { return params_; }
   constexpr vef_type_t return_type() const { return return_type_; }
   constexpr ExtFunc vdf() const { return vdf_; }

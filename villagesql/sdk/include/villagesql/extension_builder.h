@@ -63,15 +63,17 @@ struct ExtensionBuilder {
   TypeTuple types_;
   vef_protocol_t min_protocol_;
 
-  // Add a function (returns new builder with function appended).
+  // Add a function (returns new builder with function appended)
   template <typename F>
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
-    return ExtensionBuilder<decltype(new_funcs), TypeTuple>{
-        new_funcs, types_, require_atleast_min(f.required_protocol())};
+    return ExtensionBuilder<decltype(new_funcs), TypeTuple>{new_funcs, types_,
+                                                            min_protocol_};
   }
 
   // Add a type (returns new builder with type appended).
+  // If the type requires a higher protocol than min_protocol_, min_protocol_
+  // is raised automatically.
   constexpr auto type(const TypeDescriptor &td) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(td));
     return ExtensionBuilder<FuncTuple, decltype(new_types)>{
