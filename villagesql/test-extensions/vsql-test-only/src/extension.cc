@@ -58,6 +58,13 @@
 //   NO_DEFAULT_PARAM_TYPE(N)
 //              - Parameterized version of NO_DEFAULT_TYPE for exercising
 //                parameterized intrinsic-default failures.
+//
+//   LARGE_DECODE_TYPE(N)
+//              - Parameterized 8-byte type whose decoded string is N 'X'
+//                characters.  Used to exercise the server's result-buffer
+//                sizing for SQL-callable decode VDFs (e.g. T::to_string),
+//                where the output size scales with the input column's
+//                max_decode_buffer_length.
 
 #include <villagesql/vsql.h>
 
@@ -241,6 +248,89 @@ int no_default_param_compare(vsql::CustomArgWith<NoDefaultParams>,
   return 0;
 }
 
+// LARGE_DECODE_TYPE(length): parameterized 8-byte type whose decoded string
+// is `length` copies of 'X'.  The persisted value is opaque; only the type
+// parameter controls the decoded size.  Used to exercise the server's
+// result-buffer sizing for STRING-returning VDFs (T::to_string), where the
+// output can exceed the historical 256-byte default and must instead be
+// sized from the input's max_decode_buffer_length.
+
+constexpr int64_t kLargeDecodePersistedLen = 8;
+
+struct LargeDecodeParams {
+  int64_t length;
+
+  static LargeDecodeParams parse(
+      const std::map<std::string, std::string> &params) {
+    auto it = params.find("length");
+    return LargeDecodeParams{std::stoll(it->second)};
+  }
+
+  static void to_strings(const LargeDecodeParams &p,
+                         std::map<std::string, std::string> &out) {
+    out["length"] = std::to_string(p.length);
+  }
+};
+
+bool large_decode_int_to_params(int64_t value,
+                                std::map<std::string, std::string> &params,
+                                char *error_msg) {
+  if (value <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "LARGE_DECODE_TYPE length must be positive");
+    return true;
+  }
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool large_decode_resolve_params(
+    const std::map<std::string, std::string> &params,
+    vsql::ResolvedTypeParams *result, char *error_msg) {
+  auto it = params.find("length");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "LARGE_DECODE_TYPE length is required");
+    return true;
+  }
+  int64_t length = std::stoll(it->second);
+  if (length <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "LARGE_DECODE_TYPE length must be positive");
+    return true;
+  }
+  result->persisted_length = kLargeDecodePersistedLen;
+  result->max_decode_buffer_length = length;
+  return false;
+}
+
+void large_decode_encode(vsql::MaybeParams<LargeDecodeParams> &params,
+                         std::string_view /*from*/, vsql::CustomResult out) {
+  // Input is ignored; we just need a valid-sized blob so INSERT works.
+  if (!params.is_known()) params.set(LargeDecodeParams{1});
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kLargeDecodePersistedLen)) return;
+  memset(buf.data(), 0, kLargeDecodePersistedLen);
+  out.set_length(static_cast<size_t>(kLargeDecodePersistedLen));
+}
+
+void large_decode_decode(vsql::CustomArgWith<LargeDecodeParams> in,
+                         vsql::StringResult out) {
+  int64_t length = in.params().length;
+  auto buf = out.buffer();
+  if (length < 0 || buf.size() < static_cast<size_t>(length)) {
+    // Wrapper-default failure surfaces: result buffer too small.
+    return;
+  }
+  memset(buf.data(), 'X', static_cast<size_t>(length));
+  out.set_length(static_cast<size_t>(length));
+}
+
+int large_decode_compare(vsql::CustomArgWith<LargeDecodeParams>,
+                         vsql::CustomArgWith<LargeDecodeParams>) {
+  return 0;
+}
+
 // test_result_kind: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR.
 //
 // Input string controls the outcome:
@@ -277,6 +367,7 @@ static void test_result_kind(vsql::StringArg input, vsql::IntResult out) {
 static constexpr const char kFaultBlobTypeName[] = "FAULT_BLOB";
 static constexpr const char kNoDefaultTypeName[] = "NO_DEFAULT_TYPE";
 static constexpr const char kNoDefaultParamTypeName[] = "NO_DEFAULT_PARAM_TYPE";
+static constexpr const char kLargeDecodeTypeName[] = "LARGE_DECODE_TYPE";
 
 constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .persisted_length(kFaultBlobSize)
@@ -308,6 +399,20 @@ constexpr auto NO_DEFAULT_PARAM_TYPE =
         .compare<&no_default_param_compare>()
         .build();
 
+constexpr auto LARGE_DECODE_TYPE =
+    vsql::make_type<kLargeDecodeTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(1)
+        .max_persisted_length(kLargeDecodePersistedLen)
+        .params<LargeDecodeParams, &LargeDecodeParams::parse,
+                &LargeDecodeParams::to_strings>()
+        .int_to_params<&large_decode_int_to_params>()
+        .resolve_params<&large_decode_resolve_params>()
+        .from_string<&large_decode_encode>()
+        .to_string<&large_decode_decode>()
+        .compare<&large_decode_compare>()
+        .build();
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -317,6 +422,7 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(FAULT_BLOB)
         .type(NO_DEFAULT_TYPE)
         .type(NO_DEFAULT_PARAM_TYPE)
+        .type(LARGE_DECODE_TYPE)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)

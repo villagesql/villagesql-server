@@ -79,6 +79,22 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     m_result_buffer_size = m_udf->vdf_func_desc->buffer_size > 0
                                ? m_udf->vdf_func_desc->buffer_size
                                : 256;
+    // STRING-returning VDFs whose argument is a custom type (e.g. the type's
+    // to_string / decode VDF) emit output whose size scales with the input
+    // value, bounded by max_decode_buffer_length on the argument's
+    // TypeContext.  Raise the buffer to fit so that, for example,
+    // SVECTOR::to_string(v) has room to decode a wide vector.  prerun can
+    // still grow the buffer further below if it requests more.
+    if (return_type == VEF_TYPE_STRING) {
+      for (uint i = 0; i < arg_count; i++) {
+        const auto *tc = m_args[i]->get_type_context();
+        if (tc == nullptr) continue;
+        const int64_t needed = tc->max_decode_buffer_length();
+        if (needed > 0 && static_cast<size_t>(needed) > m_result_buffer_size) {
+          m_result_buffer_size = static_cast<size_t>(needed);
+        }
+      }
+    }
     m_result_buffer =
         pointer_cast<char *>((*THR_MALLOC)->Alloc(m_result_buffer_size));
     if (!m_result_buffer) return true;

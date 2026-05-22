@@ -1,0 +1,32 @@
+INSTALL EXTENSION vsql_test_only;
+# === Large parameter: decoded string exceeds the old 256-byte buffer ===
+CREATE TABLE t_large (
+id INT PRIMARY KEY,
+val LARGE_DECODE_TYPE(1024) NOT NULL
+);
+INSERT INTO t_large VALUES (1, ''), (2, '');
+# SQL-callable decode VDF — this is the path the fix repairs.
+SELECT id, LENGTH(LARGE_DECODE_TYPE::to_string(val)) AS dlen
+FROM t_large ORDER BY id;
+id	dlen
+1	1024
+2	1024
+# Cross-check that the decoded payload looks the way the extension
+# produced it: 1024 'X' characters in each row.
+SELECT id, LARGE_DECODE_TYPE::to_string(val) = REPEAT('X', 1024) AS matches
+FROM t_large ORDER BY id;
+id	matches
+1	1
+2	1
+DROP TABLE t_large;
+# === Small parameter: ensure no regression on the short path ===
+CREATE TABLE t_small (
+id INT PRIMARY KEY,
+val LARGE_DECODE_TYPE(8) NOT NULL
+);
+INSERT INTO t_small VALUES (1, '');
+SELECT id, LARGE_DECODE_TYPE::to_string(val) AS dval FROM t_small;
+id	dval
+1	XXXXXXXX
+DROP TABLE t_small;
+UNINSTALL EXTENSION vsql_test_only;
