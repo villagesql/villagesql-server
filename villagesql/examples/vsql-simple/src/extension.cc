@@ -158,24 +158,20 @@ void ba_len(IntResult out) { out.set(static_cast<long long>(kBytearrayLen)); }
 // Prerun: validate that all arguments are BYTEARRAY (or NULL literals,
 // which appear as VEF_TYPE_STRING in the prerun arg-type array) and ask
 // the server to allocate arg_count * kBytearrayLen bytes of result buffer.
-void ba_concat_all_prerun(vef_context_t *, vef_prerun_args_t *args,
-                          vef_prerun_result_t *result) {
-  if (args->arg_count == 0) {
-    result->type = VEF_RESULT_ERROR;
-    snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-             "ba_concat_all requires at least one argument");
+void ba_concat_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult out) {
+  if (args.size() == 0) {
+    out.error("ba_concat_all requires at least one argument");
     return;
   }
-  for (unsigned int i = 0; i < args->arg_count; i++) {
-    vef_type_id id = args->arg_types[i].id;
-    if (id != VEF_TYPE_CUSTOM && id != VEF_TYPE_STRING) {
-      result->type = VEF_RESULT_ERROR;
-      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-               "ba_concat_all: argument %u must be BYTEARRAY", i);
+  for (size_t i = 0; i < args.size(); i++) {
+    auto t = args.type_at(i);
+    if (!t.is_custom() && !t.is_str()) {
+      out.error("ba_concat_all: argument " + std::to_string(i) +
+                " must be BYTEARRAY");
       return;
     }
   }
-  result->result_buffer_size = args->arg_count * kBytearrayLen;
+  out.request_buffer_size(args.size() * kBytearrayLen);
 }
 
 void ba_concat_all(VarArgs args, StringResult out) {
