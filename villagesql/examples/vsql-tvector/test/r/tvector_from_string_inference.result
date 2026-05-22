@@ -53,6 +53,20 @@ SELECT id, v FROM t_dim3 ORDER BY id;
 id	v
 1	[7,8,9]
 2	[4,5,6]
+SET @v3 = '[1,2,3]';
+SELECT TVECTOR::from_string(@v3) AS v;
+v
+[1,2,3]
+SET @v_match = '[4,5,6]';
+SELECT id FROM t_dim3 WHERE v = TVECTOR::from_string(@v_match);
+id
+2
+SET @v_bad = '[1,2,';
+SELECT TVECTOR::from_string(@v_bad) AS v;
+ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: missing ']'
+SET @v_short = '[1,2]';
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string(@v_short));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
 CREATE TABLE t_double3 (
 id INT AUTO_INCREMENT PRIMARY KEY,
 v TVECTOR('dimension=3,type=double')

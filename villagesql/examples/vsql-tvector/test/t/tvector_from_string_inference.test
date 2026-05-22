@@ -87,6 +87,31 @@ UPDATE t_dim3 SET v = TVECTOR::from_string('[9,9]') WHERE id = 1;
 
 SELECT id, v FROM t_dim3 ORDER BY id;
 
+# Test: inference also fires when the input string comes from a user
+# variable (Item_func_get_user_var). The variable's value is read at
+# fix_fields time and the params are inferred just like for a bare literal.
+SET @v3 = '[1,2,3]';
+SELECT TVECTOR::from_string(@v3) AS v;
+
+# Comparison against a typed column: with the user-variable inference path,
+# the LHS infers TVECTOR(3) from the variable's contents and the comparison
+# succeeds. t_dim3 has (id=1, v=[7,8,9]) and (id=2, v=[4,5,6]) at this
+# point.
+SET @v_match = '[4,5,6]';
+SELECT id FROM t_dim3 WHERE v = TVECTOR::from_string(@v_match);
+
+# Malformed user-variable contents surface the same fix_fields error as a
+# malformed literal.
+SET @v_bad = '[1,2,';
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string(@v_bad) AS v;
+
+# Inferred dimension from a user variable that doesn't match the column
+# fails the same way a literal would.
+SET @v_short = '[1,2]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_dim3 (v) VALUES (TVECTOR::from_string(@v_short));
+
 # Test: double-typed TVECTOR — inference defaults to the type's default
 # precision (float). An override or matching column would be needed to
 # write into a `type=double` column; verify that path errors when the

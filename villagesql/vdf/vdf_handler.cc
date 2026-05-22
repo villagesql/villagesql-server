@@ -22,6 +22,7 @@
 #include "mysql/strings/m_ctype.h"
 #include "sql/current_thd.h"
 #include "sql/item.h"
+#include "sql/item_func.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_udf.h"
@@ -32,6 +33,20 @@
 
 namespace villagesql {
 namespace vdf {
+
+// Returns true when `arg` is an input the from_string-inference path can
+// safely pre-execute at fix_fields time: a constant-for-execution Item whose
+// val_str() has no side effects. Today this covers string literals and
+// read-only user variables (e.g. @v after `SET @v = '[...]'`).
+static bool is_inferrable_string_const(Item *arg) {
+  if (!arg->const_for_execution()) return false;
+  if (arg->type() == Item::STRING_ITEM) return true;
+  if (arg->type() == Item::FUNC_ITEM &&
+      down_cast<Item_func *>(arg)->functype() == Item_func::GUSERVAR_FUNC) {
+    return true;
+  }
+  return false;
+}
 
 vdf_handler::vdf_handler(udf_func *u_d) : m_udf(u_d) {}
 
@@ -108,18 +123,20 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   // Constant-string from_string inference.
   //
   // If the return type's params are still unknown after type disambiguation
-  // rules and the call matches `<TYPE>::from_string('<literal>')` with a
+  // rules and the call matches `<TYPE>::from_string(<string-const>)` with a
   // deterministic VDF, we pre-execute the encode VDF here to learn the params
-  // from the literal. The SDK wrapper writes the inferred canonical params back
-  // through vef_inferred_type_params_t; we bind them to return_params so
-  // SetVDFReturnTypeContext below populates the outer call's return
-  // TypeContext. The VDF re-runs at row time on the original literal, this
-  // time with known params, and encodes normally.
+  // from the input string. The SDK wrapper writes the inferred canonical
+  // params back through vef_inferred_type_params_t; we bind them to
+  // return_params so SetVDFReturnTypeContext below populates the outer call's
+  // return TypeContext. The VDF re-runs at row time on the original argument,
+  // this time with known params, and encodes normally.
+  //
+  // "String const" here covers string literals and user variables — anything
+  // is_inferrable_string_const() accepts.
   if (signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
-      arguments[0]->type() == Item::STRING_ITEM &&
-      arguments[0]->const_for_execution()) {
+      is_inferrable_string_const(arguments[0])) {
     TypeInferenceSnapshot snap;
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
