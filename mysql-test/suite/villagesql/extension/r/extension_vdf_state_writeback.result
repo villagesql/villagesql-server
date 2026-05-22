@@ -2,22 +2,24 @@
 Creating extension test_state_writeback using SDK...
 Created test_state_writeback.veb
 INSTALL EXTENSION test_state_writeback;
-CREATE TABLE seq (id INT PRIMARY KEY, s VARCHAR(8));
-INSERT INTO seq VALUES (1, 'a'), (2, 'b'), (3, 'c');
-# By-value: every row reads user_data == nullptr (the prerun value),
-# emits NULL, then leaks its malloc'd buffer when the assignment
-# back into the local `void* user_data` parameter is dropped.
-SELECT id, s, test_state_writeback.previous_byval(s) AS prev FROM seq ORDER BY id;
+CREATE TABLE seq (id INT PRIMARY KEY, s VARCHAR(16));
+INSERT INTO seq VALUES
+(1, 'a'),
+(2, 'bb'),
+(3, 'ccc'),
+(4, 'dd'),
+(5, 'ee'),
+(6, 'ffffffff');
+# First row prev is NULL; later rows reflect prior s.
+# Rows 4-5 reuse the same buffer (shorter than capacity);
+# row 6 reallocs because 'ffffffff' doesn't fit.
+SELECT id, s, test_state_writeback.previous(s) AS prev FROM seq ORDER BY id;
 id	s	prev
 1	a	NULL
-2	b	NULL
-3	c	NULL
-# By-reference: assignment in the VDF body writes args->user_data
-# so the next row sees the cached pointer. Expected: NULL, 'a', 'b'.
-SELECT id, s, test_state_writeback.previous_byref(s) AS prev FROM seq ORDER BY id;
-id	s	prev
-1	a	NULL
-2	b	a
-3	c	b
+2	bb	a
+3	ccc	bb
+4	dd	ccc
+5	ee	dd
+6	ffffffff	ee
 DROP TABLE seq;
 UNINSTALL EXTENSION test_state_writeback;

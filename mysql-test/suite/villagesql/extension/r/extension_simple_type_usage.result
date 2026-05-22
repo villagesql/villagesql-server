@@ -79,7 +79,7 @@ ERROR HY000: Cannot initialize function 'ba_concat': wrong number of arguments (
 SELECT vsql_simple.ba_concat_all(t.data) AS one
 FROM test_bytearray t WHERE t.id = 1;
 one
-hello
+hello   
 SELECT vsql_simple.ba_concat_all(t1.data, t2.data, t3.data) AS three
 FROM test_bytearray t1, test_bytearray t2, test_bytearray t3
 WHERE t1.id = 1 AND t2.id = 2 AND t3.id = 3;

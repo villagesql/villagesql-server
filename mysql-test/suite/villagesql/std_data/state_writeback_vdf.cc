@@ -14,22 +14,15 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Test-only extension demonstrating the difference between the by-value
-// (`void*`) and by-reference (`void*&`) user_data wrappers introduced by
-// the typed prerun/postrun API (PR #551).
+// Test-only extension demonstrating the typed prerun/postrun + `void*&`
+// user_data slot (WrapperVoidStarRefState) from PR #551.
 //
-// Both VDFs implement the same "lag" function: previous(s) returns the
-// s passed on the prior row, or NULL on the first row. Storage is a
-// malloc'd buffer holding [size_t length][bytes].
-//
-//   previous_byval(s):  declares `void* user_data` — pointer is copied
-//                       in, assignment inside the body is local.
-//                       Expected: NULL on every row, buffers leaked.
-//
-//   previous_byref(s):  declares `void*& user_data` — routes through
-//                       WrapperVoidStarState so assignments survive
-//                       across rows and postrun frees the final buffer.
-//                       Expected: NULL, then the prior s.
+// previous(s) returns the s passed to the previous row, or NULL on the
+// first row. Storage is a malloc'd buffer laid out as:
+//   [size_t capacity][size_t length][capacity bytes of payload]
+// capacity is the payload bytes currently available; length is how many
+// of those are in use. When a longer string arrives we free the buffer
+// and malloc a new one; shorter strings reuse the existing allocation.
 
 #include <villagesql/vsql.h>
 
@@ -38,62 +31,53 @@
 
 using namespace vsql;
 
-static void common_prerun(PrerunArgs, PrerunResult out) {
+struct Hdr {
+  size_t capacity;
+  size_t length;
+};
+
+static void previous_prerun(PrerunArgs, PrerunResult out) {
   out.set_user_data(nullptr);
 }
 
-static void common_postrun(PostrunArgs args) { std::free(args.user_data()); }
-
-// Helper: pop the stored previous string out (or set null), then malloc
-// a new buffer holding `s` and return it. Returns the pointer the caller
-// should stash into the user_data slot.
-static void *emit_prev_and_stash(void *prev, StringArg s, StringResult out) {
-  if (prev == nullptr) {
-    out.set_null();
+void previous_vdf(void *&user_data, StringArg s, StringResult out) {
+  // Emit the previous value, if any.
+  if (user_data != nullptr) {
+    auto *hdr = static_cast<Hdr *>(user_data);
+    const char *bytes = reinterpret_cast<const char *>(hdr) + sizeof(Hdr);
+    out.set(std::string_view(bytes, hdr->length));
   } else {
-    size_t len;
-    std::memcpy(&len, prev, sizeof(len));
-    const char *bytes = static_cast<const char *>(prev) + sizeof(len);
-    out.set(std::string_view(bytes, len));
-    std::free(prev);
+    out.set_null();
   }
-  if (s.is_null()) return nullptr;
+
+  // Stash the current row's value for the next call. A NULL input clears
+  // the slot (and frees any buffer we were carrying).
+  if (s.is_null()) {
+    std::free(user_data);
+    user_data = nullptr;
+    return;
+  }
+
   auto sv = s.value();
-  size_t k = sizeof(size_t);
-  void *p = std::malloc(k + sv.size());
-  size_t len = sv.size();
-  std::memcpy(p, &len, k);
-  std::memcpy(static_cast<char *>(p) + k, sv.data(), sv.size());
-  return p;
+  size_t needed = sv.size();
+  auto *hdr = static_cast<Hdr *>(user_data);
+  if (hdr == nullptr || hdr->capacity < needed) {
+    std::free(user_data);
+    hdr = static_cast<Hdr *>(std::malloc(sizeof(Hdr) + needed));
+    hdr->capacity = needed;
+  }
+  hdr->length = needed;
+  std::memcpy(reinterpret_cast<char *>(hdr) + sizeof(Hdr), sv.data(), needed);
+  user_data = hdr;
 }
 
-// By-value: user_data is passed as a copy. Assignment is local. Every
-// row sees nullptr (the prerun value); the malloc'd buffer is leaked.
-void previous_byval(void *user_data, StringArg s, StringResult out) {
-  user_data = emit_prev_and_stash(user_data, s, out);
-  (void)user_data;  // assignment is local; writeback does not persist
-}
-
-// By-reference: user_data is passed as `void*&` and binds to the slot
-// directly. The body's assignment updates args->user_data, so subsequent
-// rows read the cached pointer and postrun frees the final allocation.
-void previous_byref(void *&user_data, StringArg s, StringResult out) {
-  user_data = emit_prev_and_stash(user_data, s, out);
-}
+static void previous_postrun(PostrunArgs args) { std::free(args.user_data()); }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension()
-        .func(make_func<&previous_byval>("previous_byval")
-                  .returns(STRING)
-                  .param(STRING)
-                  .buffer_size(1024)
-                  .prerun<&common_prerun>()
-                  .postrun<&common_postrun>()
-                  .build())
-        .func(make_func<&previous_byref>("previous_byref")
-                  .returns(STRING)
-                  .param(STRING)
-                  .buffer_size(1024)
-                  .prerun<&common_prerun>()
-                  .postrun<&common_postrun>()
-                  .build()))
+    make_extension().func(make_func<&previous_vdf>("previous")
+                              .returns(STRING)
+                              .param(STRING)
+                              .buffer_size(1024)
+                              .prerun<&previous_prerun>()
+                              .postrun<&previous_postrun>()
+                              .build()))

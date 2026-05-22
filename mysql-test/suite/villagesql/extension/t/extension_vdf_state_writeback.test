@@ -1,19 +1,10 @@
-# Compares two VDF shapes that manage per-statement scratch via the typed
-# prerun/postrun + user_data slot (#551):
+# previous(s) returns the s passed to the previous row (or NULL on the
+# first row). Implemented via the typed prerun/postrun + `void*&` user_data
+# slot (WrapperVoidStarRefState) introduced in #551.
 #
-#   previous_byval(s)  -> first parameter `void* user_data`
-#                         passes the slot value as a copy. Assignment
-#                         inside the body is local. Demonstrates the
-#                         writeback gap on the existing wrapper.
-#
-#   previous_byref(s)  -> first parameter `void*& user_data`
-#                         binds args->user_data by reference (routes
-#                         through WrapperVoidStarState). Assignment in
-#                         the body survives across rows and postrun
-#                         frees the final allocation.
-#
-# Both VDFs are meant to compute the "lag" of `s`: the previous row's
-# value, or NULL on the first row.
+# The VDF mallocs storage on first need, reuses it when subsequent strings
+# fit, and reallocates when a longer string arrives. Postrun frees the
+# final buffer.
 
 # Setup VEB directory for testing
 --let $veb_dir = $MYSQLTEST_VARDIR/veb
@@ -29,17 +20,19 @@
 
 INSTALL EXTENSION test_state_writeback;
 
-CREATE TABLE seq (id INT PRIMARY KEY, s VARCHAR(8));
-INSERT INTO seq VALUES (1, 'a'), (2, 'b'), (3, 'c');
+CREATE TABLE seq (id INT PRIMARY KEY, s VARCHAR(16));
+INSERT INTO seq VALUES
+  (1, 'a'),
+  (2, 'bb'),
+  (3, 'ccc'),
+  (4, 'dd'),
+  (5, 'ee'),
+  (6, 'ffffffff');
 
---echo # By-value: every row reads user_data == nullptr (the prerun value),
---echo # emits NULL, then leaks its malloc'd buffer when the assignment
---echo # back into the local `void* user_data` parameter is dropped.
-SELECT id, s, test_state_writeback.previous_byval(s) AS prev FROM seq ORDER BY id;
-
---echo # By-reference: assignment in the VDF body writes args->user_data
---echo # so the next row sees the cached pointer. Expected: NULL, 'a', 'b'.
-SELECT id, s, test_state_writeback.previous_byref(s) AS prev FROM seq ORDER BY id;
+--echo # First row prev is NULL; later rows reflect prior s.
+--echo # Rows 4-5 reuse the same buffer (shorter than capacity);
+--echo # row 6 reallocs because 'ffffffff' doesn't fit.
+SELECT id, s, test_state_writeback.previous(s) AS prev FROM seq ORDER BY id;
 
 DROP TABLE seq;
 UNINSTALL EXTENSION test_state_writeback;
