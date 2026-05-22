@@ -121,25 +121,112 @@
 // cursor object and assign it to *cursor. In end(), free the cursor and set
 // *cursor to nullptr. The SDK does not wrap cursor state.
 //
-// INDEX PROFILE
-// -------------
-//
-//   make_index_profile("hnsw_l2")
-//       .for_type(SVECTOR)
-//       .using_index("hnsw")
-//       .with_function(1, "l2_distance")   // fn_id 1 -> l2_distance
-//       .ordering(IndexOrdering::ASC)
-//       .build();
-//
 // INDEX FUNCTION
 // --------------
 //
-//   make_index_function<&svector_distance_l2>("l2_distance")
-//       .returns(REAL)
-//       .param(SVECTOR)
-//       .param(SVECTOR)
-//       .deterministic()
-//       .build();
+// Index functions must be deterministic. Build one and store it as static
+// const - it is passed by reference to IndexProfileBuilder::with_function().
+//
+//   static const auto MY_INDEX_FN =
+//       make_index_function<&my_index_fn>("my_index_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)     // TypeDesc built by vsql::make_type<kMyType>
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
+//
+// INDEX PROFILE
+// -------------
+//
+// Binds a custom type to an index type and assigns per-profile function IDs.
+// for_type() takes the type name string (the same kMyType constant passed to
+// make_type<kMyType>), not the TypeDesc. with_function() takes an
+// IndexFunctionDesc from make_index_function().build(), not a raw string.
+//
+//   static const auto MY_PROFILE =
+//       make_index_profile("my_profile")
+//           .for_type(kMyType)                // name string, not the TypeDesc
+//           .using_index(kMyIndex)
+//           .with_function(1, MY_INDEX_FN)    // fn_id 1 -> MY_INDEX_FN
+//           .with_function(2, MY_HELPER_FN)   // fn_id 2 -> MY_HELPER_FN
+//           .ordering(IndexOrdering::ASC)
+//           .build();
+//
+// EXTENSION REGISTRATION
+// ----------------------
+//
+// Putting the pieces together: index functions, index type, profile, capability
+// tokens, and the extension entry point.
+//
+//   static constexpr const char kMyType[]  = "my_type";
+//   static constexpr const char kMyIndex[] = "my_index";
+//
+//   // Type descriptor (see vsql.h). kMyType is the name string used below.
+//   constexpr auto MY_TYPE = vsql::make_type<kMyType>()...build();
+//
+//   // Step 1 - index functions (static: addresses must be stable).
+//   static const auto MY_INDEX_FN =
+//       make_index_function<&my_index_fn>("my_index_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
+//
+//   static const auto MY_HELPER_FN =
+//       make_index_function<&my_helper_fn>("my_helper_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
+//
+//   // Step 2 - index type (all 12 hooks required; constexpr).
+//   static constexpr auto MY_INDEX =
+//       make_index_type<kMyIndex, MyContext>()
+//           .lifecycle()
+//               .create<&my_create>()
+//               .load<&my_load>()
+//               .drop<&my_drop>()
+//           .dml()
+//               .insert<&my_insert>()
+//               .mark_delete<&my_mark_delete>()
+//               .purge<&my_purge>()
+//           .scan()
+//               .begin<&my_begin_scan>()
+//               .position<&my_position>()
+//               .fetch<&my_fetch>()
+//               .save<&my_save>()
+//               .restore<&my_restore>()
+//               .end<&my_end_scan>()
+//           .global()
+//           .global()
+//               .capabilities(IndexSupport::POINT_LOOKUP |
+//                             IndexSupport::RANGE_SCAN | ...)
+//               .storage_props(IndexStorage::HAS_ROW_REF | ...)
+//               .options<MyOptions, &MyOptions::parse>()
+//               .build();
+//
+//   // Step 3 - profile: for_type takes the name string, not the TypeDesc.
+//   static const auto MY_PROFILE =
+//       make_index_profile("my_profile")
+//           .for_type(kMyType)
+//           .using_index(kMyIndex)
+//           .with_function(1, MY_INDEX_FN)
+//           .with_function(2, MY_HELPER_FN)
+//           .ordering(IndexOrdering::ASC)
+//           .build();
+//
+//   // Step 4 - capability tokens (static: SDK holds pointers into them).
+//   static auto INDEX_TYPE    = IndexTypeCapability().index_type(MY_INDEX);
+//   static auto INDEX_PROFILE =
+//   IndexProfileCapability().index_profile(MY_PROFILE);
+//
+//   // Step 5 - extension entry point.
+//   VEF_GENERATE_ENTRY_POINTS(
+//       vsql::make_extension()
+//           .with(INDEX_TYPE)
+//           .with(INDEX_PROFILE)
+//           .type(MY_TYPE))
 
 #include <array>
 #include <cstdio>
@@ -873,9 +960,10 @@ inline IndexProfileBuilder make_index_profile(const char *name) {
 // containment, shadowing the methods that must preserve the derived type
 // through the chain. No changes to func_builder.h are required.
 
-template <auto F, size_t NumParams>
+template <auto F, size_t NumParams, uint32_t Bits = 0>
 class IndexFuncBuilder {
   using Inner = vsql::func_builder::FuncBuilder<F, NumParams>;
+  static constexpr uint32_t kDeterministic = 1u << 0;
 
  public:
   explicit IndexFuncBuilder(Inner inner) : inner_(std::move(inner)) {}
@@ -885,16 +973,20 @@ class IndexFuncBuilder {
     return *this;
   }
 
-  IndexFuncBuilder<F, NumParams + 1> param(const char *t) const {
-    return IndexFuncBuilder<F, NumParams + 1>{inner_.param(t)};
+  IndexFuncBuilder<F, NumParams + 1, Bits> param(const char *t) const {
+    return IndexFuncBuilder<F, NumParams + 1, Bits>{inner_.param(t)};
   }
 
-  IndexFuncBuilder &deterministic(bool d = true) {
-    inner_.deterministic(d);
-    return *this;
+  IndexFuncBuilder<F, NumParams, Bits | kDeterministic> deterministic() && {
+    inner_.deterministic(true);
+    return IndexFuncBuilder<F, NumParams, Bits | kDeterministic>{
+        std::move(inner_)};
   }
 
   IndexFunctionDesc build() const {
+    static_assert(
+        (Bits & kDeterministic) != 0,
+        "index function: deterministic() must be called before build()");
     auto d = inner_.build();
     IndexFunctionDesc result{};
     result.name = d.name();
