@@ -259,6 +259,24 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
                                         to_string_view(m_udf->extension_name),
                                         signature, func, &return_params);
     m_return_type_context = func->get_type_context();
+
+    // CUSTOM-returning VDFs (e.g. the type's from_string / encode VDF) emit
+    // output sized to the resolved return type's persisted_length, which is
+    // unknown until SetVDFReturnTypeContext above resolves it from
+    // return_params. Grow the buffer to fit so that, for example,
+    // SVECTOR::from_string('[…1024 floats…]') has room to encode a wide
+    // vector. Mirrors the input-side growth done above for STRING-returning
+    // VDFs. prerun may still have grown the buffer further; keep the max.
+    if (m_return_type_context != nullptr) {
+      const int64_t persisted = m_return_type_context->persisted_length();
+      if (persisted > 0 &&
+          static_cast<size_t>(persisted) > m_result_buffer_size) {
+        m_result_buffer_size = static_cast<size_t>(persisted);
+        m_result_buffer =
+            pointer_cast<char *>((*THR_MALLOC)->Alloc(m_result_buffer_size));
+        if (!m_result_buffer) return true;
+      }
+    }
   }
 
   m_active = true;
