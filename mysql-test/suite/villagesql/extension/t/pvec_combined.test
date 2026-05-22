@@ -1,0 +1,62 @@
+# Test combining parameterized custom type (PVEC), varargs VDF (int_sum_all),
+# and aggregate VDF (pvec_norm_sq) — all registered by vsql_test_only.
+#
+# PVEC(N): stores N int16 values as N*2 bytes.
+# int_sum_all(INT, ...): varargs scalar, sums non-NULL INT arguments.
+# pvec_norm_sq(PVEC): aggregate, returns sum of squared elements across rows.
+
+INSTALL EXTENSION vsql_test_only;
+
+# Varargs: sum any number of INT arguments
+SELECT vsql_test_only.int_sum_all(1, 2, 3) AS total;
+SELECT vsql_test_only.int_sum_all(10) AS total;
+SELECT vsql_test_only.int_sum_all(1, 2, 3, 4, 5) AS total;
+
+# Varargs prerun rejects zero arguments
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_test_only.int_sum_all();
+
+# Varargs prerun rejects non-INT arguments
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_test_only.int_sum_all(1.5);
+
+# Parameterized type: PVEC(N) column stores N int16 elements
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  v PVEC(3)
+);
+
+INSERT INTO t1 VALUES (1, '[1,2,3]'), (2, '[4,5,6]'), (3, '[-1,0,1]');
+
+SELECT id, v FROM t1 ORDER BY id;
+
+# Aggregate: per-group sum of squared elements
+SELECT id, vsql_test_only.pvec_norm_sq(v) AS norm_sq FROM t1 GROUP BY id ORDER BY id;
+
+# Aggregate: whole-table (1^2+2^2+3^2) + (4^2+5^2+6^2) + ((-1)^2+0^2+1^2) = 93
+SELECT vsql_test_only.pvec_norm_sq(v) AS total_norm_sq FROM t1;
+
+# Aggregate with HAVING: exclude groups with norm_sq <= 10
+SELECT id, vsql_test_only.pvec_norm_sq(v) AS norm_sq
+FROM t1
+GROUP BY id
+HAVING vsql_test_only.pvec_norm_sq(v) > 10
+ORDER BY id;
+
+# Aggregate ORDER BY descending
+SELECT id, vsql_test_only.pvec_norm_sq(v) AS norm_sq
+FROM t1
+GROUP BY id
+ORDER BY vsql_test_only.pvec_norm_sq(v) DESC;
+
+# NULL handling: NULL rows are skipped by accumulate; only [3,4] contributes 25
+CREATE TABLE t_nulls (
+  id INT,
+  v PVEC(2)
+);
+INSERT INTO t_nulls VALUES (1, '[3,4]'), (2, NULL);
+SELECT vsql_test_only.pvec_norm_sq(v) AS norm_sq FROM t_nulls;
+
+DROP TABLE t1, t_nulls;
+
+UNINSTALL EXTENSION vsql_test_only;

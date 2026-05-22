@@ -69,7 +69,9 @@
 #include <villagesql/vsql.h>
 
 #include <cassert>
+#include <cinttypes>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -413,6 +415,227 @@ constexpr auto LARGE_DECODE_TYPE =
         .compare<&large_decode_compare>()
         .build();
 
+// ---- PVEC type: parameterized vector of N int16 values ------------------
+//
+// Exercises parameterized types, varargs VDFs, and aggregate VDFs together.
+//
+// PVEC(N) stores N*2 bytes, little-endian int16. Text format: "[v1,...,vN]".
+// int_sum_all(INT, ...) -> INT  sums non-NULL INT varargs.
+// pvec_norm_sq(PVEC)    -> INT  aggregate: sum of element squares per group.
+
+constexpr int64_t kPVecMaxDim = 256;
+constexpr int64_t kPVecMaxPersistedLen = kPVecMaxDim * 2;
+
+struct PVecParams {
+  int64_t dimension;
+
+  static PVecParams parse(const std::map<std::string, std::string> &params) {
+    auto it = params.find("dimension");
+    return PVecParams{std::stoll(it->second)};
+  }
+
+  static void to_strings(const PVecParams &p,
+                         std::map<std::string, std::string> &out) {
+    out["dimension"] = std::to_string(p.dimension);
+  }
+};
+
+bool pvec_int_to_params(int64_t value,
+                        std::map<std::string, std::string> &params, char *err) {
+  if (value <= 0 || value > kPVecMaxDim) {
+    snprintf(err, VEF_MAX_ERROR_LEN,
+             "PVEC dimension must be 1..%" PRId64 ", got %" PRId64, kPVecMaxDim,
+             value);
+    return true;
+  }
+  params["dimension"] = std::to_string(value);
+  return false;
+}
+
+bool pvec_resolve_params(const std::map<std::string, std::string> &params,
+                         vsql::ResolvedTypeParams *result, char *err) {
+  auto it = params.find("dimension");
+  if (it == params.end()) {
+    snprintf(err, VEF_MAX_ERROR_LEN, "PVEC requires dimension parameter");
+    return true;
+  }
+  int64_t dim = std::stoll(it->second);
+  if (dim <= 0 || dim > kPVecMaxDim) {
+    snprintf(err, VEF_MAX_ERROR_LEN, "PVEC dimension must be 1..%" PRId64,
+             kPVecMaxDim);
+    return true;
+  }
+  result->persisted_length = dim * 2;
+  result->max_decode_buffer_length = dim * 8;  // "-32768," max per int16
+  return false;
+}
+
+static void store_i16(unsigned char *buf, int16_t v) {
+  buf[0] = static_cast<unsigned char>(v & 0xFF);
+  buf[1] = static_cast<unsigned char>((v >> 8) & 0xFF);
+}
+
+static int16_t load_i16(const unsigned char *buf) {
+  return static_cast<int16_t>(static_cast<uint16_t>(buf[0]) |
+                              (static_cast<uint16_t>(buf[1]) << 8));
+}
+
+void pvec_from_string(vsql::MaybeParams<PVecParams> &p, std::string_view from,
+                      vsql::CustomResult out) {
+  // Empty string → zero vector. The server calls from_string('') as an
+  // intrinsic-default probe when initializing a column of this type.
+  if (from.empty()) {
+    if (!p.is_known()) {
+      out.warning("PVEC: cannot infer dimension from empty string");
+      return;
+    }
+    auto buf = out.buffer();
+    size_t byte_len = static_cast<size_t>(p.value().dimension) * 2;
+    memset(buf.data(), 0, byte_len);
+    out.set_length(byte_len);
+    return;
+  }
+
+  std::string input(from);
+  const char *s = input.c_str();
+  while (*s == ' ') s++;
+  if (*s != '[') {
+    out.warning("PVEC: expected '['");
+    return;
+  }
+  s++;
+
+  auto buf = out.buffer();
+  const size_t max_elem = buf.size() / 2;
+  size_t count = 0;
+
+  while (*s != '\0') {
+    while (*s == ' ') s++;
+    if (*s == ']') break;
+    if (count >= max_elem) {
+      out.warning("PVEC: too many elements");
+      return;
+    }
+    char *endptr = nullptr;
+    long val = strtol(s, &endptr, 10);
+    if (endptr == s) {
+      out.warning("PVEC: parse error");
+      return;
+    }
+    store_i16(buf.data() + count * 2, static_cast<int16_t>(val));
+    count++;
+    s = endptr;
+    while (*s == ' ') s++;
+    if (*s == ',') s++;
+  }
+  if (*s != ']') {
+    out.warning("PVEC: missing ']'");
+    return;
+  }
+
+  if (p.is_known()) {
+    if (count != static_cast<size_t>(p.value().dimension)) {
+      out.warning("PVEC: dimension mismatch");
+      return;
+    }
+  } else {
+    p.set(PVecParams{static_cast<int64_t>(count)});
+  }
+  out.set_length(count * 2);
+}
+
+void pvec_to_string(vsql::CustomArgWith<PVecParams> in,
+                    vsql::StringResult out) {
+  const PVecParams &p = in.params();
+  auto data = in.value();
+  auto buf = out.buffer();
+  size_t pos = 0;
+  if (pos >= buf.size()) return;
+  buf[pos++] = '[';
+  for (int64_t i = 0; i < p.dimension; i++) {
+    if (i > 0) {
+      if (pos >= buf.size()) return;
+      buf[pos++] = ',';
+    }
+    int16_t v = load_i16(data.data() + i * 2);
+    int written =
+        snprintf(buf.data() + pos, buf.size() - pos, "%d", static_cast<int>(v));
+    if (written < 0 || pos + static_cast<size_t>(written) >= buf.size()) return;
+    pos += static_cast<size_t>(written);
+  }
+  if (pos >= buf.size()) return;
+  buf[pos++] = ']';
+  out.set_length(pos);
+}
+
+int pvec_compare(vsql::CustomArgWith<PVecParams> a,
+                 vsql::CustomArgWith<PVecParams> b) {
+  const PVecParams &pa = a.params();
+  for (int64_t i = 0; i < pa.dimension; i++) {
+    int16_t va = load_i16(a.value().data() + i * 2);
+    int16_t vb = load_i16(b.value().data() + i * 2);
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+  }
+  return 0;
+}
+
+void int_sum_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult result) {
+  if (args.size() == 0) {
+    result.error("int_sum_all requires at least one argument");
+    return;
+  }
+  for (size_t i = 0; i < args.size(); i++) {
+    if (!args.type_at(i).is_int()) {
+      result.error("int_sum_all: argument " + std::to_string(i) +
+                   " must be INT");
+      return;
+    }
+  }
+}
+
+void int_sum_all_impl(vsql::VarArgs args, vsql::IntResult out) {
+  long long total = 0;
+  for (auto a : args) {
+    if (!a.is_null() && a.is_int()) total += a.as_int();
+  }
+  out.set(total);
+}
+
+using NormSqState = int64_t;
+
+void pvec_norm_sq_clear(NormSqState &state) { state = 0; }
+
+void pvec_norm_sq_accumulate(NormSqState &state,
+                             vsql::CustomArgWith<PVecParams> v) {
+  if (v.is_null()) return;
+  const PVecParams &p = v.params();
+  auto data = v.value();
+  for (int64_t i = 0; i < p.dimension; i++) {
+    int16_t elem = load_i16(data.data() + i * 2);
+    state += static_cast<int64_t>(elem) * static_cast<int64_t>(elem);
+  }
+}
+
+void pvec_norm_sq_result(const NormSqState &state, vsql::IntResult out) {
+  out.set(state);
+}
+
+static constexpr const char kPVecTypeName[] = "PVEC";
+
+constexpr auto PVEC =
+    vsql::make_type<kPVecTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kPVecMaxPersistedLen)
+        .params<PVecParams, &PVecParams::parse, &PVecParams::to_strings>()
+        .int_to_params<&pvec_int_to_params>()
+        .resolve_params<&pvec_resolve_params>()
+        .from_string<&pvec_from_string>()
+        .to_string<&pvec_to_string>()
+        .compare<&pvec_compare>()
+        .build();
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -423,8 +646,21 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(NO_DEFAULT_TYPE)
         .type(NO_DEFAULT_PARAM_TYPE)
         .type(LARGE_DECODE_TYPE)
+        .type(PVEC)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)
                   .param(STRING)
+                  .build())
+        .func(make_func<&int_sum_all_impl>("int_sum_all")
+                  .returns(INT)
+                  .varargs()
+                  .prerun<&int_sum_all_prerun>()
+                  .build())
+        .func(make_aggregate_func<NormSqState, &pvec_norm_sq_result>(
+                  "pvec_norm_sq")
+                  .returns(INT)
+                  .param(PVEC)
+                  .clear<&pvec_norm_sq_clear>()
+                  .accumulate<&pvec_norm_sq_accumulate>()
                   .build()))
