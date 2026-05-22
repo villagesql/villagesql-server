@@ -53,6 +53,7 @@ jobs:
       - name: Install dependencies (Linux)
         if: matrix.os == 'linux'
         run: |
+          # TODO(villagesql) Unify this across all build environments
           sudo source/scripts/setup_linux_build_env.sh
           if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
             sudo source/scripts/setup_linux_ext_deps.sh
@@ -61,6 +62,7 @@ jobs:
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos'
         run: |
+          # TODO(villagesql) Unify this across all build environments
           brew install bison cmake openssl
           if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
             source/scripts/setup_macos_ext_deps.sh
