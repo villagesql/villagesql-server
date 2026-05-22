@@ -52,11 +52,19 @@ jobs:
 
       - name: Install dependencies (Linux)
         if: matrix.os == 'linux'
-        run: sudo source/scripts/setup_linux_build_env.sh
+        run: |
+          sudo source/scripts/setup_linux_build_env.sh
+          if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
+            sudo source/scripts/setup_linux_ext_deps.sh
+          fi
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos'
-        run: brew install bison cmake openssl
+        run: |
+          brew install bison cmake openssl
+          if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
+            source/scripts/setup_macos_ext_deps.sh
+          fi
 
       - name: Cache Boost
         uses: actions/cache@v4
