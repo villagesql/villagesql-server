@@ -472,11 +472,10 @@ class AggFuncBuilder {
     static_assert(std::is_same_v<DeducedState, State>,
                   "accumulate: first parameter must be State& matching the "
                   "make_aggregate_func State type");
-    static_assert(
-        std::tuple_size_v<Params> == NumParams + 1,
-        "accumulate: typed arg count after State& must match the SQL "
-        "parameter count; ensure .accumulate() is called after "
-        ".param(TYPE)");
+    static_assert(std::tuple_size_v<Params> == NumParams + 1,
+                  "accumulate: typed arg count after State& must match the SQL "
+                  "parameter count; ensure .accumulate() is called after "
+                  ".param(TYPE)");
     static_assert(
         std::tuple_size_v<Params> != NumParams + 1 ||
             detail::accumulate_signature_shape<Params, NumParams>::args_ok,
