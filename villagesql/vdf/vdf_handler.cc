@@ -89,9 +89,10 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
       for (uint i = 0; i < arg_count; i++) {
         const auto *tc = m_args[i]->get_type_context();
         if (tc == nullptr) continue;
-        const int64_t needed = tc->max_decode_buffer_length();
-        if (needed > 0 && static_cast<size_t>(needed) > m_result_buffer_size) {
-          m_result_buffer_size = static_cast<size_t>(needed);
+        const size_t needed =
+            static_cast<size_t>(tc->max_decode_buffer_length());
+        if (needed > 0 && needed > m_result_buffer_size) {
+          m_result_buffer_size = needed;
         }
       }
     }
