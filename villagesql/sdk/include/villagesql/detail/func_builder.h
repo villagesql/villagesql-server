@@ -529,8 +529,50 @@ struct WrapperTypedState {
 //
 // Param tuple shape: <void*, TypedArg..., ResultWrapper>. Same indexing as
 // WrapperTypedState.
+//
+// Read-only with respect to the user_data slot: any assignment inside the
+// VDF body is local because the pointer is copied. Use WrapperVoidStarRefState
+// (declare `void*&`) if the body needs to update the slot.
 template <auto Func, size_t NumParams>
-struct WrapperVoidState {
+struct WrapperVoidStarState {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    invoke_impl(ctx, args, result, std::make_index_sequence<NumParams>{});
+  }
+
+ private:
+  template <size_t... Is>
+  static void invoke_impl(vef_context_t *ctx, vef_vdf_args_t *args,
+                          vef_vdf_result_t *result,
+                          std::index_sequence<Is...>) {
+    using Params = typename FuncParamTypes<decltype(Func)>::type;
+    std::array<vef_invalue_t, NumParams> vals{
+        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+    Func(args->user_data,
+         make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
+         make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
+  }
+
+  template <typename T>
+  static T make_arg(vef_invalue_t *v) {
+    return T(v);
+  }
+  template <typename T>
+  static T make_result(vef_vdf_result_t *r) {
+    return T(r);
+  }
+};
+
+// Wrapper for VDFs whose first parameter is `void*&` — like
+// WrapperVoidStarState but binds args->user_data by reference so the VDF body
+// can write back into the slot. Use this when the body needs to lazily allocate
+// scratch space (or otherwise update the pointer) and have the new pointer
+// survive across rows and reach postrun for cleanup.
+//
+// Param tuple shape: <void*&, TypedArg..., ResultWrapper>. Same indexing as
+// WrapperVoidStarState.
+template <auto Func, size_t NumParams>
+struct WrapperVoidStarRefState {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     invoke_impl(ctx, args, result, std::make_index_sequence<NumParams>{});

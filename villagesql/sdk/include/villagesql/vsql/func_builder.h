@@ -318,7 +318,11 @@ class FuncBuilder {
       // state-style VDFs. Today these run only for stateless shapes.
       using First = std::tuple_element_t<0, AllParams>;
       if constexpr (std::is_same_v<First, void *>) {
-        meta.f = &detail::WrapperVoidState<Func, NumParams>::invoke;
+        meta.f = &detail::WrapperVoidStarState<Func, NumParams>::invoke;
+      } else if constexpr (std::is_same_v<First, void *&>) {
+        // `void*&` routes to WrapperVoidStarRefState so assignments inside the
+        // VDF write back to args->user_data and survive across rows.
+        meta.f = &detail::WrapperVoidStarRefState<Func, NumParams>::invoke;
       } else {
         // Both `State&` and `const State&` route to WrapperTypedState; the
         // implicit conversion from `State&` to `const State&` happens at
