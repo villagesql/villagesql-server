@@ -204,7 +204,7 @@ struct signature_checker_impl {
   static const char *check_params(const vef_type_t *params) {
     using Wrapper = std::tuple_element_t<I, Tuple>;
     if (!declared_type_matches_wrapper<Wrapper>(params[I])) {
-      return "VDF declared .param(...) type does not match the C++ argument "
+      return "VDF declared .param(TYPE) type does not match the C++ argument "
              "wrapper type";
     }
     return signature_checker_impl<Tuple, I + 1, N>::check_params(params);

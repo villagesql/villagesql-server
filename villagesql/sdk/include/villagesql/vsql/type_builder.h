@@ -66,7 +66,7 @@
 // buffers because the kMyTypeName pointer value differs per type.
 //
 // The resulting TypeObject converts implicitly to const char* so it can be
-// passed directly to .returns() and .param() on FuncBuilder:
+// passed directly to .returns() and .param(TYPE) on FuncBuilder:
 //
 //   make_func<&add_impl>("add")
 //       .returns(MYTYPE).param(MYTYPE).param(MYTYPE).build()
@@ -110,7 +110,8 @@ struct TypeObject {
   void (*params_init_fn)() = nullptr;
   void (*params_to_strings_init_fn)() = nullptr;
 
-  // Converts to the SQL type name string for use in .returns() and .param().
+  // Converts to the SQL type name string for use in .returns() and
+  // .param(TYPE).
   constexpr operator const char *() const { return descriptor.vef_desc.name; }
 
   constexpr const char *name() const { return descriptor.vef_desc.name; }

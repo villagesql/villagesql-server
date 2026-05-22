@@ -176,7 +176,7 @@
 //   - .clear<&fn>()      void(State&)
 //   - .accumulate<&fn>() void(State&, TypedArgs...) — TypedArgs deduced from
 //     the function signature (IntArg, StringArg, CustomArg, etc.).
-//     Call .accumulate() after all .param() calls.
+//     Call .accumulate() after all .param(TYPE) calls.
 //   - Result function uses void(const State&, ResultWrapper) where
 //     ResultWrapper is IntResult, RealResult, StringResult, CustomResult, or
 //     CustomResultWith<P>. Use out.set_null() to return SQL NULL.

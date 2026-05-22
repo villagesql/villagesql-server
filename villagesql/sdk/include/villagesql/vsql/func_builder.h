@@ -148,9 +148,9 @@ using ParamsToStringsFunc = void (*)(const P &,
 // rather than a runtime null dereference.
 
 // Selects between fixed-arity and varargs builders. A builder starts in
-// kUnset; .param(TYPE) (or .param() zero-arity) transitions to kFixed,
-// .varargs() transitions to kVarargs. The two are mutually exclusive,
-// enforced by static_assert.
+// kUnset; .param(TYPE) (or .no_params() for zero-arity) transitions to
+// kFixed, .varargs() transitions to kVarargs. The two are mutually
+// exclusive, enforced by static_assert.
 enum class ParamMode { kUnset, kFixed, kVarargs };
 
 template <auto Func, size_t NumParams, ParamMode Mode = ParamMode::kUnset,
@@ -169,8 +169,7 @@ class FuncBuilder {
     static_assert(Mode != ParamMode::kVarargs,
                   ".param(TYPE) and .varargs() are mutually exclusive");
     static_assert(Mode != ParamMode::kFixed || NumParams > 0,
-                  ".param(TYPE) and .param() (zero-arity) are mutually "
-                  "exclusive");
+                  ".param(TYPE) and .no_params() are mutually exclusive");
     FuncBuilder<Func, NumParams + 1, ParamMode::kFixed, HasPrerun> next;
     next.name_ = name_;
     next.return_type_ = return_type_;
@@ -188,13 +187,12 @@ class FuncBuilder {
   // Explicitly declare zero-arity. Useful for functions that read only
   // session state or return a constant. Mutually exclusive with .param(TYPE)
   // and .varargs().
-  constexpr FuncBuilder<Func, 0, ParamMode::kFixed, HasPrerun> param() const {
+  constexpr FuncBuilder<Func, 0, ParamMode::kFixed, HasPrerun> no_params()
+      const {
     static_assert(NumParams == 0,
-                  ".param() (zero-arity) and .param(TYPE) are mutually "
-                  "exclusive");
+                  ".no_params() and .param(TYPE) are mutually exclusive");
     static_assert(Mode != ParamMode::kVarargs,
-                  ".param() (zero-arity) and .varargs() are mutually "
-                  "exclusive");
+                  ".no_params() and .varargs() are mutually exclusive");
     FuncBuilder<Func, 0, ParamMode::kFixed, HasPrerun> next;
     next.name_ = name_;
     next.return_type_ = return_type_;
@@ -208,11 +206,11 @@ class FuncBuilder {
   // Declare a varargs VDF. The function signature must be
   //   void(vsql::VarArgs, ResultWrapper)
   // The prerun hook is responsible for validating argument count and types.
-  // Mutually exclusive with .param() / .param(TYPE).
+  // Mutually exclusive with .no_params() / .param(TYPE).
   constexpr FuncBuilder<Func, 0, ParamMode::kVarargs, HasPrerun> varargs()
       const {
     static_assert(Mode != ParamMode::kFixed,
-                  ".varargs() is mutually exclusive with .param() and "
+                  ".varargs() is mutually exclusive with .no_params() and "
                   ".param(TYPE)");
     FuncBuilder<Func, 0, ParamMode::kVarargs, HasPrerun> next;
     next.name_ = name_;
@@ -271,8 +269,8 @@ class FuncBuilder {
                   "Too many parameters (max is kMaxParams)");
     static_assert(Mode != ParamMode::kUnset,
                   "vsql make_func: arity must be declared explicitly. Call "
-                  ".param(TYPE) for each typed argument, .param() for a "
-                  "zero-arity function, or .varargs() for a variadic "
+                  ".param(TYPE) for each typed argument, .no_params() for "
+                  "a zero-arity function, or .varargs() for a variadic "
                   "function, before .build()");
 
     using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
@@ -336,7 +334,7 @@ class FuncBuilder {
           std::tuple_size_v<AllParams> == NumParams + 1,
           "make_func: C++ function must have one typed result wrapper "
           "after the declared SQL parameters; check the number of "
-          ".param(...) calls");
+          ".param(TYPE) calls");
       static_assert(
           std::tuple_size_v<AllParams> != NumParams + 1 || Shape::args_ok,
           "make_func: every C++ function parameter before the result "
@@ -461,8 +459,8 @@ class AggFuncBuilder {
   }
 
   // void(State&, TypedArgs...) — first parameter must match State; remaining
-  // parameters must match the SQL param count declared via .param() calls.
-  // Call .accumulate() after all .param() calls.
+  // parameters must match the SQL param count declared via .param(TYPE)
+  // calls. Call .accumulate() after all .param(TYPE) calls.
   template <auto Fn>
   constexpr AggFuncBuilder<State, Func, NumParams> &accumulate() {
     using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
@@ -477,7 +475,8 @@ class AggFuncBuilder {
     static_assert(
         std::tuple_size_v<Params> == NumParams + 1,
         "accumulate: typed arg count after State& must match the SQL "
-        "parameter count; ensure .accumulate() is called after .param()");
+        "parameter count; ensure .accumulate() is called after "
+        ".param(TYPE)");
     static_assert(
         std::tuple_size_v<Params> != NumParams + 1 ||
             detail::accumulate_signature_shape<Params, NumParams>::args_ok,

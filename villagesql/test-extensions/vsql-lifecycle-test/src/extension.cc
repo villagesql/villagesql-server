@@ -43,5 +43,8 @@ void tick_count(IntResult out) { out.set(g_tick_count.load()); }
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
-        .func(make_func<&tick_count>("tick_count").returns(INT).param().build())
+        .func(make_func<&tick_count>("tick_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
         .with(g_monitor_worker))

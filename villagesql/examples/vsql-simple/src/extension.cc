@@ -148,7 +148,7 @@ void ba_concat(CustomArg a, CustomArg b, StringResult out) {
 }
 
 // BA_LEN: return the fixed length of a BYTEARRAY (zero-arity constant).
-// Demonstrates .param() (zero-arity) on the func builder.
+// Demonstrates .no_params() on the func builder.
 void ba_len(IntResult out) { out.set(static_cast<long long>(kBytearrayLen)); }
 
 // BA_CONCAT_ALL: concatenate any number of BYTEARRAY values into a STRING.
@@ -225,11 +225,11 @@ VEF_GENERATE_ENTRY_POINTS(
                   .build())
         .func(make_func<&ba_call_index>("ba_call_index")
                   .returns(INT)
-                  .param()
+                  .no_params()
                   .prerun<&ba_call_index_prerun>()
                   .postrun<&ba_call_index_postrun>()
                   .build())
-        .func(make_func<&ba_len>("ba_len").returns(INT).param().build())
+        .func(make_func<&ba_len>("ba_len").returns(INT).no_params().build())
         .func(make_func<&ba_concat_all>("ba_concat_all")
                   .returns(STRING)
                   .varargs()

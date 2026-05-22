@@ -268,7 +268,7 @@ static void active_port_vdf(IntResult out) {
 VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .func(make_func<&active_port_vdf>("active_port")
                                         .returns(INT)
-                                        .param()
+                                        .no_params()
                                         .build())
                               .with(SQL_QUERY)
                               .with(THREAD_WORKER))
