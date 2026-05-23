@@ -14,16 +14,12 @@ INSTALL EXTENSION abi_v3_test;
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
 WHERE extension_name = 'abi_v3_test';
 
---echo #
 --echo # FAULT_BLOB type: encode/decode round-trip via type-method VDFs (v3 feature)
---echo #
 
 --echo # Round-trip via type-method syntax (v3: :: syntax works for named VDF types)
 SELECT abi_v3_test.FAULT_BLOB::to_string(abi_v3_test.FAULT_BLOB::from_string('OK hello')) AS roundtrip;
 
---echo #
 --echo # test_result_kind VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
---echo #
 
 --echo # Normal result
 SELECT abi_v3_test.test_result_kind('anything') AS result;
@@ -38,9 +34,7 @@ SELECT abi_v3_test.test_result_kind('ERROR fatal problem') AS result;
 --echo # NULL input -> NULL output (IntResult::set_null)
 SELECT abi_v3_test.test_result_kind(NULL) AS result;
 
---echo #
 --echo # real_double VDF: RealArg, RealResult, .deterministic()
---echo #
 
 --echo # Doubles the input value
 SELECT abi_v3_test.real_double(1.5) AS result;
@@ -48,14 +42,10 @@ SELECT abi_v3_test.real_double(1.5) AS result;
 --echo # NULL input -> NULL output (RealResult::set_null)
 SELECT abi_v3_test.real_double(NULL) AS result;
 
---echo #
 --echo # answer VDF: zero-arity, .no_params()
---echo #
 SELECT abi_v3_test.answer() AS result;
 
---echo #
 --echo # FAULT_BLOB::hash: TypeHashFunc via type builder .hash()
---echo #
 
 --echo # Hash used implicitly by COUNT(DISTINCT) on a custom type column
 CREATE TABLE t_hash (v FAULT_BLOB);
@@ -63,9 +53,7 @@ INSERT INTO t_hash VALUES ('OK a'), ('OK b'), ('OK a');
 SELECT COUNT(DISTINCT v) AS distinct_count FROM t_hash;
 DROP TABLE t_hash;
 
---echo #
 --echo # PVEC type, int_sum_all varargs VDF, pvec_norm_sq aggregate VDF
---echo #
 
 --echo # Varargs: sum any number of INT arguments
 SELECT abi_v3_test.int_sum_all(1, 2, 3) AS total;
