@@ -202,8 +202,6 @@ typedef enum : int {
   VEF_TYPE_REAL = 1,
   VEF_TYPE_INT = 2,
   VEF_TYPE_CUSTOM = 3
-
-  // TODO(villagesql-ga): Do we want to support DECIMAL?
 } vef_type_id;
 
 // Input value for VDF function arguments.

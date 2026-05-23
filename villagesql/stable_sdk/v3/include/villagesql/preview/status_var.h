@@ -100,8 +100,6 @@ class StatusVarCapability
 
   // Read by the server's on_populate callback. Public so CapabilityTraits
   // can return its address as capability_config.
-  // TODO(villagesql-beta): rename `descriptor_list` to `cc` to match the
-  // capability_config naming.
   vef_status_var_descriptor_list_t descriptor_list{};
 
  private:

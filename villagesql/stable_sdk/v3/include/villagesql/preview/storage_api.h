@@ -59,8 +59,6 @@ namespace detail {
 inline constexpr size_t ERROR_MSG_SIZE = 512;
 inline thread_local char tl_error_msg[ERROR_MSG_SIZE] = {};
 
-// TODO(villagesql-indexing): remove this global pointer, instead passing the
-// capability in the API.
 // Module-level vtable pointer. The server writes it via vtable_dest during
 // extension registration
 // (CapabilityTraits<StorageCapability>::vtable_destination returns &g_abi). The

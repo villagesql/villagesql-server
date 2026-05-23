@@ -497,7 +497,6 @@ typedef struct {
 
   // DML functions
   vef_type_index_insert_func_t insert;
-  // TODO(villagesql-indexing): Add bulk insert interface.
   vef_type_index_mark_delete_func_t mark_delete;
   vef_type_index_purge_func_t purge;
 

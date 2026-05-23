@@ -311,9 +311,6 @@ class FuncBuilder {
                     "make_func: state-style VDF must have one State (or "
                     "void*) parameter, then the declared SQL parameters, "
                     "then a typed result wrapper");
-      // TODO(villagesql-beta): also run args/result shape and runtime
-      // signature checks (declared .param/.returns vs C++ wrappers) for
-      // state-style VDFs. Today these run only for stateless shapes.
       using First = std::tuple_element_t<0, AllParams>;
       if constexpr (std::is_same_v<First, void *>) {
         meta.f = &detail::WrapperVoidStarState<Func, NumParams>::invoke;

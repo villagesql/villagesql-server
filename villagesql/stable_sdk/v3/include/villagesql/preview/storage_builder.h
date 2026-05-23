@@ -151,8 +151,6 @@ class ColumnStoreCapability
   }
 
   const vef_type_storage_intf_t *ptrs_[N > 0 ? N : 1];
-  // TODO(villagesql-beta): rename `ext_desc_` to `cc_` to match the
-  // capability_config naming.
   vef_preview_column_store_ext_desc_t ext_desc_{};
 };
 

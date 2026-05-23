@@ -141,8 +141,6 @@
 //       .deterministic()
 //       .build();
 //
-// TODO(villagesql-indexing): make_index_function is a stub; full server-side
-// integration is pending.
 
 #include <cstdio>
 #include <new>
@@ -435,7 +433,6 @@ void IndexTypeBuilder_storage_props_must_set_row_or_column_ref();
 
 // Descriptor returned by GlobalBuilder::build(). Consumed by the extension
 // builder (e.g. make_extension().index_type(HNSW_INDEX)).
-// TODO(villagesql-indexing): add index_type() to the extension builder.
 struct IndexTypeDesc {
   const char *name;
   vef_type_index_intf_t intf;
@@ -781,16 +778,11 @@ constexpr IndexTypeRootBuilder<Name, Context> make_index_type() {
 // .with_function(fn_id, name) call binds a profile function to the fn_id used
 // by the index storage implementation when calling vef_index_profile_fn.
 //
-// TODO(villagesql-indexing): IndexProfileDesc is not yet consumed by the
-// server; registration API pending.
-
 // Descriptor returned by make_index_function().build(). Passing one of these
 // to IndexProfileBuilder::with_function() instead of a raw string enforces
 // that the bound function was declared by the same extension.
 struct IndexFunctionDesc {
   const char *name;
-  // TODO(villagesql-indexing): add return type, parameter types, and
-  // determinism flag once server-side consumption is defined.
 };
 
 struct IndexProfileFunctionBinding {
@@ -874,16 +866,10 @@ inline IndexProfileBuilder make_index_profile(const char *name) {
 // make_func: the optimizer needs explicit metadata about which functions define
 // index behavior, and index functions may be internal-only.
 //
-// TODO(villagesql-indexing): IndexFunctionDesc is a stub. Full integration
-// with the function registry (return type, parameter types, determinism flag)
-// is pending server-side support.
-
 class IndexFunctionBuilder {
  public:
   explicit IndexFunctionBuilder(const char *name) { desc_.name = name; }
 
-  // TODO(villagesql-indexing): store and validate these once server-side
-  // consumption is defined.
   IndexFunctionBuilder &returns(const char * /*type*/) { return *this; }
   IndexFunctionBuilder &param(const char * /*type*/) { return *this; }
   IndexFunctionBuilder &deterministic() { return *this; }
@@ -897,7 +883,7 @@ class IndexFunctionBuilder {
 // F is accepted as a template parameter so the call site matches the final API
 // shape (make_index_function<&fn>("name")), but is intentionally not stored or
 // called in this stub. The function pointer is discarded; only the name is
-// retained. TODO(villagesql-indexing): store F once server integration is done.
+// retained.
 template <auto F>
 inline IndexFunctionBuilder make_index_function(const char *name) {
   return IndexFunctionBuilder(name);

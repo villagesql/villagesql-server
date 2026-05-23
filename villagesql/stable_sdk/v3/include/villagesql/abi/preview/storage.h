@@ -263,9 +263,6 @@ typedef struct {
 
 // Section 2: InnoDB Storage Engine Interfaces
 // -------------------------------------------
-// TODO(villagesql-windows): Export symbols with __declspec(dllexport) on
-// Windows so that extensions can link against these functions.
-
 // Storage engine interface version constants.
 #define VEF_STORAGE_SE_INTF_VERSION_1 1
 #define VEF_STORAGE_SE_INTF_VERSION VEF_STORAGE_SE_INTF_VERSION_1
@@ -592,10 +589,6 @@ typedef struct {
 // Extension descriptor for vsql::preview::column_store.
 // Pass as vef_required_capability_t.capability_config.
 //
-// TODO(villagesql-beta): rename vef_preview_column_store_ext_desc_t to
-// vef_preview_column_store_cc_t (capability_config) to match the
-// capability_config naming used by
-// vef_required_capability_t.capability_config.
 typedef struct {
   // Must be set to VEF_COLUMN_STORE_INTF_VERSION.
   uint32_t version;

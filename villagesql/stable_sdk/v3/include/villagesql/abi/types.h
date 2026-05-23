@@ -231,8 +231,6 @@ typedef enum : int {
   VEF_TYPE_REAL = 1,
   VEF_TYPE_INT = 2,
   VEF_TYPE_CUSTOM = 3
-
-  // TODO(villagesql-ga): Do we want to support DECIMAL?
 } vef_type_id;
 
 // Snapshot of vef_invalue_t as of VEF_PROTOCOL_1. Used as the element type of
@@ -316,8 +314,6 @@ typedef struct {
 
       // protocol >= VEF_PROTOCOL_3
       // Read-only: the extension must not overwrite these parameters.
-      // TODO(villagesql-beta): Optimize this to pass a token so that the
-      // extension can cache these values in a language-specific way.
       vef_type_params_t type_params;
     };
 

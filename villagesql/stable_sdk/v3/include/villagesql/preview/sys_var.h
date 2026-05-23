@@ -251,8 +251,6 @@ class SysVarCapability
 
   // Read by the server's on_populate callback. Public so CapabilityTraits
   // can return its address as capability_config.
-  // TODO(villagesql-beta): rename `descriptor_list` to `cc` to match the
-  // capability_config naming.
   vef_sys_var_descriptor_list_t descriptor_list{};
 
  private:
@@ -276,8 +274,6 @@ class SysVarCapability
 //       file path",    &g_log_file,  "/tmp/myext.log"),
 //   });
 //
-// TODO(villagesql-beta): add equivalent factories to status_var for
-// consistency.
 inline SysVarDescriptor make_bool(const char *name, const char *comment,
                                   bool *value_ptr, bool def_val) {
   SysVarDescriptor d;

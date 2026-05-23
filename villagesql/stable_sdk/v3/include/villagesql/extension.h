@@ -299,11 +299,9 @@
 // signature and routes through the cache; .params<>() binds the parse
 // function at startup. Omitting .params<>() while using parameterized
 // signatures will crash at runtime.
-// TODO(villagesql-beta): make this a compile time error.
 //
 // Note if a Params type is registered for more than one custom type, each
 // custom type MUST register the same type function.
-// TODO(villagesql-beta): remove this restriction.
 //
 // REGISTERING THE EXTENSION
 // -------------------------

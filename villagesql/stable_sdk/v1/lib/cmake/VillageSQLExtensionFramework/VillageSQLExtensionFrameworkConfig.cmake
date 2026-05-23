@@ -81,7 +81,6 @@ FUNCTION(VEF_CREATE_VEB)
   FILE(MAKE_DIRECTORY ${VEB_STAGING_DIR}/lib)
 
   # Configure the library target to output to staging/lib
-  # TODO(villagesql-windows): Handle DLL when building for Windows
   SET_TARGET_PROPERTIES(${ARG_LIBRARY_TARGET} PROPERTIES
     OUTPUT_NAME ${ARG_NAME}
     LIBRARY_OUTPUT_DIRECTORY ${VEB_STAGING_DIR}/lib

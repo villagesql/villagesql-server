@@ -38,15 +38,6 @@
 // wrapper class will be added and the postrun signature will become
 // `void(PostrunArgs, PostrunResult)`.
 //
-// TODO(villagesql-beta): add a typed-state mechanism (working name
-// `.state<T>()` on FuncBuilder) so extensions can declare a per-statement
-// state type and have the SDK manage its lifetime automatically — no
-// matched prerun/postrun pair required just to free state. Implementable
-// without ABI changes by having .state<T>() install SDK-generated prerun
-// and postrun wrappers that new/delete the T into the existing user_data
-// slot; the user's optional prerun/postrun receive the typed reference.
-// .state<T>() and raw set_user_data become mutually exclusive.
-
 #include <cstddef>
 #include <cstring>
 #include <string_view>
@@ -90,10 +81,6 @@ class PrerunArgs {
     return PrerunArgType(&a_->arg_types[i]);
   }
 
-  // TODO(villagesql-beta): expose const_at(i) returning the serialized
-  // literal bytes for constant arguments. Blocked on vdf_handler.cc
-  // populating vef_prerun_args_t::const_values / const_lengths; today both
-  // are unconditionally nullptr at the prerun call site.
 
  private:
   const vef_prerun_args_t *a_;

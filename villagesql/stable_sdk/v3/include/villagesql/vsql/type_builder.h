@@ -357,8 +357,6 @@ class TypeBuilder {
   // default binary value for a NOT NULL column receiving NULL with IGNORE.
   // The named VDF must be registered separately with make_intrinsic_default().
   //
-  // TODO(villagesql-beta): embed intrinsic_default inline once the vsql API
-  // supports auto-generating its VDF name too.
   constexpr TypeBuilder &intrinsic_default_vdf(const char *vdf_name) {
     state_.desc.vef_desc.intrinsic_default_vdf_name = vdf_name;
     state_.desc.vef_desc.protocol = VEF_PROTOCOL_3;

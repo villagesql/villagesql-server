@@ -134,7 +134,6 @@ class CustomArg {
 //
 // NOTE: Do not call params() when is_null() is true — NULL values carry no
 // type_params in the ABI, so the cache lookup has no key to work with.
-// TODO(villagesql-beta): remove this restriction.
 template <typename P>
 class CustomArgWith {
  public:

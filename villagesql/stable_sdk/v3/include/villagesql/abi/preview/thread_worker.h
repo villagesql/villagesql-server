@@ -73,10 +73,6 @@ typedef vef_next_wakeup_t (*vef_work_fn_t)(vef_wakeup_reason_t reason,
 // extension load time and manages the thread entirely — the extension only
 // provides the work function and configuration.
 //
-// TODO(villagesql-beta): rename `descriptor` to `cc` (capability_config) to
-// match vef_required_capability_t.capability_config and the trait/server
-// naming.  This is the type whose instance is passed as capability_config.
-//
 // All pointers must remain valid for the lifetime of the extension.
 typedef struct {
   // Called by the server on each wakeup. Required.

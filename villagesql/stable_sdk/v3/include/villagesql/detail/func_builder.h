@@ -607,14 +607,6 @@ struct WrapperVoidStarRefState {
 // extension that early-returns without setting an outcome still surfaces a
 // useful warning.
 //
-// TODO(villagesql-beta): tighten the contract so every from_string (and
-// every other wrapped type-op once they're migrated to typed result
-// wrappers) is expected to explicitly call out.set_length / set_null /
-// warning / error on every path. This default-WARNING fallback exists today
-// because some in-tree extensions (vsql-complex, vsql-simple, vsql-test-only,
-// vsql-storage-test) early-return on failure paths without calling anything;
-// once they're updated to be explicit, drop this synthesis and treat
-// "extension didn't set a result" as an SDK bug.
 inline void set_default_encode_failure(vef_vdf_result_t *result,
                                        const vef_invalue_t &arg) {
   result->type = VEF_RESULT_WARNING;
@@ -655,10 +647,6 @@ struct TypeEncodeVdfWrapper {
 // invoking the extension's to_string so that an extension that early-returns
 // without setting an outcome still surfaces a useful error.
 //
-// TODO(villagesql-beta): tighten the contract so every to_string explicitly
-// sets an outcome (set_length / set / set_null / warning / error) on every
-// path, then drop this synthesis and treat the silent-return case as an SDK
-// bug. Mirrors the same TODO on set_default_encode_failure.
 inline void set_default_decode_failure(vef_vdf_result_t *result) {
   result->type = VEF_RESULT_ERROR;
   snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
@@ -928,7 +916,6 @@ struct IntToParamsWrapper {
       return;
     }
 
-    // TODO(villagesql-beta): decide on a broader character set policy.
     std::string serialized;
     for (const auto &[key, value] : params) {
       if (key.empty() || key.find_first_of(",=") != std::string::npos) {

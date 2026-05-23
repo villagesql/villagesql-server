@@ -54,11 +54,6 @@ typedef enum {
   VEF_STATUS_VAR_DOUBLE = 1,  // double gauge
 } vef_status_var_type_t;
 
-// TODO(villagesql-beta): rename vef_status_var_desc_t to
-// vef_status_var_cc_t (capability_config) and
-// vef_status_var_descriptor_list_t to vef_status_var_cc_list_t to match
-// the capability_config naming used by
-// vef_required_capability_t.capability_config.
 typedef struct {
   // Variable name (without extension prefix). Encoded using UTF-8.
   const char *name;
