@@ -2445,11 +2445,16 @@ static void close_connections(void) {
   */
   Events::deinit();
 
-  // Unload VEF extensions. Must run before plugin_shutdown() so the
-  // component_sys_variable_unregister service is still available for
-  // on_depopulate to unregister sys/status variables. depopulate_capabilities()
-  // also joins background threads and removes their THDs from
-  // Global_THD_manager so wait_till_no_thd() can complete.
+  // Unload VEF extensions. Must run before plugin_shutdown() (in clean_up(),
+  // much later) so component services like component_sys_variable_unregister
+  // are still available for on_depopulate to unregister sys/status variables.
+  // depopulate_capabilities() also joins background threads and removes their
+  // THDs from Global_THD_manager so wait_till_no_thd() can complete.
+  //
+  // destroy_extension_state() below is intentionally split out to run after
+  // wait_till_no_thd(): connection threads in THD::cleanup() -> trans_rollback()
+  // -> rollback_all_tables() can hold VictionaryClient locks, so destroying
+  // VictionaryClient here (before threads exit) causes crashes.
   villagesql::deinit_extension_infrastructure();
 
   DBUG_PRINT("quit", ("Waiting for threads to die (count=%u)",
@@ -2461,8 +2466,11 @@ static void close_connections(void) {
   */
   log_alive_threads_info(thd_manager, 100);
   thd_manager->wait_till_no_thd();
-  // Destroy VictionaryClient and SchemaManager state only after all threads
-  // have exited, so no connection thread can be mid-rollback against them.
+  // Destroy VictionaryClient and SchemaManager only after wait_till_no_thd():
+  // connection threads in THD::cleanup() -> trans_rollback() ->
+  // rollback_all_tables() hold VictionaryClient locks, so we must wait for all
+  // THDs to exit. wait_till_no_connection() below is socket cleanup and is not
+  // sufficient.
   villagesql::destroy_extension_state();
   /*
     Connection threads might take a little while to go down after removing from
