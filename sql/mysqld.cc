@@ -2445,12 +2445,11 @@ static void close_connections(void) {
   */
   Events::deinit();
 
-  // Unload VEF extensions. All client connections are now closed so no VDF
-  // calls are in flight. depopulate_capabilities() joins background threads
-  // (via on_depopulate) and removes their THDs from Global_THD_manager so
-  // wait_till_no_thd() can complete. Must run before plugin_shutdown() so
-  // the component_sys_variable_unregister service is still available for
-  // on_depopulate to unregister sys/status variables.
+  // Unload VEF extensions. Must run before plugin_shutdown() so the
+  // component_sys_variable_unregister service is still available for
+  // on_depopulate to unregister sys/status variables. depopulate_capabilities()
+  // also joins background threads and removes their THDs from
+  // Global_THD_manager so wait_till_no_thd() can complete.
   villagesql::deinit_extension_infrastructure();
 
   DBUG_PRINT("quit", ("Waiting for threads to die (count=%u)",
@@ -2462,6 +2461,9 @@ static void close_connections(void) {
   */
   log_alive_threads_info(thd_manager, 100);
   thd_manager->wait_till_no_thd();
+  // Destroy VictionaryClient and SchemaManager state only after all threads
+  // have exited, so no connection thread can be mid-rollback against them.
+  villagesql::destroy_extension_state();
   /*
     Connection threads might take a little while to go down after removing from
     global thread list. Give it some time.

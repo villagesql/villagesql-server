@@ -233,7 +233,6 @@ void deinit_extension_infrastructure() {
   if (!vclient.is_initialized()) {
     LogVSQL(INFORMATION_LEVEL,
             "VillageSQL extension infrastructure never initialized");
-    SchemaManager::deinit();
     return;
   }
 
@@ -252,10 +251,11 @@ void deinit_extension_infrastructure() {
                                 desc->registration());
     }
   }
+}
 
-  vclient.destroy();
+void destroy_extension_state() {
+  VictionaryClient::instance().destroy();
   SchemaManager::deinit();
-
   LogVSQL(INFORMATION_LEVEL,
           "VillageSQL extension infrastructure deinitialized");
 }

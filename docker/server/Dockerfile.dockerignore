@@ -1,1 +1,6 @@
 .claude
+.git
+mysql-test/std_data/
+mysql-test/suite/
+mysql-test/r/
+mysql-test/t/

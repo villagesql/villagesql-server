@@ -23,9 +23,13 @@ namespace villagesql {
 // Initialize the villagesql extension framework.
 bool init_extension_infrastructure();
 
-// Deinitialize the villagesql extension framework.
-// Unloads all loaded extensions and cleans up the VictionaryClient.
+// Unloads all loaded extensions. Must run before plugin_shutdown() so
+// component services are still available for deregistration.
 void deinit_extension_infrastructure();
+
+// Destroys the VictionaryClient and SchemaManager state. Must run after
+// wait_till_no_thd() so no connection threads are mid-rollback.
+void destroy_extension_state();
 
 /**
  * Initializes VillageSQL before running the user's --init-file.  This runs on
