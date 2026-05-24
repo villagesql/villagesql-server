@@ -2452,7 +2452,8 @@ static void close_connections(void) {
   // THDs from Global_THD_manager so wait_till_no_thd() can complete.
   //
   // destroy_extension_state() below is intentionally split out to run after
-  // wait_till_no_thd(): connection threads in THD::cleanup() -> trans_rollback()
+  // wait_till_no_thd(): connection threads in THD::cleanup() ->
+  // trans_rollback()
   // -> rollback_all_tables() can hold VictionaryClient locks, so destroying
   // VictionaryClient here (before threads exit) causes crashes.
   villagesql::deinit_extension_infrastructure();
