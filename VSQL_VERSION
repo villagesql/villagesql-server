@@ -8,5 +8,5 @@
 #   mysql-test/suite/villagesql/startup/r/upgrade_skip_grant_tables.result
 VSQL_MAJOR_VERSION=0
 VSQL_MINOR_VERSION=0
-VSQL_PATCH_VERSION=4
+VSQL_PATCH_VERSION=5
 VSQL_PRE_RELEASE_VERSION=dev

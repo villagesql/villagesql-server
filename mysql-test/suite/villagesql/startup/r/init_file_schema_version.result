@@ -8,7 +8,7 @@
 # Check the value that was captured during --initialize
 SELECT captured_version AS version_during_initialize FROM test.init_version_check;
 version_during_initialize
-0.0.4
+0.0.5
 #
 # Test: villagesql_schema_version accessibility with --init-file (without --initialize)
 # Verify that @@GLOBAL.villagesql_schema_version can be queried from init-file during normal startup
@@ -17,7 +17,7 @@ version_during_initialize
 # Check the value that was captured during normal startup with --init-file
 SELECT captured_version AS version_during_startup FROM test.startup_version_check;
 version_during_startup
-0.0.4
+0.0.5
 #
 # Cleanup
 #
