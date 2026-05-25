@@ -35,7 +35,9 @@ vsql_parse_version() {
         VSQL_PRE=$(grep "^VSQL_PRE_RELEASE_VERSION=" "$f" | cut -d'=' -f2)
     fi
     VSQL_VERSION="${VSQL_MAJOR}.${VSQL_MINOR}.${VSQL_PATCH}"
-    [[ -n "$VSQL_PRE" ]] && VSQL_VERSION="${VSQL_VERSION}-${VSQL_PRE}"
+    if [[ -n "$VSQL_PRE" ]]; then
+        VSQL_VERSION="${VSQL_VERSION}-${VSQL_PRE}"
+    fi
 }
 
 # Set PLATFORM (linux|macos) and ARCH (x86_64|aarch64|arm64) for this machine.
