@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build a release for (e.g. 0.0.3)'
+        description: 'Git tag to build (e.g. 0.0.4). This is the tag name only — do not include the pre-release suffix here.'
         required: true
       pre_release_version:
         description: 'Pre-release suffix to embed in the version (e.g. "dev"). Leave empty for a clean release build.'
@@ -138,6 +138,12 @@ jobs:
         with:
           pattern: devserver-*
           merge-multiple: true
+          path: packages/
+
+      - name: Download SDK
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-linux-x86_64
           path: packages/
 
       - name: Attach artifacts to release
