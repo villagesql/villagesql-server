@@ -18,6 +18,10 @@ on:
       tag:
         description: 'Existing tag to build a release for (e.g. 0.0.3)'
         required: true
+      pre_release_version:
+        description: 'Pre-release suffix to embed in the version (e.g. "dev"). Leave empty for a clean release build.'
+        required: false
+        default: 'dev'
 
 jobs:
   build-package:
@@ -78,7 +82,10 @@ jobs:
         run: |
           mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 
-          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost"
+          PRE_RELEASE="${{ inputs.pre_release_version }}"
+          echo "pre_release_version: '${PRE_RELEASE}'"
+
+          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${PRE_RELEASE}"
           if [ "${{ matrix.os }}" = "macos" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
           fi
