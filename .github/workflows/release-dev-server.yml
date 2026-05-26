@@ -16,26 +16,59 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build a release for (e.g. 0.0.3)'
+        description: 'Git tag, branch, or SHA to build from (e.g. 0.0.4 or main).'
         required: true
+      release_tag:
+        description: 'GitHub Release to attach artifacts to. Defaults to "tag". Leave blank to skip upload (useful for test builds — artifacts are still available for download from the Actions run page).'
+        required: false
+        default: ''
+      release_build:
+        description: 'Release build: strip the -dev suffix from the version. Leave unchecked to include -dev (safe default).'
+        required: false
+        type: boolean
+        default: false
+      platform:
+        description: 'Platform(s) to build. Use a single platform to speed up test runs.'
+        required: false
+        type: choice
+        options:
+          - all
+          - linux-x86_64
+          - linux-aarch64
+          - macos-arm64
+        default: all
 
 jobs:
+  compute-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          case "${{ inputs.platform }}" in
+            linux-x86_64)
+              M='{"include":[{"runner":["self-hosted","linux","x86_64"],"platform":"linux-x86_64","os":"linux"}]}'
+              ;;
+            linux-aarch64)
+              M='{"include":[{"runner":"ubuntu-24.04-arm","platform":"linux-aarch64","os":"linux"}]}'
+              ;;
+            macos-arm64)
+              M='{"include":[{"runner":"macos-latest","platform":"macos-arm64","os":"macos"}]}'
+              ;;
+            *)
+              M='{"include":[{"runner":["self-hosted","linux","x86_64"],"platform":"linux-x86_64","os":"linux"},{"runner":"ubuntu-24.04-arm","platform":"linux-aarch64","os":"linux"},{"runner":"macos-latest","platform":"macos-arm64","os":"macos"}]}'
+              ;;
+          esac
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+
   build-package:
+    needs: compute-matrix
     name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: [self-hosted, linux, x86_64]
-            platform: linux-x86_64
-            os: linux
-          - runner: ubuntu-24.04-arm
-            platform: linux-aarch64
-            os: linux
-          - runner: macos-latest
-            platform: macos-arm64
-            os: macos
+      matrix: ${{ fromJSON(needs.compute-matrix.outputs.matrix) }}
 
     env:
       BUILD_DIR: ${{ github.workspace }}/build
@@ -78,7 +111,14 @@ jobs:
         run: |
           mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 
-          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost"
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" || "${{ inputs.release_build }}" == "true" ]]; then
+            PRE_RELEASE=""
+          else
+            PRE_RELEASE="dev"
+          fi
+          echo "pre_release_version: '${PRE_RELEASE}'"
+
+          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${PRE_RELEASE}"
           if [ "${{ matrix.os }}" = "macos" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
           fi
@@ -86,6 +126,7 @@ jobs:
           BUILD_DIR="$BUILD_DIR" \
           OUTPUT_DIR="$OUTPUT_DIR" \
           CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
+          VSQL_PRE_RELEASE_VERSION="${PRE_RELEASE}" \
             source/scripts/make_villagesql_dev_server.sh
 
       - name: Run integration tests
@@ -121,7 +162,7 @@ jobs:
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ inputs.release_tag || inputs.tag }}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
@@ -133,10 +174,20 @@ jobs:
           merge-multiple: true
           path: packages/
 
+      - name: Download SDK
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-linux-x86_64
+          path: packages/
+
       - name: Attach artifacts to release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          gh release upload "$TAG" packages/*.tar.gz --clobber
+          if gh release view "$TAG" &>/dev/null; then
+            gh release upload "$TAG" packages/*.tar.gz --clobber
+          else
+            echo "No GitHub Release found for '$TAG' — skipping upload. Download artifacts from the Actions run page."
+          fi

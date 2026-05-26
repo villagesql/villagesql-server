@@ -28,9 +28,16 @@ vsql_parse_version() {
     VSQL_MAJOR=$(grep "^VSQL_MAJOR_VERSION=" "$f" | cut -d'=' -f2)
     VSQL_MINOR=$(grep "^VSQL_MINOR_VERSION=" "$f" | cut -d'=' -f2)
     VSQL_PATCH=$(grep "^VSQL_PATCH_VERSION=" "$f" | cut -d'=' -f2)
-    VSQL_PRE=$(grep "^VSQL_PRE_RELEASE_VERSION=" "$f" | cut -d'=' -f2)
+    # VSQL_PRE_RELEASE_VERSION env var overrides the file (set to "" to strip the suffix)
+    if [[ "${VSQL_PRE_RELEASE_VERSION+set}" == "set" ]]; then
+        VSQL_PRE="$VSQL_PRE_RELEASE_VERSION"
+    else
+        VSQL_PRE=$(grep "^VSQL_PRE_RELEASE_VERSION=" "$f" | cut -d'=' -f2)
+    fi
     VSQL_VERSION="${VSQL_MAJOR}.${VSQL_MINOR}.${VSQL_PATCH}"
-    [[ -n "$VSQL_PRE" ]] && VSQL_VERSION="${VSQL_VERSION}-${VSQL_PRE}"
+    if [[ -n "$VSQL_PRE" ]]; then
+        VSQL_VERSION="${VSQL_VERSION}-${VSQL_PRE}"
+    fi
 }
 
 # Set PLATFORM (linux|macos) and ARCH (x86_64|aarch64|arm64) for this machine.
