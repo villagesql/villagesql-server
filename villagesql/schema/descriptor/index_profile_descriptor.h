@@ -134,6 +134,20 @@ class IndexProfileDescriptor {
     return index_type_ref_;
   }
 
+  // Qualify an unresolved type_ref with the resolved extension name.
+  // Called during registration when the profile was declared with an
+  // unqualified data type name; the registrar resolves the extension and
+  // writes it back before inserting the descriptor.
+  void set_type_ref(TypeDescriptorKeyPrefix ref) { type_ref_ = std::move(ref); }
+
+  // Qualify an unresolved index_type_ref with the resolved extension name.
+  // Called during registration when the profile was declared with an
+  // unqualified index type name; the registrar resolves the extension and
+  // writes it back before inserting the descriptor.
+  void set_index_type_ref(IndexTypeDescriptorKeyPrefix ref) {
+    index_type_ref_ = std::move(ref);
+  }
+
   // Bare name accessors (no extension qualifier) for diagnostics.
   const std::string &type_name() const { return type_ref_.type_name(); }
   const std::string &index_type_name() const {

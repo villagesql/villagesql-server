@@ -520,9 +520,8 @@ inline constexpr bool always_false = false;
 // storage_props value that has neither HAS_ROW_REF nor HAS_COLUMN_REF.
 void IndexTypeBuilder_storage_props_must_set_row_or_column_ref();
 
-// Descriptor returned by GlobalBuilder::build(). Consumed by the extension
-// builder (e.g. make_extension().index_type(HNSW_INDEX)).
-// TODO(villagesql-indexing): add index_type() to the extension builder.
+// Descriptor returned by GlobalBuilder::build(). Passed to
+// IndexTypeCapability::index_type() and registered via make_extension().with().
 struct IndexTypeDesc {
   const char *name;
   vef_type_index_intf_t intf;
@@ -867,9 +866,6 @@ constexpr IndexTypeRootBuilder<Name, Context> make_index_type() {
 // Defines how a specific custom type behaves with a given index type. Each
 // .with_function(fn_id, name) call binds a profile function to the fn_id used
 // by the index storage implementation when calling vef_index_profile_fn.
-//
-// TODO(villagesql-indexing): IndexProfileDesc is not yet consumed by the
-// server; registration API pending.
 
 // Descriptor returned by make_index_function().build(). Passing one of these
 // to IndexProfileBuilder::with_function() instead of a raw string enforces

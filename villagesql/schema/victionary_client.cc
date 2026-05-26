@@ -156,6 +156,8 @@ void VictionaryClient::commit_all_tables(THD *thd) {
   m_funcs.commit(thd);
   m_custom_indexes.commit(thd);
   m_custom_index_columns.commit(thd);
+  m_index_type_descriptors.commit(thd);
+  m_index_profile_descriptors.commit(thd);
 }
 
 void VictionaryClient::rollback_all_tables(THD *thd) {
@@ -173,6 +175,8 @@ void VictionaryClient::rollback_all_tables(THD *thd) {
   m_funcs.rollback(thd);
   m_custom_indexes.rollback(thd);
   m_custom_index_columns.rollback(thd);
+  m_index_type_descriptors.rollback(thd);
+  m_index_profile_descriptors.rollback(thd);
 }
 
 bool VictionaryClient::write_all_uncommitted_entries(THD *thd) {

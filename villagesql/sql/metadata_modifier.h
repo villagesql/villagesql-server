@@ -248,8 +248,8 @@ class Metadata_modifier {
   std::vector<IndexEntry> to_add_indexes_;
   std::vector<IndexColumnEntry> to_add_index_columns_;
   // Custom index entries staged for deletion
-  std::vector<IndexKey> to_remove_indexes_;
-  std::vector<IndexColumnKey> to_remove_index_columns_;
+  std::vector<IndexEntry> to_remove_indexes_;
+  std::vector<IndexColumnEntry> to_remove_index_columns_;
 };
 
 // Template implementation for process_drop

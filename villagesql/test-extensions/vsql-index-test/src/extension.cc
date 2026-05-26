@@ -45,11 +45,6 @@
 //
 //   dummy_helper_fn   - A stub index function (DUMMY_VECTOR -> REAL) registered
 //                       via make_index_function.
-//
-// TODO(villagesql-indexing): Once make_extension().index_type() and
-// index_profile() are implemented, wire DUMMY_HNSW_INDEX and
-// DUMMY_HNSW_L2_PROFILE into VEF_GENERATE_ENTRY_POINTS. Index functions are
-// registered automatically as part of profile registration.
 
 #include <villagesql/preview/index_builder.h>
 #include <villagesql/vsql.h>
@@ -267,9 +262,6 @@ static bool dummy_parse_options(const vef_index_param_t *params, uint32_t count,
 // Build the index type descriptor. This validates at compile time that all 12
 // hooks are wired, capabilities is non-zero, and storage_props declares at
 // least one reference type.
-//
-// TODO(villagesql-indexing): pass DUMMY_HNSW_INDEX to
-// make_extension().index_type() once that method is implemented.
 // clang-format off
 static constexpr auto DUMMY_HNSW_INDEX =
     make_index_type<kDummyHNSW, DummyHNSWCtx>()
@@ -332,8 +324,6 @@ static const auto DUMMY_HELPER_FN =
 // Index profile
 // ============================================================================
 
-// TODO(villagesql-indexing): pass DUMMY_HNSW_L2_PROFILE to
-// make_extension().index_profile() once that method is implemented.
 static const auto DUMMY_HNSW_L2_PROFILE = make_index_profile(kDummyProfileL2)
                                               .for_type(kDummyVECTOR)
                                               .using_index(kDummyHNSW)

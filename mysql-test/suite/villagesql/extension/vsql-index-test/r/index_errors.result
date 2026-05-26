@@ -1,0 +1,43 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE t (id INT PRIMARY KEY,
+a dummy_type_vector,
+b dummy_type_vector,
+c dummy_type_vector);
+# --- Unknown index type name ---
+CREATE INDEX idx ON t (a) USING EXTENDED(no_such_type);
+ERROR HY000: Unknown custom index type 'no_such_type'
+# --- Wrong extension qualifier for known type ---
+CREATE INDEX idx ON t (a) USING EXTENDED(no_such_ext.dummy_index_hnsw);
+ERROR HY000: Unknown custom index type 'dummy_index_hnsw'
+# --- Qualified type with unknown name ---
+CREATE INDEX idx ON t (a) USING EXTENDED(vsql_index_test.no_such_type);
+ERROR HY000: Unknown custom index type 'no_such_type'
+# --- Unknown per-column profile ---
+CREATE INDEX idx ON t (a no_such_profile) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Unknown index profile 'no_such_profile'
+# --- Wrong extension qualifier for known profile ---
+CREATE INDEX idx ON t (a no_such_ext.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Unknown index profile 'dummy_profile_hnsw_l2'
+# --- Qualified profile with unknown name ---
+CREATE INDEX idx ON t (a vsql_index_test.no_such_profile) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Unknown index profile 'no_such_profile'
+# --- Non-custom column: no default profile ---
+CREATE INDEX idx ON t (id) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: No default index profile found: column 'id' is not a custom type
+# --- UNINSTALL blocked by existing custom index ---
+DROP TABLE t;
+CREATE TABLE t2 (id INT PRIMARY KEY);
+CREATE INDEX idx_block ON t2 (id dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+UNINSTALL EXTENSION vsql_index_test;
+ERROR HY000: Cannot drop extension `vsql_index_test` as 1 custom index(es) depend on it, e.g. test.t2.idx_block uses index type dummy_index_hnsw
+# --- DROP INDEX unblocks UNINSTALL; reinstall succeeds in same session ---
+DROP INDEX idx_block ON t2;
+DROP TABLE t2;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+INSTALL EXTENSION vsql_index_test;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

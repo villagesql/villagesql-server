@@ -416,7 +416,10 @@ bool remove_extension_from_victionary(
   }
 
   const auto &all_indexes = victionary.custom_indexes().get_all_committed();
-  if (villagesql::check_for_indexes_of_extension(*ext_entry, all_indexes)) {
+  const auto &all_index_columns =
+      victionary.custom_index_columns().get_all_committed();
+  if (villagesql::check_for_indexes_of_extension(*ext_entry, all_indexes,
+                                                 all_index_columns)) {
     return true;
   }
 
@@ -485,6 +488,29 @@ bool remove_extension_from_victionary(
     if (type_desc->extension_name() == extension_name &&
         type_desc->extension_version() == ext_entry->extension_version) {
       victionary.type_descriptors().MarkForDeletion(*thd, type_desc->key());
+    }
+  }
+
+  // Delete IndexProfileDescriptors for this extension (before IndexType since
+  // profiles reference index types, but ordering under the lock doesn't matter
+  // in practice; deletion is transactional).
+  const auto &all_index_profiles =
+      victionary.index_profile_descriptors().get_all_committed();
+  for (const auto *prof : all_index_profiles) {
+    if (prof->extension_name() == extension_name &&
+        prof->extension_version() == ext_entry->extension_version) {
+      victionary.index_profile_descriptors().MarkForDeletion(*thd, prof->key());
+    }
+  }
+
+  // Delete IndexTypeDescriptors for this extension
+  const auto &all_index_types =
+      victionary.index_type_descriptors().get_all_committed();
+  for (const auto *index_type : all_index_types) {
+    if (index_type->extension_name() == extension_name &&
+        index_type->extension_version() == ext_entry->extension_version) {
+      victionary.index_type_descriptors().MarkForDeletion(*thd,
+                                                          index_type->key());
     }
   }
 

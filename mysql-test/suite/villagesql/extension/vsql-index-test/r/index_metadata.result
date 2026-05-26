@@ -8,9 +8,9 @@ table_name	index_name	key_position	column_name	extension_name	extension_version	
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
 INDEX idx_inline (a) USING EXTENDED(dummy_index_hnsw));
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_inline	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_inline	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_inline	0	a	EMPTY	EMPTY	EMPTY
+t	idx_inline	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 DROP TABLE t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
@@ -23,99 +23,129 @@ e dummy_type_vector);
 # --- CREATE INDEX: unqualified type, no params ---
 CREATE INDEX idx_dummy_index_hnsw ON t (a) USING EXTENDED(dummy_index_hnsw);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_dummy_index_hnsw	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_dummy_index_hnsw	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_dummy_index_hnsw	0	a	EMPTY	EMPTY	EMPTY
+t	idx_dummy_index_hnsw	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- CREATE INDEX: qualified ext.type + WITH params ---
 CREATE INDEX idx_ext ON t (b) USING EXTENDED(vsql_index_test.dummy_index_hnsw)
 WITH (M = 16, ef_construction = 200, label = 'primary', mode = fast);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_dummy_index_hnsw	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_ext	vsql_index_test	EMPTY	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_dummy_index_hnsw	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_ext	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_dummy_index_hnsw	0	a	EMPTY	EMPTY	EMPTY
-t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
+t	idx_dummy_index_hnsw	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- CREATE INDEX: per-column profile ---
 CREATE INDEX idx_prof ON t (c dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_dummy_index_hnsw	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_ext	vsql_index_test	EMPTY	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_prof	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_dummy_index_hnsw	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_ext	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_prof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_dummy_index_hnsw	0	a	EMPTY	EMPTY	EMPTY
-t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_prof	0	c	EMPTY	EMPTY	dummy_profile_hnsw_l2
+t	idx_dummy_index_hnsw	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_prof	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- CREATE INDEX: multi-column ---
 CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_hnsw);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_dummy_index_hnsw	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_ext	vsql_index_test	EMPTY	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_multi	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_dummy_index_hnsw	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_ext	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_multi	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_prof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_dummy_index_hnsw	0	a	EMPTY	EMPTY	EMPTY
-t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
-t	idx_multi	1	e	EMPTY	EMPTY	EMPTY
-t	idx_prof	0	c	EMPTY	EMPTY	dummy_profile_hnsw_l2
+t	idx_dummy_index_hnsw	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	1	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_prof	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- ALTER TABLE ADD INDEX ---
 ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(dummy_index_hnsw) WITH (M = 8);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	dummy_index_hnsw	{"M": 8}
-test	t	idx_dummy_index_hnsw	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_ext	vsql_index_test	EMPTY	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_multi	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_dummy_index_hnsw	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_ext	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_multi	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_prof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
-t	idx_dummy_index_hnsw	0	a	EMPTY	EMPTY	EMPTY
-t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
-t	idx_multi	1	e	EMPTY	EMPTY	EMPTY
-t	idx_prof	0	c	EMPTY	EMPTY	dummy_profile_hnsw_l2
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_dummy_index_hnsw	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	1	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_prof	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- DROP INDEX: removes metadata for that index ---
 DROP INDEX idx_dummy_index_hnsw ON t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	dummy_index_hnsw	{"M": 8}
-test	t	idx_ext	vsql_index_test	EMPTY	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
-test	t	idx_multi	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_ext	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 16, "mode": "fast", "label": "primary", "ef_construction": 200}
+test	t	idx_multi	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_prof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
-t	idx_ext	0	b	EMPTY	EMPTY	EMPTY
-t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
-t	idx_multi	1	e	EMPTY	EMPTY	EMPTY
-t	idx_prof	0	c	EMPTY	EMPTY	dummy_profile_hnsw_l2
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	1	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_prof	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- ALTER TABLE DROP INDEX ---
 ALTER TABLE t DROP INDEX idx_ext;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	dummy_index_hnsw	{"M": 8}
-test	t	idx_multi	EMPTY	EMPTY	dummy_index_hnsw	{}
-test	t	idx_prof	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_multi	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_prof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
-t	idx_multi	0	d	EMPTY	EMPTY	EMPTY
-t	idx_multi	1	e	EMPTY	EMPTY	EMPTY
-t	idx_prof	0	c	EMPTY	EMPTY	dummy_profile_hnsw_l2
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_multi	1	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_prof	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- ALTER TABLE DROP INDEX: multiple at once ---
 ALTER TABLE t DROP INDEX idx_prof, DROP INDEX idx_multi;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- DROP INDEX: mixed-case name removes metadata ---
 CREATE INDEX idx_case ON t (a) USING EXTENDED(dummy_index_hnsw);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	dummy_index_hnsw	{"M": 8}
-test	t	idx_case	EMPTY	EMPTY	dummy_index_hnsw	{}
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_case	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
-t	idx_case	0	a	EMPTY	EMPTY	EMPTY
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_case	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 DROP INDEX IDX_CASE ON t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-test	t	idx_alt	EMPTY	EMPTY	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-t	idx_alt	0	e	EMPTY	EMPTY	EMPTY
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- CREATE INDEX: qualified profile (unqualified type) ---
+CREATE INDEX idx_qprof ON t (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- CREATE INDEX: qualified type + qualified profile ---
+CREATE INDEX idx_qq ON t (b vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qq	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- ALTER TABLE ADD INDEX: qualified type ---
+ALTER TABLE t ADD INDEX idx_alt_q (c) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt_q	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qq	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- DROP TABLE: removes all remaining custom index metadata ---
 DROP TABLE t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters

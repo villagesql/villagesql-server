@@ -2390,8 +2390,10 @@ class PT_key_part_specification : public Parse_tree_node {
 
   /// Optional index profile name specified in the CREATE INDEX key part.
   /// Null str when not specified.
-  // TODO(villagesql-indexing): resolve profile to registered IndexProfileDesc
-  // during contextualization.
+  // NOTE: Profile resolution cannot happen in do_contextualize() because the
+  // table is not yet open at that point. Resolution happens later in
+  // Metadata_modifier::add_indexes(), after prepare_key_column() has run and
+  // the column type is known.
   LEX_CSTRING m_index_profile{};
 };
 

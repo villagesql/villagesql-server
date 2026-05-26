@@ -13,7 +13,7 @@
 #
 # Covers:
 #   CREATE TABLE with inline custom index
-#   CREATE INDEX and ALTER TABLE ADD INDEX
+#   CREATE INDEX and ALTER TABLE ADD INDEX (unqualified and qualified type/profile)
 #   DROP INDEX and ALTER TABLE DROP INDEX (single and multiple)
 #   DROP TABLE
 
@@ -81,6 +81,18 @@ ALTER TABLE t DROP INDEX idx_prof, DROP INDEX idx_multi;
 CREATE INDEX idx_case ON t (a) USING EXTENDED(dummy_index_hnsw);
 --source include/villagesql/query_custom_indexes.inc
 DROP INDEX IDX_CASE ON t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CREATE INDEX: qualified profile (unqualified type) ---
+CREATE INDEX idx_qprof ON t (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CREATE INDEX: qualified type + qualified profile ---
+CREATE INDEX idx_qq ON t (b vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- ALTER TABLE ADD INDEX: qualified type ---
+ALTER TABLE t ADD INDEX idx_alt_q (c) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
 --source include/villagesql/query_custom_indexes.inc
 
 --echo # --- DROP TABLE: removes all remaining custom index metadata ---

@@ -1883,9 +1883,9 @@ static bool setup_index(keytype key_type, const LEX_STRING name,
       spec =
           new (pc->mem_root) Key_part_spec(kp.get_expression(), kp.get_order());
     } else {
-      spec = new (pc->mem_root)
-          Key_part_spec(kp.get_column_name(), kp.get_prefix_length(),
-                        kp.get_order(), kp.get_index_profile());
+      spec = new (pc->mem_root) Key_part_spec(
+          kp.get_column_name(), kp.get_prefix_length(), kp.get_order(),
+          kp.get_index_profile(), kp.get_index_profile_extension());
     }
     if (spec == nullptr || cols.push_back(spec)) {
       return true; /* purecov: deadcode */
