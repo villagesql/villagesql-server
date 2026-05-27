@@ -43,6 +43,7 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/extension_descriptor.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
+#include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
@@ -685,6 +686,9 @@ class VictionaryClient {
     return m_extension_descriptors;
   }
   ExtensionObjectMap<TypeContext> &type_contexts() { return m_type_contexts; }
+  ExtensionObjectMap<IndexContext> &index_contexts() {
+    return m_index_contexts;
+  }
   ExtensionObjectMap<FuncDescriptor> &funcs() { return m_funcs; }
   ExtensionObjectMap<IndexTypeDescriptor> &index_type_descriptors() {
     return m_index_type_descriptors;
@@ -713,6 +717,9 @@ class VictionaryClient {
   }
   const ExtensionObjectMap<TypeContext> &type_contexts() const {
     return m_type_contexts;
+  }
+  const ExtensionObjectMap<IndexContext> &index_contexts() const {
+    return m_index_contexts;
   }
   const ExtensionObjectMap<FuncDescriptor> &funcs() const { return m_funcs; }
   const ExtensionObjectMap<IndexTypeDescriptor> &index_type_descriptors()
@@ -843,6 +850,7 @@ class VictionaryClient {
         m_type_descriptors(&m_lock),
         m_extension_descriptors(&m_lock),
         m_type_contexts(&m_lock),
+        m_index_contexts(&m_lock),
         m_funcs(&m_lock),
         m_index_type_descriptors(&m_lock),
         m_index_profile_descriptors(&m_lock),
@@ -920,6 +928,7 @@ class VictionaryClient {
   ExtensionObjectMap<TypeDescriptor> m_type_descriptors;
   ExtensionObjectMap<ExtensionDescriptor> m_extension_descriptors;
   ExtensionObjectMap<TypeContext> m_type_contexts;
+  ExtensionObjectMap<IndexContext> m_index_contexts;
   ExtensionObjectMap<FuncDescriptor> m_funcs;
   ExtensionObjectMap<IndexTypeDescriptor> m_index_type_descriptors;
   ExtensionObjectMap<IndexProfileDescriptor> m_index_profile_descriptors;

@@ -61,6 +61,14 @@ namespace villagesql {
 // falling back to committed data.
 extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
 
+// Check if a KEY represents a custom index by looking up the VictionaryClient.
+// If found, sets keyinfo->custom_index_context (an IndexContext scoped to
+// share.mem_root) and sets custom_index_profile on each KEY_PART_INFO from
+// the per-column IndexColumnEntry profile bindings.
+// Only operates on committed entries (existing tables opened from DD).
+// Returns true on error, false on success (including when not a custom index).
+extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo);
+
 // Injects custom TypeContexts into SP variable fields for a stored procedure
 // by looking up villagesql.custom_sp_params. Restores custom type information
 // that was lost when MySQL normalized SP variable types (e.g. COMPLEX ->

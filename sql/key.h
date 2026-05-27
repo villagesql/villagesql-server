@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,6 +40,11 @@ class Field;
 class String;
 struct MY_BITMAP;
 struct TABLE;
+
+namespace villagesql {
+class IndexContext;
+class IndexProfileDescriptor;
+}  // namespace villagesql
 
 class FOREIGN_KEY {
  public:
@@ -85,6 +91,8 @@ class KEY_PART_INFO { /* Info about a key part */
     presence of HA_BLOB_PART, HA_VAR_LENGTH_PART and HA_BIT_PART flags.
   */
   bool bin_cmp{false};
+  // VillageSQL: profile descriptor for this key part; nullptr for regular keys.
+  const villagesql::IndexProfileDescriptor *custom_index_profile{nullptr};
   void init_from_field(Field *fld); /** Fill data from given field */
   void init_flags();                /** Set key_part_flag from field */
 };
@@ -202,6 +210,9 @@ class KEY {
 
   TABLE *table{nullptr};
   LEX_CSTRING comment{nullptr, 0};
+  // VillageSQL: index context for this key; nullptr for regular (non-custom)
+  // keys.
+  const villagesql::IndexContext *custom_index_context{nullptr};
 
   /**
     Check if records per key estimate is available for given key part.
