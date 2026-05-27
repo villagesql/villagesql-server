@@ -37,20 +37,38 @@ namespace veb {
 // Returns empty string on error
 std::string get_veb_path(const std::string &filename);
 
+// Resolve the VEB filename version selector for an extension.
+//
+// Returns false on success. On success, version is:
+//   empty       -> use {name}.veb
+//   non-empty   -> use {name}-{version}.veb
+//
+// If multiple versioned VEBs are present and no unversioned VEB is present,
+// returns true and reports that INSTALL EXTENSION ... VERSION is required.
+bool find_veb_version(const std::string &name, std::string &version);
+
+// True if {name}.veb (veb_version empty) or {name}-{veb_version}.veb exists.
+bool veb_file_exists(const std::string &name, const std::string &veb_version);
+
 // Calculate SHA256 hash of a file, return as 64-character hex string
 // Uses SHA_EVP256() from MySQL's sha2.h
 // Returns false on success, true on error
 bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex);
 
-// Load manifest.json from a VEB file and extract the "version" field
-// Opens {name}.veb as a tar archive using libarchive
-// Parses manifest.json using RapidJSON
-// Returns false on success, true on error
-// On success, version is populated with the extension version
+// Load manifest.json from a VEB file and extract the "version" field.
+// `version` is in/out:
+//   empty input    -> opens {name}.veb and writes the manifest version
+//   non-empty input -> opens {name}-{version}.veb and asserts the manifest
+//                      version matches; on mismatch returns true with a
+//                      diagnostic error.
+// Opens the tar archive using libarchive and parses manifest.json using
+// RapidJSON. Returns false on success, true on error.
 bool load_veb_manifest(const std::string &name, std::string &version);
 
 // Expand VEB archive to directory:
 //   {datadir}/.veb_expansion_cache/{name}/{sha256}/
+//
+// Opens {name}.veb when veb_version is empty, else {name}-{veb_version}.veb.
 //
 // Directory structure created:
 //   .veb_expansion_cache/
@@ -64,6 +82,7 @@ bool load_veb_manifest(const std::string &name, std::string &version);
 // Returns false on success, true on error
 // On success, expanded_path contains full path and sha256_hash contains hash
 bool expand_veb_to_directory(const std::string &name,
+                             const std::string &veb_version,
                              std::string &expanded_path,
                              std::string &sha256_hash);
 

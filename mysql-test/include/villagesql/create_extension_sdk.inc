@@ -12,6 +12,10 @@
 #
 # Optional:
 #   --let $extension_manifest_extra = , "description": "My extension"
+#   --let $extension_versioned = 1
+#     When set, copies to {name}-{version}.veb instead of {name}.veb.
+#     Use this when the test needs versioned VEB files on disk (e.g. for
+#     INSTALL EXTENSION foo VERSION 'x.y.z').
 #
 # The VEB file will be created and moved to the VEB directory.
 #
@@ -76,9 +80,18 @@ if (!$extension_version)
 
 # Move VEB to server's VEB directory
 --exec mkdir -p $veb_dir
---exec cp $ext_build_dir/build/$extension_name.veb $veb_dir/
 
---echo Created $extension_name.veb
+if ($extension_versioned)
+{
+  --exec cp $ext_build_dir/build/$extension_name.veb $veb_dir/$extension_name-$extension_version.veb
+  --echo Created $extension_name-$extension_version.veb
+}
+
+if (!$extension_versioned)
+{
+  --exec cp $ext_build_dir/build/$extension_name.veb $veb_dir/
+  --echo Created $extension_name.veb
+}
 
 # Cleanup build directory
 --exec rm -rf $ext_build_dir
@@ -88,3 +101,4 @@ if (!$extension_version)
 --let $extension_version =
 --let $extension_source =
 --let $extension_manifest_extra =
+--let $extension_versioned =

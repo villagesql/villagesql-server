@@ -33,8 +33,10 @@ extern char opt_veb_dir[FN_REFLEN];
 // This class implements the INSTALL EXTENSION statement.
 class Sql_cmd_install_extension : public Sql_cmd {
  public:
-  // version: asserted VEB-manifest version (m_version.str == nullptr if no
-  // VERSION clause). When set, install fails unless the manifest matches.
+  // version: requested VEB-manifest version (m_version.str == nullptr if no
+  // VERSION clause). When set, install opens {name}-{version}.veb and fails
+  // unless the manifest version matches. When omitted, install picks the only
+  // versioned VEB present, or {name}.veb if it exists.
   Sql_cmd_install_extension(const LEX_CSTRING &name, const LEX_CSTRING &version)
       : m_name(name), m_version(version) {}
 
@@ -48,6 +50,8 @@ class Sql_cmd_install_extension : public Sql_cmd {
   bool execute(THD *thd) override;
 
  private:
+  bool execute_install(THD *thd);
+
   LEX_CSTRING m_name;
   LEX_CSTRING m_version;
 };

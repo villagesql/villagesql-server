@@ -63,6 +63,21 @@
 char *opt_veb_dir_ptr;
 char opt_veb_dir[FN_REFLEN];
 
+namespace {
+// Helpers below execute_install. Forward-declared so the install path can
+// call them without reordering this file.
+bool validate_extension_name(THD *thd, const std::string &extension_name);
+bool resolve_veb_version(THD *thd, const std::string &extension_name,
+                         const LEX_CSTRING &m_version, bool require_explicit,
+                         std::string &veb_version, std::string &version);
+bool load_veb_and_so(THD *thd, const std::string &extension_name,
+                     const std::string &veb_version,
+                     villagesql::veb::ExtensionRegistration &registration,
+                     std::string &sha256_hash,
+                     villagesql::services::LoadReason load_reason =
+                         villagesql::services::LoadReason::kInstall);
+}  // namespace
+
 // EXTENSION MDL locks (defined in sql/mdl.h):
 // - An X (exclusive) lock is acquired when installing or uninstalling
 //   an extension. This is the lock taken in the install/uninstall path
@@ -76,6 +91,10 @@ char opt_veb_dir[FN_REFLEN];
 // - This locking order is deadlock-safe, provided the uninstall command does
 //   not itself execute any DDL on dependent objects.
 bool Sql_cmd_install_extension::execute(THD *thd) {
+  return execute_install(thd);
+}
+
+bool Sql_cmd_install_extension::execute_install(THD *thd) {
   // We do not replicate the INSTALL EXTENSION statement
   const Disable_binlog_guard binlog_guard(thd);
 
@@ -91,41 +110,8 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   LogVSQL(INFORMATION_LEVEL, "Installing extension: '%s'",
           extension_name.c_str());
 
-  // Validate extension name first (before file operations)
-  if (extension_name.empty()) {
-    villagesql_error("Extension name cannot be empty", MYF(0));
+  if (validate_extension_name(thd, extension_name))
     return end_transaction(thd, true);
-  }
-
-  if (extension_name.length() > 64) {
-    villagesql_error(
-        "Extension name '%s' exceeds maximum length of 64 characters", MYF(0),
-        extension_name.c_str());
-    return end_transaction(thd, true);
-  }
-
-  if (!std::isalpha(static_cast<unsigned char>(extension_name[0]))) {
-    villagesql_error("Extension name '%s' must start with a letter", MYF(0),
-                     extension_name.c_str());
-    return end_transaction(thd, true);
-  }
-
-  char last_char = extension_name[extension_name.length() - 1];
-  if (!std::isalnum(static_cast<unsigned char>(last_char))) {
-    villagesql_error("Extension name '%s' must end with a letter or digit",
-                     MYF(0), extension_name.c_str());
-    return end_transaction(thd, true);
-  }
-
-  for (char c : extension_name) {
-    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
-      villagesql_error(
-          "Extension name '%s' contains invalid character '%c' "
-          "(only letters, digits, underscore, and hyphen allowed)",
-          MYF(0), extension_name.c_str(), c);
-      return end_transaction(thd, true);
-    }
-  }
 
   // Acquire global shared read lock to check and prevent installation in
   // "read only mode". Acquire shared backup lock to synchronize with final
@@ -142,28 +128,10 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return true;
   }
 
-  // Load manifest from VEB file to get version
-  std::string version;
-  if (villagesql::veb::load_veb_manifest(extension_name, version)) {
-    // Error already reported by load_veb_manifest
-    return end_transaction(thd, true);
-  }
-
-  std::string expected_version =
-      m_version.str ? to_string(m_version) : std::string();
-  if (!expected_version.empty() && version != expected_version) {
-    villagesql_error(
-        "Cannot install extension '%s': manifest version is '%s' but "
-        "VERSION '%s' was specified",
-        MYF(0), extension_name.c_str(), version.c_str(),
-        expected_version.c_str());
-    return end_transaction(thd, true);
-  }
-
   auto &victionary = villagesql::VictionaryClient::instance();
 
   // Early check: fail fast if extension already exists (from in-memory cache).
-  // This avoids executing install.sql for an extension that will be rejected.
+  // This avoids touching VEB files for an extension that will be rejected.
   // We do a final authoritative check later under table lock to handle races.
   // NOTE: We must release the read lock BEFORE calling end_transaction, because
   // end_transaction -> trans_rollback -> rollback_all_tables needs write lock.
@@ -180,49 +148,17 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
-  // Expand VEB archive to directory
-  std::string expanded_path;
-  std::string sha256_hash;
-  if (villagesql::veb::expand_veb_to_directory(extension_name, expanded_path,
-                                               sha256_hash)) {
-    // Error already reported by expand_veb_to_directory
+  std::string veb_version;
+  std::string version;
+  if (resolve_veb_version(thd, extension_name, m_version,
+                          /*require_explicit=*/false, veb_version, version))
     return end_transaction(thd, true);
-  }
-
-  std::string so_path =
-      villagesql::veb::get_extension_so_path(extension_name, sha256_hash);
-  if (so_path.empty()) {
-    villagesql_error("Failed to construct .so path for extension '%s'", MYF(0),
-                     extension_name.c_str());
-    return end_transaction(thd, true);
-  }
 
   villagesql::veb::ExtensionRegistration registration;
-  vef_protocol_t server_protocol =
-      static_cast<vef_protocol_t>(villagesql::veb::vef_server_protocol_version);
-#ifndef NDEBUG
-  {
-    auto it = thd->user_vars.find("vef_debug_protocol_override");
-    if (it != thd->user_vars.end()) {
-      bool null_value = false;
-      const longlong val = it->second->val_int(&null_value);
-      if (!null_value && val > 0)
-        server_protocol = static_cast<vef_protocol_t>(val);
-    }
-  }
-#endif
-  std::string load_error;
-  if (villagesql::veb::load_vef_extension(
-          {.extension_name = extension_name,
-           .reason = villagesql::services::LoadReason::kInstall,
-           .thd = thd},
-          so_path, server_protocol, registration, load_error)) {
-    LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
-            extension_name.c_str(), load_error.c_str());
-    villagesql_error("Failed to load VEF extension '%s': %s", MYF(0),
-                     extension_name.c_str(), load_error.c_str());
+  std::string sha256_hash;
+  if (load_veb_and_so(thd, extension_name, veb_version, registration,
+                      sha256_hash))
     return end_transaction(thd, true);
-  }
 
   std::string reg_error;
   std::optional<villagesql::veb::ValidatedRegistration> validated =
@@ -323,6 +259,156 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   my_ok(thd);
   return end_transaction(thd, false);
 }
+
+namespace {
+
+// Validate the extension name and set thd error on failure.
+// Returns true on error, false on success.
+bool validate_extension_name(THD *thd, const std::string &extension_name) {
+  if (extension_name.empty()) {
+    villagesql_error("Extension name cannot be empty", MYF(0));
+    return true;
+  }
+
+  if (extension_name.length() > 64) {
+    villagesql_error(
+        "Extension name '%s' exceeds maximum length of 64 characters", MYF(0),
+        extension_name.c_str());
+    return true;
+  }
+
+  if (!std::isalpha(static_cast<unsigned char>(extension_name[0]))) {
+    villagesql_error("Extension name '%s' must start with a letter", MYF(0),
+                     extension_name.c_str());
+    return true;
+  }
+
+  char last_char = extension_name[extension_name.length() - 1];
+  if (!std::isalnum(static_cast<unsigned char>(last_char))) {
+    villagesql_error("Extension name '%s' must end with a letter or digit",
+                     MYF(0), extension_name.c_str());
+    return true;
+  }
+
+  for (char c : extension_name) {
+    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
+      villagesql_error(
+          "Extension name '%s' contains invalid character '%c' "
+          "(only letters, digits, underscore, and hyphen allowed)",
+          MYF(0), extension_name.c_str(), c);
+      return true;
+    }
+  }
+
+  (void)thd;
+  return false;
+}
+
+// Resolve the VEB version sentinel and logical version string.
+// veb_version: empty = unversioned ({name}.veb); non-empty = {name}-{ver}.veb.
+// version: logical version from manifest (same as veb_version for versioned).
+// When m_version is set but {name}-{version}.veb does not exist, falls back
+// to {name}.veb and asserts the manifest version matches.
+// When require_explicit is true and m_version is unset, fails — used by
+// callers (e.g. extension update) where omitting VERSION is not allowed.
+// Returns true on error (thd error already set), false on success.
+bool resolve_veb_version(THD *thd, const std::string &extension_name,
+                         const LEX_CSTRING &m_version, bool require_explicit,
+                         std::string &veb_version, std::string &version) {
+  std::string requested_version;
+  if (m_version.str != nullptr && m_version.length > 0) {
+    requested_version.assign(m_version.str, m_version.length);
+    // With VERSION specified, prefer {name}-{ver}.veb and fall back to
+    // {name}.veb. The manifest is then asserted against requested_version
+    // below.
+    if (villagesql::veb::veb_file_exists(extension_name, requested_version)) {
+      veb_version = requested_version;
+    } else {
+      veb_version.clear();
+    }
+  } else {
+    if (require_explicit) {
+      villagesql_error("Extension '%s' requires an explicit VERSION clause",
+                       MYF(0), extension_name.c_str());
+      return true;
+    }
+    if (villagesql::veb::find_veb_version(extension_name, veb_version)) {
+      // Error already reported by find_veb_version
+      return true;
+    }
+  }
+
+  // Load manifest; for versioned VEBs this also asserts that the manifest
+  // version matches veb_version.
+  version = veb_version;
+  if (villagesql::veb::load_veb_manifest(extension_name, version)) {
+    // Error already reported by load_veb_manifest
+    return true;
+  }
+
+  if (!requested_version.empty() && version != requested_version) {
+    villagesql_error(
+        "Cannot install extension '%s': manifest version is '%s' but "
+        "VERSION '%s' was specified",
+        MYF(0), extension_name.c_str(), version.c_str(),
+        requested_version.c_str());
+    return true;
+  }
+
+  (void)thd;
+  return false;
+}
+
+// Expand the VEB archive and load the .so into memory.
+// On success, registration is populated and sha256_hash contains the hash.
+// Returns true on error (thd error set), false on success.
+bool load_veb_and_so(THD *thd, const std::string &extension_name,
+                     const std::string &veb_version,
+                     villagesql::veb::ExtensionRegistration &registration,
+                     std::string &sha256_hash,
+                     villagesql::services::LoadReason load_reason) {
+  std::string expanded_path;
+  if (villagesql::veb::expand_veb_to_directory(extension_name, veb_version,
+                                               expanded_path, sha256_hash)) {
+    return true;
+  }
+
+  std::string so_path =
+      villagesql::veb::get_extension_so_path(extension_name, sha256_hash);
+  if (so_path.empty()) {
+    villagesql_error("Failed to construct .so path for extension '%s'", MYF(0),
+                     extension_name.c_str());
+    return true;
+  }
+
+  vef_protocol_t server_protocol =
+      static_cast<vef_protocol_t>(villagesql::veb::vef_server_protocol_version);
+#ifndef NDEBUG
+  {
+    auto it = thd->user_vars.find("vef_debug_protocol_override");
+    if (it != thd->user_vars.end()) {
+      bool null_value = false;
+      const longlong val = it->second->val_int(&null_value);
+      if (!null_value && val > 0)
+        server_protocol = static_cast<vef_protocol_t>(val);
+    }
+  }
+#endif
+  std::string load_error;
+  if (villagesql::veb::load_vef_extension(
+          {.extension_name = extension_name, .reason = load_reason, .thd = thd},
+          so_path, server_protocol, registration, load_error)) {
+    LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
+            extension_name.c_str(), load_error.c_str());
+    villagesql_error("Failed to load VEF extension '%s': %s", MYF(0),
+                     extension_name.c_str(), load_error.c_str());
+    return true;
+  }
+
+  return false;
+}
+
+}  // namespace
 
 namespace villagesql {
 namespace {
