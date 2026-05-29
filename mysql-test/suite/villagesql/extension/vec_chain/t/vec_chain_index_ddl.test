@@ -1,0 +1,25 @@
+--echo #
+--echo # Driver test: registering the vec_chain custom index materializes
+--echo # the backing hidden table with the declared schema, including the
+--echo # secondary index. Milestone 2 — DML maintenance is still no-op.
+--echo #
+
+INSTALL EXTENSION VSQL_VEC_CHAIN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v VSQL_VEC_CHAIN(3) NOT NULL,
+  INDEX idx_v (v) USING EXTENDED(vec_chain)
+);
+
+--echo # The server materialized villagesql.__hidden_vec_chain. Inspect
+--echo # its schema: PK (pk_id) plus secondary index by_seq (seq).
+--disable_query_log
+SET SESSION debug = '+d,skip_dd_table_access_check';
+--enable_query_log
+
+SHOW CREATE TABLE villagesql.__hidden_vec_chain;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION VSQL_VEC_CHAIN_TEST;

@@ -1,0 +1,100 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3)
+);
+INSERT INTO t (v) VALUES ('[1,2,3]');
+INSERT INTO t (v) VALUES ('[4,5,6]');
+INSERT INTO t (v) VALUES ('[0,0,0]');
+INSERT INTO t (v) VALUES ('[-1,-2,-3]');
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t WHERE id=1),
+(SELECT v FROM t WHERE id=1)) AS dot_self;
+dot_self
+14
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t WHERE id=1),
+(SELECT v FROM t WHERE id=2)) AS dot_12;
+dot_12
+32
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t WHERE id=1),
+(SELECT v FROM t WHERE id=3)) AS dot_zero;
+dot_zero
+0
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t WHERE id=1),
+(SELECT v FROM t WHERE id=4)) AS dot_neg;
+dot_neg
+-14
+CREATE TABLE t_double (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR('dimension=3,type=double')
+);
+INSERT INTO t_double (v) VALUES ('[1.5,2.5,3.5]');
+INSERT INTO t_double (v) VALUES ('[2.0,4.0,6.0]');
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t_double WHERE id=1),
+(SELECT v FROM t_double WHERE id=2)) AS dot_double;
+dot_double
+34
+CREATE TABLE t_nulls (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3) DEFAULT NULL
+);
+INSERT INTO t_nulls (v) VALUES ('[1,2,3]');
+INSERT INTO t_nulls (v) VALUES (NULL);
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t_nulls WHERE id=1),
+(SELECT v FROM t_nulls WHERE id=2)) AS dot_null_right;
+dot_null_right
+NULL
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t_nulls WHERE id=2),
+(SELECT v FROM t_nulls WHERE id=1)) AS dot_null_left;
+dot_null_left
+NULL
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t_nulls WHERE id=2),
+(SELECT v FROM t_nulls WHERE id=2)) AS dot_null_both;
+dot_null_both
+NULL
+SELECT MVECTOR.mvector_add(
+(SELECT v FROM t WHERE id=1),
+'[4,5,6]') AS add_col_str;
+add_col_str
+[5,7,9]
+SELECT MVECTOR.mvector_add(
+(SELECT v FROM t WHERE id=1),
+(SELECT v FROM t WHERE id=2)) AS add_col_col;
+add_col_col
+[5,7,9]
+SELECT MVECTOR.mvector_add(
+'[10,20,30]',
+(SELECT v FROM t WHERE id=1)) AS add_str_col;
+add_str_col
+[11,22,33]
+SELECT MVECTOR.mvector_add(
+(SELECT v FROM t_nulls WHERE id=1),
+(SELECT v FROM t_nulls WHERE id=2)) AS add_null;
+add_null
+NULL
+SELECT MVECTOR.mvector_scale(
+(SELECT v FROM t WHERE id=1),
+2.0) AS scale_2x;
+scale_2x
+[2,4,6]
+SELECT MVECTOR.mvector_scale(
+(SELECT v FROM t_nulls WHERE id=2),
+2.0) AS scale_null;
+scale_null
+NULL
+SELECT MVECTOR.mvector_add(
+MVECTOR.mvector_scale(
+(SELECT v FROM t WHERE id=1),
+2.0),
+'[1,1,1]') AS chain_scale_add;
+chain_scale_add
+[3,5,7]
+DROP TABLE t, t_double, t_nulls;
+UNINSTALL EXTENSION MVECTOR;

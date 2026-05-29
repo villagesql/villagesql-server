@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -65,6 +66,7 @@
 #include "sql/table.h"
 #include "sql/window.h"
 #include "template_utils.h"
+#include "villagesql/sql/custom_index_hypergraph_optimizer.h"
 
 using hypergraph::NodeMap;
 using std::has_single_bit;
@@ -621,6 +623,8 @@ void BuildInterestingOrders(
   // and full-text index search even if we don't have any interesting orders.
   for (unsigned node_idx = 0; node_idx < graph->nodes.size(); ++node_idx) {
     TABLE *table = graph->nodes[node_idx].table();
+    villagesql::CollectCustomKnnOrderingsForHypergraph(
+        thd, query_block, table, orderings, spatial_indexes);
     for (unsigned key_idx = 0; key_idx < table->s->keys; ++key_idx) {
       // NOTE: visible_index claims to contain “visible and enabled” indexes,
       // but we still need to check keys_in_use to ignore disabled indexes.

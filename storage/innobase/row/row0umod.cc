@@ -53,6 +53,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 #include "current_thd.h"
 #include "debug_sync.h"
@@ -875,7 +876,10 @@ This is the specific function to handle the modify on multi-value indexes.
     dict_index_t *index = node->index;
     dtuple_t *entry;
 
-    if (index->type & DICT_FTS) {
+    // TODO(villagesql-indexing): upstream to #650 follow-up. Custom indexes
+    // have no B-tree to undo against; the runtime owns rollback semantics.
+    if ((index->type & DICT_FTS) ||
+        villagesql::innodb::Custom_index::is_custom(index)) {
       dict_table_next_uncorrupted_index(node->index);
       continue;
     }
@@ -987,7 +991,8 @@ This is the specific function to handle the modify on multi-value indexes.
     dict_index_t *index = node->index;
     dtuple_t *entry;
 
-    if (index->type == DICT_FTS) {
+    if (index->type == DICT_FTS ||
+        villagesql::innodb::Custom_index::is_custom(index)) {
       dict_table_next_uncorrupted_index(node->index);
       continue;
     }
@@ -1130,6 +1135,7 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
       }
     } else {
       if (index->type == DICT_FTS ||
+          villagesql::innodb::Custom_index::is_custom(index) ||
           !row_upd_changes_ord_field_binary(
               index, node->update, thr, node->row, node->ext,
               (index->is_multi_value() ? &non_mv_upd : nullptr))) {

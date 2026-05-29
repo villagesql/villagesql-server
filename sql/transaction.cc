@@ -57,6 +57,7 @@
 #include "sql/tc_log.h"
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
+#include "villagesql/sql/custom_index_runtime.h"
 #include "villagesql/sql/metadata_modifier.h"
 
 /**
@@ -251,6 +252,10 @@ bool trans_commit(THD *thd, bool ignore_global_read_lock) {
     if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_transaction_commit(
             thd))
       LogErr(WARNING_LEVEL, ER_TRX_GTID_COLLECT_REJECT);
+  if (res == false)
+    villagesql::custom_index_commit(thd);
+  else
+    villagesql::custom_index_rollback(thd);
   /*
     When gtid mode is enabled, a transaction may cause binlog
     rotation, which inserts a record into the gtid system table
@@ -418,6 +423,7 @@ bool trans_rollback(THD *thd) {
       ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
   res = ha_rollback_trans(thd, true);
+  villagesql::custom_index_rollback(thd);
   thd->variables.option_bits &= ~OPTION_BEGIN;
   thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
   thd->lex->start_transaction_opt = 0;
@@ -480,6 +486,7 @@ bool trans_rollback_implicit(THD *thd) {
       ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
   res = ha_rollback_trans(thd, true);
+  villagesql::custom_index_rollback(thd);
   thd->variables.option_bits &= ~OPTION_BEGIN;
   thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
 
@@ -557,6 +564,10 @@ bool trans_commit_stmt(THD *thd, bool ignore_global_read_lock) {
     if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_transaction_commit(
             thd))
       LogErr(WARNING_LEVEL, ER_TRX_GTID_COLLECT_REJECT);
+  if (res == false && !thd->in_active_multi_stmt_transaction())
+    villagesql::custom_index_commit(thd);
+  else if (res == false)
+    villagesql::custom_index_commit_stmt(thd);
   /* In autocommit=1 mode the transaction should be marked as complete in P_S */
   assert(thd->in_active_multi_stmt_transaction() ||
          thd->m_transaction_psi == nullptr);
@@ -595,6 +606,7 @@ bool trans_rollback_stmt(THD *thd) {
 
   if (thd->get_transaction()->is_active(Transaction_ctx::STMT)) {
     ha_rollback_trans(thd, false);
+    villagesql::custom_index_rollback_stmt(thd);
     if (!thd->in_active_multi_stmt_transaction())
       trans_reset_one_shot_chistics(thd);
   } else if (tc_log)

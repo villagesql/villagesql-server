@@ -1,0 +1,128 @@
+# Install MVECTOR extension
+INSTALL EXTENSION MVECTOR;
+
+########################################################################
+#
+# Test: Basic MVECTOR with type=double DDL, DML, and queries
+#
+########################################################################
+
+CREATE TABLE t (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR('dimension=3,type=double')
+);
+
+# Insert valid vectors
+INSERT INTO t (v) VALUES ('[1.0,2.0,3.0]');
+INSERT INTO t (v) VALUES ('[4.5,5.5,6.5]');
+INSERT INTO t (v) VALUES ('[0,0,0]');
+INSERT INTO t (v) VALUES ('[-1.5,2.5,-3.5]');
+
+SELECT id, v FROM t ORDER BY id;
+
+########################################################################
+#
+# Test: Double precision is preserved (values beyond float32 range)
+#
+########################################################################
+
+CREATE TABLE t_prec (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR('dimension=2,type=double')
+);
+
+INSERT INTO t_prec (v) VALUES ('[1.23456789012345,9.87654321098765]');
+
+SELECT id, v FROM t_prec ORDER BY id;
+
+DROP TABLE t_prec;
+
+########################################################################
+#
+# Test: NULL handling with double
+#
+########################################################################
+
+CREATE TABLE t_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR('dimension=3,type=double') DEFAULT NULL
+);
+
+INSERT INTO t_nulls (v) VALUES ('[1,2,3]');
+INSERT INTO t_nulls (v) VALUES (NULL);
+INSERT INTO t_nulls (v) VALUES ('[4,5,6]');
+
+SELECT id, v FROM t_nulls ORDER BY id;
+SELECT id, v FROM t_nulls WHERE v IS NULL;
+SELECT id, v FROM t_nulls WHERE v IS NOT NULL ORDER BY id;
+
+########################################################################
+#
+# Test: Equality comparison with double
+#
+########################################################################
+
+SELECT id, v FROM t WHERE v = '[1,2,3]';
+
+########################################################################
+#
+# Test: ORDER BY (lexicographic comparison) with double
+#
+########################################################################
+
+SELECT id, v FROM t ORDER BY v;
+
+########################################################################
+#
+# Test: Invalid format errors with double
+#
+########################################################################
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (v) VALUES ('not a vector');
+
+# Wrong dimension count
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (v) VALUES ('[1,2]');
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (v) VALUES ('[1,2,3,4]');
+
+########################################################################
+#
+# Test: Explicit type=float matches MVECTOR(N) behavior
+#
+########################################################################
+
+CREATE TABLE t_float (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR('dimension=3,type=float')
+);
+
+INSERT INTO t_float (v) VALUES ('[1,2,3]');
+
+SELECT id, v FROM t_float ORDER BY id;
+
+DROP TABLE t_float;
+
+########################################################################
+#
+# Test: Invalid type parameter value
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR('dimension=3,type=int'));
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR('dimension=3,type='));
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE t, t_nulls;
+
+UNINSTALL EXTENSION MVECTOR;

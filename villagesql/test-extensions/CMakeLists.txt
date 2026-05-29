@@ -58,3 +58,7 @@ vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.
 # mytype_to_v2 conversion VDF.
 vsql_add_test_extension(update-schema-test-v1          update_schema_test  VERSION 1.0.0)
 vsql_add_test_extension(update-schema-test-v2          update_schema_test  VERSION 2.0.0)
+vsql_add_test_extension(vsql-bloom-hidden-test         VSQL_BLOOM_HIDDEN_TEST)
+vsql_add_test_extension(vsql-uniq-lower-test           VSQL_UNIQ_LOWER_TEST)
+vsql_add_test_extension(vsql-vec-chain-test            VSQL_VEC_CHAIN_TEST)
+vsql_add_test_extension(bloom                          BLOOM)

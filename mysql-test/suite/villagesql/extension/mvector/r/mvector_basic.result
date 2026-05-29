@@ -1,0 +1,101 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3)
+);
+INSERT INTO t (v) VALUES ('[1.0,2.0,3.0]');
+INSERT INTO t (v) VALUES ('[4.5,5.5,6.5]');
+INSERT INTO t (v) VALUES ('[0,0,0]');
+INSERT INTO t (v) VALUES ('[-1.5,2.5,-3.5]');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+4	[-1.5,2.5,-3.5]
+INSERT INTO t (v) VALUES
+('[10,20,30]'),
+('[40,50,60]');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+4	[-1.5,2.5,-3.5]
+5	[10,20,30]
+6	[40,50,60]
+CREATE TABLE t_nulls (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3) DEFAULT NULL
+);
+INSERT INTO t_nulls (v) VALUES ('[1,2,3]');
+INSERT INTO t_nulls (v) VALUES (NULL);
+INSERT INTO t_nulls (v) VALUES ('[4,5,6]');
+SELECT id, v FROM t_nulls ORDER BY id;
+id	v
+1	[1,2,3]
+2	NULL
+3	[4,5,6]
+SELECT id, v FROM t_nulls WHERE v IS NULL;
+id	v
+2	NULL
+SELECT id, v FROM t_nulls WHERE v IS NOT NULL ORDER BY id;
+id	v
+1	[1,2,3]
+3	[4,5,6]
+SELECT id, v FROM t WHERE v = '[1,2,3]';
+id	v
+1	[1,2,3]
+SELECT id, v FROM t ORDER BY v;
+id	v
+4	[-1.5,2.5,-3.5]
+3	[0,0,0]
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+5	[10,20,30]
+6	[40,50,60]
+INSERT INTO t (v) VALUES ('not a vector');
+ERROR HY000: Incorrect MVECTOR value: 'not a vector' for column 'v' at row 1
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+4	[-1.5,2.5,-3.5]
+5	[10,20,30]
+6	[40,50,60]
+INSERT INTO t (v) VALUES ('[1,2]');
+ERROR HY000: Incorrect MVECTOR value: '[1,2]' for column 'v' at row 1
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+4	[-1.5,2.5,-3.5]
+5	[10,20,30]
+6	[40,50,60]
+INSERT INTO t (v) VALUES ('[1,2,3,4]');
+ERROR HY000: Incorrect MVECTOR value: '[1,2,3,4]' for column 'v' at row 1
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+4	[-1.5,2.5,-3.5]
+5	[10,20,30]
+6	[40,50,60]
+CREATE TABLE t_str (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR('dimension=3')
+);
+INSERT INTO t_str (v) VALUES ('[7,8,9]');
+INSERT INTO t_str (v) VALUES ('[10,11,12]');
+SELECT id, v FROM t_str ORDER BY id;
+id	v
+1	[7,8,9]
+2	[10,11,12]
+INSERT INTO t_str (v) VALUES ('[1,2]');
+ERROR HY000: Incorrect MVECTOR value: '[1,2]' for column 'v' at row 1
+DROP TABLE t_str;
+DROP TABLE t, t_nulls;
+UNINSTALL EXTENSION MVECTOR;

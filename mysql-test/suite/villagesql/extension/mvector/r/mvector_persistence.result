@@ -1,0 +1,28 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t_persist (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3)
+);
+INSERT INTO t_persist (v) VALUES ('[1.5,2.5,3.5]');
+INSERT INTO t_persist (v) VALUES ('[10,20,30]');
+INSERT INTO t_persist (v) VALUES ('[-1,-2,-3]');
+SELECT id, v FROM t_persist ORDER BY id;
+id	v
+1	[1.5,2.5,3.5]
+2	[10,20,30]
+3	[-1,-2,-3]
+# restart
+SELECT id, v FROM t_persist ORDER BY id;
+id	v
+1	[1.5,2.5,3.5]
+2	[10,20,30]
+3	[-1,-2,-3]
+SHOW CREATE TABLE t_persist;
+Table	Create Table
+t_persist	CREATE TABLE `t_persist` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` MVECTOR.MVECTOR(3) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_persist;
+UNINSTALL EXTENSION MVECTOR;

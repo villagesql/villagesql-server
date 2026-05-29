@@ -147,6 +147,13 @@ extern void PrepareAlterCustomFields(THD *thd,
 // Clear thd->villagesql_alter_custom_fields.
 extern void ClearAlterCustomFields(THD *thd);
 
+// Set thd->villagesql_alter_target_{db,table} to the user-visible name of
+// the table being altered. The custom-index runtime consults this when a
+// write hits a #sql-xxx rebuild table so it can look up victionary entries
+// under the user-visible name. Cleared by AlterGuard.
+extern void SetAlterTarget(THD *thd, const char *db, const char *table);
+extern void ClearAlterTarget(THD *thd);
+
 // Check if any column in a create_list has a custom type.
 // Used to determine if we need to regenerate the CREATE TABLE statement
 // for binlogging (to ensure fully qualified type names are used).

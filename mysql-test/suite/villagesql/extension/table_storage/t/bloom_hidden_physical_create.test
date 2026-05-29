@@ -1,0 +1,25 @@
+--echo #
+--echo # Driver test: CREATE TABLE with a custom index should cause the
+--echo # server to materialize the backing storage on its own. The bloom
+--echo # inspector's ability to bind to the storage is the indicator that
+--echo # it was materialized by the DDL.
+--echo #
+
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL,
+  INDEX idx_bucket (bucket) USING EXTENDED(bloom)
+);
+
+--echo # The inspector can bind to the storage backing the new index.
+SELECT bloom_create() AS inspector_created;
+
+--echo # And the storage is empty (base table has no rows).
+SELECT bloom_load_cache() AS rows_after_create;
+
+DROP TABLE t;
+SELECT bloom_drop() AS dropped;
+
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

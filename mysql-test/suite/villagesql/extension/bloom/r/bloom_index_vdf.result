@@ -1,0 +1,65 @@
+INSTALL EXTENSION BLOOM;
+SELECT BLOOM.bloom_index_clear('idx') AS cleared;
+cleared
+1
+SELECT BLOOM.bloom_index_count('idx') AS count_before;
+count_before
+0
+SELECT BLOOM.bloom_index_insert('idx', 1, 'apple') AS insert_1;
+insert_1
+1
+SELECT BLOOM.bloom_index_insert('idx', 2, 'banana') AS insert_2;
+insert_2
+1
+SELECT BLOOM.bloom_index_insert('idx', 3, 'cherry') AS insert_3;
+insert_3
+1
+SELECT BLOOM.bloom_index_count('idx') AS count_after_insert;
+count_after_insert
+3
+SELECT BLOOM.bloom_might_contain('idx', 'apple') AS contains_apple;
+contains_apple
+1
+SELECT BLOOM.bloom_might_contain('idx', 'durian') AS contains_durian;
+contains_durian
+0
+SELECT BLOOM.bloom_search('idx', 'apple') AS search_apple;
+search_apple
+1
+SELECT BLOOM.bloom_search('idx', 'durian') AS search_durian;
+search_durian
+
+SELECT BLOOM.bloom_index_update('idx', 1, 'apricot') AS update_1;
+update_1
+1
+SELECT BLOOM.bloom_index_count('idx') AS count_after_update;
+count_after_update
+3
+SELECT BLOOM.bloom_might_contain('idx', 'apple') AS contains_old_apple;
+contains_old_apple
+0
+SELECT BLOOM.bloom_might_contain('idx', 'apricot') AS contains_apricot;
+contains_apricot
+1
+SELECT BLOOM.bloom_search('idx', 'apricot') AS search_apricot;
+search_apricot
+1
+SELECT BLOOM.bloom_index_delete('idx', 2) AS delete_2;
+delete_2
+1
+SELECT BLOOM.bloom_index_count('idx') AS count_after_delete;
+count_after_delete
+2
+SELECT BLOOM.bloom_might_contain('idx', 'banana') AS contains_banana;
+contains_banana
+0
+SELECT BLOOM.bloom_search('idx', 'banana') AS search_banana;
+search_banana
+
+SELECT BLOOM.bloom_index_clear('idx') AS cleared_again;
+cleared_again
+1
+SELECT BLOOM.bloom_index_count('idx') AS count_after_clear;
+count_after_clear
+0
+UNINSTALL EXTENSION BLOOM;

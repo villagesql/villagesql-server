@@ -1,0 +1,52 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3)
+);
+INSERT INTO t (v) VALUES
+('[1,0,0]'),
+('[0,1,0]'),
+('[0,0,1]'),
+('[1,1,0]'),
+('[2,0,0]');
+SELECT MVECTOR.mvector_l2_distance(
+MVECTOR::from_string('[1,0,0]'),
+MVECTOR::from_string('[2,0,0]')) AS d;
+d
+1
+SELECT MVECTOR.mvector_cosine_distance(
+MVECTOR::from_string('[1,0,0]'),
+MVECTOR::from_string('[2,0,0]')) AS d;
+d
+0
+SELECT MVECTOR.mvector_cosine_distance(
+MVECTOR::from_string('[1,0,0]'),
+MVECTOR::from_string('[0,1,0]')) AS d;
+d
+1
+SELECT id, v,
+MVECTOR.mvector_l2_distance(
+v, MVECTOR::from_string('[1,0,0]')) AS d
+FROM t
+ORDER BY d, id
+LIMIT 3;
+id	v	d
+1	[1,0,0]	0
+4	[1,1,0]	1
+5	[2,0,0]	1
+SELECT id, v,
+MVECTOR.mvector_cosine_distance(
+v, MVECTOR::from_string('[1,0,0]')) AS d
+FROM t
+ORDER BY d, id
+LIMIT 3;
+id	v	d
+1	[1,0,0]	0
+5	[2,0,0]	0
+4	[1,1,0]	0.29289321881345254
+SELECT MVECTOR.mvector_l2_distance(
+MVECTOR::from_string('[1,0]'),
+MVECTOR::from_string('[1,0,0]')) AS d;
+ERROR HY000: Cannot initialize function 'mvector_l2_distance': conflicting type parameters for MVECTOR.MVECTOR in arguments 1 and 2
+DROP TABLE t;
+UNINSTALL EXTENSION MVECTOR;

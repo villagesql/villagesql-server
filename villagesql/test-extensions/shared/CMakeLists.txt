@@ -29,9 +29,9 @@ find_package(VillageSQLExtensionFramework REQUIRED)
 
 include_directories(${VillageSQLExtensionFramework_INCLUDE_DIR})
 
-add_library(extension SHARED
-  ${EXTENSION_SOURCE_DIR}/src/extension.cc
-)
+file(GLOB EXTENSION_SOURCES CONFIGURE_DEPENDS
+     ${EXTENSION_SOURCE_DIR}/src/*.cc)
+add_library(extension SHARED ${EXTENSION_SOURCES})
 
 target_compile_options(extension PRIVATE -fPIC)
 

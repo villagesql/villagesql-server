@@ -563,6 +563,58 @@ class SystemTableMap {
     return result;
   }
 
+  // Prefix lookup that also includes the THD's uncommitted INSERTs and
+  // UPDATEs (and respects DELETEs). Used by callers — e.g. the custom
+  // index runtime during ALTER copy — that need to see entries marked
+  // for insert in the current statement before the implicit DDL commit.
+  // REQUIRES: Caller must hold read lock.
+  template <typename T = EntryType>
+  std::vector<const EntryType *> get_prefix(
+      THD *thd, const typename T::key_prefix_type &prefix) const {
+    assert_read_or_write_lock_held();
+    std::vector<const EntryType *> committed = get_prefix_committed(prefix);
+    if (thd == nullptr) return committed;
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end()) return committed;
+
+    const std::string &prefix_str = prefix.str();
+    if (prefix_str.empty()) return committed;
+    std::string upper = prefix_str;
+    upper.back() = upper.back() + 1;
+
+    // Build a map keyed by entry key so later ops override earlier ones,
+    // and DELETEs remove the entry. Seed from committed.
+    std::map<std::string, const EntryType *> merged;
+    for (const EntryType *e : committed) {
+      merged[e->key().str()] = e;
+    }
+    for (const PendingOperation<EntryType> *op = thd_it->second.first;
+         op != nullptr; op = op->next) {
+      switch (op->op_type) {
+        case OperationType::INSERT:
+        case OperationType::UPDATE: {
+          if (!op->entry) break;
+          const std::string key = op->entry->key().str();
+          if (key >= prefix_str && key < upper) {
+            merged[key] = op->entry.get();
+          }
+          break;
+        }
+        case OperationType::DELETE: {
+          const std::string key = op->key.str();
+          if (key >= prefix_str && key < upper) {
+            merged.erase(key);
+          }
+          break;
+        }
+      }
+    }
+    std::vector<const EntryType *> result;
+    result.reserve(merged.size());
+    for (auto &kv : merged) result.push_back(kv.second);
+    return result;
+  }
+
   // Get all committed entries in the map
   // Useful for iterating over all entries (e.g., during startup validation)
   // REQUIRES: Caller must hold read lock

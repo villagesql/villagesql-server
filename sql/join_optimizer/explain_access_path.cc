@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -88,6 +89,7 @@
 #include "sql/window.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "villagesql/sql/custom_index_hypergraph_optimizer.h"
 
 using std::string;
 using std::unique_ptr;
@@ -1145,12 +1147,19 @@ static unique_ptr<Json_object> SetObjectMembers(
       const TABLE &table = *path->index_distance_scan().table;
       assert(table.file->pushed_idx_cond == nullptr);
 
-      const KEY &key = table.key_info[path->index_distance_scan().idx];
-      error |= SetIndexInfoInObject(&description, "index_distance_scan",
-                                    nullptr, table, key, "distance scan",
-                                    /*lookup condition*/ "", /*range*/ nullptr,
-                                    nullptr, false,
-                                    /*push_condition*/ nullptr, obj);
+      if (path->index_distance_scan().is_custom_index) {
+        description = "Custom index distance scan on ";
+        description += table.key_info[path->index_distance_scan().idx].name;
+        error |= AddMemberToObject<Json_string>(obj, "access_type",
+                                                "index_distance_scan");
+      } else {
+        const KEY &key = table.key_info[path->index_distance_scan().idx];
+        error |= SetIndexInfoInObject(&description, "index_distance_scan",
+                                      nullptr, table, key, "distance scan",
+                                      /*lookup condition*/ "",
+                                      /*range*/ nullptr, nullptr, false,
+                                      /*push_condition*/ nullptr, obj);
+      }
       error |= AddChildrenFromPushedCondition(table, children);
       break;
     }

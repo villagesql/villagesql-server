@@ -1836,18 +1836,16 @@ bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->is_algorithm_explicit = false;
   pc->key_create_info->custom_index_type = m_name;
   pc->key_create_info->custom_index_extension = m_extension;
-  // TODO(villagesql-indexing): Execute extended index type.
-  DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
-  villagesql_error("Extended Index feature not yet implemented", MYF(0));
-  return true;
+  return false;
 }
 
 bool PT_index_with_options::do_contextualize(Table_ddl_parse_context *pc) {
+  if (!pc->key_create_info->custom_index_type.str) {
+    villagesql_error("Extended Index WITH requires USING EXTENDED", MYF(0));
+    return true;
+  }
   pc->key_create_info->custom_index_params = m_params;
-  // TODO(villagesql-indexing): Execute extended index WITH parameters.
-  DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
-  villagesql_error("Extended Index feature not yet implemented", MYF(0));
-  return true;
+  return false;
 }
 
 static bool setup_index(keytype key_type, const LEX_STRING name,

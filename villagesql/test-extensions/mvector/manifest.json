@@ -1,0 +1,7 @@
+{
+  "name": "MVECTOR",
+  "version": "0.0.1",
+  "description": "Memory vector type and exact nearest-neighbor test extension",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "VSQL_VEC_CHAIN_TEST",
+  "version": "0.0.1",
+  "description": "Vector custom type for the hidden-table-backed vec_chain index POC",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

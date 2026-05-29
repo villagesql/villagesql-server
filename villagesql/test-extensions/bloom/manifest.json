@@ -1,0 +1,7 @@
+{
+  "name": "BLOOM",
+  "version": "0.0.1",
+  "description": "In-memory Bloom filter index test extension",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

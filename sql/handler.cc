@@ -133,6 +133,7 @@
 #include "string_with_len.h"
 #include "template_utils.h"
 #include "uniques.h"  // Unique_on_insert
+#include "villagesql/sql/custom_index_runtime.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -6149,6 +6150,14 @@ Cost_estimate handler::read_cost(uint index, double ranges, double rows) {
   assert(ranges >= 0.0);
   assert(rows >= 0.0);
 
+  // TODO(villagesql-indexing): custom-index cost ABI (see gap #8 in
+  // Docs/CUSTOM_INDEX_MERGED_PRS.md). Until extensions can declare cost,
+  // bill custom-index reads against the primary key as a placeholder.
+  if (index < table->s->keys &&
+      table->key_info[index].custom_index_context != nullptr) {
+    index = table->s->primary_key;
+  }
+
   const double io_cost =
       read_time(index, static_cast<uint>(ranges), static_cast<ha_rows>(rows)) *
       table->cost_model()->page_read_cost(1.0);
@@ -8037,6 +8046,13 @@ int handler::ha_external_lock(THD *thd, int lock_type) {
 
   ha_statistic_increment(&System_status_var::ha_external_lock_count);
 
+  // Custom-index pre-statement hook: tear down per-statement resources
+  // before releasing the engine lock so any MDL the backend holds on
+  // backing tables is dropped first.
+  if (lock_type == F_UNLCK && m_lock_type == F_WRLCK) {
+    villagesql::custom_index_finish_table_writes(thd, table);
+  }
+
   MYSQL_TABLE_LOCK_WAIT(PSI_TABLE_EXTERNAL_LOCK, lock_type,
                         { error = external_lock(thd, lock_type); })
 
@@ -8052,6 +8068,22 @@ int handler::ha_external_lock(THD *thd, int lock_type) {
     */
     m_lock_type = lock_type;
     cached_table_flags = table_flags();
+
+    // Custom-index post-lock hook: open & write-lock backing storage for
+    // this table's custom indexes (MariaDB-style open_hlindexes_for_write).
+    // Runs only after the engine lock succeeded so the base table is
+    // properly held. If preparation fails, undo the engine lock and
+    // propagate the error.
+    if (lock_type == F_WRLCK) {
+      int prep_error =
+          villagesql::custom_index_prepare_table_writes(thd, table);
+      if (prep_error != 0) {
+        MYSQL_TABLE_LOCK_WAIT(PSI_TABLE_EXTERNAL_LOCK, F_UNLCK,
+                              { (void)external_lock(thd, F_UNLCK); })
+        m_lock_type = F_UNLCK;
+        return prep_error;
+      }
+    }
   }
 
   return error;
@@ -8110,6 +8142,9 @@ int handler::ha_write_row(uchar *buf) {
                       { error = write_row(buf); })
 
   if (unlikely(error)) return error;
+  if (unlikely((error = villagesql::custom_index_after_write_row(ha_thd(),
+                                                                 table, buf))))
+    return error;
 
   if (unlikely((error = binlog_log_row(table, nullptr, buf, log_func))))
     return error; /* purecov: inspected */
@@ -8141,6 +8176,9 @@ int handler::ha_update_row(const uchar *old_data, uchar *new_data) {
                       { error = update_row(old_data, new_data); })
 
   if (unlikely(error)) return error;
+  if (unlikely((error = villagesql::custom_index_after_update_row(
+                    ha_thd(), table, old_data, new_data))))
+    return error;
   if (unlikely((error = binlog_log_row(table, old_data, new_data, log_func))))
     return error;
   return 0;
@@ -8171,6 +8209,9 @@ int handler::ha_delete_row(const uchar *buf) {
                       { error = delete_row(buf); })
 
   if (unlikely(error)) return error;
+  if (unlikely((error = villagesql::custom_index_after_delete_row(ha_thd(),
+                                                                  table, buf))))
+    return error;
   if (unlikely((error = binlog_log_row(table, buf, nullptr, log_func))))
     return error;
   return 0;

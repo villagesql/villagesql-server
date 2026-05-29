@@ -1,0 +1,35 @@
+--echo #
+--echo # MVECTOR custom index DML maintenance
+--echo #
+
+INSTALL EXTENSION MVECTOR;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v MVECTOR(3)
+);
+
+CREATE INDEX idx_v ON t (v) USING EXTENDED(MVECTOR.mvector_nn);
+
+INSERT INTO t VALUES
+  (1, '[1,0,0]'),
+  (2, '[0,1,0]'),
+  (3, '[0,0,1]');
+
+SELECT MVECTOR.mvector_index_count('test.t.idx_v') AS count_after_insert;
+SELECT MVECTOR.mvector_search_nn(
+  'test.t.idx_v', MVECTOR::from_string('[1,0,0]'), 3) AS nearest_after_insert;
+
+UPDATE t SET v = '[2,0,0]' WHERE id = 2;
+
+SELECT MVECTOR.mvector_search_nn(
+  'test.t.idx_v', MVECTOR::from_string('[2,0,0]'), 3) AS nearest_after_update;
+
+DELETE FROM t WHERE id = 1;
+
+SELECT MVECTOR.mvector_index_count('test.t.idx_v') AS count_after_delete;
+SELECT MVECTOR.mvector_search_nn(
+  'test.t.idx_v', MVECTOR::from_string('[2,0,0]'), 3) AS nearest_after_delete;
+
+DROP TABLE t;
+UNINSTALL EXTENSION MVECTOR;

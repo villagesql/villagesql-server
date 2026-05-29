@@ -1009,6 +1009,13 @@ class THD : public MDL_context_owner,
   // AlterCustomFieldsGuard in mysql_alter_table on all exit paths.
   std::unordered_map<std::string, const villagesql::TypeContext *>
       villagesql_alter_custom_fields;
+  // VillageSQL: User-visible (db, table) name of the original table being
+  // altered. Set by mysql_alter_table around the rebuild copy so the custom
+  // index runtime can resolve victionary entries for the original name when
+  // ha_write_row fires on the rebuild table (#sql-xxx). Cleared by
+  // AlterGuard on all exit paths.
+  std::string villagesql_alter_target_db;
+  std::string villagesql_alter_target_table;
 
  private:
   /**

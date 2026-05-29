@@ -1,0 +1,158 @@
+--echo #
+--echo # Driver test for transactional consistency between a base table and
+--echo # the hidden table backing its custom index. The current behavior is
+--echo # recorded here so we can see what (if anything) is broken; the
+--echo # expected behavior is that hidden-table rows live and die with the
+--echo # user's transaction on the base table.
+--echo #
+
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+
+# This test needs to read the hidden table directly to verify
+# transactional consistency with the base table. Hidden tables live in
+# villagesql.* which is normally inaccessible to user sessions.
+--disable_query_log
+SET SESSION debug = '+d,skip_dd_table_access_check';
+--enable_query_log
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL
+);
+CREATE INDEX idx_bucket ON t (bucket)
+  USING EXTENDED(bloom);
+
+--echo #
+--echo # Case 1: autocommit INSERT — row should land in the hidden table.
+--echo #
+INSERT INTO t VALUES (1, 10);
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+
+--echo #
+--echo # Case 2: explicit COMMIT — same expectation.
+--echo #
+BEGIN;
+INSERT INTO t VALUES (2, 20);
+COMMIT;
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+
+--echo #
+--echo # Case 3: ROLLBACK of a single-statement transaction.
+--echo # Expected (once transactional support is wired): the hidden-table
+--echo # row for id=3 must NOT survive the rollback.
+--echo #
+BEGIN;
+INSERT INTO t VALUES (3, 30);
+--echo # Inside the transaction: the writer's own view should include the
+--echo # new (30, 3) row before we decide to roll back.
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+ROLLBACK;
+--echo # After rollback the (30, 3) row should be gone from both.
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+
+--echo #
+--echo # Case 4: ROLLBACK of a multi-statement transaction.
+--echo # Expected: neither id=4 nor id=5 should appear in the hidden table.
+--echo #
+BEGIN;
+INSERT INTO t VALUES (4, 40);
+INSERT INTO t VALUES (5, 50);
+ROLLBACK;
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+
+--echo #
+--echo # Case 5: DELETE rolled back.
+--echo # Expected: id=2's hidden-table row should be present after rollback.
+--echo #
+BEGIN;
+DELETE FROM t WHERE id = 2;
+ROLLBACK;
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+
+--echo #
+--echo # Case 6: Isolation between sessions — uncommitted writes in con1
+--echo # must not be visible to con2.
+--echo #
+--connect (con1, localhost, root,,)
+--connect (con2, localhost, root,,)
+
+--disable_query_log
+--connection con1
+SET SESSION debug = '+d,skip_dd_table_access_check';
+--connection con2
+SET SESSION debug = '+d,skip_dd_table_access_check';
+--enable_query_log
+
+--connection con1
+BEGIN;
+INSERT INTO t VALUES (6, 60);
+--echo # con1's own view of the hidden table should include (60, 6).
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  WHERE bucket = 60;
+
+--connection con2
+--echo # con2 should NOT see (60, 6) — con1 hasn't committed.
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  WHERE bucket = 60;
+
+--connection con1
+COMMIT;
+
+--connection con2
+--echo # After commit, con2 should now see (60, 6).
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  WHERE bucket = 60;
+
+--connection default
+--disconnect con1
+--disconnect con2
+
+--echo #
+--echo # Case 7: SAVEPOINT — ROLLBACK TO savepoint should undo the
+--echo # writes done since the savepoint, including their hidden-table
+--echo # rows, while leaving earlier writes in the same transaction
+--echo # intact.
+--echo #
+BEGIN;
+INSERT INTO t VALUES (7, 70);
+SAVEPOINT after_7;
+INSERT INTO t VALUES (8, 80);
+INSERT INTO t VALUES (9, 90);
+--echo # Before rolling back: all three new rows should be visible to this
+--echo # transaction.
+SELECT id, bucket FROM t WHERE id IN (7, 8, 9) ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  WHERE bucket IN (70, 80, 90) ORDER BY bucket, row_id;
+ROLLBACK TO SAVEPOINT after_7;
+--echo # After ROLLBACK TO: only (7, 70) should remain.
+SELECT id, bucket FROM t WHERE id IN (7, 8, 9) ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  WHERE bucket IN (70, 80, 90) ORDER BY bucket, row_id;
+COMMIT;
+--echo # After COMMIT: still only (7, 70).
+SELECT id, bucket FROM t WHERE id IN (7, 8, 9) ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  WHERE bucket IN (70, 80, 90) ORDER BY bucket, row_id;
+
+--echo #
+--echo # Final base-table vs hidden-table snapshot for the record.
+--echo #
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+  ORDER BY bucket, row_id;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

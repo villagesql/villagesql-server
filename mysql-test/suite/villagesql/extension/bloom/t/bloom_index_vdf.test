@@ -1,0 +1,32 @@
+INSTALL EXTENSION BLOOM;
+
+SELECT BLOOM.bloom_index_clear('idx') AS cleared;
+SELECT BLOOM.bloom_index_count('idx') AS count_before;
+
+SELECT BLOOM.bloom_index_insert('idx', 1, 'apple') AS insert_1;
+SELECT BLOOM.bloom_index_insert('idx', 2, 'banana') AS insert_2;
+SELECT BLOOM.bloom_index_insert('idx', 3, 'cherry') AS insert_3;
+
+SELECT BLOOM.bloom_index_count('idx') AS count_after_insert;
+SELECT BLOOM.bloom_might_contain('idx', 'apple') AS contains_apple;
+SELECT BLOOM.bloom_might_contain('idx', 'durian') AS contains_durian;
+SELECT BLOOM.bloom_search('idx', 'apple') AS search_apple;
+SELECT BLOOM.bloom_search('idx', 'durian') AS search_durian;
+
+SELECT BLOOM.bloom_index_update('idx', 1, 'apricot') AS update_1;
+
+SELECT BLOOM.bloom_index_count('idx') AS count_after_update;
+SELECT BLOOM.bloom_might_contain('idx', 'apple') AS contains_old_apple;
+SELECT BLOOM.bloom_might_contain('idx', 'apricot') AS contains_apricot;
+SELECT BLOOM.bloom_search('idx', 'apricot') AS search_apricot;
+
+SELECT BLOOM.bloom_index_delete('idx', 2) AS delete_2;
+
+SELECT BLOOM.bloom_index_count('idx') AS count_after_delete;
+SELECT BLOOM.bloom_might_contain('idx', 'banana') AS contains_banana;
+SELECT BLOOM.bloom_search('idx', 'banana') AS search_banana;
+
+SELECT BLOOM.bloom_index_clear('idx') AS cleared_again;
+SELECT BLOOM.bloom_index_count('idx') AS count_after_clear;
+
+UNINSTALL EXTENSION BLOOM;

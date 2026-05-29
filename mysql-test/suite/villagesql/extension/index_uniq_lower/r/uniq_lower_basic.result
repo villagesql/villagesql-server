@@ -1,0 +1,25 @@
+#
+# Driver test: hidden-table-backed unique-on-lowercase index.
+# Verifies basic insert + delete maintenance against distinct values.
+#
+INSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;
+CREATE TABLE users (
+id INT PRIMARY KEY,
+email CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+INDEX idx_lower_email (email) USING EXTENDED(uniq_lower)
+);
+INSERT INTO users VALUES (1, 'alice@example.com');
+INSERT INTO users VALUES (2, 'BOB@example.com');
+INSERT INTO users VALUES (3, 'carol@EXAMPLE.com');
+SELECT id, email FROM users ORDER BY id;
+id	email
+1	alice@example.com
+2	BOB@example.com
+3	carol@EXAMPLE.com
+DELETE FROM users WHERE id = 2;
+SELECT id, email FROM users ORDER BY id;
+id	email
+1	alice@example.com
+3	carol@EXAMPLE.com
+DROP TABLE users;
+UNINSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;

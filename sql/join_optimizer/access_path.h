@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -949,6 +950,11 @@ struct AccessPath {
       TABLE *table;
       int idx;
       QUICK_RANGE *range;
+      bool is_custom_index;
+      // Custom-index KNN scan spec (owned by thd->mem_root). Only meaningful
+      // when is_custom_index is true. See villagesql/sql/custom_index_
+      // hypergraph_optimizer.cc.
+      void *custom_scan_spec;
       bool reverse;
     } index_distance_scan;
     struct {

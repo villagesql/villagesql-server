@@ -1,0 +1,17 @@
+INSTALL EXTENSION MVECTOR;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v MVECTOR(3)
+);
+
+CREATE INDEX idx_v ON t (v) USING EXTENDED(MVECTOR.mvector_nn);
+
+--source include/villagesql/query_custom_indexes.inc
+
+DROP INDEX idx_v ON t;
+
+--source include/villagesql/query_custom_indexes.inc
+
+DROP TABLE t;
+UNINSTALL EXTENSION MVECTOR;

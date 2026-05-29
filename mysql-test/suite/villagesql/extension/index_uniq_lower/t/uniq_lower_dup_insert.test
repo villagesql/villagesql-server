@@ -1,0 +1,28 @@
+--echo #
+--echo # Driver test: duplicate insert (after lowercasing) must fail and
+--echo # leave the base table unchanged.
+--echo #
+
+--disable_query_log
+CALL mtr.add_suppression("Custom index '.*' maintenance failed: hidden table insert failed");
+--enable_query_log
+
+INSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;
+
+CREATE TABLE users (
+  id INT PRIMARY KEY,
+  email CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  INDEX idx_lower_email (email) USING EXTENDED(uniq_lower)
+);
+
+INSERT INTO users VALUES (1, 'alice@example.com');
+
+--echo # Same value, different case — must fail.
+--error ER_GET_ERRNO
+INSERT INTO users VALUES (2, 'Alice@Example.com');
+
+--echo # Base table unchanged: only id=1 present.
+SELECT id, email FROM users ORDER BY id;
+
+DROP TABLE users;
+UNINSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;

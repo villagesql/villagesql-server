@@ -1,0 +1,100 @@
+# Install MVECTOR extension
+INSTALL EXTENSION MVECTOR;
+
+########################################################################
+#
+# Test: MVECTOR without length specification
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR);
+
+########################################################################
+#
+# Test: MVECTOR(0) - dimension must be positive
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR(0));
+
+########################################################################
+#
+# Test: MVECTOR(-1) - negative dimension
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR(-1));
+
+########################################################################
+#
+# Test: String params - empty string
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR(''));
+
+########################################################################
+#
+# Test: String params - missing '=' sign
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR('invalid'));
+
+########################################################################
+#
+# Test: String params - dimension=0 rejected by resolve_params
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR('dimension=0'));
+
+########################################################################
+#
+# Test: String params - unknown key rejected by resolve_params
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v MVECTOR('unknown_key=5'));
+
+########################################################################
+#
+# Test: VDF with two string constants - no type params can be inferred
+#
+########################################################################
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT MVECTOR.mvector_dot_product('[1,2,3]', '[4,5,6]');
+
+########################################################################
+#
+# Test: VDF with conflicting dimensions from table columns
+#
+########################################################################
+
+CREATE TABLE t_dim3 (v MVECTOR(3));
+CREATE TABLE t_dim4 (v MVECTOR(4));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+INSERT INTO t_dim4 (v) VALUES ('[1,2,3,4]');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t_dim3 LIMIT 1),
+    (SELECT v FROM t_dim4 LIMIT 1));
+
+DROP TABLE t_dim3, t_dim4;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+UNINSTALL EXTENSION MVECTOR;

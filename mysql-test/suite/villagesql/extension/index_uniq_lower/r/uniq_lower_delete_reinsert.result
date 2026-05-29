@@ -1,0 +1,25 @@
+#
+# Driver test: deleting a row should free its lowercased value for
+# reinsertion (in a separate statement).
+#
+INSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;
+CREATE TABLE users (
+id INT PRIMARY KEY,
+email CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+INDEX idx_lower_email (email) USING EXTENDED(uniq_lower)
+);
+INSERT INTO users VALUES (1, 'alice@example.com');
+DELETE FROM users WHERE id = 1;
+# Same lowered value is now free.
+INSERT INTO users VALUES (2, 'ALICE@example.com');
+SELECT id, email FROM users ORDER BY id;
+id	email
+2	ALICE@example.com
+# And still rejects further duplicates.
+INSERT INTO users VALUES (3, 'alice@EXAMPLE.com');
+ERROR HY000: Got error 122 - 'Internal (unspecified) error in handler' from storage engine
+SELECT id, email FROM users ORDER BY id;
+id	email
+2	ALICE@example.com
+DROP TABLE users;
+UNINSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;

@@ -1,0 +1,38 @@
+# Exercises every explicit out.warning() path in mvector_from_string.
+# Each INSERT below feeds a malformed string into a nullable MVECTOR(3)
+# column. mvector_from_string fails the encode, the row is stored as NULL,
+# and a Warning 3200 is emitted with the extension-supplied message.
+
+INSTALL EXTENSION MVECTOR;
+
+CREATE TABLE t (v MVECTOR(3));
+
+# Test: missing '['
+INSERT IGNORE INTO t VALUES ('1,2,3');
+SHOW WARNINGS;
+DELETE FROM t;
+
+# Test: parse error (non-numeric content)
+INSERT IGNORE INTO t VALUES ('[abc,2,3]');
+SHOW WARNINGS;
+DELETE FROM t;
+
+# Test: buffer too small (more elements than dimension)
+INSERT IGNORE INTO t VALUES ('[1,2,3,4]');
+SHOW WARNINGS;
+DELETE FROM t;
+
+# Test: missing ']' (unterminated)
+INSERT IGNORE INTO t VALUES ('[1,2,3');
+SHOW WARNINGS;
+DELETE FROM t;
+
+# Test: dimension mismatch (fewer elements than dimension)
+INSERT IGNORE INTO t VALUES ('[1,2]');
+SHOW WARNINGS;
+DELETE FROM t;
+
+# All malformed inserts should have stored NULL, not a value.
+DROP TABLE t;
+
+UNINSTALL EXTENSION MVECTOR;

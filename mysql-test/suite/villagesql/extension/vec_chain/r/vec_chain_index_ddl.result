@@ -1,0 +1,26 @@
+#
+# Driver test: registering the vec_chain custom index materializes
+# the backing hidden table with the declared schema, including the
+# secondary index. Milestone 2 — DML maintenance is still no-op.
+#
+INSTALL EXTENSION VSQL_VEC_CHAIN_TEST;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v VSQL_VEC_CHAIN(3) NOT NULL,
+INDEX idx_v (v) USING EXTENDED(vec_chain)
+);
+# The server materialized villagesql.__hidden_vec_chain. Inspect
+# its schema: PK (pk_id) plus secondary index by_seq (seq).
+SHOW CREATE TABLE villagesql.__hidden_vec_chain;
+Table	Create Table
+__hidden_vec_chain	CREATE TABLE `__hidden_vec_chain` (
+  `pk_id` varbinary(255) NOT NULL,
+  `vec` varbinary(255) NOT NULL,
+  `prev_gref` varbinary(4096) DEFAULT NULL,
+  `seq` bigint unsigned NOT NULL,
+  `deleted` bigint unsigned NOT NULL,
+  PRIMARY KEY (`pk_id`),
+  KEY `by_seq` (`seq`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+UNINSTALL EXTENSION VSQL_VEC_CHAIN_TEST;

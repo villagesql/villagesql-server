@@ -14,6 +14,9 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_SQL_SOURCES
+  custom_index_backend.cc
+  custom_index_hypergraph_optimizer.cc
+  custom_index_runtime.cc
   custom_vdf.cc
   func_lookup.cc
   initialize.cc

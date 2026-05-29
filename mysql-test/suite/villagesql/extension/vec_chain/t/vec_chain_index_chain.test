@@ -1,0 +1,42 @@
+--echo #
+--echo # Driver test: chain linking. Each new vec_chain node captures the
+--echo # previous head's gref (via scan_position on a by_seq DESC scan)
+--echo # and stores it in prev_gref. Validates the new ABI's secondary-
+--echo # index scan + scan_position end-to-end.
+--echo #
+
+INSTALL EXTENSION VSQL_VEC_CHAIN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v VSQL_VEC_CHAIN(3) NOT NULL,
+  INDEX idx_v (v) USING EXTENDED(vec_chain)
+);
+
+INSERT INTO t VALUES (1, '[1,0,0]');
+INSERT INTO t VALUES (2, '[0,1,0]');
+INSERT INTO t VALUES (3, '[0,0,1]');
+
+--disable_query_log
+SET SESSION debug = '+d,skip_dd_table_access_check';
+--enable_query_log
+
+--echo # First node has prev_gref NULL (no previous head).
+--echo # Subsequent nodes have a non-NULL prev_gref. We can't compare
+--echo # the raw bytes to anything user-visible (gref is engine-opaque),
+--echo # but we can verify the linkage shape.
+SELECT seq,
+       prev_gref IS NULL AS is_first,
+       LENGTH(prev_gref) AS gref_len
+  FROM villagesql.__hidden_vec_chain
+  ORDER BY seq;
+
+--echo # All non-first nodes share the same gref length (InnoDB's
+--echo # ref_length is fixed per table).
+SELECT COUNT(DISTINCT LENGTH(prev_gref)) AS distinct_gref_lens
+  FROM villagesql.__hidden_vec_chain
+  WHERE prev_gref IS NOT NULL;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION VSQL_VEC_CHAIN_TEST;

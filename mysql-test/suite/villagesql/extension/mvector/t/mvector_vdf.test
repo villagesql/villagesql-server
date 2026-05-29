@@ -1,0 +1,147 @@
+# Install MVECTOR extension
+INSTALL EXTENSION MVECTOR;
+
+########################################################################
+#
+# Test: mvector_dot_product with float vectors
+#
+########################################################################
+
+CREATE TABLE t (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR(3)
+);
+
+INSERT INTO t (v) VALUES ('[1,2,3]');
+INSERT INTO t (v) VALUES ('[4,5,6]');
+INSERT INTO t (v) VALUES ('[0,0,0]');
+INSERT INTO t (v) VALUES ('[-1,-2,-3]');
+
+# [1,2,3] . [1,2,3] = 1+4+9 = 14
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=1)) AS dot_self;
+
+# [1,2,3] . [4,5,6] = 4+10+18 = 32
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=2)) AS dot_12;
+
+# [1,2,3] . [0,0,0] = 0
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=3)) AS dot_zero;
+
+# [1,2,3] . [-1,-2,-3] = -1-4-9 = -14
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=4)) AS dot_neg;
+
+########################################################################
+#
+# Test: mvector_dot_product with double vectors
+#
+########################################################################
+
+CREATE TABLE t_double (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR('dimension=3,type=double')
+);
+
+INSERT INTO t_double (v) VALUES ('[1.5,2.5,3.5]');
+INSERT INTO t_double (v) VALUES ('[2.0,4.0,6.0]');
+
+# [1.5,2.5,3.5] . [2.0,4.0,6.0] = 3.0+10.0+21.0 = 34.0
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t_double WHERE id=1),
+    (SELECT v FROM t_double WHERE id=2)) AS dot_double;
+
+########################################################################
+#
+# Test: NULL handling
+#
+########################################################################
+
+CREATE TABLE t_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR(3) DEFAULT NULL
+);
+
+INSERT INTO t_nulls (v) VALUES ('[1,2,3]');
+INSERT INTO t_nulls (v) VALUES (NULL);
+
+# NULL input -> NULL result
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t_nulls WHERE id=1),
+    (SELECT v FROM t_nulls WHERE id=2)) AS dot_null_right;
+
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t_nulls WHERE id=2),
+    (SELECT v FROM t_nulls WHERE id=1)) AS dot_null_left;
+
+SELECT MVECTOR.mvector_dot_product(
+    (SELECT v FROM t_nulls WHERE id=2),
+    (SELECT v FROM t_nulls WHERE id=2)) AS dot_null_both;
+
+########################################################################
+#
+# Test: mvector_add - element-wise addition
+#
+########################################################################
+
+# Column + string constant
+SELECT MVECTOR.mvector_add(
+    (SELECT v FROM t WHERE id=1),
+    '[4,5,6]') AS add_col_str;
+
+# Both args from table columns
+SELECT MVECTOR.mvector_add(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=2)) AS add_col_col;
+
+# String constant + column
+SELECT MVECTOR.mvector_add(
+    '[10,20,30]',
+    (SELECT v FROM t WHERE id=1)) AS add_str_col;
+
+# NULL handling
+SELECT MVECTOR.mvector_add(
+    (SELECT v FROM t_nulls WHERE id=1),
+    (SELECT v FROM t_nulls WHERE id=2)) AS add_null;
+
+########################################################################
+#
+# Test: mvector_scale - scalar multiplication
+#
+########################################################################
+
+SELECT MVECTOR.mvector_scale(
+    (SELECT v FROM t WHERE id=1),
+    2.0) AS scale_2x;
+
+# NULL handling
+SELECT MVECTOR.mvector_scale(
+    (SELECT v FROM t_nulls WHERE id=2),
+    2.0) AS scale_null;
+
+########################################################################
+#
+# Test: chained VDFs
+#
+########################################################################
+
+SELECT MVECTOR.mvector_add(
+    MVECTOR.mvector_scale(
+        (SELECT v FROM t WHERE id=1),
+        2.0),
+    '[1,1,1]') AS chain_scale_add;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE t, t_double, t_nulls;
+
+UNINSTALL EXTENSION MVECTOR;

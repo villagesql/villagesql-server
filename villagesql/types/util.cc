@@ -1447,6 +1447,16 @@ void ClearAlterCustomFields(THD *thd) {
   thd->villagesql_alter_custom_fields.clear();
 }
 
+void SetAlterTarget(THD *thd, const char *db, const char *table) {
+  thd->villagesql_alter_target_db = db != nullptr ? db : "";
+  thd->villagesql_alter_target_table = table != nullptr ? table : "";
+}
+
+void ClearAlterTarget(THD *thd) {
+  thd->villagesql_alter_target_db.clear();
+  thd->villagesql_alter_target_table.clear();
+}
+
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     std::string_view extension_name,
                                     uint arg_count, Item **args,

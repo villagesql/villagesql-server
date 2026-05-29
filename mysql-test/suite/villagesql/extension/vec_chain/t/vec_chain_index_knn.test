@@ -1,0 +1,39 @@
+--echo #
+--echo # Driver test: KNN scan over the vec_chain index. The inspector
+--echo # VDF walks the hidden-table chain via gref, computes L2 distance
+--echo # per node, sorts, and returns the top-k PK ids. Validates
+--echo # scan_seek + scan_position + secondary-index scan as a whole.
+--echo #
+
+INSTALL EXTENSION VSQL_VEC_CHAIN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v VSQL_VEC_CHAIN(3) NOT NULL,
+  INDEX idx_v (v) USING EXTENDED(vec_chain)
+);
+
+INSERT INTO t VALUES (1, '[10,0,0]');
+INSERT INTO t VALUES (2, '[0,10,0]');
+INSERT INTO t VALUES (3, '[0,0,10]');
+INSERT INTO t VALUES (4, '[1,1,1]');
+INSERT INTO t VALUES (5, '[2,0,0]');
+
+--echo # Query near [10,0,0] — id=1 is exact, id=5 is the next closest.
+SELECT VSQL_VEC_CHAIN_TEST.vec_chain_inspect_knn(3, '[10,0,0]', 3) AS top3;
+
+--echo # Query near origin — id=4 ([1,1,1]) is closest.
+SELECT VSQL_VEC_CHAIN_TEST.vec_chain_inspect_knn(3, '[0,0,0]', 1) AS top1;
+
+--echo # k larger than rows returns all rows ordered by distance.
+SELECT VSQL_VEC_CHAIN_TEST.vec_chain_inspect_knn(3, '[0,0,0]', 100) AS all_rows;
+
+--echo # Deleting id=4 (a middle-of-chain node) tombstones the row.
+--echo # The walker still passes through it (so id=3, id=2, id=1 stay
+--echo # reachable) but doesn't emit it as a result.
+DELETE FROM t WHERE id = 4;
+SELECT VSQL_VEC_CHAIN_TEST.vec_chain_inspect_knn(3, '[0,0,0]', 4) AS top4_after_delete;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION VSQL_VEC_CHAIN_TEST;

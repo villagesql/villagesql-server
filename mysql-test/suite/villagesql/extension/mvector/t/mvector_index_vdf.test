@@ -1,0 +1,30 @@
+INSTALL EXTENSION MVECTOR;
+
+SELECT MVECTOR.mvector_index_clear('idx') AS cleared;
+SELECT MVECTOR.mvector_index_count('idx') AS count_before;
+
+SELECT MVECTOR.mvector_index_upsert(
+  'idx', 1, MVECTOR::from_string('[10,0,0]')) AS upsert_1;
+SELECT MVECTOR.mvector_index_upsert(
+  'idx', 2, MVECTOR::from_string('[0,0,0]')) AS upsert_2;
+SELECT MVECTOR.mvector_index_upsert(
+  'idx', 3, MVECTOR::from_string('[2,0,0]')) AS upsert_3;
+
+SELECT MVECTOR.mvector_index_count('idx') AS count_after_upsert;
+SELECT MVECTOR.mvector_search_nn(
+  'idx', MVECTOR::from_string('[0,0,0]'), 3) AS nn_after_upsert;
+
+SELECT MVECTOR.mvector_index_upsert(
+  'idx', 1, MVECTOR::from_string('[1,0,0]')) AS update_1;
+
+SELECT MVECTOR.mvector_index_count('idx') AS count_after_update;
+SELECT MVECTOR.mvector_search_nn(
+  'idx', MVECTOR::from_string('[0,0,0]'), 3) AS nn_after_update;
+
+SELECT MVECTOR.mvector_index_delete('idx', 2) AS delete_2;
+
+SELECT MVECTOR.mvector_index_count('idx') AS count_after_delete;
+SELECT MVECTOR.mvector_search_nn(
+  'idx', MVECTOR::from_string('[0,0,0]'), 3) AS nn_after_delete;
+
+UNINSTALL EXTENSION MVECTOR;

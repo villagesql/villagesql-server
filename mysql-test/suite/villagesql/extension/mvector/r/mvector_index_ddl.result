@@ -1,0 +1,15 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v MVECTOR(3)
+);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(MVECTOR.mvector_nn);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_v	MVECTOR	0.0.1	mvector_nn	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_v	0	v	MVECTOR	0.0.1	mvector_nn_l2
+DROP INDEX idx_v ON t;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+DROP TABLE t;
+UNINSTALL EXTENSION MVECTOR;

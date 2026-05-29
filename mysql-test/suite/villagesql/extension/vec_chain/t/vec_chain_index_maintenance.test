@@ -1,0 +1,46 @@
+--echo #
+--echo # Driver test: INSERT and DELETE on the base table propagate to
+--echo # the hidden table via vec_chain's per-row maintenance callbacks.
+--echo # The first node has prev_gref NULL; later nodes link back to
+--echo # the previously-inserted node.
+--echo #
+
+INSTALL EXTENSION VSQL_VEC_CHAIN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v VSQL_VEC_CHAIN(3) NOT NULL,
+  INDEX idx_v (v) USING EXTENDED(vec_chain)
+);
+
+INSERT INTO t VALUES (1, '[1,0,0]');
+INSERT INTO t VALUES (2, '[0,1,0]');
+INSERT INTO t VALUES (3, '[0,0,1]');
+
+--echo # Base table populated.
+SELECT id, v FROM t ORDER BY id;
+
+--echo # Hidden table mirrors the inserts. Seq is monotonic; only the
+--echo # first node's prev_gref is NULL (head of the chain).
+--disable_query_log
+SET SESSION debug = '+d,skip_dd_table_access_check';
+--enable_query_log
+
+SELECT seq, prev_gref IS NULL AS prev_is_null
+  FROM villagesql.__hidden_vec_chain
+  ORDER BY seq;
+
+--echo # DELETE on the base table tombstones the corresponding hidden
+--echo # row (sets deleted=1) rather than removing it, so newer nodes'
+--echo # prev_gref links stay valid and the chain remains traversable.
+--echo # Physical row count therefore stays at 3.
+DELETE FROM t WHERE id = 2;
+SELECT id, v FROM t ORDER BY id;
+SELECT COUNT(*) AS total_rows FROM villagesql.__hidden_vec_chain;
+SELECT COUNT(*) AS live_rows FROM villagesql.__hidden_vec_chain WHERE deleted = 0;
+SELECT HEX(pk_id) AS tombstoned_pk_id_hex
+  FROM villagesql.__hidden_vec_chain WHERE deleted = 1;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION VSQL_VEC_CHAIN_TEST;

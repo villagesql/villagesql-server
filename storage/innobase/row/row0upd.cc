@@ -80,6 +80,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "dict0dd.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 #endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_HOTBACKUP
@@ -3242,7 +3243,11 @@ static dberr_t row_upd(upd_node_t *node, /*!< in: row update node */
       break;
     }
 
-    if (node->index->type != DICT_FTS) {
+    // TODO(villagesql-indexing): upstream this skip to #650's follow-up.
+    // Custom indexes have no B-tree; their maintenance flows through the
+    // VillageSQL custom-index runtime, not InnoDB's secondary-index path.
+    if (node->index->type != DICT_FTS &&
+        !villagesql::innodb::Custom_index::is_custom(node->index)) {
       err = row_upd_sec_step(node, thr);
 
       if (err != DB_SUCCESS) {

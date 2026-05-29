@@ -18,6 +18,7 @@
 
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "sql/create_field.h"
 #include "sql/field.h"
@@ -35,6 +36,7 @@
 #include "sql/sql_udf.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/schema_manager.h"
@@ -43,6 +45,7 @@
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/sql/custom_index_runtime.h"
 #include "villagesql/sql/custom_vdf.h"
 #include "villagesql/sql/func_lookup.h"
 #include "villagesql/types/util.h"
@@ -51,6 +54,7 @@ namespace villagesql {
 
 Metadata_modifier::AlterGuard::~AlterGuard() {
   ClearAlterCustomFields(thd_);
+  ClearAlterTarget(thd_);
   if (armed_) rollback(thd_);
 }
 
@@ -60,6 +64,44 @@ static constexpr const char *error_uninitialized_victionary =
     "Victionary Client not initialized";
 static constexpr const char *error_uninitialized_session =
     "Uninitialized Session: NULL THD";
+
+bool validate_custom_index_params(const IndexTypeDescriptor &descriptor,
+                                  const KEY_CREATE_INFO &kci) {
+  const vef_type_index_intf_t &intf = descriptor.intf();
+  if (intf.parse == nullptr) return false;
+
+  const Mem_root_array<IndexWithParam> *params = kci.custom_index_params;
+  const uint32_t count =
+      params == nullptr ? 0 : static_cast<uint32_t>(params->size());
+  std::vector<std::string> keys;
+  std::vector<std::string> values;
+  std::vector<vef_index_param_t> abi_params;
+  keys.reserve(count);
+  values.reserve(count);
+  abi_params.reserve(count);
+
+  for (uint32_t i = 0; i < count; i++) {
+    const IndexWithParam &param = (*params)[i];
+    keys.emplace_back(param.key.str, param.key.length);
+    if (param.is_string) {
+      values.emplace_back(param.value.str.str, param.value.str.length);
+    } else {
+      values.emplace_back(std::to_string(param.value.num));
+    }
+    abi_params.push_back(
+        vef_index_param_t{keys.back().c_str(), values.back().c_str()});
+  }
+
+  std::vector<unsigned char> options(intf.options_size);
+  char error_msg[VEF_MAX_ERROR_LEN] = {0};
+  if (intf.parse(abi_params.data(), count, options.data(), error_msg,
+                 sizeof(error_msg))) {
+    villagesql_error("Invalid parameters for custom index type '%s': %s",
+                     MYF(0), descriptor.index_type_name().c_str(), error_msg);
+    return true;
+  }
+  return false;
+}
 
 bool Metadata_modifier::ensure_engine_is_innodb(const handlerton *hton,
                                                 const char *operation) {
@@ -160,14 +202,25 @@ static const EntryType *resolve_unique_descriptor(const Map &map,
 // TODO(villagesql): string parameters here (and normalize_type_name /
 // normalize_extension_name) should use std::string_view; requires updating the
 // downstream helpers consistently.
-static bool find_default_profile(VictionaryClient &vclient,
-                                 const Alter_info *alter_info, const char *db,
-                                 const char *table_name, const char *field_name,
-                                 const std::string &index_type_name,
-                                 const std::string &index_type_ext_name,
-                                 std::string &out_profile_name,
-                                 std::string &out_prof_ext_name,
-                                 std::string &out_prof_ext_version) {
+// Resolves the default index profile for a column. Three outcomes:
+//   returns false, *out_has_custom_type==true  : profile found, out_* filled
+//   returns false, *out_has_custom_type==false : column has no custom type,
+//                                                out_* unchanged — caller
+//                                                should record empty profile
+//                                                metadata (e.g. bloom on
+//                                                VARCHAR, uniq_lower on TEXT)
+//   returns true                               : real error (no default
+//                                                profile exists for a column
+//                                                that *does* have a custom
+//                                                type) — diagnostic already
+//                                                raised via villagesql_error
+static bool find_default_profile(
+    VictionaryClient &vclient, const Alter_info *alter_info, const char *db,
+    const char *table_name, const char *field_name,
+    const std::string &index_type_name, const std::string &index_type_ext_name,
+    std::string &out_profile_name, std::string &out_prof_ext_name,
+    std::string &out_prof_ext_version, bool *out_has_custom_type) {
+  *out_has_custom_type = false;
   std::string col_type_name;
   std::string col_ext_name;
   // Common case: column already exists in the table.
@@ -207,11 +260,12 @@ static bool find_default_profile(VictionaryClient &vclient,
     }
   }
   if (col_type_name.empty()) {
-    villagesql_error(
-        "No default index profile found: column '%s' is not a custom type",
-        MYF(0), field_name);
-    return true;
+    // Column has no custom type. Index types that don't need optimizer
+    // function routing (bloom on VARCHAR, uniq_lower on TEXT, etc.) are
+    // valid here — record empty profile metadata and let the caller proceed.
+    return false;
   }
+  *out_has_custom_type = true;
 
   // TODO(villagesql-performance): This is a linear scan over all registered
   // profiles. A secondary map in VictionaryClient keyed by (type_name,
@@ -275,6 +329,7 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
             : "{}";
     std::string ext_version;
 
+    uint64_t index_id = 0;
     {
       auto guard = vclient.get_read_lock();
 
@@ -283,10 +338,11 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
           IndexTypeDescriptorKeyPrefix(type_name, ext_name),
           "custom index type", type_name.c_str(), "'extension.type_name'");
       if (!desc) return true;
+      if (validate_custom_index_params(*desc, kci)) return true;
       ext_name = desc->extension_name();
       ext_version = desc->extension_version();
 
-      const uint64_t index_id = vclient.allocate_index_id();
+      index_id = vclient.allocate_index_id();
       to_add_indexes_.emplace_back(IndexKey(db, table_name, index_name),
                                    index_id, ext_name, ext_version, type_name,
                                    params_json);
@@ -370,11 +426,16 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
           prof_ext_version = prof_desc->extension_version();
 
         } else {
+          bool has_custom_type = false;
           if (find_default_profile(vclient, alter_info, db, table_name,
                                    kp->get_field_name(), type_name, ext_name,
                                    profile_name, prof_ext_name,
-                                   prof_ext_version))
+                                   prof_ext_version, &has_custom_type))
             return true;
+          // If the column has no custom type, profile resolution doesn't
+          // apply — profile_name and prof_ext_name remain empty and the
+          // entry is recorded without an optimizer routing binding.
+          (void)has_custom_type;
         }
 
         to_add_index_columns_.emplace_back(IndexColumnKey(index_id, key_pos),
@@ -685,12 +746,14 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
     for (const IndexColumnEntry *col :
          vclient.GetColumnsForIndex(entry->index_id)) {
       if (!col) continue;
-      assert(!col->profile_extension_name.empty());
+      // profile_extension_name is empty for columns whose index has no
+      // profile binding (e.g. bloom on VARCHAR) — see add_indexes.
       to_remove_index_columns_.emplace_back(
           col->key(), col->column_name, col->profile_extension_name,
           col->profile_extension_version, col->profile_name);
     }
-    assert(!entry->extension_name.empty());
+    // extension_name is empty for entries originally inserted via the
+    // villagesql_custom_index_proceed test escape hatch.
     to_remove_indexes_.emplace_back(
         entry->key(), entry->index_id, entry->extension_name,
         entry->extension_version, entry->index_type_name,
@@ -715,12 +778,14 @@ bool Metadata_modifier::remove_all_indexes(THD *thd [[maybe_unused]],
     for (const IndexColumnEntry *col :
          vclient.GetColumnsForIndex(entry->index_id)) {
       if (!col) continue;
-      assert(!col->profile_extension_name.empty());
+      // profile_extension_name is empty for columns whose index has no
+      // profile binding (e.g. bloom on VARCHAR) — see add_indexes.
       to_remove_index_columns_.emplace_back(
           col->key(), col->column_name, col->profile_extension_name,
           col->profile_extension_version, col->profile_name);
     }
-    assert(!entry->extension_name.empty());
+    // extension_name is empty for entries originally inserted via the
+    // villagesql_custom_index_proceed test escape hatch.
     to_remove_indexes_.emplace_back(
         entry->key(), entry->index_id, entry->extension_name,
         entry->extension_version, entry->index_type_name,
@@ -786,28 +851,32 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   }
 
   for (const IndexEntry &entry : to_add_indexes_) {
-    assert(!entry.extension_name.empty());
+    // extension_name is empty when the villagesql_custom_index_proceed test
+    // escape hatch in add_indexes recorded the entry without resolving;
+    // add_mdl_request handles empty as a no-op.
     if (add_mdl_request(entry.extension_name)) {
       return true;
     }
   }
 
   for (const IndexColumnEntry &entry : to_add_index_columns_) {
-    assert(!entry.profile_extension_name.empty());
+    // profile_extension_name is empty when the column has no profile binding
+    // (e.g. bloom on VARCHAR); add_mdl_request handles empty as a no-op.
     if (add_mdl_request(entry.profile_extension_name)) {
       return true;
     }
   }
 
   for (const IndexEntry &entry : to_remove_indexes_) {
-    assert(!entry.extension_name.empty());
+    // Same as the to_add_indexes_ loop: empty extension_name is possible for
+    // entries originally staged via the villagesql_custom_index_proceed test
+    // escape hatch.
     if (add_mdl_request(entry.extension_name)) {
       return true;
     }
   }
 
   for (const IndexColumnEntry &entry : to_remove_index_columns_) {
-    assert(!entry.profile_extension_name.empty());
     if (add_mdl_request(entry.profile_extension_name)) {
       return true;
     }
@@ -915,7 +984,9 @@ bool Metadata_modifier::validate_entries() {
   }
 
   for (const IndexEntry &entry : to_add_indexes_) {
-    assert(!entry.extension_name.empty());
+    // Empty extension_name signals the villagesql_custom_index_proceed test
+    // escape hatch in add_indexes; skip post-staging validation for it too.
+    if (entry.extension_name.empty()) continue;
     IndexTypeDescriptorKeyPrefix pfx(entry.index_type_name,
                                      entry.extension_name);
     if (!vclient.index_type_descriptors().has_prefix_committed(pfx)) {
@@ -927,7 +998,7 @@ bool Metadata_modifier::validate_entries() {
   }
 
   for (const IndexColumnEntry &entry : to_add_index_columns_) {
-    assert(!entry.profile_name.empty());
+    if (entry.profile_name.empty()) continue;
     assert(!entry.profile_extension_name.empty());
     IndexProfileDescriptorKeyPrefix ppfx(entry.profile_name,
                                          entry.profile_extension_name);
@@ -1002,6 +1073,9 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
     if (vclient.custom_indexes().MarkForDeletion(*thd, entry.key())) {
       return true;
     }
+    const IndexKey &key = entry.key();
+    custom_index_schedule_drop(thd, key.db().c_str(), key.table().c_str(),
+                               key.index_name().c_str());
     marked_index = true;
   }
   to_remove_indexes_.clear();
@@ -1118,6 +1192,16 @@ bool Metadata_modifier::process_create(THD *thd,
     return false;
   }
 
+  // VillageSQL: pre-create backing storage (e.g. hidden tables) for any
+  // declared custom indexes before staging victionary entries. For
+  // CREATE TABLE this fires on the user's final table; for ALTER
+  // TABLE / CREATE INDEX this fires when the intermediate #sql-…
+  // table is created — same code path, same alter_info, so the hidden
+  // table is materialized before the row copy begins.
+  if (custom_index_pre_create_storage(thd, alter_info)) {
+    return true;
+  }
+
   Metadata_modifier custom_modifier;
   Table_name db_table = {db, table_name};
 
@@ -1156,6 +1240,17 @@ bool Metadata_modifier::process_alter(THD *thd,
 #ifndef NDEBUG
   const uint tables_before = count_global_tables(table_list);
 #endif
+
+  // VillageSQL: pre-create backing storage (e.g. hidden tables) for any
+  // newly-added custom indexes BEFORE we stage any victionary entries.
+  // The nested CREATE TABLE inside pre_create flushes any uncommitted
+  // entries on the THD; running it first ensures nothing is pending.
+  // The intermediate #sql-… created by the ALTER copy goes through
+  // create_table_impl (not mysql_create_table_no_lock), so it does not
+  // call process_create — so we cannot rely on that path.
+  if (custom_index_pre_create_storage(thd, alter_info)) {
+    return true;
+  }
 
   Metadata_modifier custom_modifier;
 

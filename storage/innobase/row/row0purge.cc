@@ -66,6 +66,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -683,7 +684,11 @@ static inline void row_purge_remove_multi_sec_if_poss(purge_node_t *node,
       break;
     }
 
-    if (node->index->type != DICT_FTS) {
+    // TODO(villagesql-indexing): upstream to #650 follow-up. Custom indexes
+    // have no B-tree; purge skips them entirely — the extension owns
+    // delete-mark lifecycle through its own purge callback.
+    if (node->index->type != DICT_FTS &&
+        !villagesql::innodb::Custom_index::is_custom(node->index)) {
       if (node->index->is_multi_value()) {
         row_purge_remove_multi_sec_if_poss(node, heap, false);
       } else {
@@ -1301,7 +1306,8 @@ bool purge_node_t::validate_pcur() {
     return (true);
   }
 
-  if (index->type == DICT_FTS) {
+  if (index->type == DICT_FTS ||
+      villagesql::innodb::Custom_index::is_custom(index)) {
     return (true);
   }
 

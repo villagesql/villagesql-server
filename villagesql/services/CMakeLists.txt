@@ -18,6 +18,7 @@ SET(VILLAGESQL_SERVICES_SOURCES
   sys_var_access.cc
   preview/auth.cc
   preview/column_store.cc
+  preview/custom_index_table_storage_backend.cc
   preview/index_profile.cc
   preview/index_type.cc
   preview/keyring.cc
@@ -27,6 +28,7 @@ SET(VILLAGESQL_SERVICES_SOURCES
   preview/status_var.cc
   preview/storage.cc
   preview/sys_var.cc
+  preview/table_storage.cc
   preview/thread_worker.cc
 )
 

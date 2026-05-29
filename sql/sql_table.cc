@@ -199,6 +199,7 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "typelib.h"
+#include "villagesql/sql/custom_index_runtime.h"
 #include "villagesql/sql/metadata_modifier.h"
 #include "villagesql/types/util.h"
 
@@ -17118,6 +17119,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   // store().
   villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
 
+  // VillageSQL: Stash the user-visible name so custom-index runtime can
+  // resolve victionary entries for the original table when ha_write_row
+  // fires on the #sql-xxx rebuild. Cleared by AlterGuard on all exits.
+  villagesql::SetAlterTarget(thd, table_list->db, table_list->table_name);
+
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
    the table's row type.
@@ -17730,6 +17736,14 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     enum_alter_inplace_result inplace_supported =
         table->file->check_if_supported_inplace_alter(altered_table,
                                                       &ha_alter_info);
+
+    // VillageSQL: force the copy path when adding a custom index so the
+    // engine's row-by-row copy fires the per-row maintenance hooks that
+    // populate the index's backing storage. The engine doesn't know
+    // about custom indexes, so its inplace path would skip the scan.
+    if (villagesql::alter_info_adds_custom_index(alter_info)) {
+      inplace_supported = HA_ALTER_INPLACE_NOT_SUPPORTED;
+    }
 
     // If INSTANT was requested but it is not supported, report error.
     if (alter_info->requested_algorithm ==

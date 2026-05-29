@@ -1,0 +1,60 @@
+#
+# MVECTOR custom index ORDER BY KNN
+#
+SELECT FIND_IN_SET('hypergraph_optimizer=on', @@optimizer_switch) > 0
+AS hypergraph_on;
+hypergraph_on
+1
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v MVECTOR(3)
+);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(MVECTOR.mvector_nn);
+INSERT INTO t VALUES
+(1, '[1,0,0]'),
+(2, '[0,1,0]'),
+(3, '[0,0,1]'),
+(4, '[1,1,0]'),
+(5, '[2,0,0]');
+SELECT MVECTOR.mvector_index_scan_begin_count('test.t.idx_v')
+AS scan_begins_before;
+scan_begins_before
+0
+SELECT MVECTOR.mvector_index_scan_fetch_count('test.t.idx_v')
+AS scan_fetches_before;
+scan_fetches_before
+0
+SELECT MVECTOR.mvector_index_count('test.t.idx_v') AS index_count_before;
+index_count_before
+5
+SELECT id
+FROM t
+ORDER BY MVECTOR.mvector_l2_distance(v, MVECTOR::from_string('[1,0,0]'))
+LIMIT 3;
+id
+1
+4
+5
+SELECT MVECTOR.mvector_index_scan_begin_count('test.t.idx_v')
+AS scan_begins_after;
+scan_begins_after
+1
+SELECT MVECTOR.mvector_index_scan_fetch_count('test.t.idx_v')
+AS scan_fetches_after;
+scan_fetches_after
+3
+SELECT MVECTOR.mvector_index_last_scan_entry_count('test.t.idx_v')
+AS last_scan_entries;
+last_scan_entries
+5
+SELECT MVECTOR.mvector_index_last_scan_query_len('test.t.idx_v')
+AS last_scan_query_len;
+last_scan_query_len
+12
+SELECT MVECTOR.mvector_index_last_scan_hit_count('test.t.idx_v')
+AS last_scan_hits;
+last_scan_hits
+3
+DROP TABLE t;
+UNINSTALL EXTENSION MVECTOR;

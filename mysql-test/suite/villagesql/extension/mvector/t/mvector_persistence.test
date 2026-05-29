@@ -1,0 +1,38 @@
+# Install MVECTOR extension
+INSTALL EXTENSION MVECTOR;
+
+########################################################################
+#
+# Test: Data persists across server restart
+#
+########################################################################
+
+CREATE TABLE t_persist (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v MVECTOR(3)
+);
+
+INSERT INTO t_persist (v) VALUES ('[1.5,2.5,3.5]');
+INSERT INTO t_persist (v) VALUES ('[10,20,30]');
+INSERT INTO t_persist (v) VALUES ('[-1,-2,-3]');
+
+SELECT id, v FROM t_persist ORDER BY id;
+
+# Restart the server
+--source include/restart_mysqld.inc
+
+# Verify data survives restart
+SELECT id, v FROM t_persist ORDER BY id;
+
+# Verify SHOW CREATE TABLE shows the type
+SHOW CREATE TABLE t_persist;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE t_persist;
+
+UNINSTALL EXTENSION MVECTOR;

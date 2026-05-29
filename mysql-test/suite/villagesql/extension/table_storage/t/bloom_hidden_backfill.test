@@ -1,0 +1,61 @@
+--echo #
+--echo # Driver test for backfilling a custom index from existing rows
+--echo # when CREATE INDEX / ALTER TABLE ADD INDEX runs on a populated
+--echo # base table.
+--echo #
+
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL
+);
+
+--echo #
+--echo # Populate the base table BEFORE creating the custom index.
+--echo #
+INSERT INTO t VALUES (1, 10), (2, 10), (3, 20), (4, 30);
+SELECT id, bucket FROM t ORDER BY id;
+
+--echo #
+--echo # CREATE INDEX should backfill: index storage contains one row per
+--echo # existing base-table row.
+--echo #
+CREATE INDEX idx_bucket ON t (bucket)
+  USING EXTENDED(bloom);
+SELECT bloom_create() AS inspector_created;
+SELECT bloom_load_cache() AS rows_after_create_index;
+SELECT bloom_search(10) AS bucket_10;
+SELECT bloom_search(20) AS bucket_20;
+SELECT bloom_search(30) AS bucket_30;
+
+--echo #
+--echo # Ongoing maintenance still works after backfill.
+--echo #
+INSERT INTO t VALUES (5, 40);
+SELECT bloom_load_cache() AS rows_after_followup_insert;
+SELECT bloom_search(40) AS bucket_40;
+
+DROP TABLE t;
+SELECT bloom_drop() AS dropped;
+
+--echo #
+--echo # ALTER TABLE ADD INDEX on a separate populated table should also
+--echo # backfill.
+--echo #
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL
+);
+INSERT INTO t VALUES (101, 11), (102, 22);
+ALTER TABLE t ADD INDEX idx_bucket (bucket)
+  USING EXTENDED(bloom);
+SELECT bloom_create() AS inspector_recreated;
+SELECT bloom_load_cache() AS rows_after_alter_add_index;
+SELECT bloom_search(11) AS bucket_11;
+SELECT bloom_search(22) AS bucket_22;
+
+DROP TABLE t;
+SELECT bloom_drop() AS final_drop;
+
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

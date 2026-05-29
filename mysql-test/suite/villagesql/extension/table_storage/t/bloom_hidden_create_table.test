@@ -1,0 +1,45 @@
+--echo #
+--echo # Driver test: CREATE TABLE with an inline custom index. Verifies
+--echo # that the index storage is materialized as part of the DDL and that
+--echo # subsequent INSERT/DELETE update it correctly. The hidden table is
+--echo # observed via the bloom extension's inspector functions; we
+--echo # deliberately do NOT depend on the hidden table being visible in
+--echo # information_schema or queryable by name.
+--echo #
+
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+
+--echo #
+--echo # CREATE TABLE with an inline custom index.
+--echo #
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL,
+  INDEX idx_bucket (bucket) USING EXTENDED(bloom)
+);
+
+--echo # Inspector binds to the index's backing storage. Empty after create.
+SELECT bloom_create() AS inspector_created;
+SELECT bloom_load_cache() AS rows_after_create;
+
+--echo #
+--echo # Inserts populate the hidden storage via the normal maintenance path.
+--echo #
+INSERT INTO t VALUES (1, 10), (2, 10), (3, 20);
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bloom_load_cache() AS rows_after_insert;
+SELECT bloom_search(10) AS bucket_10_after_insert;
+SELECT bloom_search(20) AS bucket_20_after_insert;
+
+--echo #
+--echo # DELETE on the base table propagates to the hidden storage.
+--echo #
+DELETE FROM t WHERE id = 2;
+SELECT id, bucket FROM t ORDER BY id;
+SELECT bloom_load_cache() AS rows_after_delete;
+SELECT bloom_search(10) AS bucket_10_after_delete;
+
+DROP TABLE t;
+SELECT bloom_drop() AS dropped;
+
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

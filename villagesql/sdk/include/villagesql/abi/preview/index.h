@@ -32,6 +32,15 @@
 #include "../types.h"
 #include "storage.h"
 
+// Forward declarations for the optional hidden-table backing contract.
+// Extensions that opt in to a hidden-table-backed index include
+// <villagesql/abi/preview/table_storage.h> themselves to get the full
+// definitions; index.h intentionally does not include it so index.h has no
+// dependency on the table_storage capability.
+typedef struct vef_table_storage_t vef_table_storage_t;
+typedef struct vef_table_storage_handle_t vef_table_storage_handle_t;
+typedef struct vef_table_storage_def_t vef_table_storage_def_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -163,6 +172,13 @@ typedef struct {
   // Valid only during the create() call; NULL for all other calls and when
   // the index type declared no options.
   const void *options;
+
+  // Open handle to the index's backing hidden table, if the index type
+  // declared one via vef_type_index_intf_t::table_storage_def. The server
+  // opens and locks the table once per statement before invoking DML
+  // callbacks, and closes it at statement end. NULL for index types that
+  // do not declare a backing hidden table.
+  vef_table_storage_handle_t *table_storage_handle;
 
 } vef_index_ctx_t;
 
@@ -513,6 +529,17 @@ typedef bool (*vef_type_index_parse_func_t)(const vef_index_param_t *params,
                                             char *error_msg,
                                             uint32_t error_msg_len);
 
+// Declare the hidden table that backs this index instance.
+// Called by the server at index load time. The extension fills def_out with
+// column definitions and primary key for the backing table. The strings the
+// def points to (logical_name, column names) must remain valid for the
+// lifetime of the loaded index (typically pointers into extension static
+// storage or memory owned by the index's storage context).
+// Returns false on success, true on error (writes to error_msg).
+typedef bool (*vef_type_index_table_storage_def_func_t)(
+    const vef_index_ctx_t *index_ctx, vef_table_storage_def_t *def_out,
+    char *error_msg, uint32_t error_msg_len);
+
 // Index type interface version constants.
 #define VEF_INDEX_TYPE_INTF_VERSION_1 1
 #define VEF_INDEX_TYPE_INTF_VERSION VEF_INDEX_TYPE_INTF_VERSION_1
@@ -571,6 +598,14 @@ typedef struct {
   // helper functions (keyed by fn_id) that this index type expects. The server
   // can use these to validate that a profile binding this index type declares
   // compatible function signatures.
+
+  // Optional hook for index types whose storage lives in a server-owned
+  // hidden table. When non-NULL, the server calls it at load time to learn
+  // the backing table's schema, then takes care of creating, opening, and
+  // locking the hidden table around DML callbacks. The open handle is
+  // exposed to the extension via vef_index_ctx_t::table_storage_handle.
+  // NULL for index types that manage their own storage.
+  vef_type_index_table_storage_def_func_t table_storage_def;
 
 } vef_type_index_intf_t;
 

@@ -1,0 +1,42 @@
+--echo #
+--echo # Driver test: ALTER TABLE ADD INDEX on a table that already has
+--echo # rows colliding under lower() must fail during backfill, and the
+--echo # base table must be left in its original shape (no index added,
+--echo # no rows lost).
+--echo #
+
+--disable_query_log
+CALL mtr.add_suppression("Custom index '.*' maintenance failed: hidden table insert failed");
+--enable_query_log
+
+INSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;
+
+CREATE TABLE users (
+  id INT PRIMARY KEY,
+  email CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL
+);
+INSERT INTO users VALUES (1, 'alice@example.com');
+INSERT INTO users VALUES (2, 'Alice@Example.com');
+SELECT id, email FROM users ORDER BY id;
+
+--error ER_GET_ERRNO
+ALTER TABLE users ADD INDEX idx_lower_email (email)
+  USING EXTENDED(uniq_lower);
+
+--echo # Base table unchanged.
+SELECT id, email FROM users ORDER BY id;
+SHOW CREATE TABLE users;
+
+DROP TABLE users;
+
+# TODO(villagesql-indexing): cleanup_failed_create is currently disabled
+# in the hidden-table backend (table-cache "still in use" assertion when
+# running inline with the outer failing DDL). Until that is fixed, the
+# hidden table for a failed ALTER ADD INDEX leaks. Clean it up here so
+# MTR's check-testcase doesn't see leftover state.
+--disable_query_log
+SET SESSION debug = '+d,skip_dd_table_access_check';
+DROP TABLE IF EXISTS villagesql.__hidden_uniq_lower;
+--enable_query_log
+
+UNINSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;

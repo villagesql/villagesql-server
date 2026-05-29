@@ -368,12 +368,27 @@ class Index {
 
   explicit Index(const vef_index_ctx_t &ctx) : ctx_(ctx) {}
 
+  uint32_t get_num_key_cols() const { return ctx_.num_key_columns; }
+
   uint32_t get_primary_num_key_cols() const {
     return ctx_.num_primary_key_columns;
   }
 
   uint32_t get_primary_max_col_len(uint32_t key_pos) const {
     return ctx_.key_len_fn(ctx_.index_ref, key_pos, true);
+  }
+
+  // Opaque per-index-instance reference. Extensions can use this as a stable
+  // handle to correlate callback invocations back to an index instance.
+  Ref get_index_ref() const { return ctx_.index_ref; }
+
+  // Open handle to the index's backing hidden table, if the index type
+  // declared one via .table_storage(). The server opens and locks the table
+  // once per statement before invoking DML callbacks, and closes it at
+  // statement end. Returns nullptr for index types that do not declare a
+  // backing hidden table, or when no handle has been attached for this call.
+  vef_table_storage_handle_t *get_table_storage_handle() const {
+    return ctx_.table_storage_handle;
   }
 
   template <typename T>
@@ -702,6 +717,15 @@ struct ParseWrapper {
   }
 };
 
+template <auto F>
+struct TableStorageDefWrapper {
+  static bool invoke(const vef_index_ctx_t *index_ctx,
+                     vef_table_storage_def_t *def_out, char *error_msg,
+                     uint32_t error_msg_len) {
+    return F(index_ctx, def_out, error_msg, error_msg_len);
+  }
+};
+
 // always_false<T> is always false but depends on T, so static_assert(
 // always_false<T>, ...) in a function template is only evaluated on
 // instantiation (i.e. when the function is actually called), not eagerly.
@@ -1022,6 +1046,22 @@ class GlobalBuilder {
   constexpr GlobalBuilder<Context, Bits> options() && {
     intf_.options_size = static_cast<uint32_t>(sizeof(OptionsStruct));
     intf_.parse = detail::ParseWrapper<OptionsStruct, ParseFn>::invoke;
+    return {name_, intf_};
+  }
+
+  // Declare a server-owned hidden table that backs this index type.
+  // F must have signature:
+  //   bool fn(const vef_index_ctx_t*, vef_table_storage_def_t*,
+  //           char*, uint32_t)
+  // The server calls F at load time to learn the backing table's schema,
+  // then opens & locks the table around DML callbacks; the open handle is
+  // delivered through vef_index_ctx_t::table_storage_handle.
+  template <auto F>
+  constexpr GlobalBuilder<Context, Bits> table_storage() && {
+    static_assert(std::is_pointer_v<decltype(F)> &&
+                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
+                  "table_storage: F must be a plain function pointer");
+    intf_.table_storage_def = detail::TableStorageDefWrapper<F>::invoke;
     return {name_, intf_};
   }
 

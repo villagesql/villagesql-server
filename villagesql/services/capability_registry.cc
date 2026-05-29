@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/keyring.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/ping.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sql_query.h"
@@ -28,9 +29,11 @@
 #include "villagesql/sdk/include/villagesql/abi/preview/status_var.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/table_storage.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/thread_worker.h"
 #include "villagesql/services/preview/auth.h"
 #include "villagesql/services/preview/column_store.h"
+#include "villagesql/services/preview/custom_index_table_storage_backend.h"
 #include "villagesql/services/preview/index_profile.h"
 #include "villagesql/services/preview/index_type.h"
 #include "villagesql/services/preview/keyring.h"
@@ -40,6 +43,7 @@
 #include "villagesql/services/preview/status_var.h"
 #include "villagesql/services/preview/storage.h"
 #include "villagesql/services/preview/sys_var.h"
+#include "villagesql/services/preview/table_storage.h"
 #include "villagesql/services/preview/thread_worker.h"
 
 // Each register_capability() call declares the version of each ABI
@@ -176,6 +180,10 @@ void register_builtin_capabilities() {
                       {.vtable = preview_index_profile_vtable(),
                        .vtable_hash = "ver-1",
                        .capability_config_hash = "ver-1"});
+  register_capability(
+      VEF_PREVIEW_TABLE_STORAGE_NAME,
+      {.vtable = preview_table_storage_vtable(), .vtable_hash = "ver-1"});
+  register_table_storage_custom_index_backend();
   register_capability(
       VEF_PREVIEW_SQL_QUERY_NAME,
       {.vtable = preview_sql_query_vtable(), .vtable_hash = "ver-1"});

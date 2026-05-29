@@ -1,0 +1,7 @@
+{
+  "name": "VSQL_BLOOM_HIDDEN_TEST",
+  "version": "0.0.1",
+  "description": "Tests a hidden-table-backed Bloom index cache",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

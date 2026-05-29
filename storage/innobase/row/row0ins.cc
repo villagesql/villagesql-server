@@ -3631,7 +3631,12 @@ static inline void row_ins_get_row_from_query_block(
   ut_ad(node->state == INS_NODE_INSERT_ENTRIES);
 
   while (node->index != nullptr) {
-    if (node->index->type != DICT_FTS) {
+    // TODO(villagesql-indexing): upstream this skip to #650's follow-up.
+    // Custom indexes have no B-tree (page == FIL_NULL); the extension
+    // handles maintenance through the VillageSQL custom-index runtime's
+    // ha_write_row hook, so InnoDB must not try to insert into them here.
+    if (node->index->type != DICT_FTS &&
+        !villagesql::innodb::Custom_index::is_custom(node->index)) {
       err = row_ins_index_entry_step(node, thr);
 
       switch (err) {

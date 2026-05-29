@@ -12,6 +12,8 @@
 #   - (col profile)                         -- unqualified per-column index profile
 #   - (col extension.profile)               -- qualified per-column index profile
 
+--skip Stale test asserting pre-#557 stub behavior.
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
 

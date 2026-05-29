@@ -1,0 +1,35 @@
+--echo #
+--echo # BLOOM custom index DML maintenance
+--echo #
+
+INSTALL EXTENSION BLOOM;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  s VARCHAR(32)
+);
+
+CREATE INDEX idx_s ON t (s) USING EXTENDED(BLOOM.bloom);
+
+INSERT INTO t VALUES
+  (1, 'apple'),
+  (2, 'banana'),
+  (3, 'cherry');
+
+SELECT BLOOM.bloom_index_count('test.t.idx_s') AS count_after_insert;
+SELECT BLOOM.bloom_search('test.t.idx_s', 'apple') AS search_after_insert;
+SELECT BLOOM.bloom_might_contain(
+  'test.t.idx_s', 'durian') AS missing_after_insert;
+
+UPDATE t SET s = 'apricot' WHERE id = 1;
+
+SELECT BLOOM.bloom_search('test.t.idx_s', 'apple') AS old_after_update;
+SELECT BLOOM.bloom_search('test.t.idx_s', 'apricot') AS new_after_update;
+
+DELETE FROM t WHERE id = 2;
+
+SELECT BLOOM.bloom_index_count('test.t.idx_s') AS count_after_delete;
+SELECT BLOOM.bloom_search('test.t.idx_s', 'banana') AS search_after_delete;
+
+DROP TABLE t;
+UNINSTALL EXTENSION BLOOM;

@@ -1,0 +1,46 @@
+INSTALL EXTENSION MVECTOR;
+
+CREATE TABLE t (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v MVECTOR(3)
+);
+
+INSERT INTO t (v) VALUES
+  ('[1,0,0]'),
+  ('[0,1,0]'),
+  ('[0,0,1]'),
+  ('[1,1,0]'),
+  ('[2,0,0]');
+
+SELECT MVECTOR.mvector_l2_distance(
+  MVECTOR::from_string('[1,0,0]'),
+  MVECTOR::from_string('[2,0,0]')) AS d;
+SELECT MVECTOR.mvector_cosine_distance(
+  MVECTOR::from_string('[1,0,0]'),
+  MVECTOR::from_string('[2,0,0]')) AS d;
+SELECT MVECTOR.mvector_cosine_distance(
+  MVECTOR::from_string('[1,0,0]'),
+  MVECTOR::from_string('[0,1,0]')) AS d;
+
+SELECT id, v,
+  MVECTOR.mvector_l2_distance(
+    v, MVECTOR::from_string('[1,0,0]')) AS d
+  FROM t
+  ORDER BY d, id
+  LIMIT 3;
+
+SELECT id, v,
+  MVECTOR.mvector_cosine_distance(
+    v, MVECTOR::from_string('[1,0,0]')) AS d
+  FROM t
+  ORDER BY d, id
+  LIMIT 3;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT MVECTOR.mvector_l2_distance(
+  MVECTOR::from_string('[1,0]'),
+  MVECTOR::from_string('[1,0,0]')) AS d;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION MVECTOR;

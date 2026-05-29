@@ -1,0 +1,20 @@
+#
+# Driver test: duplicate insert (after lowercasing) must fail and
+# leave the base table unchanged.
+#
+INSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;
+CREATE TABLE users (
+id INT PRIMARY KEY,
+email CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+INDEX idx_lower_email (email) USING EXTENDED(uniq_lower)
+);
+INSERT INTO users VALUES (1, 'alice@example.com');
+# Same value, different case — must fail.
+INSERT INTO users VALUES (2, 'Alice@Example.com');
+ERROR HY000: Got error 122 - 'Internal (unspecified) error in handler' from storage engine
+# Base table unchanged: only id=1 present.
+SELECT id, email FROM users ORDER BY id;
+id	email
+1	alice@example.com
+DROP TABLE users;
+UNINSTALL EXTENSION VSQL_UNIQ_LOWER_TEST;

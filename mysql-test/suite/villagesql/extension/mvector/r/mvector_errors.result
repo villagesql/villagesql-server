@@ -1,0 +1,27 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t_err (v MVECTOR);
+ERROR 42000: Type 'MVECTOR.MVECTOR' requires a length specification near 'MVECTOR)' at line 1
+CREATE TABLE t_err (v MVECTOR(0));
+ERROR 42000: Invalid length '0' for type 'MVECTOR.MVECTOR' near 'MVECTOR(0))' at line 1
+CREATE TABLE t_err (v MVECTOR(-1));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-1))' at line 1
+CREATE TABLE t_err (v MVECTOR(''));
+ERROR 42000: Empty parameter string for type 'MVECTOR.MVECTOR' near 'MVECTOR(''))' at line 1
+CREATE TABLE t_err (v MVECTOR('invalid'));
+ERROR 42000: Invalid parameter string for type 'MVECTOR.MVECTOR' near 'MVECTOR('invalid'))' at line 1
+CREATE TABLE t_err (v MVECTOR('dimension=0'));
+ERROR 42000: MVECTOR: dimension must be in 1..4096, got 0 near 'MVECTOR('dimension=0'))' at line 1
+CREATE TABLE t_err (v MVECTOR('unknown_key=5'));
+ERROR 42000: MVECTOR: dimension must be a positive integer near 'MVECTOR('unknown_key=5'))' at line 1
+SELECT MVECTOR.mvector_dot_product('[1,2,3]', '[4,5,6]');
+ERROR HY000: Cannot initialize function 'mvector_dot_product': cannot determine type parameters for MVECTOR.MVECTOR in argument 1
+CREATE TABLE t_dim3 (v MVECTOR(3));
+CREATE TABLE t_dim4 (v MVECTOR(4));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+INSERT INTO t_dim4 (v) VALUES ('[1,2,3,4]');
+SELECT MVECTOR.mvector_dot_product(
+(SELECT v FROM t_dim3 LIMIT 1),
+(SELECT v FROM t_dim4 LIMIT 1));
+ERROR HY000: Cannot initialize function 'mvector_dot_product': conflicting type parameters for MVECTOR.MVECTOR in arguments 1 and 2
+DROP TABLE t_dim3, t_dim4;
+UNINSTALL EXTENSION MVECTOR;

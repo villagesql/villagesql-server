@@ -1,0 +1,51 @@
+INSTALL EXTENSION MVECTOR;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v MVECTOR(3)
+);
+INSERT INTO t VALUES
+(1, '[9,0,0]'),
+(2, '[0,0,0]'),
+(3, '[2,0,0]'),
+(4, '[1,0,0]');
+SELECT MVECTOR.mvector_index_clear('t_v_idx') AS cleared;
+cleared
+1
+SELECT MVECTOR.mvector_index_upsert('t_v_idx', id, v) AS rebuilt
+FROM t
+ORDER BY id;
+rebuilt
+1
+1
+1
+1
+SELECT MVECTOR.mvector_index_count('t_v_idx') AS count_after_rebuild;
+count_after_rebuild
+4
+SELECT MVECTOR.mvector_search_nn(
+'t_v_idx', MVECTOR::from_string('[0,0,0]'), 3) AS nn_after_rebuild;
+nn_after_rebuild
+2,4,3
+UPDATE t SET v = '[10,0,0]' WHERE id = 4;
+DELETE FROM t WHERE id = 2;
+INSERT INTO t VALUES (5, '[0.5,0,0]');
+SELECT MVECTOR.mvector_index_clear('t_v_idx') AS cleared_again;
+cleared_again
+1
+SELECT MVECTOR.mvector_index_upsert('t_v_idx', id, v) AS rebuilt_again
+FROM t
+ORDER BY id;
+rebuilt_again
+1
+1
+1
+1
+SELECT MVECTOR.mvector_index_count('t_v_idx') AS count_after_second_rebuild;
+count_after_second_rebuild
+4
+SELECT MVECTOR.mvector_search_nn(
+'t_v_idx', MVECTOR::from_string('[0,0,0]'), 3) AS nn_after_second_rebuild;
+nn_after_second_rebuild
+5,3,1
+DROP TABLE t;
+UNINSTALL EXTENSION MVECTOR;

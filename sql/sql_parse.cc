@@ -187,6 +187,7 @@
 #include "thr_lock.h"
 #include "villagesql/include/error.h"
 #include "villagesql/services/preview/statement_event.h"
+#include "villagesql/sql/custom_index_runtime.h"
 #include "violite.h"
 
 #ifdef WITH_LOCK_ORDER
@@ -3700,9 +3701,19 @@ int mysql_execute_command(THD *thd, bool first_level) {
                                false))
           goto error; /* purecov: inspected */
       }
+      // VillageSQL: snapshot the custom-index intfs for each table being
+      // dropped, before MySQL's DROP TABLE wipes the victionary entries
+      // we need to consult. We drop the backing storage after the base
+      // drop succeeds.
+      auto vsql_drop_snapshot =
+          villagesql::custom_index_snapshot_for_drop(thd, first_table);
       /* DDL and binlog write order are protected by metadata locks. */
       res = mysql_rm_table(thd, first_table, lex->drop_if_exists,
                            lex->drop_temporary);
+      if (!res) {
+        villagesql::custom_index_drop_snapshotted_storage(
+            thd, vsql_drop_snapshot.get());
+      }
       /* when dropping temporary tables if @@session_track_state_change is ON
          then send the boolean tracker in the OK packet */
       if (!res && lex->drop_temporary) {

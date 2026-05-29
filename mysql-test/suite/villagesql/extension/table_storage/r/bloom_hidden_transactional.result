@@ -1,0 +1,185 @@
+#
+# Driver test for transactional consistency between a base table and
+# the hidden table backing its custom index. The current behavior is
+# recorded here so we can see what (if anything) is broken; the
+# expected behavior is that hidden-table rows live and die with the
+# user's transaction on the base table.
+#
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+bucket INT NOT NULL
+);
+CREATE INDEX idx_bucket ON t (bucket)
+USING EXTENDED(bloom);
+#
+# Case 1: autocommit INSERT — row should land in the hidden table.
+#
+INSERT INTO t VALUES (1, 10);
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+#
+# Case 2: explicit COMMIT — same expectation.
+#
+BEGIN;
+INSERT INTO t VALUES (2, 20);
+COMMIT;
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	20
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+20	2
+#
+# Case 3: ROLLBACK of a single-statement transaction.
+# Expected (once transactional support is wired): the hidden-table
+# row for id=3 must NOT survive the rollback.
+#
+BEGIN;
+INSERT INTO t VALUES (3, 30);
+# Inside the transaction: the writer's own view should include the
+# new (30, 3) row before we decide to roll back.
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	20
+3	30
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+20	2
+30	3
+ROLLBACK;
+# After rollback the (30, 3) row should be gone from both.
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	20
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+20	2
+#
+# Case 4: ROLLBACK of a multi-statement transaction.
+# Expected: neither id=4 nor id=5 should appear in the hidden table.
+#
+BEGIN;
+INSERT INTO t VALUES (4, 40);
+INSERT INTO t VALUES (5, 50);
+ROLLBACK;
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	20
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+20	2
+#
+# Case 5: DELETE rolled back.
+# Expected: id=2's hidden-table row should be present after rollback.
+#
+BEGIN;
+DELETE FROM t WHERE id = 2;
+ROLLBACK;
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	20
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+20	2
+#
+# Case 6: Isolation between sessions — uncommitted writes in con1
+# must not be visible to con2.
+#
+BEGIN;
+INSERT INTO t VALUES (6, 60);
+# con1's own view of the hidden table should include (60, 6).
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+WHERE bucket = 60;
+bucket	row_id
+60	6
+# con2 should NOT see (60, 6) — con1 hasn't committed.
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+WHERE bucket = 60;
+bucket	row_id
+COMMIT;
+# After commit, con2 should now see (60, 6).
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+WHERE bucket = 60;
+bucket	row_id
+60	6
+#
+# Case 7: SAVEPOINT — ROLLBACK TO savepoint should undo the
+# writes done since the savepoint, including their hidden-table
+# rows, while leaving earlier writes in the same transaction
+# intact.
+#
+BEGIN;
+INSERT INTO t VALUES (7, 70);
+SAVEPOINT after_7;
+INSERT INTO t VALUES (8, 80);
+INSERT INTO t VALUES (9, 90);
+# Before rolling back: all three new rows should be visible to this
+# transaction.
+SELECT id, bucket FROM t WHERE id IN (7, 8, 9) ORDER BY id;
+id	bucket
+7	70
+8	80
+9	90
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+WHERE bucket IN (70, 80, 90) ORDER BY bucket, row_id;
+bucket	row_id
+70	7
+80	8
+90	9
+ROLLBACK TO SAVEPOINT after_7;
+# After ROLLBACK TO: only (7, 70) should remain.
+SELECT id, bucket FROM t WHERE id IN (7, 8, 9) ORDER BY id;
+id	bucket
+7	70
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+WHERE bucket IN (70, 80, 90) ORDER BY bucket, row_id;
+bucket	row_id
+70	7
+COMMIT;
+# After COMMIT: still only (7, 70).
+SELECT id, bucket FROM t WHERE id IN (7, 8, 9) ORDER BY id;
+id	bucket
+7	70
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+WHERE bucket IN (70, 80, 90) ORDER BY bucket, row_id;
+bucket	row_id
+70	7
+#
+# Final base-table vs hidden-table snapshot for the record.
+#
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	20
+6	60
+7	70
+SELECT bucket, row_id FROM villagesql.__hidden_bloom_test
+ORDER BY bucket, row_id;
+bucket	row_id
+10	1
+20	2
+60	6
+70	7
+DROP TABLE t;
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

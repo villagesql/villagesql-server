@@ -1,0 +1,62 @@
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+CREATE TABLE bloom_owner (
+id INT PRIMARY KEY,
+bucket INT NOT NULL,
+INDEX idx (bucket) USING EXTENDED(bloom)
+);
+SELECT bloom_create() AS created;
+created
+1
+SELECT bloom_insert(10, 1, 'alpha')
+AS inserted_1;
+inserted_1
+1
+SELECT bloom_insert(10, 2, 'beta')
+AS inserted_2;
+inserted_2
+1
+SELECT bloom_insert(20, 3, 'gamma')
+AS inserted_3;
+inserted_3
+1
+SELECT bloom_cache_count()
+AS cache_before_load;
+cache_before_load
+0
+SELECT bloom_load_cache() AS loaded;
+loaded
+3
+SELECT bloom_cache_count()
+AS cache_after_load;
+cache_after_load
+3
+SELECT bloom_might_contain(10, 'alpha')
+AS might_contain_alpha;
+might_contain_alpha
+1
+SELECT bloom_might_contain(10, 'not stored')
+AS bucket_false_positive;
+bucket_false_positive
+1
+SELECT bloom_might_contain(99, 'alpha')
+AS absent_bucket;
+absent_bucket
+0
+SELECT bloom_search(10) AS bucket_10_rows;
+bucket_10_rows
+1,2
+SELECT bloom_delete(10, 2) AS deleted;
+deleted
+1
+SELECT bloom_load_cache() AS reloaded;
+reloaded
+2
+SELECT bloom_search(10)
+AS bucket_10_rows_after_delete;
+bucket_10_rows_after_delete
+1
+SELECT bloom_drop() AS dropped;
+dropped
+1
+DROP TABLE bloom_owner;
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

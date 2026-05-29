@@ -1,0 +1,7 @@
+{
+  "name": "VSQL_UNIQ_LOWER_TEST",
+  "version": "0.0.1",
+  "description": "Tests a hidden-table-backed unique index on lower(value)",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

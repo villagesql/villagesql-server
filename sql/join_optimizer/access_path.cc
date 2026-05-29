@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,6 +80,7 @@
 #include "sql/table.h"
 #include "sql/visible_fields.h"
 #include "template_utils.h"
+#include "villagesql/sql/custom_index_hypergraph_optimizer.h"
 
 using pack_rows::TableCollection;
 using std::all_of;
@@ -550,9 +552,15 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       }
       case AccessPath::INDEX_DISTANCE_SCAN: {
         const auto &param = path->index_distance_scan();
-        iterator = NewIterator<IndexDistanceScanIterator>(
-            thd, mem_root, param.table, param.idx, param.range,
-            path->num_output_rows(), examined_rows);
+        if (param.is_custom_index) {
+          iterator = villagesql::CreateCustomHypergraphDistanceIterator(
+              thd, mem_root, param.table, param.idx, param.custom_scan_spec,
+              path->num_output_rows(), examined_rows);
+        } else {
+          iterator = NewIterator<IndexDistanceScanIterator>(
+              thd, mem_root, param.table, param.idx, param.range,
+              path->num_output_rows(), examined_rows);
+        }
         break;
       }
       case AccessPath::REF: {

@@ -1,0 +1,83 @@
+#
+# Driver test for backfilling a custom index from existing rows
+# when CREATE INDEX / ALTER TABLE ADD INDEX runs on a populated
+# base table.
+#
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+bucket INT NOT NULL
+);
+#
+# Populate the base table BEFORE creating the custom index.
+#
+INSERT INTO t VALUES (1, 10), (2, 10), (3, 20), (4, 30);
+SELECT id, bucket FROM t ORDER BY id;
+id	bucket
+1	10
+2	10
+3	20
+4	30
+#
+# CREATE INDEX should backfill: index storage contains one row per
+# existing base-table row.
+#
+CREATE INDEX idx_bucket ON t (bucket)
+USING EXTENDED(bloom);
+SELECT bloom_create() AS inspector_created;
+inspector_created
+1
+SELECT bloom_load_cache() AS rows_after_create_index;
+rows_after_create_index
+4
+SELECT bloom_search(10) AS bucket_10;
+bucket_10
+1,2
+SELECT bloom_search(20) AS bucket_20;
+bucket_20
+3
+SELECT bloom_search(30) AS bucket_30;
+bucket_30
+4
+#
+# Ongoing maintenance still works after backfill.
+#
+INSERT INTO t VALUES (5, 40);
+SELECT bloom_load_cache() AS rows_after_followup_insert;
+rows_after_followup_insert
+5
+SELECT bloom_search(40) AS bucket_40;
+bucket_40
+5
+DROP TABLE t;
+SELECT bloom_drop() AS dropped;
+dropped
+1
+#
+# ALTER TABLE ADD INDEX on a separate populated table should also
+# backfill.
+#
+CREATE TABLE t (
+id INT PRIMARY KEY,
+bucket INT NOT NULL
+);
+INSERT INTO t VALUES (101, 11), (102, 22);
+ALTER TABLE t ADD INDEX idx_bucket (bucket)
+USING EXTENDED(bloom);
+SELECT bloom_create() AS inspector_recreated;
+inspector_recreated
+1
+SELECT bloom_load_cache() AS rows_after_alter_add_index;
+rows_after_alter_add_index
+2
+SELECT bloom_search(11) AS bucket_11;
+bucket_11
+101
+SELECT bloom_search(22) AS bucket_22;
+bucket_22
+102
+DROP TABLE t;
+SELECT bloom_drop() AS final_drop;
+final_drop
+1
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

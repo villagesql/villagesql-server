@@ -1,0 +1,78 @@
+INSTALL EXTENSION MVECTOR;
+SELECT MVECTOR::from_string('[1,2,3]') AS v;
+v
+[1,2,3]
+SELECT MVECTOR.MVECTOR::from_string('[4,5,6]') AS v;
+v
+[4,5,6]
+SELECT MVECTOR.mvector_scale(
+MVECTOR::from_string('[1,2,3]'),
+2.0) AS scaled;
+scaled
+[2,4,6]
+SELECT MVECTOR.mvector_dot_product(
+MVECTOR::from_string('[1,2,3]'),
+MVECTOR::from_string('[4,5,6]')) AS dot;
+dot
+32
+SELECT MVECTOR.mvector_dot_product(
+MVECTOR::from_string('[1,2,3]'),
+MVECTOR::from_string('[4,5]')) AS dot;
+ERROR HY000: Cannot initialize function 'mvector_dot_product': conflicting type parameters for MVECTOR.MVECTOR in arguments 1 and 2
+SELECT MVECTOR::from_string('[1,2,') AS v;
+ERROR HY000: error encountered during MVECTOR::from_string inference: mvector_from_string: missing ']'
+SELECT MVECTOR::from_string('[abc,2,3]') AS v;
+ERROR HY000: error encountered during MVECTOR::from_string inference: mvector_from_string: parse error
+SELECT MVECTOR::from_string('not a vector') AS v;
+ERROR HY000: error encountered during MVECTOR::from_string inference: mvector_from_string: missing '['
+CREATE TABLE t_dim3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR(3)
+);
+INSERT INTO t_dim3 (v) VALUES (MVECTOR::from_string('[1,2,3]'));
+INSERT INTO t_dim3 (v) VALUES (MVECTOR::from_string('[4,5,6]'));
+SELECT id, v FROM t_dim3 ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+UPDATE t_dim3 SET v = MVECTOR::from_string('[7,8,9]') WHERE id = 1;
+SELECT id, v FROM t_dim3 ORDER BY id;
+id	v
+1	[7,8,9]
+2	[4,5,6]
+INSERT INTO t_dim3 (v) VALUES (MVECTOR::from_string('[1,2]'));
+ERROR HY000: Cannot implicitly cast from MVECTOR.MVECTOR(2) to MVECTOR.MVECTOR(3) for column 'v' at row 1
+INSERT INTO t_dim3 (v) VALUES (MVECTOR::from_string('[1,2,3,4]'));
+ERROR HY000: Cannot implicitly cast from MVECTOR.MVECTOR(4) to MVECTOR.MVECTOR(3) for column 'v' at row 1
+SELECT COUNT(*) FROM t_dim3;
+COUNT(*)
+2
+UPDATE t_dim3 SET v = MVECTOR::from_string('[9,9]') WHERE id = 1;
+ERROR HY000: Cannot implicitly cast from MVECTOR.MVECTOR(2) to MVECTOR.MVECTOR(3) for column 'v' at row 1
+SELECT id, v FROM t_dim3 ORDER BY id;
+id	v
+1	[7,8,9]
+2	[4,5,6]
+SET @v3 = '[1,2,3]';
+SELECT MVECTOR::from_string(@v3) AS v;
+v
+[1,2,3]
+SET @v_match = '[4,5,6]';
+SELECT id FROM t_dim3 WHERE v = MVECTOR::from_string(@v_match);
+id
+2
+SET @v_bad = '[1,2,';
+SELECT MVECTOR::from_string(@v_bad) AS v;
+ERROR HY000: error encountered during MVECTOR::from_string inference: mvector_from_string: missing ']'
+SET @v_short = '[1,2]';
+INSERT INTO t_dim3 (v) VALUES (MVECTOR::from_string(@v_short));
+ERROR HY000: Cannot implicitly cast from MVECTOR.MVECTOR(2) to MVECTOR.MVECTOR(3) for column 'v' at row 1
+CREATE TABLE t_double3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v MVECTOR('dimension=3,type=double')
+);
+INSERT INTO t_double3 (v) VALUES (MVECTOR::from_string('[1,2,3]'));
+ERROR HY000: Cannot implicitly cast from MVECTOR.MVECTOR(3) to MVECTOR.MVECTOR('dimension=3,type=double') for column 'v' at row 1
+DROP TABLE t_double3;
+DROP TABLE t_dim3;
+UNINSTALL EXTENSION MVECTOR;

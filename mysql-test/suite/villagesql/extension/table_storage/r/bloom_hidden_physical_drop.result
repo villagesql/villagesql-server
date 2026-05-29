@@ -1,0 +1,44 @@
+#
+# Driver test: DROP TABLE on a base table with a custom index
+# should also drop the backing storage. Verified by:
+#   1. Create + populate + drop.
+#   2. Recreate the same base+index.
+#   3. Confirm the new index's storage is empty (no leftover rows
+#      from before the drop).
+#
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+bucket INT NOT NULL,
+INDEX idx_bucket (bucket) USING EXTENDED(bloom)
+);
+INSERT INTO t VALUES (1, 10), (2, 20);
+SELECT bloom_create() AS inspector_created;
+inspector_created
+1
+SELECT bloom_load_cache() AS rows_before_drop;
+rows_before_drop
+2
+DROP TABLE t;
+SELECT bloom_drop() AS dropped_inspector_after_drop;
+dropped_inspector_after_drop
+1
+#
+# Recreate. Storage should be empty (no leftover rows from before).
+#
+CREATE TABLE t (
+id INT PRIMARY KEY,
+bucket INT NOT NULL,
+INDEX idx_bucket (bucket) USING EXTENDED(bloom)
+);
+SELECT bloom_create() AS inspector_recreated;
+inspector_recreated
+1
+SELECT bloom_load_cache() AS rows_after_recreate;
+rows_after_recreate
+0
+DROP TABLE t;
+SELECT bloom_drop() AS final_drop;
+final_drop
+1
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

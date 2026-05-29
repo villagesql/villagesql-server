@@ -1,0 +1,39 @@
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+
+# Create a base table with a bloom index so the server materializes the
+# backing hidden storage. The inspector functions below operate against
+# that storage.
+CREATE TABLE bloom_owner (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL,
+  INDEX idx (bucket) USING EXTENDED(bloom)
+);
+
+SELECT bloom_create() AS created;
+SELECT bloom_insert(10, 1, 'alpha')
+  AS inserted_1;
+SELECT bloom_insert(10, 2, 'beta')
+  AS inserted_2;
+SELECT bloom_insert(20, 3, 'gamma')
+  AS inserted_3;
+SELECT bloom_cache_count()
+  AS cache_before_load;
+SELECT bloom_load_cache() AS loaded;
+SELECT bloom_cache_count()
+  AS cache_after_load;
+SELECT bloom_might_contain(10, 'alpha')
+  AS might_contain_alpha;
+SELECT bloom_might_contain(10, 'not stored')
+  AS bucket_false_positive;
+SELECT bloom_might_contain(99, 'alpha')
+  AS absent_bucket;
+SELECT bloom_search(10) AS bucket_10_rows;
+SELECT bloom_delete(10, 2) AS deleted;
+SELECT bloom_load_cache() AS reloaded;
+SELECT bloom_search(10)
+  AS bucket_10_rows_after_delete;
+SELECT bloom_drop() AS dropped;
+
+DROP TABLE bloom_owner;
+
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;

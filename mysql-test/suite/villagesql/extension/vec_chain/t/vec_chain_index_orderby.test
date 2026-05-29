@@ -1,0 +1,94 @@
+--echo #
+--echo # Driver test: ORDER BY vec_chain_l2_distance(...) LIMIT k is
+--echo # routed through the vec_chain custom index via the hypergraph
+--echo # optimizer hook. Validates the end-to-end path:
+--echo #   parser → optimizer recognition → custom-index scan →
+--echo #   walk_chain (gref traversal) → base-row fetch by PK → emit.
+--echo #
+
+--source include/have_hypergraph.inc
+
+INSTALL EXTENSION VSQL_VEC_CHAIN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v VSQL_VEC_CHAIN(3) NOT NULL,
+  INDEX idx_v (v) USING EXTENDED(vec_chain)
+);
+
+INSERT INTO t VALUES (1, '[10,0,0]');
+INSERT INTO t VALUES (2, '[0,10,0]');
+INSERT INTO t VALUES (3, '[0,0,10]');
+INSERT INTO t VALUES (4, '[1,1,1]');
+INSERT INTO t VALUES (5, '[2,0,0]');
+
+--echo # Capture the scan-count baseline; the counter is process-wide
+--echo # so the absolute value depends on what other tests ran. We only
+--echo # care about the delta across the ORDER BY queries below.
+--disable_query_log
+SET @scans_before = VSQL_VEC_CHAIN_TEST.vec_chain_scan_count();
+--enable_query_log
+
+--echo # Nearest 3 to [10,0,0]: id=1 (exact), id=5, id=4.
+SELECT id
+  FROM t
+  ORDER BY VSQL_VEC_CHAIN_TEST.vec_chain_l2_distance(
+    v, VSQL_VEC_CHAIN::from_string('[10,0,0]'))
+  LIMIT 3;
+
+--echo # Nearest 1 to the origin: id=4 ([1,1,1]).
+SELECT id
+  FROM t
+  ORDER BY VSQL_VEC_CHAIN_TEST.vec_chain_l2_distance(
+    v, VSQL_VEC_CHAIN::from_string('[0,0,0]'))
+  LIMIT 1;
+
+--echo # All five rows ordered by distance from the origin.
+--echo # A full-scan fallback would tie-break by PK order (1,2,3); the
+--echo # walker traverses newest-first so ties come out as (3,2,1).
+--echo # That difference is the signal that the index is actually used.
+SELECT id
+  FROM t
+  ORDER BY VSQL_VEC_CHAIN_TEST.vec_chain_l2_distance(
+    v, VSQL_VEC_CHAIN::from_string('[0,0,0]'))
+  LIMIT 100;
+
+--echo # LIMIT 4 must include the first member of the three-way tie
+--echo # (one of id=1/2/3), not skip it. Expected: 4,5,3,2 — proving
+--echo # the truncate happens AFTER the sort, not during the walk.
+SELECT id
+  FROM t
+  ORDER BY VSQL_VEC_CHAIN_TEST.vec_chain_l2_distance(
+    v, VSQL_VEC_CHAIN::from_string('[0,0,0]'))
+  LIMIT 4;
+
+--echo # Insert a new node that should slot between id=4 (~1.73) and
+--echo # id=5 (2.0): id=6 at [1.5,0,0] (distance 1.5). Expected new
+--echo # order from origin: 6,4,5,3,2,1.
+INSERT INTO t VALUES (6, '[1.5,0,0]');
+SELECT id
+  FROM t
+  ORDER BY VSQL_VEC_CHAIN_TEST.vec_chain_l2_distance(
+    v, VSQL_VEC_CHAIN::from_string('[0,0,0]'))
+  LIMIT 100;
+
+--echo # Tombstone behavior survives the optimizer path: deleting
+--echo # id=4 (now a middle-of-chain node, after id=6 was inserted)
+--echo # drops it from results without breaking the chain. With id=4
+--echo # gone, ordered by origin distance: 6 (1.5), 5 (2), then ties
+--echo # 3,2,1 at 10 → top-4 = 6,5,3,2.
+DELETE FROM t WHERE id = 4;
+SELECT id
+  FROM t
+  ORDER BY VSQL_VEC_CHAIN_TEST.vec_chain_l2_distance(
+    v, VSQL_VEC_CHAIN::from_string('[0,0,0]'))
+  LIMIT 4;
+
+--echo # Each of the six ORDER BY queries above should have invoked
+--echo # vec_chain's scan_begin once. If the optimizer routed through
+--echo # the custom index for all of them, scans_run = 6. A lower value
+--echo # would mean some query fell back to a full table scan + sort.
+SELECT VSQL_VEC_CHAIN_TEST.vec_chain_scan_count() - @scans_before AS scans_run;
+
+DROP TABLE t;
+UNINSTALL EXTENSION VSQL_VEC_CHAIN_TEST;

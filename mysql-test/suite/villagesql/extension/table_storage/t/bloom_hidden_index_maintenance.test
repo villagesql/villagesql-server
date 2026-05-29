@@ -1,0 +1,28 @@
+INSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  bucket INT NOT NULL
+);
+CREATE INDEX idx_bucket ON t (bucket)
+  USING EXTENDED(bloom);
+
+SELECT bloom_create() AS inspector_created;
+
+INSERT INTO t VALUES (1, 10), (2, 10);
+SELECT bloom_load_cache() AS loaded_after_insert;
+SELECT bloom_search(10) AS bucket_10_after_insert;
+
+DELETE FROM t WHERE id = 1;
+SELECT bloom_load_cache() AS loaded_after_delete;
+SELECT bloom_search(10) AS bucket_10_after_delete;
+
+UPDATE t SET bucket = 20 WHERE id = 2;
+SELECT bloom_load_cache() AS loaded_after_update;
+SELECT bloom_search(10) AS bucket_10_after_update;
+SELECT bloom_search(20) AS bucket_20_after_update;
+
+DROP TABLE t;
+SELECT bloom_drop() AS dropped;
+
+UNINSTALL EXTENSION VSQL_BLOOM_HIDDEN_TEST;
