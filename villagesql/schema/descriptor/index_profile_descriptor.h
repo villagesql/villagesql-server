@@ -111,7 +111,8 @@ class IndexProfileDescriptor {
                          TypeDescriptorKeyPrefix type_ref,
                          IndexTypeDescriptorKeyPrefix index_type_ref,
                          std::vector<vef_index_profile_fn_binding_t> functions,
-                         bool ordering_asc, bool default_for_type);
+                         std::vector<vef_index_profile_fn_binding_t> helpers,
+                         uint8_t ordering, bool default_for_type);
 
   // Disable copy, enable move.
   IndexProfileDescriptor(const IndexProfileDescriptor &) = delete;
@@ -154,11 +155,23 @@ class IndexProfileDescriptor {
     return index_type_ref_.index_type_name();
   }
 
+  // User-visible SQL functions (optimizer-rewritable).
   const std::vector<vef_index_profile_fn_binding_t> &functions() const {
     return functions_;
   }
 
-  bool ordering_asc() const { return ordering_asc_; }
+  // Helper functions invoked only by the index implementation via profile_fn.
+  const std::vector<vef_index_profile_fn_binding_t> &helpers() const {
+    return helpers_;
+  }
+
+  uint8_t ordering() const { return ordering_; }
+  bool ordering_asc() const {
+    return (ordering_ & VEF_INDEX_ORDERING_ASC) != 0;
+  }
+  bool ordering_desc() const {
+    return (ordering_ & VEF_INDEX_ORDERING_DESC) != 0;
+  }
 
   // True if this profile is the default for its (type_name, index_type_name)
   // pair — used when no profile is named at CREATE INDEX time.
@@ -169,7 +182,8 @@ class IndexProfileDescriptor {
   TypeDescriptorKeyPrefix type_ref_;
   IndexTypeDescriptorKeyPrefix index_type_ref_;
   std::vector<vef_index_profile_fn_binding_t> functions_;
-  bool ordering_asc_{true};
+  std::vector<vef_index_profile_fn_binding_t> helpers_;
+  uint8_t ordering_{VEF_INDEX_ORDERING_ASC};
   bool default_for_type_{false};
 };
 

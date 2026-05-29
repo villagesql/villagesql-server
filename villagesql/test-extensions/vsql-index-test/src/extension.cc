@@ -328,7 +328,7 @@ static const auto DUMMY_HNSW_L2_PROFILE = make_index_profile(kDummyProfileL2)
                                               .for_type(kDummyVECTOR)
                                               .using_index(kDummyHNSW)
                                               .with_function(1, DUMMY_L2_FN)
-                                              .with_function(2, DUMMY_HELPER_FN)
+                                              .with_helper(1, DUMMY_HELPER_FN)
                                               .ordering(IndexOrdering::ASC)
                                               .default_for_type(true)
                                               .build();

@@ -905,7 +905,7 @@ TEST_F(ValidatePreviewCapabilitiesTest, ValidIndexProfileCapability) {
   profile.type_name = "MYTYPE";
   profile.index_type_name = "HNSW";
   profile.function_count = 0;
-  profile.ordering_asc = 1;
+  profile.ordering = VEF_INDEX_ORDERING_ASC;
   profile.default_for_type = 1;
 
   vef_preview_index_profile_ext_desc_t ext_desc = {};

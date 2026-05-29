@@ -227,6 +227,7 @@
 //           .with(INDEX_PROFILE)
 //           .type(MY_TYPE))
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <new>
@@ -272,11 +273,17 @@ constexpr IndexStorage operator|(IndexStorage a, IndexStorage b) {
                                    static_cast<vef_index_storage_t>(b));
 }
 
-// Ordering of index scan results for use with make_index_profile().
+// Ordering flags for use with make_index_profile().ordering(). Values can be
+// combined with | to indicate a profile supports both scan directions.
 enum class IndexOrdering : uint8_t {
-  ASC = 0,
-  DESC = 1,
+  ASC = VEF_INDEX_ORDERING_ASC,
+  DESC = VEF_INDEX_ORDERING_DESC,
 };
+
+constexpr IndexOrdering operator|(IndexOrdering a, IndexOrdering b) {
+  return static_cast<IndexOrdering>(static_cast<uint8_t>(a) |
+                                    static_cast<uint8_t>(b));
+}
 
 // The SDK allocates IndexStorageCtx<T> and T from the InnoDB arena before
 // calling create/load, and destroys the arena (which calls ~T) after drop
@@ -888,8 +895,12 @@ struct IndexProfileDesc {
   const char *name;
   const char *type_name;
   const char *index_type_name;
+  // User-visible SQL functions (optimizer-rewritable).
   std::vector<IndexProfileFunctionBinding> functions;
-  bool ordering_asc;
+  // Helper functions invoked only by the index implementation via profile_fn.
+  // fn_ids are independent of the functions fn_id sequence.
+  std::vector<IndexProfileFunctionBinding> helpers;
+  uint8_t ordering;
   bool default_for_type;
 };
 
@@ -899,7 +910,7 @@ class IndexProfileBuilder {
     desc_.name = name;
     desc_.type_name = nullptr;
     desc_.index_type_name = nullptr;
-    desc_.ordering_asc = true;
+    desc_.ordering = static_cast<uint8_t>(IndexOrdering::ASC);
     desc_.default_for_type = false;
   }
 
@@ -913,17 +924,26 @@ class IndexProfileBuilder {
     return *this;
   }
 
-  // Bind fn_id to a function declared by the same extension via
-  // make_index_function. Multiple calls register multiple bindings; fn_ids
-  // must be unique within the profile.
+  // Bind fn_id to a user-visible SQL function. The optimizer may rewrite calls
+  // to this function as an index scan. fn_ids must be unique within the
+  // functions list.
   IndexProfileBuilder &with_function(uint32_t fn_id,
                                      const IndexFunctionDesc &fn) {
     desc_.functions.push_back({fn_id, fn});
     return *this;
   }
 
+  // Bind fn_id to a helper function invoked only by the index implementation
+  // via vef_index_ctx_t.profile_fn. fn_ids are independent of the functions
+  // sequence and must be unique within the helpers list.
+  IndexProfileBuilder &with_helper(uint32_t fn_id,
+                                   const IndexFunctionDesc &fn) {
+    desc_.helpers.push_back({fn_id, fn});
+    return *this;
+  }
+
   IndexProfileBuilder &ordering(IndexOrdering ord) {
-    desc_.ordering_asc = (ord == IndexOrdering::ASC);
+    desc_.ordering = static_cast<uint8_t>(ord);
     return *this;
   }
 
@@ -933,7 +953,15 @@ class IndexProfileBuilder {
     return *this;
   }
 
-  IndexProfileDesc build() { return std::move(desc_); }
+  IndexProfileDesc build() {
+    auto by_fn_id = [](const IndexProfileFunctionBinding &a,
+                       const IndexProfileFunctionBinding &b) {
+      return a.fn_id < b.fn_id;
+    };
+    std::sort(desc_.functions.begin(), desc_.functions.end(), by_fn_id);
+    std::sort(desc_.helpers.begin(), desc_.helpers.end(), by_fn_id);
+    return std::move(desc_);
+  }
 
  private:
   IndexProfileDesc desc_;
@@ -1116,30 +1144,41 @@ class IndexProfileCapability
   const vef_preview_index_profile_ext_desc_t *extension_desc() {
     for (size_t i = 0; i < N; ++i) {
       const IndexProfileDesc &d = *descs_[i];
-      auto &bindings = fn_bindings_[i];
-      bindings.clear();
-      for (const auto &fb : d.functions) {
-        vef_index_profile_fn_binding_t b{};
-        b.fn_id = fb.fn_id;
-        b.name = fb.function.name;
-        b.vdf = fb.function.vdf;
-        b.return_type = fb.function.return_type;
-        b.num_params = static_cast<uint32_t>(fb.function.num_params);
-        b.is_deterministic = fb.function.is_deterministic ? 1 : 0;
-        for (size_t j = 0;
-             j < fb.function.num_params && j < VEF_INDEX_PROFILE_MAX_FN_PARAMS;
-             ++j) {
-          b.param_types[j] = fb.function.param_types[j];
-        }
-        bindings.push_back(std::move(b));
-      }
+
+      auto fill_bindings =
+          [](const std::vector<IndexProfileFunctionBinding> &src,
+             std::vector<vef_index_profile_fn_binding_t> &dst) {
+            dst.clear();
+            for (const auto &fb : src) {
+              vef_index_profile_fn_binding_t b{};
+              b.fn_id = fb.fn_id;
+              b.name = fb.function.name;
+              b.vdf = fb.function.vdf;
+              b.return_type = fb.function.return_type;
+              b.num_params = static_cast<uint32_t>(fb.function.num_params);
+              b.is_deterministic = fb.function.is_deterministic ? 1 : 0;
+              for (size_t j = 0; j < fb.function.num_params &&
+                                 j < VEF_INDEX_PROFILE_MAX_FN_PARAMS;
+                   ++j) {
+                b.param_types[j] = fb.function.param_types[j];
+              }
+              dst.push_back(std::move(b));
+            }
+          };
+
+      fill_bindings(d.functions, fn_bindings_[i]);
+      fill_bindings(d.helpers, helper_bindings_[i]);
+
       vef_index_profile_reg_t &r = c_regs_[i];
       r.name = d.name;
       r.type_name = d.type_name;
       r.index_type_name = d.index_type_name;
-      r.function_count = static_cast<uint32_t>(bindings.size());
-      r.functions = bindings.empty() ? nullptr : bindings.data();
-      r.ordering_asc = d.ordering_asc ? 1 : 0;
+      r.function_count = static_cast<uint32_t>(fn_bindings_[i].size());
+      r.functions = fn_bindings_[i].empty() ? nullptr : fn_bindings_[i].data();
+      r.helper_count = static_cast<uint32_t>(helper_bindings_[i].size());
+      r.helpers =
+          helper_bindings_[i].empty() ? nullptr : helper_bindings_[i].data();
+      r.ordering = d.ordering;
       r.default_for_type = d.default_for_type ? 1 : 0;
     }
     ext_desc_.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
@@ -1165,9 +1204,10 @@ class IndexProfileCapability
 
   const IndexProfileDesc *descs_[N > 0 ? N : 1];
   vef_index_profile_reg_t c_regs_[N > 0 ? N : 1];
-  // Flat function binding arrays built lazily in extension_desc(). One vector
-  // per profile; each vector's .data() is pointed to by c_regs_[i].functions.
+  // Flat binding arrays built lazily in extension_desc(). One vector per
+  // profile; .data() is pointed to by c_regs_[i].functions / .helpers.
   std::vector<vef_index_profile_fn_binding_t> fn_bindings_[N > 0 ? N : 1];
+  std::vector<vef_index_profile_fn_binding_t> helper_bindings_[N > 0 ? N : 1];
   vef_preview_index_profile_ext_desc_t ext_desc_;
 };
 

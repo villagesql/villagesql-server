@@ -32,13 +32,15 @@ IndexProfileDescriptorKey::IndexProfileDescriptorKey(
 IndexProfileDescriptor::IndexProfileDescriptor(
     IndexProfileDescriptorKey key, TypeDescriptorKeyPrefix type_ref,
     IndexTypeDescriptorKeyPrefix index_type_ref,
-    std::vector<vef_index_profile_fn_binding_t> functions, bool ordering_asc,
+    std::vector<vef_index_profile_fn_binding_t> functions,
+    std::vector<vef_index_profile_fn_binding_t> helpers, uint8_t ordering,
     bool default_for_type)
     : key_(std::move(key)),
       type_ref_(std::move(type_ref)),
       index_type_ref_(std::move(index_type_ref)),
       functions_(std::move(functions)),
-      ordering_asc_(ordering_asc),
+      helpers_(std::move(helpers)),
+      ordering_(ordering),
       default_for_type_(default_for_type) {}
 
 }  // namespace villagesql

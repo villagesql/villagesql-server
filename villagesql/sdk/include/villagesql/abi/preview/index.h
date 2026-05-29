@@ -124,6 +124,9 @@ typedef struct {
   // Index profile function call interface. Always non-NULL.
   vef_index_profile_fn profile_fn;
 
+  // Index profile helper call interface. Always non-NULL.
+  vef_index_profile_fn helper_fn;
+
   // Get maximum key storage length. Always non-NULL.
   vef_index_max_key_len_fn key_len_fn;
 
@@ -600,16 +603,28 @@ typedef struct {
   // Name of the index type (vef_index_type_reg_t.name) that implements this
   // profile's storage.
   const char *index_type_name;
+  // User-visible SQL functions. The optimizer pattern-matches calls to these
+  // functions in queries and substitutes an index scan.
   uint32_t function_count;
   // Pointer to a flat array of function_count bindings. NULL when
   // function_count is zero.
   const vef_index_profile_fn_binding_t *functions;
-  // 1 if the profile's distance ordering is ascending; 0 for descending.
-  uint8_t ordering_asc;
+  // Helper functions invoked only by the index implementation via
+  // vef_index_ctx_t.profile_fn. fn_ids are independent of function fn_ids.
+  uint32_t helper_count;
+  // Pointer to a flat array of helper_count bindings. NULL when
+  // helper_count is zero.
+  const vef_index_profile_fn_binding_t *helpers;
+  // Bitmask of VEF_INDEX_ORDERING_* flags indicating supported scan directions.
+  uint8_t ordering;
   // 1 if this is the default profile for the type when no profile is named at
   // CREATE INDEX time.
   uint8_t default_for_type;
 } vef_index_profile_reg_t;
+
+// Bitmask values for vef_index_profile_reg_t.ordering.
+#define VEF_INDEX_ORDERING_ASC 0x01
+#define VEF_INDEX_ORDERING_DESC 0x02
 
 // Extension descriptor for vsql::preview::index_profile.
 typedef struct {
