@@ -199,7 +199,6 @@
 //               .restore<&my_restore>()
 //               .end<&my_end_scan>()
 //           .global()
-//           .global()
 //               .capabilities(IndexSupport::POINT_LOOKUP |
 //                             IndexSupport::RANGE_SCAN | ...)
 //               .storage_props(IndexStorage::HAS_ROW_REF | ...)
