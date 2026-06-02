@@ -10,7 +10,7 @@
 [![Discord](https://img.shields.io/discord/1445037832707113043?logo=discord&label=discord)](https://discord.com/invite/KSr6whd3Fr)
 [![GitHub Release](https://img.shields.io/github/v/release/villagesql/villagesql-server?include_prereleases)](https://github.com/villagesql/villagesql-server/releases)
 
-VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL 8.4.8 LTS** that introduces the **VillageSQL Extension Framework (VEF)**.
+VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL 8.4.9 LTS** that introduces the **VillageSQL Extension Framework (VEF)**.
 
 VEF enables custom data types and functions while maintaining MySQL 8.4 compatibility.
 
@@ -42,7 +42,7 @@ VEF enables custom data types and functions while maintaining MySQL 8.4 compatib
 
 ## Installation (Building from Source)
 
-During the alpha phase, VillageSQL must be built from source. Docker and pre-built binary installations are coming soon. VillageSQL follows the same build requirements as standard MySQL 8.4.
+For quick installation, visit [villagesql.com/install](https://villagesql.com/install) — the shell installer and Docker are both available. To build from source, VillageSQL follows the same build requirements as standard MySQL 8.4.
 
 ### Prerequisites
 
@@ -290,13 +290,12 @@ VillageSQL provides a C++ SDK for building high-performance extensions.
   - `villagesql/examples/vsql-simple`: A minimal "Hello World" implementation of a custom type and functions.
 - **Templates:**
   - [`villagesql/vsql-extension-template`](https://github.com/villagesql/vsql-extension-template)
-- **Header API:** Detailed extension API definitions can be found in `villagesql/include/villagesql/extension.h`.
+- **Header API:** Detailed extension API definitions can be found in `villagesql/include/villagesql/vsql.h`.
 
 ## Known Limitations
 
-- **Source-only Build:** No official Docker images or binary packages are available yet.
 - **No Custom Indexes:** Custom data types cannot be indexed in this version (coming soon).
-- **Limited Aggregate Support:** COUNT(DISTINCT), MIN, and MAX work with custom types. We are investigating other aggregate functions (SUM, AVG, etc.) for inclusion in a future release.
+- **Limited Built-in Aggregate Support:** COUNT(DISTINCT), MIN, and MAX work with custom types. Extensions can define custom aggregate functions via VDF Aggregates. Built-in aggregates like SUM and AVG are not yet supported for custom types.
 - **Alpha Stability:** Expect breaking changes and potential bugs as we progress towards Beta.
 - **No Windows Support:** We don't support compiling to .dll to Windows yet. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
 
@@ -307,8 +306,7 @@ Priority items are listed below. The full roadmap can be found at [villagesql.co
 - [ ] **Custom Indexes:** Support for indexing custom data types. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
 - [ ] **Variable Length Custom Types:** Support for custom types with variable storage size. ([#13](https://github.com/villagesql/villagesql-server/issues/13))
 - [ ] **ALTER/UPGRADE Extension:** Lifecycle management for installed extensions. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
-- [ ] **Full Aggregate Function Support:** Investigating support for additional aggregate functions (SUM, AVG, etc.) with custom types. Partial support (COUNT(DISTINCT), MIN, MAX) available in 0.0.2. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
-- [ ] **Docker & Shell Installer:** Official images and simplified installation. ([#15](https://github.com/villagesql/villagesql-server/issues/15), [#18](https://github.com/villagesql/villagesql-server/issues/18))
+- [ ] **Full Built-in Aggregate Support:** Investigating support for built-in aggregate functions (SUM, AVG, etc.) with custom types. COUNT(DISTINCT), MIN, and MAX work today. Extensions can implement custom aggregates via VDF Aggregates. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
 - [ ] **Startup Install Flag:** Automatic extension installation on server startup. ([#17](https://github.com/villagesql/villagesql-server/issues/17))
 - [ ] **Windows Support:** Native Windows compilation and .dll support. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
 - [ ] **Analytical Capabilities:** Embedded analytical engines (e.g., DuckDB integration).
