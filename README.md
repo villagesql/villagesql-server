@@ -251,8 +251,8 @@ Once the server is running, you can manage extensions using new SQL commands:
 INSTALL EXTENSION vsql_complex;
 
 -- Verify the extension is loaded
-SELECT extension_name, negotiated_protocol
-FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION;
+SELECT extension_name, extension_version
+FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 -- Create a database and use it
 CREATE DATABASE demo;
