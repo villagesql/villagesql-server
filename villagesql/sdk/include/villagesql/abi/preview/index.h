@@ -29,6 +29,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "../types.h"
 #include "storage.h"
 
 #ifdef __cplusplus
@@ -516,6 +517,113 @@ typedef struct {
   vef_type_index_parse_func_t parse;
 
 } vef_type_index_intf_t;
+
+// ===========================================================================
+// vsql::preview::index_type capability
+// ===========================================================================
+//
+// Registers custom index type implementations. Pass a
+// vef_preview_index_type_ext_desc_t as vef_required_capability_t.extension_data
+// when requiring this capability.
+//
+// Capability name: VEF_PREVIEW_INDEX_TYPE_NAME
+
+#define VEF_PREVIEW_INDEX_TYPE_NAME "vsql::preview::index_type"
+
+#define VEF_PREVIEW_INDEX_TYPE_ABI_VERSION_1 1
+#define VEF_PREVIEW_INDEX_TYPE_ABI_VERSION VEF_PREVIEW_INDEX_TYPE_ABI_VERSION_1
+
+// One index type entry: name plus a pointer to the interface struct.
+// Both pointers must remain valid for the lifetime of the extension.
+typedef struct {
+  const char *name;
+  const vef_type_index_intf_t *intf;
+} vef_index_type_reg_t;
+
+// Extension descriptor for vsql::preview::index_type.
+typedef struct {
+  // Must be set to VEF_PREVIEW_INDEX_TYPE_ABI_VERSION.
+  uint32_t version;
+  uint32_t count;
+  // Flat array of count entries. NULL when count is zero.
+  const vef_index_type_reg_t *types;
+} vef_preview_index_type_ext_desc_t;
+
+// Minimal vtable for vsql::preview::index_type.
+typedef struct {
+  uint32_t version;
+} vef_preview_index_type_t;
+
+// ===========================================================================
+// vsql::preview::index_profile capability
+// ===========================================================================
+//
+// Registers index profiles. Each profile binds a custom type to an index type
+// and declares the helper functions (distance, compare, etc.) used by the
+// index storage implementation. The server registers those functions as SQL
+// VDFs automatically when the profile is loaded.
+//
+// Pass a vef_preview_index_profile_ext_desc_t as
+// vef_required_capability_t.extension_data when requiring this capability.
+//
+// Capability name: VEF_PREVIEW_INDEX_PROFILE_NAME
+
+#define VEF_PREVIEW_INDEX_PROFILE_NAME "vsql::preview::index_profile"
+
+#define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1 1
+#define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION \
+  VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1
+
+// Maximum number of parameters a single index profile function may declare.
+// Matches vsql::func_builder::kMaxParams on the C++ side.
+#define VEF_INDEX_PROFILE_MAX_FN_PARAMS 8
+
+// One function binding within an index profile.
+// fn_id is the identifier used by the index storage implementation when it
+// calls vef_index_profile_fn in the index context. The remaining fields carry
+// the VDF metadata the server uses to register the function as a SQL function.
+typedef struct {
+  uint32_t fn_id;
+  const char *name;
+  vef_vdf_func_t vdf;
+  vef_type_t return_type;
+  vef_type_t param_types[VEF_INDEX_PROFILE_MAX_FN_PARAMS];
+  uint32_t num_params;
+  uint8_t is_deterministic;
+} vef_index_profile_fn_binding_t;
+
+// One registered index profile entry.
+typedef struct {
+  const char *name;
+  // Name of the custom type this profile applies to.
+  const char *type_name;
+  // Name of the index type (vef_index_type_reg_t.name) that implements this
+  // profile's storage.
+  const char *index_type_name;
+  uint32_t function_count;
+  // Pointer to a flat array of function_count bindings. NULL when
+  // function_count is zero.
+  const vef_index_profile_fn_binding_t *functions;
+  // 1 if the profile's distance ordering is ascending; 0 for descending.
+  uint8_t ordering_asc;
+  // 1 if this is the default profile for the type when no profile is named at
+  // CREATE INDEX time.
+  uint8_t default_for_type;
+} vef_index_profile_reg_t;
+
+// Extension descriptor for vsql::preview::index_profile.
+typedef struct {
+  // Must be set to VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION.
+  uint32_t version;
+  uint32_t count;
+  // Flat array of count entries. NULL when count is zero.
+  const vef_index_profile_reg_t *profiles;
+} vef_preview_index_profile_ext_desc_t;
+
+// Minimal vtable for vsql::preview::index_profile.
+typedef struct {
+  uint32_t version;
+} vef_preview_index_profile_t;
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -121,29 +121,113 @@
 // cursor object and assign it to *cursor. In end(), free the cursor and set
 // *cursor to nullptr. The SDK does not wrap cursor state.
 //
-// INDEX PROFILE
-// -------------
-//
-//   make_index_profile("hnsw_l2")
-//       .for_type(SVECTOR)
-//       .using_index("hnsw")
-//       .with_function(1, "l2_distance")   // fn_id 1 -> l2_distance
-//       .ordering(IndexOrdering::ASC)
-//       .build();
-//
 // INDEX FUNCTION
 // --------------
 //
-//   make_index_function<&svector_distance_l2>("l2_distance")
-//       .returns(REAL)
-//       .param(SVECTOR)
-//       .param(SVECTOR)
-//       .deterministic()
-//       .build();
+// Index functions must be deterministic. Build one and store it as static
+// const - it is passed by reference to IndexProfileBuilder::with_function().
 //
-// TODO(villagesql-indexing): make_index_function is a stub; full server-side
-// integration is pending.
+//   static const auto MY_INDEX_FN =
+//       make_index_function<&my_index_fn>("my_index_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)     // TypeDesc built by vsql::make_type<kMyType>
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
+//
+// INDEX PROFILE
+// -------------
+//
+// Binds a custom type to an index type and assigns per-profile function IDs.
+// for_type() takes the type name string (the same kMyType constant passed to
+// make_type<kMyType>), not the TypeDesc. with_function() takes an
+// IndexFunctionDesc from make_index_function().build(), not a raw string.
+//
+//   static const auto MY_PROFILE =
+//       make_index_profile("my_profile")
+//           .for_type(kMyType)                // name string, not the TypeDesc
+//           .using_index(kMyIndex)
+//           .with_function(1, MY_INDEX_FN)    // fn_id 1 -> MY_INDEX_FN
+//           .with_function(2, MY_HELPER_FN)   // fn_id 2 -> MY_HELPER_FN
+//           .ordering(IndexOrdering::ASC)
+//           .build();
+//
+// EXTENSION REGISTRATION
+// ----------------------
+//
+// Putting the pieces together: index functions, index type, profile, capability
+// tokens, and the extension entry point.
+//
+//   static constexpr const char kMyType[]  = "my_type";
+//   static constexpr const char kMyIndex[] = "my_index";
+//
+//   // Type descriptor (see vsql.h). kMyType is the name string used below.
+//   constexpr auto MY_TYPE = vsql::make_type<kMyType>()...build();
+//
+//   // Step 1 - index functions (static: addresses must be stable).
+//   static const auto MY_INDEX_FN =
+//       make_index_function<&my_index_fn>("my_index_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
+//
+//   static const auto MY_HELPER_FN =
+//       make_index_function<&my_helper_fn>("my_helper_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
+//
+//   // Step 2 - index type (all 12 hooks required; constexpr).
+//   static constexpr auto MY_INDEX =
+//       make_index_type<kMyIndex, MyContext>()
+//           .lifecycle()
+//               .create<&my_create>()
+//               .load<&my_load>()
+//               .drop<&my_drop>()
+//           .dml()
+//               .insert<&my_insert>()
+//               .mark_delete<&my_mark_delete>()
+//               .purge<&my_purge>()
+//           .scan()
+//               .begin<&my_begin_scan>()
+//               .position<&my_position>()
+//               .fetch<&my_fetch>()
+//               .save<&my_save>()
+//               .restore<&my_restore>()
+//               .end<&my_end_scan>()
+//           .global()
+//               .capabilities(IndexSupport::POINT_LOOKUP |
+//                             IndexSupport::RANGE_SCAN | ...)
+//               .storage_props(IndexStorage::HAS_ROW_REF | ...)
+//               .options<MyOptions, &MyOptions::parse>()
+//               .build();
+//
+//   // Step 3 - profile: for_type takes the name string, not the TypeDesc.
+//   static const auto MY_PROFILE =
+//       make_index_profile("my_profile")
+//           .for_type(kMyType)
+//           .using_index(kMyIndex)
+//           .with_function(1, MY_INDEX_FN)
+//           .with_function(2, MY_HELPER_FN)
+//           .ordering(IndexOrdering::ASC)
+//           .build();
+//
+//   // Step 4 - capability tokens (static: SDK holds pointers into them).
+//   static auto INDEX_TYPE    = IndexTypeCapability().index_type(MY_INDEX);
+//   static auto INDEX_PROFILE =
+//   IndexProfileCapability().index_profile(MY_PROFILE);
+//
+//   // Step 5 - extension entry point.
+//   VEF_GENERATE_ENTRY_POINTS(
+//       vsql::make_extension()
+//           .with(INDEX_TYPE)
+//           .with(INDEX_PROFILE)
+//           .type(MY_TYPE))
 
+#include <array>
 #include <cstdio>
 #include <new>
 #include <type_traits>
@@ -151,7 +235,9 @@
 #include <vector>
 
 #include <villagesql/abi/preview/index.h>
+#include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/storage_api.h>
+#include <villagesql/vsql/func_builder.h>
 
 namespace vsql::preview_index_builder {
 
@@ -789,13 +875,16 @@ constexpr IndexTypeRootBuilder<Name, Context> make_index_type() {
 // that the bound function was declared by the same extension.
 struct IndexFunctionDesc {
   const char *name;
-  // TODO(villagesql-indexing): add return type, parameter types, and
-  // determinism flag once server-side consumption is defined.
+  vef_vdf_func_t vdf;
+  vef_type_t return_type;
+  std::array<vef_type_t, vsql::func_builder::kMaxParams> param_types;
+  size_t num_params;
+  bool is_deterministic;
 };
 
 struct IndexProfileFunctionBinding {
   uint32_t fn_id;
-  const char *function_name;
+  IndexFunctionDesc function;
 };
 
 struct IndexProfileDesc {
@@ -827,20 +916,12 @@ class IndexProfileBuilder {
     return *this;
   }
 
-  // Bind fn_id to a function registered by make_index_function or make_func.
-  // Multiple calls register multiple bindings; fn_ids must be unique within
-  // the profile.
-  IndexProfileBuilder &with_function(uint32_t fn_id,
-                                     const char *function_name) {
-    desc_.functions.push_back({fn_id, function_name});
-    return *this;
-  }
-
-  // Typed overload: accepts an IndexFunctionDesc directly, enforcing that the
-  // bound function was declared by the same extension via make_index_function.
+  // Bind fn_id to a function declared by the same extension via
+  // make_index_function. Multiple calls register multiple bindings; fn_ids
+  // must be unique within the profile.
   IndexProfileBuilder &with_function(uint32_t fn_id,
                                      const IndexFunctionDesc &fn) {
-    desc_.functions.push_back({fn_id, fn.name});
+    desc_.functions.push_back({fn_id, fn});
     return *this;
   }
 
@@ -869,40 +950,266 @@ inline IndexProfileBuilder make_index_profile(const char *name) {
 // make_index_function
 // ===========================================================================
 //
-// Registers a function for internal use by index operations (distance,
-// comparison). Index functions are distinct from SQL functions registered via
-// make_func: the optimizer needs explicit metadata about which functions define
-// index behavior, and index functions may be internal-only.
+// Registers a function for use by index operations (distance, comparison).
+// Index functions extend the VDF builder: make_index_function<&fn>("name")
+// uses the same .returns()/.param()/.deterministic() chain as make_func, and
+// .build() produces an IndexFunctionDesc carrying the full VDF metadata.
 //
-// TODO(villagesql-indexing): IndexFunctionDesc is a stub. Full integration
-// with the function registry (return type, parameter types, determinism flag)
-// is pending server-side support.
+// IndexFuncBuilder<F, N> wraps vsql::func_builder::FuncBuilder<F, N> via
+// containment, shadowing the methods that must preserve the derived type
+// through the chain. No changes to func_builder.h are required.
 
-class IndexFunctionBuilder {
+template <auto F, size_t NumParams, uint32_t Bits = 0,
+          vsql::func_builder::ParamMode Mode =
+              vsql::func_builder::ParamMode::kUnset>
+class IndexFuncBuilder {
+  using Inner = vsql::func_builder::FuncBuilder<F, NumParams, Mode>;
+  static constexpr uint32_t kDeterministic = 1u << 0;
+
  public:
-  explicit IndexFunctionBuilder(const char *name) { desc_.name = name; }
+  explicit IndexFuncBuilder(Inner inner) : inner_(std::move(inner)) {}
 
-  // TODO(villagesql-indexing): store and validate these once server-side
-  // consumption is defined.
-  IndexFunctionBuilder &returns(const char * /*type*/) { return *this; }
-  IndexFunctionBuilder &param(const char * /*type*/) { return *this; }
-  IndexFunctionBuilder &deterministic() { return *this; }
+  IndexFuncBuilder &returns(const char *t) {
+    inner_.returns(t);
+    return *this;
+  }
 
-  IndexFunctionDesc build() { return desc_; }
+  IndexFuncBuilder<F, NumParams + 1, Bits,
+                   vsql::func_builder::ParamMode::kFixed>
+  param(const char *t) const {
+    return IndexFuncBuilder<F, NumParams + 1, Bits,
+                            vsql::func_builder::ParamMode::kFixed>{
+        inner_.param(t)};
+  }
+
+  IndexFuncBuilder<F, NumParams, Bits | kDeterministic, Mode> deterministic()
+      && {
+    inner_.deterministic(true);
+    return IndexFuncBuilder<F, NumParams, Bits | kDeterministic, Mode>{
+        std::move(inner_)};
+  }
+
+  IndexFunctionDesc build() const {
+    static_assert(
+        (Bits & kDeterministic) != 0,
+        "index function: deterministic() must be called before build()");
+    auto d = inner_.build();
+    IndexFunctionDesc result{};
+    result.name = d.name();
+    result.vdf = d.vdf();
+    result.return_type = d.return_type();
+    result.num_params = d.num_params();
+    for (size_t i = 0; i < d.num_params(); ++i) {
+      result.param_types[i] = d.params()[i];
+    }
+    result.is_deterministic = d.deterministic();
+    return result;
+  }
 
  private:
-  IndexFunctionDesc desc_;
+  Inner inner_;
 };
 
-// F is accepted as a template parameter so the call site matches the final API
-// shape (make_index_function<&fn>("name")), but is intentionally not stored or
-// called in this stub. The function pointer is discarded; only the name is
-// retained. TODO(villagesql-indexing): store F once server integration is done.
 template <auto F>
-inline IndexFunctionBuilder make_index_function(const char *name) {
-  return IndexFunctionBuilder(name);
+inline IndexFuncBuilder<F, 0> make_index_function(const char *name) {
+  return IndexFuncBuilder<F, 0>{vsql::func_builder::make_func<F>(name)};
 }
 
+// ===========================================================================
+// IndexTypeCapability<N>
+// ===========================================================================
+//
+// Capability token that registers custom index type implementations.
+//
+// Usage:
+//   static constexpr auto HNSW_INDEX = make_index_type<...>()...build();
+//
+//   static auto INDEX_TYPE = IndexTypeCapability().index_type(HNSW_INDEX);
+//
+//   VEF_GENERATE_ENTRY_POINTS(
+//       make_extension().with(INDEX_TYPE).type(MY_TYPE))
+//
+// Each .index_type(desc) call appends one descriptor and returns a new
+// IndexTypeCapability<N+1>. INDEX_TYPE must have static storage duration.
+// The IndexTypeDesc passed to each .index_type() call must also have static
+// storage duration so that the intf pointer stored internally remains valid.
+
+template <size_t N = 0>
+class IndexTypeCapability {
+ public:
+  static constexpr const char *kName = VEF_PREVIEW_INDEX_TYPE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+
+  constexpr IndexTypeCapability() : regs_{} {}
+
+  constexpr IndexTypeCapability<N + 1> index_type(
+      const IndexTypeDesc &d) const {
+    return IndexTypeCapability<N + 1>(*this, {d.name, &d.intf});
+  }
+
+  const vef_preview_index_type_ext_desc_t *extension_desc() {
+    ext_desc_.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+    ext_desc_.count = static_cast<uint32_t>(N);
+    ext_desc_.types = N > 0 ? regs_ : nullptr;
+    return &ext_desc_;
+  }
+
+  void *vtable_{nullptr};
+
+  template <size_t M>
+  friend class IndexTypeCapability;
+
+ private:
+  template <size_t M>
+  constexpr IndexTypeCapability(const IndexTypeCapability<M> &base,
+                                vef_index_type_reg_t reg)
+      : regs_{} {
+    static_assert(M + 1 == N, "internal construction size mismatch");
+    for (size_t i = 0; i < M; ++i) regs_[i] = base.regs_[i];
+    regs_[M] = reg;
+  }
+
+  vef_index_type_reg_t regs_[N > 0 ? N : 1];
+  vef_preview_index_type_ext_desc_t ext_desc_{};
+};
+
+// ===========================================================================
+// IndexProfileCapability<N>
+// ===========================================================================
+//
+// Capability token that registers index profiles. Each profile binds a custom
+// type to an index type and declares its helper functions. The server registers
+// those functions as SQL VDFs automatically when the profile is loaded.
+//
+// Usage:
+//   static const auto MY_PROFILE = make_index_profile("hnsw_l2")...build();
+//
+//   static auto INDEX_PROFILE =
+//       IndexProfileCapability().index_profile(MY_PROFILE);
+//
+//   VEF_GENERATE_ENTRY_POINTS(
+//       make_extension().with(INDEX_PROFILE).type(MY_TYPE))
+//
+// Each .index_profile(desc) call appends one descriptor and returns a new
+// IndexProfileCapability<N+1>. INDEX_PROFILE must have static storage
+// duration. The IndexProfileDesc passed to each .index_profile() call must
+// also have static storage duration.
+
+template <size_t N = 0>
+class IndexProfileCapability {
+ public:
+  static constexpr const char *kName = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+
+  IndexProfileCapability() : descs_{}, c_regs_{}, ext_desc_{} {}
+
+  IndexProfileCapability<N + 1> index_profile(const IndexProfileDesc &d) const {
+    return IndexProfileCapability<N + 1>(*this, &d);
+  }
+
+  // Builds flat C ABI structs from the stored descriptors and returns a
+  // pointer to the extension descriptor. Called once at registration time;
+  // INDEX_PROFILE must be in static storage by then so that the internal
+  // arrays have stable addresses.
+  const vef_preview_index_profile_ext_desc_t *extension_desc() {
+    for (size_t i = 0; i < N; ++i) {
+      const IndexProfileDesc &d = *descs_[i];
+      auto &bindings = fn_bindings_[i];
+      bindings.clear();
+      for (const auto &fb : d.functions) {
+        vef_index_profile_fn_binding_t b{};
+        b.fn_id = fb.fn_id;
+        b.name = fb.function.name;
+        b.vdf = fb.function.vdf;
+        b.return_type = fb.function.return_type;
+        b.num_params = static_cast<uint32_t>(fb.function.num_params);
+        b.is_deterministic = fb.function.is_deterministic ? 1 : 0;
+        for (size_t j = 0;
+             j < fb.function.num_params && j < VEF_INDEX_PROFILE_MAX_FN_PARAMS;
+             ++j) {
+          b.param_types[j] = fb.function.param_types[j];
+        }
+        bindings.push_back(std::move(b));
+      }
+      vef_index_profile_reg_t &r = c_regs_[i];
+      r.name = d.name;
+      r.type_name = d.type_name;
+      r.index_type_name = d.index_type_name;
+      r.function_count = static_cast<uint32_t>(bindings.size());
+      r.functions = bindings.empty() ? nullptr : bindings.data();
+      r.ordering_asc = d.ordering_asc ? 1 : 0;
+      r.default_for_type = d.default_for_type ? 1 : 0;
+    }
+    ext_desc_.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+    ext_desc_.count = static_cast<uint32_t>(N);
+    ext_desc_.profiles = N > 0 ? c_regs_ : nullptr;
+    return &ext_desc_;
+  }
+
+  void *vtable_{nullptr};
+
+  template <size_t M>
+  friend class IndexProfileCapability;
+
+ private:
+  template <size_t M>
+  IndexProfileCapability(const IndexProfileCapability<M> &base,
+                         const IndexProfileDesc *d)
+      : descs_{}, c_regs_{}, ext_desc_{} {
+    static_assert(M + 1 == N, "internal construction size mismatch");
+    for (size_t i = 0; i < M; ++i) descs_[i] = base.descs_[i];
+    descs_[M] = d;
+  }
+
+  const IndexProfileDesc *descs_[N > 0 ? N : 1];
+  vef_index_profile_reg_t c_regs_[N > 0 ? N : 1];
+  // Flat function binding arrays built lazily in extension_desc(). One vector
+  // per profile; each vector's .data() is pointed to by c_regs_[i].functions.
+  std::vector<vef_index_profile_fn_binding_t> fn_bindings_[N > 0 ? N : 1];
+  vef_preview_index_profile_ext_desc_t ext_desc_;
+};
+
 }  // namespace vsql::preview_index_builder
+
+namespace vsql::detail {
+
+template <size_t N>
+struct CapabilityTraits<::vsql::preview_index_builder::IndexTypeCapability<N>> {
+  static constexpr const char *kName = VEF_PREVIEW_INDEX_TYPE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+  using AbiType = vef_preview_index_type_t;
+  using DescriptorType = vef_preview_index_type_ext_desc_t;
+
+  static void *vtable_destination(
+      ::vsql::preview_index_builder::IndexTypeCapability<N> *p) noexcept {
+    return static_cast<void *>(&p->vtable_);
+  }
+
+  static const void *extension_data(
+      ::vsql::preview_index_builder::IndexTypeCapability<N> *p) noexcept {
+    return p->extension_desc();
+  }
+};
+
+template <size_t N>
+struct CapabilityTraits<
+    ::vsql::preview_index_builder::IndexProfileCapability<N>> {
+  static constexpr const char *kName = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  using AbiType = vef_preview_index_profile_t;
+  using DescriptorType = vef_preview_index_profile_ext_desc_t;
+
+  static void *vtable_destination(
+      ::vsql::preview_index_builder::IndexProfileCapability<N> *p) noexcept {
+    return static_cast<void *>(&p->vtable_);
+  }
+
+  static const void *extension_data(
+      ::vsql::preview_index_builder::IndexProfileCapability<N> *p) noexcept {
+    return p->extension_desc();
+  }
+};
+
+}  // namespace vsql::detail
 
 #endif  // VILLAGESQL_PREVIEW_INDEX_BUILDER_H
