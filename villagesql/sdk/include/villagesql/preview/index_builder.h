@@ -959,9 +959,11 @@ inline IndexProfileBuilder make_index_profile(const char *name) {
 // containment, shadowing the methods that must preserve the derived type
 // through the chain. No changes to func_builder.h are required.
 
-template <auto F, size_t NumParams, uint32_t Bits = 0>
+template <auto F, size_t NumParams, uint32_t Bits = 0,
+          vsql::func_builder::ParamMode Mode =
+              vsql::func_builder::ParamMode::kUnset>
 class IndexFuncBuilder {
-  using Inner = vsql::func_builder::FuncBuilder<F, NumParams>;
+  using Inner = vsql::func_builder::FuncBuilder<F, NumParams, Mode>;
   static constexpr uint32_t kDeterministic = 1u << 0;
 
  public:
@@ -972,13 +974,18 @@ class IndexFuncBuilder {
     return *this;
   }
 
-  IndexFuncBuilder<F, NumParams + 1, Bits> param(const char *t) const {
-    return IndexFuncBuilder<F, NumParams + 1, Bits>{inner_.param(t)};
+  IndexFuncBuilder<F, NumParams + 1, Bits,
+                   vsql::func_builder::ParamMode::kFixed>
+  param(const char *t) const {
+    return IndexFuncBuilder<F, NumParams + 1, Bits,
+                            vsql::func_builder::ParamMode::kFixed>{
+        inner_.param(t)};
   }
 
-  IndexFuncBuilder<F, NumParams, Bits | kDeterministic> deterministic() && {
+  IndexFuncBuilder<F, NumParams, Bits | kDeterministic, Mode> deterministic()
+      && {
     inner_.deterministic(true);
-    return IndexFuncBuilder<F, NumParams, Bits | kDeterministic>{
+    return IndexFuncBuilder<F, NumParams, Bits | kDeterministic, Mode>{
         std::move(inner_)};
   }
 
