@@ -25,6 +25,7 @@
 #include <string>
 
 #include "unittest/gunit/test_utils.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/veb/validate.h"
@@ -709,6 +710,536 @@ TEST_F(ValidateExtensionRegistrationTest, MultipleTypesAndFuncs) {
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->types.size(), 2u);
   EXPECT_EQ(result->funcs.size(), 3u);
+}
+
+// ---- Stub function pointers for vef_type_index_intf_t ----------------------
+
+static bool stub_idx_create(const vef_index_ctx_t *, vef_storage_space_ref_t,
+                            vef_storage_trx_ref_t, vef_storage_arena_t *,
+                            vef_storage_arena_func_t, vef_storage_ctx_t **,
+                            char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_drop(const vef_index_ctx_t *, vef_storage_ctx_t *,
+                          vef_storage_trx_ref_t, char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_load(const vef_index_ctx_t *, vef_storage_ref_t,
+                          vef_storage_arena_t *, vef_storage_arena_func_t,
+                          vef_storage_ctx_t **, char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_insert(const vef_index_ctx_t *, vef_storage_ctx_t *,
+                            vef_storage_trx_ref_t, vef_storage_col_data_t *,
+                            vef_storage_col_data_t *, vef_storage_col_ref_t *,
+                            char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_mark_delete(const vef_index_ctx_t *, vef_storage_ctx_t *,
+                                 vef_storage_trx_ref_t, vef_storage_col_ref_t *,
+                                 vef_storage_col_data_t *,
+                                 vef_storage_col_data_t *, bool, char *,
+                                 uint32_t) {
+  return false;
+}
+static bool stub_idx_purge(const vef_index_ctx_t *, vef_storage_ctx_t *,
+                           vef_storage_trx_ref_t, vef_storage_col_ref_t *,
+                           vef_storage_col_data_t *, vef_storage_col_data_t *,
+                           char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_scan_begin(const vef_index_ctx_t *, vef_storage_ctx_t *,
+                                vef_storage_mtr_ref_t,
+                                const vef_index_scan_desc_t *,
+                                vef_index_cursor_ref_t *, bool *, char *,
+                                uint32_t) {
+  return false;
+}
+static bool stub_idx_scan_position(vef_index_cursor_ref_t,
+                                   vef_index_cursor_op_t, bool *, char *,
+                                   uint32_t) {
+  return false;
+}
+static bool stub_idx_scan_fetch(vef_index_cursor_ref_t, vef_storage_col_ref_t *,
+                                vef_storage_col_data_t *,
+                                vef_storage_col_data_t *, char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_scan_save(vef_index_cursor_ref_t, char *, uint32_t) {
+  return false;
+}
+static bool stub_idx_scan_restore(vef_index_cursor_ref_t, vef_storage_mtr_ref_t,
+                                  bool *, char *, uint32_t) {
+  return false;
+}
+static void stub_idx_scan_end(vef_index_cursor_ref_t *) {}
+
+static vef_type_index_intf_t make_index_intf() {
+  vef_type_index_intf_t intf = {};
+  intf.version = VEF_INDEX_TYPE_INTF_VERSION;
+  intf.create = stub_idx_create;
+  intf.drop = stub_idx_drop;
+  intf.load = stub_idx_load;
+  intf.insert = stub_idx_insert;
+  intf.mark_delete = stub_idx_mark_delete;
+  intf.purge = stub_idx_purge;
+  intf.scan_begin = stub_idx_scan_begin;
+  intf.scan_position = stub_idx_scan_position;
+  intf.scan_fetch = stub_idx_scan_fetch;
+  intf.scan_save = stub_idx_scan_save;
+  intf.scan_restore = stub_idx_scan_restore;
+  intf.scan_end = stub_idx_scan_end;
+  return intf;
+}
+
+class ValidatePreviewCapabilitiesTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    villagesql::test_set_lower_case_table_names(0);
+    system_charset_info = &my_charset_utf8mb4_0900_ai_ci;
+  }
+
+  static villagesql::veb::ExtensionRegistration make_ext_reg(
+      vef_registration_t *reg, vef_protocol_t protocol) {
+    villagesql::veb::ExtensionRegistration ext_reg;
+    ext_reg.registration = reg;
+    ext_reg.negotiated_protocol = protocol;
+    ext_reg.dlhandle = nullptr;
+    ext_reg.unregister_func = nullptr;
+    return ext_reg;
+  }
+};
+
+// A null registration pointer produces an empty result, not an error.
+TEST_F(ValidatePreviewCapabilitiesTest, NullRegistrationReturnsEmpty) {
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(nullptr, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->index_types.empty());
+  EXPECT_TRUE(result->index_profiles.empty());
+}
+
+// A protocol older than VEF_PROTOCOL_2 skips parsing entirely.
+TEST_F(ValidatePreviewCapabilitiesTest, OldProtocolReturnsEmpty) {
+  vef_type_index_intf_t intf = make_index_intf();
+  vef_index_type_reg_t entry = {};
+  entry.name = "HNSW";
+  entry.intf = &intf;
+
+  vef_preview_index_type_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.types = &entry;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_TYPE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->index_types.empty());
+  EXPECT_TRUE(result->index_profiles.empty());
+}
+
+// A registration with no capabilities produces an empty result.
+TEST_F(ValidatePreviewCapabilitiesTest, NoCapabilitiesReturnsEmpty) {
+  vef_registration_t reg = {};
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->index_types.empty());
+  EXPECT_TRUE(result->index_profiles.empty());
+}
+
+// A valid index_type capability produces an IndexTypeDescriptor with the
+// correct name and extension.
+TEST_F(ValidatePreviewCapabilitiesTest, ValidIndexTypeCapability) {
+  vef_type_index_intf_t intf = make_index_intf();
+  vef_index_type_reg_t entry = {};
+  entry.name = "HNSW";
+  entry.intf = &intf;
+
+  vef_preview_index_type_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.types = &entry;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_TYPE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(error.empty());
+  ASSERT_EQ(result->index_types.size(), 1u);
+  EXPECT_EQ(result->index_types[0].index_type_name(), "HNSW");
+  EXPECT_EQ(result->index_types[0].extension_name(), "my_ext");
+  EXPECT_EQ(result->index_types[0].extension_version(), "1.0.0");
+  EXPECT_TRUE(result->index_profiles.empty());
+}
+
+// A valid index_profile capability (no function bindings) produces an
+// IndexProfileDescriptor with the correct name and unqualified type refs.
+TEST_F(ValidatePreviewCapabilitiesTest, ValidIndexProfileCapability) {
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+  profile.function_count = 0;
+  profile.ordering_asc = 1;
+  profile.default_for_type = 1;
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(error.empty());
+  EXPECT_TRUE(result->index_types.empty());
+  ASSERT_EQ(result->index_profiles.size(), 1u);
+  EXPECT_EQ(result->index_profiles[0].profile_name(), "mytype_hnsw");
+  EXPECT_EQ(result->index_profiles[0].extension_name(), "my_ext");
+}
+
+// Both index_type and index_profile capabilities in one registration are both
+// parsed independently.
+TEST_F(ValidatePreviewCapabilitiesTest,
+       BothCapabilitiesProduceBothDescriptors) {
+  vef_type_index_intf_t intf = make_index_intf();
+  vef_index_type_reg_t type_entry = {};
+  type_entry.name = "HNSW";
+  type_entry.intf = &intf;
+
+  vef_preview_index_type_ext_desc_t type_ext_desc = {};
+  type_ext_desc.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+  type_ext_desc.count = 1;
+  type_ext_desc.types = &type_entry;
+
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+
+  vef_preview_index_profile_ext_desc_t profile_ext_desc = {};
+  profile_ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  profile_ext_desc.count = 1;
+  profile_ext_desc.profiles = &profile;
+
+  vef_required_capability_t caps[2] = {};
+  caps[0].name = VEF_PREVIEW_INDEX_TYPE_NAME;
+  caps[0].capability_config = &type_ext_desc;
+  caps[1].name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  caps[1].capability_config = &profile_ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 2;
+  reg.required_capabilities = caps;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(error.empty());
+  EXPECT_EQ(result->index_types.size(), 1u);
+  EXPECT_EQ(result->index_profiles.size(), 1u);
+}
+
+// A qualified type_name ("other_ext.MYTYPE") produces a type_ref with the
+// extension component set.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileQualifiedTypeRef) {
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "other_ext.MYTYPE";
+  profile.index_type_name = "HNSW";
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  ASSERT_EQ(result->index_profiles.size(), 1u);
+  EXPECT_EQ(result->index_profiles[0].type_ref().extension_name(), "other_ext");
+}
+
+// index_type capability with a mismatched version fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexTypeVersionMismatchFails) {
+  vef_preview_index_type_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION + 99;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_TYPE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("unsupported version"), std::string::npos);
+}
+
+// A null name or intf pointer in an index type entry fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexTypeNullEntryFails) {
+  vef_index_type_reg_t entry = {};
+  entry.name = nullptr;
+  entry.intf = nullptr;
+
+  vef_preview_index_type_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.types = &entry;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_TYPE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("NULL"), std::string::npos);
+}
+
+// An index type entry with one missing function pointer fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexTypeMissingFunctionPointerFails) {
+  vef_type_index_intf_t intf = make_index_intf();
+  intf.scan_end = nullptr;
+
+  vef_index_type_reg_t entry = {};
+  entry.name = "HNSW";
+  entry.intf = &intf;
+
+  vef_preview_index_type_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.types = &entry;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_TYPE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("not all required function pointers"),
+            std::string::npos);
+  EXPECT_NE(error.find("HNSW"), std::string::npos);
+}
+
+// index_profile capability with a mismatched version fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileVersionMismatchFails) {
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION + 99;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("unsupported version"), std::string::npos);
+}
+
+// An index profile entry with a null name/type_name/index_type_name fails.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullFieldFails) {
+  vef_index_profile_reg_t profile = {};
+  profile.name = nullptr;
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("NULL"), std::string::npos);
+}
+
+// A function binding with a null name fails with a descriptive error.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullFunctionNameFails) {
+  vef_index_profile_fn_binding_t fn = {};
+  fn.name = nullptr;
+  fn.vdf = stub_vdf;
+
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+  profile.function_count = 1;
+  profile.functions = &fn;
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("NULL name"), std::string::npos);
+}
+
+// A function binding with a null vdf pointer fails with a descriptive error.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullFunctionVdfFails) {
+  vef_index_profile_fn_binding_t fn = {};
+  fn.name = "mytype_distance";
+  fn.vdf = nullptr;
+
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+  profile.function_count = 1;
+  profile.functions = &fn;
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("NULL vdf pointer"), std::string::npos);
+  EXPECT_NE(error.find("mytype_distance"), std::string::npos);
+}
+
+// A function binding declaring more than VEF_INDEX_PROFILE_MAX_FN_PARAMS
+// parameters fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileTooManyParamsFails) {
+  vef_index_profile_fn_binding_t fn = {};
+  fn.name = "mytype_distance";
+  fn.vdf = stub_vdf;
+  fn.num_params = VEF_INDEX_PROFILE_MAX_FN_PARAMS + 1;
+
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+  profile.function_count = 1;
+  profile.functions = &fn;
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  std::string error;
+  auto result = villagesql::veb::parse_preview_capabilities(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("mytype_distance"), std::string::npos);
+  EXPECT_NE(error.find("params"), std::string::npos);
 }
 
 }  // namespace villagesql_unittest

@@ -16,6 +16,8 @@
 
 #include "villagesql/veb/register.h"
 
+#include <algorithm>
+
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
@@ -98,24 +100,20 @@ bool register_preview_capabilities(THD &thd,
   victionary.assert_write_lock_held();
 
   // Validate profile references before moving any descriptor. Each profile's
-  // data type and index type must resolve to exactly one entry — either from
-  // the current batch (not yet committed) or from already-committed entries.
+  // data type and index type must resolve to exactly one entry in the current
+  // batch.
   for (const auto &profile : preview.index_profiles) {
     const std::string &prof_name = profile.profile_name();
     const std::string &prof_ext = profile.extension_name();
 
-    // Resolve data type reference: check same-batch types then committed.
-    int type_count = 0;
-    for (const auto &td : validated.types) {
-      const std::string &key = td.key().str();
-      const std::string &prefix = profile.type_ref().str();
-      if (key.size() >= prefix.size() &&
-          key.compare(0, prefix.size(), prefix) == 0)
-        type_count++;
-    }
-    type_count += static_cast<int>(victionary.type_descriptors()
-                                       .get_prefix_committed(profile.type_ref())
-                                       .size());
+    // Resolve data type reference: check same-batch types only.
+    // TODO(villagesql-indexing): Also resolve against committed types from the
+    // same extension once cross-extension profile references are designed.
+    int type_count = static_cast<int>(
+        std::count_if(validated.types.begin(), validated.types.end(),
+                      [&profile](const auto &td) {
+                        return profile.type_ref().matches_key(td.key().str());
+                      }));
     if (type_count == 0) {
       error_out = "index profile '" + prof_name +
                   "': references unknown data type '" + profile.type_name() +
@@ -133,20 +131,15 @@ bool register_preview_capabilities(THD &thd,
       return true;
     }
 
-    // Resolve index type reference: check same-batch index types then
-    // committed.
-    int index_type_count = 0;
-    for (const auto &itd : preview.index_types) {
-      const std::string &key = itd.key().str();
-      const std::string &prefix = profile.index_type_ref().str();
-      if (key.size() >= prefix.size() &&
-          key.compare(0, prefix.size(), prefix) == 0)
-        index_type_count++;
-    }
-    index_type_count +=
-        static_cast<int>(victionary.index_type_descriptors()
-                             .get_prefix_committed(profile.index_type_ref())
-                             .size());
+    // Resolve index type reference: check same-batch index types only.
+    // TODO(villagesql-indexing): Also resolve against committed index types
+    // from the same extension once cross-extension profile references are
+    // designed.
+    int index_type_count = static_cast<int>(std::count_if(
+        preview.index_types.begin(), preview.index_types.end(),
+        [&profile](const auto &itd) {
+          return profile.index_type_ref().matches_key(itd.key().str());
+        }));
     if (index_type_count == 0) {
       error_out = "index profile '" + prof_name +
                   "': references unknown index type '" +
