@@ -16,6 +16,7 @@
 #ifndef VILLAGESQL_DETAIL_CAPABILITY_BASE_H
 #define VILLAGESQL_DETAIL_CAPABILITY_BASE_H
 
+#include <cassert>
 #include <cstddef>
 
 #include <villagesql/detail/capability_traits.h>
@@ -80,16 +81,15 @@ __attribute__((visibility("hidden"))) inline void withdraw_capability(
   PendingCapability *&head = pending_capabilities_head();
   if (head == node) {
     head = node->next;
-    node->next = nullptr;
     return;
   }
   for (PendingCapability *p = head; p != nullptr; p = p->next) {
     if (p->next == node) {
       p->next = node->next;
-      node->next = nullptr;
       return;
     }
   }
+  assert(false && "capability node not found in pending list");
 }
 
 // Reset all consumed flags. Called at the top of each vef_register_impl
