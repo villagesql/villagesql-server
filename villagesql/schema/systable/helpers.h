@@ -72,6 +72,20 @@ inline bool is_qualified_name(std::string_view name) {
   return name.find('.') != std::string_view::npos;
 }
 
+struct ParsedQualifiedName {
+  std::string extension_name;  // empty if unqualified
+  std::string bare_name;
+};
+
+// Splits a potentially qualified name into {extension_name, bare_name}.
+// "ext.name" -> {"ext", "name"}
+// "name"     -> {"",    "name"}
+inline ParsedQualifiedName parse_qualified_name(std::string_view name) {
+  auto dot = name.find('.');
+  if (dot == std::string_view::npos) return {"", std::string(name)};
+  return {std::string(name.substr(0, dot)), std::string(name.substr(dot + 1))};
+}
+
 // Helper functions for reading a value from a Field.
 void read_string_field(Field *f, std::string &out);
 void read_unsigned_field(Field *f, unsigned int &out);
