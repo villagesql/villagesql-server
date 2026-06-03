@@ -305,6 +305,7 @@ bool stored_int_purge(Ctx * /*ctx*/, storage::MtrCtx::Ref /*mctx*/,
 // ============================================================================
 
 static constexpr const char kStoredIntTypeName[] = "STORED_INT";
+static constexpr const char kStoredInt2TypeName[] = "STORED_INT_2";
 
 constexpr auto STORED_INT =
     vsql::make_type<kStoredIntTypeName>()
@@ -317,6 +318,17 @@ constexpr auto STORED_INT =
         .intrinsic_default_str("0")
         .build();
 
+// STORED_INT_2 duplicates STORED_INT to exercise multiple entries in a single
+// ColumnStoreCapability.
+constexpr auto STORED_INT_2 = vsql::make_type<kStoredInt2TypeName>()
+                                  .persisted_length(kFieldSize)
+                                  .max_decode_buffer_length(22)
+                                  .from_string<&stored_int_from_string>()
+                                  .to_string<&stored_int_to_string>()
+                                  .compare<&stored_int_compare>()
+                                  .intrinsic_default_str("0")
+                                  .build();
+
 static constexpr auto kStoredIntStorage =
     make_column_store<StoredIntCtx>(STORED_INT)
         .create<&stored_int_create>()
@@ -328,11 +340,26 @@ static constexpr auto kStoredIntStorage =
         .purge<&stored_int_purge>()
         .build();
 
+static constexpr auto kStoredInt2Storage =
+    make_column_store<StoredIntCtx>(STORED_INT_2)
+        .create<&stored_int_create>()
+        .drop<&stored_int_drop>()
+        .load<&stored_int_load>()
+        .insert<&stored_int_insert>()
+        .select<&stored_int_select>()
+        .mark_delete<&stored_int_mark_delete>()
+        .purge<&stored_int_purge>()
+        .build();
+
 static auto STORAGE = StorageCapability{};
-static auto COLUMN_STORE =
-    ColumnStoreCapability().column_store(kStoredIntStorage);
+static auto COLUMN_STORE = ColumnStoreCapability()
+                               .column_store(kStoredIntStorage)
+                               .column_store(kStoredInt2Storage);
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(
-    make_extension().with(STORAGE).with(COLUMN_STORE).type(STORED_INT))
+VEF_GENERATE_ENTRY_POINTS(make_extension()
+                              .with(STORAGE)
+                              .with(COLUMN_STORE)
+                              .type(STORED_INT)
+                              .type(STORED_INT_2))

@@ -16,6 +16,7 @@
 #ifndef VILLAGESQL_DETAIL_CAPABILITY_BASE_H
 #define VILLAGESQL_DETAIL_CAPABILITY_BASE_H
 
+#include <cassert>
 #include <cstddef>
 
 #include <villagesql/detail/capability_traits.h>
@@ -31,6 +32,13 @@
 // correspond to an enrolled capability. Anything else fails the load with
 // a named diagnostic, instead of silently producing a null vtable that
 // would crash later inside a VDF or worker callback.
+//
+// The destructor de-enrolls the node. This handles builder chains where
+// intermediate temporary objects (e.g. ColumnStoreCapability<1> in a
+// two-step .column_store().column_store() chain) inherit CapabilityBase and
+// enroll themselves during construction. The temporaries are destroyed at the
+// end of the initializer expression, leaving only the final static variable
+// enrolled by the time vef_register_impl runs.
 
 namespace vsql::detail {
 
@@ -62,6 +70,26 @@ __attribute__((visibility("hidden"))) inline void enroll_capability(
   PendingCapability *&head = pending_capabilities_head();
   node->next = head;
   head = node;
+}
+
+// Remove a node from the registry. Called from CapabilityBase's destructor so
+// that temporaries created during builder chains are de-enrolled before
+// vef_register_impl runs its cross-check. Only the final object stored in a
+// static variable survives until INSTALL EXTENSION time.
+__attribute__((visibility("hidden"))) inline void withdraw_capability(
+    PendingCapability *node) {
+  PendingCapability *&head = pending_capabilities_head();
+  if (head == node) {
+    head = node->next;
+    return;
+  }
+  for (PendingCapability *p = head; p != nullptr; p = p->next) {
+    if (p->next == node) {
+      p->next = node->next;
+      return;
+    }
+  }
+  assert(false && "capability node not found in pending list");
 }
 
 // Reset all consumed flags. Called at the top of each vef_register_impl
@@ -105,6 +133,8 @@ class CapabilityBase {
     node_.next = nullptr;
     enroll_capability(&node_);
   }
+
+  ~CapabilityBase() { withdraw_capability(&node_); }
 
   CapabilityBase(const CapabilityBase &) = delete;
   CapabilityBase &operator=(const CapabilityBase &) = delete;
