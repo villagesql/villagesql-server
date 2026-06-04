@@ -32,6 +32,9 @@
 #include <memory>
 
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
+// TODO(villagesql-indexing): TypeParameters is shared between type_context.h
+// and index_context.h; consider moving it to its own header to avoid the
+// dependency.
 #include "villagesql/schema/descriptor/type_context.h"  // TypeParameters
 
 namespace villagesql {
