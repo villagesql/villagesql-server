@@ -84,16 +84,17 @@ class PT_custom_type : public PT_type {
       return;
     }
 
-    // If no length_spec provided, generate it from the TypeContext's
-    // persisted_length. For fixed-length types this comes from the descriptor.
-    // For variable-length types with parameters, this was computed by
-    // resolve_params at TypeContext construction time.
+    // If no length_spec provided, generate it from the TypeContext's storage
+    // length. For fixed-length types this comes from the descriptor; for
+    // variable-length types with parameters it was computed by resolve_params
+    // at TypeContext construction time; for variable-length types without
+    // parameters (length decided per value, like a roaring bitmap) it is the
+    // descriptor's max_persisted_length upper bound.
     if (nullptr == length_spec) {
-      int64_t len = type_context->persisted_length();
-      if (len > 0) {
-        snprintf(length_buffer, sizeof(length_buffer), "%" PRId64, len);
-        length_spec = length_buffer;
-      }
+      int64_t len = type_context->field_buffer_length();
+      assert(len > 0);
+      snprintf(length_buffer, sizeof(length_buffer), "%" PRId64, len);
+      length_spec = length_buffer;
     }
   }
 

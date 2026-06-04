@@ -1,0 +1,99 @@
+# Install the variable-length, non-parameterized vector extension.
+INSTALL EXTENSION vsql_varvec_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_varvec_test	0.0.1
+# A column of a variable-length type declared WITHOUT parameters; the
+# length is decided per value.
+CREATE TABLE vecs (
+id INT PRIMARY KEY,
+v vsql_varvec_test.VARVEC
+);
+# Vectors of DIFFERENT element counts coexist in the same column.
+INSERT INTO vecs VALUES (1, '[1,2,3]');
+INSERT INTO vecs VALUES (2, '[10,20]');
+INSERT INTO vecs VALUES (3, '[-5,0,5,100,-100]');
+INSERT INTO vecs VALUES (4, '[]');
+# Each value round-trips at its own length; the element count is derived
+# from the stored byte length, not from a type parameter.
+SELECT id, v, vsql_varvec_test.varvec_dim(v) AS n_elems
+FROM vecs ORDER BY id;
+id	v	n_elems
+1	[1,2,3]	3
+2	[10,20]	2
+3	[-5,0,5,100,-100]	5
+4	[]	0
+# Predicate comparisons use the type's element-wise compare across
+# vectors of differing lengths.
+SELECT id FROM vecs WHERE v > '[1,2,3]' ORDER BY id;
+id
+2
+SELECT id FROM vecs WHERE v = '[10,20]' ORDER BY id;
+id
+2
+# UPDATE may grow or shrink the vector's length.
+UPDATE vecs SET v = '[7,7,7,7]' WHERE id = 2;
+SELECT id, v, vsql_varvec_test.varvec_dim(v) AS n_elems
+FROM vecs WHERE id = 2;
+id	v	n_elems
+2	[7,7,7,7]	4
+# A CUSTOM-returning VDF (the type's from_string) sizes its result buffer
+# from max_persisted_length, not the default 256-byte buffer. A 200-element
+# vector is 400 stored bytes (> 256); from_string must keep all 200
+# elements rather than truncating or dropping the value.
+SELECT vsql_varvec_test.varvec_dim(
+VARVEC::from_string(CONCAT('[', REPEAT('9,', 199), '9', ']'))) AS n_elems;
+n_elems
+200
+# A string EXPRESSION (not a literal) is not implicitly cast to the
+# custom type; explicit conversion is required.
+INSERT INTO vecs VALUES (5, CONCAT('[', REPEAT('9,', 199), '9', ']'));
+ERROR HY000: Incorrect VARVEC value: cannot implicitly cast string expression. Use explicit conversion for column 'v' at row 1
+# With an explicit from_string conversion the large vector stores and
+# reads back at its full 200-element length.
+INSERT INTO vecs VALUES (5, VARVEC::from_string(CONCAT('[', REPEAT('9,', 199), '9', ']')));
+SELECT id, vsql_varvec_test.varvec_dim(v) AS n_elems FROM vecs WHERE id = 5;
+id	n_elems
+5	200
+# varvec_concat(VARVEC, VARVEC) -> VARVEC appends two vectors that may
+# have different lengths; the result length is the sum of the inputs.
+SELECT vsql_varvec_test.varvec_concat(
+VARVEC::from_string('[1,2,3]'),
+VARVEC::from_string('[4,5]')) AS combined;
+combined
+[1,2,3,4,5]
+# Concatenating with an empty vector returns the other vector unchanged.
+SELECT vsql_varvec_test.varvec_concat(
+VARVEC::from_string('[1,2,3]'),
+VARVEC::from_string('[]')) AS combined;
+combined
+[1,2,3]
+# A NULL input yields a NULL result.
+SELECT vsql_varvec_test.varvec_concat(
+VARVEC::from_string('[1,2,3]'), NULL) AS combined;
+combined
+NULL
+# Concatenation works on stored columns of differing lengths too.
+SELECT vsql_varvec_test.varvec_concat(a.v, b.v) AS combined
+FROM vecs a JOIN vecs b ON a.id = 1 AND b.id = 3;
+combined
+[1,2,3,-5,0,5,100,-100]
+# A concatenation that would exceed max_persisted_length is rejected with
+# a warning (result NULL) rather than silently truncated.
+SELECT vsql_varvec_test.varvec_dim(
+vsql_varvec_test.varvec_concat(
+VARVEC::from_string(CONCAT('[', REPEAT('9,', 199), '9', ']')),
+VARVEC::from_string(CONCAT('[', REPEAT('9,', 199), '9', ']')))) AS n;
+n
+NULL
+Warnings:
+Warning	3200	VDF error in function 'varvec_concat': VARVEC: concatenated value exceeds max length
+# The type is variable-length and parameterless (no int_to_params), so a
+# length specification is rejected.
+CREATE TABLE bad (id INT, v vsql_varvec_test.VARVEC(3));
+ERROR 42000: Type 'vsql_varvec_test.VARVEC' does not accept a length specification near 'vsql_varvec_test.VARVEC(3))' at line 1
+# Clean up.
+DROP TABLE vecs;
+UNINSTALL EXTENSION vsql_varvec_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION

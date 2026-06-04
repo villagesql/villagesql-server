@@ -1,0 +1,7 @@
+{
+  "name": "vsql_varvec_test",
+  "version": "0.0.1",
+  "description": "Variable-length, non-parameterized vector type (VARVEC): persisted_length=-1 with a max_persisted_length upper bound and NO int_to_params/resolve_params. A column is declared without any length or parameters and holds int16 vectors whose element count is decided per value (#535).",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}
