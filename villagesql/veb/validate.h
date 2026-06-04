@@ -61,6 +61,8 @@ std::optional<ValidatedRegistration> parse_extension_registration(
     const ExtensionRegistration &ext_reg, const std::string &extension_name,
     const std::string &extension_version, std::string &error_out);
 
+// TODO(villagesql-indexing): Merge parse_preview_capabilities into
+// parse_extension_registration.
 // Parses the index_type and index_profile preview capabilities from a raw
 // ExtensionRegistration. Independent of parse_extension_registration; both
 // operate on the same ExtensionRegistration without consuming it.
