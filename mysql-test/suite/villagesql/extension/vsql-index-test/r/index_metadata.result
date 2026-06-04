@@ -146,6 +146,65 @@ t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- ALTER TABLE DROP + re-ADD same column with custom index ---
+CREATE TABLE t_drop_readd (id INT PRIMARY KEY, a dummy_type_vector);
+ALTER TABLE t_drop_readd
+DROP COLUMN a,
+ADD COLUMN a dummy_type_vector,
+ADD INDEX idx_new (a) USING EXTENDED(dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt_q	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qq	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t_drop_readd	idx_new	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t_drop_readd	idx_new	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+DROP TABLE t_drop_readd;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt_q	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qq	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- ALTER TABLE ADD INDEX: multiple indexes same extension -- MDL dedup ---
+CREATE TABLE t_dedup (id INT PRIMARY KEY, x dummy_type_vector, y dummy_type_vector);
+ALTER TABLE t_dedup
+ADD INDEX idx_dedup1 (x dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw),
+ADD INDEX idx_dedup2 (y dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt_q	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qq	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t_dedup	idx_dedup1	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t_dedup	idx_dedup2	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t_dedup	idx_dedup1	0	x	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t_dedup	idx_dedup2	0	y	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+DROP TABLE t_dedup;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_alt	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": 8}
+test	t	idx_alt_q	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qprof	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	idx_qq	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- DROP TABLE: removes all remaining custom index metadata ---
 DROP TABLE t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters

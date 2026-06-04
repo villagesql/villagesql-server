@@ -95,6 +95,25 @@ CREATE INDEX idx_qq ON t (b vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDE
 ALTER TABLE t ADD INDEX idx_alt_q (c) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
 --source include/villagesql/query_custom_indexes.inc
 
+--echo # --- ALTER TABLE DROP + re-ADD same column with custom index ---
+CREATE TABLE t_drop_readd (id INT PRIMARY KEY, a dummy_type_vector);
+ALTER TABLE t_drop_readd
+  DROP COLUMN a,
+  ADD COLUMN a dummy_type_vector,
+  ADD INDEX idx_new (a) USING EXTENDED(dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+DROP TABLE t_drop_readd;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- ALTER TABLE ADD INDEX: multiple indexes same extension -- MDL dedup ---
+CREATE TABLE t_dedup (id INT PRIMARY KEY, x dummy_type_vector, y dummy_type_vector);
+ALTER TABLE t_dedup
+  ADD INDEX idx_dedup1 (x dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw),
+  ADD INDEX idx_dedup2 (y dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+DROP TABLE t_dedup;
+--source include/villagesql/query_custom_indexes.inc
+
 --echo # --- DROP TABLE: removes all remaining custom index metadata ---
 DROP TABLE t;
 --source include/villagesql/query_custom_indexes.inc

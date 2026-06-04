@@ -50,12 +50,6 @@ bool check_for_indexes_of_extension(
     return true;
   }
 
-  // Build index_id -> IndexEntry map for profile error message context.
-  std::unordered_map<uint64_t, const IndexEntry *> index_by_id;
-  for (const IndexEntry *entry : all_indexes) {
-    index_by_id.emplace(entry->index_id, entry);
-  }
-
   const IndexColumnEntry *first_col = nullptr;
   int col_count = 0;
 
@@ -68,6 +62,11 @@ bool check_for_indexes_of_extension(
   }
 
   if (first_col != nullptr) {
+    // Build index_id -> IndexEntry map for profile error message context.
+    std::unordered_map<uint64_t, const IndexEntry *> index_by_id;
+    for (const IndexEntry *entry : all_indexes) {
+      index_by_id.emplace(entry->index_id, entry);
+    }
     auto it = index_by_id.find(first_col->index_id());
     const IndexEntry *parent = (it != index_by_id.end()) ? it->second : nullptr;
     assert(parent);
