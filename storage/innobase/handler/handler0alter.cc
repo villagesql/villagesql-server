@@ -2682,6 +2682,7 @@ static void innobase_create_index_def(const TABLE *altered_table,
   index_def->m_n_fields = n_fields;
   index_def->m_name = mem_heap_strdup(heap, key->name);
   index_def->m_rebuild = new_clustered;
+  index_def->m_custom_index_context = key->custom_index_context;
 
   /* If this is a spatial index, we need to fetch the SRID */
   if (key->flags & HA_SPATIAL) {
@@ -3098,6 +3099,7 @@ index for FTS index */
       index_def->m_rebuild = true;
       index_def->m_key_number = std::numeric_limits<size_t>::max();
       index_def->m_is_ngram = false;
+      index_def->m_custom_index_context = nullptr;
       primary_key_number = ULINT_UNDEFINED;
       goto created_clustered;
     } else {
@@ -3193,6 +3195,7 @@ index for FTS index */
 
     /* TODO: assign a real MySQL key number for this */
     index_def->m_key_number = ULINT_UNDEFINED;
+    index_def->m_custom_index_context = nullptr;
     n_add++;
   }
 
@@ -7298,6 +7301,15 @@ after a successful commit_try_norebuild() call.
       if (index->page != FIL_NULL) {
         dict_sys_mutex_exit();
         ut_d(dberr_t err =) log_ddl->write_free_tree_log(trx, index, true);
+        ut_ad(err == DB_SUCCESS);
+        dict_sys_mutex_enter();
+      }
+
+      using villagesql::innodb::Custom_index;
+      if (Custom_index::is_custom(index)) {
+        ut_a(index->page == FIL_NULL);
+        dict_sys_mutex_exit();
+        ut_d(dberr_t err =) Custom_index::drop(index, trx->id);
         ut_ad(err == DB_SUCCESS);
         dict_sys_mutex_enter();
       }

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 Copyright (c) 2012, Facebook Inc.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -2492,6 +2493,14 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   new_index->srid_is_valid = index->srid_is_valid;
   if (index->rtr_srs.get() != nullptr)
     new_index->rtr_srs.reset(index->rtr_srs->clone());
+
+  // Carry the Custom_index runtime state onto the cache-internal index by
+  // re-loading it onto new_index's heap. The prototype's Custom_index is
+  // destroyed by dict_mem_index_free(index) at the end of this function.
+  if (index->custom_index != nullptr) {
+    villagesql::innodb::Custom_index::load(
+        new_index, index->custom_index->index_context().get());
+  }
 
   if (dict_index_too_big_for_tree(table, new_index)) {
     if (strict) {

@@ -2981,6 +2981,8 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
                   my_error(ER_INDEX_COLUMN_TOO_LONG, MYF(0), max_len);
                   return HA_ERR_TOO_BIG_ROW;);
 
+  villagesql::innodb::Custom_index::load(index, key.custom_index_context);
+
   for (unsigned i = 0; i < key.user_defined_key_parts; i++) {
     const KEY_PART_INFO *key_part = &key.key_part[i];
     const Field *field = key_part->field;
@@ -5197,6 +5199,7 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
 
     ut_ad(root > 1);
     ut_ad(index->type & DICT_FTS || root != FIL_NULL ||
+          villagesql::innodb::Custom_index::is_custom(index) ||
           dict_table_is_discarded(m_table));
     ut_ad(id != 0);
     index->page = root;

@@ -54,6 +54,8 @@ class String;
 
 namespace villagesql {
 
+class IndexContext;
+
 // Check if Field should be marked as a custom type by checking the
 // VictionaryClient. If the Field is supposed to be a custom type, then fill the
 // internal TypeContext appropriately to refer to the type information and the
@@ -398,6 +400,12 @@ extern void SetVDFReturnTypeContext(THD *thd, std::string_view extension_name,
 // If source_tc is null, returns an empty shared_ptr.
 extern std::shared_ptr<const TypeContext> AcquireTypeContextClientManaged(
     const TypeContext *source_tc);
+
+// Acquire a client-managed reference to an IndexContext.
+// Returns a shared_ptr that the caller is responsible for releasing.
+// If source_ic is null, returns an empty shared_ptr.
+extern std::shared_ptr<const IndexContext> AcquireIndexContextClientManaged(
+    const IndexContext *source_ic);
 
 }  // namespace villagesql
 

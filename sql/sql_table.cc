@@ -17647,6 +17647,14 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     if (fill_alter_inplace_info(thd, table, &ha_alter_info))
       goto err_new_table_cleanup;
 
+    // VillageSQL: Inject custom context here for both newly added custom
+    // indexes and pre-existing ones (needed in rebuild path).
+    for (uint j = 0; j < ha_alter_info.key_count; j++) {
+      if (villagesql::MaybeInjectCustomIndex(thd, *table->s,
+                                             &ha_alter_info.key_info_buffer[j]))
+        goto err_new_table_cleanup;
+    }
+
     DBUG_EXECUTE_IF("innodb_index_drop_count_zero", {
       if (ha_alter_info.index_drop_count) {
         my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), "Index rebuild",

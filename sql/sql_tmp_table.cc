@@ -942,7 +942,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
   // 4096 since (sizeof(TABLE) + sizeof(TABLE_SHARE) ~= 3KB)
   MEM_ROOT own_root(key_memory_TABLE, 4096);
 
-  param->keyinfo = static_cast<KEY *>(own_root.Alloc(sizeof(*param->keyinfo)));
+  param->keyinfo = own_root.ArrayAlloc<KEY>(1);
 
   const uint field_count = param->func_count + param->sum_func_count;
   try {
@@ -1644,6 +1644,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
                           &hash_kpi, sizeof(*hash_kpi),  // Only one key part
                           NullS))
       return nullptr;
+    new (hash_key) KEY();
     table->key_info = share->key_info = hash_key;
     share->key_parts = 1;
     hash_key->table = table;
@@ -1754,6 +1755,7 @@ TABLE *create_duplicate_weedout_tmp_table(THD *thd, uint uniq_tuple_length_arg,
           &bitmaps, bitmap_buffer_size(1) * 3, NullS)) {
     return nullptr;
   }
+  new (keyinfo) KEY();
 
   /* STEP 3: Create TABLE description */
   new (table) TABLE;

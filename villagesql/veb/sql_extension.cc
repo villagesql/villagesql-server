@@ -437,9 +437,9 @@ bool remove_extension_from_victionary(
     return true;
   }
 
-  // Check for active references to VDFs, TypeContexts, and TypeDescriptors.
-  // A use_count > 1 means something other than Victionary holds a reference
-  // (e.g., an executing query).
+  // Check for active references to VDFs, TypeContexts, TypeDescriptors, and
+  // IndexContexts. A use_count > 1 means something other than Victionary holds
+  // a reference (e.g., an executing query).
   const auto &all_funcs = victionary.funcs().get_all_committed();
   for (const auto *func : all_funcs) {
     if (func->extension_name() == extension_name &&
@@ -487,6 +487,24 @@ bool remove_extension_from_victionary(
     }
   }
 
+  const auto &all_index_contexts =
+      victionary.index_contexts().get_all_committed();
+  for (const auto *index_context : all_index_contexts) {
+    if (index_context->extension_name() == extension_name &&
+        index_context->extension_version() == ext_entry->extension_version) {
+      long use_count =
+          victionary.index_contexts().get_use_count(index_context->key().str());
+      if (use_count > 1) {
+        villagesql_error(
+            "Cannot uninstall extension '%s': index type '%s' is currently in "
+            "use",
+            MYF(0), extension_name.c_str(),
+            index_context->index_type_name().c_str());
+        return true;
+      }
+    }
+  }
+
   // Delete TypeContexts for this extension (we do it before TypeDescriptors
   // since TypeContext holds a raw pointer to TypeDescriptor, but under the
   // lock, it doesn't really matter)
@@ -505,9 +523,15 @@ bool remove_extension_from_victionary(
     }
   }
 
-  // Delete IndexProfileDescriptors for this extension (before IndexType since
-  // profiles reference index types, but ordering under the lock doesn't matter
-  // in practice; deletion is transactional).
+  // Delete IndexContexts for this extension
+  for (const auto *index_context : all_index_contexts) {
+    if (index_context->extension_name() == extension_name &&
+        index_context->extension_version() == ext_entry->extension_version) {
+      victionary.index_contexts().MarkForDeletion(*thd, index_context->key());
+    }
+  }
+
+  // Delete IndexProfileDescriptors for this extension
   const auto &all_index_profiles =
       victionary.index_profile_descriptors().get_all_committed();
   for (const auto *prof : all_index_profiles) {

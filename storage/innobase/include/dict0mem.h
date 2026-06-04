@@ -69,6 +69,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict/mem.h"
 #include "ut0new.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 #include "sql/sql_const.h" /* MAX_KEY_LENGTH */
 #include "sql/table.h"
@@ -1155,6 +1156,12 @@ struct dict_index_t {
   /** Cached spatial reference system dictionary entry used by R-tree indexes.
    */
   std::unique_ptr<dd::Spatial_reference_system> rtr_srs;
+
+  // Owned per-index runtime state (client-managed IndexContext reference, ABI
+  // index context, extension storage handle) for a custom index. Allocated on
+  // this index's heap by Custom_index::create() and destroyed by
+  // dict_mem_index_free().
+  villagesql::innodb::Custom_index *custom_index{nullptr};
 
 #ifdef UNIV_DEBUG
   uint32_t magic_n; /*!< magic number */

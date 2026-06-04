@@ -61,6 +61,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0vec.h"
 
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 dberr_t dict_build_table_def(dict_table_t *table,
                              const HA_CREATE_INFO *create_info, trx_t *trx) {
@@ -414,6 +415,10 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
     index->trx_id = trx->id;
 
     return (DB_SUCCESS);
+  }
+
+  if (villagesql::innodb::Custom_index::is_custom(index)) {
+    return villagesql::innodb::Custom_index::create(index, trx->id);
   }
 
   mtr_start(&mtr);

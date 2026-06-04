@@ -39,6 +39,8 @@ Created 2020-11-01 by Sunny Bains. */
 #include "lock0lock.h"
 #include "row0log.h"
 
+#include "villagesql/custom_index.h"
+
 /* Ignore posix_fadvise() on those platforms where it does not exist */
 #if defined _WIN32
 #define posix_fadvise(fd, offset, len, advice) /* nothing */
@@ -199,6 +201,11 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
   ut_a(index);
 
   index->set_committed(index_def->m_rebuild);
+
+  // Record the custom index descriptor before the index is added to the
+  // dictionary cache so it propagates onto the cache-internal index.
+  villagesql::innodb::Custom_index::load(index,
+                                         index_def->m_custom_index_context);
 
   bool has_new_v_col{};
 

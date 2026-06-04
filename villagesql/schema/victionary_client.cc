@@ -154,6 +154,7 @@ void VictionaryClient::commit_all_tables(THD *thd) {
   m_extension_descriptors.commit(thd);
   m_type_contexts.commit(thd);
   m_funcs.commit(thd);
+  m_index_contexts.commit(thd);
   m_custom_indexes.commit(thd);
   m_custom_index_columns.commit(thd);
   m_index_type_descriptors.commit(thd);
@@ -173,6 +174,7 @@ void VictionaryClient::rollback_all_tables(THD *thd) {
   m_extension_descriptors.rollback(thd);
   m_type_contexts.rollback(thd);
   m_funcs.rollback(thd);
+  m_index_contexts.rollback(thd);
   m_custom_indexes.rollback(thd);
   m_custom_index_columns.rollback(thd);
   m_index_type_descriptors.rollback(thd);
@@ -332,8 +334,11 @@ void VictionaryClient::clear_all_tables() {
   m_extension_descriptors.clear();
   m_type_contexts.clear();
   m_funcs.clear();
+  m_index_contexts.clear();
   m_custom_indexes.clear();
   m_custom_index_columns.clear();
+  m_index_type_descriptors.clear();
+  m_index_profile_descriptors.clear();
 
   LogVSQL(INFORMATION_LEVEL, "Cleared all system table metadata");
 }

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -36,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ddl0impl-buffer.h"
 #include "ddl0impl-file-reader.h"
 #include "row0pread.h"
+#include "villagesql/custom_index.h"
 
 namespace ddl {
 
@@ -114,6 +116,12 @@ struct Builder {
   /** @return true if the index is an FTS index. */
   [[nodiscard]] bool is_fts_index() const noexcept {
     return m_index->type & DICT_FTS;
+  }
+
+  /** @return true if the index is a VillageSQL custom index. */
+  [[nodiscard]] bool is_custom_index() const noexcept {
+    return m_index != nullptr &&
+           villagesql::innodb::Custom_index::is_custom(m_index);
   }
 
   /** @return true if the index is a unique index. */
