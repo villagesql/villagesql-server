@@ -51,6 +51,12 @@ struct IndexTypeDescriptorKeyPrefix {
                  : normalize_extension_name(extension_name_) + ".")) {}
 
   const std::string &str() const { return normalized_prefix_; }
+
+  bool matches_key(const std::string &key) const {
+    return key.size() >= normalized_prefix_.size() &&
+           key.compare(0, normalized_prefix_.size(), normalized_prefix_) == 0;
+  }
+
   const std::string &index_type_name() const { return index_type_name_; }
   const std::string &extension_name() const { return extension_name_; }
 

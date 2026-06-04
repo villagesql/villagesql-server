@@ -523,8 +523,8 @@ typedef struct {
 // ===========================================================================
 //
 // Registers custom index type implementations. Pass a
-// vef_preview_index_type_ext_desc_t as vef_required_capability_t.extension_data
-// when requiring this capability.
+// vef_preview_index_type_ext_desc_t as
+// vef_required_capability_t.capability_config when requiring this capability.
 //
 // Capability name: VEF_PREVIEW_INDEX_TYPE_NAME
 
@@ -564,7 +564,7 @@ typedef struct {
 // VDFs automatically when the profile is loaded.
 //
 // Pass a vef_preview_index_profile_ext_desc_t as
-// vef_required_capability_t.extension_data when requiring this capability.
+// vef_required_capability_t.capability_config when requiring this capability.
 //
 // Capability name: VEF_PREVIEW_INDEX_PROFILE_NAME
 

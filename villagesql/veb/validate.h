@@ -28,6 +28,8 @@
 #include <vector>
 
 #include "villagesql/schema/descriptor/func_descriptor.h"
+#include "villagesql/schema/descriptor/index_profile_descriptor.h"
+#include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
@@ -43,11 +45,29 @@ struct ValidatedRegistration {
   std::vector<FuncDescriptor> funcs;
 };
 
+// Preview parse result: index types and index profiles.
+// Kept separate from ValidatedRegistration so the preview surface can evolve
+// or be removed without touching the stable registration path.
+struct ValidatedPreviewCapabilities {
+  std::vector<IndexTypeDescriptor> index_types;
+  std::vector<IndexProfileDescriptor> index_profiles;
+};
+
 // Parses the raw ABI registration into C++ descriptors, including wiring
 // column storage interfaces into any types that register them.
 // No THD, no VictionaryClient — purely operates on the ExtensionRegistration.
 // Returns nullopt on error; error_out is set to a descriptive message.
 std::optional<ValidatedRegistration> parse_extension_registration(
+    const ExtensionRegistration &ext_reg, const std::string &extension_name,
+    const std::string &extension_version, std::string &error_out);
+
+// TODO(villagesql-indexing): Merge parse_preview_capabilities into
+// parse_extension_registration.
+// Parses the index_type and index_profile preview capabilities from a raw
+// ExtensionRegistration. Independent of parse_extension_registration; both
+// operate on the same ExtensionRegistration without consuming it.
+// Returns nullopt on error; error_out is set to a descriptive message.
+std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
     const ExtensionRegistration &ext_reg, const std::string &extension_name,
     const std::string &extension_version, std::string &error_out);
 

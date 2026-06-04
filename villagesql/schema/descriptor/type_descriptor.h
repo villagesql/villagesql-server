@@ -59,6 +59,11 @@ struct TypeDescriptorKeyPrefix {
 
   const std::string &str() const { return normalized_prefix_; }
 
+  bool matches_key(const std::string &key) const {
+    return key.size() >= normalized_prefix_.size() &&
+           key.compare(0, normalized_prefix_.size(), normalized_prefix_) == 0;
+  }
+
   const std::string &type_name() const { return type_name_; }
   const std::string &extension_name() const { return extension_name_; }
 

@@ -683,13 +683,23 @@ bool load_installed_extensions(THD *thd) {
         return true;
       }
 
-      if (register_validated_extension(*thd, std::move(*validated),
+      std::optional<ValidatedPreviewCapabilities> preview =
+          parse_preview_capabilities(registration, extension_name,
+                                     expected_version, reg_error);
+      if (!preview) {
+        LogVSQL(ERROR_LEVEL, "Failed to parse extension '%s': %s",
+                extension_name.c_str(), reg_error.c_str());
+        return true;
+      }
+
+      if (register_preview_capabilities(*thd, std::move(*preview), *validated,
+                                        reg_error) ||
+          register_validated_extension(*thd, std::move(*validated),
                                        reg_error)) {
         LogVSQL(ERROR_LEVEL, "Failed to register extension '%s': %s",
                 extension_name.c_str(), reg_error.c_str());
         return true;
       }
-
 
       if (victionary.extension_descriptors().MarkForInsertion(
               *thd, ExtensionDescriptor(ExtensionDescriptorKey(
