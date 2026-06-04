@@ -17,6 +17,8 @@ SET(VILLAGESQL_SERVICES_SOURCES
   capability_registry.cc
   sys_var_access.cc
   preview/column_store.cc
+  preview/index_profile.cc
+  preview/index_type.cc
   preview/keyring.cc
   preview/ping.cc
   preview/sql_query.cc

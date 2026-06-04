@@ -347,11 +347,14 @@ static const auto DUMMY_HNSW_L2_PROFILE = make_index_profile(kDummyProfileL2)
 // Extension entry point
 // ============================================================================
 
-// TODO(villagesql-indexing): Register index type and profile once the
-// corresponding make_extension() methods are implemented. Index functions
-// bound to the profile are registered automatically as part of profile
-// registration.
-VEF_GENERATE_ENTRY_POINTS(vsql::make_extension().type(DUMMY_VECTOR)
-                          //      .index_type(DUMMY_HNSW_INDEX)
-                          //      .index_profile(DUMMY_HNSW_L2_PROFILE)
-)
+static auto INDEX_TYPE =
+    vsql::preview_index_builder::IndexTypeCapability().index_type(
+        DUMMY_HNSW_INDEX);
+static auto INDEX_PROFILE =
+    vsql::preview_index_builder::IndexProfileCapability().index_profile(
+        DUMMY_HNSW_L2_PROFILE);
+
+VEF_GENERATE_ENTRY_POINTS(vsql::make_extension()
+                              .with(INDEX_TYPE)
+                              .with(INDEX_PROFILE)
+                              .type(DUMMY_VECTOR))

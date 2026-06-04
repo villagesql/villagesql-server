@@ -235,6 +235,7 @@
 #include <vector>
 
 #include <villagesql/abi/preview/index.h>
+#include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/storage_api.h>
 #include <villagesql/vsql/func_builder.h>
@@ -1035,15 +1036,17 @@ inline IndexFuncBuilder<F, 0> make_index_function(const char *name) {
 // storage duration so that the intf pointer stored internally remains valid.
 
 template <size_t N = 0>
-class IndexTypeCapability {
+class IndexTypeCapability
+    : public std::conditional_t<
+          (N > 0), ::vsql::detail::CapabilityBase<IndexTypeCapability<N>>,
+          std::false_type> {
  public:
   static constexpr const char *kName = VEF_PREVIEW_INDEX_TYPE_NAME;
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
 
-  constexpr IndexTypeCapability() : regs_{} {}
+  IndexTypeCapability() : regs_{} {}
 
-  constexpr IndexTypeCapability<N + 1> index_type(
-      const IndexTypeDesc &d) const {
+  IndexTypeCapability<N + 1> index_type(const IndexTypeDesc &d) const {
     return IndexTypeCapability<N + 1>(*this, {d.name, &d.intf});
   }
 
@@ -1061,8 +1064,8 @@ class IndexTypeCapability {
 
  private:
   template <size_t M>
-  constexpr IndexTypeCapability(const IndexTypeCapability<M> &base,
-                                vef_index_type_reg_t reg)
+  IndexTypeCapability(const IndexTypeCapability<M> &base,
+                      vef_index_type_reg_t reg)
       : regs_{} {
     static_assert(M + 1 == N, "internal construction size mismatch");
     for (size_t i = 0; i < M; ++i) regs_[i] = base.regs_[i];
@@ -1096,7 +1099,10 @@ class IndexTypeCapability {
 // also have static storage duration.
 
 template <size_t N = 0>
-class IndexProfileCapability {
+class IndexProfileCapability
+    : public std::conditional_t<
+          (N > 0), ::vsql::detail::CapabilityBase<IndexProfileCapability<N>>,
+          std::false_type> {
  public:
   static constexpr const char *kName = VEF_PREVIEW_INDEX_PROFILE_NAME;
   static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
@@ -1176,16 +1182,18 @@ namespace vsql::detail {
 template <size_t N>
 struct CapabilityTraits<::vsql::preview_index_builder::IndexTypeCapability<N>> {
   static constexpr const char *kName = VEF_PREVIEW_INDEX_TYPE_NAME;
-  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_TYPE_ABI_VERSION;
-  using AbiType = vef_preview_index_type_t;
-  using DescriptorType = vef_preview_index_type_ext_desc_t;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_index_builder::IndexTypeCapability";
+  using CapabilityConfigType = vef_preview_index_type_ext_desc_t;
+  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kCapabilityConfigHash = "ver-1";
 
   static void *vtable_destination(
       ::vsql::preview_index_builder::IndexTypeCapability<N> *p) noexcept {
     return static_cast<void *>(&p->vtable_);
   }
 
-  static const void *extension_data(
+  static const void *capability_config(
       ::vsql::preview_index_builder::IndexTypeCapability<N> *p) noexcept {
     return p->extension_desc();
   }
@@ -1195,16 +1203,18 @@ template <size_t N>
 struct CapabilityTraits<
     ::vsql::preview_index_builder::IndexProfileCapability<N>> {
   static constexpr const char *kName = VEF_PREVIEW_INDEX_PROFILE_NAME;
-  static constexpr uint32_t kAbiVersion = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
-  using AbiType = vef_preview_index_profile_t;
-  using DescriptorType = vef_preview_index_profile_ext_desc_t;
+  static constexpr const char *kCppTypeName =
+      "vsql::preview_index_builder::IndexProfileCapability";
+  using CapabilityConfigType = vef_preview_index_profile_ext_desc_t;
+  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kCapabilityConfigHash = "ver-1";
 
   static void *vtable_destination(
       ::vsql::preview_index_builder::IndexProfileCapability<N> *p) noexcept {
     return static_cast<void *>(&p->vtable_);
   }
 
-  static const void *extension_data(
+  static const void *capability_config(
       ::vsql::preview_index_builder::IndexProfileCapability<N> *p) noexcept {
     return p->extension_desc();
   }
