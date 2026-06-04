@@ -1,0 +1,36 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (label = 'l2');
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (mode = l2);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, ef_construction = 200, label = 'l2', mode = fast);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a) WITH (M = 16);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2');
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Extended Index feature not yet implemented
+CREATE INDEX idx ON t (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2');
+ERROR HY000: Extended Index feature not yet implemented
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
