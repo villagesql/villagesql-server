@@ -21,6 +21,6 @@ https://github.com/villagesql/vsql-crypto main
 https://github.com/villagesql/vsql-cube main
 https://github.com/villagesql/vsql-http main
 https://github.com/villagesql/vsql-network-address main
-https://github.com/villagesql/vsql-rest main
+https://github.com/villagesql/vsql-rest main abi=dev
 https://github.com/villagesql/vsql-uuid main
 https://github.com/villagesql/vsql-vector main bundle=false
