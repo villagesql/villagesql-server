@@ -1,0 +1,72 @@
+# Acceptance test for issue #535:
+#   "Support variable-length, parameterized custom types"
+#
+# TARRAY is a typed array: the element WIDTH is parameterized via 'type', the
+# element COUNT is decided per value (persisted_length = -1), and a 'max_size'
+# parameter caps the element count. The integer shorthand TARRAY(N) maps N to
+# max_size via int_to_params; resolve_params enforces
+# max_size * element_size <= max_persisted_length (512 bytes here).
+#
+# Fixture: vsql_tarray_test exposes TARRAY.
+
+--echo # Install the typed-array extension.
+INSTALL EXTENSION vsql_tarray_test;
+
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # TARRAY(N): integer shorthand mapped to max_size by int_to_params (type
+--echo # defaults to int16). TARRAY('max_size=...,type=...'): explicit cap+width.
+CREATE TABLE arrs (
+  id INT PRIMARY KEY,
+  a vsql_tarray_test.TARRAY(4),
+  f vsql_tarray_test.TARRAY('max_size=3,type=float')
+);
+
+--echo # Counts vary per value, up to max_size.
+INSERT INTO arrs VALUES (1, '[1,2,3]', '[1.5,2.5]');
+INSERT INTO arrs VALUES (2, '[10,20,30,40]', '[0]');
+
+SELECT id,
+       a, vsql_tarray_test.tarray_dim(a) AS na,
+       f, vsql_tarray_test.tarray_dim(f) AS nf
+FROM arrs ORDER BY id;
+
+--echo # Both parameters round-trip through SHOW CREATE TABLE.
+SHOW CREATE TABLE arrs;
+
+--echo # More elements than max_size is rejected by from_string (a has max 4).
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO arrs VALUES (3, '[1,2,3,4,5]', '[1]');
+
+--echo # Element-wise compare predicate.
+SELECT id FROM arrs WHERE a > '[1,2,3]' ORDER BY id;
+
+--echo # Concatenation within max_size (f has max 3): [1.5,2.5] + [0] = 3 elems.
+SELECT vsql_tarray_test.tarray_concat(x.f, y.f) AS c,
+       vsql_tarray_test.tarray_dim(vsql_tarray_test.tarray_concat(x.f, y.f)) AS n
+FROM arrs x JOIN arrs y ON x.id = 1 AND y.id = 2;
+
+--echo # Concatenation exceeding max_size (a has max 4): 3 + 4 = 7 > 4 -> NULL
+--echo # with a warning.
+SELECT vsql_tarray_test.tarray_dim(
+         vsql_tarray_test.tarray_concat(x.a, y.a)) AS n
+FROM arrs x JOIN arrs y ON x.id = 1 AND y.id = 2;
+
+--echo # resolve_params enforces max_size * element_size <= 512:
+--echo # double * 100 = 800 bytes is rejected.
+--error ER_PARSE_ERROR
+CREATE TABLE bad1 (id INT, v vsql_tarray_test.TARRAY('max_size=100,type=double'));
+
+--echo # The integer shorthand goes through int_to_params (max_size=300) and is
+--echo # then rejected by resolve_params: int16 * 300 = 600 > 512.
+--error ER_PARSE_ERROR
+CREATE TABLE bad2 (id INT, v vsql_tarray_test.TARRAY(300));
+
+--echo # A non-positive shorthand is rejected by the parser before int_to_params.
+--error ER_PARSE_ERROR
+CREATE TABLE bad3 (id INT, v vsql_tarray_test.TARRAY(0));
+
+--echo # Clean up.
+DROP TABLE arrs;
+UNINSTALL EXTENSION vsql_tarray_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;

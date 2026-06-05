@@ -1,0 +1,58 @@
+# Acceptance test for issue #535:
+#   "Support variable-length, non-parameterized types"
+#
+# BITFIELD is a variable-length bit field whose length (in bits) is decided per
+# value: persisted_length = -1, a max_persisted_length upper bound, and NO
+# params/resolve_params. Its element is a single BIT: from_string packs each
+# '0'/'1' character into one bit (8 bits per byte), so a 64-character bit string
+# stores in 8 packed bytes, not 64.
+#
+# Fixture: vsql_bitfield_test exposes BITFIELD. Stored layout is a 2-byte
+# little-endian bit count followed by the packed bits, so any bit length
+# round-trips exactly.
+
+--echo # Install the variable-length, non-parameterized bit field extension.
+INSTALL EXTENSION vsql_bitfield_test;
+
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # A column declared without any length or parameters; the bit length is
+--echo # decided per value.
+CREATE TABLE bits (
+  id INT PRIMARY KEY,
+  b vsql_bitfield_test.BITFIELD
+);
+
+--echo # Bit fields of DIFFERENT bit lengths coexist in the same column.
+INSERT INTO bits VALUES (1, '1');
+INSERT INTO bits VALUES (2, '101');
+INSERT INTO bits VALUES (3, '11110000');
+INSERT INTO bits VALUES (4, '1010101010101010');
+INSERT INTO bits VALUES (5, '');
+
+--echo # Each value round-trips at its own bit length. bitfield_length reports
+--echo # the number of bits; bitfield_popcount the number of set bits. A 16-bit
+--echo # value is packed into 2 bytes, not 16.
+SELECT id, b,
+       vsql_bitfield_test.bitfield_length(b) AS nbits,
+       vsql_bitfield_test.bitfield_popcount(b) AS nset
+FROM bits ORDER BY id;
+
+--echo # Predicate comparisons use the type's bit-by-bit compare across
+--echo # different lengths.
+SELECT id FROM bits WHERE b > '1' ORDER BY id;
+SELECT id FROM bits WHERE b = '11110000' ORDER BY id;
+
+--echo # UPDATE may grow or shrink the bit length.
+UPDATE bits SET b = '111' WHERE id = 1;
+SELECT id, b, vsql_bitfield_test.bitfield_length(b) AS nbits
+FROM bits WHERE id = 1;
+
+--echo # A character other than '0'/'1' is rejected by from_string.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO bits VALUES (6, '1021');
+
+--echo # Clean up.
+DROP TABLE bits;
+UNINSTALL EXTENSION vsql_bitfield_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;

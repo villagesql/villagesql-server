@@ -81,16 +81,16 @@ static const char *ER_INCOMPARABLE_TYPES =
 static const char *ER_INCOMPATIBLE_TYPES =
     "Cannot compare values of incompatible types '%s' and '%s'";
 
-// Verify that the Field's storage length matches the TypeContext's
-// persisted_length.
+// Verify that the backing Field's length matches the TypeContext's
+// field_buffer_length.
 static bool CheckFieldLengthMatchesType(const Field *field,
                                         const TypeContext *tc) {
   if (should_assert_if_false(static_cast<int64_t>(field->field_length) ==
-                             tc->persisted_length())) {
+                             tc->field_buffer_length())) {
     LogVSQL(ERROR_LEVEL,
-            "field_length (%u) != persisted_length (%" PRId64
+            "field_length (%u) != field_buffer_length (%" PRId64
             ") for column %s (type %s)",
-            field->field_length, tc->persisted_length(), field->field_name,
+            field->field_length, tc->field_buffer_length(), field->field_name,
             tc->qualified_name().c_str());
     villagesql_error(
         "Internal error: field length mismatch for column %s (type %s); "
