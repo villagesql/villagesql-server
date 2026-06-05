@@ -360,9 +360,15 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
                 profile_name.c_str());
             return true;
           }
-
+          // TODO(villagesql-indexing): Validate that the requested sort
+          // direction (kp->is_ascending()) is supported by
+          // prof_desc->ordering(). Return an error if the profile's ordering
+          // bitmask does not include the requested direction (e.g., an
+          // unordered profile with ordering == VEF_INDEX_ORDERING_NONE used
+          // with ASC/DESC).
           prof_ext_name = prof_desc->extension_name();
           prof_ext_version = prof_desc->extension_version();
+
         } else {
           if (find_default_profile(vclient, alter_info, db, table_name,
                                    kp->get_field_name(), type_name, ext_name,

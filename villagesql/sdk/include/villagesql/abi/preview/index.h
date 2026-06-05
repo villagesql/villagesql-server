@@ -623,6 +623,7 @@ typedef struct {
 } vef_index_profile_reg_t;
 
 // Bitmask values for vef_index_profile_reg_t.ordering.
+#define VEF_INDEX_ORDERING_NONE 0x00
 #define VEF_INDEX_ORDERING_ASC 0x01
 #define VEF_INDEX_ORDERING_DESC 0x02
 

@@ -322,7 +322,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                         "' has duplicate fn_id " + std::to_string(fn.fn_id);
             LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                     error_out.c_str());
-            return false;
+            return true;
           }
           if (fn.name == nullptr) {
             error_out = std::string("index profile '") + profile.name +
@@ -330,7 +330,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                         std::to_string(k) + " has NULL name";
             LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                     error_out.c_str());
-            return false;
+            return true;
           }
           if (fn.vdf == nullptr) {
             error_out = std::string("index profile '") + profile.name +
@@ -338,7 +338,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                         "' has NULL vdf pointer";
             LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                     error_out.c_str());
-            return false;
+            return true;
           }
           if (fn.num_params > VEF_INDEX_PROFILE_MAX_FN_PARAMS) {
             error_out = std::string("index profile '") + profile.name +
@@ -347,22 +347,22 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                         std::to_string(VEF_INDEX_PROFILE_MAX_FN_PARAMS);
             LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                     error_out.c_str());
-            return false;
+            return true;
           }
           out.push_back(fn);
         }
-        return true;
+        return false;
       };
 
       std::vector<vef_index_profile_fn_binding_t> functions;
-      if (!parse_bindings(profile.function_count, profile.functions, "function",
-                          functions)) {
+      if (parse_bindings(profile.function_count, profile.functions, "function",
+                         functions)) {
         return std::nullopt;
       }
 
       std::vector<vef_index_profile_fn_binding_t> helpers;
-      if (!parse_bindings(profile.helper_count, profile.helpers, "helper",
-                          helpers)) {
+      if (parse_bindings(profile.helper_count, profile.helpers, "helper",
+                         helpers)) {
         return std::nullopt;
       }
 

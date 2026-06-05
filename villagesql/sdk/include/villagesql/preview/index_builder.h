@@ -276,6 +276,7 @@ constexpr IndexStorage operator|(IndexStorage a, IndexStorage b) {
 // Ordering flags for use with make_index_profile().ordering(). Values can be
 // combined with | to indicate a profile supports both scan directions.
 enum class IndexOrdering : uint8_t {
+  NONE = VEF_INDEX_ORDERING_NONE,
   ASC = VEF_INDEX_ORDERING_ASC,
   DESC = VEF_INDEX_ORDERING_DESC,
 };
@@ -910,7 +911,7 @@ class IndexProfileBuilder {
     desc_.name = name;
     desc_.type_name = nullptr;
     desc_.index_type_name = nullptr;
-    desc_.ordering = static_cast<uint8_t>(IndexOrdering::ASC);
+    desc_.ordering = static_cast<uint8_t>(IndexOrdering::NONE);
     desc_.default_for_type = false;
   }
 
