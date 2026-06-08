@@ -1,0 +1,70 @@
+# Test the vsql_slow_query_log extension.
+#
+# Verifies:
+# - INSTALL EXTENSION registers the slow query log hook
+# - Queries exceeding threshold_ms are written to log_file
+# - Queries under threshold_ms are NOT written
+# - Disabling 'enabled' silences the hook
+# - When log_file cannot be opened, the hook reports an error via
+#   QueryHookResult::error_msg() and the server logs it
+# - UNINSTALL EXTENSION removes the hook cleanly
+
+# Unique token for the unwritable-path error message so the grep can't
+# accidentally match an unrelated line in a long error log.
+--let $error_log = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $bad_log_path = /tmp/vsql_slow_query_log_uaf_test_dir_xyz/slow.log
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_slow.log
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+# Clean any stale log file from a previous run.
+--error 0,1
+--remove_file $slow_log
+
+INSTALL EXTENSION vsql_slow_query_log;
+
+SET GLOBAL vsql_slow_query_log.threshold_ms = 100;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+--echo # Slow query (>= 100ms) should be logged
+SELECT SLEEP(0.3) AS slow_marker;
+
+--echo # Fast query should NOT be logged
+SELECT 1 AS fast_marker;
+
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+--echo # While disabled, even slow queries should NOT be logged
+SELECT SLEEP(0.3) AS disabled_marker;
+
+# grep -c exits 1 when it finds zero matches (still prints "0"). Wrap in
+# sh -c "...; true" so mysqltest sees a success exit code regardless.
+--echo # Exactly one SLEEP entry (from the enabled period) is in the log
+--exec sh -c "grep -c 'slow_marker' $slow_log; true"
+
+--echo # The fast query did not get logged
+--exec sh -c "grep -c 'fast_marker' $slow_log; true"
+
+--echo # The disabled query did not get logged
+--exec sh -c "grep -c 'disabled_marker' $slow_log; true"
+
+--echo # When log_file points at a non-existent directory, the hook's fopen
+--echo # fails and reports via result.error_msg(). The server logs that as a
+--echo # Warning in the error log.
+call mtr.add_suppression("Query hook error in extension 'vsql_slow_query_log'");
+eval SET GLOBAL vsql_slow_query_log.log_file = '$bad_log_path';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+SELECT SLEEP(0.3) AS unwritable_marker;
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+--echo # Exactly one warning containing the unique path token
+--exec sh -c "grep -c 'vsql_slow_query_log_uaf_test_dir_xyz' $error_log; true"
+
+UNINSTALL EXTENSION vsql_slow_query_log;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--remove_file $slow_log

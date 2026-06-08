@@ -1,0 +1,7 @@
+{
+  "name": "vsql_slow_query_log",
+  "version": "0.0.1",
+  "description": "Logs queries exceeding a configurable threshold to a log file",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

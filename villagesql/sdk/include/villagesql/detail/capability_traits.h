@@ -46,6 +46,13 @@ namespace vsql::detail {
 //       capability's vtable pointer at registration time. Returned as
 //       void*; vef_register_impl casts it to void** for the wire entry.
 //
+// TODO(villagesql): kVtableHash and kCapabilityConfigHash are manually
+// maintained version strings ("ver-1", "ver-2", ...), not actual hashes of
+// the struct layout. Either compute a real hash of the ABI struct at compile
+// time (e.g. a constexpr CRC over field sizes) so mismatches are caught
+// automatically, or rename these to kVtableVersion / kCapabilityConfigVersion
+// to reflect what they actually are.
+//
 // .with(Capability&) on ExtensionBuilder reads these from the
 // specialization keyed by the user's wrapper type.
 template <typename Capability>
