@@ -1,0 +1,107 @@
+# Test error paths for CREATE INDEX USING EXTENDED.
+#
+# Covers:
+#   Unknown index type name (unqualified and qualified)
+#   Wrong extension qualifier for a known type
+#   Unknown per-column profile name (unqualified and qualified)
+#   Wrong extension qualifier for a known profile
+#   Non-custom column with no default profile
+#   Explicit profile for wrong column type
+#   Profile validated against new column type when column is dropped and re-added
+#   UNINSTALL EXTENSION blocked by: custom type columns, live custom index, index profile
+#   UNINSTALL then INSTALL in the same session (ghost-descriptor regression)
+#
+# All error cases expect ER_VILLAGESQL_GENERIC_ERROR (HY000).
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE t (id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b dummy_type_vector,
+  c dummy_type_vector);
+
+--echo # --- Unknown index type name ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a) USING EXTENDED(no_such_type);
+
+--echo # --- Wrong extension qualifier for known type ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a) USING EXTENDED(no_such_ext.dummy_index_hnsw);
+
+--echo # --- Qualified type with unknown name ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a) USING EXTENDED(vsql_index_test.no_such_type);
+
+--echo # --- Unknown per-column profile ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a no_such_profile) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Wrong extension qualifier for known profile ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a no_such_ext.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Qualified profile with unknown name ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a vsql_index_test.no_such_profile) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Non-custom column: no default profile ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Explicit profile for wrong column type ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (id dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Drop+re-add: old type matches profile but new type does not (error) ---
+# Column a was dummy_type_vector (T1); re-added as INT (T2). Profile requires
+# dummy_type_vector, so the new column type must be checked, not the old one.
+CREATE TABLE t_readd (id INT PRIMARY KEY, a dummy_type_vector);
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a INT,
+  ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+DROP TABLE t_readd;
+
+--echo # --- Drop+re-add: new type matches profile, old type did not (success) ---
+# Column a was INT (T1); re-added as dummy_type_vector (T2). Profile requires
+# dummy_type_vector, so the new column type satisfies the check.
+CREATE TABLE t_readd (id INT PRIMARY KEY, a INT);
+ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a dummy_type_vector,
+  ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+DROP TABLE t_readd;
+
+--echo # --- UNINSTALL blocked by existing custom type ---
+# Default: column check fires first.
+CREATE INDEX idx_block ON t (a) USING EXTENDED(dummy_index_hnsw);
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_index_test;
+
+--echo # --- UNINSTALL blocked by custom index ---
+# Skip the column check so the index count check is the blocker.
+SET SESSION debug='+d,villagesql_skip_uninstall_column_check';
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_index_test;
+
+--echo # --- UNINSTALL blocked by index profile ---
+# Also skip the index count check so the profile check is the blocker.
+SET SESSION debug='+d,villagesql_skip_uninstall_index_check';
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_index_test;
+SET SESSION debug='-d,villagesql_skip_uninstall_column_check';
+SET SESSION debug='-d,villagesql_skip_uninstall_index_check';
+
+--echo # --- DROP INDEX + DROP TABLE unblocks UNINSTALL; reinstall succeeds in same session ---
+DROP INDEX idx_block ON t;
+DROP TABLE t;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+INSTALL EXTENSION vsql_index_test;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

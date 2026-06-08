@@ -131,6 +131,124 @@ bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
   return false;
 }
 
+// Resolves a name to exactly one registered descriptor via prefix lookup.
+// Returns nullptr and sets a villagesql_error on 0 or >1 matches.
+// REQUIRES: Caller must hold vclient read lock.
+template <typename EntryType, typename Map, typename Prefix>
+static const EntryType *resolve_unique_descriptor(const Map &map,
+                                                  const Prefix &prefix,
+                                                  const char *entity_type,
+                                                  const char *name,
+                                                  const char *qualify_hint) {
+  auto matches = map.get_prefix_committed(prefix);
+  if (matches.empty()) {
+    villagesql_error("Unknown %s '%s'", MYF(0), entity_type, name);
+    return nullptr;
+  }
+  if (matches.size() > 1) {
+    villagesql_error("%s '%s' is ambiguous; qualify as %s", MYF(0), entity_type,
+                     name, qualify_hint);
+    return nullptr;
+  }
+  return matches[0];
+}
+
+// Finds the default profile registered for (col_type, index_type) pair and
+// sets out_* on success. Returns true and sets a villagesql_error if the column
+// type cannot be determined or no default profile is registered for the pair.
+// REQUIRES: Caller must hold vclient read lock.
+// TODO(villagesql): string parameters here (and normalize_type_name /
+// normalize_extension_name) should use std::string_view; requires updating the
+// downstream helpers consistently.
+static bool find_default_profile(VictionaryClient &vclient,
+                                 const Alter_info *alter_info, const char *db,
+                                 const char *table_name, const char *field_name,
+                                 const std::string &index_type_name,
+                                 const std::string &index_type_ext_name,
+                                 std::string &out_profile_name,
+                                 std::string &out_prof_ext_name,
+                                 std::string &out_prof_ext_version) {
+  std::string col_type_name;
+  std::string col_ext_name;
+  // Common case: column already exists in the table.
+  const ColumnEntry *ce =
+      vclient.columns().get_committed(ColumnKey(db, table_name, field_name));
+  if (ce) {
+    // Guard against DROP + re-ADD of the same column in one ALTER TABLE; the
+    // existing entry is stale in that case so fall through to create_list.
+    bool being_dropped = false;
+    for (const Alter_drop *drop : alter_info->drop_list) {
+      if (drop->type == Alter_drop::COLUMN &&
+          my_strcasecmp(system_charset_info, drop->name, field_name) == 0) {
+        being_dropped = true;
+        break;
+      }
+    }
+    if (!being_dropped) {
+      col_type_name = ce->type_name;
+      col_ext_name = ce->extension_name;
+      assert(!col_ext_name.empty());
+    }
+  }
+  // Column is new (ADD COLUMN in this statement).
+  if (col_type_name.empty()) {
+    // TODO(villagesql-indexing): Built-in types have no custom_type_context;
+    // support custom indexes on built-in types by also matching fields without
+    // a custom_type_context using the field's SQL type name.
+    for (const Create_field &field : alter_info->create_list) {
+      if (field.custom_type_context &&
+          my_strcasecmp(system_charset_info, field.field_name, field_name) ==
+              0) {
+        col_type_name = field.custom_type_context->type_name();
+        col_ext_name = field.custom_type_context->extension_name();
+        assert(!col_ext_name.empty());
+        break;
+      }
+    }
+  }
+  if (col_type_name.empty()) {
+    villagesql_error(
+        "No default index profile found: column '%s' is not a custom type",
+        MYF(0), field_name);
+    return true;
+  }
+
+  // TODO(villagesql-performance): This is a linear scan over all registered
+  // profiles. A secondary map in VictionaryClient keyed by (type_name,
+  // index_type_name) would make it faster. Currently justified by small profile
+  // counts and DDL-only call site.
+  const std::string norm_col = normalize_type_name(col_type_name);
+  const std::string norm_col_ext = normalize_extension_name(col_ext_name);
+  const std::string norm_idx = normalize_type_name(index_type_name);
+  const std::string norm_index_type_ext =
+      normalize_extension_name(index_type_ext_name);
+  for (const IndexProfileDescriptor *pd :
+       vclient.index_profile_descriptors().get_all_committed()) {
+    if (!pd->default_for_type()) continue;
+    if (normalize_type_name(pd->type_name()) != norm_col) continue;
+    assert(!pd->type_ref().extension_name().empty());
+    if (normalize_extension_name(pd->type_ref().extension_name()) !=
+        norm_col_ext)
+      continue;
+    if (normalize_type_name(pd->index_type_name()) != norm_idx) continue;
+    assert(!norm_index_type_ext.empty());
+    assert(!pd->index_type_ref().extension_name().empty());
+    if (normalize_extension_name(pd->index_type_ref().extension_name()) !=
+        norm_index_type_ext)
+      continue;
+    out_profile_name = pd->profile_name();
+    out_prof_ext_name = pd->extension_name();
+    out_prof_ext_version = pd->extension_version();
+    return false;
+  }
+  villagesql_error(
+      "No default index profile found for type '%s' (extension '%s') with"
+      " index type '%s' (extension '%s')",
+      MYF(0), col_type_name.c_str(), col_ext_name.c_str(),
+      index_type_name.c_str(), index_type_ext_name.c_str());
+  return true;
+}
+
 bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
                                     const char *table_name,
                                     const Alter_info *alter_info) {
@@ -144,15 +262,10 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
 
     const KEY_CREATE_INFO &kci = key->key_create_info;
 
-    const std::string ext_name =
-        kci.custom_index_extension.str
-            ? std::string(kci.custom_index_extension.str,
-                          kci.custom_index_extension.length)
-            : "";
-    // TODO(villagesql-indexing): When ext_name is empty, look up the index type
-    // name in VictionaryClient to find and match the extension that registers
-    // it. Error if no extension or multiple extensions register the same type
-    // name.
+    std::string ext_name = kci.custom_index_extension.str
+                               ? std::string(kci.custom_index_extension.str,
+                                             kci.custom_index_extension.length)
+                               : "";
     const std::string type_name(kci.custom_index_type.str,
                                 kci.custom_index_type.length);
     const std::string index_name(key->name.str, key->name.length);
@@ -160,35 +273,110 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
         (kci.custom_index_params && !kci.custom_index_params->empty())
             ? params_to_json(*kci.custom_index_params)
             : "{}";
+    std::string ext_version;
 
-    const uint64_t index_id = vclient.allocate_index_id();
-    to_add_indexes_.emplace_back(IndexKey(db, table_name, index_name), index_id,
-                                 ext_name, /*extension_version=*/"", type_name,
-                                 params_json);
+    {
+      auto guard = vclient.get_read_lock();
 
-    uint32_t key_pos = 0;
-    for (const Key_part_spec *kp : key->columns) {
-      // Custom index not supported on expression.
-      assert(kp->get_field_name());
+      const auto *desc = resolve_unique_descriptor<IndexTypeDescriptor>(
+          vclient.index_type_descriptors(),
+          IndexTypeDescriptorKeyPrefix(type_name, ext_name),
+          "custom index type", type_name.c_str(), "'extension.type_name'");
+      if (!desc) return true;
+      ext_name = desc->extension_name();
+      ext_version = desc->extension_version();
 
-      std::string profile_name;
-      if (kp->has_index_profile()) {
-        LEX_CSTRING prof = kp->get_index_profile();
-        profile_name = std::string(prof.str, prof.length);
-        // TODO(villagesql-indexing): Look up profile_name in VictionaryClient
-        // to resolve the owning extension name and version, and fill
-        // profile_extension_name / profile_extension_version below.
-      } else {
-        // TODO(villagesql-indexing): Look up the default profile for this
-        // column's data type and the index type (type_name / ext_name) in
-        // VictionaryClient, and use it if one is registered.
+      const uint64_t index_id = vclient.allocate_index_id();
+      to_add_indexes_.emplace_back(IndexKey(db, table_name, index_name),
+                                   index_id, ext_name, ext_version, type_name,
+                                   params_json);
+
+      uint32_t key_pos = 0;
+      for (const Key_part_spec *kp : key->columns) {
+        // Custom index not supported on expression.
+        assert(kp->get_field_name());
+
+        std::string profile_name, prof_ext_name, prof_ext_version;
+        if (kp->has_index_profile()) {
+          LEX_CSTRING prof = kp->get_index_profile();
+          profile_name = std::string(prof.str, prof.length);
+          const std::string prof_extension =
+              kp->has_index_profile_extension()
+                  ? std::string(kp->get_index_profile_extension().str,
+                                kp->get_index_profile_extension().length)
+                  : "";
+          const auto *prof_desc =
+              resolve_unique_descriptor<IndexProfileDescriptor>(
+                  vclient.index_profile_descriptors(),
+                  IndexProfileDescriptorKeyPrefix(profile_name, prof_extension),
+                  "index profile", profile_name.c_str(),
+                  "'extension.profile_name'");
+          if (!prof_desc) return true;
+
+          // Validate that the column's type matches the profile's expected
+          // type.
+          std::string col_type_name;
+          std::string col_ext_name;
+          const char *field_name = kp->get_field_name();
+          const ColumnEntry *ce = vclient.columns().get_committed(
+              ColumnKey(db, table_name, field_name));
+          if (ce) {
+            bool being_dropped = false;
+            for (const Alter_drop *drop : alter_info->drop_list) {
+              if (drop->type == Alter_drop::COLUMN &&
+                  my_strcasecmp(system_charset_info, drop->name, field_name) ==
+                      0) {
+                being_dropped = true;
+                break;
+              }
+            }
+            if (!being_dropped) {
+              col_type_name = ce->type_name;
+              col_ext_name = ce->extension_name;
+            }
+          }
+          if (col_type_name.empty()) {
+            for (const Create_field &field : alter_info->create_list) {
+              if (field.custom_type_context &&
+                  my_strcasecmp(system_charset_info, field.field_name,
+                                field_name) == 0) {
+                col_type_name = field.custom_type_context->type_name();
+                col_ext_name = field.custom_type_context->extension_name();
+                break;
+              }
+            }
+          }
+          if (col_type_name.empty() ||
+              normalize_type_name(col_type_name) !=
+                  normalize_type_name(prof_desc->type_name()) ||
+              normalize_extension_name(col_ext_name) !=
+                  normalize_extension_name(
+                      prof_desc->type_ref().extension_name())) {
+            villagesql_error(
+                "Column '%s' is not of type '%s' (extension '%s') required"
+                " by index profile '%s'",
+                MYF(0), field_name, prof_desc->type_name().c_str(),
+                prof_desc->type_ref().extension_name().c_str(),
+                profile_name.c_str());
+            return true;
+          }
+
+          prof_ext_name = prof_desc->extension_name();
+          prof_ext_version = prof_desc->extension_version();
+        } else {
+          if (find_default_profile(vclient, alter_info, db, table_name,
+                                   kp->get_field_name(), type_name, ext_name,
+                                   profile_name, prof_ext_name,
+                                   prof_ext_version))
+            return true;
+        }
+
+        to_add_index_columns_.emplace_back(IndexColumnKey(index_id, key_pos),
+                                           std::string(kp->get_field_name()),
+                                           prof_ext_name, prof_ext_version,
+                                           profile_name);
+        ++key_pos;
       }
-
-      to_add_index_columns_.emplace_back(
-          IndexColumnKey(index_id, key_pos), std::string(kp->get_field_name()),
-          /*profile_extension_name=*/"", /*profile_extension_version=*/"",
-          profile_name);
-      ++key_pos;
     }
   }
   return false;
@@ -490,9 +678,17 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
     // Queue child column rows for deletion before the parent index row.
     for (const IndexColumnEntry *col :
          vclient.GetColumnsForIndex(entry->index_id)) {
-      if (col) to_remove_index_columns_.emplace_back(col->key());
+      if (!col) continue;
+      assert(!col->profile_extension_name.empty());
+      to_remove_index_columns_.emplace_back(
+          col->key(), col->column_name, col->profile_extension_name,
+          col->profile_extension_version, col->profile_name);
     }
-    to_remove_indexes_.emplace_back(entry->key());
+    assert(!entry->extension_name.empty());
+    to_remove_indexes_.emplace_back(
+        entry->key(), entry->index_id, entry->extension_name,
+        entry->extension_version, entry->index_type_name,
+        entry->index_type_parameters);
   }
   return false;
 }
@@ -512,9 +708,17 @@ bool Metadata_modifier::remove_all_indexes(THD *thd [[maybe_unused]],
 
     for (const IndexColumnEntry *col :
          vclient.GetColumnsForIndex(entry->index_id)) {
-      if (col) to_remove_index_columns_.emplace_back(col->key());
+      if (!col) continue;
+      assert(!col->profile_extension_name.empty());
+      to_remove_index_columns_.emplace_back(
+          col->key(), col->column_name, col->profile_extension_name,
+          col->profile_extension_version, col->profile_name);
     }
-    to_remove_indexes_.emplace_back(entry->key());
+    assert(!entry->extension_name.empty());
+    to_remove_indexes_.emplace_back(
+        entry->key(), entry->index_id, entry->extension_name,
+        entry->extension_version, entry->index_type_name,
+        entry->index_type_parameters);
   }
   return false;
 }
@@ -576,14 +780,28 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   }
 
   for (const IndexEntry &entry : to_add_indexes_) {
-    if (entry.extension_name.empty()) continue;
+    assert(!entry.extension_name.empty());
     if (add_mdl_request(entry.extension_name)) {
       return true;
     }
   }
 
   for (const IndexColumnEntry &entry : to_add_index_columns_) {
-    if (entry.profile_extension_name.empty()) continue;
+    assert(!entry.profile_extension_name.empty());
+    if (add_mdl_request(entry.profile_extension_name)) {
+      return true;
+    }
+  }
+
+  for (const IndexEntry &entry : to_remove_indexes_) {
+    assert(!entry.extension_name.empty());
+    if (add_mdl_request(entry.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const IndexColumnEntry &entry : to_remove_index_columns_) {
+    assert(!entry.profile_extension_name.empty());
     if (add_mdl_request(entry.profile_extension_name)) {
       return true;
     }
@@ -689,8 +907,30 @@ bool Metadata_modifier::validate_entries() {
     }
   }
 
-  // TODO(villagesql-indexing): Validate index_type_name and profile_name
-  // against index types and profiles registered by the extension.
+  for (const IndexEntry &entry : to_add_indexes_) {
+    assert(!entry.extension_name.empty());
+    IndexTypeDescriptorKeyPrefix pfx(entry.index_type_name,
+                                     entry.extension_name);
+    if (!vclient.index_type_descriptors().has_prefix_committed(pfx)) {
+      villagesql_error("Custom index type '%s' from extension '%s' not found",
+                       MYF(0), entry.index_type_name.c_str(),
+                       entry.extension_name.c_str());
+      return true;
+    }
+  }
+
+  for (const IndexColumnEntry &entry : to_add_index_columns_) {
+    assert(!entry.profile_name.empty());
+    assert(!entry.profile_extension_name.empty());
+    IndexProfileDescriptorKeyPrefix ppfx(entry.profile_name,
+                                         entry.profile_extension_name);
+    if (!vclient.index_profile_descriptors().has_prefix_committed(ppfx)) {
+      villagesql_error("Index profile '%s' from extension '%s' not found",
+                       MYF(0), entry.profile_name.c_str(),
+                       entry.profile_extension_name.c_str());
+      return true;
+    }
+  }
 
   return false;
 }
@@ -742,8 +982,8 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   to_add_.clear();
 
   // 4. Process custom index column removals (child before parent).
-  for (const IndexColumnKey &key : to_remove_index_columns_) {
-    if (vclient.custom_index_columns().MarkForDeletion(*thd, key)) {
+  for (const IndexColumnEntry &entry : to_remove_index_columns_) {
+    if (vclient.custom_index_columns().MarkForDeletion(*thd, entry.key())) {
       return true;
     }
     marked_index = true;
@@ -751,8 +991,8 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   to_remove_index_columns_.clear();
 
   // 5. Process custom index removals.
-  for (const IndexKey &key : to_remove_indexes_) {
-    if (vclient.custom_indexes().MarkForDeletion(*thd, key)) {
+  for (const IndexEntry &entry : to_remove_indexes_) {
+    if (vclient.custom_indexes().MarkForDeletion(*thd, entry.key())) {
       return true;
     }
     marked_index = true;

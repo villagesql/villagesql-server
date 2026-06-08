@@ -19,18 +19,22 @@
 
 #include <vector>
 
+#include "villagesql/schema/systable/custom_index_columns.h"
 #include "villagesql/schema/systable/custom_indexes.h"
 #include "villagesql/schema/systable/extensions.h"
 
 namespace villagesql {
 
-// Returns true and emits villagesql_error if any IndexEntry in
-// `all_indexes` belongs to `ext_entry` (matched on extension_name +
-// extension_version). RESTRICT semantics: the caller aborts uninstall when
-// this returns true. No system-table mutations occur.
+// Returns true and emits villagesql_error if any IndexEntry in `all_indexes`
+// belongs to `ext_entry` (matched on extension_name + extension_version), or
+// if any IndexColumnEntry in `all_index_columns` references a profile from
+// `ext_entry` (matched on profile_extension_name + profile_extension_version).
+// RESTRICT semantics: the caller aborts uninstall when this returns true.
+// No system-table mutations occur.
 bool check_for_indexes_of_extension(
     const ExtensionEntry &ext_entry,
-    const std::vector<const IndexEntry *> &all_indexes);
+    const std::vector<const IndexEntry *> &all_indexes,
+    const std::vector<const IndexColumnEntry *> &all_index_columns);
 
 }  // namespace villagesql
 

@@ -126,14 +126,16 @@ class Key_part_spec {
         m_has_expression(true) {}
 
   Key_part_spec(LEX_CSTRING column_name, uint prefix_length, enum_order order,
-                LEX_CSTRING index_profile = {nullptr, 0})
+                LEX_CSTRING index_profile = {nullptr, 0},
+                LEX_CSTRING index_profile_extension = {nullptr, 0})
       : m_is_ascending((order == ORDER_DESC) ? false : true),
         m_is_explicit(order != ORDER_NOT_RELEVANT),
         m_field_name(column_name.str),
         m_prefix_length(prefix_length),
         m_expression(nullptr),
         m_has_expression(false),
-        m_index_profile(index_profile) {}
+        m_index_profile(index_profile),
+        m_index_profile_extension(index_profile_extension) {}
 
   bool operator==(const Key_part_spec &other) const;
   /**
@@ -202,8 +204,15 @@ class Key_part_spec {
   bool has_expression() const { return m_has_expression; }
 
   LEX_CSTRING get_index_profile() const { return m_index_profile; }
+  LEX_CSTRING get_index_profile_extension() const {
+    return m_index_profile_extension;
+  }
   bool has_index_profile() const {
     return m_index_profile.str != nullptr && m_index_profile.length != 0;
+  }
+  bool has_index_profile_extension() const {
+    return m_index_profile_extension.str != nullptr &&
+           m_index_profile_extension.length != 0;
   }
 
  private:
@@ -232,6 +241,7 @@ class Key_part_spec {
   bool m_has_expression;
 
   LEX_CSTRING m_index_profile{};
+  LEX_CSTRING m_index_profile_extension{};
 };
 
 class Key_spec {

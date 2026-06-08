@@ -102,18 +102,21 @@ bool register_preview_capabilities(THD &thd,
   // Validate profile references before moving any descriptor. Each profile's
   // data type and index type must resolve to exactly one entry in the current
   // batch.
-  for (const auto &profile : preview.index_profiles) {
+  for (auto &profile : preview.index_profiles) {
     const std::string &prof_name = profile.profile_name();
     const std::string &prof_ext = profile.extension_name();
 
     // Resolve data type reference: check same-batch types only.
     // TODO(villagesql-indexing): Also resolve against committed types from the
     // same extension once cross-extension profile references are designed.
-    int type_count = static_cast<int>(
-        std::count_if(validated.types.begin(), validated.types.end(),
-                      [&profile](const auto &td) {
-                        return profile.type_ref().matches_key(td.key().str());
-                      }));
+    std::string resolved_type_ext;
+    int type_count = 0;
+    for (const auto &td : validated.types) {
+      if (profile.type_ref().matches_key(td.key().str())) {
+        if (type_count == 0) resolved_type_ext = td.extension_name();
+        type_count++;
+      }
+    }
     if (type_count == 0) {
       error_out = "index profile '" + prof_name +
                   "': references unknown data type '" + profile.type_name() +
@@ -130,16 +133,24 @@ bool register_preview_capabilities(THD &thd,
               error_out.c_str());
       return true;
     }
+    if (profile.type_ref().extension_name().empty()) {
+      profile.set_type_ref(
+          TypeDescriptorKeyPrefix(profile.type_name(), resolved_type_ext));
+    }
 
     // Resolve index type reference: check same-batch index types only.
     // TODO(villagesql-indexing): Also resolve against committed index types
     // from the same extension once cross-extension profile references are
     // designed.
-    int index_type_count = static_cast<int>(std::count_if(
-        preview.index_types.begin(), preview.index_types.end(),
-        [&profile](const auto &itd) {
-          return profile.index_type_ref().matches_key(itd.key().str());
-        }));
+    std::string resolved_index_type_ext;
+    int index_type_count = 0;
+    for (const auto &itd : preview.index_types) {
+      if (profile.index_type_ref().matches_key(itd.key().str())) {
+        if (index_type_count == 0)
+          resolved_index_type_ext = itd.extension_name();
+        index_type_count++;
+      }
+    }
     if (index_type_count == 0) {
       error_out = "index profile '" + prof_name +
                   "': references unknown index type '" +
@@ -155,6 +166,12 @@ bool register_preview_capabilities(THD &thd,
       LogVSQL(ERROR_LEVEL, "Extension '%s': %s", prof_ext.c_str(),
               error_out.c_str());
       return true;
+    }
+    // Qualify the index_type_ref if the extension was unqualified at parse
+    // time; all descriptors must have a non-empty extension name.
+    if (profile.index_type_ref().extension_name().empty()) {
+      profile.set_index_type_ref(IndexTypeDescriptorKeyPrefix(
+          profile.index_type_name(), resolved_index_type_ext));
     }
   }
 
