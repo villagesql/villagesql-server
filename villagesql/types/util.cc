@@ -46,10 +46,15 @@
 #include "sql/visible_fields.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/index_context.h"
+#include "villagesql/schema/descriptor/index_profile_descriptor.h"
+#include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/systable/custom_index_columns.h"
+#include "villagesql/schema/systable/custom_indexes.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/tmp_metadata.h"
 #include "villagesql/schema/util.h"
@@ -190,6 +195,102 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
 
   field->set_type_context(tc);
   return CheckFieldLengthMatchesType(field, tc);
+}
+
+bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
+  if (should_assert_if_null(thd)) {
+    LogVSQL(ERROR_LEVEL, "thd is null in MaybeInjectCustomIndex");
+    return true;
+  }
+  if (should_assert_if_null(keyinfo)) {
+    LogVSQL(ERROR_LEVEL, "keyinfo is null in MaybeInjectCustomIndex");
+    return true;
+  }
+  if (!keyinfo->name) return false;
+
+  std::string db_name(share.db.str, share.db.length);
+
+  if (::villagesql::is_system_schema(db_name.c_str())) return false;
+
+  std::string table_name(share.table_name.str, share.table_name.length);
+  std::string index_name(keyinfo->name);
+  IndexKey idx_key(db_name, table_name, index_name);
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  auto guard = vclient.get_write_lock();
+  const IndexEntry *index_entry =
+      vclient.custom_indexes().get_committed(idx_key.str());
+  if (!index_entry) return false;
+
+  // Resolve IndexTypeDescriptor.
+  IndexTypeDescriptorKey type_key(index_entry->index_type_name,
+                                  index_entry->extension_name,
+                                  index_entry->extension_version);
+  const IndexTypeDescriptor *type_descriptor =
+      vclient.index_type_descriptors().get_committed(type_key);
+  if (should_assert_if_null(type_descriptor)) {
+    LogVSQL(ERROR_LEVEL,
+            "Failed to find index type %s in extension %s, version %s when "
+            "loading index %s in table %s.%s",
+            index_entry->index_type_name.c_str(),
+            index_entry->extension_name.c_str(),
+            index_entry->extension_version.c_str(), index_name.c_str(),
+            db_name.c_str(), table_name.c_str());
+    return true;
+  }
+
+  TypeParameters parameters =
+      TypeParameters::from_json(index_entry->index_type_parameters);
+  IndexContextKey ctx_key(type_key, std::move(parameters));
+
+  const IndexContext *ic = vclient.index_contexts().acquire_or_create(
+      ctx_key, share.mem_root, type_descriptor);
+  if (should_assert_if_null(ic)) {
+    if (thd->is_error()) return true;
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(IndexContext));
+    return true;
+  }
+
+  keyinfo->custom_index_context = ic;
+
+  // Inject per-column profile into each KEY_PART_INFO.
+  std::vector<const IndexColumnEntry *> col_entries =
+      vclient.GetColumnsForIndex(index_entry->index_id);
+  for (const IndexColumnEntry *col_entry : col_entries) {
+    uint32_t pos = col_entry->key_position();
+    if (pos >= keyinfo->user_defined_key_parts) {
+      LogVSQL(ERROR_LEVEL,
+              "Invalid key_position %u (>= user_defined_key_parts %u) for "
+              "index %s in table %s.%s",
+              pos, keyinfo->user_defined_key_parts, index_name.c_str(),
+              db_name.c_str(), table_name.c_str());
+      return true;
+    }
+    if (col_entry->profile_name.empty()) continue;
+
+    IndexProfileDescriptorKey profile_key(col_entry->profile_name,
+                                          col_entry->profile_extension_name,
+                                          col_entry->profile_extension_version);
+    const IndexProfileDescriptor *profile_desc =
+        vclient.index_profile_descriptors().get_committed(profile_key);
+    if (should_assert_if_null(profile_desc)) {
+      LogVSQL(ERROR_LEVEL,
+              "Failed to find profile %s in extension %s, version %s for "
+              "column %s (position %u) of index %s in table %s.%s",
+              col_entry->profile_name.c_str(),
+              col_entry->profile_extension_name.c_str(),
+              col_entry->profile_extension_version.c_str(),
+              col_entry->column_name.c_str(), pos, index_name.c_str(),
+              db_name.c_str(), table_name.c_str());
+      return true;
+    }
+
+    keyinfo->key_part[pos].custom_index_profile = profile_desc;
+  }
+
+  return false;
 }
 
 bool ResolveTypeToContext(std::string_view extension_name,

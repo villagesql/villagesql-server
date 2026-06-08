@@ -1626,6 +1626,8 @@ static bool fill_indexes_from_dd(THD *thd, TABLE_SHARE *share,
 
       fill_index_elements_from_dd(share, index_at_pos[key_nr], key_nr);
 
+      if (villagesql::MaybeInjectCustomIndex(thd, *share, keyinfo)) return true;
+
       key_part += keyinfo->user_defined_key_parts;
       rec_per_key += keyinfo->user_defined_key_parts;
       rec_per_key_float += keyinfo->user_defined_key_parts;
