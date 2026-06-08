@@ -26,15 +26,37 @@ ERROR HY000: Unknown index profile 'no_such_profile'
 # --- Non-custom column: no default profile ---
 CREATE INDEX idx ON t (id) USING EXTENDED(dummy_index_hnsw);
 ERROR HY000: No default index profile found: column 'id' is not a custom type
-# --- UNINSTALL blocked by existing custom index ---
-DROP TABLE t;
-CREATE TABLE t2 (id INT PRIMARY KEY);
-CREATE INDEX idx_block ON t2 (id dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+# --- Explicit profile for wrong column type ---
+CREATE INDEX idx ON t (id dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Column 'id' is not of type 'dummy_type_vector' (extension 'vsql_index_test') required by index profile 'dummy_profile_hnsw_l2'
+# --- Drop+re-add: old type matches profile but new type does not (error) ---
+CREATE TABLE t_readd (id INT PRIMARY KEY, a dummy_type_vector);
+ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a INT,
+ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Column 'a' is not of type 'dummy_type_vector' (extension 'vsql_index_test') required by index profile 'dummy_profile_hnsw_l2'
+DROP TABLE t_readd;
+# --- Drop+re-add: new type matches profile, old type did not (success) ---
+CREATE TABLE t_readd (id INT PRIMARY KEY, a INT);
+ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a dummy_type_vector,
+ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+DROP TABLE t_readd;
+# --- UNINSTALL blocked by existing custom type ---
+CREATE INDEX idx_block ON t (a) USING EXTENDED(dummy_index_hnsw);
 UNINSTALL EXTENSION vsql_index_test;
-ERROR HY000: Cannot drop extension `vsql_index_test` as 1 custom index(es) depend on it, e.g. test.t2.idx_block uses index type dummy_index_hnsw
-# --- DROP INDEX unblocks UNINSTALL; reinstall succeeds in same session ---
-DROP INDEX idx_block ON t2;
-DROP TABLE t2;
+ERROR HY000: Cannot drop extension `vsql_index_test` as 3 column(s) depend on it, e.g. test.t.a has type dummy_type_vector
+# --- UNINSTALL blocked by custom index ---
+SET SESSION debug='+d,villagesql_skip_uninstall_column_check';
+UNINSTALL EXTENSION vsql_index_test;
+ERROR HY000: Cannot drop extension `vsql_index_test` as 1 custom index(es) depend on it, e.g. test.t.idx_block uses index type dummy_index_hnsw
+# --- UNINSTALL blocked by index profile ---
+SET SESSION debug='+d,villagesql_skip_uninstall_index_check';
+UNINSTALL EXTENSION vsql_index_test;
+ERROR HY000: Cannot drop extension `vsql_index_test` as 1 index column(s) depend on its profile `dummy_profile_hnsw_l2`, e.g. test.t.idx_block (column a)
+SET SESSION debug='-d,villagesql_skip_uninstall_column_check';
+SET SESSION debug='-d,villagesql_skip_uninstall_index_check';
+# --- DROP INDEX + DROP TABLE unblocks UNINSTALL; reinstall succeeds in same session ---
+DROP INDEX idx_block ON t;
+DROP TABLE t;
 SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 INSTALL EXTENSION vsql_index_test;

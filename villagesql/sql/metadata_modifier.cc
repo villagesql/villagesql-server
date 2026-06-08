@@ -157,6 +157,9 @@ static const EntryType *resolve_unique_descriptor(const Map &map,
 // sets out_* on success. Returns true and sets a villagesql_error if the column
 // type cannot be determined or no default profile is registered for the pair.
 // REQUIRES: Caller must hold vclient read lock.
+// TODO(villagesql): string parameters here (and normalize_type_name /
+// normalize_extension_name) should use std::string_view; requires updating the
+// downstream helpers consistently.
 static bool find_default_profile(VictionaryClient &vclient,
                                  const Alter_info *alter_info, const char *db,
                                  const char *table_name, const char *field_name,
@@ -309,6 +312,55 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
                   "index profile", profile_name.c_str(),
                   "'extension.profile_name'");
           if (!prof_desc) return true;
+
+          // Validate that the column's type matches the profile's expected
+          // type.
+          std::string col_type_name;
+          std::string col_ext_name;
+          const char *field_name = kp->get_field_name();
+          const ColumnEntry *ce = vclient.columns().get_committed(
+              ColumnKey(db, table_name, field_name));
+          if (ce) {
+            bool being_dropped = false;
+            for (const Alter_drop *drop : alter_info->drop_list) {
+              if (drop->type == Alter_drop::COLUMN &&
+                  my_strcasecmp(system_charset_info, drop->name, field_name) ==
+                      0) {
+                being_dropped = true;
+                break;
+              }
+            }
+            if (!being_dropped) {
+              col_type_name = ce->type_name;
+              col_ext_name = ce->extension_name;
+            }
+          }
+          if (col_type_name.empty()) {
+            for (const Create_field &field : alter_info->create_list) {
+              if (field.custom_type_context &&
+                  my_strcasecmp(system_charset_info, field.field_name,
+                                field_name) == 0) {
+                col_type_name = field.custom_type_context->type_name();
+                col_ext_name = field.custom_type_context->extension_name();
+                break;
+              }
+            }
+          }
+          if (col_type_name.empty() ||
+              normalize_type_name(col_type_name) !=
+                  normalize_type_name(prof_desc->type_name()) ||
+              normalize_extension_name(col_ext_name) !=
+                  normalize_extension_name(
+                      prof_desc->type_ref().extension_name())) {
+            villagesql_error(
+                "Column '%s' is not of type '%s' (extension '%s') required"
+                " by index profile '%s'",
+                MYF(0), field_name, prof_desc->type_name().c_str(),
+                prof_desc->type_ref().extension_name().c_str(),
+                profile_name.c_str());
+            return true;
+          }
+
           prof_ext_name = prof_desc->extension_name();
           prof_ext_version = prof_desc->extension_version();
         } else {

@@ -18,6 +18,7 @@
 
 #include <unordered_map>
 
+#include "my_dbug.h"
 #include "my_sys.h"
 
 #include "villagesql/include/error.h"
@@ -39,7 +40,8 @@ bool check_for_indexes_of_extension(
     }
   }
 
-  if (first_index != nullptr) {
+  if (first_index != nullptr &&
+      !DBUG_EVALUATE_IF("villagesql_skip_uninstall_index_check", true, false)) {
     villagesql_error(
         "Cannot drop extension `%s` as %d custom index(es) depend on it, "
         "e.g. %s.%s.%s uses index type %s",

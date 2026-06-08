@@ -20,6 +20,7 @@
 #include <string>
 #include <tuple>
 
+#include "my_dbug.h"
 #include "my_sys.h"
 #include "mysql/components/services/registry.h"
 #include "mysql/service_security_context.h"
@@ -406,7 +407,9 @@ bool remove_extension_from_victionary(
   // Delete all custom types for this extension (RESTRICT behavior - fails
   // if any type has dependent columns or stored procedures)
   const auto &all_columns = victionary.columns().get_all_committed();
-  if (check_for_columns_of_extension(*ext_entry, all_columns)) {
+  if (!DBUG_EVALUATE_IF("villagesql_skip_uninstall_column_check", true,
+                        false) &&
+      check_for_columns_of_extension(*ext_entry, all_columns)) {
     return true;
   }
 
