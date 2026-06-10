@@ -21,6 +21,7 @@
 #define VILLAGESQL_SCHEMA_DESCRIPTOR_INDEX_TYPE_DESCRIPTOR_H_
 
 #include <string>
+#include <string_view>
 
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
@@ -35,15 +36,15 @@ struct TableTraits;
 // "normalized_index_type_name.normalized_ext_name."
 struct IndexTypeDescriptorKeyPrefix {
   // Query by index type name only (for unqualified lookups).
-  explicit IndexTypeDescriptorKeyPrefix(std::string index_type_name)
-      : index_type_name_(std::move(index_type_name)),
+  explicit IndexTypeDescriptorKeyPrefix(std::string_view index_type_name)
+      : index_type_name_(index_type_name),
         normalized_prefix_(normalize_type_name(index_type_name_) + ".") {}
 
   // Query by index type name + extension name.
-  IndexTypeDescriptorKeyPrefix(std::string index_type_name,
-                               std::string extension_name)
-      : index_type_name_(std::move(index_type_name)),
-        extension_name_(std::move(extension_name)),
+  IndexTypeDescriptorKeyPrefix(std::string_view index_type_name,
+                               std::string_view extension_name)
+      : index_type_name_(index_type_name),
+        extension_name_(extension_name),
         normalized_prefix_(
             normalize_type_name(index_type_name_) + "." +
             (extension_name_.empty()

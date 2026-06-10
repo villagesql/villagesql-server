@@ -20,6 +20,7 @@
 #include <cctype>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include "lex_string.h"
 #include "mysql/strings/m_ctype.h"
 #include "sql/field.h"
@@ -167,43 +168,48 @@ const CHARSET_INFO *get_identifier_charset() {
   return &my_charset_utf8mb4_0900_ai_ci;  // Case-insensitive
 }
 
-std::string normalize_database_name(const std::string &name) {
-  if (::lower_case_table_names == 0) {
-    return name;  // Case-sensitive, store as-is
-  }
-  // Case-insensitive: normalize to lowercase
-  return casedn(get_identifier_charset(), name);
+static std::string casedn_string(const CHARSET_INFO *cs, std::string_view name) {
+  if (name.empty()) return {};
+  return casedn(cs, std::string(name));
 }
 
-std::string normalize_table_name(const std::string &name) {
+std::string normalize_database_name(std::string_view name) {
   if (::lower_case_table_names == 0) {
-    return name;  // Case-sensitive, store as-is
+    return std::string(name);  // Case-sensitive, store as-is
   }
   // Case-insensitive: normalize to lowercase
-  return casedn(get_identifier_charset(), name);
+  return casedn_string(get_identifier_charset(), name);
 }
 
-std::string normalize_column_name(const std::string &name) {
+std::string normalize_table_name(std::string_view name) {
+  if (::lower_case_table_names == 0) {
+    return std::string(name);  // Case-sensitive, store as-is
+  }
+  // Case-insensitive: normalize to lowercase
+  return casedn_string(get_identifier_charset(), name);
+}
+
+std::string normalize_column_name(std::string_view name) {
   // Column names are always case-insensitive in MySQL
-  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
+  return casedn_string(&my_charset_utf8mb4_0900_ai_ci, name);
 }
 
-std::string normalize_extension_name(const std::string &name) {
+std::string normalize_extension_name(std::string_view name) {
   // Extension names are in system character set.
   // TODO(villagesql-beta): Check and replace all other hard coded
   // my_charset_utf8mb4_0900_ai_ci in this file.
-  return casedn(system_charset_info, name);
+  return casedn_string(system_charset_info, name);
 }
 
-std::string normalize_type_name(const std::string &name) {
+std::string normalize_type_name(std::string_view name) {
   // Type names should be case-insensitive (like SQL type names)
-  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
+  return casedn_string(&my_charset_utf8mb4_0900_ai_ci, name);
 }
 
-std::string normalize_index_name(const std::string &name) {
+std::string normalize_index_name(std::string_view name) {
   // Index names are always case-insensitive in MySQL, regardless of
   // lower_case_table_names (which only governs table/database identifiers).
-  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
+  return casedn_string(&my_charset_utf8mb4_0900_ai_ci, name);
 }
 
 // ===== Test utilities =====

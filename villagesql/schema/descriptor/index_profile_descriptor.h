@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
@@ -41,15 +42,15 @@ struct TableTraits;
 // "normalized_profile_name.normalized_ext_name."
 struct IndexProfileDescriptorKeyPrefix {
   // Query by profile name only (for unqualified lookups).
-  explicit IndexProfileDescriptorKeyPrefix(std::string profile_name)
-      : profile_name_(std::move(profile_name)),
+  explicit IndexProfileDescriptorKeyPrefix(std::string_view profile_name)
+      : profile_name_(profile_name),
         normalized_prefix_(normalize_extension_name(profile_name_) + ".") {}
 
   // Query by profile name + extension name.
-  IndexProfileDescriptorKeyPrefix(std::string profile_name,
-                                  std::string extension_name)
-      : profile_name_(std::move(profile_name)),
-        extension_name_(std::move(extension_name)),
+  IndexProfileDescriptorKeyPrefix(std::string_view profile_name,
+                                  std::string_view extension_name)
+      : profile_name_(profile_name),
+        extension_name_(extension_name),
         normalized_prefix_(
             normalize_extension_name(profile_name_) + "." +
             (extension_name_.empty()

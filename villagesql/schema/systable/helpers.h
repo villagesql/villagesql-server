@@ -37,22 +37,22 @@ const CHARSET_INFO *get_identifier_charset();
 
 // Normalize different identifier types according to MySQL rules
 // Database names: Follow lower_case_table_names setting (like MySQL DD)
-std::string normalize_database_name(const std::string &name);
+std::string normalize_database_name(std::string_view name);
 
 // Table names: Follow lower_case_table_names setting (like MySQL DD)
-std::string normalize_table_name(const std::string &name);
+std::string normalize_table_name(std::string_view name);
 
 // Column names: Always case-insensitive (per MySQL standard)
-std::string normalize_column_name(const std::string &name);
+std::string normalize_column_name(std::string_view name);
 
 // Extension names: Always case-insensitive (like plugin names)
-std::string normalize_extension_name(const std::string &name);
+std::string normalize_extension_name(std::string_view name);
 
 // Type names: Always case-insensitive (like SQL type names)
-std::string normalize_type_name(const std::string &name);
+std::string normalize_type_name(std::string_view name);
 
 // Index names: Follow lower_case_table_names setting (same as table names)
-std::string normalize_index_name(const std::string &name);
+std::string normalize_index_name(std::string_view name);
 
 // Build a qualified base name string "extension_name.type_name".
 inline std::string make_qualified_base_name(std::string_view extension_name,

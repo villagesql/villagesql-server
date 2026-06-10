@@ -18,6 +18,7 @@
 #define VILLAGESQL_SQL_METADATA_MODIFIER_H_
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -149,8 +150,7 @@ class Metadata_modifier {
   // Acquire an X (exclusive) MDL lock on an extension with the specified
   // duration. Normalizes the extension name before acquiring the lock.
   // Returns false on success, true on error.
-  static bool lock_extension_exclusive(THD *thd,
-                                       const std::string &extension_name,
+  static bool lock_extension_exclusive(THD *thd, std::string_view extension_name,
                                        enum_mdl_duration duration);
 
   // Returns true if there are custom column or index entries to process.

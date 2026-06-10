@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "villagesql/schema/systable/helpers.h"
@@ -43,14 +44,15 @@ struct TableTraits;
 struct TypeDescriptorKeyPrefix {
  public:
   // Query by type name only
-  explicit TypeDescriptorKeyPrefix(std::string type_name)
-      : type_name_(std::move(type_name)),
+  explicit TypeDescriptorKeyPrefix(std::string_view type_name)
+      : type_name_(type_name),
         normalized_prefix_(normalize_type_name(type_name_) + ".") {}
 
   // Query by type name + optional extension name
-  TypeDescriptorKeyPrefix(std::string type_name, std::string extension_name)
-      : type_name_(std::move(type_name)),
-        extension_name_(std::move(extension_name)),
+  TypeDescriptorKeyPrefix(std::string_view type_name,
+                          std::string_view extension_name)
+      : type_name_(type_name),
+        extension_name_(extension_name),
         normalized_prefix_(
             normalize_type_name(type_name_) + "." +
             (extension_name_.empty()

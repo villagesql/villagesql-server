@@ -16,9 +16,11 @@
 
 #include "villagesql/sql/metadata_modifier.h"
 
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 
+#include "lex_string.h"
 #include "sql/create_field.h"
 #include "sql/field.h"
 #include "sql/field_common_properties.h"
@@ -138,16 +140,19 @@ template <typename EntryType, typename Map, typename Prefix>
 static const EntryType *resolve_unique_descriptor(const Map &map,
                                                   const Prefix &prefix,
                                                   const char *entity_type,
-                                                  const char *name,
+                                                  std::string_view name,
                                                   const char *qualify_hint) {
   auto matches = map.get_prefix_committed(prefix);
   if (matches.empty()) {
-    villagesql_error("Unknown %s '%s'", MYF(0), entity_type, name);
+    const std::string name_for_error(name);
+    villagesql_error("Unknown %s '%s'", MYF(0), entity_type,
+                     name_for_error.c_str());
     return nullptr;
   }
   if (matches.size() > 1) {
+    const std::string name_for_error(name);
     villagesql_error("%s '%s' is ambiguous; qualify as %s", MYF(0), entity_type,
-                     name, qualify_hint);
+                     name_for_error.c_str(), qualify_hint);
     return nullptr;
   }
   return matches[0];
@@ -157,14 +162,11 @@ static const EntryType *resolve_unique_descriptor(const Map &map,
 // sets out_* on success. Returns true and sets a villagesql_error if the column
 // type cannot be determined or no default profile is registered for the pair.
 // REQUIRES: Caller must hold vclient read lock.
-// TODO(villagesql): string parameters here (and normalize_type_name /
-// normalize_extension_name) should use std::string_view; requires updating the
-// downstream helpers consistently.
 static bool find_default_profile(VictionaryClient &vclient,
                                  const Alter_info *alter_info, const char *db,
                                  const char *table_name, const char *field_name,
-                                 const std::string &index_type_name,
-                                 const std::string &index_type_ext_name,
+                                 std::string_view index_type_name,
+                                 std::string_view index_type_ext_name,
                                  std::string &out_profile_name,
                                  std::string &out_prof_ext_name,
                                  std::string &out_prof_ext_version) {
@@ -241,11 +243,13 @@ static bool find_default_profile(VictionaryClient &vclient,
     out_prof_ext_version = pd->extension_version();
     return false;
   }
+  const std::string index_type_name_for_error(index_type_name);
+  const std::string index_type_ext_name_for_error(index_type_ext_name);
   villagesql_error(
       "No default index profile found for type '%s' (extension '%s') with"
       " index type '%s' (extension '%s')",
       MYF(0), col_type_name.c_str(), col_ext_name.c_str(),
-      index_type_name.c_str(), index_type_ext_name.c_str());
+      index_type_name_for_error.c_str(), index_type_ext_name_for_error.c_str());
   return true;
 }
 
@@ -262,12 +266,10 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
 
     const KEY_CREATE_INFO &kci = key->key_create_info;
 
-    std::string ext_name = kci.custom_index_extension.str
-                               ? std::string(kci.custom_index_extension.str,
-                                             kci.custom_index_extension.length)
-                               : "";
-    const std::string type_name(kci.custom_index_type.str,
-                                kci.custom_index_type.length);
+    std::string_view ext_name = kci.custom_index_extension.str
+                                    ? to_string_view(kci.custom_index_extension)
+                                    : std::string_view{};
+    const std::string_view type_name = to_string_view(kci.custom_index_type);
     const std::string index_name(key->name.str, key->name.length);
     const std::string params_json =
         (kci.custom_index_params && !kci.custom_index_params->empty())
@@ -281,15 +283,15 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
       const auto *desc = resolve_unique_descriptor<IndexTypeDescriptor>(
           vclient.index_type_descriptors(),
           IndexTypeDescriptorKeyPrefix(type_name, ext_name),
-          "custom index type", type_name.c_str(), "'extension.type_name'");
+          "custom index type", type_name, "'extension.type_name'");
       if (!desc) return true;
       ext_name = desc->extension_name();
       ext_version = desc->extension_version();
 
       const uint64_t index_id = vclient.allocate_index_id();
       to_add_indexes_.emplace_back(IndexKey(db, table_name, index_name),
-                                   index_id, ext_name, ext_version, type_name,
-                                   params_json);
+                                   index_id, std::string(ext_name), ext_version,
+                                   std::string(type_name), params_json);
 
       uint32_t key_pos = 0;
       for (const Key_part_spec *kp : key->columns) {
@@ -299,16 +301,16 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
         std::string profile_name, prof_ext_name, prof_ext_version;
         if (kp->has_index_profile()) {
           LEX_CSTRING prof = kp->get_index_profile();
-          profile_name = std::string(prof.str, prof.length);
-          const std::string prof_extension =
+          std::string_view prof_name = to_string_view(prof);
+          profile_name = std::string(prof_name);
+          const std::string_view prof_extension =
               kp->has_index_profile_extension()
-                  ? std::string(kp->get_index_profile_extension().str,
-                                kp->get_index_profile_extension().length)
-                  : "";
+                  ? to_string_view(kp->get_index_profile_extension())
+                  : std::string_view{};
           const auto *prof_desc =
               resolve_unique_descriptor<IndexProfileDescriptor>(
                   vclient.index_profile_descriptors(),
-                  IndexProfileDescriptorKeyPrefix(profile_name, prof_extension),
+                  IndexProfileDescriptorKeyPrefix(prof_name, prof_extension),
                   "index profile", profile_name.c_str(),
                   "'extension.profile_name'");
           if (!prof_desc) return true;
@@ -1313,8 +1315,8 @@ void Metadata_modifier::rollback(THD *thd) {
 }
 
 bool Metadata_modifier::lock_extension_exclusive(
-    THD *thd, const std::string &extension_name, enum_mdl_duration duration) {
-  ExtensionKey ext_key(extension_name);
+    THD *thd, std::string_view extension_name, enum_mdl_duration duration) {
+  ExtensionKey ext_key{std::string(extension_name)};
   const std::string &normalized_name = ext_key.str();
 
   MDL_request mdl_request;
