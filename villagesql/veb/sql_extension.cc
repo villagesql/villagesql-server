@@ -149,6 +149,17 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  std::string expected_version =
+      m_version.str ? to_string(m_version) : std::string();
+  if (!expected_version.empty() && version != expected_version) {
+    villagesql_error(
+        "Cannot install extension '%s': manifest version is '%s' but "
+        "VERSION '%s' was specified",
+        MYF(0), extension_name.c_str(), version.c_str(),
+        expected_version.c_str());
+    return end_transaction(thd, true);
+  }
+
   auto &victionary = villagesql::VictionaryClient::instance();
 
   // Early check: fail fast if extension already exists (from in-memory cache).

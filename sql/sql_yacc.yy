@@ -19128,11 +19128,12 @@ install_stmt:
             $$ = nullptr;
           }
         // TODO(villagesql-rebase): INSTALL EXTENSION grammar rule, check placement during MySQL rebase
-        | INSTALL_SYM EXTENSION_SYM IDENT_sys
+        | INSTALL_SYM EXTENSION_SYM IDENT_sys opt_extension_version
           {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_INSTALL_EXTENSION;
-            lex->m_sql_cmd= new (YYMEM_ROOT) Sql_cmd_install_extension(to_lex_cstring($3));
+            lex->m_sql_cmd= new (YYMEM_ROOT)
+                Sql_cmd_install_extension(to_lex_cstring($3), $4);
             $$ = nullptr;
           }
         | INSTALL_SYM COMPONENT_SYM TEXT_STRING_sys_list opt_install_set_value_list

@@ -33,7 +33,10 @@ extern char opt_veb_dir[FN_REFLEN];
 // This class implements the INSTALL EXTENSION statement.
 class Sql_cmd_install_extension : public Sql_cmd {
  public:
-  explicit Sql_cmd_install_extension(const LEX_CSTRING &name) : m_name(name) {}
+  // version: asserted VEB-manifest version (m_version.str == nullptr if no
+  // VERSION clause). When set, install fails unless the manifest matches.
+  Sql_cmd_install_extension(const LEX_CSTRING &name, const LEX_CSTRING &version)
+      : m_name(name), m_version(version) {}
 
   enum_sql_command sql_command_code() const override {
     return SQLCOM_INSTALL_EXTENSION;
@@ -46,6 +49,7 @@ class Sql_cmd_install_extension : public Sql_cmd {
 
  private:
   LEX_CSTRING m_name;
+  LEX_CSTRING m_version;
 };
 
 // This class implements the UNINSTALL EXTENSION statement.
