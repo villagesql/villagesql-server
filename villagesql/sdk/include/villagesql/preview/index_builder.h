@@ -137,6 +137,9 @@
 //
 // INDEX PROFILE
 // -------------
+// TODO(villagesql-indexing): Evaluate using string-based function identifiers
+// instead of numeric fn_ids, and assess the impact on function invocation and
+// builder-generated execution context.
 //
 // Binds a custom type to an index type and assigns per-profile function IDs.
 // for_type() takes the type name string (the same kMyType constant passed to
@@ -925,9 +928,9 @@ class IndexProfileBuilder {
     return *this;
   }
 
-  // Bind fn_id to a user-visible SQL function. The optimizer may rewrite calls
-  // to this function as an index scan. fn_ids must be unique within the
-  // functions list.
+  // Bind fn_id to a user-visible SQL function. The optimizer may generate an
+  // index scan plan for calls to this function. fn_ids must be unique within
+  // the functions list.
   IndexProfileBuilder &with_function(uint32_t fn_id,
                                      const IndexFunctionDesc &fn) {
     desc_.functions.push_back({fn_id, fn});
@@ -1155,14 +1158,13 @@ class IndexProfileCapability
               b.fn_id = fb.fn_id;
               b.name = fb.function.name;
               b.vdf = fb.function.vdf;
-              b.return_type = fb.function.return_type;
-              b.num_params = static_cast<uint32_t>(fb.function.num_params);
+              b.signature.return_type = fb.function.return_type;
+              b.signature.param_count =
+                  static_cast<unsigned int>(fb.function.num_params);
+              b.signature.params = fb.function.num_params > 0
+                                       ? fb.function.param_types.data()
+                                       : nullptr;
               b.is_deterministic = fb.function.is_deterministic ? 1 : 0;
-              for (size_t j = 0; j < fb.function.num_params &&
-                                 j < VEF_INDEX_PROFILE_MAX_FN_PARAMS;
-                   ++j) {
-                b.param_types[j] = fb.function.param_types[j];
-              }
               dst.push_back(std::move(b));
             }
           };

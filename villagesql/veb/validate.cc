@@ -340,11 +340,10 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                     error_out.c_str());
             return true;
           }
-          if (fn.num_params > VEF_INDEX_PROFILE_MAX_FN_PARAMS) {
+          if (fn.signature.param_count > 0 && fn.signature.params == nullptr) {
             error_out = std::string("index profile '") + profile.name +
-                        "': " + kind + " '" + fn.name + "' declares " +
-                        std::to_string(fn.num_params) + " params, max is " +
-                        std::to_string(VEF_INDEX_PROFILE_MAX_FN_PARAMS);
+                        "': " + kind + " '" + fn.name +
+                        "' has non-zero param_count but NULL params";
             LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                     error_out.c_str());
             return true;

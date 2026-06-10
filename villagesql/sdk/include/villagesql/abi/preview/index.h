@@ -519,6 +519,11 @@ typedef struct {
   uint32_t options_size;
   vef_type_index_parse_func_t parse;
 
+  // TODO(villagesql-indexing): Add signatures for the index functions and
+  // helper functions (keyed by fn_id) that this index type expects. The server
+  // can use these to validate that a profile binding this index type declares
+  // compatible function signatures.
+
 } vef_type_index_intf_t;
 
 // ===========================================================================
@@ -577,10 +582,6 @@ typedef struct {
 #define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION \
   VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1
 
-// Maximum number of parameters a single index profile function may declare.
-// Matches vsql::func_builder::kMaxParams on the C++ side.
-#define VEF_INDEX_PROFILE_MAX_FN_PARAMS 8
-
 // One function binding within an index profile.
 // fn_id is the identifier used by the index storage implementation when it
 // calls vef_index_profile_fn in the index context. The remaining fields carry
@@ -589,9 +590,7 @@ typedef struct {
   uint32_t fn_id;
   const char *name;
   vef_vdf_func_t vdf;
-  vef_type_t return_type;
-  vef_type_t param_types[VEF_INDEX_PROFILE_MAX_FN_PARAMS];
-  uint32_t num_params;
+  vef_signature_t signature;
   uint8_t is_deterministic;
 } vef_index_profile_fn_binding_t;
 
@@ -628,6 +627,9 @@ typedef struct {
 #define VEF_INDEX_ORDERING_DESC 0x02
 
 // Extension descriptor for vsql::preview::index_profile.
+// TODO(villagesql-indexing): Consider changing profiles to
+// const vef_index_profile_reg_t ** so vef_index_profile_reg_t can grow
+// without changing the array stride.
 typedef struct {
   // Must be set to VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION.
   uint32_t version;
