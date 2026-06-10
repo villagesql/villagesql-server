@@ -2,9 +2,8 @@
 #   "Support variable-length, parameterized custom types"
 #
 # TARRAY is a typed array: the element WIDTH is parameterized via 'type', the
-# element COUNT is decided per value (persisted_length = -1), and a 'max_size'
-# parameter caps the element count. The integer shorthand TARRAY(N) maps N to
-# max_size via int_to_params; resolve_params enforces
+# element COUNT is decided per value, and a 'max_size' parameter caps the element count.
+# The integer shorthand TARRAY(N) maps N to max_size via int_to_params; resolve_params enforces
 # max_size * element_size <= max_persisted_length (512 bytes here).
 #
 # Fixture: vsql_tarray_test exposes TARRAY.

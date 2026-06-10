@@ -1,7 +1,7 @@
 {
   "name": "vsql_bitfield_test",
   "version": "0.0.1",
-  "description": "Variable-length, non-parameterized bit field type (BITFIELD): persisted_length=-1 with a max_persisted_length upper bound and NO params/resolve_params. from_string packs each '0'/'1' character into a single bit (8 bits per byte), so the stored size grows with the bit count, not the character count (#535).",
+  "description": "Variable-length, non-parameterized bit field type (BITFIELD): with a max_persisted_length upper bound and NO params/resolve_params. from_string packs each '0'/'1' character into a single bit (8 bits per byte), so the stored size grows with the bit count, not the character count (#535).",
   "author": "VillageSQL Community",
   "license": "GPL-2.0"
 }

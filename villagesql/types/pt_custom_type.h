@@ -73,7 +73,7 @@ class PT_custom_type : public PT_type {
     }
 
     // Validate length specification against type characteristics
-    if (nullptr != length_spec &&
+    if (nullptr != length_spec && !type_context->is_variable_length() &&
         type_context->descriptor()->persisted_length() != -1) {
       // Fixed-length type with length specification - this is an error
       std::string qname = type_context->qualified_name();
@@ -86,10 +86,8 @@ class PT_custom_type : public PT_type {
 
     // If no length_spec provided, generate it from the TypeContext's storage
     // length. For fixed-length types this comes from the descriptor; for
-    // variable-length types with parameters it was computed by resolve_params
-    // at TypeContext construction time; for variable-length types without
-    // parameters (length decided per value, like a roaring bitmap) it is the
-    // descriptor's max_persisted_length upper bound.
+    // variable-length types it is the descriptor's max_persisted_length
+    // upper bound.
     if (nullptr == length_spec) {
       int64_t len = type_context->field_buffer_length();
       assert(len > 0);
@@ -152,9 +150,12 @@ class PT_custom_type : public PT_type {
       return nullptr;
     }
 
-    // Handle variable-length types (persisted_length == -1)
+    // Handle types that accept a length/parameter spec: variable-length types
+    // (the variable_length flag) and fixed-length parameterized types
+    // (persisted_length == -1).
     if (type_context != nullptr &&
-        type_context->descriptor()->persisted_length() == -1) {
+        (type_context->is_variable_length() ||
+         type_context->descriptor()->persisted_length() == -1)) {
       auto *descriptor = type_context->descriptor();
       if (length != nullptr) {
         // TYPE(N) syntax used - convert N to parameters via callbacks

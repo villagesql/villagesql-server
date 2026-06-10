@@ -16,22 +16,22 @@
 // Test fixture for issue #535: a variable-length typed array (TARRAY).
 //
 // TARRAY is a typed array where the element WIDTH is a 'type' parameter
-// (int16/float/double) and the element COUNT is decided per value
-// (persisted_length = -1), bounded by a 'max_size' parameter that caps how many
-// elements a value may hold:
+// (int16/float/double) and the element COUNT is decided per value,
+// bounded by a 'max_size' parameter that caps how many elements
+// a value may hold:
 //   TARRAY(N)                          -> max_size=N, type defaults to int16
 //   TARRAY('type=float,max_size=10')   -> float elements, at most 10
 // The integer shorthand TARRAY(N) is mapped to max_size by int_to_params. A
 // column must specify the parameters (it is a parameterized type).
 //
 // resolve_params enforces max_size * element_size <= max_persisted_length (the
-// type's static upper bound) and returns persisted_length = -1 (the count is
-// still variable per value, just capped at max_size). from_string rejects a
-// value with more than max_size elements.
+// type's static upper bound, the count is still variable per value, just
+// capped at max_size). from_string rejects a value with more than max_size
+// elements.
 //
-// The backing field is a VARCHAR(max_persisted_length); only the actual encoded
-// bytes are stored per value. Element widths are stored little-endian for
-// portable persistence.
+// The backing field is a VARBINARY(max_persisted_length); only the actual
+// encoded bytes are stored per value. Element widths are stored little-endian
+// for portable persistence.
 
 #include <villagesql/vsql.h>
 
@@ -47,16 +47,23 @@
 // Static upper bound on a stored TARRAY value in bytes. resolve_params requires
 // max_size * element_size to stay within this.
 constexpr int64_t kTarrayMaxLen = 512;
+// max decoded double element (a double in %g). At most 25 characters + 1 for
+// comma.
+constexpr int64_t kMaxDecodedDoubleElem = 25 + 1;
 
 // Element widths in bytes for the supported element types.
 constexpr int64_t kElemInt16 = 2;
 constexpr int64_t kElemFloat = 4;
 constexpr int64_t kElemDouble = 8;
 
+// The element type selected by the 'type' parameter.
+enum class TarrayElemType { kInt16, kFloat, kDouble };
+
 // Parameters: element width (from 'type') and element-count cap (from
 // 'max_size').
 struct TarrayParams {
   int64_t bytes_per_elem = kElemInt16;
+  TarrayElemType elem_type = TarrayElemType::kInt16;
   int64_t max_size = 0;  // 0 = unset; resolve_params rejects a non-positive max
 
   static TarrayParams parse(const std::map<std::string, std::string> &params) {
@@ -65,10 +72,14 @@ struct TarrayParams {
     if (t != params.end()) {
       if (t->second == "float") {
         p.bytes_per_elem = kElemFloat;
+        p.elem_type = TarrayElemType::kFloat;
       } else if (t->second == "double") {
         p.bytes_per_elem = kElemDouble;
+        p.elem_type = TarrayElemType::kDouble;
       } else {
+        assert(t->second == "int16");
         p.bytes_per_elem = kElemInt16;
+        p.elem_type = TarrayElemType::kInt16;
       }
     }
     auto m = params.find("max_size");
@@ -78,9 +89,17 @@ struct TarrayParams {
 
   static void to_strings(const TarrayParams &p,
                          std::map<std::string, std::string> &out) {
-    out["type"] = p.bytes_per_elem == kElemDouble  ? "double"
-                  : p.bytes_per_elem == kElemFloat ? "float"
-                                                   : "int16";
+    switch (p.elem_type) {
+      case TarrayElemType::kInt16:
+        out["type"] = "int16";
+        break;
+      case TarrayElemType::kFloat:
+        out["type"] = "float";
+        break;
+      case TarrayElemType::kDouble:
+        out["type"] = "double";
+        break;
+    }
     out["max_size"] = std::to_string(p.max_size);
   }
 };
@@ -134,29 +153,6 @@ static double load_d64(const unsigned char *buf) {
   return v;
 }
 
-// Map a 'type' parameter string to its element width, or report an error.
-static bool elem_bytes_from_params(const std::map<std::string, std::string> &p,
-                                   int64_t *out_bytes, char *error_msg) {
-  auto it = p.find("type");
-  if (it == p.end()) {
-    *out_bytes = kElemInt16;
-    return false;
-  }
-  if (it->second == "int16") {
-    *out_bytes = kElemInt16;
-  } else if (it->second == "float") {
-    *out_bytes = kElemFloat;
-  } else if (it->second == "double") {
-    *out_bytes = kElemDouble;
-  } else {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TARRAY: type must be int16, float, or double (got '%s')",
-             it->second.c_str());
-    return true;
-  }
-  return false;
-}
-
 // int_to_params: TARRAY(N) maps the integer N to the max_size parameter. The
 // element type defaults to int16 unless given via the string parameter form.
 bool tarray_int_to_params(int64_t value,
@@ -173,14 +169,20 @@ bool tarray_int_to_params(int64_t value,
 }
 
 // resolve_params: validate the element width and the max_size cap, and enforce
-// max_size * element_size <= max_persisted_length. persisted_length stays -1
-// (the count is variable per value, capped at max_size).
+// max_size * element_size <= max_persisted_length (the count is variable per
+// value, capped at max_size).
 bool tarray_resolve_params(const std::map<std::string, std::string> &params,
                            vsql::ResolvedTypeParams *result, char *error_msg) {
-  int64_t bpe = kElemInt16;
-  if (elem_bytes_from_params(params, &bpe, error_msg)) {
+  // Validate "type" parameter if present.
+  auto type_it = params.find("type");
+  if (type_it != params.end() && type_it->second != "float" &&
+      type_it->second != "double" && type_it->second != "int16") {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "TARRAY type must be 'float' or 'double' or 'int16', got '%s'",
+             type_it->second.c_str());
     return true;
   }
+
   auto it = params.find("max_size");
   if (it == params.end()) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
@@ -198,6 +200,9 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
     snprintf(error_msg, VEF_MAX_ERROR_LEN, "TARRAY max_size must be positive");
     return true;
   }
+
+  int64_t bpe = TarrayParams::parse(params).bytes_per_elem;
+
   if (max_size * bpe > kTarrayMaxLen) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "TARRAY max_size %lld * element size %lld exceeds the %lld-byte "
@@ -206,10 +211,11 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
              static_cast<long long>(kTarrayMaxLen));
     return true;
   }
-  result->persisted_length = -1;  // variable count, capped at max_size
+
+  assert(result->persisted_length <= 0);
   // Upper bound on the text form: at most max_size elements, each printing to
-  // at most 26 chars (a double in %g), plus the brackets.
-  result->max_decode_buffer_length = max_size * 26 + 2;
+  // at most kMaxDecodedDoubleElemchars plus the brackets.
+  result->max_decode_buffer_length = max_size * kMaxDecodedDoubleElem + 2;
   return false;
 }
 
@@ -217,7 +223,12 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
 // width, rejecting more than max_size elements.
 void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
                         std::string_view from, vsql::CustomResult out) {
-  const int64_t bpe = p.is_known() ? p.value().bytes_per_elem : kElemInt16;
+  int64_t bpe = kElemInt16;
+  TarrayElemType elem_type = TarrayElemType::kInt16;
+  if (p.is_known()) {
+    bpe = p.value().bytes_per_elem;
+    elem_type = p.value().elem_type;
+  }
   assert(bpe > 0);
   auto buf = out.buffer();
   // resolve_params guarantees max_size * bpe <= buffer capacity, so max_size is
@@ -245,27 +256,38 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
     }
     char *endptr = nullptr;
     unsigned char *slot = buf.data() + count * static_cast<size_t>(bpe);
-    if (bpe == kElemInt16) {
-      long v = strtol(s, &endptr, 10);
-      if (endptr == s) {
-        out.warning("TARRAY: parse error");
-        return;
+    switch (elem_type) {
+      case TarrayElemType::kInt16: {
+        long v = strtol(s, &endptr, 10);
+        if (endptr == s) {
+          out.warning("TARRAY: parse error");
+          return;
+        }
+        store_i16(slot, static_cast<int16_t>(v));
+        break;
       }
-      store_i16(slot, static_cast<int16_t>(v));
-    } else if (bpe == kElemFloat) {
-      float v = strtof(s, &endptr);
-      if (endptr == s) {
-        out.warning("TARRAY: parse error");
-        return;
+      case TarrayElemType::kFloat: {
+        float v = strtof(s, &endptr);
+        if (endptr == s) {
+          out.warning("TARRAY: parse error");
+          return;
+        }
+        store_f32(slot, v);
+        break;
       }
-      store_f32(slot, v);
-    } else {
-      double v = strtod(s, &endptr);
-      if (endptr == s) {
-        out.warning("TARRAY: parse error");
-        return;
+      case TarrayElemType::kDouble: {
+        double v = strtod(s, &endptr);
+        if (endptr == s) {
+          out.warning("TARRAY: parse error");
+          return;
+        }
+        store_d64(slot, v);
+        break;
       }
-      store_d64(slot, v);
+      default:
+        out.warning("TARRAY: invalid element type");
+        assert(false);
+        return;
     }
     count++;
     s = endptr;
@@ -284,6 +306,7 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
 void tarray_to_string(vsql::CustomArgWith<TarrayParams> in,
                       vsql::StringResult out) {
   const int64_t bpe = in.params().bytes_per_elem;
+  TarrayElemType elem_type = in.params().elem_type;
   assert(bpe > 0);
   auto data = in.value();
   const size_t count = data.size() / static_cast<size_t>(bpe);
@@ -298,15 +321,21 @@ void tarray_to_string(vsql::CustomArgWith<TarrayParams> in,
     }
     const unsigned char *slot = data.data() + i * static_cast<size_t>(bpe);
     int written = 0;
-    if (bpe == kElemInt16) {
-      written = snprintf(buf.data() + pos, buf.size() - pos, "%d",
-                         static_cast<int>(load_i16(slot)));
-    } else if (bpe == kElemFloat) {
-      written = snprintf(buf.data() + pos, buf.size() - pos, "%g",
-                         static_cast<double>(load_f32(slot)));
-    } else {
-      written =
-          snprintf(buf.data() + pos, buf.size() - pos, "%g", load_d64(slot));
+    switch (elem_type) {
+      case TarrayElemType::kInt16:
+        written = snprintf(buf.data() + pos, buf.size() - pos, "%d",
+                           static_cast<int>(load_i16(slot)));
+        break;
+      case TarrayElemType::kFloat:
+        written = snprintf(buf.data() + pos, buf.size() - pos, "%g",
+                           static_cast<double>(load_f32(slot)));
+        break;
+      case TarrayElemType::kDouble:
+        written =
+            snprintf(buf.data() + pos, buf.size() - pos, "%g", load_d64(slot));
+        break;
+      default:
+        assert(false);
     }
     if (written < 0 || pos + static_cast<size_t>(written) >= buf.size()) return;
     pos += static_cast<size_t>(written);
@@ -329,15 +358,25 @@ int tarray_compare(vsql::CustomArgWith<TarrayParams> a,
   for (size_t i = 0; i < n; i++) {
     const unsigned char *pa = va.data() + i * static_cast<size_t>(bpe);
     const unsigned char *pb = vb.data() + i * static_cast<size_t>(bpe);
-    if (bpe == kElemInt16) {
-      int16_t ea = load_i16(pa), eb = load_i16(pb);
-      if (ea != eb) return ea < eb ? -1 : 1;
-    } else if (bpe == kElemFloat) {
-      float ea = load_f32(pa), eb = load_f32(pb);
-      if (ea != eb) return ea < eb ? -1 : 1;
-    } else {
-      double ea = load_d64(pa), eb = load_d64(pb);
-      if (ea != eb) return ea < eb ? -1 : 1;
+    TarrayElemType elem_type = a.params().elem_type;
+    switch (elem_type) {
+      case TarrayElemType::kInt16: {
+        int16_t ea = load_i16(pa), eb = load_i16(pb);
+        if (ea != eb) return ea < eb ? -1 : 1;
+        break;
+      }
+      case TarrayElemType::kFloat: {
+        float ea = load_f32(pa), eb = load_f32(pb);
+        if (ea != eb) return ea < eb ? -1 : 1;
+        break;
+      }
+      case TarrayElemType::kDouble: {
+        double ea = load_d64(pa), eb = load_d64(pb);
+        if (ea != eb) return ea < eb ? -1 : 1;
+        break;
+      }
+      default:
+        assert(false);
     }
   }
   if (na != nb) return na < nb ? -1 : 1;
@@ -367,8 +406,13 @@ void tarray_concat(vsql::CustomArgWith<TarrayParams> a,
     return;
   }
   const int64_t bpe = a.params().bytes_per_elem;
-  const int64_t max_size = a.params().max_size;
   assert(bpe > 0);
+  assert(bpe ==
+         b.params()
+             .bytes_per_elem);  // guaranteed by type-parameter disambiguation
+  const int64_t max_size = a.params().max_size;
+  assert(max_size ==
+         b.params().max_size);  // guaranteed by type-parameter disambiguation
   auto va = a.value();
   auto vb = b.value();
   const size_t total = va.size() + vb.size();
@@ -387,7 +431,7 @@ static constexpr const char kTarrayTypeName[] = "TARRAY";
 
 constexpr auto TARRAY =
     vsql::make_type<kTarrayTypeName>()
-        .persisted_length(-1)
+        .variable_length_type()
         .max_persisted_length(kTarrayMaxLen)
         .max_decode_buffer_length(kTarrayMaxLen / kElemInt16 * 8 + 2)
         .params<TarrayParams, &TarrayParams::parse, &TarrayParams::to_strings>()

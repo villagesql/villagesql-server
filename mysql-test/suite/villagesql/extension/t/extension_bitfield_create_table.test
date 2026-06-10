@@ -2,10 +2,10 @@
 #   "Support variable-length, non-parameterized types"
 #
 # BITFIELD is a variable-length bit field whose length (in bits) is decided per
-# value: persisted_length = -1, a max_persisted_length upper bound, and NO
-# params/resolve_params. Its element is a single BIT: from_string packs each
-# '0'/'1' character into one bit (8 bits per byte), so a 64-character bit string
-# stores in 8 packed bytes, not 64.
+# value, a max_persisted_length upper bound, and NO params/resolve_params.
+# Its element is a single BIT: from_string packs each '0'/'1' character into
+# one bit (8 bits per byte), so a 64-character bit string stores in 8 packed
+# bytes, not 64.
 #
 # Fixture: vsql_bitfield_test exposes BITFIELD. Stored layout is a 2-byte
 # little-endian bit count followed by the packed bits, so any bit length

@@ -16,10 +16,10 @@
 // Test fixture for issue #535: a variable-length, NON-parameterized bit field
 // type whose length (in bits) is decided per value.
 //
-// BITFIELD declares persisted_length = -1 with a max_persisted_length upper
-// bound and NO params/int_to_params/resolve_params, and its element is a single
-// BIT rather than a byte or a fixed-width number. A column is declared without
-// any length or parameters:
+// BITFIELD declares a max_persisted_length upper bound and NO
+// params/int_to_params/resolve_params, and its element is a single BIT rather
+// than a byte or a fixed-width number. A column is declared without any length
+// or parameters:
 //   CREATE TABLE t (b vsql_bitfield_test.BITFIELD);
 // and each value keeps its own bit length; bit fields of different lengths
 // coexist in the same column.
@@ -35,9 +35,9 @@
 // 7-(i%8)). to_string reads the bit count from the header and emits exactly
 // that many '0'/'1' characters, so any bit string round-trips exactly.
 //
-// The backing field is a VARCHAR(max_persisted_length): the in-memory buffer is
-// sized to the upper bound, but only the actual encoded bytes (set via
-// out.set_length()) are written, and the VARCHAR length prefix records the
+// The backing field is a VARBINARY(max_persisted_length): the in-memory buffer
+// is sized to the upper bound, but only the actual encoded bytes (set via
+// out.set_length()) are written, and the VARBINARY length prefix records the
 // per-value byte length.
 
 #include <villagesql/vsql.h>
@@ -67,10 +67,9 @@ static size_t load_bit_count(const unsigned char *buf) {
   return static_cast<size_t>(buf[0]) | (static_cast<size_t>(buf[1]) << 8);
 }
 
-// Read bit i (MSB-first within each byte) from the packed region of `data`,
-// which starts after the 2-byte header.
+// Read bit i (MSB-first within each byte) from the packed region of `data`
 static int get_bit(const unsigned char *data, size_t i) {
-  return (data[kBitfieldHeaderLen + i / 8] >> (7 - (i % 8))) & 1;
+  return (data[i / 8] >> (7 - (i % 8))) & 1;
 }
 
 // STRING -> binary: pack each '0'/'1' character into one bit. The number of
@@ -107,13 +106,14 @@ void bitfield_to_string(vsql::CustomArg in, vsql::StringResult out) {
   auto data = in.value();
   auto buf = out.buffer();
   if (data.size() < static_cast<size_t>(kBitfieldHeaderLen)) {
+    out.warning("bitfield_to_string: doesn't contain enough data for header");
     out.set_length(0);
     return;
   }
   const size_t nbits = load_bit_count(data.data());
   if (nbits > buf.size()) return;
   for (size_t i = 0; i < nbits; i++) {
-    buf[i] = get_bit(data.data(), i) ? '1' : '0';
+    buf[i] = get_bit(data.data() + kBitfieldHeaderLen, i) ? '1' : '0';
   }
   out.set_length(nbits);
 }
@@ -122,19 +122,40 @@ void bitfield_to_string(vsql::CustomArg in, vsql::StringResult out) {
 int bitfield_compare(vsql::CustomArg a, vsql::CustomArg b) {
   auto da = a.value();
   auto db = b.value();
-  size_t na = da.size() >= static_cast<size_t>(kBitfieldHeaderLen)
-                  ? load_bit_count(da.data())
-                  : 0;
-  size_t nb = db.size() >= static_cast<size_t>(kBitfieldHeaderLen)
-                  ? load_bit_count(db.data())
-                  : 0;
-  size_t n = na < nb ? na : nb;
-  for (size_t i = 0; i < n; i++) {
-    int ba = get_bit(da.data(), i);
-    int bb = get_bit(db.data(), i);
+  size_t nabits = da.size() >= static_cast<size_t>(kBitfieldHeaderLen)
+                      ? load_bit_count(da.data())
+                      : 0;
+  size_t nbbits = db.size() >= static_cast<size_t>(kBitfieldHeaderLen)
+                      ? load_bit_count(db.data())
+                      : 0;
+
+  assert(nabits == 0 || (da.size() - kBitfieldHeaderLen) * 8 >= nabits);
+  assert(nbbits == 0 || (db.size() - kBitfieldHeaderLen) * 8 >= nbbits);
+
+  // compare full bytes first for efficiency, then remaining bits
+  size_t nabytes = nabits / 8;
+  size_t nbbytes = nbbits / 8;
+  size_t nbytes = std::min(nabytes, nbbytes);
+
+  if (nbytes > 0) {
+    int rc = memcmp(da.data() + kBitfieldHeaderLen,
+                    db.data() + kBitfieldHeaderLen, nbytes);
+    if (rc != 0) return rc < 0 ? -1 : 1;
+  }
+
+  // compare remaining bits
+  assert(nabits >= nbytes * 8);
+  assert(nbbits >= nbytes * 8);
+  size_t na_remaining_bits = nabits - (nbytes * 8);
+  size_t nb_remaining_bits = nbbits - (nbytes * 8);
+  size_t n_remaining_bits = std::min(na_remaining_bits, nb_remaining_bits);
+  for (size_t i = 0; i < n_remaining_bits; i++) {
+    int ba = get_bit(da.data() + kBitfieldHeaderLen + nbytes, i);
+    int bb = get_bit(db.data() + kBitfieldHeaderLen + nbytes, i);
     if (ba != bb) return ba < bb ? -1 : 1;
   }
-  if (na != nb) return na < nb ? -1 : 1;
+  if (na_remaining_bits != nb_remaining_bits)
+    return na_remaining_bits < nb_remaining_bits ? -1 : 1;
   return 0;
 }
 
@@ -165,7 +186,7 @@ void bitfield_popcount(vsql::CustomArg in, vsql::IntResult out) {
   const size_t nbits = load_bit_count(data.data());
   long long count = 0;
   for (size_t i = 0; i < nbits; i++) {
-    count += get_bit(data.data(), i);
+    count += get_bit(data.data() + kBitfieldHeaderLen, i);
   }
   out.set(count);
 }
@@ -173,7 +194,7 @@ void bitfield_popcount(vsql::CustomArg in, vsql::IntResult out) {
 static constexpr const char kBitfieldTypeName[] = "BITFIELD";
 
 constexpr auto BITFIELD = vsql::make_type<kBitfieldTypeName>()
-                              .persisted_length(-1)
+                              .variable_length_type()
                               .max_persisted_length(kBitfieldMaxLen)
                               .max_decode_buffer_length(kBitfieldMaxText)
                               .from_string<&bitfield_from_string>()

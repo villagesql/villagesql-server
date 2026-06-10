@@ -235,11 +235,15 @@ std::optional<TypeDescriptor> build_type_descriptor_v3(
   }
 
   if (td->persisted_length == -1) {
-    // Variable-length type: max_persisted_length bounds the field and
-    // is always required. resolve_params is required only for parameterized
-    // variants (those that also expose int_to_params, validated below); a bare
-    // variable-length type whose length is decided per value needs only
-    // max_persisted_length.
+    // Variable-length / parameterized type: resolve_params_vdf_name and
+    // max_persisted_length are both required.
+    if (td->resolve_params_vdf_name == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has persisted_length=-1 "
+              "(variable-length) but does not set resolve_params_vdf_name",
+              type_name.c_str(), extension_name.c_str());
+      return std::nullopt;
+    }
     if (td->max_persisted_length <= 0) {
       LogVSQL(ERROR_LEVEL,
               "Type '%s' in extension '%s' has persisted_length=-1 "
