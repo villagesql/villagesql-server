@@ -13,25 +13,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef VILLAGESQL_PREVIEW_DETAIL_QUERY_HOOK_REGISTER_H
-#define VILLAGESQL_PREVIEW_DETAIL_QUERY_HOOK_REGISTER_H
+#ifndef VILLAGESQL_PREVIEW_DETAIL_STATEMENT_EVENT_REGISTER_H
+#define VILLAGESQL_PREVIEW_DETAIL_STATEMENT_EVENT_REGISTER_H
 
-#include <villagesql/abi/preview/query_hook.h>
+#include <villagesql/abi/preview/statement_event.h>
 #include <villagesql/detail/capability_traits.h>
-#include <villagesql/preview/query_hook.h>
+#include <villagesql/preview/statement_event.h>
 
 namespace vsql::detail {
 
-template <vef_query_hook_phase_t Phase,
-          void (*Fn)(const ::vsql::preview_query_hook::QueryHookArgs &,
-                     ::vsql::preview_query_hook::QueryHookResult &)>
+template <vef_statement_event_phase_t Phase,
+          void (*Fn)(
+              const ::vsql::preview_statement_event::StatementEventArgs &,
+              ::vsql::preview_statement_event::StatementEventResult &)>
 struct CapabilityTraits<
-    ::vsql::preview_query_hook::QueryHookCapability<Phase, Fn>> {
-  using Cap = ::vsql::preview_query_hook::QueryHookCapability<Phase, Fn>;
-  static constexpr const char *kName = VEF_PREVIEW_QUERY_HOOK_NAME;
+    ::vsql::preview_statement_event::StatementEventCapability<Phase, Fn>> {
+  using Cap =
+      ::vsql::preview_statement_event::StatementEventCapability<Phase, Fn>;
+  static constexpr const char *kName = VEF_PREVIEW_STATEMENT_EVENT_NAME;
   static constexpr const char *kCppTypeName =
-      "vsql::preview_query_hook::QueryHookCapability";
-  using CapabilityConfigType = vef_query_hook_cc_t;
+      "vsql::preview_statement_event::StatementEventCapability";
+  using CapabilityConfigType = vef_statement_event_cc_t;
   static constexpr const char *kVtableHash = "ver-1";
   static constexpr const char *kCapabilityConfigHash = "ver-1";
 
@@ -46,4 +48,4 @@ struct CapabilityTraits<
 
 }  // namespace vsql::detail
 
-#endif  // VILLAGESQL_PREVIEW_DETAIL_QUERY_HOOK_REGISTER_H
+#endif  // VILLAGESQL_PREVIEW_DETAIL_STATEMENT_EVENT_REGISTER_H

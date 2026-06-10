@@ -23,8 +23,8 @@
 
 #include "villagesql/sdk/include/villagesql/abi/preview/keyring.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/ping.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/query_hook.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sql_query.h"
+#include "villagesql/sdk/include/villagesql/abi/preview/statement_event.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/status_var.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
@@ -34,8 +34,8 @@
 #include "villagesql/services/preview/index_type.h"
 #include "villagesql/services/preview/keyring.h"
 #include "villagesql/services/preview/ping.h"
-#include "villagesql/services/preview/query_hook.h"
 #include "villagesql/services/preview/sql_query.h"
+#include "villagesql/services/preview/statement_event.h"
 #include "villagesql/services/preview/status_var.h"
 #include "villagesql/services/preview/storage.h"
 #include "villagesql/services/preview/sys_var.h"
@@ -187,12 +187,12 @@ void register_builtin_capabilities() {
                        .on_depopulate = on_depopulate_sys_var});
   // Query hook: on_populate appends to the global dispatch list;
   // on_depopulate removes the hook on extension unload.
-  register_capability(VEF_PREVIEW_QUERY_HOOK_NAME,
-                      {.vtable = preview_query_hook_vtable(),
+  register_capability(VEF_PREVIEW_STATEMENT_EVENT_NAME,
+                      {.vtable = preview_statement_event_vtable(),
                        .vtable_hash = "ver-1",
                        .capability_config_hash = "ver-1",
-                       .on_populate = on_populate_query_hook,
-                       .on_depopulate = on_depopulate_query_hook});
+                       .on_populate = on_populate_statement_event,
+                       .on_depopulate = on_depopulate_statement_event});
 }
 
 // TODO(villagesql-preview): Verify that the capabilities declared in

@@ -23,8 +23,8 @@
 //     notice. See villagesql/preview/README.md.
 // =============================================================================
 
-#ifndef VILLAGESQL_ABI_PREVIEW_QUERY_HOOK_H
-#define VILLAGESQL_ABI_PREVIEW_QUERY_HOOK_H
+#ifndef VILLAGESQL_ABI_PREVIEW_STATEMENT_EVENT_H
+#define VILLAGESQL_ABI_PREVIEW_STATEMENT_EVENT_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -36,19 +36,19 @@
 extern "C" {
 #endif
 
-// Preview capability: "vsql::preview::query_hook"
+// Preview capability: "vsql::preview::statement_event"
 //
-// An extension declares one QueryHookCapability per hook function. The server
-// invokes registered hooks at the corresponding phase of query processing.
-// Only the POSTEXECUTE phase is wired up in this version; the other phase
-// values are reserved for future use without ABI break.
+// An extension declares one StatementEventCapability per hook function. The
+// server invokes registered hooks at the corresponding phase of query
+// processing. Only the POSTEXECUTE phase is wired up in this version; the other
+// phase values are reserved for future use without ABI break.
 //
-// Capability name: VEF_PREVIEW_QUERY_HOOK_NAME
+// Capability name: VEF_PREVIEW_STATEMENT_EVENT_NAME
 
-#define VEF_PREVIEW_QUERY_HOOK_NAME "vsql::preview::query_hook"
+#define VEF_PREVIEW_STATEMENT_EVENT_NAME "vsql::preview::statement_event"
 
 // Capability ABI version compiled into this SDK snapshot.
-#define VEF_PREVIEW_QUERY_HOOK_ABI_VERSION 1
+#define VEF_PREVIEW_STATEMENT_EVENT_ABI_VERSION 1
 
 // Phase at which a hook fires.
 //
@@ -61,64 +61,79 @@ typedef enum {
   // EVENT_TRACKING_CONNECTION_CONNECT. Args populated: user, host,
   // connection_id, port. Query fields and timing are unset.
   // Result.error_msg refuses the connection.
-  VEF_QUERY_HOOK_CONNECT = 0,
+  VEF_STATEMENT_EVENT_CONNECT = 0,
 
   // Reserved: client connection closing. Fires from
   // EVENT_TRACKING_CONNECTION_DISCONNECT. Same args as CONNECT.
   // Result is ignored — the connection is going away.
-  VEF_QUERY_HOOK_DISCONNECT = 1,
+  VEF_STATEMENT_EVENT_DISCONNECT = 1,
 
   // Reserved: before the parser runs. Only `query` is populated. Hooked
   // inside sql_parse.cc rather than the audit path. Result.error_msg
   // blocks the query.
-  VEF_QUERY_HOOK_PREPARSE = 2,
+  VEF_STATEMENT_EVENT_PREPARSE = 2,
 
   // Reserved: after the parser runs. Adds sql_command, is_prepared, and
   // the SHA-256 digest of the normalized query to args. Result.error_msg
   // blocks the query.
-  VEF_QUERY_HOOK_POSTPARSE = 3,
+  VEF_STATEMENT_EVENT_POSTPARSE = 3,
 
   // Reserved: after parsing, before execution begins. Fires from
   // EVENT_TRACKING_QUERY_START. Args populated: query, user, host,
   // connection_id, port, schema, sql_command, in_transaction. Timing/rows/
   // status are zero. Result.error_msg blocks the query.
-  VEF_QUERY_HOOK_PREEXECUTE = 4,
+  VEF_STATEMENT_EVENT_PREEXECUTE = 4,
 
   // After execution completes (success or failure). All args fields are
   // populated; result.error_msg is logged but does not affect the client.
-  VEF_QUERY_HOOK_POSTEXECUTE = 5,
-} vef_query_hook_phase_t;
+  VEF_STATEMENT_EVENT_POSTEXECUTE = 5,
+} vef_statement_event_phase_t;
 
 // Read-only arguments passed to a hook invocation. Which fields are populated
 // depends on the phase; POSTEXECUTE populates all of them.
+//
+// Pointer lifetime summary (see per-field comments):
+//   process lifetime    — safe to retain indefinitely; no copy needed.
+//   connection lifetime — valid until the client disconnects; safe to retain
+//                         across hook calls for the same connection, but copy
+//                         if you may use it after the connection ends.
+//   copy before return  — valid only during this hook invocation; copy the
+//                         string before the hook function returns if you need
+//                         to keep it.
 typedef struct {
-  vef_query_hook_phase_t phase;
+  vef_statement_event_phase_t phase;
 
   // Query text. Not null-terminated; use query_len.
+  // Lifetime: copy before return.
   const char *query;
   size_t query_len;
 
-  // Authenticated user name (priv_user), or empty string.
+  // Authenticated user name, or empty string.
+  // Lifetime: connection lifetime.
   const char *user;
   // Client IP address, or empty string.
+  // Lifetime: connection lifetime.
   const char *host;
   unsigned long connection_id;
   uint16_t port;
   bool in_transaction;
 
   // SQL command as a lowercase string (e.g. "select", "insert",
-  // "create_table"). Stable across MySQL version rebases. NULL if unknown.
-  // The pointed-to string has static lifetime and need not be copied.
+  // "create_table"). Stable across MySQL versions. NULL if unknown.
+  // Lifetime: process lifetime.
   const char *sql_command;
 
-  // Default schema (USE <db>), or NULL if none selected.
+  // Current default schema (USE <db>), or NULL if none selected.
+  // Lifetime: connection lifetime.
   const char *schema;
 
   // Execution status. 0 on success, otherwise the MySQL error code.
   int status;
   // 5-character SQLSTATE + NUL, or NULL on success.
+  // Lifetime: copy before return.
   const char *sqlstate;
   // Error message text, or NULL on success.
+  // Lifetime: copy before return.
   const char *error_message;
 
   // Query start time, microseconds since epoch.
@@ -130,7 +145,38 @@ typedef struct {
   uint64_t rows_affected;
   uint64_t bytes_sent;
   uint64_t bytes_received;
-} vef_query_hook_args_t;
+
+  // Number of warnings raised during execution (in addition to any error).
+  uint64_t warning_count;
+
+  // Normalized (digested) form of the query, suitable for grouping similar
+  // queries regardless of literal values. NULL if digest computation was
+  // disabled or the query was too long to digest.
+  // Lifetime: copy before return.
+  const char *digest_text;
+
+  // Optimizer and execution quality indicators. Non-zero values suggest
+  // potentially inefficient execution.
+  uint64_t select_full_join;        // joins without usable index
+  uint64_t select_full_range_join;  // joins using range on ref table
+  uint64_t select_range;            // range scans on first table
+  uint64_t select_range_check;      // joins with key check per row
+  uint64_t select_scan;             // full scans of first table
+
+  // Sort metrics.
+  uint64_t sort_merge_passes;  // number of merge passes (high = large sort)
+  uint64_t sort_range;         // sorts using a range
+  uint64_t sort_rows;          // rows sorted
+  uint64_t sort_scan;          // sorts using a full table scan
+
+  // Temporary table usage.
+  uint64_t created_tmp_tables;       // tmp tables created (memory or disk)
+  uint64_t created_tmp_disk_tables;  // tmp tables spilled to disk
+
+  // Index usage flags. Non-zero means the query ran without a usable index.
+  uint8_t no_index_used;       // 1 if no index was used
+  uint8_t no_good_index_used;  // 1 if no good index was found
+} vef_statement_event_args_t;
 
 // Writable result. For POSTEXECUTE error_msg is advisory: the server logs it
 // but does not propagate to the client.
@@ -141,21 +187,21 @@ typedef struct {
   // this pointer before calling the hook. Matches the convention used by
   // vef_vdf_result_t and vef_prerun_result_t.
   char *error_msg;
-} vef_query_hook_result_t;
+} vef_statement_event_result_t;
 
 // Hook callback type. Invoked synchronously on the query's thread.
 // args is read-only; result is the extension's writeback channel.
-typedef void (*vef_query_hook_fn_t)(const vef_query_hook_args_t *args,
-                                    vef_query_hook_result_t *result);
+typedef void (*vef_statement_event_fn_t)(const vef_statement_event_args_t *args,
+                                         vef_statement_event_result_t *result);
 
 // Capability config (cc) filled in by the extension and passed to the server
 // via vef_required_capability_t.capability_config. The phase determines when
 // the hook fires; the function pointer must remain valid for the lifetime of
 // the extension.
 typedef struct {
-  vef_query_hook_phase_t phase;
-  vef_query_hook_fn_t hook;
-} vef_query_hook_cc_t;
+  vef_statement_event_phase_t phase;
+  vef_statement_event_fn_t hook;
+} vef_statement_event_cc_t;
 
 // Server-side vtable. The version field is always first, matching the
 // convention used by other preview capabilities. The server exposes no
@@ -163,10 +209,10 @@ typedef struct {
 // capability_config.
 typedef struct {
   uint32_t version;
-} vef_preview_query_hook_t;
+} vef_preview_statement_event_t;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // VILLAGESQL_ABI_PREVIEW_QUERY_HOOK_H
+#endif  // VILLAGESQL_ABI_PREVIEW_STATEMENT_EVENT_H

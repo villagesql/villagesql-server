@@ -64,7 +64,7 @@
 #include "sql_string.h"
 #include "strxnmov.h"
 #include "thr_mutex.h"
-#include "villagesql/services/preview/query_hook.h"
+#include "villagesql/services/preview/statement_event.h"
 
 namespace {
 /**
@@ -1097,7 +1097,7 @@ int mysql_event_tracking_query_notify(
   mysql_event_tracking_query_data event;
 
   if (subclass & EVENT_TRACKING_QUERY_STATUS_END)
-    villagesql::services::on_query_status_end(thd);
+    villagesql::services::on_statement_postexecute(thd);
 
   if (thd->check_event_subscribers(Event_tracking_class::QUERY, subclass, true))
     return 0;

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#include "villagesql/services/preview/query_hook.h"
+#include "villagesql/services/preview/statement_event.h"
 
 #include <algorithm>
 #include <memory>
@@ -26,6 +26,7 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/command_mapping.h"
 #include "sql/sql_class.h"
+#include "sql/sql_digest.h"
 #include "sql/sql_lex.h"
 #include "villagesql/include/error.h"
 
@@ -35,13 +36,13 @@ namespace {
 
 struct RegisteredHook {
   std::string extension_name;
-  const vef_query_hook_cc_t *cc;
+  const vef_statement_event_cc_t *cc;
 };
 
 using HookList = std::vector<RegisteredHook>;
 
 // Dispatch list. Writers (on_populate/on_depopulate) hold g_mu, copy the
-// list, mutate the copy, and swap. Readers (on_query_status_end) take g_mu
+// list, mutate the copy, and swap. Readers (on_statement_postexecute) take g_mu
 // briefly to bump the shared_ptr refcount, then iterate without the lock
 // so hook callbacks cannot block INSTALL EXTENSION.
 std::mutex g_mu;
@@ -52,28 +53,28 @@ std::shared_ptr<HookList> snapshot() {
   return g_hooks;
 }
 
-vef_preview_query_hook_t g_query_hook_vtable{
-    VEF_PREVIEW_QUERY_HOOK_ABI_VERSION};
+vef_preview_statement_event_t g_statement_event_vtable{
+    VEF_PREVIEW_STATEMENT_EVENT_ABI_VERSION};
 
 }  // namespace
 
-vef_preview_query_hook_t *preview_query_hook_vtable() {
-  return &g_query_hook_vtable;
+vef_preview_statement_event_t *preview_statement_event_vtable() {
+  return &g_statement_event_vtable;
 }
 
-bool on_populate_query_hook(const PopulateContext &ctx,
-                            std::string &error_message) {
+bool on_populate_statement_event(const PopulateContext &ctx,
+                                 std::string &error_message) {
   if (ctx.capability_config == nullptr) return false;
   const auto *cc =
-      static_cast<const vef_query_hook_cc_t *>(ctx.capability_config);
+      static_cast<const vef_statement_event_cc_t *>(ctx.capability_config);
   if (cc->hook == nullptr) {
-    error_message = "query_hook: capability_config has NULL hook function";
+    error_message = "statement_event: capability_config has NULL hook function";
     return true;
   }
   // Reserved phases are declared in the ABI but not yet dispatched. Reject
   // at install time so extensions don't silently observe nothing.
-  if (cc->phase != VEF_QUERY_HOOK_POSTEXECUTE) {
-    error_message = "query_hook: phase " +
+  if (cc->phase != VEF_STATEMENT_EVENT_POSTEXECUTE) {
+    error_message = "statement_event: phase " +
                     std::to_string(static_cast<int>(cc->phase)) +
                     " is reserved but not yet implemented";
     return true;
@@ -91,10 +92,10 @@ bool on_populate_query_hook(const PopulateContext &ctx,
   return false;
 }
 
-void on_depopulate_query_hook(const DepopulateContext &ctx) {
+void on_depopulate_statement_event(const DepopulateContext &ctx) {
   if (ctx.capability_config == nullptr) return;
   const auto *cc =
-      static_cast<const vef_query_hook_cc_t *>(ctx.capability_config);
+      static_cast<const vef_statement_event_cc_t *>(ctx.capability_config);
 
   std::lock_guard<std::mutex> lock(g_mu);
   auto new_list = std::make_shared<HookList>(*g_hooks);
@@ -105,14 +106,14 @@ void on_depopulate_query_hook(const DepopulateContext &ctx) {
   g_hooks = std::move(new_list);
 }
 
-void on_query_status_end(THD *thd) {
+void on_statement_postexecute(THD *thd) {
   if (thd == nullptr) return;
 
   auto hooks = snapshot();
   if (hooks->empty()) return;
 
-  vef_query_hook_args_t args{};
-  args.phase = VEF_QUERY_HOOK_POSTEXECUTE;
+  vef_statement_event_args_t args{};
+  args.phase = VEF_STATEMENT_EVENT_POSTEXECUTE;
 
   const LEX_CSTRING query = thd->query();
   args.query = query.str;
@@ -149,10 +150,54 @@ void on_query_status_end(THD *thd) {
                     ? thd->db().str
                     : nullptr;
 
+  // Warning count from the diagnostics area.
+  args.warning_count = da != nullptr ? da->last_statement_cond_count() : 0;
+
+  // Digest text — computed into a stack buffer; pointer is valid for the
+  // duration of on_statement_postexecute and is set to NULL on args before
+  // return.
+  String digest_str;
+  if (thd->m_digest != nullptr) {
+    compute_digest_text(&thd->m_digest->m_digest_storage, &digest_str);
+    args.digest_text =
+        digest_str.length() > 0 ? digest_str.c_ptr_safe() : nullptr;
+  }
+
+  // Optimizer and sort metrics as per-statement deltas. copy_status_var_ptr
+  // holds a snapshot of status_var taken at statement start; subtracting it
+  // gives the per-statement contribution.
+  const System_status_var *snap = thd->copy_status_var_ptr;
+  auto stat_delta = [&](ulonglong System_status_var::*field) -> uint64_t {
+    return snap ? thd->status_var.*field - snap->*field
+                : thd->status_var.*field;
+  };
+
+  args.select_full_join =
+      stat_delta(&System_status_var::select_full_join_count);
+  args.select_full_range_join =
+      stat_delta(&System_status_var::select_full_range_join_count);
+  args.select_range = stat_delta(&System_status_var::select_range_count);
+  args.select_range_check =
+      stat_delta(&System_status_var::select_range_check_count);
+  args.select_scan = stat_delta(&System_status_var::select_scan_count);
+  args.sort_merge_passes =
+      stat_delta(&System_status_var::filesort_merge_passes);
+  args.sort_range = stat_delta(&System_status_var::filesort_range_count);
+  args.sort_rows = stat_delta(&System_status_var::filesort_rows);
+  args.sort_scan = stat_delta(&System_status_var::filesort_scan_count);
+  args.created_tmp_tables = stat_delta(&System_status_var::created_tmp_tables);
+  args.created_tmp_disk_tables =
+      stat_delta(&System_status_var::created_tmp_disk_tables);
+
+  args.no_index_used =
+      (thd->server_status & SERVER_QUERY_NO_INDEX_USED) ? 1 : 0;
+  args.no_good_index_used =
+      (thd->server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) ? 1 : 0;
+
   for (const auto &h : *hooks) {
-    if (h.cc->phase != VEF_QUERY_HOOK_POSTEXECUTE) continue;
+    if (h.cc->phase != VEF_STATEMENT_EVENT_POSTEXECUTE) continue;
     char error_buf[VEF_MAX_ERROR_LEN]{};
-    vef_query_hook_result_t result{};
+    vef_statement_event_result_t result{};
     result.error_msg = error_buf;
     h.cc->hook(&args, &result);
     // Defensive: force the last byte to NUL so the %s log below cannot walk

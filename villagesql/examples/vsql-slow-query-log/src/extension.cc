@@ -34,13 +34,13 @@
 #include <ctime>
 #include <mutex>
 
-#include <villagesql/preview/query_hook.h>
+#include <villagesql/preview/statement_event.h>
 #include <villagesql/preview/sys_var.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
 namespace sv = vsql::preview_sys_var;
-namespace qh = vsql::preview_query_hook;
+namespace se = vsql::preview_statement_event;
 
 static bool g_enabled;
 static long long g_threshold_ms;
@@ -48,8 +48,8 @@ static char *g_log_filename;
 
 static std::mutex g_log_mutex;
 
-static void slow_query_hook(const qh::QueryHookArgs &args,
-                            qh::QueryHookResult &result) {
+static void slow_query_hook(const se::StatementEventArgs &args,
+                            se::StatementEventResult &result) {
   if (!g_enabled) return;
   if (args.query_time_secs() * 1000.0 < static_cast<double>(g_threshold_ms))
     return;
@@ -98,7 +98,8 @@ static auto SYS_VARS = sv::make_capability({
                  &g_log_filename, "/tmp/vsql_slow_query.log"),
 });
 
-static qh::QueryHookCapability<VEF_QUERY_HOOK_POSTEXECUTE, &slow_query_hook>
+static se::StatementEventCapability<VEF_STATEMENT_EVENT_POSTEXECUTE,
+                                    &slow_query_hook>
     QUERY_HOOK;
 
 VEF_GENERATE_ENTRY_POINTS(make_extension().with(SYS_VARS).with(QUERY_HOOK))
