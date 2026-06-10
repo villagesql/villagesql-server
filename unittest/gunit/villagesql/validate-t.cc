@@ -905,7 +905,7 @@ TEST_F(ValidatePreviewCapabilitiesTest, ValidIndexProfileCapability) {
   profile.type_name = "MYTYPE";
   profile.index_type_name = "HNSW";
   profile.function_count = 0;
-  profile.ordering_asc = 1;
+  profile.ordering = VEF_INDEX_ORDERING_ASC;
   profile.default_for_type = 1;
 
   vef_preview_index_profile_ext_desc_t ext_desc = {};
@@ -1205,13 +1205,14 @@ TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullFunctionVdfFails) {
   EXPECT_NE(error.find("mytype_distance"), std::string::npos);
 }
 
-// A function binding declaring more than VEF_INDEX_PROFILE_MAX_FN_PARAMS
-// parameters fails validation.
-TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileTooManyParamsFails) {
+// A function binding with non-zero param_count but NULL params fails
+// validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullParamsFails) {
   vef_index_profile_fn_binding_t fn = {};
   fn.name = "mytype_distance";
   fn.vdf = stub_vdf;
-  fn.num_params = VEF_INDEX_PROFILE_MAX_FN_PARAMS + 1;
+  fn.signature.param_count = 1;
+  // fn.signature.params intentionally left NULL
 
   vef_index_profile_reg_t profile = {};
   profile.name = "mytype_hnsw";

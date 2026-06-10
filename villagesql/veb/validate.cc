@@ -19,6 +19,7 @@
 #include <cstring>
 #include <optional>
 #include <string>
+#include <unordered_set>
 
 #include "sql/field.h"
 #include "villagesql/include/error.h"
@@ -308,35 +309,60 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
         return std::nullopt;
       }
 
+      auto parse_bindings =
+          [&](uint32_t count, const vef_index_profile_fn_binding_t *arr,
+              const char *kind,
+              std::vector<vef_index_profile_fn_binding_t> &out) -> bool {
+        out.reserve(count);
+        for (unsigned int k = 0; k < count; k++) {
+          const vef_index_profile_fn_binding_t &fn = arr[k];
+          if (k > 0 && fn.fn_id == arr[k - 1].fn_id) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has duplicate fn_id " + std::to_string(fn.fn_id);
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          if (fn.name == nullptr) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " binding at index " +
+                        std::to_string(k) + " has NULL name";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          if (fn.vdf == nullptr) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has NULL vdf pointer";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          if (fn.signature.param_count > 0 && fn.signature.params == nullptr) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has non-zero param_count but NULL params";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          out.push_back(fn);
+        }
+        return false;
+      };
+
       std::vector<vef_index_profile_fn_binding_t> functions;
-      functions.reserve(profile.function_count);
-      for (unsigned int k = 0; k < profile.function_count; k++) {
-        const vef_index_profile_fn_binding_t &fn = profile.functions[k];
-        if (fn.name == nullptr) {
-          error_out = std::string("index profile '") + profile.name +
-                      "': function binding at index " + std::to_string(k) +
-                      " has NULL name";
-          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                  error_out.c_str());
-          return std::nullopt;
-        }
-        if (fn.vdf == nullptr) {
-          error_out = std::string("index profile '") + profile.name +
-                      "': function '" + fn.name + "' has NULL vdf pointer";
-          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                  error_out.c_str());
-          return std::nullopt;
-        }
-        if (fn.num_params > VEF_INDEX_PROFILE_MAX_FN_PARAMS) {
-          error_out = std::string("index profile '") + profile.name +
-                      "': function '" + fn.name + "' declares " +
-                      std::to_string(fn.num_params) + " params, max is " +
-                      std::to_string(VEF_INDEX_PROFILE_MAX_FN_PARAMS);
-          LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                  error_out.c_str());
-          return std::nullopt;
-        }
-        functions.push_back(fn);
+      if (parse_bindings(profile.function_count, profile.functions, "function",
+                         functions)) {
+        return std::nullopt;
+      }
+
+      std::vector<vef_index_profile_fn_binding_t> helpers;
+      if (parse_bindings(profile.helper_count, profile.helpers, "helper",
+                         helpers)) {
+        return std::nullopt;
       }
 
       auto [type_ext, type_bare] = parse_qualified_name(profile.type_name);
@@ -353,7 +379,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
           IndexProfileDescriptorKey(profile.name, extension_name,
                                     extension_version),
           std::move(type_ref), std::move(index_type_ref), std::move(functions),
-          profile.ordering_asc != 0, profile.default_for_type != 0);
+          std::move(helpers), profile.ordering, profile.default_for_type != 0);
     }
     break;
   }
