@@ -899,7 +899,8 @@ struct IndexProfileDesc {
   const char *name;
   const char *type_name;
   const char *index_type_name;
-  // User-visible SQL functions (optimizer-rewritable).
+  // User-visible SQL functions associated with this profile.
+  // The optimizer may generate index scan plans for calls to these functions.
   std::vector<IndexProfileFunctionBinding> functions;
   // Helper functions invoked only by the index implementation via profile_fn.
   // fn_ids are independent of the functions fn_id sequence.

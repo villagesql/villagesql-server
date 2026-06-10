@@ -155,7 +155,6 @@ class IndexProfileDescriptor {
     return index_type_ref_.index_type_name();
   }
 
-  // User-visible SQL functions (optimizer-rewritable).
   const std::vector<vef_index_profile_fn_binding_t> &functions() const {
     return functions_;
   }
