@@ -1,44 +1,53 @@
-CREATE TABLE t1 (id INT PRIMARY KEY, INDEX idx (id) USING EXTENDED(hnsw));
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) USING EXTENDED(dummy_index_hnsw));
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t1;
 ERROR 42S02: Table 'test.t1' doesn't exist
-CREATE TABLE t2 (id INT PRIMARY KEY, INDEX idx (id) USING EXTENDED(myext.hnsw));
+CREATE TABLE t2 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw));
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t2;
 ERROR 42S02: Table 'test.t2' doesn't exist
 CREATE TABLE t3 (
 id INT PRIMARY KEY,
-INDEX idx (id) USING EXTENDED(hnsw) WITH (M = 16, metric = 'l2')
+a dummy_type_vector,
+INDEX idx (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16, metric = 'l2')
 );
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t3;
 ERROR 42S02: Table 'test.t3' doesn't exist
-CREATE TABLE t4 (id INT PRIMARY KEY, INDEX idx (id) WITH (M = 16));
+CREATE TABLE t4 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) WITH (M = 16));
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t4;
 ERROR 42S02: Table 'test.t4' doesn't exist
-CREATE TABLE t5 (id INT PRIMARY KEY, INDEX idx (id hnsw_l2_profile) USING EXTENDED(hnsw));
+CREATE TABLE t5 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw));
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t5;
 ERROR 42S02: Table 'test.t5' doesn't exist
 CREATE TABLE t6 (
 id INT PRIMARY KEY,
-INDEX idx (id hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16)
+a dummy_type_vector,
+INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16)
 );
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t6;
 ERROR 42S02: Table 'test.t6' doesn't exist
 CREATE TABLE t7 (
 id INT PRIMARY KEY,
-INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(hnsw)
+a dummy_type_vector,
+INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw)
 );
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t7;
 ERROR 42S02: Table 'test.t7' doesn't exist
 CREATE TABLE t8 (
 id INT PRIMARY KEY,
-INDEX idx (id myext.hnsw_l2_profile) USING EXTENDED(myext.hnsw) WITH (M = 16, metric = 'l2')
+a dummy_type_vector,
+INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, metric = 'l2')
 );
 ERROR HY000: Extended Index feature not yet implemented
 SHOW CREATE TABLE t8;
 ERROR 42S02: Table 'test.t8' doesn't exist
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
