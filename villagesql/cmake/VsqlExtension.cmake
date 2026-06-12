@@ -69,19 +69,33 @@ function(vsql_add_extension)
   endif()
 endfunction()
 
-# vsql_add_test_extension(DIR_NAME VEB_NAME)
+# vsql_add_test_extension(DIR_NAME VEB_NAME [ABI])
 #
 # Shorthand for test extensions. Uses the shared CMakeLists.txt template at
 # test-extensions/shared/ so individual extensions need no CMakeLists.txt.
 # SOURCE_BASE, BINARY_BASE, and EXT_TARGET are derived automatically.
+#
+# The optional ABI argument selects which SDK headers the fixture is built
+# against:
+#   (default) / "dev" - current unstable dev SDK (include-dev), latest protocol
+#   "v3"              - frozen stable v3 SDK (include), so the fixture registers
+#                       at VEF_PROTOCOL_3. Use this to exercise the v3 register
+#                       path (build_type_descriptor_v3) from a fixture that a
+#                       real v3-compiled extension would produce.
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
+  set(_vsql_test_ext_abi "${ARGN}")
+  if(_vsql_test_ext_abi STREQUAL "v3")
+    set(_vsql_test_ext_include "${SDK_STAGING_DIR}/include")
+  else()
+    set(_vsql_test_ext_include "${SDK_STAGING_DIR}/include-dev")
+  endif()
   ExternalProject_Add(${VEB_NAME}_extension
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/shared
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/${DIR_NAME}-shared-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
     CMAKE_ARGS
       "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
+      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${_vsql_test_ext_include}"
       "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
       "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
       "-DEXTENSION_NAME=${VEB_NAME}"

@@ -91,6 +91,16 @@
 
 namespace vsql {
 
+// The descriptor's protocol is monotonic: a feature may raise the minimum VEF
+// protocol the type requires but must never lower it. Variable-length types
+// (persisted_length(-1)) require VEF_PROTOCOL_4; later v3 features such as
+// from_string()/int_to_params() must not pull it back down. Every builder
+// method routes its protocol requirement through this helper instead of
+// assigning directly.
+constexpr void raise_protocol(vef_protocol_t &cur, vef_protocol_t required) {
+  if (required > cur) cur = required;
+}
+
 // =============================================================================
 // TypeObject — the built type, usable as a type reference
 // =============================================================================
@@ -130,6 +140,13 @@ class TypeBuilder {
  public:
   constexpr TypeBuilder &persisted_length(int64_t len) {
     state_.desc.vef_desc.persisted_length = len;
+    // A variable-length type (length decided per value) is a VEF_PROTOCOL_4
+    // feature: the v3 register requires a resolve_params VDF for
+    // persisted_length == -1, only v4 relaxes that. raise_protocol() keeps this
+    // monotonic so no later v3 feature can lower it back down.
+    if (len == -1) {
+      raise_protocol(state_.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    }
     return *this;
   }
 
@@ -189,7 +206,7 @@ class TypeBuilder {
     s.params_init_fn = &detail::bind_params_cache<P, ParseFunc>;
     s.params_to_strings_init_fn =
         &detail::bind_params_to_strings_cache<P, ParamsToStringsFunc>;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     return TypeBuilder<HasFromString, HasToString, HasCompare, P,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        EFT, Name>{s, embedded_funcs_};
@@ -211,7 +228,7 @@ class TypeBuilder {
     auto inner = func_builder::make_int_to_params<Func>(vdf_name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.int_to_params_vdf_name = vdf_name;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType, true,
                        HasResolveParams, HasMaxPersistedLength,
@@ -236,7 +253,7 @@ class TypeBuilder {
     auto inner = func_builder::make_resolve_params<Func>(vdf_name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.resolve_params_vdf_name = vdf_name;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, true, HasMaxPersistedLength,
@@ -267,7 +284,7 @@ class TypeBuilder {
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.encode_vdf_name = vdf_name;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<true, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
@@ -290,7 +307,7 @@ class TypeBuilder {
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.decode_vdf_name = vdf_name;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, true, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
@@ -313,7 +330,7 @@ class TypeBuilder {
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.compare_vdf_name = vdf_name;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, true, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
@@ -335,7 +352,7 @@ class TypeBuilder {
         func_builder::make_type_hash<Func>(vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.hash_vdf_name = vdf_name;
-    s.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
@@ -349,7 +366,7 @@ class TypeBuilder {
   // computed.
   constexpr TypeBuilder &intrinsic_default_str(const char *str) {
     state_.desc.vef_desc.intrinsic_default_str = str;
-    state_.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(state_.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     return *this;
   }
 
@@ -361,7 +378,7 @@ class TypeBuilder {
   // supports auto-generating its VDF name too.
   constexpr TypeBuilder &intrinsic_default_vdf(const char *vdf_name) {
     state_.desc.vef_desc.intrinsic_default_vdf_name = vdf_name;
-    state_.desc.vef_desc.protocol = VEF_PROTOCOL_3;
+    raise_protocol(state_.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     return *this;
   }
 

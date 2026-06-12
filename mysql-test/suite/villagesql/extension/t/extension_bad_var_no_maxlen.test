@@ -1,0 +1,37 @@
+# Test that INSTALL EXTENSION fails when a variable-length type
+# (persisted_length = -1) does not set max_persisted_length. A variable-length
+# type needs max_persisted_length to bound its backing field, so vef_register
+# rejects it before the extension can install.
+
+--let $extension_name = bad_var_no_maxlen
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/bad_var_no_maxlen.cc
+--source include/villagesql/create_extension_sdk.inc
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("max_persisted_length");
+
+--echo # Attempt to install (should fail: variable-length type without max_persisted_length)
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION bad_var_no_maxlen;
+
+--echo # Verify extension was NOT installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'bad_var_no_maxlen';
+
+--echo # Verify the error log names the specific reason (missing max_persisted_length)
+--perl
+use strict;
+my $error_log = $ENV{'MYSQLTEST_VARDIR'} . "/log/mysqld.1.err";
+open(FILE, "$error_log") or die("Unable to open error log: $error_log");
+my $found = 0;
+while (<FILE>) {
+  if (/has persisted_length=-1 .*max_persisted_length is 0 .must be > 0/) {
+    $found = 1;
+  }
+}
+close(FILE);
+if (!$found) {
+  die "Expected max_persisted_length rejection message in error log";
+}
+print "Found max_persisted_length rejection message in error log\n";
+EOF
