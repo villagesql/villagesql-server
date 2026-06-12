@@ -20,7 +20,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and Test VillageSQL
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       actions: write  # Required to read/write caches
       contents: read
