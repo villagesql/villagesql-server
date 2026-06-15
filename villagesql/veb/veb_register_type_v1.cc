@@ -53,8 +53,8 @@ std::optional<TypeDescriptor> build_type_descriptor_v1(
       TypeDescriptorKey(type_name, extension_name, extension_version),
       VEF_PROTOCOL_1, MYSQL_TYPE_VARCHAR, td->persisted_length,
       td->max_decode_buffer_length, /*max_persisted_length=*/0,
-      std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
-      std::move(hash_fn));
+      /*is_variable_length=*/false, std::move(encode_fn), std::move(decode_fn),
+      std::move(compare_fn), std::move(hash_fn));
 
   // 5. No intrinsic default for protocol-1; encode("") is the fallback.
 

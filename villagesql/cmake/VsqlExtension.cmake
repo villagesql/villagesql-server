@@ -78,14 +78,14 @@ endfunction()
 # The optional ABI argument selects which SDK headers the fixture is built
 # against:
 #   (default) / "dev" - current unstable dev SDK (include-dev), latest protocol
-#   "v3"              - frozen stable v3 SDK (include), so the fixture registers
+#   "v3"              - frozen stable v3 SDK, so the fixture registers
 #                       at VEF_PROTOCOL_3. Use this to exercise the v3 register
 #                       path (build_type_descriptor_v3) from a fixture that a
 #                       real v3-compiled extension would produce.
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
   set(_vsql_test_ext_abi "${ARGN}")
   if(_vsql_test_ext_abi STREQUAL "v3")
-    set(_vsql_test_ext_include "${SDK_STAGING_DIR}/include")
+    set(_vsql_test_ext_include "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk/v3/include")
   else()
     set(_vsql_test_ext_include "${SDK_STAGING_DIR}/include-dev")
   endif()
