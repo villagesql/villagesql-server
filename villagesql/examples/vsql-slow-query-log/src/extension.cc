@@ -28,10 +28,12 @@
 //   SET GLOBAL vsql_slow_query_log.enabled = ON;
 
 #include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <format>
 #include <mutex>
 
 #include <villagesql/preview/statement_event.h>
@@ -54,13 +56,10 @@ static void slow_query_hook(const se::StatementEventArgs &args,
   if (args.query_time_secs() * 1000.0 < static_cast<double>(g_threshold_ms))
     return;
 
+  auto tp = std::chrono::sys_time<std::chrono::microseconds>{
+      std::chrono::microseconds{static_cast<int64_t>(args.query_start_utime())}};
+  std::string ts = std::format("{:%Y-%m-%dT%H:%M:%S}Z", tp);
   time_t now = static_cast<time_t>(args.query_start_utime() / 1000000);
-  uint32_t usec = static_cast<uint32_t>(args.query_start_utime() % 1000000);
-  struct tm tm_buf;
-  gmtime_r(&now, &tm_buf);
-  char ts[48];
-  strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S.", &tm_buf);
-  snprintf(ts + 20, sizeof(ts) - 20, "%06uZ", usec);
 
   std::lock_guard<std::mutex> lock(g_log_mutex);
   FILE *f = fopen(g_log_filename, "a");
@@ -70,7 +69,7 @@ static void slow_query_hook(const se::StatementEventArgs &args,
     return;
   }
 
-  fprintf(f, "# Time: %s\n", ts);
+  fprintf(f, "# Time: %s\n", ts.c_str());
   fprintf(f, "# User@Host: %s @ %s  Id: %lu\n", args.user() ? args.user() : "",
           args.host() ? args.host() : "", args.connection_id());
   fprintf(f,

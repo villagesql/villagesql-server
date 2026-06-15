@@ -16,6 +16,7 @@
 #include "villagesql/services/preview/statement_event.h"
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -125,7 +126,8 @@ void on_statement_postexecute(THD *thd) {
   args.connection_id = thd->thread_id();
   args.port = thd->peer_port;
   args.in_transaction = thd->in_active_multi_stmt_transaction();
-  args.sql_command = get_sql_command_string(thd->lex->sql_command);
+  args.sql_command =
+      thd->lex ? get_sql_command_string(thd->lex->sql_command) : nullptr;
 
   const Diagnostics_area *da = thd->get_stmt_da();
   if (da != nullptr && da->is_error()) {
@@ -143,8 +145,20 @@ void on_statement_postexecute(THD *thd) {
   args.rows_sent = thd->get_sent_row_count();
   args.rows_examined = thd->get_examined_row_count();
   args.rows_affected = (da != nullptr && da->is_ok()) ? da->affected_rows() : 0;
-  args.bytes_sent = thd->status_var.bytes_sent;
-  args.bytes_received = thd->status_var.bytes_received;
+
+  // Per-statement deltas. copy_status_var_ptr holds a snapshot of status_var
+  // taken at statement start; subtracting it gives the per-statement
+  // contribution. When null (e.g. internal or optimizer-only statements that
+  // skip the slow-query-log snapshot path), the raw cumulative session total
+  // is returned instead.
+  const System_status_var *snap = thd->copy_status_var_ptr;
+  auto stat_delta = [&](ulonglong System_status_var::*field) -> uint64_t {
+    return snap ? thd->status_var.*field - snap->*field
+                : thd->status_var.*field;
+  };
+
+  args.bytes_sent = stat_delta(&System_status_var::bytes_sent);
+  args.bytes_received = stat_delta(&System_status_var::bytes_received);
 
   args.schema = (thd->db().str != nullptr && thd->db().length > 0)
                     ? thd->db().str
@@ -154,23 +168,13 @@ void on_statement_postexecute(THD *thd) {
   args.warning_count = da != nullptr ? da->last_statement_cond_count() : 0;
 
   // Digest text — computed into a stack buffer; pointer is valid for the
-  // duration of on_statement_postexecute and is set to NULL on args before
-  // return.
+  // duration of on_statement_postexecute.
   String digest_str;
   if (thd->m_digest != nullptr) {
     compute_digest_text(&thd->m_digest->m_digest_storage, &digest_str);
     args.digest_text =
         digest_str.length() > 0 ? digest_str.c_ptr_safe() : nullptr;
   }
-
-  // Optimizer and sort metrics as per-statement deltas. copy_status_var_ptr
-  // holds a snapshot of status_var taken at statement start; subtracting it
-  // gives the per-statement contribution.
-  const System_status_var *snap = thd->copy_status_var_ptr;
-  auto stat_delta = [&](ulonglong System_status_var::*field) -> uint64_t {
-    return snap ? thd->status_var.*field - snap->*field
-                : thd->status_var.*field;
-  };
 
   args.select_full_join =
       stat_delta(&System_status_var::select_full_join_count);
