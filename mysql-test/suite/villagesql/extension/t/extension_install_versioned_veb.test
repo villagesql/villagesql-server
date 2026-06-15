@@ -1,0 +1,43 @@
+# Test INSTALL EXTENSION with versioned VEB filenames ({name}-{version}.veb).
+# The original extension_install_version.test covers unversioned {name}.veb
+# with manifest-version matching; this one covers the version-in-filename
+# resolution rules.
+
+--let $veb_dir = `SELECT @@veb_dir`
+
+--let $extension_name = versioned_noop
+--let $extension_version = 1.2.3
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--let $extension_versioned = 1
+--source include/villagesql/create_extension_sdk.inc
+
+--copy_file $veb_dir/versioned_noop-1.2.3.veb $veb_dir/versioned_noop-2.0.0.veb
+--replace_result $MYSQLTEST_VARDIR/mysqld.1/veb/ MYSQLTEST_VEB_DIR
+--replace_result $veb_dir MYSQLTEST_VEB_DIR
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION versioned_noop;
+--remove_file $veb_dir/versioned_noop-2.0.0.veb
+
+INSTALL EXTENSION versioned_noop;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'versioned_noop';
+UNINSTALL EXTENSION versioned_noop VERSION '1.2.3';
+
+INSTALL EXTENSION versioned_noop VERSION '1.2.3';
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'versioned_noop';
+UNINSTALL EXTENSION versioned_noop VERSION '1.2.3';
+
+--copy_file $veb_dir/versioned_noop-1.2.3.veb $veb_dir/versioned_noop-9.9.9.veb
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION versioned_noop VERSION '9.9.9';
+--remove_file $veb_dir/versioned_noop-9.9.9.veb
+
+# Filename version must match manifest version even when VERSION is omitted.
+# Move versioned_noop-1.2.3.veb to versioned_noop-9.9.9.veb: filename says
+# 9.9.9 but manifest still says 1.2.3.
+--move_file $veb_dir/versioned_noop-1.2.3.veb $veb_dir/versioned_noop-9.9.9.veb
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION versioned_noop;
+--remove_file $veb_dir/versioned_noop-9.9.9.veb

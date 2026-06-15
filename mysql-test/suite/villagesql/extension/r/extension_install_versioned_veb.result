@@ -1,0 +1,20 @@
+Creating extension versioned_noop using SDK...
+Created versioned_noop-1.2.3.veb
+INSTALL EXTENSION versioned_noop;
+ERROR HY000: Multiple versions of extension 'versioned_noop' found in 'MYSQLTEST_VARDIR/mysqld.1/veb/'; specify a version with INSTALL EXTENSION versioned_noop VERSION 'x.y.z'
+INSTALL EXTENSION versioned_noop;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'versioned_noop';
+EXTENSION_NAME	EXTENSION_VERSION
+versioned_noop	1.2.3
+UNINSTALL EXTENSION versioned_noop VERSION '1.2.3';
+INSTALL EXTENSION versioned_noop VERSION '1.2.3';
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'versioned_noop';
+EXTENSION_NAME	EXTENSION_VERSION
+versioned_noop	1.2.3
+UNINSTALL EXTENSION versioned_noop VERSION '1.2.3';
+INSTALL EXTENSION versioned_noop VERSION '9.9.9';
+ERROR HY000: Version mismatch in 'versioned_noop-9.9.9.veb': filename says '9.9.9' but manifest says '1.2.3'
+INSTALL EXTENSION versioned_noop;
+ERROR HY000: Version mismatch in 'versioned_noop-9.9.9.veb': filename says '9.9.9' but manifest says '1.2.3'

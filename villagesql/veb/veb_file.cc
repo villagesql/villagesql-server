@@ -23,6 +23,7 @@
 #include <fstream>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include "my_config.h"
 #include "my_dir.h"
@@ -128,6 +129,73 @@ std::string get_veb_path(const std::string &filename) {
   return "";
 }
 
+static std::string make_veb_filename(const std::string &name,
+                                     const std::string &veb_version) {
+  if (veb_version.empty()) return name + ".veb";
+  return name + "-" + veb_version + ".veb";
+}
+
+bool veb_file_exists(const std::string &name, const std::string &veb_version) {
+  std::string full_path = get_veb_path(make_veb_filename(name, veb_version));
+  if (full_path.empty()) return false;
+
+  MY_STAT file_stat;
+  return my_stat(full_path.c_str(), &file_stat, MYF(0)) != nullptr;
+}
+
+bool find_veb_version(const std::string &name, std::string &version) {
+  std::string veb_dir(opt_veb_dir);
+  std::string prefix = name + "-";
+  std::string suffix = ".veb";
+  std::string unversioned = name + ".veb";
+
+  DIR *dir = opendir(veb_dir.c_str());
+  if (!dir) {
+    villagesql_error("Cannot open VEB directory '%s'", MYF(0), veb_dir.c_str());
+    return true;
+  }
+
+  std::vector<std::string> found_versions;
+  bool found_unversioned = false;
+  while (dirent *entry = readdir(dir)) {
+    std::string filename(entry->d_name);
+    if (filename == unversioned) {
+      found_unversioned = true;
+      continue;
+    }
+
+    if (filename.size() > prefix.size() + suffix.size() &&
+        filename.rfind(prefix, 0) == 0 &&
+        filename.compare(filename.size() - suffix.size(), suffix.size(),
+                         suffix) == 0) {
+      found_versions.push_back(filename.substr(
+          prefix.size(), filename.size() - prefix.size() - suffix.size()));
+    }
+  }
+  closedir(dir);
+
+  if (found_unversioned) {
+    version.clear();
+    return false;
+  }
+
+  if (found_versions.size() > 1) {
+    villagesql_error(
+        "Multiple versions of extension '%s' found in '%s'; specify a version "
+        "with INSTALL EXTENSION %s VERSION 'x.y.z'",
+        MYF(0), name.c_str(), veb_dir.c_str(), name.c_str());
+    return true;
+  }
+
+  if (found_versions.size() == 1) {
+    version = found_versions[0];
+    return false;
+  }
+
+  villagesql_error("VEB file not found: %s.veb", MYF(0), name.c_str());
+  return true;
+}
+
 bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex) {
   // Read entire file into memory
   std::ifstream file(filepath, std::ios::binary);
@@ -157,11 +225,14 @@ bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex) {
 }
 
 bool load_veb_manifest(const std::string &name, std::string &version) {
-  LogVSQL(INFORMATION_LEVEL, "Loading VEB manifest for extension '%s'",
-          name.c_str());
+  LogVSQL(INFORMATION_LEVEL,
+          "Loading VEB manifest for extension '%s' version '%s'", name.c_str(),
+          version.c_str());
 
-  // Construct VEB filename
-  std::string veb_filename = name + ".veb";
+  // Construct VEB filename: {name}.veb if version is empty, else
+  // {name}-{version}.veb. When version is empty, it is populated from the
+  // manifest below; when non-empty, it is asserted against the manifest.
+  std::string veb_filename = make_veb_filename(name, version);
   std::string full_path = get_veb_path(veb_filename);
 
   if (full_path.empty()) {
@@ -263,7 +334,17 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
     return true;
   }
 
-  version = version_value.GetString();
+  std::string manifest_version = version_value.GetString();
+  if (version.empty()) {
+    // Unversioned file: take version from manifest.
+    version = manifest_version;
+  } else if (manifest_version != version) {
+    villagesql_error(
+        "Version mismatch in '%s': filename says '%s' but manifest says '%s'",
+        MYF(0), veb_filename.c_str(), version.c_str(),
+        manifest_version.c_str());
+    return true;
+  }
 
   // Validate name field
   if (!manifest.HasMember("name")) {
@@ -296,6 +377,7 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
 }
 
 bool expand_veb_to_directory(const std::string &name,
+                             const std::string &veb_version,
                              std::string &expanded_path,
                              std::string &sha256_hash) {
   // Note: Name validation is done by caller (sql_extension.cc) before calling
@@ -303,7 +385,7 @@ bool expand_veb_to_directory(const std::string &name,
   LogVSQL(INFORMATION_LEVEL, "Expanding VEB for extension '%s'", name.c_str());
 
   // Get VEB file path and calculate SHA256
-  std::string veb_filename = name + ".veb";
+  std::string veb_filename = make_veb_filename(name, veb_version);
   std::string full_veb_path = get_veb_path(veb_filename);
 
   if (full_veb_path.empty()) {
@@ -609,8 +691,13 @@ bool load_installed_extensions(THD *thd) {
 
       installed_extensions.insert(extension_name);
 
-      // Validate extension: load manifest and check version matches
-      std::string actual_version;
+      // Validate extension: load manifest and check version matches.
+      // Prefer {name}-{version}.veb if present; fall back to {name}.veb.
+      std::string veb_version;
+      if (veb_file_exists(extension_name, expected_version)) {
+        veb_version = expected_version;
+      }
+      std::string actual_version = veb_version;
       if (load_veb_manifest(extension_name, actual_version)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEB manifest for extension '%s'",
                 extension_name.c_str());
@@ -645,7 +732,7 @@ bool load_installed_extensions(THD *thd) {
                 extension_name.c_str(), so_path.c_str());
         std::string expanded_path;
         std::string reexpand_sha256;
-        if (expand_veb_to_directory(extension_name, expanded_path,
+        if (expand_veb_to_directory(extension_name, veb_version, expanded_path,
                                     reexpand_sha256)) {
           LogVSQL(ERROR_LEVEL, "Failed to re-expand VEB for extension '%s'",
                   extension_name.c_str());
