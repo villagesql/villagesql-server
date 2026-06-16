@@ -414,16 +414,38 @@ die_clang_format() {
   exit 1
 }
 
+# Validate the pin's shape: two or three dot-separated numeric components and
+# nothing else.  A trailing newline does NOT matter -- $() strips it whether
+# present or not, on Linux CI and macOS alike -- but $() does NOT strip a
+# stray trailing space or carriage return (e.g. a CRLF checkout), and either
+# would silently corrupt both this check and the "pip install ...==<pin>.*"
+# step in .github/workflows/validate-pr.yml.  Reject anything malformed here
+# with a clear message instead.
+clang_format_version_pattern='^[0-9]+\.[0-9]+(\.[0-9]+)?$'
+if ! [[ "$REQUIRED_CLANG_FORMAT_VERSION" =~ $clang_format_version_pattern ]]; then
+  die_clang_format "clang-format-version pin '$REQUIRED_CLANG_FORMAT_VERSION' is malformed; expected two or three numeric components like 22.1 or 22.1.8"
+fi
+
 if ! command -v clang-format >/dev/null 2>&1; then
   die_clang_format "clang-format is not installed or not in PATH"
 fi
-# Match the full version (major.minor.patch) so we catch formatting drift
-# between point releases.  Patch releases of clang-format are not policy-
-# bound to keep formatting stable, and we have been burned by minor drift
-# (see the bug history of this script's revset and ranges logic for the
-# investigation that surfaced this).
+# Match at the precision of the pin in clang-format-version: a two-component
+# pin like "22.1" accepts any 22.1.x patch release, while a three-component
+# pin like "22.1.8" requires that exact patch.  We normally pin to two
+# components so devs (e.g. brew tracking LLVM's latest stable) don't have to
+# update lockstep on every patch; but patch releases are not policy-bound to
+# keep formatting stable, so if a release changes output we pin the full
+# three-component version to force everyone onto the same build.  We have
+# been burned by drift before (see the bug history of this script's revset
+# and ranges logic for the investigation that surfaced this).
+# The CI install in .github/workflows/validate-pr.yml mirrors this by
+# appending ".*" to the pin, so pip honors the same two-or-three precision.
 CLANG_FORMAT_VERSION=$(clang-format --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-if [ "$CLANG_FORMAT_VERSION" != "$REQUIRED_CLANG_FORMAT_VERSION" ]; then
+# Truncate the detected version to the same number of dotted components as
+# the pin so the comparison honors the pin's precision.
+num_components=$(printf '%s' "$REQUIRED_CLANG_FORMAT_VERSION" | awk -F. '{print NF}')
+CLANG_FORMAT_VERSION_PREFIX=$(printf '%s' "$CLANG_FORMAT_VERSION" | cut -d. -f1-"$num_components")
+if [ "$CLANG_FORMAT_VERSION_PREFIX" != "$REQUIRED_CLANG_FORMAT_VERSION" ]; then
   die_clang_format "clang-format version $CLANG_FORMAT_VERSION found, expected $REQUIRED_CLANG_FORMAT_VERSION"
 fi
 
