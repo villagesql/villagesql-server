@@ -42,9 +42,9 @@ bool Semver::is_valid_identifier(std::string_view id) {
   });
 }
 
-bool Semver::parse_core_component(const std::string &version_str, unsigned long version_max,
-                                  const char *name, unsigned long *out,
-                                  std::string *error) {
+bool Semver::parse_core_component(const std::string &version_str,
+                                  unsigned long version_max, const char *name,
+                                  unsigned long *out, std::string *error) {
   if (!is_numeric(version_str)) {
     if (error)
       *error = std::string(name) + " must be numeric, not " +
@@ -55,19 +55,17 @@ bool Semver::parse_core_component(const std::string &version_str, unsigned long 
   // Check for leading zeros
   if (has_leading_zero(version_str)) {
     if (error)
-      *error = std::string(name) + " version numbers ("
-               + safe_for_output(version_str)
-               + ") must not have leading zeros";
+      *error = std::string(name) + " version numbers (" +
+               safe_for_output(version_str) + ") must not have leading zeros";
     return false;
   }
 
   errno = 0;
   unsigned long value = strtoul(version_str.c_str(), nullptr, 10);
-  if (errno == ERANGE ) {
+  if (errno == ERANGE) {
     if (error)
-      *error = std::string(name) + " version ("
-               + safe_for_output(version_str)
-               + ") is out of range";
+      *error = std::string(name) + " version (" + safe_for_output(version_str) +
+               ") is out of range";
     return false;
   }
 
@@ -77,18 +75,17 @@ bool Semver::parse_core_component(const std::string &version_str, unsigned long 
   return true;
 }
 
-bool Semver::check_version_bound(unsigned long version_val, unsigned long version_max,
-                                 const char *name, std::string *error) {
-
+bool Semver::check_version_bound(unsigned long version_val,
+                                 unsigned long version_max, const char *name,
+                                 std::string *error) {
   // Easy case if things are valid
   if (version_val <= version_max) return true;
 
   // It must be too big
   if (error)
-    *error = std::string(name) + " version value("
-              + std::to_string(version_val)
-              + ") must not exceed " +
-              std::to_string(version_max);
+    *error = std::string(name) + " version value(" +
+             std::to_string(version_val) + ") must not exceed " +
+             std::to_string(version_max);
   return false;
 }
 
@@ -236,7 +233,7 @@ Semver Semver::from_components(unsigned long major, unsigned long minor,
 
   // Validate identifiers if provided
   for (const auto &id : prerelease) {
-    if (!is_valid_identifier(id))  return ver;
+    if (!is_valid_identifier(id)) return ver;
 
     // Check for leading zeros in numeric identifiers
     if (is_numeric(id) && has_leading_zero(id)) return ver;

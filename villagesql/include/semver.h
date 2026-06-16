@@ -180,9 +180,8 @@ class Semver {
    * @return true on success, false otherwise
    */
   static bool parse_core_component(const std::string &version_str,
-                                      unsigned long version_max,
-                                      const char *name, unsigned long *out,
-                                      std::string *error);
+                                   unsigned long version_max, const char *name,
+                                   unsigned long *out, std::string *error);
 
   /**
    * Check that a parsed core version value is within its allowed bound.
