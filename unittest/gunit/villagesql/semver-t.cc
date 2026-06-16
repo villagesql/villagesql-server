@@ -200,6 +200,19 @@ TEST_F(SemverTest, ParseInvalidVersions) {
   EXPECT_FALSE(v.parse("1.2.03", &error));
   EXPECT_FALSE(error.empty());
 
+  // Version numbers exceeding their per-position bounds
+  error.clear();
+  EXPECT_FALSE(v.parse("11.0.0", &error));
+  EXPECT_FALSE(error.empty());
+
+  error.clear();
+  EXPECT_FALSE(v.parse("0.101.0", &error));
+  EXPECT_FALSE(error.empty());
+
+  error.clear();
+  EXPECT_FALSE(v.parse("0.0.1001", &error));
+  EXPECT_FALSE(error.empty());
+
   // Leading zeros in numeric pre-release identifiers
   error.clear();
   EXPECT_FALSE(v.parse("1.0.0-01", &error));
@@ -405,11 +418,11 @@ TEST_F(SemverTest, NumericVsAlphanumericPrerelease) {
 TEST_F(SemverTest, EdgeCases) {
   Semver v;
 
-  // Large version numbers
-  EXPECT_TRUE(v.parse("999999.999999.999999"));
-  EXPECT_EQ(999999u, v.major());
-  EXPECT_EQ(999999u, v.minor());
-  EXPECT_EQ(999999u, v.patch());
+  // Maximum allowed version numbers (bounds are inclusive)
+  EXPECT_TRUE(v.parse("10.100.1000"));
+  EXPECT_EQ(10u, v.major());
+  EXPECT_EQ(100u, v.minor());
+  EXPECT_EQ(1000u, v.patch());
 
   // Single character identifiers
   EXPECT_TRUE(v.parse("1.0.0-a"));

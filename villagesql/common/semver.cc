@@ -18,7 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <climits>
+#include <cerrno>
 #include <cstdlib>
 
 namespace villagesql {
@@ -31,11 +31,132 @@ bool Semver::is_numeric(std::string_view str) {
                      [](unsigned char c) { return std::isdigit(c); });
 }
 
+bool Semver::has_leading_zero(std::string_view str) {
+  return str.length() > 1 && str[0] == '0';
+}
+
 bool Semver::is_valid_identifier(std::string_view id) {
   if (id.empty()) return false;
   return std::all_of(id.begin(), id.end(), [](unsigned char c) {
     return std::isalnum(c) || c == '-';
   });
+}
+
+bool Semver::parse_core_component(const std::string &version_str, unsigned long version_max,
+                                  const char *name, unsigned long *out,
+                                  std::string *error) {
+  if (!is_numeric(version_str)) {
+    if (error)
+      *error = std::string(name) + " must be numeric, not " +
+               safe_for_output(version_str);
+    return false;
+  }
+
+  // Check for leading zeros
+  if (has_leading_zero(version_str)) {
+    if (error)
+      *error = std::string(name) + " version numbers ("
+               + safe_for_output(version_str)
+               + ") must not have leading zeros";
+    return false;
+  }
+
+  errno = 0;
+  unsigned long value = strtoul(version_str.c_str(), nullptr, 10);
+  if (errno == ERANGE ) {
+    if (error)
+      *error = std::string(name) + " version ("
+               + safe_for_output(version_str)
+               + ") is out of range";
+    return false;
+  }
+
+  if (!check_version_bound(value, version_max, name, error)) return false;
+
+  *out = value;
+  return true;
+}
+
+bool Semver::check_version_bound(unsigned long version_val, unsigned long version_max,
+                                 const char *name, std::string *error) {
+
+  // Easy case if things are valid
+  if (version_val <= version_max) return true;
+
+  // It must be too big
+  if (error)
+    *error = std::string(name) + " version value("
+              + std::to_string(version_val)
+              + ") must not exceed " +
+              std::to_string(version_max);
+  return false;
+}
+
+bool Semver::parse_core(std::string_view core, unsigned long *major,
+                        unsigned long *minor, unsigned long *patch,
+                        std::string *error) {
+  if (std::count(core.begin(), core.end(), '.') != 2) {
+    if (error)
+      *error = "Invalid core version format, expected MAJOR.MINOR.PATCH";
+    return false;
+  }
+
+  size_t minor_pos = core.find('.');
+  size_t patch_pos = core.find('.', minor_pos + 1);
+  std::string major_str(core.substr(0, minor_pos));
+  std::string minor_str(core.substr(minor_pos + 1, patch_pos - minor_pos - 1));
+  std::string patch_str(core.substr(patch_pos + 1));
+
+  // Parse each position into its own bounds.
+  return parse_core_component(major_str, kMajorMax, "MAJOR", major, error) &&
+         parse_core_component(minor_str, kMinorMax, "MINOR", minor, error) &&
+         parse_core_component(patch_str, kPatchMax, "PATCH", patch, error);
+}
+
+bool Semver::parse_prerelease(std::string_view segment,
+                              std::vector<std::string> *out,
+                              std::string *error) {
+  // Split by dots
+  while (true) {
+    size_t dot = segment.find('.');
+    std::string_view identifier = segment.substr(0, dot);
+
+    if (!is_valid_identifier(identifier)) {
+      if (error) *error = "Invalid pre-release identifier";
+      return false;
+    }
+    // Check for leading zeros in numeric identifiers
+    if (is_numeric(identifier) && has_leading_zero(identifier)) {
+      if (error)
+        *error = "Numeric pre-release identifiers must not have leading zeros";
+      return false;
+    }
+
+    out->push_back(std::string(identifier));
+    if (dot == std::string_view::npos) break;
+    segment.remove_prefix(dot + 1);
+  }
+  return true;
+}
+
+bool Semver::parse_build_metadata(std::string_view segment,
+                                  std::vector<std::string> *out,
+                                  std::string *error) {
+  // Split by dots
+  while (true) {
+    size_t dot = segment.find('.');
+    std::string_view identifier = segment.substr(0, dot);
+
+    if (!is_valid_identifier(identifier)) {
+      if (error) *error = "Invalid build metadata identifier";
+      return false;
+    }
+
+    out->push_back(std::string(identifier));
+    if (dot == std::string_view::npos) break;
+    segment.remove_prefix(dot + 1);
+  }
+  return true;
 }
 
 bool Semver::parse(std::string_view s, std::string *error) {
@@ -47,113 +168,42 @@ bool Semver::parse(std::string_view s, std::string *error) {
     return false;
   }
 
-  // Separate core version (MAJOR.MINOR.PATCH)
-  std::string_view core_version =
-      s.substr(0, std::min(s.find("+"), s.find("-")));
-  s.remove_prefix(core_version.size());
+  // Split into core[-prerelease][+build_metadata] segments. The core segment
+  // ends at the first '-' or '+'; any pre-release runs up to a trailing '+'.
+  std::string_view core = s.substr(0, std::min(s.find('+'), s.find('-')));
+  s.remove_prefix(core.size());
 
-  // Parse MAJOR.MINOR.PATCH
-  if (std::count(core_version.begin(), core_version.end(), '.') != 2) {
-    if (error)
-      *error = "Invalid core version format, expected MAJOR.MINOR.PATCH";
-    return false;
+  bool has_prerelease = !s.empty() && s[0] == '-';
+  std::string_view prerelease_seg;
+  if (has_prerelease) {
+    std::string_view seg = s.substr(0, s.find('+'));
+    s.remove_prefix(seg.size());
+    prerelease_seg = seg.substr(1);  // skip leading '-'
   }
 
-  size_t minor_pos = core_version.find('.');
-  size_t patch_pos = core_version.find('.', minor_pos + 1);
-  std::string major_str = std::string(core_version.substr(0, minor_pos));
-  std::string minor_str = std::string(
-      core_version.substr(minor_pos + 1, patch_pos - minor_pos - 1));
-  std::string patch_str = std::string(core_version.substr(patch_pos + 1));
-
-  // Validate and parse major, minor, patch
-  if (!is_numeric(major_str) || !is_numeric(minor_str) ||
-      !is_numeric(patch_str)) {
-    if (error) *error = "MAJOR, MINOR, and PATCH must be numeric";
-    return false;
+  bool has_build_metadata = !s.empty() && s[0] == '+';
+  std::string_view build_seg;
+  if (has_build_metadata) {
+    build_seg = s.substr(1);  // skip leading '+'
   }
 
-  // Check for leading zeros
-  if ((major_str.length() > 1 && major_str[0] == '0') ||
-      (minor_str.length() > 1 && minor_str[0] == '0') ||
-      (patch_str.length() > 1 && patch_str[0] == '0')) {
-    if (error) *error = "Version numbers must not have leading zeros";
-    return false;
-  }
-
-  // Parse the numbers. Use the C routines to avoid exceptions
-  unsigned long major_tmp = strtoul(major_str.data(), nullptr, 10);
-  unsigned long minor_tmp = strtoul(minor_str.data(), nullptr, 10);
-  unsigned long patch_tmp = strtoul(patch_str.data(), nullptr, 10);
-  if (major_tmp == ULONG_MAX || minor_tmp == ULONG_MAX ||
-      patch_tmp == ULONG_MAX) {
-    if (error) *error = "Version number out of range";
+  // Parse each component into temporaries so that a failure partway through
+  // leaves the existing object state untouched.
+  unsigned long major_tmp = 0, minor_tmp = 0, patch_tmp = 0;
+  if (!parse_core(core, &major_tmp, &minor_tmp, &patch_tmp, error)) {
     return false;
   }
 
   std::vector<std::string> prerelease_tmp;
-  // Parse pre-release if present
-  if (!s.empty() && s[0] == '-') {
-    std::string_view prerelease_str = s.substr(0, s.find('+'));
-    s.remove_prefix(prerelease_str.size());
-
-    // Split by dots
-    while (!prerelease_str.empty()) {
-      // Remove '-' or '.'
-      prerelease_str.remove_prefix(1);
-
-      size_t dot = prerelease_str.find('.');
-      std::string_view identifier = prerelease_str.substr(0, dot);
-
-      if (!is_valid_identifier(identifier)) {
-        if (error) *error = "Invalid pre-release identifier";
-        return false;
-      }
-      // Check for leading zeros in numeric identifiers
-      if (is_numeric(identifier) && identifier.length() > 1 &&
-          identifier[0] == '0') {
-        if (error)
-          *error =
-              "Numeric pre-release identifiers must not have leading zeros";
-        return false;
-      }
-
-      prerelease_tmp.push_back(std::string(identifier));
-      prerelease_str.remove_prefix(identifier.size());
-    }
-
-    if (prerelease_tmp.empty()) {
-      if (error) *error = "Pre-release section cannot be empty";
-      return false;
-    }
+  if (has_prerelease &&
+      !parse_prerelease(prerelease_seg, &prerelease_tmp, error)) {
+    return false;
   }
 
   std::vector<std::string> build_metadata_tmp;
-  // Parse build metadata if present
-  if (!s.empty() && s[0] == '+') {
-    std::string_view build_str = s;
-
-    // Split by dots
-    while (!build_str.empty()) {
-      // Remove '+' or '.'
-      build_str.remove_prefix(1);
-
-      size_t dot = build_str.find('.');
-      std::string_view identifier = build_str.substr(0, dot);
-
-      if (!is_valid_identifier(identifier)) {
-        if (error) *error = "Invalid build metadata identifier";
-        return false;
-      }
-
-      build_metadata_tmp.push_back(std::string(identifier));
-      build_str.remove_prefix(identifier.size());
-    }
-
-    if (build_metadata_tmp.empty()) {
-      if (error) *error = "Build metadata section cannot be empty";
-      return false;
-    }
+  if (has_build_metadata &&
+      !parse_build_metadata(build_seg, &build_metadata_tmp, error)) {
+    return false;
   }
 
   major_ = major_tmp;
@@ -177,26 +227,26 @@ Semver Semver::from_components(unsigned long major, unsigned long minor,
                                const std::vector<std::string> &build_metadata) {
   Semver ver;
 
+  // Assume failure unless everything succeeds
+  ver.valid_ = false;
+
+  if (!check_version_bound(major, kMajorMax, "MAJOR", nullptr)) return ver;
+  if (!check_version_bound(major, kMinorMax, "MINOR", nullptr)) return ver;
+  if (!check_version_bound(major, kPatchMax, "PATCH", nullptr)) return ver;
+
   // Validate identifiers if provided
   for (const auto &id : prerelease) {
-    if (!is_valid_identifier(id)) {
-      ver.valid_ = false;
-      return ver;
-    }
+    if (!is_valid_identifier(id))  return ver;
+
     // Check for leading zeros in numeric identifiers
-    if (is_numeric(id) && id.length() > 1 && id[0] == '0') {
-      ver.valid_ = false;
-      return ver;
-    }
+    if (is_numeric(id) && has_leading_zero(id)) return ver;
   }
 
   for (const auto &id : build_metadata) {
-    if (!is_valid_identifier(id)) {
-      ver.valid_ = false;
-      return ver;
-    }
+    if (!is_valid_identifier(id)) return ver;
   }
 
+  // All of the components are valid
   ver.major_ = major;
   ver.minor_ = minor;
   ver.patch_ = patch;
@@ -236,6 +286,39 @@ std::string Semver::to_string() const {
   }
 
   return r;
+}
+
+std::string Semver::safe_for_output(std::string_view str) {
+  std::string result;
+  size_t limit = std::min(str.size(), kMaxOutputChars);
+  for (size_t i = 0; i < limit; ++i) {
+    unsigned char c = static_cast<unsigned char>(str[i]);
+    switch (c) {
+      case '\t':
+        result += "\\t";
+        break;
+      case '\n':
+        result += "\\n";
+        break;
+      case '\r':
+        result += "\\r";
+        break;
+      case '\\':  // Keep out safe with backslash.
+        result += "\\\\";
+        break;
+      default:
+        if (std::isprint(c)) {
+          result += static_cast<char>(c);
+        } else {
+          char buf[5];
+          snprintf(buf, sizeof(buf), "\\x%02X", c);
+          result += buf;
+        }
+    }
+  }
+  // Truncated strings get an unicode ellipsis appended at the end
+  if (str.size() > kMaxOutputChars) result += "\u2026";
+  return result;
 }
 
 int Semver::compare_prerelease(const Semver &other) const {
