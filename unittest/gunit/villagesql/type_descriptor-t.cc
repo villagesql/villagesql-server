@@ -84,11 +84,11 @@ TEST_F(TypeDescriptorTest, Construction) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("MYTYPE", "test_ext", "2.0.0"),
       VEF_PROTOCOL_1,
-      1,      // implementation_type
-      16,     // persisted_length
-      256,    // max_decode_buffer_length
-      0,      // max_persisted_length
-      false,  // is_variable_length
+      1,                              // implementation_type
+      16,                             // persisted_length
+      256,                            // max_decode_buffer_length
+      0,                              // max_persisted_length
+      villagesql::LengthKind::Fixed,  // length_kind
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare),
@@ -117,8 +117,8 @@ TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("NOHASH", "ext", "1.0"), VEF_PROTOCOL_1, 0,
       8, 64,
-      0,      // max_persisted_length
-      false,  // is_variable_length
+      0,                              // max_persisted_length
+      villagesql::LengthKind::Fixed,  // length_kind
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
@@ -135,8 +135,8 @@ TEST_F(TypeDescriptorTest, KeyTypeCompatibility) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("TEST", "ext", "1.0"), VEF_PROTOCOL_1, 0, 8,
       64,
-      0,      // max_persisted_length
-      false,  // is_variable_length
+      0,                              // max_persisted_length
+      villagesql::LengthKind::Fixed,  // length_kind
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
@@ -259,11 +259,11 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
       VEF_PROTOCOL_3,
-      1,     // implementation_type
-      -1,    // persisted_length (variable-length)
-      0,     // max_decode_buffer_length (determined by params)
-      0,     // max_persisted_length (not used by these tests)
-      true,  // is_variable_length
+      1,   // implementation_type
+      -1,  // persisted_length (variable-length)
+      0,   // max_decode_buffer_length (determined by params)
+      0,   // max_persisted_length (not used by these tests)
+      villagesql::LengthKind::Fixed,  // length_kind
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare),

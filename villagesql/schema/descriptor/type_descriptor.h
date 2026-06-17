@@ -37,6 +37,14 @@ namespace villagesql {
 template <typename EntryType>
 struct TableTraits;
 
+// How a custom type's persisted size is determined.
+//   Fixed    - a single fixed footprint (persisted_length()).
+//   Variable - decided per value; the backing field is sized to
+//              max_persisted_length().
+// The ABI carries this as the bool vef_type_desc_t::variable_length
+// (VEF_PROTOCOL_4); it is converted at the registration boundary.
+enum class LengthKind { Fixed, Variable };
+
 // Prefix key for querying TypeDescriptors by type name (and optionally
 // extension). Format: "normalized_type_name." or
 // "normalized_type_name.normalized_ext_name."
@@ -129,7 +137,7 @@ class TypeDescriptor {
   TypeDescriptor(
       TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
       int64_t persisted_len, int64_t max_unpersisted_len,
-      int64_t max_persisted_len, bool is_variable_length, EncodeFunction encode,
+      int64_t max_persisted_len, LengthKind length_kind, EncodeFunction encode,
       DecodeFunction decode, CompareFunction compare,
       std::optional<HashFunction> hash = std::nullopt,
       std::optional<IntToParamsFunction> int_to_params = std::nullopt,
@@ -169,13 +177,11 @@ class TypeDescriptor {
   unsigned char implementation_type() const { return implementation_type_; }
   int64_t persisted_length() const { return persisted_length_; }
 
-  // True if the type's persisted size is decided per value (variable-length),
-  // rather than being a single fixed footprint. The backing field is sized to
-  // max_persisted_length(). Replaces the legacy persisted_length() == -1
-  // marker. Set at registration from the protocol-appropriate source: the
-  // variable_length flag for VEF_PROTOCOL_4 types, or persisted_length == -1
-  // for earlier protocols.
-  bool is_variable_length() const { return is_variable_length_; }
+  // How the type's persisted size is determined (fixed footprint vs. decided
+  // per value). Set at registration from the protocol-appropriate source: the
+  // variable_length flag for VEF_PROTOCOL_4 types
+  LengthKind length_kind() const { return length_kind_; }
+
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
   // Upper bound on persisted_length across all valid parameterizations.
   // 0 for non-parameterized types (use persisted_length()) and for
@@ -259,7 +265,7 @@ class TypeDescriptor {
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
   int64_t max_persisted_length_{0};
-  bool is_variable_length_{false};
+  LengthKind length_kind_{LengthKind::Fixed};
 
   // Type functions (encode/decode/compare required; hash optional)
   std::optional<EncodeFunction> encode_fn_;

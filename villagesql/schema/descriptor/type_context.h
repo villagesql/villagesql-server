@@ -281,10 +281,6 @@ class TypeContext {
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
 
-  // True if the underlying type is variable-length (size decided per value).
-  // Delegates to the descriptor's registration-time marker.
-  bool is_variable_length() const { return descriptor_->is_variable_length(); }
-
   // Bound type operations. These combine the TypeFunction from the descriptor
   // with this context's TypeParameters.
   // encode_op, decode_op, compare_op assert that the op is set (required ops).
