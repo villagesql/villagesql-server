@@ -223,68 +223,99 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
     const std::string &extension_version) {
   bool error = false;
 
-  // persisted_length must be either -1 (variable-length, parameterized) or a
-  // positive value (fixed-length). 0 and other negatives are invalid.
-  if (td->persisted_length != -1 && td->persisted_length <= 0) {
-    LogVSQL(ERROR_LEVEL,
-            "Type '%s' in extension '%s' has invalid persisted_length %lld "
-            "(must be -1 for variable-length or > 0 for fixed-length)",
-            type_name.c_str(), extension_name.c_str(),
-            static_cast<long long>(td->persisted_length));
-    return std::nullopt;
-  }
+  // A type is variable-length when it sets the variable_length flag (via the
+  // builder's variable_length_type()).
+  const bool is_variable = td->variable_length;
 
-  if (td->persisted_length == -1) {
-    // Variable-length / parameterized type: resolve_params_vdf_name and
-    // max_persisted_length are both required.
-    if (td->resolve_params_vdf_name == nullptr) {
+  if (is_variable) {
+    // Variable-length type: its persisted size is decided per value, so
+    // persisted_length is not a fixed footprint.
+    // max_persisted_length bounds the backing field and is always required.
+    // resolve_params is required only for parameterized variants (those that
+    // also expose int_to_params, validated below); a bare variable-length type
+    // whose length is decided per value needs only max_persisted_length.
+    if (td->persisted_length > 0) {
       LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has persisted_length=-1 "
-              "(variable-length) but does not set resolve_params_vdf_name",
-              type_name.c_str(), extension_name.c_str());
+              "Type '%s' in extension '%s' is variable-length but also sets a "
+              "positive persisted_length=%lld (variable-length types must not "
+              "declare a fixed persisted_length)",
+              type_name.c_str(), extension_name.c_str(),
+              static_cast<long long>(td->persisted_length));
       return std::nullopt;
     }
     if (td->max_persisted_length <= 0) {
       LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has persisted_length=-1 "
-              "(variable-length) but max_persisted_length is %lld "
-              "(must be > 0)",
+              "Type '%s' in extension '%s' is variable-length but "
+              "max_persisted_length is %lld (must be > 0)",
               type_name.c_str(), extension_name.c_str(),
               static_cast<long long>(td->max_persisted_length));
       return std::nullopt;
     }
   } else {
-    // Fixed-length type (persisted_length > 0): resolve_params_vdf_name,
-    // int_to_params_vdf_name, and max_persisted_length must not be set.
-    if (td->resolve_params_vdf_name != nullptr) {
+    // Fixed length type: persisted_length must be either -1 (discover during
+    // resolve_params) or a positive value. 0 and other negatives are invalid.
+    if (td->persisted_length != -1 && td->persisted_length <= 0) {
       LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has fixed persisted_length=%lld "
-              "but also sets resolve_params_vdf_name '%s' (only valid for "
-              "variable-length types with persisted_length=-1)",
+              "Type '%s' in extension '%s' has invalid persisted_length %lld "
+              "(must be -1 for parameterized types or > 0 for "
+              "non-parameterized types)",
               type_name.c_str(), extension_name.c_str(),
-              static_cast<long long>(td->persisted_length),
-              td->resolve_params_vdf_name);
+              static_cast<long long>(td->persisted_length));
       return std::nullopt;
     }
-    if (td->int_to_params_vdf_name != nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has fixed persisted_length=%lld "
-              "but also sets int_to_params_vdf_name '%s' (only valid for "
-              "variable-length types with persisted_length=-1)",
-              type_name.c_str(), extension_name.c_str(),
-              static_cast<long long>(td->persisted_length),
-              td->int_to_params_vdf_name);
-      return std::nullopt;
-    }
-    if (td->max_persisted_length != 0) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has fixed persisted_length=%lld "
-              "but also sets max_persisted_length=%lld (only valid for "
-              "variable-length types with persisted_length=-1)",
-              type_name.c_str(), extension_name.c_str(),
-              static_cast<long long>(td->persisted_length),
-              static_cast<long long>(td->max_persisted_length));
-      return std::nullopt;
+    if (td->persisted_length == -1) {
+      // Fixed length, parameterized type: resolve_params_vdf_name and
+      // max_persisted_length are both required.
+      if (td->resolve_params_vdf_name == nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' has persisted_length=-1 "
+                "(parameterized) but does not set resolve_params_vdf_name",
+                type_name.c_str(), extension_name.c_str());
+        return std::nullopt;
+      }
+      if (td->max_persisted_length <= 0) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' has persisted_length=-1 "
+                "(parameterized) but max_persisted_length is %lld "
+                "(must be > 0)",
+                type_name.c_str(), extension_name.c_str(),
+                static_cast<long long>(td->max_persisted_length));
+        return std::nullopt;
+      }
+    } else {
+      // Fixed-length, not parameterized types (persisted_length > 0):
+      // resolve_params_vdf_name, int_to_params_vdf_name, and
+      // max_persisted_length must not be set.
+      if (td->resolve_params_vdf_name != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' has fixed persisted_length=%lld "
+                "but also sets resolve_params_vdf_name '%s' (only valid for "
+                "parameterized types with persisted_length=-1)",
+                type_name.c_str(), extension_name.c_str(),
+                static_cast<long long>(td->persisted_length),
+                td->resolve_params_vdf_name);
+        return std::nullopt;
+      }
+      if (td->int_to_params_vdf_name != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' has fixed persisted_length=%lld "
+                "but also sets int_to_params_vdf_name '%s' (only valid for "
+                "parameterized types with persisted_length=-1)",
+                type_name.c_str(), extension_name.c_str(),
+                static_cast<long long>(td->persisted_length),
+                td->int_to_params_vdf_name);
+        return std::nullopt;
+      }
+      if (td->max_persisted_length != 0) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' has fixed persisted_length=%lld "
+                "but also sets max_persisted_length=%lld (only valid for "
+                "parameterized types with persisted_length=-1)",
+                type_name.c_str(), extension_name.c_str(),
+                static_cast<long long>(td->persisted_length),
+                static_cast<long long>(td->max_persisted_length));
+        return std::nullopt;
+      }
     }
   }
 
@@ -414,6 +445,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
       TypeDescriptorKey(type_name, extension_name, extension_version),
       VEF_PROTOCOL_4, MYSQL_TYPE_VARCHAR, td->persisted_length,
       td->max_decode_buffer_length, td->max_persisted_length,
+      is_variable ? LengthKind::Variable : LengthKind::Fixed,
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
       std::move(hash_fn), std::move(int_to_params_fn),
       std::move(resolve_params_fn));

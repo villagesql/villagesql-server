@@ -54,8 +54,10 @@
 //   const char *intrinsic_default_vdf_name;         // +112 (protocol >= 2)
 //   const char *intrinsic_default_str;              // +120 (protocol >= 2)
 //   int64_t max_persisted_length;                   // +128 (protocol >= 2)
+//   bool variable_length;                           // +136 (protocol >= 4)
+//   [7 bytes padding]
 // ---------------------------------------------------------------------------
-static_assert(sizeof(vef_type_desc_t) == 136,
+static_assert(sizeof(vef_type_desc_t) == 144,
               "ABI v2 break: vef_type_desc_t size changed");
 static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 64,
               "ABI v2 break: vef_type_desc_t::encode_vdf_name offset changed");
@@ -80,6 +82,8 @@ static_assert(
 static_assert(offsetof(vef_type_desc_t, max_persisted_length) == 128,
               "ABI v2 break: vef_type_desc_t::max_persisted_length offset "
               "changed");
+static_assert(offsetof(vef_type_desc_t, variable_length) == 136,
+              "ABI break: vef_type_desc_t::variable_length offset changed");
 
 // ---------------------------------------------------------------------------
 // vef_type_params_t (protocol >= VEF_PROTOCOL_2)

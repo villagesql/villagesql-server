@@ -214,6 +214,79 @@ TEST_F(TypeBuilderTest, ParameterizedOperationsAnyOrder) {
 }
 
 // =============================================================================
+// variable-length tests
+// =============================================================================
+//
+// variable-length is a VEF_PROTOCOL_4 feature. variable_length_type() raises
+// the type's required protocol to VEF_PROTOCOL_4 via require_atleast_min(),
+// so later v3-level setters (from_string/to_string/compare, etc.)
+// can never lower it back down. These tests pin that contract.
+
+// Control: a plain fixed-footprint type negotiates VEF_PROTOCOL_3 (the floor
+// implied by from_string/to_string/compare) and is not flagged variable-length.
+TEST_F(TypeBuilderTest, PlainTypeNegotiatesV3AndIsNotVariableLength) {
+  constexpr auto obj = vsql::make_type<kPlainName>()
+                           .persisted_length(8)
+                           .max_decode_buffer_length(64)
+                           .from_string<&plain_encode>()
+                           .to_string<&plain_decode>()
+                           .compare<&plain_compare>()
+                           .build();
+
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_3);
+  EXPECT_FALSE(obj.descriptor.vef_desc.variable_length);
+}
+
+// variable_length_type() flags the type and raises the protocol to V4.
+TEST_F(TypeBuilderTest, VariableLengthSetsFlagAndRaisesProtocolToV4) {
+  constexpr auto obj = vsql::make_type<kPlainName>()
+                           .max_persisted_length(64)
+                           .variable_length_type()
+                           .from_string<&plain_encode>()
+                           .to_string<&plain_decode>()
+                           .compare<&plain_compare>()
+                           .build();
+
+  EXPECT_TRUE(obj.descriptor.vef_desc.variable_length);
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_4);
+  EXPECT_EQ(obj.descriptor.vef_desc.max_persisted_length, 64);
+}
+
+// The headline contract: v3-level setters invoked AFTER variable_length_type()
+// must not lower the negotiated protocol back to V3. require_atleast_min() is
+// monotonic, so the result stays at V4.
+TEST_F(TypeBuilderTest, V3SettersAfterVariableLengthDoNotLowerProtocol) {
+  constexpr auto obj = vsql::make_type<kPlainName>()
+                           .max_persisted_length(64)
+                           .variable_length_type()
+                           .from_string<&plain_encode>()
+                           .to_string<&plain_decode>()
+                           .compare<&plain_compare>()
+                           .hash<&plain_hash>()
+                           .intrinsic_default_str("0")
+                           .build();
+
+  EXPECT_TRUE(obj.descriptor.vef_desc.variable_length);
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_4);
+}
+
+// Order independence: calling variable_length_type() last (after the v3-level
+// operations have already raised the floor to V3) still ends at V4 with the
+// flag set. Pairs with the test above to show the bump is order-independent.
+TEST_F(TypeBuilderTest, VariableLengthLastStillNegotiatesV4) {
+  constexpr auto obj = vsql::make_type<kPlainName>()
+                           .max_persisted_length(64)
+                           .from_string<&plain_encode>()
+                           .to_string<&plain_decode>()
+                           .compare<&plain_compare>()
+                           .variable_length_type()
+                           .build();
+
+  EXPECT_TRUE(obj.descriptor.vef_desc.variable_length);
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_4);
+}
+
+// =============================================================================
 // Negative-path documentation
 // =============================================================================
 //

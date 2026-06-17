@@ -1655,10 +1655,11 @@ TEST_F(VictionaryClientTest, TypeDescriptorOperations) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"),
       VEF_PROTOCOL_1,
-      1,    // implementation_type
-      16,   // persisted_length
-      256,  // max_decode_buffer_length
-      0,    // max_persisted_length
+      1,                  // implementation_type
+      16,                 // persisted_length
+      256,                // max_decode_buffer_length
+      0,                  // max_persisted_length
+      LengthKind::Fixed,  // length_kind
       villagesql::EncodeFunction(test_encode),
       villagesql::DecodeFunction(test_decode),
       villagesql::CompareFunction(test_compare));
@@ -1711,7 +1712,8 @@ TEST_F(VictionaryClientTest, TypeDescriptorRollback) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("ROLLBACK_TYPE", "ext", "1.0"),
       VEF_PROTOCOL_1, 0, 8, 64,
-      0,  // max_persisted_length
+      0,                  // max_persisted_length
+      LengthKind::Fixed,  // length_kind
       villagesql::EncodeFunction(test_encode),
       villagesql::DecodeFunction(test_decode),
       villagesql::CompareFunction(test_compare));
@@ -1794,7 +1796,8 @@ TEST_F(VictionaryClientTest, AcquireKeepsEntryAlive) {
   // Create and commit a TypeDescriptor entry
   TypeDescriptorKey key("REFCOUNT_TYPE", "ext", "1.0");
   TypeDescriptor entry(key, VEF_PROTOCOL_1, 0, 42, 0,
-                       0,  // max_persisted_length
+                       0,                  // max_persisted_length
+                       LengthKind::Fixed,  // length_kind
                        EncodeFunction(test_encode), DecodeFunction(test_decode),
                        CompareFunction(test_compare));
 

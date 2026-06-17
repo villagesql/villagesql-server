@@ -760,6 +760,18 @@ typedef struct {
   // Example: for SVECTOR with max dimension 3072, this is
   //   sizeof(vef_storage_ref_t) + 3072 * sizeof(float).
   int64_t max_persisted_length;
+
+  // protocol >= VEF_PROTOCOL_4
+
+  // Marks the type as variable-length: its persisted size is decided per value
+  // (e.g. a a typed array) rather than being a single fixed
+  // footprint. Set via the builder's variable_length_type(); variable-length
+  // types must also declare max_persisted_length as the upper bound on the
+  // backing field. When true, persisted_length is not a fixed footprint (it is
+  // either left unset or resolved per-instantiation by resolve_params).
+  //
+  // Read only when protocol >= VEF_PROTOCOL_4.
+  bool variable_length;
 } vef_type_desc_t;
 
 // Forward declaration so vef_required_capability_t can reference it.

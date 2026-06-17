@@ -13,10 +13,17 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// Bad-registration test extension: declares a type with
-// persisted_length = -1 (variable-length / parameterized) but does not
-// provide resolve_params. The server must reject this at INSTALL EXTENSION
-// time with a clear error from build_type_descriptor_v3.
+// Bad-registration test extension: declares a type with persisted_length = -1
+// (variable-length) but does not provide resolve_params.
+//
+// This fixture is built against the frozen stable v3 SDK (see the "v3" ABI
+// selector in test-extensions/CMakeLists.txt), so the type registers at
+// VEF_PROTOCOL_3 -- the v3 type builder does not raise variable-length types to
+// VEF_PROTOCOL_4 the way the current dev SDK does. The server therefore
+// dispatches it to build_type_descriptor_v3, which requires resolve_params for
+// persisted_length == -1 and rejects this extension at INSTALL EXTENSION time.
+// This is the rejection path a real v3-compiled extension would hit; the dev
+// SDK can no longer produce a variable-length type that reaches it.
 
 #include <villagesql/vsql.h>
 
