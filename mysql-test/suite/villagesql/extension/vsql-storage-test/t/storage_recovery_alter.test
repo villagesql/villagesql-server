@@ -1,0 +1,57 @@
+# Crash-recovery test for the column-store (extended storage) bulk-load DDL path.
+#
+# A table-rebuild DDL (ALTER TABLE ... FORCE, ALGORITHM=INPLACE) re-inserts each
+# extended-storage value through Custom_column::insert_direct(..., no_redo=true)
+# (btr0load.cc Page_load::insert). Those column-store pages are written with
+# MTR_LOG_NO_REDO and are NOT attached to the bulk-load Flush_observer, so they
+# are neither redo-logged nor force-flushed before the DDL commits.
+#
+# This test commits the rebuild, then crashes with innodb_fast_shutdown=2 (redo
+# durable, buffer pool NOT flushed) and verifies the STORED_INT values survive
+# recovery. If the durability hole is real, the values are lost/garbage after
+# recovery (RED). A correct implementation preserves them (GREEN).
+#
+# See Docs/CUSTOM_COLUMN_NO_REDO_DURABILITY.md for the full analysis.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Install the column-store test extension (provides STORED_INT)
+INSTALL EXTENSION vsql_storage_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, '111');
+INSERT INTO t1 VALUES (2, '222');
+INSERT INTO t1 VALUES (3, '333');
+
+--echo # Values before rebuild
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo # Suppress idle background flushing so the column-store pages written by
+--echo # the rebuild stay dirty in the buffer pool until the crash.
+SET GLOBAL innodb_idle_flush_pct = 0;
+
+--echo # Rebuild the table: clustered bulk load -> insert_direct(no_redo=true)
+ALTER TABLE t1 FORCE, ALGORITHM=INPLACE;
+
+--echo # Values right after rebuild (in-memory; pages dirty, not yet flushed)
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo # Crash WITHOUT flushing the buffer pool (redo durable only).
+SET GLOBAL innodb_fast_shutdown = 2;
+--source include/kill_and_restart_mysqld.inc
+
+--echo # ---- after crash recovery ----
+SHOW CREATE TABLE t1;
+CHECK TABLE t1;
+
+--echo # The custom-column values must survive recovery (111, 222, 333).
+SELECT id, n FROM t1 ORDER BY id;
+SELECT COUNT(*) AS rows_total FROM t1;
+
+DROP TABLE t1;
+
+--echo # Cleanup
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

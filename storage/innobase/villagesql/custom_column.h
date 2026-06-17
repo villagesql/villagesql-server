@@ -38,6 +38,8 @@ struct dtuple_t;
 struct upd_t;
 struct TABLE;
 
+class Flush_observer;
+
 class Alter_inplace_info;
 class Field;
 
@@ -163,13 +165,13 @@ class Custom_column {
 
   // Inserts extended column data into the column store before bulk-load record
   // conversion. Updates each extended field in the tuple with the REF in-place.
-  // @param table The table being inserted into.
-  // @param trx_id The transaction ID of the insert.
-  // @param tuple The clustered index tuple
-  // @param no_redo True for bulk-load: skips redo logging for column store mtr.
+  // Writes column-store pages with MTR_LOG_NO_REDO; durability comes from the
+  // bulk-load flush observer (force-flushed before commit) plus redo-logged
+  // page allocation, mirroring Page_load::init in btr0load.cc.
+  // @param observer Bulk-load flush observer; must be non-null.
   // @return DB_SUCCESS or an error code.
   static dberr_t insert_direct(dict_table_t *table, trx_id_t trx_id,
-                               dtuple_t *tuple, bool no_redo);
+                               dtuple_t *tuple, Flush_observer *observer);
 
   // Updates extended column data for an updated row.
   // Marks the old data as deleted and inserts the new data.
