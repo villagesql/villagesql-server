@@ -185,7 +185,7 @@ IF(NOT WITHOUT_SERVER)
 
   # Test extensions (share a single CMakeLists.txt template)
   vsql_add_test_extension(vsql-config-vars-test  vsql_config_vars_test)
-  vsql_add_test_extension(vsql-usage-counter      vsql_usage_counter)
+  vsql_add_test_extension(vsql-usage-counter      vsql_usage_counter  VERSION 0.0.1)
   vsql_add_test_extension(vsql-range-clamp-test   vsql_range_clamp_test)
   vsql_add_test_extension(vsql-test-only          vsql_test_only)
   vsql_add_test_extension(vsql-storage-test       vsql_storage_test)

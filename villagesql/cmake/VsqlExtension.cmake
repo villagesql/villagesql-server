@@ -69,27 +69,50 @@ function(vsql_add_extension)
   endif()
 endfunction()
 
-# vsql_add_test_extension(DIR_NAME VEB_NAME [ABI])
+# vsql_add_test_extension(DIR_NAME VEB_NAME [ABI <abi>] [VERSION <ver>])
 #
 # Shorthand for test extensions. Uses the shared CMakeLists.txt template at
 # test-extensions/shared/ so individual extensions need no CMakeLists.txt.
 # SOURCE_BASE, BINARY_BASE, and EXT_TARGET are derived automatically.
 #
-# The optional ABI argument selects which SDK headers the fixture is built
-# against:
-#   (default) / "dev" - current unstable dev SDK (include-dev), latest protocol
-#   "v3"              - frozen stable v3 SDK, so the fixture registers
-#                       at VEF_PROTOCOL_3. Use this to exercise the v3 register
-#                       path (build_type_descriptor_v3) from a fixture that a
-#                       real v3-compiled extension would produce.
+# Keyword options:
+#   ABI <abi>     - selects which SDK headers the fixture is built against:
+#                     (default) / "dev" - current unstable dev SDK
+#                                         (include-dev), latest protocol
+#                     "v3"              - frozen stable v3 SDK, so the
+#                                         fixture registers at VEF_PROTOCOL_3
+#   VERSION <ver> - when supplied, the staged output filename is
+#                   <VEB_NAME>-<VERSION>.veb (matching what the server's
+#                   find_veb_version() looks for). The .so inside the .veb
+#                   keeps the plain name. CMake target names are suffixed
+#                   with -<VERSION> so multiple versions of the same
+#                   VEB_NAME can coexist.
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
-  set(_vsql_test_ext_abi "${ARGN}")
-  if(_vsql_test_ext_abi STREQUAL "v3")
+  set(_ext_options)
+  set(_ext_one_value ABI VERSION)
+  set(_ext_multi)
+  cmake_parse_arguments(_ext "${_ext_options}" "${_ext_one_value}"
+    "${_ext_multi}" ${ARGN})
+
+  if(_ext_ABI STREQUAL "v3")
     set(_vsql_test_ext_include "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk/v3/include")
   else()
     set(_vsql_test_ext_include "${SDK_STAGING_DIR}/include-dev")
   endif()
-  ExternalProject_Add(${VEB_NAME}_extension
+
+  if(_ext_VERSION)
+    set(_ext_target_suffix "-${_ext_VERSION}")
+    set(_ext_veb_basename ${VEB_NAME}-${_ext_VERSION})
+  else()
+    set(_ext_target_suffix "")
+    set(_ext_veb_basename ${VEB_NAME})
+  endif()
+
+  set(_ext_proj_target ${VEB_NAME}${_ext_target_suffix}_extension)
+  set(_ext_copy_target copy_${VEB_NAME}${_ext_target_suffix}_veb)
+  set(_ext_veb_target ${VEB_NAME}${_ext_target_suffix}_veb)
+
+  ExternalProject_Add(${_ext_proj_target}
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/shared
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/${DIR_NAME}-shared-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
@@ -105,14 +128,14 @@ macro(vsql_add_test_extension DIR_NAME VEB_NAME)
     INSTALL_COMMAND ""
   )
 
-  add_custom_target(copy_${VEB_NAME}_veb
+  add_custom_target(${_ext_copy_target}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
     COMMAND ${CMAKE_COMMAND} -E copy
       ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/${DIR_NAME}-shared-build/${VEB_NAME}.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS ${VEB_NAME}_extension
+      ${CMAKE_BINARY_DIR}/veb_output_directory/${_ext_veb_basename}.veb
+    DEPENDS ${_ext_proj_target}
   )
 
-  add_custom_target(${VEB_NAME}_veb ALL)
-  add_dependencies(${VEB_NAME}_veb copy_${VEB_NAME}_veb)
+  add_custom_target(${_ext_veb_target} ALL)
+  add_dependencies(${_ext_veb_target} ${_ext_copy_target})
 endmacro()
