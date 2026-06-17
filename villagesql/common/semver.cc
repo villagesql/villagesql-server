@@ -228,8 +228,8 @@ Semver Semver::from_components(unsigned long major, unsigned long minor,
   ver.valid_ = false;
 
   if (!check_version_bound(major, kMajorMax, "MAJOR", nullptr)) return ver;
-  if (!check_version_bound(major, kMinorMax, "MINOR", nullptr)) return ver;
-  if (!check_version_bound(major, kPatchMax, "PATCH", nullptr)) return ver;
+  if (!check_version_bound(minor, kMinorMax, "MINOR", nullptr)) return ver;
+  if (!check_version_bound(patch, kPatchMax, "PATCH", nullptr)) return ver;
 
   // Validate identifiers if provided
   for (const auto &id : prerelease) {
