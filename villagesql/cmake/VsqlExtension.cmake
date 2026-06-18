@@ -88,11 +88,7 @@ endfunction()
 #                   with -<VERSION> so multiple versions of the same
 #                   VEB_NAME can coexist.
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
-  set(_ext_options)
-  set(_ext_one_value ABI VERSION)
-  set(_ext_multi)
-  cmake_parse_arguments(_ext "${_ext_options}" "${_ext_one_value}"
-    "${_ext_multi}" ${ARGN})
+  cmake_parse_arguments(_ext "" "ABI;VERSION" "" ${ARGN})
 
   if(_ext_ABI STREQUAL "v3")
     set(_vsql_test_ext_include "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk/v3/include")
