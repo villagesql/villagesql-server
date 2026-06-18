@@ -73,12 +73,11 @@ class PT_custom_type : public PT_type {
     }
 
     // Validate length specification against type characteristics
-    if (nullptr != length_spec && !type_context->is_variable_length() &&
-        type_context->descriptor()->persisted_length() != -1) {
-      // Fixed-length type with length specification - this is an error
+    if (nullptr != length_spec && !type_context->is_parameterized()) {
+      // Non parameterized type with length specification - this is an error
       std::string qname = type_context->qualified_name();
       thd->syntax_error_at(pos,
-                           "Type '%s' is fixed-length and cannot have a "
+                           "Type '%s' is not parameterized and cannot have a "
                            "length specification",
                            qname.c_str());
       return;
@@ -150,12 +149,8 @@ class PT_custom_type : public PT_type {
       return nullptr;
     }
 
-    // Handle types that accept a length/parameter spec: variable-length types
-    // (the variable_length flag) and fixed-length parameterized types
-    // (persisted_length == -1).
-    if (type_context != nullptr &&
-        (type_context->is_variable_length() ||
-         type_context->descriptor()->persisted_length() == -1)) {
+    // Handle types that accept a length/parameter spec
+    if (type_context != nullptr && type_context->is_parameterized()) {
       auto *descriptor = type_context->descriptor();
       if (length != nullptr) {
         // TYPE(N) syntax used - convert N to parameters via callbacks
@@ -204,7 +199,7 @@ class PT_custom_type : public PT_type {
         // length is now consumed - pass nullptr to constructor
         length = nullptr;
       } else {
-        // No length provided for variable-length type
+        // No length provided for a parameterized type
         if (descriptor->int_to_params_fn().has_value()) {
           std::string qname = type_context->qualified_name();
           thd->syntax_error_at(pos, "Type '%s' requires a length specification",

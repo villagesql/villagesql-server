@@ -239,9 +239,7 @@ class TypeContext {
   // Returns true when this TypeContext represents a parameterized type whose
   // parameters have not yet been resolved. A non-parameterized type with empty
   // parameters (e.g. COMPLEX) is fully known and returns false.
-  bool is_unknown() const {
-    return descriptor_->is_parameterized() && parameters().empty();
-  }
+  bool is_unknown() const { return is_parameterized() && parameters().empty(); }
 
   // Types are compatible if they have the same key (type name, extension,
   // version, and parameters). This ensures e.g. TVECTOR(3) != TVECTOR(4).
@@ -286,6 +284,10 @@ class TypeContext {
   bool is_variable_length() const {
     return descriptor_->length_kind() == LengthKind::Variable;
   }
+
+  // True if this type accepts parameters (has a resolve_params callback),
+  // independent of whether it is fixed- or variable-length.
+  bool is_parameterized() const { return descriptor_->is_parameterized(); }
 
   // Declared length of the backing field for this type instantiation.
   // Fixed-length and parameter-resolved types store exactly persisted_length

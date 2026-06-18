@@ -243,6 +243,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     m_vdf_args.user_data = prerun_result.user_data;
 
     // Handle buffer size request
+    // TODO(villagesql): refactor to MaybeResizeBuffer()
     if (prerun_result.result_buffer_size > m_result_buffer_size) {
       m_result_buffer_size = prerun_result.result_buffer_size;
       m_result_buffer =
@@ -273,6 +274,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     if (m_return_type_context != nullptr) {
       const int64_t buffer_len = m_return_type_context->field_buffer_length();
       assert(buffer_len > 0);
+      // TODO(villagesql): refactor to MaybeResizeBuffer()
       if (static_cast<size_t>(buffer_len) > m_result_buffer_size) {
         m_result_buffer_size = static_cast<size_t>(buffer_len);
         m_result_buffer =

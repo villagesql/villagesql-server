@@ -52,6 +52,14 @@ FROM bits WHERE id = 1;
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO bits VALUES (6, '1021');
 
+--echo # BITFIELD is not parameterized, so it does not accept a length or
+--echo # parameter spec. Both the integer-length and the string-parameter forms
+--echo # are rejected at parse time.
+--error ER_PARSE_ERROR
+CREATE TABLE bad_bits (b BITFIELD(5));
+--error ER_PARSE_ERROR
+CREATE TABLE bad_bits (b BITFIELD('max_size=5'));
+
 --echo # Clean up.
 DROP TABLE bits;
 UNINSTALL EXTENSION vsql_bitfield_test;

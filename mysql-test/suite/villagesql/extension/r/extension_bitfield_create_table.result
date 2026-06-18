@@ -47,6 +47,13 @@ id	b	nbits
 # A character other than '0'/'1' is rejected by from_string.
 INSERT INTO bits VALUES (6, '1021');
 ERROR HY000: Incorrect BITFIELD value: '1021' for column 'b' at row 1
+# BITFIELD is not parameterized, so it does not accept a length or
+# parameter spec. Both the integer-length and the string-parameter forms
+# are rejected at parse time.
+CREATE TABLE bad_bits (b BITFIELD(5));
+ERROR 42000: Type 'vsql_bitfield_test.BITFIELD' is not parameterized and cannot have a length specification near 'BITFIELD(5))' at line 1
+CREATE TABLE bad_bits (b BITFIELD('max_size=5'));
+ERROR 42000: Type 'vsql_bitfield_test.BITFIELD' does not accept parameters near 'BITFIELD('max_size=5'))' at line 1
 # Clean up.
 DROP TABLE bits;
 UNINSTALL EXTENSION vsql_bitfield_test;

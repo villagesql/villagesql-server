@@ -159,9 +159,10 @@ bool tarray_int_to_params(int64_t value,
                           std::map<std::string, std::string> &params,
                           char *error_msg) {
   if (value <= 0) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TARRAY max_size must be positive (got %lld)",
-             static_cast<long long>(value));
+    snprintf(
+        error_msg, VEF_MAX_ERROR_LEN,
+        "tarray_int_to_params: TARRAY max_size must be positive (got %lld)",
+        static_cast<long long>(value));
     return true;
   }
   params["max_size"] = std::to_string(value);
@@ -178,7 +179,8 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
   if (type_it != params.end() && type_it->second != "float" &&
       type_it->second != "double" && type_it->second != "int16") {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TARRAY type must be 'float' or 'double' or 'int16', got '%s'",
+             "tarray_resolve_params: type must be 'float' or 'double' or "
+             "'int16', got '%s'",
              type_it->second.c_str());
     return true;
   }
@@ -186,18 +188,20 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
   auto it = params.find("max_size");
   if (it == params.end()) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TARRAY requires a max_size parameter");
+             "tarray_resolve_params: TARRAY requires a max_size parameter");
     return true;
   }
   char *endptr = nullptr;
   int64_t max_size = strtoll(it->second.c_str(), &endptr, 10);
   if (endptr == it->second.c_str() || *endptr != '\0') {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN, "TARRAY: invalid max_size '%s'",
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "tarray_resolve_params: invalid max_size '%s'",
              it->second.c_str());
     return true;
   }
   if (max_size <= 0) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN, "TARRAY max_size must be positive");
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "tarray_resolve_params: TARRAY max_size must be positive");
     return true;
   }
 
@@ -205,7 +209,8 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
 
   if (max_size * bpe > kTarrayMaxLen) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TARRAY max_size %lld * element size %lld exceeds the %lld-byte "
+             "tarray_resolve_params: TARRAY max_size %lld * element size %lld "
+             "exceeds the %lld-byte "
              "limit",
              static_cast<long long>(max_size), static_cast<long long>(bpe),
              static_cast<long long>(kTarrayMaxLen));
@@ -214,7 +219,7 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
 
   assert(result->persisted_length <= 0);
   // Upper bound on the text form: at most max_size elements, each printing to
-  // at most kMaxDecodedDoubleElemchars plus the brackets.
+  // at most kMaxDecodedDoubleElem chars plus the brackets.
   result->max_decode_buffer_length = max_size * kMaxDecodedDoubleElem + 2;
   return false;
 }
@@ -231,8 +236,15 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
   }
   assert(bpe > 0);
   auto buf = out.buffer();
-  // resolve_params guarantees max_size * bpe <= buffer capacity, so max_size is
-  // the binding cap when the params are known.
+
+  // out buffer size is equal to max_persisted_size. resolve_params guarantees
+  // that max_size*bpe is smaller than max_persisted_size. We want to parse at
+  // most max_size elements from the string into out buffer. In case string has
+  // more than max_size elements - we will return a warning and not write more
+  // than max_size elements into out buffer.
+  assert(!p.is_known() || p.value().max_size > 0);
+  assert(!p.is_known() ||
+         (p.value().max_size * bpe <= static_cast<int64_t>(buf.size())));
   const size_t cap = (p.is_known() && p.value().max_size > 0)
                          ? static_cast<size_t>(p.value().max_size)
                          : buf.size() / static_cast<size_t>(bpe);
@@ -241,7 +253,7 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
   const char *s = input.c_str();
   while (*s == ' ') s++;
   if (*s != '[') {
-    out.warning("TARRAY: expected '['");
+    out.warning("tarray_from_string: expected '['");
     return;
   }
   s++;
@@ -260,7 +272,7 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
       case TarrayElemType::kInt16: {
         long v = strtol(s, &endptr, 10);
         if (endptr == s) {
-          out.warning("TARRAY: parse error");
+          out.warning("tarray_from_string: parse error when parsing int16");
           return;
         }
         store_i16(slot, static_cast<int16_t>(v));
@@ -269,7 +281,7 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
       case TarrayElemType::kFloat: {
         float v = strtof(s, &endptr);
         if (endptr == s) {
-          out.warning("TARRAY: parse error");
+          out.warning("tarray_from_string: parse error when parsing float");
           return;
         }
         store_f32(slot, v);
@@ -278,14 +290,14 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
       case TarrayElemType::kDouble: {
         double v = strtod(s, &endptr);
         if (endptr == s) {
-          out.warning("TARRAY: parse error");
+          out.warning("tarray_from_string: parse error when parsing double");
           return;
         }
         store_d64(slot, v);
         break;
       }
       default:
-        out.warning("TARRAY: invalid element type");
+        out.warning("tarray_from_string: invalid element type");
         assert(false);
         return;
     }
@@ -295,7 +307,7 @@ void tarray_from_string(vsql::MaybeParams<TarrayParams> &p,
     if (*s == ',') s++;
   }
   if (*s != ']') {
-    out.warning("TARRAY: missing ']'");
+    out.warning("tarray_from_string: missing ']'");
     return;
   }
   out.set_length(count * static_cast<size_t>(bpe));
@@ -335,7 +347,9 @@ void tarray_to_string(vsql::CustomArgWith<TarrayParams> in,
             snprintf(buf.data() + pos, buf.size() - pos, "%g", load_d64(slot));
         break;
       default:
-        assert(false);
+        out.warning("tarray_to_string: invalid element type");
+        out.set_length(0);
+        assert(written == 0);
     }
     if (written < 0 || pos + static_cast<size_t>(written) >= buf.size()) return;
     pos += static_cast<size_t>(written);
@@ -395,9 +409,10 @@ void tarray_dim(vsql::CustomArgWith<TarrayParams> in, vsql::IntResult out) {
 }
 
 // Concatenate two TARRAY values: (TARRAY, TARRAY) -> TARRAY. Both share the
-// same parameters (type and max_size, guaranteed by type-parameter
-// disambiguation). The result must still respect max_size, so a concatenation
-// whose combined element count exceeds max_size is rejected with a warning.
+// same parameters (type and max_size, guaranteed equal by the
+// parameter-conflict check during VDF argument validation). The result must
+// still respect max_size, so a concatenation whose combined element count
+// exceeds max_size is rejected with a warning.
 void tarray_concat(vsql::CustomArgWith<TarrayParams> a,
                    vsql::CustomArgWith<TarrayParams> b,
                    vsql::CustomResultWith<TarrayParams> out) {
@@ -407,18 +422,20 @@ void tarray_concat(vsql::CustomArgWith<TarrayParams> a,
   }
   const int64_t bpe = a.params().bytes_per_elem;
   assert(bpe > 0);
-  assert(bpe ==
-         b.params()
-             .bytes_per_elem);  // guaranteed by type-parameter disambiguation
+  assert(
+      bpe ==
+      b.params().bytes_per_elem);  // guaranteed equal by the parameter-conflict
+                                   // check during VDF argument validation
   const int64_t max_size = a.params().max_size;
   assert(max_size ==
-         b.params().max_size);  // guaranteed by type-parameter disambiguation
+         b.params().max_size);  // guaranteed equal by the parameter-conflict
+                                // check during VDF argument validation
   auto va = a.value();
   auto vb = b.value();
   const size_t total = va.size() + vb.size();
   const size_t total_elems = total / static_cast<size_t>(bpe);
   if (static_cast<int64_t>(total_elems) > max_size) {
-    out.warning("TARRAY: concatenated size exceeds max_size");
+    out.warning("tarray_concat: concatenated size exceeds max_size");
     return;
   }
   auto buf = out.buffer();

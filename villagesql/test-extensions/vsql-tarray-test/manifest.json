@@ -1,7 +1,7 @@
 {
   "name": "vsql_tarray_test",
   "version": "0.0.1",
-  "description": "Variable-length typed array (TARRAY): element WIDTH parameterized via 'type', element COUNT decided per value, bounded by a 'max_size' parameter capping the element count. TARRAY(N) maps the integer to max_size via int_to_params; resolve_params enforces max_size * element_size <= max_persisted_length (#535).",
+  "description": "Variable-length typed array (TARRAY): element WIDTH parameterized via 'type', element COUNT decided per value, bounded by a 'max_size' parameter capping the element count. TARRAY(N) maps the integer to max_size via int_to_params; resolve_params enforces max_size * element_size <= max_persisted_length.",
   "author": "VillageSQL Community",
   "license": "GPL-2.0"
 }
