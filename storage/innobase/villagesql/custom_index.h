@@ -59,12 +59,17 @@ class Custom_index {
   // remains valid for the lifetime of this Custom_index (the index heap).
   vef_index_ctx_t *index_ctx() { return &index_ctx_; }
 
-  // Extension storage handle returned by create()/load().
+  // Storage context for this custom index's own storage implementation,
+  // populated during the index create/load lifecycle. Unrelated to column
+  // storage; Custom_index only manages the storage used by the index itself.
   StorageCtx *storage_ctx() const { return storage_ctx_; }
   void set_storage_ctx(StorageCtx *ctx) { storage_ctx_ = ctx; }
 
   // Creates the Custom_index runtime state on index->heap and sets
   // index->custom_index. No-op when ctx is null.
+  // TODO(villagesql-indexing): load() is currently incomplete and only supports
+  // the create path. Once the implementation is complete, revisit whether this
+  // should return a dberr_t so callers can propagate load failures.
   static void load(dict_index_t *index, const IndexContext *ctx);
 
   // Returns true if index has Custom_index runtime state.

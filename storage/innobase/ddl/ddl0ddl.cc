@@ -204,8 +204,8 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
 
   // Record the custom index descriptor before the index is added to the
   // dictionary cache so it propagates onto the cache-internal index.
-  villagesql::innodb::Custom_index::load(index,
-                                         index_def->m_custom_index_context);
+  using villagesql::innodb::Custom_index;
+  Custom_index::load(index, index_def->m_custom_index_context);
 
   bool has_new_v_col{};
 
@@ -226,12 +226,12 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
     } else {
       name = table->get_col_name(ifield->m_col_no);
       dict_col_t *col = table->get_col(ifield->m_col_no);
-      if (col->stored_by_extn()) {
+      if (col->stored_by_extn() && !Custom_index::is_custom(index)) {
         trx->error_state = DB_VILLAGESQL_ERROR;
         trx_set_detailed_error(
             trx,
-            "InnoDB: Indexing for types with column storage is not"
-            " supported.");
+            "InnoDB: Indexing for types with column storage is supported only "
+            "with custom index.");
         return nullptr;
       }
     }

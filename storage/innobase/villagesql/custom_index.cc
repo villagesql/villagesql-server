@@ -125,7 +125,10 @@ void Custom_index::load(dict_index_t *index, const IndexContext *ctx) {
                 "Custom_index over-aligned for mem_heap_alloc");
   void *mem = mem_heap_alloc(index->heap, sizeof(Custom_index));
   index->custom_index = new (mem) Custom_index(std::move(ic));
+  // AHI (Adaptive Hash Index) is tightly coupled to B-tree. Custom index types
+  // do not currently support AHI.
   index->disable_ahi = true;
+
   // TODO(villagesql-indexing): Call parse_index_options() here to populate
   // ctx->options when opening an already-created index. Requires load() to
   // also invoke the extension's load function to reconnect to persisted storage
@@ -171,8 +174,8 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
                   reinterpret_cast<vef_storage_arena_t *>(index->heap),
                   arena_alloc, &storage, error_msg, sizeof(error_msg));
 
-  error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Error creating custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
@@ -204,8 +207,8 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
                  static_cast<vef_storage_trx_ref_t>(trx_id), error_msg,
                  sizeof(error_msg));
 
-  error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Error dropping custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
