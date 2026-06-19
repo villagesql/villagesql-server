@@ -293,13 +293,20 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
   return false;
 }
 
-bool ResolveTypeToContext(std::string_view extension_name,
-                          std::string_view type_name,
-                          const TypeParameters &parameters, MEM_ROOT &mem_root,
-                          const TypeContext *&result) {
+namespace {
+
+// Look up the TypeDescriptor for a (possibly extension-qualified) type name.
+// REQUIRES: caller holds the victionary read or write lock.
+// Returns true on internal failure. A type that simply isn't found returns
+// false with result set to nullptr.
+bool resolve_type_descriptor_locked(VictionaryClient &vclient,
+                                    std::string_view extension_name,
+                                    std::string_view type_name,
+                                    const TypeDescriptor *&result) {
   result = nullptr;
 
-  auto &vclient = VictionaryClient::instance();
+  vclient.assert_read_or_write_lock_held();
+
   if (should_assert_if_false(vclient.is_initialized())) {
     LogVSQL(ERROR_LEVEL,
             "Failed to resolve type %.*s; VictionaryClient not initialized",
@@ -309,8 +316,6 @@ bool ResolveTypeToContext(std::string_view extension_name,
 
   TypeDescriptorKeyPrefix prefix{std::string(type_name),
                                  std::string(extension_name)};
-
-  auto guard = vclient.get_write_lock();
   std::vector<const TypeDescriptor *> results =
       vclient.type_descriptors().get_prefix_committed(prefix);
 
@@ -320,30 +325,98 @@ bool ResolveTypeToContext(std::string_view extension_name,
     return true;
   }
 
-  // The type didn't resolve, which isn't a failure here. It probably is to the
-  // caller, but they will see result is nullptr.
   if (results.empty()) return false;
+  result = results[0];
+  return false;
+}
 
-  const TypeDescriptor *type_descriptor = results[0];
-  TypeDescriptorKey type_descriptor_key(type_descriptor->type_name(),
-                                        type_descriptor->extension_name(),
-                                        type_descriptor->extension_version());
+// Acquire (create if necessary) the cached TypeContext for a descriptor and
+// its parameters. REQUIRES: caller holds the victionary write lock.
+// Returns true on error (and sets the SQL error).
+bool acquire_or_create_type_context_locked(VictionaryClient &vclient,
+                                           const TypeDescriptor *descriptor,
+                                           const TypeParameters &parameters,
+                                           MEM_ROOT &mem_root,
+                                           const TypeContext *&result) {
+  vclient.assert_write_lock_held();
+
+  if (should_assert_if_null(descriptor)) {
+    LogVSQL(ERROR_LEVEL,
+            "Cannot acquire or create TypeContext for null descriptor");
+    return true;
+  }
+
+  TypeDescriptorKey type_descriptor_key(descriptor->type_name(),
+                                        descriptor->extension_name(),
+                                        descriptor->extension_version());
   TypeContextKey type_context_key(type_descriptor_key, parameters);
 
   result = vclient.type_contexts().acquire_or_create(type_context_key, mem_root,
-                                                     type_descriptor);
+                                                     descriptor);
   if (result == nullptr) {
     // nullptr means OOM (SQL error already set) or TypeContext initialization
     // failure (only logged to error log). Set the SQL error if not already set.
     if (!current_thd->is_error()) {
       villagesql_error(
           "Type '%s' failed to initialize; check the error log for details",
-          MYF(0), type_descriptor->qualified_base_name().c_str());
+          MYF(0), descriptor->qualified_base_name().c_str());
     }
     return true;
   }
-
   return false;
+}
+
+}  // namespace
+
+bool ResolveTypeDescriptor(std::string_view extension_name,
+                           std::string_view type_name,
+                           const TypeDescriptor *&result) {
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  return resolve_type_descriptor_locked(vclient, extension_name, type_name,
+                                        result);
+}
+
+bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
+                                const TypeParameters &parameters,
+                                MEM_ROOT &mem_root,
+                                const TypeContext *&result) {
+  result = nullptr;
+  assert(descriptor != nullptr);
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_write_lock();
+  return acquire_or_create_type_context_locked(vclient, descriptor, parameters,
+                                               mem_root, result);
+}
+
+// Fills *result with a TypeContext based on the type_name given. If
+// extension_name is non-empty, filters results to match that extension
+// (for qualified names like extension_name.type_name).
+// Returns false on success and true on failure. If the type isn't known the
+// function will return false (success), but the result will be nullptr. The
+// mem_root is used to scope the cleanup of the TypeContext.
+static bool ResolveTypeToContext(std::string_view extension_name,
+                                 std::string_view type_name,
+                                 const TypeParameters &parameters,
+                                 MEM_ROOT &mem_root,
+                                 const TypeContext *&result) {
+  result = nullptr;
+
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_write_lock();
+
+  const TypeDescriptor *type_descriptor = nullptr;
+  if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
+                                     type_descriptor)) {
+    return true;
+  }
+
+  // The type didn't resolve, which isn't a failure here. It probably is to the
+  // caller, but they will see result is nullptr.
+  if (type_descriptor == nullptr) return false;
+
+  return acquire_or_create_type_context_locked(vclient, type_descriptor,
+                                               parameters, mem_root, result);
 }
 
 bool HasCustomTypeColumns(const List<Create_field> &create_list) {
@@ -1334,7 +1407,6 @@ void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
   if (!table) return;
   RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
-
 
 void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
   thd->villagesql_alter_custom_fields.clear();

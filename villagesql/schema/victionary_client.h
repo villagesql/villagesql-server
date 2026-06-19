@@ -841,6 +841,13 @@ class VictionaryClient {
            "Write lock not held - able to acquire read lock");
   }
 
+  // Assert that read or write lock is held (for debugging)
+  void assert_read_or_write_lock_held() const {
+    // Try to acquire write lock - should fail if we have any lock
+    assert(mysql_rwlock_trywrlock(&m_lock) != 0 &&
+           "No lock held - able to acquire write lock");
+  }
+
  private:
   VictionaryClient()
       : m_properties(&m_lock),  // Pass lock pointer to map
