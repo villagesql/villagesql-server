@@ -46,7 +46,7 @@ using HookList = std::vector<RegisteredHook>;
 // Dispatch list. Writers (on_populate/on_depopulate) hold g_mu, copy the
 // list, mutate the copy, and swap. Readers (on_statement_postexecute) take g_mu
 // briefly to bump the shared_ptr refcount, then iterate without the lock
-// so hook callbacks cannot block INSTALL EXTENSION.
+// so handlers cannot block INSTALL EXTENSION.
 std::mutex g_mu;
 std::shared_ptr<HookList> g_hooks{std::make_shared<HookList>()};
 
@@ -57,8 +57,8 @@ std::atomic<size_t> g_hook_count{0};
 
 // Drain counter: incremented (seq_cst) before snapshot(), decremented
 // (release) after the dispatch loop. on_depopulate spins on this with acquire
-// after removing the hook from g_hooks, ensuring no extension code runs after
-// on_depopulate returns and dlclose becomes safe.
+// after removing the handler from g_hooks, ensuring no extension code runs
+// after on_depopulate returns and dlclose becomes safe.
 std::atomic<size_t> g_inflight{0};
 
 struct ScopedInflightGuard {
@@ -85,8 +85,9 @@ bool on_populate_statement_event(const PopulateContext &ctx,
   if (ctx.capability_config == nullptr) return false;
   const auto *cc =
       static_cast<const vef_statement_event_cc_t *>(ctx.capability_config);
-  if (cc->hook == nullptr) {
-    error_message = "statement_event: capability_config has NULL hook function";
+  if (cc->handler == nullptr) {
+    error_message =
+        "statement_event: capability_config has NULL handler function";
     return true;
   }
   // Reserved phases are declared in the ABI but not yet dispatched. Reject
@@ -231,7 +232,7 @@ void on_statement_postexecute(THD *thd) {
     char error_buf[VEF_MAX_ERROR_LEN]{};
     vef_statement_event_result_t result{};
     result.error_msg = error_buf;
-    h.cc->hook(&args, &result);
+    h.cc->handler(&args, &result);
     // Defensive: force the last byte to NUL so the %s log below cannot walk
     // off the end if an extension writes the buffer without null-terminating.
     error_buf[VEF_MAX_ERROR_LEN - 1] = '\0';

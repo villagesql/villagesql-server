@@ -27,8 +27,8 @@ inline StatementEventCapability<Phase,
   cc.phase = Phase;
   // Adapts the raw vef_statement_event_args_t*/vef_statement_event_result_t*
   // into the typed wrappers the user's Fn expects.
-  cc.hook = [](const vef_statement_event_args_t *args,
-               vef_statement_event_result_t *result) {
+  cc.handler = [](const vef_statement_event_args_t *args,
+                  vef_statement_event_result_t *result) {
     StatementEventArgs typed_args(args);
     StatementEventResult typed_result(result);
     Fn(typed_args, typed_result);

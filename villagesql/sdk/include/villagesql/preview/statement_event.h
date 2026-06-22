@@ -94,12 +94,12 @@ class StatementEventArgs {
   const vef_statement_event_args_t *a_;
 };
 
-// Writable result for a hook invocation. For POSTEXECUTE error_msg is
+// Writable result for a handler invocation. For POSTEXECUTE error_msg is
 // advisory: the server logs it but does not propagate it to the client.
 //
 // The result struct owns a fixed-size buffer (VEF_MAX_ERROR_LEN); the
 // printf-style API formats directly into it so there are no lifetime
-// concerns about caller-owned strings outliving the hook return.
+// concerns about caller-owned strings outliving the handler return.
 class StatementEventResult {
  public:
   explicit StatementEventResult(vef_statement_event_result_t *r) : r_(r) {}
@@ -117,7 +117,7 @@ class StatementEventResult {
   vef_statement_event_result_t *r_;
 };
 
-// StatementEventCapability<Phase, Fn> declares a single hook that fires at
+// StatementEventCapability<Phase, Fn> declares a single handler that fires at
 // Phase. Each unique (Phase, Fn) instantiation gets its own static
 // capability_config.
 //

@@ -38,8 +38,8 @@ extern "C" {
 
 // Preview capability: "vsql::preview::statement_event"
 //
-// An extension declares one StatementEventCapability per hook function. The
-// server invokes registered hooks at the corresponding phase of query
+// An extension declares one StatementEventCapability per handler function. The
+// server invokes registered handlers at the corresponding phase of query
 // processing. Only the POSTEXECUTE phase is wired up in this version; the other
 // phase values are reserved for future use without ABI break.
 //
@@ -50,12 +50,12 @@ extern "C" {
 // Capability ABI version compiled into this SDK snapshot.
 #define VEF_PREVIEW_STATEMENT_EVENT_ABI_VERSION 1
 
-// Phase at which a hook fires.
+// Phase at which a handler fires.
 //
 // Only POSTEXECUTE is implemented today. The other values are reserved so
 // later versions can implement them without renumbering the ABI. Until they
 // are wired up, the server rejects INSTALL EXTENSION for any extension that
-// declares a hook for a reserved phase.
+// declares a handler for a reserved phase.
 typedef enum {
   // Reserved: client connection established. Fires from
   // EVENT_TRACKING_CONNECTION_CONNECT. Args populated: user, client_ip,
@@ -68,7 +68,7 @@ typedef enum {
   // Result is ignored — the connection is going away.
   VEF_STATEMENT_EVENT_DISCONNECT = 1,
 
-  // Reserved: before the parser runs. Only `query` is populated. Hooked
+  // Reserved: before the parser runs. Only `query` is populated. Registered
   // inside sql_parse.cc rather than the audit path. Result.error_msg
   // blocks the query.
   VEF_STATEMENT_EVENT_PREPARSE = 2,
@@ -89,16 +89,16 @@ typedef enum {
   VEF_STATEMENT_EVENT_POSTEXECUTE = 5,
 } vef_statement_event_phase_t;
 
-// Read-only arguments passed to a hook invocation. Which fields are populated
-// depends on the phase; POSTEXECUTE populates all of them.
+// Read-only arguments passed to a handler invocation. Which fields are
+// populated depends on the phase; POSTEXECUTE populates all of them.
 //
 // Pointer lifetime summary (see per-field comments):
 //   process lifetime    — safe to retain indefinitely; no copy needed.
 //   connection lifetime — valid until the client disconnects; safe to retain
-//                         across hook calls for the same connection, but copy
-//                         if you may use it after the connection ends.
-//   copy before return  — valid only during this hook invocation; copy the
-//                         string before the hook function returns if you need
+//                         across handler calls for the same connection, but
+//                         copy if you may use it after the connection ends.
+//   copy before return  — valid only during this handler invocation; copy the
+//                         string before the handler returns if you need
 //                         to keep it.
 typedef struct {
   vef_statement_event_phase_t phase;
@@ -184,23 +184,23 @@ typedef struct {
   // Caller-provided buffer for error message (size VEF_MAX_ERROR_LEN).
   // Write a null-terminated string here if an error occurred; leave it empty
   // (first byte '\0') otherwise. The server pre-allocates the buffer and sets
-  // this pointer before calling the hook. Matches the convention used by
+  // this pointer before calling the handler. Matches the convention used by
   // vef_vdf_result_t and vef_prerun_result_t.
   char *error_msg;
 } vef_statement_event_result_t;
 
-// Hook callback type. Invoked synchronously on the query's thread.
+// Handler type. Invoked synchronously on the query's thread.
 // args is read-only; result is the extension's writeback channel.
 typedef void (*vef_statement_event_fn_t)(const vef_statement_event_args_t *args,
                                          vef_statement_event_result_t *result);
 
 // Capability config (cc) filled in by the extension and passed to the server
 // via vef_required_capability_t.capability_config. The phase determines when
-// the hook fires; the function pointer must remain valid for the lifetime of
+// the handler fires; the function pointer must remain valid for the lifetime of
 // the extension.
 typedef struct {
   vef_statement_event_phase_t phase;
-  vef_statement_event_fn_t hook;
+  vef_statement_event_fn_t handler;
 } vef_statement_event_cc_t;
 
 // Server-side vtable. The version field is always first, matching the

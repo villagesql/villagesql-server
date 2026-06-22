@@ -185,8 +185,8 @@ void register_builtin_capabilities() {
                        .capability_config_hash = "ver-1",
                        .on_populate = on_populate_sys_var,
                        .on_depopulate = on_depopulate_sys_var});
-  // Query hook: on_populate appends to the global dispatch list;
-  // on_depopulate removes the hook on extension unload.
+  // Statement event: on_populate appends to the global dispatch list;
+  // on_depopulate removes the handler on extension unload.
   register_capability(VEF_PREVIEW_STATEMENT_EVENT_NAME,
                       {.vtable = preview_statement_event_vtable(),
                        .vtable_hash = "ver-1",

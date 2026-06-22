@@ -1096,8 +1096,9 @@ int mysql_event_tracking_query_notify(
     const char *subclass_name) {
   mysql_event_tracking_query_data event;
 
-  // VEF hooks are dispatched unconditionally — they are independent of MySQL's
-  // audit subscriber system and do not require any audit plugin to be loaded.
+  // VEF statement events are dispatched unconditionally — they are independent
+  // of MySQL's audit subscriber system and do not require any audit plugin to
+  // be loaded.
   if (subclass & EVENT_TRACKING_QUERY_STATUS_END)
     villagesql::services::on_statement_postexecute(thd);
 
