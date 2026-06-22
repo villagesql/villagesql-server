@@ -350,8 +350,10 @@ void tarray_to_string(vsql::CustomArgWith<TarrayParams> in,
         out.warning("tarray_to_string: invalid element type");
         out.set_length(0);
         assert(written == 0);
+        return;
     }
-    if (written < 0 || pos + static_cast<size_t>(written) >= buf.size()) return;
+    if (written <= 0 || pos + static_cast<size_t>(written) >= buf.size())
+      return;
     pos += static_cast<size_t>(written);
   }
   if (pos >= buf.size()) return;
@@ -390,6 +392,8 @@ int tarray_compare(vsql::CustomArgWith<TarrayParams> a,
         break;
       }
       default:
+        // TODO(villagesql): add handling for dealing with invalid element type
+        // in production.
         assert(false);
     }
   }
