@@ -1,4 +1,5 @@
 /* Copyright (c) 2007, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,6 +64,7 @@
 #include "sql_string.h"
 #include "strxnmov.h"
 #include "thr_mutex.h"
+#include "villagesql/services/preview/statement_event.h"
 
 namespace {
 /**
@@ -1093,6 +1095,12 @@ int mysql_event_tracking_query_notify(
     THD *thd, mysql_event_tracking_query_subclass_t subclass,
     const char *subclass_name) {
   mysql_event_tracking_query_data event;
+
+  // VEF statement events are dispatched unconditionally — they are independent
+  // of MySQL's audit subscriber system and do not require any audit plugin to
+  // be loaded.
+  if (subclass & EVENT_TRACKING_QUERY_STATUS_END)
+    villagesql::services::on_statement_postexecute(thd);
 
   if (thd->check_event_subscribers(Event_tracking_class::QUERY, subclass, true))
     return 0;

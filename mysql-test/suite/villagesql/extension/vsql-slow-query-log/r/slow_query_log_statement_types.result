@@ -1,0 +1,31 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_slow_ddl.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+# DDL: CREATE TABLE
+CREATE TABLE vsql_hook_ddl_test (id INT PRIMARY KEY, val VARCHAR(32));
+# DDL: ALTER TABLE
+ALTER TABLE vsql_hook_ddl_test ADD COLUMN extra INT;
+# DDL: DROP TABLE
+DROP TABLE vsql_hook_ddl_test;
+# GRANT
+CREATE USER IF NOT EXISTS 'vsql_hook_test_user'@'localhost';
+GRANT SELECT ON *.* TO 'vsql_hook_test_user'@'localhost';
+# REVOKE
+REVOKE SELECT ON *.* FROM 'vsql_hook_test_user'@'localhost';
+DROP USER 'vsql_hook_test_user'@'localhost';
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# CREATE TABLE was logged
+1
+# ALTER TABLE was logged
+1
+# DROP TABLE was logged
+1
+# GRANT was logged
+1
+# REVOKE was logged
+1
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

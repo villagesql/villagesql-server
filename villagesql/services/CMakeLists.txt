@@ -21,6 +21,7 @@ SET(VILLAGESQL_SERVICES_SOURCES
   preview/index_type.cc
   preview/keyring.cc
   preview/ping.cc
+  preview/statement_event.cc
   preview/sql_query.cc
   preview/status_var.cc
   preview/storage.cc

@@ -1,0 +1,39 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 100;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_slow.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+# Slow query (>= 100ms) should be logged
+SELECT SLEEP(0.3) AS slow_marker;
+slow_marker
+0
+# Fast query should NOT be logged
+SELECT 1 AS fast_marker;
+fast_marker
+1
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# While disabled, even slow queries should NOT be logged
+SELECT SLEEP(0.3) AS disabled_marker;
+disabled_marker
+0
+# Exactly one SLEEP entry (from the enabled period) is in the log
+1
+# The fast query did not get logged
+0
+# The disabled query did not get logged
+0
+# When log_file points at a non-existent directory, the hook's fopen
+# fails and reports via result.error_msg(). The server logs that as a
+# Warning in the error log.
+call mtr.add_suppression("Statement event error in extension 'vsql_slow_query_log'");
+SET GLOBAL vsql_slow_query_log.log_file = '/tmp/vsql_slow_query_log_uaf_test_dir_xyz/slow.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+SELECT SLEEP(0.3) AS unwritable_marker;
+unwritable_marker
+0
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# Exactly one warning containing the unique path token
+1
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

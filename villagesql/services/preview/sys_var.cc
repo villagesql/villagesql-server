@@ -114,6 +114,12 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
   change.var_name = var_name_copy.c_str();
   if (change.type == VEF_VAR_STR && change.str_val != nullptr)
     change.str_val = str_val_copy.c_str();
+  // TODO(villagesql-crash): on_change points into extension code captured under
+  // g_sys_vars_mutex. If UNINSTALL EXTENSION races with a concurrent SET
+  // GLOBAL, on_depopulate_sys_var may erase the entry and return (allowing
+  // dlclose) while this thread holds the captured on_change pointer but has
+  // already released the lock. A drain mechanism analogous to statement_event's
+  // g_inflight counter is needed to close this window.
   if (on_change != nullptr && change.var_name != nullptr) on_change(&change);
 }
 
