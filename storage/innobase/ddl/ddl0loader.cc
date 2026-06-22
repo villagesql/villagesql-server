@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -508,7 +509,7 @@ dberr_t Loader::build_all() noexcept {
 #ifdef UNIV_DEBUG
 bool Loader::validate_indexes() const noexcept {
   for (auto &builder : m_builders) {
-    if (!builder->is_fts_index() &&
+    if (!builder->is_fts_index() && !builder->is_custom_index() &&
         !btr_validate_index(builder->index(), nullptr, false)) {
       return false;
     }

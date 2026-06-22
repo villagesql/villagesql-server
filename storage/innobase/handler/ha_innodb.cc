@@ -198,6 +198,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0test.h"
 #include "ut0ut.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/util.h"
 #else
@@ -12329,6 +12330,11 @@ inline int create_index(
   index = dict_mem_index_create(table_name, key->name, 0, ind_type,
                                 key->user_defined_key_parts);
 
+  // Record the custom index descriptor carried on the KEY before the index is
+  // added to the dictionary cache.
+  using villagesql::innodb::Custom_index;
+  Custom_index::load(index, key->custom_index_context);
+
   innodb_session_t *&priv = thd_to_innodb_session(trx->mysql_thd);
   dict_table_t *handler = priv->lookup_table_handler(table_name);
 
@@ -12370,9 +12376,11 @@ inline int create_index(
 
     // TODO(villagesql-indexing): Support indexing for types with column store.
     if (field->has_type_context() &&
-        field->get_type_context()->storage_intf()) {
+        field->get_type_context()->storage_intf() &&
+        !Custom_index::is_custom(index)) {
       villagesql_error(
-          "InnoDB: Indexing for types with column storage is not supported.",
+          "InnoDB: Indexing for types with column storage is supported only "
+          "with custom index.",
           MYF(0));
       error = ER_VILLAGESQL_GENERIC_ERROR;
       goto do_cleanup;

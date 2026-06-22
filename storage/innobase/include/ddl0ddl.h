@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2005, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -39,6 +40,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 // Forward declaration
 class Flush_observer;
 class Alter_stage;
+
+namespace villagesql {
+class IndexContext;
+}  // namespace villagesql
 
 namespace ddl {
 // Forward declaration
@@ -126,6 +131,10 @@ struct Index_defn {
 
   /** SRID obtained from dd column */
   uint32_t m_srid{};
+
+  /** Custom index descriptor carried on the KEY, or nullptr if this is not a
+  custom index. */
+  const villagesql::IndexContext *m_custom_index_context{};
 };
 
 /** Structure for reporting duplicate records. */

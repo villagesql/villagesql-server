@@ -3992,10 +3992,15 @@ dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx, bool nonatomic,
             strstr(table->name.m_name, TEMP_FILE_PREFIX_INNODB) != nullptr);
   }
 
+  using villagesql::innodb::Custom_index;
   if (!table->is_temporary() && !file_per_table) {
     dict_sys_mutex_exit();
     for (dict_index_t *index = table->first_index();
          err == DB_SUCCESS && index != nullptr; index = index->next()) {
+      if (Custom_index::is_custom(index)) {
+        err = Custom_index::drop(index, trx->id);
+        continue;
+      }
       err = log_ddl->write_free_tree_log(trx, index, true);
     }
     dict_sys_mutex_enter();
@@ -4017,6 +4022,8 @@ dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx, bool nonatomic,
     rw_lock_x_unlock(dict_index_get_lock(index));
 
     if (table->is_temporary()) {
+      // TODO(villagesql-indexing): Handle index on temp table
+      ut_a(!Custom_index::is_custom(index));
       dict_drop_temporary_table_index(index, page);
     }
   }

@@ -221,7 +221,7 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   auto guard = vclient.get_write_lock();
   const IndexEntry *index_entry =
-      vclient.custom_indexes().get_committed(idx_key.str());
+      vclient.custom_indexes().get(thd, idx_key.str());
   if (!index_entry) return false;
 
   // Resolve IndexTypeDescriptor.
@@ -1559,6 +1559,17 @@ std::shared_ptr<const TypeContext> AcquireTypeContextClientManaged(
   auto &vclient = VictionaryClient::instance();
   auto guard = vclient.get_read_lock();
   return vclient.type_contexts().acquire_client_managed(source_tc->key());
+}
+
+std::shared_ptr<const IndexContext> AcquireIndexContextClientManaged(
+    const IndexContext *source_ic) {
+  if (source_ic == nullptr) {
+    return std::shared_ptr<const IndexContext>();
+  }
+
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  return vclient.index_contexts().acquire_client_managed(source_ic->key());
 }
 
 bool InjectCustomSpParams(

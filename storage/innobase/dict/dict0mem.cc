@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 Copyright (c) 2012, Facebook Inc.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -789,6 +790,8 @@ void dict_mem_index_free(dict_index_t *index) /*!< in: index */
     ut::delete_(index->rtr_track->rtr_active);
   }
   dict_index_remove_from_v_col_list(index);
+
+  villagesql::innodb::Custom_index::free_all(index);
 #endif /* !UNIV_HOTBACKUP */
 
   index->rtr_srs.reset();

@@ -269,6 +269,7 @@ SET(INNOBASE_SOURCES
   ut/ut0vec.cc
   ut/ut0wqueue.cc
   villagesql/custom_column.cc
+  villagesql/custom_index.cc
   villagesql/storage_abi.cc)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
