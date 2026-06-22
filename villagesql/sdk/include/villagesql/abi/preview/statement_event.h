@@ -58,7 +58,7 @@ extern "C" {
 // declares a hook for a reserved phase.
 typedef enum {
   // Reserved: client connection established. Fires from
-  // EVENT_TRACKING_CONNECTION_CONNECT. Args populated: user, host,
+  // EVENT_TRACKING_CONNECTION_CONNECT. Args populated: user, client_ip,
   // connection_id, port. Query fields and timing are unset.
   // Result.error_msg refuses the connection.
   VEF_STATEMENT_EVENT_CONNECT = 0,
@@ -79,7 +79,7 @@ typedef enum {
   VEF_STATEMENT_EVENT_POSTPARSE = 3,
 
   // Reserved: after parsing, before execution begins. Fires from
-  // EVENT_TRACKING_QUERY_START. Args populated: query, user, host,
+  // EVENT_TRACKING_QUERY_START. Args populated: query, user, client_ip,
   // connection_id, port, schema, sql_command, in_transaction. Timing/rows/
   // status are zero. Result.error_msg blocks the query.
   VEF_STATEMENT_EVENT_PREEXECUTE = 4,
@@ -113,7 +113,7 @@ typedef struct {
   const char *user;
   // Client IP address, or empty string.
   // Lifetime: connection lifetime.
-  const char *host;
+  const char *client_ip;
   unsigned long connection_id;
   uint16_t port;
   bool in_transaction;

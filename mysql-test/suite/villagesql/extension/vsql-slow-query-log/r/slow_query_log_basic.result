@@ -25,7 +25,7 @@ disabled_marker
 # When log_file points at a non-existent directory, the hook's fopen
 # fails and reports via result.error_msg(). The server logs that as a
 # Warning in the error log.
-call mtr.add_suppression("Query hook error in extension 'vsql_slow_query_log'");
+call mtr.add_suppression("Statement event error in extension 'vsql_slow_query_log'");
 SET GLOBAL vsql_slow_query_log.log_file = '/tmp/vsql_slow_query_log_uaf_test_dir_xyz/slow.log';
 SET GLOBAL vsql_slow_query_log.enabled = ON;
 SELECT SLEEP(0.3) AS unwritable_marker;

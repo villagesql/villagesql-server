@@ -48,7 +48,7 @@ class StatementEventArgs {
   }
 
   const char *user() const { return a_->user; }
-  const char *host() const { return a_->host; }
+  const char *client_ip() const { return a_->client_ip; }
   unsigned long connection_id() const { return a_->connection_id; }
   uint16_t port() const { return a_->port; }
   bool in_transaction() const { return a_->in_transaction; }

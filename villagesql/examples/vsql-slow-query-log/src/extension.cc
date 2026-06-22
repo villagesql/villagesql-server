@@ -28,12 +28,10 @@
 //   SET GLOBAL vsql_slow_query_log.enabled = ON;
 
 #include <cerrno>
-#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <format>
 #include <mutex>
 
 #include <villagesql/preview/statement_event.h>
@@ -56,10 +54,11 @@ static void slow_query_hook(const se::StatementEventArgs &args,
   if (args.query_time_secs() * 1000.0 < static_cast<double>(g_threshold_ms))
     return;
 
-  auto tp = std::chrono::sys_time<std::chrono::microseconds>{
-      std::chrono::microseconds{static_cast<int64_t>(args.query_start_utime())}};
-  std::string ts = std::format("{:%Y-%m-%dT%H:%M:%S}Z", tp);
   time_t now = static_cast<time_t>(args.query_start_utime() / 1000000);
+  char ts[32];
+  struct tm tm_utc;
+  gmtime_r(&now, &tm_utc);  // TODO(villagesql-windows): use gmtime_s(&tm_utc, &now)
+  strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
 
   std::lock_guard<std::mutex> lock(g_log_mutex);
   FILE *f = fopen(g_log_filename, "a");
@@ -69,9 +68,9 @@ static void slow_query_hook(const se::StatementEventArgs &args,
     return;
   }
 
-  fprintf(f, "# Time: %s\n", ts.c_str());
+  fprintf(f, "# Time: %s\n", ts);
   fprintf(f, "# User@Host: %s @ %s  Id: %lu\n", args.user() ? args.user() : "",
-          args.host() ? args.host() : "", args.connection_id());
+          args.client_ip() ? args.client_ip() : "", args.connection_id());
   fprintf(f,
           "# Schema: %s  Query_time: %.6f  Lock_time: %.6f"
           "  Rows_sent: %llu  Rows_examined: %llu\n",
@@ -99,6 +98,6 @@ static auto SYS_VARS = sv::make_capability({
 
 static se::StatementEventCapability<VEF_STATEMENT_EVENT_POSTEXECUTE,
                                     &slow_query_hook>
-    QUERY_HOOK;
+    STATEMENT_EVENT;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension().with(SYS_VARS).with(QUERY_HOOK))
+VEF_GENERATE_ENTRY_POINTS(make_extension().with(SYS_VARS).with(STATEMENT_EVENT))

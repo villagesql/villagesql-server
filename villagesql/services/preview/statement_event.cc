@@ -87,7 +87,8 @@ bool on_populate_statement_event(const PopulateContext &ctx,
   g_hooks = std::move(new_list);
 
   LogVSQL(
-      INFORMATION_LEVEL, "Registered query hook phase=%d from extension '%.*s'",
+      INFORMATION_LEVEL,
+      "Registered statement event phase=%d from extension '%.*s'",
       static_cast<int>(cc->phase), static_cast<int>(ctx.extension_name.size()),
       ctx.extension_name.data());
   return false;
@@ -122,7 +123,7 @@ void on_statement_postexecute(THD *thd) {
 
   const Security_context *sctx = thd->security_context();
   args.user = sctx->priv_user().str;
-  args.host = sctx->ip().str;
+  args.client_ip = sctx->ip().str;
   args.connection_id = thd->thread_id();
   args.port = thd->peer_port;
   args.in_transaction = thd->in_active_multi_stmt_transaction();
@@ -208,7 +209,7 @@ void on_statement_postexecute(THD *thd) {
     // off the end if an extension writes the buffer without null-terminating.
     error_buf[VEF_MAX_ERROR_LEN - 1] = '\0';
     if (error_buf[0] != '\0') {
-      LogVSQL(WARNING_LEVEL, "Query hook error in extension '%s': %s",
+      LogVSQL(WARNING_LEVEL, "Statement event error in extension '%s': %s",
               h.extension_name.c_str(), error_buf);
     }
   }

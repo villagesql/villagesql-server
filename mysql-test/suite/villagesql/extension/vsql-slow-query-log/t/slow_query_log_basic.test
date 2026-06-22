@@ -6,7 +6,7 @@
 # - Queries under threshold_ms are NOT written
 # - Disabling 'enabled' silences the hook
 # - When log_file cannot be opened, the hook reports an error via
-#   QueryHookResult::error_msg() and the server logs it
+#   StatementEventResult::error_msg() and the server logs it
 # - UNINSTALL EXTENSION removes the hook cleanly
 
 # Unique token for the unwritable-path error message so the grep can't
@@ -53,7 +53,7 @@ SELECT SLEEP(0.3) AS disabled_marker;
 --echo # When log_file points at a non-existent directory, the hook's fopen
 --echo # fails and reports via result.error_msg(). The server logs that as a
 --echo # Warning in the error log.
-call mtr.add_suppression("Query hook error in extension 'vsql_slow_query_log'");
+call mtr.add_suppression("Statement event error in extension 'vsql_slow_query_log'");
 eval SET GLOBAL vsql_slow_query_log.log_file = '$bad_log_path';
 SET GLOBAL vsql_slow_query_log.enabled = ON;
 SELECT SLEEP(0.3) AS unwritable_marker;

@@ -1,4 +1,4 @@
-# Verify that the POSTEXECUTE query hook fires for DDL and GRANT/REVOKE
+# Verify that the POSTEXECUTE statement event fires for DDL and GRANT/REVOKE
 # statements, not only for DML. Uses threshold_ms=0 so every statement is
 # logged regardless of duration.
 
