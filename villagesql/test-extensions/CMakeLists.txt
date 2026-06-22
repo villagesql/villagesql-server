@@ -38,3 +38,5 @@ vsql_add_test_extension(vsql-noop-test                 vsql_noop_test)
 # at VEF_PROTOCOL_3 and is rejected by build_type_descriptor_v3 (missing
 # resolve_params) -- a path the current dev SDK can no longer produce.
 vsql_add_test_extension(vsql-bad-var-no-resolve-test   vsql_bad_var_no_resolve_test  ABI v3)
+vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
+vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)

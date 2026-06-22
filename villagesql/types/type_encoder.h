@@ -72,7 +72,7 @@ class TypeEncoder {
  private:
   MEM_ROOT *mem_root_{nullptr};  // owning mem_root, used for overflow growth
   char *buffer_{nullptr};        // pre-allocated from mem_root_
-  size_t buffer_size_{0};        // = tc->persisted_length()
+  size_t buffer_size_{0};        // = tc->field_buffer_length()
   String result_;                // reused String wrapper pointing into buffer_
 
   // Overflow path: reused when VDF output exceeds buffer_size_ (rare).

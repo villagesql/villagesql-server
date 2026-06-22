@@ -239,9 +239,7 @@ class TypeContext {
   // Returns true when this TypeContext represents a parameterized type whose
   // parameters have not yet been resolved. A non-parameterized type with empty
   // parameters (e.g. COMPLEX) is fully known and returns false.
-  bool is_unknown() const {
-    return descriptor_->is_parameterized() && parameters().empty();
-  }
+  bool is_unknown() const { return is_parameterized() && parameters().empty(); }
 
   // Types are compatible if they have the same key (type name, extension,
   // version, and parameters). This ensures e.g. TVECTOR(3) != TVECTOR(4).
@@ -280,6 +278,25 @@ class TypeContext {
   // the descriptor's resolve_params callback at construction time.
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
+
+  // True if the underlying type is variable-length (size decided per value).
+  // Delegates to the descriptor's registration-time marker.
+  bool is_variable_length() const {
+    return descriptor_->length_kind() == LengthKind::Variable;
+  }
+
+  // True if this type accepts parameters (has a resolve_params callback),
+  // independent of whether it is fixed- or variable-length.
+  bool is_parameterized() const { return descriptor_->is_parameterized(); }
+
+  // Declared length of the backing field for this type instantiation.
+  // Fixed-length and parameter-resolved types store exactly persisted_length
+  // bytes. A variable-length type length is decided per value, and the backing
+  // field is sized to the type's max_persisted_length upper bound.
+  int64_t field_buffer_length() const {
+    return is_variable_length() ? descriptor_->max_persisted_length()
+                                : persisted_length_;
+  }
 
   // Bound type operations. These combine the TypeFunction from the descriptor
   // with this context's TypeParameters.

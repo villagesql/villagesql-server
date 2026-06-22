@@ -73,27 +73,25 @@ class PT_custom_type : public PT_type {
     }
 
     // Validate length specification against type characteristics
-    if (nullptr != length_spec &&
-        type_context->descriptor()->persisted_length() != -1) {
-      // Fixed-length type with length specification - this is an error
+    if (nullptr != length_spec && !type_context->is_parameterized()) {
+      // Non parameterized type with length specification - this is an error
       std::string qname = type_context->qualified_name();
       thd->syntax_error_at(pos,
-                           "Type '%s' is fixed-length and cannot have a "
+                           "Type '%s' is not parameterized and cannot have a "
                            "length specification",
                            qname.c_str());
       return;
     }
 
-    // If no length_spec provided, generate it from the TypeContext's
-    // persisted_length. For fixed-length types this comes from the descriptor.
-    // For variable-length types with parameters, this was computed by
-    // resolve_params at TypeContext construction time.
+    // If no length_spec provided, generate it from the TypeContext's storage
+    // length. For fixed-length types this comes from the descriptor; for
+    // variable-length types it is the descriptor's max_persisted_length
+    // upper bound.
     if (nullptr == length_spec) {
-      int64_t len = type_context->persisted_length();
-      if (len > 0) {
-        snprintf(length_buffer, sizeof(length_buffer), "%" PRId64, len);
-        length_spec = length_buffer;
-      }
+      int64_t len = type_context->field_buffer_length();
+      assert(len > 0);
+      snprintf(length_buffer, sizeof(length_buffer), "%" PRId64, len);
+      length_spec = length_buffer;
     }
   }
 
@@ -151,9 +149,8 @@ class PT_custom_type : public PT_type {
       return nullptr;
     }
 
-    // Handle variable-length types (persisted_length == -1)
-    if (type_context != nullptr &&
-        type_context->descriptor()->persisted_length() == -1) {
+    // Handle types that accept a length/parameter spec
+    if (type_context != nullptr && type_context->is_parameterized()) {
       auto *descriptor = type_context->descriptor();
       if (length != nullptr) {
         // TYPE(N) syntax used - convert N to parameters via callbacks
@@ -202,7 +199,7 @@ class PT_custom_type : public PT_type {
         // length is now consumed - pass nullptr to constructor
         length = nullptr;
       } else {
-        // No length provided for variable-length type
+        // No length provided for a parameterized type
         if (descriptor->int_to_params_fn().has_value()) {
           std::string qname = type_context->qualified_name();
           thd->syntax_error_at(pos, "Type '%s' requires a length specification",

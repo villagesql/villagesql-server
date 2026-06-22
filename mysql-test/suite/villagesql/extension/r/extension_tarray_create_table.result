@@ -1,0 +1,89 @@
+# Install the typed-array extension.
+INSTALL EXTENSION vsql_tarray_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_tarray_test	0.0.1
+# TARRAY(N): integer shorthand mapped to max_size by int_to_params (type
+# defaults to int16). TARRAY('max_size=...,type=...'): explicit cap+width.
+CREATE TABLE arrs (
+id INT PRIMARY KEY,
+a vsql_tarray_test.TARRAY(4),
+f vsql_tarray_test.TARRAY('max_size=3,type=float')
+);
+# Counts vary per value, up to max_size.
+INSERT INTO arrs VALUES (1, '[1,2,3]', '[1.5,2.5]');
+INSERT INTO arrs VALUES (2, '[10,20,30,40]', '[0]');
+SELECT id,
+a, vsql_tarray_test.tarray_dim(a) AS na,
+f, vsql_tarray_test.tarray_dim(f) AS nf
+FROM arrs ORDER BY id;
+id	a	na	f	nf
+1	[1,2,3]	3	[1.5,2.5]	2
+2	[10,20,30,40]	4	[0]	1
+# Both parameters round-trip through SHOW CREATE TABLE.
+SHOW CREATE TABLE arrs;
+Table	Create Table
+arrs	CREATE TABLE `arrs` (
+  `id` int NOT NULL,
+  `a` vsql_tarray_test.TARRAY(4) DEFAULT NULL,
+  `f` vsql_tarray_test.TARRAY('max_size=3,type=float') DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# More elements than max_size is rejected by from_string (a has max 4).
+INSERT INTO arrs VALUES (3, '[1,2,3,4,5]', '[1]');
+ERROR HY000: Incorrect TARRAY value: '[1,2,3,4,5]' for column 'a' at row 1
+# Element-wise compare predicate.
+SELECT id FROM arrs WHERE a > '[1,2,3]' ORDER BY id;
+id
+2
+# Concatenation within max_size (f has max 3): [1.5,2.5] + [0] = 3 elems.
+SELECT vsql_tarray_test.tarray_concat(x.f, y.f) AS c,
+vsql_tarray_test.tarray_dim(vsql_tarray_test.tarray_concat(x.f, y.f)) AS n
+FROM arrs x JOIN arrs y ON x.id = 1 AND y.id = 2;
+c	n
+[1.5,2.5,0]	3
+# Concatenation exceeding max_size (a has max 4): 3 + 4 = 7 > 4 -> NULL
+# with a warning.
+SELECT vsql_tarray_test.tarray_dim(
+vsql_tarray_test.tarray_concat(x.a, y.a)) AS n
+FROM arrs x JOIN arrs y ON x.id = 1 AND y.id = 2;
+n
+NULL
+Warnings:
+Warning	3200	VDF error in function 'tarray_concat': tarray_concat: concatenated size exceeds max_size
+# tarray_concat requires both arguments to share the same type parameters.
+# Here a is TARRAY(max_size=4,type=int16) and f is
+# TARRAY(max_size=3,type=float): type-parameter disambiguation rejects the
+# call at prepare time rather than letting the VDF run with mismatched
+# parameters.
+SELECT vsql_tarray_test.tarray_concat(x.a, y.f)
+FROM arrs x JOIN arrs y ON x.id = 1 AND y.id = 2;
+ERROR HY000: Cannot initialize function 'tarray_concat': conflicting type parameters for vsql_tarray_test.TARRAY in arguments 1 and 2
+# The conflict is on any differing parameter, not just element type. Here
+# both columns are int16 and differ only in max_size (1 vs 2), and the
+# call is still rejected at prepare time.
+CREATE TABLE arrs2 (
+id INT PRIMARY KEY,
+g vsql_tarray_test.TARRAY(1),
+h vsql_tarray_test.TARRAY(2)
+);
+INSERT INTO arrs2 VALUES (1, '[1]', '[2,3]');
+SELECT vsql_tarray_test.tarray_concat(g, h) FROM arrs2;
+ERROR HY000: Cannot initialize function 'tarray_concat': conflicting type parameters for vsql_tarray_test.TARRAY in arguments 1 and 2
+DROP TABLE arrs2;
+# resolve_params enforces max_size * element_size <= 512:
+# double * 100 = 800 bytes is rejected.
+CREATE TABLE bad1 (id INT, v vsql_tarray_test.TARRAY('max_size=100,type=double'));
+ERROR 42000: tarray_resolve_params: TARRAY max_size 100 * element size 8 exceeds the 512-byte limit near 'vsql_tarray_test.TARRAY('max_size=100,type=double'))' at line 1
+# The integer shorthand goes through int_to_params (max_size=300) and is
+# then rejected by resolve_params: int16 * 300 = 600 > 512.
+CREATE TABLE bad2 (id INT, v vsql_tarray_test.TARRAY(300));
+ERROR 42000: tarray_resolve_params: TARRAY max_size 300 * element size 2 exceeds the 512-byte limit near 'vsql_tarray_test.TARRAY(300))' at line 1
+# A non-positive shorthand is rejected by the parser before int_to_params.
+CREATE TABLE bad3 (id INT, v vsql_tarray_test.TARRAY(0));
+ERROR 42000: Invalid length '0' for type 'vsql_tarray_test.TARRAY' near 'vsql_tarray_test.TARRAY(0))' at line 1
+# Clean up.
+DROP TABLE arrs;
+UNINSTALL EXTENSION vsql_tarray_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION

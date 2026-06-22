@@ -1,0 +1,61 @@
+# Install the variable-length, non-parameterized bit field extension.
+INSTALL EXTENSION vsql_bitfield_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_bitfield_test	0.0.1
+# A column declared without any length or parameters; the bit length is
+# decided per value.
+CREATE TABLE bits (
+id INT PRIMARY KEY,
+b vsql_bitfield_test.BITFIELD
+);
+# Bit fields of DIFFERENT bit lengths coexist in the same column.
+INSERT INTO bits VALUES (1, '1');
+INSERT INTO bits VALUES (2, '101');
+INSERT INTO bits VALUES (3, '11110000');
+INSERT INTO bits VALUES (4, '1010101010101010');
+INSERT INTO bits VALUES (5, '');
+# Each value round-trips at its own bit length. bitfield_length reports
+# the number of bits; bitfield_popcount the number of set bits. A 16-bit
+# value is packed into 2 bytes, not 16.
+SELECT id, b,
+vsql_bitfield_test.bitfield_length(b) AS nbits,
+vsql_bitfield_test.bitfield_popcount(b) AS nset
+FROM bits ORDER BY id;
+id	b	nbits	nset
+1	1	1	1
+2	101	3	2
+3	11110000	8	4
+4	1010101010101010	16	8
+5		0	0
+# Predicate comparisons use the type's bit-by-bit compare across
+# different lengths.
+SELECT id FROM bits WHERE b > '1' ORDER BY id;
+id
+2
+3
+4
+SELECT id FROM bits WHERE b = '11110000' ORDER BY id;
+id
+3
+# UPDATE may grow or shrink the bit length.
+UPDATE bits SET b = '111' WHERE id = 1;
+SELECT id, b, vsql_bitfield_test.bitfield_length(b) AS nbits
+FROM bits WHERE id = 1;
+id	b	nbits
+1	111	3
+# A character other than '0'/'1' is rejected by from_string.
+INSERT INTO bits VALUES (6, '1021');
+ERROR HY000: Incorrect BITFIELD value: '1021' for column 'b' at row 1
+# BITFIELD is not parameterized, so it does not accept a length or
+# parameter spec. Both the integer-length and the string-parameter forms
+# are rejected at parse time.
+CREATE TABLE bad_bits (b BITFIELD(5));
+ERROR 42000: Type 'vsql_bitfield_test.BITFIELD' is not parameterized and cannot have a length specification near 'BITFIELD(5))' at line 1
+CREATE TABLE bad_bits (b BITFIELD('max_size=5'));
+ERROR 42000: Type 'vsql_bitfield_test.BITFIELD' does not accept parameters near 'BITFIELD('max_size=5'))' at line 1
+# Clean up.
+DROP TABLE bits;
+UNINSTALL EXTENSION vsql_bitfield_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
