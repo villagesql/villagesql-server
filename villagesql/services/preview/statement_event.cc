@@ -106,11 +106,11 @@ bool on_populate_statement_event(const PopulateContext &ctx,
   }
   g_hook_count.fetch_add(1, std::memory_order_release);
 
-  LogVSQL(
-      INFORMATION_LEVEL,
-      "Registered statement event phase=%d from extension '%.*s'",
-      static_cast<int>(cc->phase), static_cast<int>(ctx.extension_name.size()),
-      ctx.extension_name.data());
+  LogVSQL(INFORMATION_LEVEL,
+          "Registered statement event phase=%d from extension '%.*s'",
+          static_cast<int>(cc->phase),
+          static_cast<int>(ctx.extension_name.size()),
+          ctx.extension_name.data());
   return false;
 }
 

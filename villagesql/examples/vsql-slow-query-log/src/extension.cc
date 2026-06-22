@@ -57,7 +57,8 @@ static void slow_query_hook(const se::StatementEventArgs &args,
   time_t now = static_cast<time_t>(args.query_start_utime() / 1000000);
   char ts[32];
   struct tm tm_utc;
-  gmtime_r(&now, &tm_utc);  // TODO(villagesql-windows): use gmtime_s(&tm_utc, &now)
+  gmtime_r(&now,
+           &tm_utc);  // TODO(villagesql-windows): use gmtime_s(&tm_utc, &now)
   strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
 
   std::lock_guard<std::mutex> lock(g_log_mutex);
