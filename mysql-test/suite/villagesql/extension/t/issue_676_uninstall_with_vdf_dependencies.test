@@ -1,0 +1,89 @@
+# Issue #676: UNINSTALL EXTENSION must be blocked when its VDFs are used in
+# functional indexes, CHECK constraints, or generated columns even when those
+# expressions take only built-in inputs.
+#
+# Today the dependency check only finds VDF references via custom_columns rows
+# (i.e. when a column has a custom type). A VDF called over built-in columns
+# (or constant arguments) leaves no persistent dependency, so after the table
+# cache is flushed UNINSTALL silently succeeds and the table becomes
+# unloadable / unwritable. This test pins the current (buggy) behavior so the
+# fix flips each FIXME assertion below from "succeeds" to "blocked".
+
+# Reopening a table whose CHECK constraint references a missing VDF logs
+# "Incorrect information in file" before erroring at the SQL layer. The
+# warning is part of the bug surface this test demonstrates.
+call mtr.add_suppression("Incorrect information in file: '.*t_chk.frm'");
+
+--source include/villagesql/install_complex_extension.inc
+
+# ---------------------------------------------------------------------------
+# 1. Functional index on a VDF over a built-in column.
+# ---------------------------------------------------------------------------
+CREATE TABLE t_idx (id INT PRIMARY KEY, v INT,
+                    INDEX idx_func ((vsql_complex.complex_real('(1,2)') + v)));
+INSERT INTO t_idx (id, v) VALUES (1, 10);
+
+--echo # While the table is open, use_count blocks UNINSTALL.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+FLUSH TABLES;
+--echo # FIXME(issue-676): cold-cache UNINSTALL succeeds — functional index
+--echo # carries no persistent dependency on the VDF. Should be blocked.
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # The table is now broken: reads error with missing-function code.
+--error ER_SP_DOES_NOT_EXIST
+SELECT * FROM t_idx;
+
+DROP TABLE t_idx;
+
+# ---------------------------------------------------------------------------
+# 2. CHECK constraint that calls a (deterministic) VDF.
+# ---------------------------------------------------------------------------
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_chk (id INT PRIMARY KEY, v INT,
+                    CHECK (vsql_complex.complex_real('(1,2)') + v >= 0));
+INSERT INTO t_chk (id, v) VALUES (1, 10);
+
+--echo # While the table is open, use_count blocks UNINSTALL.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+FLUSH TABLES;
+--echo # FIXME(issue-676): cold-cache UNINSTALL succeeds — CHECK constraint
+--echo # carries no persistent dependency on the VDF. Should be blocked.
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # The table is now broken: inserts error with missing-function code.
+--error ER_SP_DOES_NOT_EXIST
+INSERT INTO t_chk (id, v) VALUES (2, 20);
+
+DROP TABLE t_chk;
+
+# ---------------------------------------------------------------------------
+# 3. Generated column whose expression calls a VDF over built-in inputs.
+#    (Mirrors generated_column_with_vdf_errors_after_extension_uninstall.test
+#    but kept here so issue #676 has all three contexts in one file.)
+# ---------------------------------------------------------------------------
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_gen (id INT PRIMARY KEY, v INT,
+                    gen DOUBLE AS (v + vsql_complex.complex_real('(1,2)')) STORED);
+INSERT INTO t_gen (id, v) VALUES (1, 10);
+
+--echo # While the table is open, use_count blocks UNINSTALL.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+FLUSH TABLES;
+--echo # FIXME(issue-676): cold-cache UNINSTALL succeeds — generated column
+--echo # carries no persistent dependency on the VDF. Should be blocked.
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # The table is now broken: reads error with missing-function code.
+--error ER_SP_DOES_NOT_EXIST
+SELECT * FROM t_gen;
+
+DROP TABLE t_gen;
