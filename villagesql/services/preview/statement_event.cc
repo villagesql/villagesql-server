@@ -20,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "my_sys.h"
@@ -48,6 +49,22 @@ using HookList = std::vector<RegisteredHook>;
 // so hook callbacks cannot block INSTALL EXTENSION.
 std::mutex g_mu;
 std::shared_ptr<HookList> g_hooks{std::make_shared<HookList>()};
+
+// Fast-path: number of registered hooks. on_statement_postexecute loads this
+// with acquire and returns immediately when zero, avoiding the mutex and
+// shared_ptr bump on every query when no extensions are installed.
+std::atomic<size_t> g_hook_count{0};
+
+// Drain counter: incremented (seq_cst) before snapshot(), decremented
+// (release) after the dispatch loop. on_depopulate spins on this with acquire
+// after removing the hook from g_hooks, ensuring no extension code runs after
+// on_depopulate returns and dlclose becomes safe.
+std::atomic<size_t> g_inflight{0};
+
+struct ScopedInflightGuard {
+  ScopedInflightGuard() { g_inflight.fetch_add(1, std::memory_order_seq_cst); }
+  ~ScopedInflightGuard() { g_inflight.fetch_sub(1, std::memory_order_release); }
+};
 
 std::shared_ptr<HookList> snapshot() {
   std::lock_guard<std::mutex> lock(g_mu);
@@ -81,10 +98,13 @@ bool on_populate_statement_event(const PopulateContext &ctx,
     return true;
   }
 
-  std::lock_guard<std::mutex> lock(g_mu);
-  auto new_list = std::make_shared<HookList>(*g_hooks);
-  new_list->push_back({std::string(ctx.extension_name), cc});
-  g_hooks = std::move(new_list);
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    auto new_list = std::make_shared<HookList>(*g_hooks);
+    new_list->push_back({std::string(ctx.extension_name), cc});
+    g_hooks = std::move(new_list);
+  }
+  g_hook_count.fetch_add(1, std::memory_order_release);
 
   LogVSQL(
       INFORMATION_LEVEL,
@@ -99,18 +119,25 @@ void on_depopulate_statement_event(const DepopulateContext &ctx) {
   const auto *cc =
       static_cast<const vef_statement_event_cc_t *>(ctx.capability_config);
 
-  std::lock_guard<std::mutex> lock(g_mu);
-  auto new_list = std::make_shared<HookList>(*g_hooks);
-  new_list->erase(
-      std::remove_if(new_list->begin(), new_list->end(),
-                     [&](const RegisteredHook &h) { return h.cc == cc; }),
-      new_list->end());
-  g_hooks = std::move(new_list);
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    auto new_list = std::make_shared<HookList>(*g_hooks);
+    new_list->erase(
+        std::remove_if(new_list->begin(), new_list->end(),
+                       [&](const RegisteredHook &h) { return h.cc == cc; }),
+        new_list->end());
+    g_hooks = std::move(new_list);
+  }
+  g_hook_count.fetch_sub(1, std::memory_order_release);
+  while (g_inflight.load(std::memory_order_acquire) > 0)
+    std::this_thread::yield();
 }
 
 void on_statement_postexecute(THD *thd) {
   if (thd == nullptr) return;
+  if (g_hook_count.load(std::memory_order_acquire) == 0) return;
 
+  ScopedInflightGuard inflight_guard;
   auto hooks = snapshot();
   if (hooks->empty()) return;
 
