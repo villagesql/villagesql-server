@@ -41,6 +41,10 @@ struct BuildInfo {
   const char *build_host;       // hostname of the machine that built it
   const char *build_os;         // host OS, e.g. "Linux-6.8.0"
   const char *build_arch;       // host architecture, e.g. "x86_64"
+
+  // True if the build tree diverged from git_sha, i.e. any of the file-change
+  // counts is non-zero.
+  bool is_dirty() const;
 };
 
 // Returns the build metadata baked into this binary. The reference is to a

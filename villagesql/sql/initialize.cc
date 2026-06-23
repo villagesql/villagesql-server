@@ -104,6 +104,8 @@ const uchar *Sys_var_villagesql_build_info::global_value_ptr(THD *thd,
   w.StartObject();
   w.Key("git_sha");
   w.String(info.git_sha);
+  w.Key("is_dirty");
+  w.Bool(info.is_dirty());
   w.Key("files_added");
   w.Int(info.files_added);
   w.Key("files_deleted");
