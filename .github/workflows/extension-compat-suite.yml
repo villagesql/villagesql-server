@@ -3,7 +3,7 @@ name: Extension SDK Compatibility (Reusable)
 # Reusable workflow that builds bundled extensions against the SDK built from a
 # given ref and runs their MTR suites. Called by:
 #   - extension-compat.yml (nightly workflow_run + manual workflow_dispatch)
-#   - pr-commands.yml       (/testextensions on a PR)
+#   - slash-commands.yml    (/testextensions on a PR)
 #
 # The SDK is compiled fresh from `ref` in build-server, and each extension is
 # built against that SDK artifact — so passing a PR's head SHA as `ref` tests

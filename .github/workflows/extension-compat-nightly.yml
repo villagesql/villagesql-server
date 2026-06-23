@@ -8,7 +8,7 @@ name: Extension SDK Compatibility
 #   - Can be triggered manually to test a single platform, extension, or ABI.
 #
 # For on-demand testing against a PR's commit, see /testextensions in
-# pr-commands.yml, which calls the same reusable workflow.
+# slash-commands.yml, which calls the same reusable workflow.
 
 on:
   workflow_run:

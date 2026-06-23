@@ -1,4 +1,4 @@
-name: PR Commands
+name: Slash Commands
 
 # Single front door for slash-commands posted as PR comments. Parses the
 # command, resolves the PR head SHA, reacts, refuses duplicate runs, and routes
@@ -61,7 +61,7 @@ jobs:
             const name = firstTok.slice(1).toLowerCase();
 
             const helpText = () =>
-              `**PR commands**\n\n` +
+              `**Slash commands**\n\n` +
               COMMANDS.map(c => `- \`/${c}\``).join('\n') +
               `\n- \`/help\``;
 
@@ -92,14 +92,14 @@ jobs:
               return;
             }
 
-            // Best-effort duplicate guard: if a previous PR Commands run for
+            // Best-effort duplicate guard: if a previous Slash Commands run for
             // THIS PR is still in flight, point at it and don't start another.
             // (Can't cancel/queue with a "notify" message via native
             // concurrency, so we check the API. Matched by run-name prefix.)
             const prefix = `PR #${prNumber}:`;
             for (const status of ['in_progress', 'queued']) {
               const { data } = await github.rest.actions.listWorkflowRuns({
-                owner, repo, workflow_id: 'pr-commands.yml',
+                owner, repo, workflow_id: 'slash-commands.yml',
                 status, per_page: 50,
               });
               const other = data.workflow_runs.find(r =>
@@ -107,7 +107,7 @@ jobs:
                 (r.display_title || r.name || '').startsWith(prefix));
               if (other) {
                 await comment(
-                  `⏳ A PR Commands run is already in progress for this PR: ` +
+                  `⏳ A Slash Commands run is already in progress for this PR: ` +
                   `[run #${other.run_number}](${other.html_url}). ` +
                   `Waiting for it to finish — re-comment once it completes.`);
                 core.setOutput('should_run', 'false');
