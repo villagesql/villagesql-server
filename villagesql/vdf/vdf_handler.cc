@@ -15,7 +15,9 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <string>
 #include <type_traits>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_sys.h"
@@ -184,6 +186,94 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
         // will receive an empty return_params, and downstream code will
         // surface the existing ambiguity error if needed.
       }
+    }
+  }
+
+  // bind_and_check_types override.
+  //
+  // When the function supplies a bind_and_check_types hook it takes control of
+  // return-type parameter resolution. We hand it the declared argument types
+  // and any constant argument values (the same view prerun gets), then read
+  // back the canonical "k=v,k=v" params it computes for the return type and
+  // feed them to SetVDFReturnTypeContext below. The hook augments the built-in
+  // TD1/TD2 pass above; for functions whose return params the default rules
+  // cannot infer (e.g. TYPEID('user') -> typeid(prefix=user)), return_params
+  // is still empty here and the hook fills it.
+  // TODO(villagesql): let the hook fully replace TD1/TD2 (e.g. vector_concat,
+  // whose argument params are related but not equal) rather than only augment.
+  //
+  // bind_and_check_types is a VEF_PROTOCOL_4 field. Gate on the func desc's
+  // protocol (its first member, present in every protocol version) before
+  // touching the field so that extensions built against an older, smaller
+  // vef_func_desc_t are never read out of bounds.
+  if (signature != nullptr &&
+      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4 &&
+      m_udf->vdf_func_desc->bind_and_check_types != nullptr) {
+    std::vector<vef_type_t> bt_arg_types(arg_count);
+    std::vector<char *> bt_const_values(arg_count, nullptr);
+    std::vector<size_t> bt_const_lengths(arg_count, 0);
+    std::vector<String> bt_const_store(arg_count);
+    for (uint i = 0; i < arg_count; i++) {
+      const auto *tc = m_args[i]->get_type_context();
+      if (tc != nullptr) {
+        bt_arg_types[i].id = VEF_TYPE_CUSTOM;
+        bt_arg_types[i].custom_type = tc->type_name().c_str();
+      } else {
+        switch (m_args[i]->result_type()) {
+          case REAL_RESULT:
+            bt_arg_types[i].id = VEF_TYPE_REAL;
+            break;
+          case INT_RESULT:
+            bt_arg_types[i].id = VEF_TYPE_INT;
+            break;
+          default:
+            bt_arg_types[i].id = VEF_TYPE_STRING;
+            break;
+        }
+        bt_arg_types[i].custom_type = nullptr;
+      }
+      // Provide constant string values where available; analysis-time
+      // parameter derivation (the common case) reads them.
+      if (m_args[i]->const_for_execution() &&
+          bt_arg_types[i].id == VEF_TYPE_STRING) {
+        String *v = m_args[i]->val_str(&bt_const_store[i]);
+        if (v != nullptr && !m_args[i]->null_value) {
+          bt_const_values[i] = const_cast<char *>(v->ptr());
+          bt_const_lengths[i] = v->length();
+        }
+      }
+    }
+
+    char params_buf[256];
+    char err_msg[VEF_MAX_ERROR_LEN] = {0};
+    vef_bind_types_args_t bt_args{};
+    bt_args.arg_count = arg_count;
+    bt_args.arg_types = bt_arg_types.data();
+    bt_args.const_values = bt_const_values.data();
+    bt_args.const_lengths = bt_const_lengths.data();
+
+    vef_bind_types_result_t bt_result{};
+    bt_result.type = VEF_RESULT_VALUE;
+    bt_result.error_msg = err_msg;
+    bt_result.out_return_params.buf = params_buf;
+    bt_result.out_return_params.max_buf_len = sizeof(params_buf);
+
+    m_udf->vdf_func_desc->bind_and_check_types(&m_context, &bt_args,
+                                               &bt_result);
+
+    if (bt_result.type == VEF_RESULT_ERROR) {
+      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
+               err_msg[0] ? err_msg : "bind_and_check_types failed");
+      return true;
+    }
+    if (bt_result.out_return_params.overflow) {
+      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
+               "bind_and_check_types: return params buffer overflow");
+      return true;
+    }
+    if (bt_result.out_return_params.actual_len > 0) {
+      return_params = villagesql::TypeParameters(
+          std::string(params_buf, bt_result.out_return_params.actual_len));
     }
   }
 

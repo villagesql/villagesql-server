@@ -183,6 +183,11 @@ typedef enum : unsigned int {
                    //   vef_register() returns.
                    //   (vef_required_capability_t, required_capabilities,
                    //   required_capability_count in vef_registration_t)
+  VEF_PROTOCOL_4,  // Development version. Adds:
+                   // + Add bind_and_check_types VDF hook to vef_func_desc_t,
+                   //   letting an extension validate argument type parameters
+                   //   and compute the function's return-type parameters at
+                   //   fix_fields time, bypassing the built-in TD1/TD2 rules.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -557,6 +562,68 @@ typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
                                    vef_postrun_result_t *result);
 
 // =============================================================================
+// Bind-and-check-types Function (vef_bind_types_func_t)
+// =============================================================================
+//
+// protocol >= VEF_PROTOCOL_4
+//
+// Optional hook called once at analysis time (fix_fields), before prerun, when
+// the function is resolved. It lets the extension take full control of type
+// parameter resolution for the call, bypassing the built-in type
+// disambiguation rules (TD1: sibling args of the same custom type must agree;
+// TD2: a parameterized return type mirrors its same-typed arguments).
+//
+// Use it when the parameter relationship between arguments and the return type
+// is something the default rules cannot express, e.g.
+//   vector_concat(vector(M), vector(N)) -> vector(M+N)
+// or when the return type's parameters must be derived from a constant
+// argument value, e.g.
+//   TYPEID('user') -> typeid(prefix=user)
+//
+// The hook sees only declared argument types plus any constant argument values
+// (the same view prerun gets); it must not depend on per-row data. It reports
+// the return type's parameters as a canonical "k=v,k=v" string through
+// out_return_params, following the vef_inferred_type_params_t overflow
+// contract.
+
+typedef struct {
+  // Number of arguments to the call.
+  unsigned int arg_count;
+
+  // Declared type of each argument. Array has arg_count elements.
+  const vef_type_t *arg_types;
+
+  // For each argument: non-NULL if the argument is a constant, NULL otherwise.
+  // If non-NULL, points to the constant's serialized value (for STRING args,
+  // the text bytes). Array has arg_count elements.
+  char **const_values;
+
+  // Length of each constant value. Only valid where const_values[i] != NULL.
+  // Array has arg_count elements.
+  size_t *const_lengths;
+} vef_bind_types_args_t;
+
+typedef struct {
+  // Result type: VEF_RESULT_VALUE on success, VEF_RESULT_ERROR to abort the
+  // statement with error_msg.
+  vef_return_value_type_t type;
+
+  // Caller-provided buffer for error message (size VEF_MAX_ERROR_LEN).
+  // Write a null-terminated string here if type == VEF_RESULT_ERROR.
+  char *error_msg;
+
+  // OUTPUT: the return type's parameters as a canonical "k=v,k=v" string.
+  // The caller supplies buf/max_buf_len; the callee writes actual_len (and
+  // sets overflow when the buffer is too small). actual_len == 0 means the
+  // function leaves the return-type parameters to the default rules.
+  vef_inferred_type_params_t out_return_params;
+} vef_bind_types_result_t;
+
+typedef void (*vef_bind_types_func_t)(vef_context_t *ctx,
+                                      vef_bind_types_args_t *args,
+                                      vef_bind_types_result_t *result);
+
+// =============================================================================
 // Aggregate Functions
 // =============================================================================
 //
@@ -625,6 +692,13 @@ typedef struct {
   // It is an error to set exactly one of these; both must be present or absent.
   vef_vdf_clear_func_t clear;
   vef_vdf_accumulate_func_t accumulate;
+
+  // protocol >= VEF_PROTOCOL_4
+  // OPTIONAL: author-supplied type binding/checking hook. When non-NULL, the
+  // server calls it at fix_fields time to validate argument type parameters
+  // and compute the return type's parameters, bypassing the built-in TD1/TD2
+  // rules. See vef_bind_types_func_t.
+  vef_bind_types_func_t bind_and_check_types;
 } vef_func_desc_t;
 
 // =============================================================================
