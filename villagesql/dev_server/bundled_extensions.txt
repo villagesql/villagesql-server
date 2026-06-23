@@ -1,5 +1,5 @@
 # Bundled extensions included in the dev server release tarball.
-# Also tested against the HEAD SDK in extension-compat.yml.
+# Also tested against the HEAD SDK in extension-compat-suite.yml.
 #
 # Format: <url> [branch-or-tag] [key=value ...]
 #   url:           Full URL or local filesystem path. git clone accepts both.

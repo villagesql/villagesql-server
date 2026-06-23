@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the JSON matrices used by extension-compat.yml.
+# Builds the JSON matrices used by extension-compat-suite.yml.
 #
 # Outputs two JSON values to stdout (one per line):
 #   1. build-matrix  — platforms for the build-server job (no abi dimension;

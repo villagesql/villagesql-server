@@ -155,5 +155,5 @@ jobs:
       pr_number: ${{ needs.parse.outputs.pr_number }}
       platform_filter: linux-x86_64
       # abi_filter omitted => both ABIs, per-extension declared
-      notify: 'false'
+      slack_notify: 'false'
     secrets: inherit

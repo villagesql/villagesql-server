@@ -33,7 +33,7 @@ on:
         description: 'Branch, tag, or commit SHA to test, or leave empty for the default branch'
         required: false
         default: ''
-      notify:
+      slack_notify:
         description: 'Send Slack notification with results'
         required: false
         type: boolean
@@ -53,6 +53,6 @@ jobs:
       extension_filter: ${{ inputs.extension }}
       abi_filter: ${{ inputs.abi }}
       # format() coerces the boolean to a non-empty string so a dispatch
-      # 'notify: false' is preserved; workflow_run has no inputs => 'true'.
-      notify: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.notify) || 'true' }}
+      # 'slack_notify: false' is preserved; workflow_run has no inputs => 'true'.
+      slack_notify: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.slack_notify) || 'true' }}
     secrets: inherit

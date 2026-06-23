@@ -40,7 +40,7 @@ on:
         required: false
         type: string
         default: ''
-      notify:
+      slack_notify:
         description: "Send Slack notification with results ('true'/'false')"
         required: false
         type: string
@@ -359,10 +359,10 @@ jobs:
             }
 
   # Sends a Slack summary after all test jobs complete (nightly / dispatch).
-  notify:
+  slack_notify:
     name: Slack Notification
     needs: [build-server, test-extension]
-    if: always() && inputs.notify != 'false'
+    if: always() && inputs.slack_notify != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Compute overall status
