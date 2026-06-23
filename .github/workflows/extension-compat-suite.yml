@@ -1,0 +1,427 @@
+name: Extension SDK Compatibility (Reusable)
+
+# Reusable workflow that builds bundled extensions against the SDK built from a
+# given ref and runs their MTR suites. Called by:
+#   - extension-compat.yml (nightly workflow_run + manual workflow_dispatch)
+#   - pr-commands.yml       (/testextensions on a PR)
+#
+# The SDK is compiled fresh from `ref` in build-server, and each extension is
+# built against that SDK artifact — so passing a PR's head SHA as `ref` tests
+# every extension against that exact commit.
+#
+# Extension test convention: each extension repo must have a mysql-test/
+# directory at its root containing t/ and r/ subdirectories. This directory
+# is mounted as mysql-test/suite/<extension-name>/ in the dev server package.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Commit/branch/tag to build the server and SDK from'
+        required: true
+        type: string
+      platform_filter:
+        description: 'Limit to one platform (linux-x86_64, linux-aarch64, macos-arm64)'
+        required: false
+        type: string
+        default: ''
+      extension_filter:
+        description: 'Limit to one extension (e.g. vsql-ai)'
+        required: false
+        type: string
+        default: ''
+      abi_filter:
+        description: 'Limit to one ABI (stable, dev); empty means per-extension declared'
+        required: false
+        type: string
+        default: ''
+      pr_number:
+        description: 'If set, post a results summary as a comment on this PR'
+        required: false
+        type: string
+        default: ''
+      notify:
+        description: "Send Slack notification with results ('true'/'false')"
+        required: false
+        type: string
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  # Reads bundled_extensions.txt and builds a cross-product matrix of
+  # (platform x extension x abi), filtered by the inputs.
+  prepare:
+    name: Prepare matrix
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix: ${{ steps.build-matrix.outputs.build-matrix }}
+      test-matrix: ${{ steps.build-matrix.outputs.test-matrix }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      - name: Build test matrix
+        id: build-matrix
+        env:
+          PLATFORM_FILTER: ${{ inputs.platform_filter }}
+          EXTENSION_FILTER: ${{ inputs.extension_filter }}
+          ABI_FILTER: ${{ inputs.abi_filter }}
+        run: |
+          # Delegate all matrix logic to the script so it can be tested locally:
+          #   PLATFORM_FILTER=macos-arm64 ABI_FILTER=stable \
+          #     ./scripts/villagesql_build-compat-matrix.sh
+          mapfile -t MATRICES < <(./scripts/villagesql_build-compat-matrix.sh)
+          BUILD_MATRIX="${MATRICES[0]}"
+          TEST_MATRIX="${MATRICES[1]}"
+
+          COUNT=$(echo "$TEST_MATRIX" | jq '.include | length')
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No test jobs matched filters (platform='$PLATFORM_FILTER' extension='$EXTENSION_FILTER' abi='$ABI_FILTER'). Nothing to test."
+            exit 1
+          fi
+          echo "build-matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "test-matrix=$TEST_MATRIX" >> "$GITHUB_OUTPUT"
+
+  # Builds the server (for mysqld + MTR) and SDK (for extension compilation).
+  # One job per platform; the server binary is ABI-agnostic.
+  build-server:
+    name: Build Server (${{ matrix.platform }})
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.build-matrix) }}
+
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build
+      OUTPUT_DIR: ${{ github.workspace }}/output
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          path: source
+          ref: ${{ inputs.ref }}
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: sudo source/scripts/setup_linux_build_env.sh
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos'
+        run: brew install bison cmake openssl
+
+      - name: Cache Boost
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/boost
+          key: boost-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build server and SDK
+        run: |
+          mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
+
+          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost"
+          if [ "${{ matrix.os }}" = "macos" ]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
+          fi
+
+          # Build without bundled extensions — each test-extension job builds
+          # its own extension against the SDK artifact from this job.
+          BUILD_DIR="$BUILD_DIR" \
+          OUTPUT_DIR="$OUTPUT_DIR" \
+          BUILD_BUNDLED_EXTENSIONS=0 \
+          CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
+            source/scripts/make_villagesql_dev_server.sh
+
+      - name: Upload dev server
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: devserver-${{ matrix.platform }}
+          path: ${{ env.OUTPUT_DIR }}/*.tar.gz
+          retention-days: 3
+
+      - name: Upload SDK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-${{ matrix.platform }}
+          path: ${{ env.BUILD_DIR }}/villagesql-extension-sdk-*.tar.gz
+          retention-days: 3
+
+  # Builds one extension and runs its MTR suite against the dev server.
+  # Matrix is the cross-product generated by prepare (platform x extension x abi).
+  test-extension:
+    name: Test ${{ matrix.extension }} (${{ matrix.platform }}, ${{ matrix.abi }} ABI)
+    needs: [prepare, build-server]
+    if: |
+      needs.build-server.result != 'failure' &&
+      needs.build-server.result != 'cancelled'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.test-matrix) }}
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+          ref: ${{ inputs.ref }}
+
+      - name: Download dev server
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: devserver-${{ matrix.platform }}
+          path: artifacts/
+
+      - name: Download SDK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdk-${{ matrix.platform }}
+          path: artifacts/
+
+      - name: Extract dev server and SDK
+        run: |
+          mkdir -p package sdk
+          tar xzf artifacts/villagesql-dev-server-*.tar.gz -C package
+          tar xzf artifacts/villagesql-extension-sdk-*.tar.gz -C sdk
+          echo "PACKAGE_DIR=$(echo "$PWD"/package/villagesql-dev-server-*)" >> "$GITHUB_ENV"
+          echo "SDK_DIR=$(echo "$PWD"/sdk/villagesql-extension-sdk-*)" >> "$GITHUB_ENV"
+
+      - name: Install build dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: sudo ./scripts/setup_linux_ext_deps.sh
+
+      - name: Install build dependencies (macOS)
+        if: matrix.os == 'macos'
+        run: ./scripts/setup_macos_ext_deps.sh
+
+      - name: Clone extension
+        run: |
+          CLONE_ARGS=(--depth=1)
+          [[ -n "${{ matrix.branch }}" ]] && CLONE_ARGS+=(--branch "${{ matrix.branch }}")
+          git clone "${CLONE_ARGS[@]}" ${{ matrix.url }} extension/
+
+      - name: Build extension VEB
+        id: build_ext
+        run: |
+          NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
+          DEV_ABI_FLAG=""
+          [ "${{ matrix.abi }}" = "dev" ] && DEV_ABI_FLAG="-DVSQL_USE_DEV_ABI=ON"
+          cmake -S extension/ -B ext-build/ \
+            -DVillageSQL_SDK_DIR="$SDK_DIR" \
+            -DCMAKE_BUILD_TYPE=Release \
+            $DEV_ABI_FLAG
+          cmake --build ext-build/ --parallel "$NCORES"
+
+          # Copy the built VEB into the dev server's extension directory
+          find ext-build/ -maxdepth 1 -name "*.veb" \
+            -exec cp {} "$PACKAGE_DIR/lib/veb/" \;
+
+      - name: Install extension test suite
+        run: |
+          if [ ! -d "extension/mysql-test" ]; then
+            echo "No mysql-test/ directory in ${{ matrix.extension }} — skipping suite install"
+            exit 0
+          fi
+          SUITE_DIR="$PACKAGE_DIR/mysql-test/suite/${{ matrix.extension }}"
+          mkdir -p "$SUITE_DIR"
+          cp -r extension/mysql-test/. "$SUITE_DIR/"
+
+      - name: Run MTR suite
+        id: run_mtr
+        run: |
+          if [ ! -d "extension/mysql-test" ]; then
+            echo "Error: no mysql-test/ directory found in ${{ matrix.extension }}"
+            exit 1
+          fi
+          "$PACKAGE_DIR/villagesql" mysql-test \
+            --suite=${{ matrix.extension }} \
+            --parallel=auto \
+            --nounit-tests \
+            --force \
+            --retry=0
+
+      - name: Upload MTR results on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mtr-results-${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}
+          # var/log/ holds the default error log and per-test save dirs; under
+          # --parallel each worker writes its mysqld.N.err to var/<N>/log/, so
+          # capture both or the server-side failure reason is lost.
+          path: |
+            ${{ env.PACKAGE_DIR }}/mysql-test/var/log/
+            ${{ env.PACKAGE_DIR }}/mysql-test/var/*/log/
+
+      # Record a per-job result so the comment job can build a summary table.
+      # Matrix jobs cannot share an output, so each writes a tiny artifact.
+      - name: Record result
+        if: always()
+        run: |
+          mkdir -p extresults
+          STATUS=success
+          if [ "${{ steps.build_ext.outcome }}" != "success" ] || \
+             [ "${{ steps.run_mtr.outcome }}" != "success" ]; then
+            STATUS=failure
+          fi
+          jq -cn \
+            --arg e "${{ matrix.extension }}" \
+            --arg a "${{ matrix.abi }}" \
+            --arg p "${{ matrix.platform }}" \
+            --arg s "$STATUS" \
+            '{extension:$e, abi:$a, platform:$p, status:$s}' \
+            > "extresults/${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}.json"
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: extresult-${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}
+          path: extresults/
+          retention-days: 3
+
+  # Posts a per-extension pass/fail table as a PR comment. Only when pr_number
+  # is set (i.e. invoked by /testextensions). Updates a prior bot comment in
+  # place via a hidden marker so repeated runs don't spam the thread.
+  comment:
+    name: PR comment
+    needs: [build-server, test-extension]
+    if: always() && inputs.pr_number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Download results
+        # Don't fail the comment if no results exist (e.g. server build failed
+        # so no test-extension jobs ran) — the script reports that case.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: extresult-*
+          path: extresults/
+          merge-multiple: true
+
+      - name: Post or update comment
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- pr-command:testextensions -->';
+            const prNumber = Number('${{ inputs.pr_number }}');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let rows = [];
+            try {
+              for (const f of fs.readdirSync('extresults')) {
+                if (f.endsWith('.json')) {
+                  rows.push(JSON.parse(fs.readFileSync(`extresults/${f}`, 'utf8')));
+                }
+              }
+            } catch (e) {
+              core.warning(`Could not read results: ${e.message}`);
+            }
+            rows.sort((a, b) =>
+              (a.extension + a.abi).localeCompare(b.extension + b.abi));
+
+            const buildResult = '${{ needs.build-server.result }}';
+            const icon = s => s === 'success' ? '✅' : '❌';
+
+            let body = `${marker}\n## 🧩 \`/testextensions\` results\n\n`;
+            if (buildResult !== 'success') {
+              body += `⚠️ Server/SDK build was \`${buildResult}\` — extension results may be incomplete.\n\n`;
+            }
+            if (rows.length === 0) {
+              body += `No extension results were produced. See the [run](${runUrl}).\n`;
+            } else {
+              body += `| Extension | ABI | Result |\n|---|---|---|\n`;
+              for (const r of rows) {
+                body += `| \`${r.extension}\` | ${r.abi} | ${icon(r.status)} ${r.status} |\n`;
+              }
+              const failed = rows.filter(r => r.status !== 'success').length;
+              body += `\n${failed === 0 ? '✅ All extensions passed.' : `❌ ${failed} of ${rows.length} failed.`}`;
+            }
+            body += `\n\n[View run](${runUrl})`;
+
+            const { owner, repo } = context.repo;
+            const comments = await github.paginate(github.rest.issues.listComments,
+              { owner, repo, issue_number: prNumber, per_page: 100 });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
+            }
+
+  # Sends a Slack summary after all test jobs complete (nightly / dispatch).
+  notify:
+    name: Slack Notification
+    needs: [build-server, test-extension]
+    if: always() && inputs.notify != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute overall status
+        id: status
+        run: |
+          BUILD="${{ needs.build-server.result }}"
+          TEST="${{ needs.test-extension.result }}"
+          if [[ "$BUILD" == "success" && "$TEST" == "success" ]]; then
+            echo "label=passed" >> "$GITHUB_OUTPUT"
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+            echo "color=#36a64f" >> "$GITHUB_OUTPUT"
+          elif [[ "$BUILD" == "cancelled" || "$TEST" == "cancelled" ]]; then
+            echo "label=cancelled" >> "$GITHUB_OUTPUT"
+            echo "emoji=⚠️" >> "$GITHUB_OUTPUT"
+            echo "color=#daa520" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=failed" >> "$GITHUB_OUTPUT"
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "color=#cc0000" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.emoji }} Extension SDK Compatibility ${{ steps.status.outputs.label }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "fields": [
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Triggered by",
+                      "value": "${{ github.event_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Build",
+                      "value": "${{ needs.build-server.result }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Tests",
+                      "value": "${{ needs.test-extension.result }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
