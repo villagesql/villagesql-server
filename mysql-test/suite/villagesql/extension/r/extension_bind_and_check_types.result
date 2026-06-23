@@ -1,0 +1,173 @@
+# Install the bind-hook fixture.
+INSTALL EXTENSION vsql_bindcheck_test;
+#
+# tag_make: the return type's label is the VALUE of the constant first
+# argument, read through BindArgType::const_value().
+#
+SELECT vsql_bindcheck_test.tag_make('user', 42) AS t;
+t
+user#42
+SELECT vsql_bindcheck_test.tag_label(vsql_bindcheck_test.tag_make('user', 42))
+AS label,
+vsql_bindcheck_test.tag_counter(vsql_bindcheck_test.tag_make('user', 42))
+AS n;
+label	n
+user	42
+# A user variable is constant for execution, so the hook sees it too.
+SET @l = 'order';
+SELECT vsql_bindcheck_test.tag_label(vsql_bindcheck_test.tag_make(@l, 7))
+AS label;
+label
+order
+# The label is validated at resolution time, before any row is read.
+SELECT vsql_bindcheck_test.tag_make('Bad Label', 1);
+ERROR HY000: Can't initialize function 'tag_make'; tag_make: invalid label 'Bad Label' (lowercase [a-z] and '_', 1..16 chars)
+#
+# has_const_value() is false for a column reference: the hook has no
+# value to derive the label from and rejects the call.
+#
+CREATE TABLE labels (l VARCHAR(16));
+INSERT INTO labels VALUES ('user');
+SELECT vsql_bindcheck_test.tag_make(l, 1) FROM labels;
+ERROR HY000: Can't initialize function 'tag_make'; tag_make: the label must be a constant string
+#
+# A TAG column declares its label, which the text form is checked
+# against.
+#
+CREATE TABLE tags (id INT PRIMARY KEY,
+t vsql_bindcheck_test.TAG('label=user'));
+INSERT INTO tags VALUES (1, 'user#100'), (2, 'user#5');
+SELECT id, t, vsql_bindcheck_test.tag_label(t) AS label
+FROM tags ORDER BY id;
+id	t	label
+1	user#100	user
+2	user#5	user
+SHOW CREATE TABLE tags;
+Table	Create Table
+tags	CREATE TABLE `tags` (
+  `id` int NOT NULL,
+  `t` vsql_bindcheck_test.TAG('label=user') DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Big-endian storage makes the byte order the numeric order.
+SELECT id FROM tags WHERE t > 'user#50' ORDER BY id;
+id
+1
+# A value whose label disagrees with the column's is rejected.
+INSERT INTO tags VALUES (3, 'order#1');
+ERROR HY000: Incorrect TAG value: 'order#1' for column 't' at row 1
+#
+# tag_relabel: the hook combines the first argument's already resolved
+# parameters (params<P>()) with a constant (const_value()).
+#
+SELECT id,
+vsql_bindcheck_test.tag_relabel(t, 'archived') AS relabelled,
+vsql_bindcheck_test.tag_label(
+vsql_bindcheck_test.tag_relabel(t, 'archived')) AS label
+FROM tags ORDER BY id;
+id	relabelled	label
+1	archived#100	archived
+2	archived#5	archived
+# Having read both, the hook can reject a no-op relabel.
+SELECT vsql_bindcheck_test.tag_relabel(t, 'user') FROM tags;
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label matches the old one
+# The new label must be constant here as well.
+SELECT vsql_bindcheck_test.tag_relabel(tags.t, labels.l) FROM tags, labels;
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label must be a constant string
+#
+# A hook can also tighten the contract. A bare string in TAG position
+# reaches the hook as a STRING with no type context, and this hook
+# refuses it rather than reading a label out of the value's own
+# characters -- even though a TAG's text form would allow that.
+#
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the first argument must be a TAG value; write TAG::from_string(...) to convert a string
+SELECT vsql_bindcheck_test.tag_relabel('nope', 'archived');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the first argument must be a TAG value; write TAG::from_string(...) to convert a string
+# The conversion has to be written, and then it works. TAG::from_string
+# resolves the literal to TAG('label=user') on its own, so the argument
+# reaches the hook already carrying parameters and needs no set_arg.
+SELECT vsql_bindcheck_test.tag_relabel(TAG::from_string('user#5'), 'archived')
+AS from_ctor;
+from_ctor
+archived#5
+SELECT vsql_bindcheck_test.tag_label(
+vsql_bindcheck_test.tag_relabel(
+TAG::from_string('user#5'), 'archived')) AS new_label,
+vsql_bindcheck_test.tag_counter(
+vsql_bindcheck_test.tag_relabel(
+TAG::from_string('user#5'), 'archived')) AS n;
+new_label	n
+archived	5
+# The no-op check still reads the source's real label.
+SELECT vsql_bindcheck_test.tag_relabel(TAG::from_string('user#5'), 'user');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label matches the old one
+#
+# TAGLIST: an argument whose parameters are a function of a
+# DIFFERENTLY-typed argument's. This is the case set_arg() alone can
+# serve -- a TAGLIST's text form never names its label, and TD1 only
+# donates between arguments of the same type, so a TAG can never hand
+# its label to a TAGLIST.
+#
+# Written explicitly it cannot be resolved either -- the text is silent:
+SELECT TAGLIST::from_string('[1,2,3]') AS ctor;
+ERROR HY000: error encountered during TAGLIST::from_string inference: taglist_from_string: a TAGLIST literal cannot say which label it belongs to
+# Through the hook, the TAG argument supplies it.
+SELECT vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]') AS lst,
+vsql_bindcheck_test.taglist_label(
+vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]')) AS lbl,
+vsql_bindcheck_test.taglist_size(
+vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]')) AS n
+FROM tags WHERE id = 2;
+lst	lbl	n
+[5,1,2,3]	user	4
+# An already resolved TAGLIST column needs no set_arg, only agreement.
+CREATE TABLE lists (v vsql_bindcheck_test.TAGLIST('label=user'));
+INSERT INTO lists VALUES ('[4,5]');
+SELECT vsql_bindcheck_test.taglist_prepend(tags.t, lists.v) AS lst
+FROM tags, lists WHERE tags.id = 2;
+lst
+[5,4,5]
+CREATE TABLE other_lists (v vsql_bindcheck_test.TAGLIST('label=order'));
+INSERT INTO other_lists VALUES ('[9]');
+# Disagreement is the hook's to reject; TD1 never sees these as siblings.
+SELECT vsql_bindcheck_test.taglist_prepend(tags.t, other_lists.v)
+FROM tags, other_lists;
+ERROR HY000: Can't initialize function 'taglist_prepend'; taglist_prepend: cannot prepend a 'user' tag to a 'order' list
+#
+# taglist_max: variable-length argument in, fixed-size parameterized
+# value out. The return's label crosses from TAGLIST to TAG -- two
+# different type names -- which TD2 cannot do, because it looks up only
+# the return type's own name among the arguments and would find none.
+#
+SELECT v AS list,
+vsql_bindcheck_test.taglist_max(v) AS largest,
+vsql_bindcheck_test.tag_label(vsql_bindcheck_test.taglist_max(v)) AS lbl,
+vsql_bindcheck_test.tag_counter(vsql_bindcheck_test.taglist_max(v)) AS n
+FROM lists;
+list	largest	lbl	n
+[4,5]	user#5	user	5
+# The result really is TAG('label=user'): it stores into a matching
+# column and is refused by one whose label differs.
+CREATE TABLE winners (t vsql_bindcheck_test.TAG('label=user'));
+INSERT INTO winners SELECT vsql_bindcheck_test.taglist_max(v) FROM lists;
+SELECT t FROM winners;
+t
+user#5
+CREATE TABLE wrong_winners (t vsql_bindcheck_test.TAG('label=order'));
+INSERT INTO wrong_winners SELECT vsql_bindcheck_test.taglist_max(v) FROM lists;
+ERROR HY000: Cannot implicitly cast from vsql_bindcheck_test.TAG('label=user') to vsql_bindcheck_test.TAG('label=order') for column 't' at row 1
+# A TAGLIST literal has no label of its own and no sibling to take one
+# from, so there is nothing for the hook to derive.
+SELECT vsql_bindcheck_test.taglist_max('[1,2,3]');
+ERROR HY000: Can't initialize function 'taglist_max'; taglist_max: the list's label is not known here. Put this taglist in a column and run taglist_max() on that column, or use taglist_prepend() to build a list from a TAG.
+#
+# Cleanup
+#
+DROP TABLE wrong_winners;
+DROP TABLE winners;
+DROP TABLE other_lists;
+DROP TABLE lists;
+DROP TABLE tags;
+DROP TABLE labels;
+UNINSTALL EXTENSION vsql_bindcheck_test;

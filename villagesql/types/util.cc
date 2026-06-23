@@ -1349,17 +1349,29 @@ void ClearAlterCustomFields(THD *thd) {
   thd->villagesql_alter_custom_fields.clear();
 }
 
-bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
-                                    std::string_view extension_name,
-                                    uint arg_count, Item **args,
-                                    const vef_signature_t *signature,
-                                    TypeParameters *out_return_params) {
-  // Varargs: skip both arg-count and per-arg type validation. The function's
-  // prerun hook is responsible for inspecting arg_count and arg_types and
-  // rejecting calls it does not accept.
-  if (signature->param_count == VEF_PARAM_VARARGS) {
-    return false;
-  }
+// Params observed for one qualified base name, plus the index of the argument
+// they came from, so conflicts can name both argument positions.
+struct KnownEntry {
+  const TypeParameters *params;
+  uint arg_index;
+};
+
+// Does pass 1 over arguments: validate the argument count and each argument's
+// base type, and collect the type parameters observed per qualified base name.
+//
+// out_known_params == nullptr means a bind_and_check_types hook decides the
+// parameters: nothing is collected and differing sibling params are not an
+// error.
+//
+// The caller must handle varargs before calling this -- signature->params is
+// null for a varargs function. Returns true on error (error already raised).
+static bool ValidateVDFArguments(
+    const char *func_name, std::string_view extension_name, uint arg_count,
+    Item **args, const vef_signature_t *signature,
+    std::map<std::string, KnownEntry> *out_known_params) {
+  // Asking for NO params back is what disabled TD1: nothing is
+  // collected for pass 2 and TD1 is not enforced.
+  const bool enable_TD1 = (out_known_params != nullptr);
 
   // Validate argument count matches signature
   if (arg_count != signature->param_count) {
@@ -1378,10 +1390,6 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   //
   // known_params maps qbn -> (TypeParameters*, first_arg_index) so that
   // conflicts can be reported with both argument positions.
-  struct KnownEntry {
-    const TypeParameters *params;
-    uint arg_index;
-  };
   std::map<std::string, KnownEntry> known_params;
 
   for (uint i = 0; i < arg_count; i++) {
@@ -1407,10 +1415,14 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     }
 
     // If this arg has known (non-unknown) params, record them for TD1.
-    if (!tc->is_unknown()) {
+    if (!tc->is_unknown() && enable_TD1) {
       auto it = known_params.find(expected_qbn);
       if (it != known_params.end()) {
-        // Another arg already provided params for this type. They must match.
+        // Another arg already provided params for this type. Under normal
+        // operation (no bind_and_check_types hook - thus, TD1 enabled) -
+        // they must match; when a bind_and_check_types hook owns parameter
+        // resolution, differing sibling params are allowed (the hook decides
+        // what they mean).
         if (!(tc->parameters() == *it->second.params)) {
           villagesql_error(
               "Cannot initialize function '%s': conflicting type parameters "
@@ -1425,8 +1437,39 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     }
   }
 
-  // Pass 2: Resolve unknown params and convert string constants. For each
-  // custom-type arg that needs params, use TD1 (known_params from pass 1).
+  if (out_known_params != nullptr) {
+    *out_known_params = std::move(known_params);
+  }
+  return false;
+}
+
+// Pass 2: Resolve unknown params and convert string constants, applying the
+// parameters pass 1 collected. This never decides parameters itself -- an empty
+// known_params simply means there is nothing to propagate, so a parameterized
+// type that needs them errors out.
+static bool ConvertVDFArguments(
+    THD *thd, const char *func_name, std::string_view extension_name,
+    uint arg_count, Item **args, const vef_signature_t *signature,
+    const std::map<std::string, KnownEntry> &known_params,
+    const std::vector<TypeParameters> &hook_arg_params) {
+  // The two sources are alternatives, TD1 fills known_params when the server
+  // resolves the parameters, a bind_and_check_types hook fills hook_arg_params
+  // when it does, and the caller only ever runs one of them. They are keyed
+  // differently because of how each is decided -- known_params by type name,
+  // since TD1 shares one answer across every argument of that type;
+  // hook_arg_params by argument index, since the hook is asked about each
+  // argument separately.
+  assert(known_params.empty() || hook_arg_params.empty());
+
+  // The hook's answer for one argument, or null if the hook did not supply one
+  // (either because there is no hook, or because it left this argument alone).
+  auto params_for_arg = [&](uint i) -> const TypeParameters * {
+    if (i < hook_arg_params.size() && !hook_arg_params[i].empty()) {
+      return &hook_arg_params[i];
+    }
+    return nullptr;
+  };
+
   for (uint i = 0; i < arg_count; i++) {
     const vef_type_t &expected_type = signature->params[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
@@ -1442,22 +1485,28 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     if (tc != nullptr && !tc->is_unknown()) continue;
 
     // Case 2: Arg has a TypeContext but with unknown params (e.g., from an
-    // inner VDF that returned an unknown-params type). Re-acquire with the
-    // known params if available via TD1.
+    // inner VDF that returned an unknown-params type). Re-acquire using
+    // whichever source is in play -- the hook's answer for this argument, or
+    // TD1's for its type.
     if (tc != nullptr && tc->is_unknown()) {
-      auto it = known_params.find(expected_qbn);
-      if (it != known_params.end()) {
+      const TypeParameters *params{nullptr};
+      if (!hook_arg_params.empty()) {
+        params = params_for_arg(i);
+      } else {
+        auto it = known_params.find(expected_qbn);
+        if (it != known_params.end()) params = it->second.params;
+      }
+      if (params != nullptr) {
         const TypeContext *resolved_tc = nullptr;
         if (ResolveTypeToContext(extension_name, expected_type.custom_type,
-                                 *it->second.params, *thd->mem_root,
-                                 resolved_tc)) {
+                                 *params, *thd->mem_root, resolved_tc)) {
           return true;
         }
         if (resolved_tc != nullptr) {
           args[i]->set_type_context(resolved_tc);
         }
       } else {
-        // No known params available for this type. Error.
+        // Neither the hook nor TD1 could supply params for this type.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -1470,12 +1519,18 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // Case 3: Arg is a constant string — implicit conversion.
     if (args[i]->type() == Item::STRING_ITEM &&
         args[i]->const_for_execution()) {
-      // Use known params from TD1 if available, otherwise empty (correct for
-      // non-parameterized types).
+      // Take the params from whichever source is in play -- the hook's answer
+      // for this argument, or TD1's for its type. Neither supplying any leaves
+      // them empty, which is the complete and correct answer for a
+      // non-parameterized type.
       TypeParameters resolved_params;
-      auto it = known_params.find(expected_qbn);
-      if (it != known_params.end()) {
-        resolved_params = *it->second.params;
+      if (const TypeParameters *hook_params = params_for_arg(i)) {
+        resolved_params = *hook_params;
+      } else {
+        auto it = known_params.find(expected_qbn);
+        if (it != known_params.end()) {
+          resolved_params = *it->second.params;
+        }
       }
 
       const TypeContext *type_ctx = nullptr;
@@ -1516,17 +1571,196 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return true;
   }
 
-  // Type disambiguation rule 2 (TD2): If the return type is a parameterized
-  // custom type, infer its params from args of the same type.
-  if (out_return_params != nullptr &&
-      signature->return_type.id == VEF_TYPE_CUSTOM &&
-      signature->return_type.custom_type != nullptr) {
-    const std::string return_qbn = make_qualified_base_name(
-        extension_name, signature->return_type.custom_type);
-    auto it = known_params.find(return_qbn);
-    if (it != known_params.end()) {
-      *out_return_params = *it->second.params;
+  return false;
+}
+
+// Type disambiguation rule 2 (TD2): if the return type is a parameterized
+// custom type, infer its params from args of the same type.
+static void InferVDFReturnParams(
+    std::string_view extension_name, const vef_signature_t *signature,
+    const std::map<std::string, KnownEntry> &known_params,
+    TypeParameters *out_return_params) {
+  if (signature->return_type.id != VEF_TYPE_CUSTOM ||
+      signature->return_type.custom_type == nullptr) {
+    return;
+  }
+  const std::string return_qbn = make_qualified_base_name(
+      extension_name, signature->return_type.custom_type);
+  auto it = known_params.find(return_qbn);
+  if (it != known_params.end()) {
+    *out_return_params = *it->second.params;
+  }
+}
+
+// Buffer for one canonical "k=v,k=v" params string.
+static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+
+// Invokes a function's bind_and_check_types hook.
+// Fills out_arg_params[i] for each argument the hook resolved (left empty where
+// it had nothing to say) and *out_return_params for the return type. Returns
+// true on error (error already raised).
+static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
+                              vef_context_t *ctx, const char *func_name,
+                              uint arg_count, Item **args,
+                              std::vector<TypeParameters> *out_arg_params,
+                              TypeParameters *out_return_params) {
+  std::vector<vef_type_t> arg_types(arg_count);
+  std::vector<char *> const_values(arg_count, nullptr);
+  std::vector<size_t> const_lengths(arg_count, 0);
+  std::vector<vef_type_params_t> arg_params(arg_count, vef_type_params_t{});
+  std::vector<String> const_store(arg_count);
+
+  for (uint i = 0; i < arg_count; i++) {
+    const auto *tc = args[i]->get_type_context();
+    if (tc != nullptr) {
+      arg_types[i].id = VEF_TYPE_CUSTOM;
+      arg_types[i].custom_type = tc->type_name().c_str();
+      // Expose this argument's resolved params so the hook can implement its
+      // own params/return type disambiguation logic. The arrays live on the
+      // TypeContext and stay valid for this call.
+      if (!tc->is_unknown()) {
+        const auto &params = tc->parameters();
+        arg_params[i] = {params.count(), params.key_data(),
+                         params.value_data()};
+      }
+    } else {
+      switch (args[i]->result_type()) {
+        case REAL_RESULT:
+          arg_types[i].id = VEF_TYPE_REAL;
+          break;
+        case INT_RESULT:
+          arg_types[i].id = VEF_TYPE_INT;
+          break;
+        default:
+          arg_types[i].id = VEF_TYPE_STRING;
+          break;
+      }
+      arg_types[i].custom_type = nullptr;
     }
+    // Provide constant string values where available
+    if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
+      String *v = args[i]->val_str(&const_store[i]);
+      if (v != nullptr && !args[i]->null_value) {
+        const_values[i] = const_cast<char *>(v->ptr());
+        const_lengths[i] = v->length();
+      }
+    }
+  }
+
+  // One output slot per argument, plus one for the return type.
+  std::vector<vef_inferred_type_params_t> out_args(arg_count);
+  std::vector<char> arg_bufs(arg_count * kBindParamsBufLen);
+  for (uint i = 0; i < arg_count; i++) {
+    out_args[i] = {};
+    out_args[i].buf = arg_bufs.data() + i * kBindParamsBufLen;
+    out_args[i].max_buf_len = kBindParamsBufLen;
+  }
+
+  char return_buf[kBindParamsBufLen];
+  char err_msg[VEF_MAX_ERROR_LEN] = {0};
+
+  vef_bind_types_args_t bt_args{};
+  bt_args.arg_count = arg_count;
+  bt_args.arg_types = arg_types.data();
+  bt_args.const_values = const_values.data();
+  bt_args.const_lengths = const_lengths.data();
+  bt_args.arg_params = arg_params.data();
+
+  vef_bind_types_result_t bt_result{};
+  bt_result.type = VEF_RESULT_VALUE;
+  bt_result.error_msg = err_msg;
+  bt_result.out_return_params.buf = return_buf;
+  bt_result.out_return_params.max_buf_len = sizeof(return_buf);
+  bt_result.out_arg_params = arg_count > 0 ? out_args.data() : nullptr;
+
+  bind_and_check(ctx, &bt_args, &bt_result);
+
+  // Only VEF_RESULT_VALUE is success.
+  if (bt_result.type != VEF_RESULT_VALUE) {
+    my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name,
+             err_msg[0] ? err_msg : "bind_and_check_types failed");
+    return true;
+  }
+  if (bt_result.out_return_params.overflow) {
+    my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name,
+             "bind_and_check_types: return params buffer overflow");
+    return true;
+  }
+  if (bt_result.out_return_params.actual_len > 0 &&
+      out_return_params != nullptr) {
+    *out_return_params = TypeParameters(
+        std::string(return_buf, bt_result.out_return_params.actual_len));
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if (out_args[i].overflow) {
+      // ER_CANT_INITIALIZE_UDF takes a fixed reason string, so format the
+      // argument position into it first.
+      char reason[VEF_MAX_ERROR_LEN];
+      snprintf(reason, sizeof(reason),
+               "bind_and_check_types: params buffer overflow for argument %u",
+               i + 1);
+      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name, reason);
+      return true;
+    }
+    if (out_args[i].actual_len > 0) {
+      (*out_arg_params)[i] =
+          TypeParameters(std::string(out_args[i].buf, out_args[i].actual_len));
+    }
+  }
+  return false;
+}
+
+bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
+                                    std::string_view extension_name,
+                                    uint arg_count, Item **args,
+                                    const vef_signature_t *signature,
+                                    TypeParameters *out_return_params,
+                                    const vef_bind_types_func_t bind_and_check,
+                                    vef_context_t *ctx) {
+  // Varargs: skip both arg-count and per-arg type validation. The function's
+  // prerun hook is responsible for inspecting arg_count and arg_types and
+  // rejecting calls it does not accept.
+  if (signature->param_count == VEF_PARAM_VARARGS) {
+    return false;
+  }
+  const bool has_bind_hook = nullptr != bind_and_check;
+
+  // A bind_and_check_types hook replaces both TD1 and TD2. Passing nullptr
+  // leaves known_params empty, which is what switches TD1 off: pass 1 collects
+  // nothing and stops enforcing sibling agreement, and pass 2 has nothing of
+  // TD1's to propagate. Pass 2 still runs for its non-TD1 half -- encoding
+  // string literals and rejecting arguments that are neither a custom value nor
+  // a literal -- and for applying whatever the hook decided below.
+  std::map<std::string, KnownEntry> known_params;
+  if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
+                           signature,
+                           has_bind_hook ? nullptr : &known_params)) {
+    return true;
+  }
+
+  // The hook sits between the passes: it sees what pass 1 resolved, and the
+  // params it decides are what pass 2 applies.
+  std::vector<TypeParameters> hook_arg_params;
+  if (has_bind_hook) {
+    hook_arg_params.resize(arg_count);
+    if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
+                          &hook_arg_params, out_return_params)) {
+      return true;
+    }
+  }
+
+  if (ConvertVDFArguments(thd, func_name, extension_name, arg_count, args,
+                          signature, known_params, hook_arg_params)) {
+    return true;
+  }
+
+  // TD2's replacement: the hook already supplied the return type's params.
+  if (has_bind_hook) return false;
+
+  if (out_return_params != nullptr) {
+    InferVDFReturnParams(extension_name, signature, known_params,
+                         out_return_params);
   }
 
   return false;

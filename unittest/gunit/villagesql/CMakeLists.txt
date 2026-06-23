@@ -24,6 +24,7 @@ SET(VILLAGESQL_UNIT_TESTS
   type_builder-t
   type_context-t
   type_descriptor-t
+  type_params-t
   validate-t
   victionary_client-t
 )
@@ -72,6 +73,7 @@ ADD_VILLAGESQL_TEST(semver-t)
 ADD_VILLAGESQL_TEST(type_builder-t)
 ADD_VILLAGESQL_TEST(type_context-t)
 ADD_VILLAGESQL_TEST(type_descriptor-t)
+ADD_VILLAGESQL_TEST(type_params-t)
 ADD_VILLAGESQL_TEST(validate-t)
 ADD_VILLAGESQL_TEST(victionary_client-t)
 
