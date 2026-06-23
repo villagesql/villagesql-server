@@ -241,7 +241,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mtr-results-${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}
-          path: ${{ env.PACKAGE_DIR }}/mysql-test/var/log/
+          # var/log/ holds the default error log and per-test save dirs; under
+          # --parallel each worker writes its mysqld.N.err to var/<N>/log/, so
+          # capture both or the server-side failure reason is lost.
+          path: |
+            ${{ env.PACKAGE_DIR }}/mysql-test/var/log/
+            ${{ env.PACKAGE_DIR }}/mysql-test/var/*/log/
 
   # Sends a Slack summary after all test jobs complete.
   # Runs automatically (workflow_run) or when notify is true (workflow_dispatch).
