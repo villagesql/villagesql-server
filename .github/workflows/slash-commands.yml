@@ -68,6 +68,9 @@ jobs:
             const comment = (b) => github.rest.issues.createComment(
               { owner, repo, issue_number: prNumber, body: b });
 
+            const runUrl =
+              `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
             if (name === 'help' || name === 'commands') {
               await comment(helpText());
               core.setOutput('should_run', 'false');
@@ -127,6 +130,12 @@ jobs:
             } catch (e) {
               core.info(`Could not add reaction: ${e.message}`);
             }
+
+            // Post a "started" comment with a link to this run. The result job
+            // posts a separate comment when the run finishes.
+            await comment(
+              `## 🚀 \`/${name}\` started\n\n` +
+              `Running against \`${pr.head.sha.slice(0, 12)}\`. [View run](${runUrl})`);
 
             core.setOutput('command', name);
             core.setOutput('ref', pr.head.sha);
