@@ -380,13 +380,17 @@ extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 // unknown type parameters. If out_return_params is non-null and the return type
 // is a parameterized custom type, writes the resolved TypeParameters for the
 // return type (inferred from args via the rule that the return parameters are
-// the same as those matching arguements of the same abstract type). Returns
-// false on success, true on error.
+// the same as those matching arguements of the same abstract type).
+// func_desc is the calling function's descriptor (may be null). When it carries
+// a bind_and_check_types hook, that hook replaces TD1 and TD2.
+// Returns false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                            std::string_view extension_name,
                                            uint arg_count, Item **args,
                                            const vef_signature_t *signature,
-                                           TypeParameters *out_return_params);
+                                           TypeParameters *out_return_params,
+                                           const vef_func_desc_t *func_desc,
+                                           vef_context_t *ctx);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.

@@ -15,7 +15,9 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <string>
 #include <type_traits>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_sys.h"
@@ -126,14 +128,17 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   }
 
   // Validate and convert VDF arguments (custom type handling).
-  // We resolve unknown type params from sibling args by default; we then infer
-  // return type params from the args, as written into return_params.
+  // We resolve unknown type params from sibling args by default, then infer
+  // return type params from the args, as written into return_params. If the
+  // function carries a bind_and_check_types hook, the hooks resolve those
+  // params and returned params instead. 
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
   villagesql::TypeParameters return_params;
   if (signature != nullptr &&
       villagesql::ValidateAndConvertVDFArguments(
           thd, m_udf->name.str, to_string_view(m_udf->extension_name),
-          arg_count, m_args, signature, &return_params)) {
+          arg_count, m_args, signature, &return_params, m_udf->vdf_func_desc,
+          &m_context)) {
     return true;
   }
 

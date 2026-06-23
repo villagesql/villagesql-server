@@ -1,0 +1,7 @@
+{
+  "name": "vsql_bindcheck_test",
+  "version": "0.0.1",
+  "description": "Coverage fixture for the typed bind_and_check_types API (BindArgs/BindResult). TAG is a custom type parameterized by a 'label'; tag_make(label, n) derives the return type's label from a constant argument value, and tag_relabel(tag, label) derives it from both an argument's resolved parameters and a constant.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}
