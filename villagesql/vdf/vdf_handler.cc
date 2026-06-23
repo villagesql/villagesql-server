@@ -273,9 +273,10 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     // keep the max.
     if (m_return_type_context != nullptr) {
       const int64_t buffer_len = m_return_type_context->field_buffer_length();
-      assert(buffer_len > 0);
+      assert(!m_return_type_context->is_variable_length() || buffer_len > 0);
       // TODO(villagesql): refactor to MaybeResizeBuffer()
-      if (static_cast<size_t>(buffer_len) > m_result_buffer_size) {
+      if (buffer_len > 0 &&
+          static_cast<size_t>(buffer_len) > m_result_buffer_size) {
         m_result_buffer_size = static_cast<size_t>(buffer_len);
         m_result_buffer =
             pointer_cast<char *>((*THR_MALLOC)->Alloc(m_result_buffer_size));
