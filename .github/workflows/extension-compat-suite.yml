@@ -260,22 +260,14 @@ jobs:
 
       # Record a per-job result so the comment job can build a summary table.
       # Matrix jobs cannot share an output, so each writes a tiny artifact.
+      # Logic lives in a script tested by scripts/ci_helpers/regtest_workflow_scripts.sh.
       - name: Record result
         if: always()
         run: |
-          mkdir -p extresults
-          STATUS=success
-          if [ "${{ steps.build_ext.outcome }}" != "success" ] || \
-             [ "${{ steps.run_mtr.outcome }}" != "success" ]; then
-            STATUS=failure
-          fi
-          jq -cn \
-            --arg e "${{ matrix.extension }}" \
-            --arg a "${{ matrix.abi }}" \
-            --arg p "${{ matrix.platform }}" \
-            --arg s "$STATUS" \
-            '{extension:$e, abi:$a, platform:$p, status:$s}' \
-            > "extresults/${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}.json"
+          ./scripts/ci_helpers/villagesql_ext_record_result.sh \
+            "${{ matrix.extension }}" "${{ matrix.abi }}" "${{ matrix.platform }}" \
+            "${{ steps.build_ext.outcome }}" "${{ steps.run_mtr.outcome }}" \
+            extresults
 
       - name: Upload result
         if: always()
@@ -297,6 +289,12 @@ jobs:
       contents: read
       issues: write
     steps:
+      - name: Checkout scripts
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+
       - name: Download results
         # Don't fail the comment if no results exist (e.g. server build failed
         # so no test-extension jobs ran) — the script reports that case.
@@ -307,48 +305,17 @@ jobs:
           path: extresults/
           merge-multiple: true
 
+      # Summary markdown is built by a script tested by
+      # scripts/ci_helpers/regtest_workflow_scripts.sh, then posted with gh.
       - name: Post comment
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-        with:
-          script: |
-            const fs = require('fs');
-            const prNumber = Number('${{ inputs.pr_number }}');
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
-            let rows = [];
-            try {
-              for (const f of fs.readdirSync('extresults')) {
-                if (f.endsWith('.json')) {
-                  rows.push(JSON.parse(fs.readFileSync(`extresults/${f}`, 'utf8')));
-                }
-              }
-            } catch (e) {
-              core.warning(`Could not read results: ${e.message}`);
-            }
-            rows.sort((a, b) =>
-              (a.extension + a.abi).localeCompare(b.extension + b.abi));
-
-            const buildResult = '${{ needs.build-server.result }}';
-            const icon = s => s === 'success' ? '✅' : '❌';
-
-            let body = `## 🧩 \`/testextensions\` results\n\n`;
-            if (buildResult !== 'success') {
-              body += `⚠️ Server/SDK build was \`${buildResult}\` — extension results may be incomplete.\n\n`;
-            }
-            if (rows.length === 0) {
-              body += `No extension results were produced. See the [run](${runUrl}).\n`;
-            } else {
-              body += `| Extension | ABI | Result |\n|---|---|---|\n`;
-              for (const r of rows) {
-                body += `| \`${r.extension}\` | ${r.abi} | ${icon(r.status)} ${r.status} |\n`;
-              }
-              const failed = rows.filter(r => r.status !== 'success').length;
-              body += `\n${failed === 0 ? '✅ All extensions passed.' : `❌ ${failed} of ${rows.length} failed.`}`;
-            }
-            body += `\n\n[View run](${runUrl})`;
-
-            const { owner, repo } = context.repo;
-            await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
+            extresults '${{ needs.build-server.result }}' "$RUN_URL")"
+          gh pr comment "${{ inputs.pr_number }}" \
+            --repo "${{ github.repository }}" --body "$BODY"
 
   # Sends a Slack summary after all test jobs complete (nightly / dispatch).
   slack_notify:

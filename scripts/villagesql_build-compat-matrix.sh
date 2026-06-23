@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Builds the JSON matrices used by extension-compat-suite.yml.
 #
+# TODO(villagesql-beta): this and the other Actions-only scripts (e.g.
+# should_run_all_tests.sh) should move into scripts/ci_helpers/ alongside the
+# slash-command/extension-compat helpers; left here for now to keep this PR's
+# diff focused. Update the workflow reference when moved.
+#
 # Outputs two JSON values to stdout (one per line):
 #   1. build-matrix  — platforms for the build-server job (no abi dimension;
 #                      the server binary is ABI-agnostic)
