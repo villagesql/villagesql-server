@@ -1,0 +1,121 @@
+# tvector_max_element / tvector_min_element: (TVECTOR) -> REAL
+#
+# The narrowest use of a bind hook in this extension. The return is a REAL, so
+# there are no return parameters to decide and the shared hook never calls
+# set_return() -- its only job is the argument.
+#
+# Both functions work without a hook for a TVECTOR column, and for an
+# explicitly converted TVECTOR::from_string(...). What the hook adds is the
+# bare literal: with a single argument there is no sibling for TD1 to donate a
+# dimension from, so without it the call could not be resolved at all.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO v3 VALUES (1, '[3,9,4]'), (2, '[-5,-1,-7]');
+
+########################################################################
+#
+# 1. A column: resolved already, the hook has nothing to publish.
+#
+########################################################################
+
+SELECT id, v,
+       vsql_tvector.tvector_max_element(v) AS largest,
+       vsql_tvector.tvector_min_element(v) AS smallest
+FROM v3 ORDER BY id;
+
+########################################################################
+#
+# 2. An explicit conversion: the inner call resolves to TVECTOR(3) on its
+#    own, so again nothing is published.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_max_element(TVECTOR::from_string('[1,8,2]')) AS mx,
+       vsql_tvector.tvector_min_element(TVECTOR::from_string('[1,8,2]')) AS mn;
+
+########################################################################
+#
+# 3. A bare literal. This is the case the hook exists for -- it counts the
+#    elements and answers with set_arg() so the server can encode it.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_max_element('[1,8,2]') AS mx,
+       vsql_tvector.tvector_min_element('[1,8,2]') AS mn;
+
+SELECT vsql_tvector.tvector_max_element('[42]') AS mx,
+       vsql_tvector.tvector_min_element('[42]') AS mn;
+
+SELECT vsql_tvector.tvector_max_element('[-3,-9]') AS mx,
+       vsql_tvector.tvector_min_element('[-3,-9]') AS mn;
+
+SELECT vsql_tvector.tvector_max_element('[1.5,2.25,0.5]') AS mx,
+       vsql_tvector.tvector_min_element('[1.5,2.25,0.5]') AS mn;
+
+########################################################################
+#
+# 4. Element type. A lone literal has no other side to take one from, so it
+#    is read as float; a double column keeps its own width.
+#
+########################################################################
+
+CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
+
+SELECT vsql_tvector.tvector_max_element(v) AS mx,
+       vsql_tvector.tvector_min_element(v) AS mn
+FROM d3;
+
+########################################################################
+#
+# 5. Rejections, all at resolution time, and reported under the calling
+#    function's own name.
+#
+########################################################################
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_max_element('not a vector');
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_min_element('not a vector');
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_max_element('[]');
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_min_element('[]');
+
+CREATE TABLE texts (t VARCHAR(32));
+INSERT INTO texts VALUES ('[1,2]');
+
+--echo # Not constant, so there is no value to count at resolution time.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_max_element(t) FROM texts;
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_min_element(t) FROM texts;
+
+########################################################################
+#
+# 6. NULL propagates.
+#
+########################################################################
+
+INSERT INTO v3 VALUES (3, NULL);
+SELECT id,
+       vsql_tvector.tvector_max_element(v) IS NULL AS max_is_null,
+       vsql_tvector.tvector_min_element(v) IS NULL AS min_is_null
+FROM v3 ORDER BY id;
+
+########################################################################
+#
+# Cleanup
+#
+########################################################################
+
+DROP TABLE texts;
+DROP TABLE d3;
+DROP TABLE v3;
+UNINSTALL EXTENSION vsql_tvector;

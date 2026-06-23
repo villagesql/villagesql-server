@@ -1,0 +1,149 @@
+# Functions whose return type is derived from one TVECTOR argument.
+#
+# All four share the argument half of their hook with tvector_max_element and
+# tvector_min_element -- a bare literal has no sibling to take a dimension
+# from, so the hook counts its elements and answers with set_arg(). What they
+# add is the return half, which TD2 cannot express because it can only copy an
+# argument's parameters verbatim:
+#
+#   tvector_dim              -> INT      no return parameters at all
+#   tvector_max_as_vector    -> TVECTOR  element type inherited, dimension = 1
+#   tvector_min_as_vector    -> TVECTOR  same
+#   tvector_as_double        -> TVECTOR  dimension inherited, element type fixed
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO v3 VALUES (1, '[3,9,4]'), (2, '[-5,-1,-7]');
+
+CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
+
+########################################################################
+#
+# 1. tvector_dim. The answer IS the type parameter, so for a literal the
+#    hook worked it out at resolution time and the body reads it back.
+#
+########################################################################
+
+SELECT id, v, vsql_tvector.tvector_dim(v) AS n FROM v3 ORDER BY id;
+SELECT vsql_tvector.tvector_dim('[1,2,3,4,5]') AS from_literal;
+SELECT vsql_tvector.tvector_dim(TVECTOR::from_string('[1,2]')) AS from_ctor;
+SELECT vsql_tvector.tvector_dim(v) AS from_double_column FROM d3;
+
+--echo # It reports the dimension tvector_concat's hook computed.
+SELECT vsql_tvector.tvector_dim(
+         vsql_tvector.tvector_concat(v, '[1,2]')) AS n
+FROM v3 WHERE id = 1;
+
+########################################################################
+#
+# 2. tvector_max_as_vector / tvector_min_as_vector. The point of these is
+#    that a REAL cannot be stored in a TVECTOR column, so a reduction that
+#    should land in one has to return a vector.
+#
+########################################################################
+
+SELECT id,
+       vsql_tvector.tvector_max_as_vector(v) AS mx,
+       vsql_tvector.tvector_min_as_vector(v) AS mn
+FROM v3 ORDER BY id;
+
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_max_as_vector(v)) AS n
+FROM v3 WHERE id = 1;
+
+--echo # The result is TVECTOR(1) and stores into a matching column.
+CREATE TABLE peaks (id INT PRIMARY KEY, p TVECTOR(1));
+INSERT INTO peaks SELECT id, vsql_tvector.tvector_max_as_vector(v) FROM v3;
+SELECT id, p FROM peaks ORDER BY id;
+
+--echo # A REAL cannot go the same route -- this is why the _as_vector forms
+--echo # exist at all.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO peaks VALUES (99, 9);
+
+--echo # The element type is inherited, so a double vector yields
+--echo # TVECTOR('dimension=1,type=double') and needs a matching column.
+SELECT vsql_tvector.tvector_max_as_vector(v) AS mx FROM d3;
+
+CREATE TABLE dpeaks (p TVECTOR('dimension=1,type=double'));
+INSERT INTO dpeaks SELECT vsql_tvector.tvector_max_as_vector(v) FROM d3;
+SELECT p FROM dpeaks;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO peaks VALUES (98, vsql_tvector.tvector_max_as_vector(
+                                (SELECT v FROM d3 LIMIT 1)));
+
+--echo # From a bare literal too.
+SELECT vsql_tvector.tvector_max_as_vector('[4,1,7,2]') AS mx,
+       vsql_tvector.tvector_min_as_vector('[4,1,7,2]') AS mn;
+
+########################################################################
+#
+# 3. tvector_as_double: the mirror -- dimension inherited, element type
+#    fixed at double.
+#
+########################################################################
+
+SELECT id, v, vsql_tvector.tvector_as_double(v) AS widened
+FROM v3 ORDER BY id;
+
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_as_double(v)) AS n
+FROM v3 WHERE id = 1;
+
+--echo # It really is type=double now: it stores into a double column and is
+--echo # refused by a float one of the same dimension.
+CREATE TABLE wide3 (v TVECTOR('dimension=3,type=double'));
+INSERT INTO wide3 SELECT vsql_tvector.tvector_as_double(v) FROM v3 WHERE id = 1;
+SELECT v FROM wide3;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO v3 SELECT 9, vsql_tvector.tvector_as_double(v) FROM v3 WHERE id = 1;
+
+--echo # A double argument passes through unchanged.
+SELECT vsql_tvector.tvector_as_double(v) AS already_wide FROM d3;
+
+--echo # And from a bare literal, which the hook reads as float first.
+SELECT vsql_tvector.tvector_as_double('[1.5,2.5]') AS widened;
+
+########################################################################
+#
+# 4. NULL propagates through all four.
+#
+########################################################################
+
+INSERT INTO v3 VALUES (3, NULL);
+SELECT id,
+       vsql_tvector.tvector_dim(v) IS NULL AS dim_null,
+       vsql_tvector.tvector_max_as_vector(v) IS NULL AS max_null,
+       vsql_tvector.tvector_min_as_vector(v) IS NULL AS min_null,
+       vsql_tvector.tvector_as_double(v) IS NULL AS wide_null
+FROM v3 ORDER BY id;
+
+########################################################################
+#
+# 5. The shared argument checks apply to all of them.
+#
+########################################################################
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_dim('not a vector');
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_max_as_vector('[]');
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_as_double('[]');
+
+########################################################################
+#
+# Cleanup
+#
+########################################################################
+
+DROP TABLE wide3;
+DROP TABLE dpeaks;
+DROP TABLE peaks;
+DROP TABLE d3;
+DROP TABLE v3;
+UNINSTALL EXTENSION vsql_tvector;

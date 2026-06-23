@@ -65,6 +65,7 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   desc.deterministic = func_data.deterministic();
   desc.clear = func_data.clear();
   desc.accumulate = func_data.accumulate();
+  desc.bind_and_check_types = func_data.bind();
 
   return &desc;
 }
