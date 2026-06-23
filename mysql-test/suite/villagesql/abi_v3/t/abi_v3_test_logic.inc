@@ -105,6 +105,25 @@ CREATE TABLE t_nulls (
 INSERT INTO t_nulls VALUES (1, '[3,4]'), (2, NULL);
 SELECT abi_v3_test.pvec_norm_sq(v) AS norm_sq FROM t_nulls;
 
+--echo # bind_and_check_types fully replacing TD1/TD2: pvec_concat(PVEC(M), PVEC(N))
+--echo # returns PVEC(M+N). The arguments have DIFFERENT params, which TD1
+--echo # (siblings must agree) would reject, and the return dimension is neither
+--echo # argument's, which TD2 cannot infer; the function's bind hook computes it.
+CREATE TABLE t_concat (
+  a PVEC(2),
+  b PVEC(3)
+);
+INSERT INTO t_concat VALUES ('[1,2]', '[3,4,5]');
+SELECT abi_v3_test.PVEC::to_string(abi_v3_test.pvec_concat(a, b)) AS concatenated
+  FROM t_concat;
+DROP TABLE t_concat;
+
+--echo # Same, in pure expression context: two from_string constants of
+--echo # different inferred dimensions concatenate to PVEC(3).
+SELECT abi_v3_test.PVEC::to_string(
+         abi_v3_test.pvec_concat(abi_v3_test.PVEC::from_string('[7,8]'),
+                                 abi_v3_test.PVEC::from_string('[9]'))) AS lit_concat;
+
 DROP TABLE t1, t_nulls;
 
 --echo # Uninstall extension

@@ -292,7 +292,8 @@ struct FuncWithMetadata {
         deterministic(false),
         is_varargs(false),
         check_params_cache_bound(nullptr),
-        check_signature(nullptr) {}
+        check_signature(nullptr),
+        bind(nullptr) {}
 
   vef_vdf_func_t f;
   vef_prerun_func_t prerun;
@@ -311,6 +312,7 @@ struct FuncWithMetadata {
   bool (*check_params_cache_bound)();
   const char *(*check_signature)(const vef_type_t *, size_t,
                                  const vef_type_t &);
+  vef_bind_types_func_t bind;
 };
 
 // Extracts the params type P from a type operation function pointer,
@@ -1038,6 +1040,7 @@ struct StaticFuncDesc {
   bool (*check_params_cache_bound_)();
   const char *(*check_signature_)(const vef_type_t *, size_t,
                                   const vef_type_t &);
+  vef_bind_types_func_t bind_;
 
   constexpr const char *name() const { return name_; }
   // For varargs: reports VEF_PARAM_VARARGS so materialize_func_desc writes
@@ -1069,6 +1072,7 @@ struct StaticFuncDesc {
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr vef_vdf_clear_func_t clear() const { return clear_; }
   constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
+  constexpr vef_bind_types_func_t bind() const { return bind_; }
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -1083,7 +1087,8 @@ struct StaticFuncDesc {
         deterministic_(meta.deterministic),
         is_varargs_(meta.is_varargs),
         check_params_cache_bound_(meta.check_params_cache_bound),
-        check_signature_(meta.check_signature) {
+        check_signature_(meta.check_signature),
+        bind_(meta.bind) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }

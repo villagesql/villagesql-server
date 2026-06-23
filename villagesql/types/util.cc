@@ -1353,7 +1353,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     std::string_view extension_name,
                                     uint arg_count, Item **args,
                                     const vef_signature_t *signature,
-                                    TypeParameters *out_return_params) {
+                                    TypeParameters *out_return_params,
+                                    bool bind_hook_owns_params) {
   // Varargs: skip both arg-count and per-arg type validation. The function's
   // prerun hook is responsible for inspecting arg_count and arg_types and
   // rejecting calls it does not accept.
@@ -1410,8 +1411,12 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     if (!tc->is_unknown()) {
       auto it = known_params.find(expected_qbn);
       if (it != known_params.end()) {
-        // Another arg already provided params for this type. They must match.
-        if (!(tc->parameters() == *it->second.params)) {
+        // Another arg already provided params for this type. Under TD1 they
+        // must match; when a bind_and_check_types hook owns parameter
+        // resolution, differing sibling params are allowed (the hook decides
+        // what they mean) and we keep the first-seen entry.
+        if (!bind_hook_owns_params &&
+            !(tc->parameters() == *it->second.params)) {
           villagesql_error(
               "Cannot initialize function '%s': conflicting type parameters "
               "for %s in arguments %u and %u",
@@ -1517,8 +1522,10 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   }
 
   // Type disambiguation rule 2 (TD2): If the return type is a parameterized
-  // custom type, infer its params from args of the same type.
-  if (out_return_params != nullptr &&
+  // custom type, infer its params from args of the same type. Skipped when a
+  // bind_and_check_types hook owns parameter resolution; the hook computes the
+  // return params instead (e.g. as a function of differing argument params).
+  if (!bind_hook_owns_params && out_return_params != nullptr &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       signature->return_type.custom_type != nullptr) {
     const std::string return_qbn = make_qualified_base_name(

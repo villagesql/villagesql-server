@@ -177,6 +177,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -200,6 +201,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     return next;
   }
 
@@ -219,6 +221,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     return next;
   }
 
@@ -237,6 +240,23 @@ class FuncBuilder {
     return *this;
   }
 
+  // Install an author-supplied type binding/checking hook. Called once at
+  // analysis time (fix_fields) to validate argument type parameters and
+  // compute the return type's parameters, fully replacing the built-in TD1/TD2
+  // rules. Use it when the parameter relationship between arguments and the
+  // return type cannot be expressed by the default rules (e.g.
+  // pvec_concat(PVEC(M), PVEC(N)) -> PVEC(M+N)) or when the return type's
+  // parameters come from a constant argument value (e.g.
+  // TYPEID('user') -> typeid(prefix=user)). See vef_bind_types_func_t.
+  //
+  // TODO(villagesql): add a typed C++ wrapper (BindArgs/BindResult) so authors
+  // need not drop to the raw ABI signature.
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &bind_and_check_types(
+      vef_bind_types_func_t fn) {
+    bind_ = fn;
+    return *this;
+  }
+
   template <auto Hook>
   constexpr FuncBuilder<Func, NumParams, Mode, true> prerun() const {
     static_assert(detail::is_typed_prerun<Hook>(),
@@ -249,6 +269,7 @@ class FuncBuilder {
     next.prerun_ = &detail::typed_prerun_wrapper<Hook>;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -361,6 +382,7 @@ class FuncBuilder {
 
     meta.prerun = prerun_;
     meta.postrun = postrun_;
+    meta.bind = bind_;
     meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
@@ -380,7 +402,8 @@ class FuncBuilder {
         buffer_size_(0),
         prerun_(nullptr),
         postrun_(nullptr),
-        deterministic_(false) {}
+        deterministic_(false),
+        bind_(nullptr) {}
 
   const char *name_;
   const char *return_type_;
@@ -389,6 +412,7 @@ class FuncBuilder {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   bool deterministic_;
+  vef_bind_types_func_t bind_;
 
   template <auto F, size_t M, ParamMode N, bool HP>
   friend class FuncBuilder;

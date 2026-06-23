@@ -411,6 +411,65 @@ int pvec_compare(vsql::CustomArgWith<PVecParams> a,
   return 0;
 }
 
+// pvec_concat(PVEC, PVEC) -> PVEC: concatenate two parameterized vectors. The
+// result dimension is the SUM of the input dimensions -- a relationship the
+// built-in TD1 (sibling params must match) and TD2 (return mirrors an arg)
+// rules cannot express. pvec_concat_bind below computes it, exercising a
+// bind_and_check_types hook that fully replaces TD1/TD2.
+void pvec_concat(vsql::CustomArgWith<PVecParams> a,
+                 vsql::CustomArgWith<PVecParams> b, vsql::CustomResult out) {
+  if (a.is_null() || b.is_null()) {
+    out.set_null();
+    return;
+  }
+  auto da = a.value();
+  auto db = b.value();
+  auto buf = out.buffer();
+  if (buf.size() < da.size() + db.size()) {
+    out.error("pvec_concat: output buffer too small");
+    return;
+  }
+  memcpy(buf.data(), da.data(), da.size());
+  memcpy(buf.data() + da.size(), db.data(), db.size());
+  out.set_length(da.size() + db.size());
+}
+
+// bind_and_check_types for pvec_concat: return dimension = sum of the two
+// argument dimensions. Reads each argument's resolved params from arg_params
+// (raw ABI shape; the vsql builder has no typed wrapper for this hook yet).
+void pvec_concat_bind(vef_context_t * /*ctx*/, vef_bind_types_args_t *args,
+                      vef_bind_types_result_t *result) {
+  if (args->arg_count != 2) {
+    result->type = VEF_RESULT_ERROR;
+    snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+             "pvec_concat expects 2 arguments");
+    return;
+  }
+  long long dims[2] = {0, 0};
+  for (int i = 0; i < 2; i++) {
+    if (args->arg_params[i] == nullptr ||
+        sscanf(args->arg_params[i], "dimension=%lld", &dims[i]) != 1) {
+      result->type = VEF_RESULT_ERROR;
+      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+               "pvec_concat: argument %d has no known dimension", i + 1);
+      return;
+    }
+  }
+  int n = snprintf(result->out_return_params.buf,
+                   result->out_return_params.max_buf_len, "dimension=%lld",
+                   dims[0] + dims[1]);
+  if (n < 0) {
+    result->type = VEF_RESULT_ERROR;
+    snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+             "pvec_concat: failed to format return params");
+    return;
+  }
+  result->out_return_params.actual_len = static_cast<size_t>(n);
+  result->out_return_params.overflow =
+      static_cast<size_t>(n) >= result->out_return_params.max_buf_len;
+  result->type = VEF_RESULT_VALUE;
+}
+
 void int_sum_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult result) {
   if (args.size() == 0) {
     result.error("int_sum_all requires at least one argument");
@@ -587,6 +646,14 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(PVEC)
                   .clear<&pvec_norm_sq_clear>()
                   .accumulate<&pvec_norm_sq_accumulate>()
+                  .build())
+        // pvec_concat: covers bind_and_check_types fully replacing TD1/TD2 --
+        // PVEC(M), PVEC(N) -> PVEC(M+N), which the default rules reject.
+        .func(make_func<&pvec_concat>("pvec_concat")
+                  .returns(PVEC)
+                  .param(PVEC)
+                  .param(PVEC)
+                  .bind_and_check_types(&pvec_concat_bind)
                   .build())
         // real_double: covers RealArg, RealResult, and .deterministic()
         .func(make_func<&real_double>("real_double")
