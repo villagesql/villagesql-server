@@ -19,11 +19,13 @@
 #
 # Volatile values (git SHA, work-tree file counts, timestamp, host) are
 # computed here. Stable values are passed in via -D by the caller:
-#   IN_FILE    - path to build_info.cc.in
-#   OUT_FILE   - path to the generated build_info.cc
-#   SRC_DIR    - source tree to inspect with git
-#   BUILD_OS   - host OS string (CMAKE_HOST_SYSTEM)
-#   BUILD_ARCH - host architecture (CMAKE_HOST_SYSTEM_PROCESSOR)
+#   IN_FILE          - path to build_info.cc.in
+#   OUT_FILE         - path to the generated build_info.cc
+#   SRC_DIR          - source tree to inspect with git
+#   BUILD_OS         - host OS string (CMAKE_HOST_SYSTEM)
+#   BUILD_ARCH       - host architecture (CMAKE_HOST_SYSTEM_PROCESSOR)
+#   PRODUCTION_BUILD - if true, blank the volatile, non-reproducible fields
+#                      (build timestamp and host) for reproducible releases
 
 find_package(Git QUIET)
 
@@ -69,5 +71,18 @@ endif()
 string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
 
 cmake_host_system_information(RESULT BUILD_HOST QUERY HOSTNAME)
+
+# Production releases blank the volatile, non-reproducible fields so identical
+# sources yield identical binaries (and incremental builds stop relinking just
+# to refresh the timestamp). The work-tree counts are forced to zero so a
+# release always reports clean (is_dirty() == false); git_sha, OS and arch stay
+# populated.
+if(PRODUCTION_BUILD)
+  set(GIT_FILES_ADDED 0)
+  set(GIT_FILES_DELETED 0)
+  set(GIT_FILES_MODIFIED 0)
+  set(BUILD_TIMESTAMP "")
+  set(BUILD_HOST "")
+endif()
 
 configure_file("${IN_FILE}" "${OUT_FILE}" @ONLY)

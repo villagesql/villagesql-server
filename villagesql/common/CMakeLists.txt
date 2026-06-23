@@ -23,6 +23,15 @@ SET(VILLAGESQL_COMMON_SOURCES
 # include the stable, committed build_info.h, so they are unaffected.
 SET(VILLAGESQL_BUILD_INFO_CC ${CMAKE_CURRENT_BINARY_DIR}/build_info.cc)
 
+# Production releases (no pre-release suffix) blank the volatile,
+# non-reproducible fields (build timestamp and host) so release binaries are
+# reproducible; dev builds keep them. The single template is shared by both.
+if(VSQL_HAS_PRE_RELEASE)
+  set(VSQL_BUILD_INFO_PRODUCTION OFF)
+else()
+  set(VSQL_BUILD_INFO_PRODUCTION ON)
+endif()
+
 ADD_CUSTOM_TARGET(villagesql_build_info_gen
   BYPRODUCTS ${VILLAGESQL_BUILD_INFO_CC}
   COMMAND ${CMAKE_COMMAND}
@@ -31,6 +40,7 @@ ADD_CUSTOM_TARGET(villagesql_build_info_gen
     -DOUT_FILE=${VILLAGESQL_BUILD_INFO_CC}
     -DBUILD_OS=${CMAKE_HOST_SYSTEM}
     -DBUILD_ARCH=${CMAKE_HOST_SYSTEM_PROCESSOR}
+    -DPRODUCTION_BUILD=${VSQL_BUILD_INFO_PRODUCTION}
     -P ${CMAKE_SOURCE_DIR}/villagesql/cmake/gen_build_info.cmake
   COMMENT "Generating VillageSQL build info"
   VERBATIM)
