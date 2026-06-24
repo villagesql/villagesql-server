@@ -287,7 +287,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
+      pull-requests: write  # required to comment on the PR
     steps:
       - name: Checkout scripts
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -314,10 +314,8 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
             extresults '${{ needs.build-server.result }}' "$RUN_URL")"
-          # Cf. slash-commands.yml; grep for "issues-comments endpoint".
-          gh api --method POST \
-            "repos/${{ github.repository }}/issues/${{ inputs.pr_number }}/comments" \
-            -f body="$BODY" >/dev/null
+          gh pr comment "${{ inputs.pr_number }}" \
+            --repo "${{ github.repository }}" --body "$BODY"
 
   # Sends a Slack summary after all test jobs complete (nightly / dispatch).
   slack_notify:
