@@ -657,6 +657,132 @@ bool expand_veb_to_directory(const std::string &name,
   return false;  // Success
 }
 
+// Validate, load, and register one installed extension. Resolves the VEB
+// on disk, re-expands if necessary, dlopens the .so, parses the
+// registration, registers types/VDFs/preview capabilities, and marks the
+// in-memory descriptor for insertion.
+//
+// Returns false on success with `*registration` populated. Returns true on
+// failure after logging an error; `*registration` may be partially
+// populated on failure and should not be used by callers.
+//
+// Caller must hold the victionary write lock.
+static bool load_one_extension(THD *thd, const std::string &extension_name,
+                               const std::string &expected_version,
+                               const std::string &sha256,
+                               ExtensionRegistration *registration) {
+  VictionaryClient &victionary = VictionaryClient::instance();
+
+  // Validate extension: load manifest and check version matches.
+  // Prefer {name}-{version}.veb if present; fall back to {name}.veb.
+  std::string veb_version;
+  if (veb_file_exists(extension_name, expected_version)) {
+    veb_version = expected_version;
+  }
+  std::string actual_version = veb_version;
+  if (load_veb_manifest(extension_name, actual_version)) {
+    LogVSQL(ERROR_LEVEL, "Failed to load VEB manifest for extension '%s'",
+            extension_name.c_str());
+    return true;
+  }
+
+  if (actual_version != expected_version) {
+    LogVSQL(ERROR_LEVEL,
+            "Extension '%s' version mismatch: database has '%s', manifest "
+            "has '%s'",
+            extension_name.c_str(), expected_version.c_str(),
+            actual_version.c_str());
+    return true;
+  }
+
+  LogVSQL(INFORMATION_LEVEL, "Validated extension '%s' version '%s'",
+          extension_name.c_str(), actual_version.c_str());
+
+  std::string so_path = get_extension_so_path(extension_name, sha256);
+  if (so_path.empty()) {
+    LogVSQL(ERROR_LEVEL, "Failed to construct .so path for extension '%s'",
+            extension_name.c_str());
+    return true;
+  }
+
+  // Re-expand VEB if the .so is missing from the expansion cache.
+  MY_STAT so_stat;
+  if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) {
+    LogVSQL(INFORMATION_LEVEL,
+            "Extension '%s' .so not found at '%s', re-expanding from VEB",
+            extension_name.c_str(), so_path.c_str());
+    std::string expanded_path;
+    std::string reexpand_sha256;
+    if (expand_veb_to_directory(extension_name, veb_version, expanded_path,
+                                reexpand_sha256)) {
+      LogVSQL(ERROR_LEVEL, "Failed to re-expand VEB for extension '%s'",
+              extension_name.c_str());
+      return true;
+    }
+    if (reexpand_sha256 != sha256) {
+      LogVSQL(ERROR_LEVEL,
+              "Extension '%s' VEB file has changed: database has SHA256 "
+              "'%s', current VEB has '%s'",
+              extension_name.c_str(), sha256.c_str(), reexpand_sha256.c_str());
+      return true;
+    }
+  }
+
+  std::string load_error;
+  if (load_vef_extension({.extension_name = extension_name,
+                          .reason = villagesql::services::LoadReason::kStartup,
+                          .thd = thd},
+                         so_path, vef_server_protocol_version, *registration,
+                         load_error)) {
+    LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
+            extension_name.c_str(), load_error.c_str());
+    return true;
+  }
+
+  std::string reg_error;
+  std::optional<ValidatedRegistration> validated = parse_extension_registration(
+      *registration, extension_name, expected_version, reg_error);
+  if (!validated) {
+    LogVSQL(ERROR_LEVEL, "Failed to parse extension '%s': %s",
+            extension_name.c_str(), reg_error.c_str());
+    return true;
+  }
+
+  std::optional<ValidatedPreviewCapabilities> preview =
+      parse_preview_capabilities(*registration, extension_name,
+                                 expected_version, reg_error);
+  if (!preview) {
+    LogVSQL(ERROR_LEVEL, "Failed to parse extension '%s': %s",
+            extension_name.c_str(), reg_error.c_str());
+    return true;
+  }
+
+  if (register_preview_capabilities(*thd, std::move(*preview), *validated,
+                                    reg_error) ||
+      register_validated_extension(*thd, std::move(*validated), reg_error)) {
+    LogVSQL(ERROR_LEVEL, "Failed to register extension '%s': %s",
+            extension_name.c_str(), reg_error.c_str());
+    return true;
+  }
+
+  // Build the descriptor's registration by copy: the caller keeps its own
+  // copy via `*registration` so a future rollback path can unload it.
+  ExtensionRegistration desc_reg = *registration;
+  if (victionary.extension_descriptors().MarkForInsertion(
+          *thd, ExtensionDescriptor(
+                    ExtensionDescriptorKey(extension_name, expected_version),
+                    std::move(desc_reg)))) {
+    LogVSQL(ERROR_LEVEL, "Failed to register descriptor for extension '%s'",
+            extension_name.c_str());
+    return true;
+  }
+
+  LogVSQL(INFORMATION_LEVEL,
+          "Successfully registered VEF extension '%s' from '%s'",
+          extension_name.c_str(), so_path.c_str());
+  return false;
+}
+
 bool load_installed_extensions(THD *thd) {
   LogVSQL(INFORMATION_LEVEL,
           "Loading installed extensions from villagesql.extensions table");
@@ -691,116 +817,12 @@ bool load_installed_extensions(THD *thd) {
 
       installed_extensions.insert(extension_name);
 
-      // Validate extension: load manifest and check version matches.
-      // Prefer {name}-{version}.veb if present; fall back to {name}.veb.
-      std::string veb_version;
-      if (veb_file_exists(extension_name, expected_version)) {
-        veb_version = expected_version;
-      }
-      std::string actual_version = veb_version;
-      if (load_veb_manifest(extension_name, actual_version)) {
-        LogVSQL(ERROR_LEVEL, "Failed to load VEB manifest for extension '%s'",
-                extension_name.c_str());
-        return true;
-      }
-
-      // Verify version matches
-      if (actual_version != expected_version) {
-        LogVSQL(ERROR_LEVEL,
-                "Extension '%s' version mismatch: database has '%s', manifest "
-                "has '%s'",
-                extension_name.c_str(), expected_version.c_str(),
-                actual_version.c_str());
-        return true;
-      }
-
-      LogVSQL(INFORMATION_LEVEL, "Validated extension '%s' version '%s'",
-              extension_name.c_str(), actual_version.c_str());
-
-      std::string so_path = get_extension_so_path(extension_name, sha256);
-      if (so_path.empty()) {
-        LogVSQL(ERROR_LEVEL, "Failed to construct .so path for extension '%s'",
-                extension_name.c_str());
-        return true;
-      }
-
-      // Re-expand VEB if the .so is missing from the expansion cache
-      MY_STAT so_stat;
-      if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) {
-        LogVSQL(INFORMATION_LEVEL,
-                "Extension '%s' .so not found at '%s', re-expanding from VEB",
-                extension_name.c_str(), so_path.c_str());
-        std::string expanded_path;
-        std::string reexpand_sha256;
-        if (expand_veb_to_directory(extension_name, veb_version, expanded_path,
-                                    reexpand_sha256)) {
-          LogVSQL(ERROR_LEVEL, "Failed to re-expand VEB for extension '%s'",
-                  extension_name.c_str());
-          return true;
-        }
-        if (reexpand_sha256 != sha256) {
-          LogVSQL(ERROR_LEVEL,
-                  "Extension '%s' VEB file has changed: database has SHA256 "
-                  "'%s', current VEB has '%s'",
-                  extension_name.c_str(), sha256.c_str(),
-                  reexpand_sha256.c_str());
-          return true;
-        }
-      }
-
       ExtensionRegistration registration;
-      std::string load_error;
-      if (load_vef_extension(
-              {.extension_name = extension_name,
-               .reason = villagesql::services::LoadReason::kStartup,
-               .thd = thd},
-              so_path, vef_server_protocol_version, registration, load_error)) {
-        LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
-                extension_name.c_str(), load_error.c_str());
-        return true;
-      }
-
-      std::string reg_error;
-      std::optional<ValidatedRegistration> validated =
-          parse_extension_registration(registration, extension_name,
-                                       expected_version, reg_error);
-      if (!validated) {
-        LogVSQL(ERROR_LEVEL, "Failed to parse extension '%s': %s",
-                extension_name.c_str(), reg_error.c_str());
-        return true;
-      }
-
-      std::optional<ValidatedPreviewCapabilities> preview =
-          parse_preview_capabilities(registration, extension_name,
-                                     expected_version, reg_error);
-      if (!preview) {
-        LogVSQL(ERROR_LEVEL, "Failed to parse extension '%s': %s",
-                extension_name.c_str(), reg_error.c_str());
-        return true;
-      }
-
-      if (register_preview_capabilities(*thd, std::move(*preview), *validated,
-                                        reg_error) ||
-          register_validated_extension(*thd, std::move(*validated),
-                                       reg_error)) {
-        LogVSQL(ERROR_LEVEL, "Failed to register extension '%s': %s",
-                extension_name.c_str(), reg_error.c_str());
-        return true;
-      }
-
-      if (victionary.extension_descriptors().MarkForInsertion(
-              *thd, ExtensionDescriptor(ExtensionDescriptorKey(
-                                            extension_name, expected_version),
-                                        std::move(registration)))) {
-        LogVSQL(ERROR_LEVEL, "Failed to register descriptor for extension '%s'",
-                extension_name.c_str());
+      if (load_one_extension(thd, extension_name, expected_version, sha256,
+                             &registration)) {
         return true;
       }
       success_count++;
-
-      LogVSQL(INFORMATION_LEVEL,
-              "Successfully registered VEF extension '%s' from '%s'",
-              extension_name.c_str(), so_path.c_str());
     }
   }
 
@@ -907,10 +929,10 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
-bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
-                        const std::string &so_path, vef_protocol_t max_protocol,
-                        ExtensionRegistration &registration,
-                        std::string &error_message) {
+bool load_vef_extension_raw(const std::string &so_path,
+                            vef_protocol_t max_protocol,
+                            ExtensionRegistration &registration,
+                            std::string &error_message) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -979,22 +1001,6 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
     return true;
   }
 
-  // Populate any capabilities the extension requires.
-  if (villagesql::services::populate_capabilities(ctx, reg, error_message)) {
-    // Roll back any capabilities that were successfully populated before the
-    // failure. Mirror the load reason to its unload counterpart.
-    villagesql::services::DepopulateContext depop_ctx;
-    depop_ctx.reason = ctx.reason == villagesql::services::LoadReason::kStartup
-                           ? villagesql::services::UnloadReason::kShutdown
-                           : villagesql::services::UnloadReason::kUninstall;
-    depop_ctx.thd = ctx.thd;
-    villagesql::services::depopulate_capabilities(depop_ctx, reg);
-    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
-    vef_unregister(&unregister_arg, reg);
-    dlclose(handle);
-    return true;
-  }
-
   // TODO(villagesql-beta): Add more validation of the returned registration
   // object (e.g. func/type descriptors, protocol version, null pointers).
 
@@ -1012,6 +1018,52 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
   return false;
 }
 
+void unload_vef_extension_raw(const ExtensionRegistration &registration) {
+  if (registration.dlhandle == nullptr) {
+    return;
+  }
+
+  if (registration.registration != nullptr) {
+    vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
+    LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
+            registration.so_path.c_str());
+    registration.unregister_func(&unregister_arg, registration.registration);
+  }
+
+  dlclose(registration.dlhandle);
+}
+
+bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
+                        const std::string &so_path, vef_protocol_t max_protocol,
+                        ExtensionRegistration &registration,
+                        std::string &error_message) {
+  if (load_vef_extension_raw(so_path, max_protocol, registration,
+                             error_message)) {
+    return true;
+  }
+
+  // Populate any capabilities the extension requires.
+  if (villagesql::services::populate_capabilities(
+          ctx, registration.registration, error_message)) {
+    // Roll back any capabilities that were successfully populated before the
+    // failure. Mirror the load reason to its unload counterpart.
+    villagesql::services::DepopulateContext depop_ctx;
+    depop_ctx.reason = ctx.reason == villagesql::services::LoadReason::kStartup
+                           ? villagesql::services::UnloadReason::kShutdown
+                           : villagesql::services::UnloadReason::kUninstall;
+    depop_ctx.thd = ctx.thd;
+    villagesql::services::depopulate_capabilities(depop_ctx,
+                                                  registration.registration);
+    unload_vef_extension_raw(registration);
+    registration.so_path.clear();
+    registration.dlhandle = nullptr;
+    registration.registration = nullptr;
+    registration.unregister_func = nullptr;
+    return true;
+  }
+  return false;
+}
+
 void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
                           const ExtensionRegistration &registration) {
   if (registration.dlhandle == nullptr) {
@@ -1021,13 +1073,9 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
   if (registration.registration != nullptr) {
     villagesql::services::depopulate_capabilities(ctx,
                                                   registration.registration);
-    vef_unregister_arg_t unregister_arg = {registration.negotiated_protocol};
-    LogVSQL(INFORMATION_LEVEL, "Calling vef_unregister for extension '%s'",
-            registration.so_path.c_str());
-    registration.unregister_func(&unregister_arg, registration.registration);
   }
 
-  dlclose(registration.dlhandle);
+  unload_vef_extension_raw(registration);
 }
 
 }  // namespace veb

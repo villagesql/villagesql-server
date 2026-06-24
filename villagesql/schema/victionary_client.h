@@ -576,6 +576,59 @@ class SystemTableMap {
     return result;
   }
 
+  // Get all entries visible to this THD: committed entries with any
+  // uncommitted operations for this THD overlaid (updates replace,
+  // inserts add, deletes hide). Useful for iteration in transactions
+  // that have already staged mutations and want to see their effective
+  // view rather than the committed-only view.
+  // REQUIRES: Caller must hold read lock
+  // WARNING: Same pointer-lifetime rule as get_all_committed.
+  std::vector<const EntryType *> get_all(THD *thd) const {
+    assert_read_or_write_lock_held();
+    if (!thd) return get_all_committed();
+
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+      return get_all_committed();
+    }
+
+    // Walk uncommitted ops in order; the most recent op per key wins.
+    // Records both the op type and the entry pointer (nullptr for delete).
+    std::unordered_map<std::string, OperationType> op_by_key;
+    std::unordered_map<std::string, const EntryType *> entry_by_key;
+    for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
+         op = op->next) {
+      const std::string &k = op->entry ? op->entry->key().str() : op->key.str();
+      op_by_key[k] = op->op_type;
+      entry_by_key[k] = op->entry.get();
+    }
+
+    std::vector<const EntryType *> result;
+    result.reserve(m_committed.size());
+
+    // Walk committed entries; override or skip based on uncommitted ops.
+    for (const auto &[key, entry] : m_committed) {
+      auto override_it = op_by_key.find(key);
+      if (override_it == op_by_key.end()) {
+        result.push_back(entry.get());
+      } else if (override_it->second == OperationType::DELETE) {
+        // Hidden by a staged delete.
+      } else {
+        // INSERT or UPDATE: the staged entry replaces the committed one.
+        result.push_back(entry_by_key[key]);
+      }
+    }
+
+    // Add staged inserts whose keys don't appear in committed.
+    for (const auto &[key, op_type] : op_by_key) {
+      if (op_type != OperationType::INSERT) continue;
+      if (m_committed.find(key) != m_committed.end()) continue;
+      result.push_back(entry_by_key[key]);
+    }
+
+    return result;
+  }
+
   // Check if entries exist matching a prefix
   // REQUIRES: Caller must hold read lock
   template <typename T = EntryType>
