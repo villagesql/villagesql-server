@@ -18,8 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cerrno>
-#include <cstdlib>
+#include <charconv>
 
 namespace villagesql {
 
@@ -42,7 +41,7 @@ bool Semver::is_valid_identifier(std::string_view id) {
   });
 }
 
-bool Semver::parse_core_component(const std::string &version_str,
+bool Semver::parse_core_component(std::string_view version_str,
                                   unsigned long version_max, const char *name,
                                   unsigned long *out, std::string *error) {
   if (!is_numeric(version_str)) {
@@ -60,9 +59,10 @@ bool Semver::parse_core_component(const std::string &version_str,
     return false;
   }
 
-  errno = 0;
-  unsigned long value = strtoul(version_str.c_str(), nullptr, 10);
-  if (errno == ERANGE) {
+  unsigned long value = 0;
+  auto [ptr, ec] = std::from_chars(
+      version_str.data(), version_str.data() + version_str.size(), value);
+  if (ec != std::errc()) {
     if (error)
       *error = std::string(name) + " version (" + safe_for_output(version_str) +
                ") is out of range";
@@ -100,9 +100,10 @@ bool Semver::parse_core(std::string_view core, unsigned long *major,
 
   size_t minor_pos = core.find('.');
   size_t patch_pos = core.find('.', minor_pos + 1);
-  std::string major_str(core.substr(0, minor_pos));
-  std::string minor_str(core.substr(minor_pos + 1, patch_pos - minor_pos - 1));
-  std::string patch_str(core.substr(patch_pos + 1));
+  std::string_view major_str = core.substr(0, minor_pos);
+  std::string_view minor_str =
+      core.substr(minor_pos + 1, patch_pos - minor_pos - 1);
+  std::string_view patch_str = core.substr(patch_pos + 1);
 
   // Parse each position into its own bounds.
   return parse_core_component(major_str, kMajorMax, "MAJOR", major, error) &&

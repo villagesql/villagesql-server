@@ -179,7 +179,7 @@ class Semver {
    * @param[out] error Optional error message if validation fails
    * @return true on success, false otherwise
    */
-  static bool parse_core_component(const std::string &version_str,
+  static bool parse_core_component(std::string_view version_str,
                                    unsigned long version_max, const char *name,
                                    unsigned long *out, std::string *error);
 
