@@ -20,7 +20,7 @@ on:
 # run-name embeds the PR number so the parse job's already-running check can
 # associate in-flight runs with a PR (issue_comment runs all report the default
 # branch, so branch filtering is not usable).
-run-name: "PR #${{ github.event.issue.number }}: ${{ github.event.comment.body }}"
+run-name: "${{ github.event.issue.pull_request && 'PR' || 'issue' }} #${{ github.event.issue.number }}: ${{ github.event.comment.body }}"
 
 permissions:
   contents: read
@@ -32,7 +32,13 @@ jobs:
   parse:
     name: Parse command
     runs-on: ubuntu-latest
-    if: github.event.issue.pull_request
+    # Only provision a runner for PR comments that look like a command. Other
+    # comments still create a (free, skipped) run row — that's inherent to
+    # issue_comment — but they no longer spin up a job. classify() does the
+    # finer-grained parsing (help / unknown / auth) for comments that pass this.
+    if: >
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/')
     outputs:
       command: ${{ steps.parse.outputs.command }}
       ref: ${{ steps.parse.outputs.ref }}
@@ -66,9 +72,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Post via the REST issues-comments endpoint (works with
-          # issues:write); gh pr comment uses GraphQL addComment, which would
-          # require pull-requests:write.
+          # Post comments via the REST issues-comments endpoint, which only
+          # needs issues:write. We deliberately avoid `gh pr comment`: it uses
+          # the GraphQL addComment mutation, which requires pull-requests:write.
+          # That scope is broader than this workflow should hold — beyond
+          # commenting, pull-requests:write also lets the token close/reopen
+          # PRs, edit their title/body/base branch, request reviewers, change
+          # labels/assignees/milestones, and toggle auto-merge. This workflow
+          # is triggered by PR comments (org-gated, but still semi-trusted
+          # input), so it stays at the minimum: issues:write to post comments.
           post() {
             gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" \
               -f body="$1" >/dev/null
