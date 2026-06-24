@@ -11,7 +11,9 @@ name: Slash Commands
 # To add a command:
 #   1. Ensure a reusable workflow exists (uses: ./.github/workflows/<x>.yml).
 #   2. Add it to COMMANDS in the parse step (for validation + /help).
-#   3. Add a `run-<command>` caller job below, gated on the command name.
+#   3. Add a contains(...) clause for it to the parse job's `if:` gate, so the
+#      comment provisions a runner (the gate can't read COMMANDS).
+#   4. Add a `run-<command>` caller job below, gated on the command name.
 
 on:
   issue_comment:
@@ -32,13 +34,20 @@ jobs:
   parse:
     name: Parse command
     runs-on: ubuntu-latest
-    # Only provision a runner for PR comments that look like a command. Other
-    # comments still create a (free, skipped) run row — that's inherent to
-    # issue_comment — but they no longer spin up a job. classify() does the
-    # finer-grained parsing (help / unknown / auth) for comments that pass this.
+    # Only provision a runner for PR comments mentioning a configured command
+    # (or /help) anywhere in the body. Other comments still create a (free,
+    # skipped) run row — inherent to issue_comment — but no longer spin up a
+    # job. We use contains() rather than startsWith() so leading whitespace
+    # before the slash still matches; the trade-off is that a comment merely
+    # name-dropping a command also spins up the runner, which then no-ops
+    # because classify() keys on the first token. Keep this list in sync with
+    # COMMANDS in the parse step.
     if: >
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/')
+      github.event.issue.pull_request && (
+        contains(github.event.comment.body, '/testall') ||
+        contains(github.event.comment.body, '/testextensions') ||
+        contains(github.event.comment.body, '/help')
+      )
     outputs:
       command: ${{ steps.parse.outputs.command }}
       ref: ${{ steps.parse.outputs.ref }}
@@ -100,9 +109,6 @@ jobs:
           case "$kind" in
             ignore) stop ;;
             help)   post "$(help_text)"; stop ;;
-            unknown)
-              post "$(printf 'Unknown command `/%s`.\n\n%s' "$command" "$(help_text)")"
-              stop ;;
             unauthorized)
               post "🔒 \`/$command\` is restricted to organization members. (Your association: \`$AUTHOR_ASSOCIATION\`.)"
               stop ;;
