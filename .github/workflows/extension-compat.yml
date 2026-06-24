@@ -9,6 +9,14 @@ name: Extension SDK Compatibility
 #
 # For on-demand testing against a PR's commit, see /testextensions in
 # slash-commands.yml, which calls the same reusable workflow.
+#
+# DO NOT RENAME THIS FILE. The filename `extension-compat.yml` is a public
+# contract: https://github.com/villagesql/extension-actions looks up the
+# latest successful nightly run by filename via
+#     gh run list --workflow extension-compat.yml
+# to download the `devserver-*` and `sdk-*` artifacts. That action is consumed
+# by every extension repo (vsql-ai, etc.), so renaming this file silently
+# breaks nightly CI across all of them. See cpp/action.yml in extension-actions.
 
 on:
   workflow_run:
