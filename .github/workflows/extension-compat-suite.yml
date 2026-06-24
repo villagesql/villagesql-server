@@ -35,16 +35,15 @@ on:
         required: false
         type: string
         default: ''
-      pr_number:
-        description: 'If set, post a results summary as a comment on this PR'
-        required: false
-        type: string
-        default: ''
       slack_notify:
         description: "Send Slack notification with results ('true'/'false')"
         required: false
         type: string
         default: 'true'
+    outputs:
+      build-server-result:
+        description: 'Aggregate result of the build-server matrix (success/failure/cancelled/skipped)'
+        value: ${{ jobs.build-server.result }}
 
 permissions:
   contents: read
@@ -276,46 +275,6 @@ jobs:
           name: extresult-${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}
           path: extresults/
           retention-days: 3
-
-  # Posts a per-extension pass/fail table as a PR comment when the run finishes.
-  # Only when pr_number is set (i.e. invoked by /testextensions). This is the
-  # companion to the "started" comment posted by slash-commands.yml.
-  comment:
-    name: PR comment
-    needs: [build-server, test-extension]
-    if: always() && inputs.pr_number != ''
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write  # required to comment on the PR
-    steps:
-      - name: Checkout scripts
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-          sparse-checkout: scripts/
-
-      - name: Download results
-        # Don't fail the comment if no results exist (e.g. server build failed
-        # so no test-extension jobs ran) — the script reports that case.
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: extresult-*
-          path: extresults/
-          merge-multiple: true
-
-      # Summary markdown is built by a script tested by
-      # scripts/ci_helpers/regtest_workflow_scripts.sh, then posted with gh.
-      - name: Post comment
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
-            extresults '${{ needs.build-server.result }}' "$RUN_URL")"
-          gh pr comment "${{ inputs.pr_number }}" \
-            --repo "${{ github.repository }}" --body "$BODY"
 
   # Sends a Slack summary after all test jobs complete (nightly / dispatch).
   slack_notify:

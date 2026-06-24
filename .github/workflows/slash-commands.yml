@@ -142,11 +142,34 @@ jobs:
     uses: ./.github/workflows/full-test-suite.yml
     with:
       ref: ${{ needs.parse.outputs.ref }}
-      pr_number: ${{ needs.parse.outputs.pr_number }}
       build-type: debug
       artifact-prefix: testall
       run-all-suites-conditional: false
     secrets: inherit
+
+  # "Finished" comment for /testall. Lives in the caller (not full-test-suite.yml)
+  # so the reusable workflow doesn't need pull-requests:write — only this
+  # workflow, which already holds it, does the commenting.
+  report-testall:
+    needs: [parse, run-testall]
+    if: always() && needs.parse.outputs.command == 'testall' && needs.parse.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Post comment
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        RESULT: ${{ needs.run-testall.result }}
+      run: |
+        case "$RESULT" in
+          success)   ICON="✅" ;;
+          cancelled) ICON="⚠️" ;;
+          *)         ICON="❌" ;;
+        esac
+        RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        BODY="$(printf '## %s \`/testall\` %s\n\nFull test suite (unit + big + all suites) finished with result \`%s\`.\n\n[View run](%s)' \
+          "$ICON" "$RESULT" "$RESULT" "$RUN_URL")"
+        gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
 
   run-testextensions:
     needs: parse
@@ -154,8 +177,44 @@ jobs:
     uses: ./.github/workflows/extension-compat-suite.yml
     with:
       ref: ${{ needs.parse.outputs.ref }}
-      pr_number: ${{ needs.parse.outputs.pr_number }}
       platform_filter: linux-x86_64
       # abi_filter omitted => both ABIs, per-extension declared
       slack_notify: 'false'
     secrets: inherit
+
+  # "Finished" comment for /testextensions. Lives in the caller (not
+  # extension-compat-suite.yml) so the reusable workflow doesn't need
+  # pull-requests:write — only this workflow, which already holds it, comments.
+  comment-testextensions:
+    needs: [parse, run-testextensions]
+    if: always() && needs.parse.outputs.command == 'testextensions' && needs.parse.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scripts
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+
+      - name: Download results
+        # Don't fail the comment if no results exist (e.g. server build failed
+        # so no test-extension jobs ran) — the script reports that case.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: extresult-*
+          path: extresults/
+          merge-multiple: true
+
+      # Summary markdown is built by a script tested by
+      # scripts/ci_helpers/regtest_workflow_scripts.sh, then posted with gh.
+      - name: Post comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+          BUILD_RESULT: ${{ needs.run-testextensions.outputs.build-server-result }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
+            extresults "$BUILD_RESULT" "$RUN_URL")"
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
