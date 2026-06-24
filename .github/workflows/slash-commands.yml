@@ -27,7 +27,7 @@ run-name: "${{ github.event.issue.pull_request && 'PR' || 'issue' }} #${{ github
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  pull-requests: write
   actions: read
 
 jobs:
@@ -81,19 +81,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Post comments via the REST issues-comments endpoint, which only
-          # needs issues:write. We deliberately avoid `gh pr comment`: it uses
-          # the GraphQL addComment mutation, which requires pull-requests:write.
-          # That scope is broader than this workflow should hold — beyond
-          # commenting, pull-requests:write also lets the token close/reopen
-          # PRs, edit their title/body/base branch, request reviewers, change
-          # labels/assignees/milestones, and toggle auto-merge. This workflow
-          # is triggered by PR comments (org-gated, but still semi-trusted
-          # input), so it stays at the minimum: issues:write to post comments.
-          post() {
-            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" \
-              -f body="$1" >/dev/null
-          }
+          # Post a comment on the PR. PR comments require pull-requests:write —
+          # they're governed by the Pull requests permission regardless of
+          # whether you use gh pr comment or the REST /issues/{n}/comments
+          # endpoint (a PR is an issue, but the resource is still a PR).
+          post() { gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$1"; }
           stop() { echo "should_run=false" >> "$GITHUB_OUTPUT"; exit 0; }
           help_text() {
             printf '**Slash commands**\n\n'
