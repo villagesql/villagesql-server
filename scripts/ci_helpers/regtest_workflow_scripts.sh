@@ -13,6 +13,7 @@ CLASSIFY="$DIR/villagesql_slash_classify.sh"
 FIND_RUNNING="$DIR/villagesql_slash_find_running.sh"
 RECORD="$DIR/villagesql_ext_record_result.sh"
 SUMMARY="$DIR/villagesql_ext_compat_summary.sh"
+SLACK="$DIR/villagesql_ext_slack_summary.sh"
 
 fail=0
 check() {
@@ -81,6 +82,20 @@ SUM_OK="$("$SUMMARY" "$TMP" failure 'http://run/1')"
 check "summary: build-failure note" "⚠️ Server/SDK build was \`failure\` — extension results may be incomplete." \
   "$(printf '%s' "$SUM_OK" | grep -F 'Server/SDK build was')"
 
+# --- slack summary ----------------------------------------------------------
+# Flat, Slack-mrkdwn list of every result — passes AND failures, one per line.
+SLACK_OUT="$("$SLACK" "$TMP")"
+check "slack: lists a passing test" "✅ \`vsql-ai\` (dev, linux-x86_64)" \
+  "$(printf '%s' "$SLACK_OUT" | grep -F '✅ `vsql-ai` (dev, linux-x86_64)')"
+check "slack: lists a failing test" "❌ \`vsql-ai\` (stable, linux-x86_64)" \
+  "$(printf '%s' "$SLACK_OUT" | grep -F '❌ `vsql-ai` (stable, linux-x86_64)')"
+check "slack: shows passes and fails" "3" \
+  "$(printf '%s\n' "$SLACK_OUT" | grep -c .)"
+
+EMPTY2="$(mktemp -d)"
+check "slack: empty results" "No extension results were produced." \
+  "$("$SLACK" "$EMPTY2")"
+rm -rf "$EMPTY2"
 echo
 if [ "$fail" -ne 0 ]; then
   echo "REGTEST FAILED"
