@@ -308,9 +308,11 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
   vclient.assert_read_or_write_lock_held();
 
   if (should_assert_if_false(vclient.is_initialized())) {
-    LogVSQL(ERROR_LEVEL,
-            "Failed to resolve type %.*s; VictionaryClient not initialized",
-            static_cast<int>(type_name.size()), type_name.data());
+    if (!current_thd->is_error()) {
+      villagesql_error(
+          "Failed to resolve type %.*s; VictionaryClient not initialized",
+          MYF(0), static_cast<int>(type_name.size()), type_name.data());
+    }
     return true;
   }
 
@@ -320,8 +322,11 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
       vclient.type_descriptors().get_prefix_committed(prefix);
 
   if (should_assert_if_true(results.size() > 1)) {
-    LogVSQL(ERROR_LEVEL, "Found more than one entry for type %.*s",
-            static_cast<int>(type_name.size()), type_name.data());
+    if (!current_thd->is_error()) {
+      villagesql_error(
+          "Failed to resolve type %.*s; VictionaryClient not initialized",
+          MYF(0), static_cast<int>(type_name.size()), type_name.data());
+    }
     return true;
   }
 
@@ -341,8 +346,11 @@ bool acquire_or_create_type_context_locked(VictionaryClient &vclient,
   vclient.assert_write_lock_held();
 
   if (should_assert_if_null(descriptor)) {
-    LogVSQL(ERROR_LEVEL,
-            "Cannot acquire or create TypeContext for null descriptor");
+    if (!current_thd->is_error()) {
+      villagesql_error(
+          "Type '%s' failed to initialize; cannot acquire or create TypeContext for null descriptor",
+          MYF(0), descriptor->qualified_base_name().c_str());
+    }
     return true;
   }
 
@@ -403,9 +411,9 @@ static bool ResolveTypeToContext(std::string_view extension_name,
   result = nullptr;
 
   auto &vclient = VictionaryClient::instance();
+  const TypeDescriptor *type_descriptor = nullptr;
   auto guard = vclient.get_write_lock();
 
-  const TypeDescriptor *type_descriptor = nullptr;
   if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
                                      type_descriptor)) {
     return true;
