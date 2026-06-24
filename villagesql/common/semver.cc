@@ -22,28 +22,109 @@
 
 namespace villagesql {
 
-Semver::Semver() : major_(0), minor_(0), patch_(0), valid_(false) {}
+namespace {
 
-bool Semver::is_numeric(std::string_view str) {
+// Check if a string contains only digits.
+bool is_numeric(std::string_view str) {
   if (str.empty()) return false;
   return std::all_of(str.begin(), str.end(),
                      [](unsigned char c) { return std::isdigit(c); });
 }
 
-bool Semver::has_leading_zero(std::string_view str) {
+// Check if a numeric identifier has a disallowed leading zero, i.e. it is
+// more than one digit long and starts with '0'. Per the semver spec, numeric
+// identifiers must not include leading zeros.
+bool has_leading_zero(std::string_view str) {
   return str.length() > 1 && str[0] == '0';
 }
 
-bool Semver::is_valid_identifier(std::string_view id) {
+// Check if a string is a valid identifier (alphanumeric + hyphen).
+bool is_valid_identifier(std::string_view id) {
   if (id.empty()) return false;
   return std::all_of(id.begin(), id.end(), [](unsigned char c) {
     return std::isalnum(c) || c == '-';
   });
 }
 
-bool Semver::parse_core_component(std::string_view version_str,
-                                  unsigned long version_max, const char *name,
-                                  unsigned long *out, std::string *error) {
+// Check that a parsed core version value is within its allowed bound.
+//
+// @param version_val The parsed value to check
+// @param version_max Inclusive maximum value allowed for this position
+// @param name Position name used in the error message (e.g. "MAJOR")
+// @param[out] error Optional error message if the value exceeds the bound
+// @return true if version_val <= version_max, false otherwise
+bool check_version_bound(unsigned long version_val, unsigned long version_max,
+                         const char *name, std::string *error) {
+  // Easy case if things are valid
+  if (version_val <= version_max) return true;
+
+  // It must be too big
+  if (error)
+    *error = std::string(name) + " version value(" +
+             std::to_string(version_val) + ") must not exceed " +
+             std::to_string(version_max);
+  return false;
+}
+
+// Maximum number of source characters reproduced by safe_for_output().
+constexpr size_t kMaxOutputChars = 10;
+
+// Sanitize an arbitrary string for safe inclusion in output such as error
+// messages. At most kMaxOutputChars source characters are reproduced; any
+// unprintable character is rendered as a readable escape sequence (e.g.
+// "\n", "\x1b"); if the input is longer than kMaxOutputChars an ellipsis is
+// appended.
+//
+// @param str The string to sanitize
+// @return A printable, length-limited representation of str
+std::string safe_for_output(std::string_view str) {
+  std::string result;
+  size_t limit = std::min(str.size(), kMaxOutputChars);
+  for (size_t i = 0; i < limit; ++i) {
+    unsigned char c = static_cast<unsigned char>(str[i]);
+    switch (c) {
+      case '\t':
+        result += "\\t";
+        break;
+      case '\n':
+        result += "\\n";
+        break;
+      case '\r':
+        result += "\\r";
+        break;
+      case '\\':  // Keep out safe with backslash.
+        result += "\\\\";
+        break;
+      default:
+        if (std::isprint(c)) {
+          result += static_cast<char>(c);
+        } else {
+          char buf[5];
+          snprintf(buf, sizeof(buf), "\\x%02X", c);
+          result += buf;
+        }
+    }
+  }
+  // Truncated strings get an unicode ellipsis appended at the end
+  if (str.size() > kMaxOutputChars) result += "\u2026";
+  return result;
+}
+
+// Parse and validate a single core version component.
+//
+// Validates that the component is numeric with no leading zeros, converts it,
+// and range-checks the result, rejecting values that overflow or exceed the
+// (inclusive) maximum allowed for this position.
+//
+// @param version_str Component string
+// @param version_max Inclusive maximum value allowed for this position
+// @param name Position name used in error messages (e.g. "MAJOR")
+// @param[out] out Parsed value
+// @param[out] error Optional error message if validation fails
+// @return true on success, false otherwise
+bool parse_core_component(std::string_view version_str,
+                          unsigned long version_max, const char *name,
+                          unsigned long *out, std::string *error) {
   if (!is_numeric(version_str)) {
     if (error)
       *error = std::string(name) + " must be numeric, not " +
@@ -75,23 +156,17 @@ bool Semver::parse_core_component(std::string_view version_str,
   return true;
 }
 
-bool Semver::check_version_bound(unsigned long version_val,
-                                 unsigned long version_max, const char *name,
-                                 std::string *error) {
-  // Easy case if things are valid
-  if (version_val <= version_max) return true;
-
-  // It must be too big
-  if (error)
-    *error = std::string(name) + " version value(" +
-             std::to_string(version_val) + ") must not exceed " +
-             std::to_string(version_max);
-  return false;
-}
-
-bool Semver::parse_core(std::string_view core, unsigned long *major,
-                        unsigned long *minor, unsigned long *patch,
-                        std::string *error) {
+// Parse and validate the core "MAJOR.MINOR.PATCH" segment.
+//
+// @param core The core segment, with no pre-release or build metadata
+// @param[out] major Parsed MAJOR number
+// @param[out] minor Parsed MINOR number
+// @param[out] patch Parsed PATCH number
+// @param[out] error Optional error message if validation fails
+// @return true on success, false otherwise
+bool parse_core(std::string_view core, unsigned long *major,
+                unsigned long *minor, unsigned long *patch,
+                std::string *error) {
   if (std::count(core.begin(), core.end(), '.') != 2) {
     if (error)
       *error = "Invalid core version format, expected MAJOR.MINOR.PATCH";
@@ -106,14 +181,22 @@ bool Semver::parse_core(std::string_view core, unsigned long *major,
   std::string_view patch_str = core.substr(patch_pos + 1);
 
   // Parse each position into its own bounds.
-  return parse_core_component(major_str, kMajorMax, "MAJOR", major, error) &&
-         parse_core_component(minor_str, kMinorMax, "MINOR", minor, error) &&
-         parse_core_component(patch_str, kPatchMax, "PATCH", patch, error);
+  return parse_core_component(major_str, Semver::kMajorMax, "MAJOR", major,
+                              error) &&
+         parse_core_component(minor_str, Semver::kMinorMax, "MINOR", minor,
+                              error) &&
+         parse_core_component(patch_str, Semver::kPatchMax, "PATCH", patch,
+                              error);
 }
 
-bool Semver::parse_prerelease(std::string_view segment,
-                              std::vector<std::string> *out,
-                              std::string *error) {
+// Parse and validate the dot-separated pre-release segment.
+//
+// @param segment Pre-release identifiers, without the leading '-'
+// @param[out] out Parsed pre-release identifiers
+// @param[out] error Optional error message if validation fails
+// @return true on success, false otherwise
+bool parse_prerelease(std::string_view segment, std::vector<std::string> *out,
+                      std::string *error) {
   // Split by dots
   while (true) {
     size_t dot = segment.find('.');
@@ -137,9 +220,14 @@ bool Semver::parse_prerelease(std::string_view segment,
   return true;
 }
 
-bool Semver::parse_build_metadata(std::string_view segment,
-                                  std::vector<std::string> *out,
-                                  std::string *error) {
+// Parse and validate the dot-separated build metadata segment.
+//
+// @param segment Build metadata identifiers, without the leading '+'
+// @param[out] out Parsed build metadata identifiers
+// @param[out] error Optional error message if validation fails
+// @return true on success, false otherwise
+bool parse_build_metadata(std::string_view segment,
+                          std::vector<std::string> *out, std::string *error) {
   // Split by dots
   while (true) {
     size_t dot = segment.find('.');
@@ -156,6 +244,53 @@ bool Semver::parse_build_metadata(std::string_view segment,
   }
   return true;
 }
+
+// Compare two pre-release identifier lists according to semver rules.
+// @return -1 if lhs < rhs, 0 if equal, 1 if lhs > rhs
+int compare_prerelease(const std::vector<std::string> &lhs,
+                       const std::vector<std::string> &rhs) {
+  // No pre-release > has pre-release
+  if (lhs.empty() && !rhs.empty()) return 1;
+  if (!lhs.empty() && rhs.empty()) return -1;
+  if (lhs.empty() && rhs.empty()) return 0;
+
+  // Compare identifier by identifier
+  size_t min_size = std::min(lhs.size(), rhs.size());
+  for (size_t i = 0; i < min_size; ++i) {
+    const std::string &l = lhs[i];
+    const std::string &r = rhs[i];
+
+    bool l_numeric = is_numeric(l);
+    bool r_numeric = is_numeric(r);
+
+    if (l_numeric && r_numeric) {
+      // Both numeric - compare numerically
+      unsigned long l_val = std::stoul(l);
+      unsigned long r_val = std::stoul(r);
+      if (l_val < r_val) return -1;
+      if (l_val > r_val) return 1;
+    } else if (l_numeric && !r_numeric) {
+      // Numeric < alphanumeric
+      return -1;
+    } else if (!l_numeric && r_numeric) {
+      // Alphanumeric > numeric
+      return 1;
+    } else {
+      // Both alphanumeric - compare lexically
+      if (l < r) return -1;
+      if (l > r) return 1;
+    }
+  }
+
+  // All compared identifiers are equal, check length
+  if (lhs.size() < rhs.size()) return -1;
+  if (lhs.size() > rhs.size()) return 1;
+  return 0;
+}
+
+}  // namespace
+
+Semver::Semver() : major_(0), minor_(0), patch_(0), valid_(false) {}
 
 bool Semver::parse(std::string_view s, std::string *error) {
   // Reset state
@@ -211,12 +346,6 @@ bool Semver::parse(std::string_view s, std::string *error) {
   build_metadata_.swap(build_metadata_tmp);
   valid_ = true;
   return true;
-}
-
-Semver Semver::from_string(std::string_view version_str, std::string *error) {
-  Semver ver;
-  ver.parse(version_str, error);
-  return ver;
 }
 
 Semver Semver::from_components(unsigned long major, unsigned long minor,
@@ -286,79 +415,6 @@ std::string Semver::to_string() const {
   return r;
 }
 
-std::string Semver::safe_for_output(std::string_view str) {
-  std::string result;
-  size_t limit = std::min(str.size(), kMaxOutputChars);
-  for (size_t i = 0; i < limit; ++i) {
-    unsigned char c = static_cast<unsigned char>(str[i]);
-    switch (c) {
-      case '\t':
-        result += "\\t";
-        break;
-      case '\n':
-        result += "\\n";
-        break;
-      case '\r':
-        result += "\\r";
-        break;
-      case '\\':  // Keep out safe with backslash.
-        result += "\\\\";
-        break;
-      default:
-        if (std::isprint(c)) {
-          result += static_cast<char>(c);
-        } else {
-          char buf[5];
-          snprintf(buf, sizeof(buf), "\\x%02X", c);
-          result += buf;
-        }
-    }
-  }
-  // Truncated strings get an unicode ellipsis appended at the end
-  if (str.size() > kMaxOutputChars) result += "\u2026";
-  return result;
-}
-
-int Semver::compare_prerelease(const Semver &other) const {
-  // No pre-release > has pre-release
-  if (prerelease_.empty() && !other.prerelease_.empty()) return 1;
-  if (!prerelease_.empty() && other.prerelease_.empty()) return -1;
-  if (prerelease_.empty() && other.prerelease_.empty()) return 0;
-
-  // Compare identifier by identifier
-  size_t min_size = std::min(prerelease_.size(), other.prerelease_.size());
-  for (size_t i = 0; i < min_size; ++i) {
-    const std::string &l = prerelease_[i];
-    const std::string &r = other.prerelease_[i];
-
-    bool l_numeric = is_numeric(l);
-    bool r_numeric = is_numeric(r);
-
-    if (l_numeric && r_numeric) {
-      // Both numeric - compare numerically
-      unsigned long l_val = std::stoul(l);
-      unsigned long r_val = std::stoul(r);
-      if (l_val < r_val) return -1;
-      if (l_val > r_val) return 1;
-    } else if (l_numeric && !r_numeric) {
-      // Numeric < alphanumeric
-      return -1;
-    } else if (!l_numeric && r_numeric) {
-      // Alphanumeric > numeric
-      return 1;
-    } else {
-      // Both alphanumeric - compare lexically
-      if (l < r) return -1;
-      if (l > r) return 1;
-    }
-  }
-
-  // All compared identifiers are equal, check length
-  if (prerelease_.size() < other.prerelease_.size()) return -1;
-  if (prerelease_.size() > other.prerelease_.size()) return 1;
-  return 0;
-}
-
 bool Semver::operator==(const Semver &other) const {
   if (!valid_ || !other.valid_) return false;
   return major_ == other.major_ && minor_ == other.minor_ &&
@@ -377,7 +433,7 @@ bool Semver::operator<(const Semver &other) const {
   if (patch_ != other.patch_) return patch_ < other.patch_;
 
   // Core versions are equal, compare pre-release
-  return compare_prerelease(other) < 0;
+  return compare_prerelease(prerelease_, other.prerelease_) < 0;
 }
 
 bool Semver::operator<=(const Semver &other) const {

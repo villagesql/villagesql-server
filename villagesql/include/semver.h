@@ -42,9 +42,6 @@ class Semver {
   static constexpr unsigned long kMinorMax = 100;
   static constexpr unsigned long kPatchMax = 1000;
 
-  // Maximum number of source characters reproduced by safe_for_output().
-  static constexpr size_t kMaxOutputChars = 10;
-
   /**
    * Default constructor creates an invalid semver (0.0.0)
    */
@@ -59,16 +56,6 @@ class Semver {
    * NOTE this is the opposite of mysql normal.
    */
   bool parse(std::string_view version_str, std::string *error = nullptr);
-
-  /**
-   * Static factory method to parse and create a Semver.
-   *
-   * @param version_str String in semver format
-   * @param[out] error Optional error message if parsing fails
-   * @return Semver object, check is_valid() to see if parsing succeeded
-   */
-  static Semver from_string(std::string_view version_str,
-                            std::string *error = nullptr);
 
   /**
    * Static factory method to create a Semver from components.
@@ -135,18 +122,6 @@ class Semver {
   std::string to_string() const;
 
   /**
-   * Sanitize an arbitrary string for safe inclusion in output such as error
-   * messages. At most kMaxOutputChars source characters are reproduced; any
-   * unprintable character is rendered as a readable escape sequence (e.g.
-   * "\n", "\x1b"); if the input is longer than kMaxOutputChars an ellipsis is
-   * appended.
-   *
-   * @param str The string to sanitize
-   * @return A printable, length-limited representation of str
-   */
-  static std::string safe_for_output(std::string_view str);
-
-  /**
    * Comparison operators.
    * Note: Build metadata is ignored for precedence comparison per semver spec.
    * Pre-release versions have lower precedence than normal versions.
@@ -159,98 +134,6 @@ class Semver {
   bool operator>=(const Semver &other) const;
 
  private:
-  /**
-   * Compare pre-release identifiers according to semver rules.
-   * @return -1 if this < other, 0 if equal, 1 if this > other
-   */
-  int compare_prerelease(const Semver &other) const;
-
-  /**
-   * Parse and validate a single core version component.
-   *
-   * Validates that the component is numeric with no leading zeros, converts it,
-   * and range-checks the result, rejecting values that overflow or exceed the
-   * (inclusive) maximum allowed for this position.
-   *
-   * @param version_str Component string
-   * @param version_max Inclusive maximum value allowed for this position
-   * @param name Position name used in error messages (e.g. "MAJOR")
-   * @param[out] out Parsed value
-   * @param[out] error Optional error message if validation fails
-   * @return true on success, false otherwise
-   */
-  static bool parse_core_component(std::string_view version_str,
-                                   unsigned long version_max, const char *name,
-                                   unsigned long *out, std::string *error);
-
-  /**
-   * Check that a parsed core version value is within its allowed bound.
-   *
-   * @param version_val The parsed value to check
-   * @param version_max Inclusive maximum value allowed for this position
-   * @param name Position name used in the error message (e.g. "MAJOR")
-   * @param[out] error Optional error message if the value exceeds the bound
-   * @return true if version_val <= version_max, false otherwise
-   */
-  static bool check_version_bound(unsigned long version_val,
-                                  unsigned long version_max, const char *name,
-                                  std::string *error);
-
-  /**
-   * Parse and validate the core "MAJOR.MINOR.PATCH" segment.
-   *
-   * @param core The core segment, with no pre-release or build metadata
-   * @param[out] major Parsed MAJOR number
-   * @param[out] minor Parsed MINOR number
-   * @param[out] patch Parsed PATCH number
-   * @param[out] error Optional error message if validation fails
-   * @return true on success, false otherwise
-   */
-  static bool parse_core(std::string_view core, unsigned long *major,
-                         unsigned long *minor, unsigned long *patch,
-                         std::string *error);
-
-  /**
-   * Parse and validate the dot-separated pre-release segment.
-   *
-   * @param segment Pre-release identifiers, without the leading '-'
-   * @param[out] out Parsed pre-release identifiers
-   * @param[out] error Optional error message if validation fails
-   * @return true on success, false otherwise
-   */
-  static bool parse_prerelease(std::string_view segment,
-                               std::vector<std::string> *out,
-                               std::string *error);
-
-  /**
-   * Parse and validate the dot-separated build metadata segment.
-   *
-   * @param segment Build metadata identifiers, without the leading '+'
-   * @param[out] out Parsed build metadata identifiers
-   * @param[out] error Optional error message if validation fails
-   * @return true on success, false otherwise
-   */
-  static bool parse_build_metadata(std::string_view segment,
-                                   std::vector<std::string> *out,
-                                   std::string *error);
-
-  /**
-   * Check if a string is a valid identifier (alphanumeric + hyphen)
-   */
-  static bool is_valid_identifier(std::string_view id);
-
-  /**
-   * Check if a string contains only digits
-   */
-  static bool is_numeric(std::string_view str);
-
-  /**
-   * Check if a numeric identifier has a disallowed leading zero, i.e. it is
-   * more than one digit long and starts with '0'. Per the semver spec, numeric
-   * identifiers must not include leading zeros.
-   */
-  static bool has_leading_zero(std::string_view str);
-
   unsigned long major_;
   unsigned long minor_;
   unsigned long patch_;

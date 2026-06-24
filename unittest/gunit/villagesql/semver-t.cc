@@ -139,21 +139,6 @@ TEST_F(SemverTest, ToString) {
   EXPECT_EQ("1.0.0-beta+exp.sha.5114f85", v5.to_string());
 }
 
-// Test from_string factory method
-TEST_F(SemverTest, FromString) {
-  std::string error;
-  Semver v1 = Semver::from_string("1.2.3", &error);
-  EXPECT_TRUE(v1.is_valid());
-  EXPECT_TRUE(error.empty());
-  EXPECT_EQ(1u, v1.major());
-  EXPECT_EQ(2u, v1.minor());
-  EXPECT_EQ(3u, v1.patch());
-
-  Semver v2 = Semver::from_string("invalid", &error);
-  EXPECT_FALSE(v2.is_valid());
-  EXPECT_FALSE(error.empty());
-}
-
 // Test invalid version strings
 TEST_F(SemverTest, ParseInvalidVersions) {
   std::string error;
@@ -560,11 +545,12 @@ TEST_F(SemverTest, FromComponentsComparison) {
   EXPECT_FALSE(v1 < v2);
 }
 
-// Test that from_components and from_string produce equivalent results
-TEST_F(SemverTest, FromComponentsEquivalentToFromString) {
+// Test that from_components and parse produce equivalent results
+TEST_F(SemverTest, FromComponentsEquivalentToParse) {
   Semver v1 =
       Semver::from_components(1, 2, 3, {"alpha", "1"}, {"build", "123"});
-  Semver v2 = Semver::from_string("1.2.3-alpha.1+build.123");
+  Semver v2;
+  v2.parse("1.2.3-alpha.1+build.123");
 
   EXPECT_TRUE(v1.is_valid());
   EXPECT_TRUE(v2.is_valid());
