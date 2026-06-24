@@ -157,13 +157,14 @@ class PT_custom_type : public PT_type {
     const TypeContext *type_context = nullptr;
 
     // Handle types that accept a length spec. Note that this create function
-    // only handles TYPE(N) syntax and unparameterized types. Parameterized types with
-    // TYPE('key=value,...') syntax are handled by the other create() overload.
+    // only handles TYPE(N) syntax and unparameterized types. Parameterized
+    // types with TYPE('key=value,...') syntax are handled by the other create()
+    // overload.
     if (descriptor->is_parameterized()) {
-      // type provides resolve_params, check if also provides int_to_params for TYPE(N) syntax.
-      // In case it does, and length is provided, we will convert the length to parameters and
-      // resolve the TypeContext.
-      // In case it does, and length is not provided -> this is an error.
+      // type provides resolve_params, check if also provides int_to_params for
+      // TYPE(N) syntax. In case it does, and length is provided, we will
+      // convert the length to parameters and resolve the TypeContext. In case
+      // it does, and length is not provided -> this is an error.
       if (length != nullptr) {
         // TYPE(N) syntax used - convert N to parameters via callbacks
         if (!descriptor->int_to_params_fn().has_value()) {
@@ -200,7 +201,8 @@ class PT_custom_type : public PT_type {
           return nullptr;
         }
 
-        // resolve_params_and_context will call AcquireOrCreateTypeContext after resolving the parameters
+        // resolve_params_and_context will call AcquireOrCreateTypeContext after
+        // resolving the parameters
         if (resolve_params_and_context(pos, thd, descriptor, canonical.str(),
                                        type_context)) {
           return nullptr;
@@ -220,13 +222,12 @@ class PT_custom_type : public PT_type {
       // non parameterized type
       if (length != nullptr) {
         if (!current_thd->is_error())
-          villagesql_error(
-              "Length provided for non-parameterized type '%s'",
-              MYF(0), descriptor->qualified_base_name().c_str());
+          villagesql_error("Length provided for non-parameterized type '%s'",
+                           MYF(0), descriptor->qualified_base_name().c_str());
         return nullptr;
       }
-      if (AcquireOrCreateTypeContext(descriptor, TypeParameters(), *thd->mem_root,
-                                     type_context)) 
+      if (AcquireOrCreateTypeContext(descriptor, TypeParameters(),
+                                     *thd->mem_root, type_context))
         return nullptr;
     }
 

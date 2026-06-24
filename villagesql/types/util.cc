@@ -348,7 +348,8 @@ bool acquire_or_create_type_context_locked(VictionaryClient &vclient,
   if (should_assert_if_null(descriptor)) {
     if (!current_thd->is_error()) {
       villagesql_error(
-          "Type '%s' failed to initialize; cannot acquire or create TypeContext for null descriptor",
+          "Type '%s' failed to initialize; cannot acquire or create "
+          "TypeContext for null descriptor",
           MYF(0), descriptor->qualified_base_name().c_str());
     }
     return true;
