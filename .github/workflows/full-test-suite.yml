@@ -123,5 +123,7 @@ jobs:
         RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         BODY="$(printf '## %s \`/testall\` %s\n\nFull test suite (unit + big + all suites) finished with result \`%s\`.\n\n[View run](%s)' \
           "$ICON" "$RESULT" "$RESULT" "$RUN_URL")"
-        gh pr comment "${{ inputs.pr_number }}" \
-          --repo "${{ github.repository }}" --body "$BODY"
+        # Cf. slash-commands.yml; grep for "issues-comments endpoint".
+        gh api --method POST \
+          "repos/${{ github.repository }}/issues/${{ inputs.pr_number }}/comments" \
+          -f body="$BODY" >/dev/null

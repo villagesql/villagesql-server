@@ -30,15 +30,18 @@ check() {
 # --- classify ---------------------------------------------------------------
 out() { BODY="$1" AUTHOR_ASSOCIATION="$2" "$CLASSIFY" | tr '\n' ',' ; }
 
-check "classify: member /testall"        "kind=run,command=testall,"        "$(out '/testall' MEMBER)"
-check "classify: owner /testextensions"  "kind=run,command=testextensions," "$(out '/testextensions' OWNER)"
-check "classify: non-member /testall"    "kind=unauthorized,command=testall," "$(out '/testall' NONE)"
-check "classify: unknown command"        "kind=unknown,command=deploy,"     "$(out '/deploy' MEMBER)"
-check "classify: help"                   "kind=help,"                       "$(out '/help' NONE)"
-check "classify: not a command"          "kind=ignore,"                     "$(out 'looks good to me' MEMBER)"
-check "classify: trailing args ignored"  "kind=run,command=testall,"        "$(out '/testall please' MEMBER)"
-check "classify: case-insensitive"       "kind=run,command=testall,"        "$(out '/TestAll' MEMBER)"
-check "classify: empty body"             "kind=ignore,"                     "$(out '' MEMBER)"
+check "classify: member /testall"         "kind=run,command=testall,"          "$(out '/testall' MEMBER)"
+check "classify: owner /testextensions"   "kind=run,command=testextensions,"   "$(out '/testextensions' OWNER)"
+check "classify: non-member /testall"     "kind=unauthorized,command=testall," "$(out '/testall' NONE)"
+check "classify: unknown slash ignored"   "kind=ignore,"                       "$(out '/deploy' MEMBER)"
+check "classify: help"                    "kind=help,"                         "$(out '/help' NONE)"
+check "classify: not a command"           "kind=ignore,"                       "$(out 'looks good to me' MEMBER)"
+check "classify: command anywhere"        "kind=run,command=testall,"          "$(out 'lgtm, please /testall now' MEMBER)"
+check "classify: cmd after unknown slash" "kind=run,command=testextensions,"   "$(out '/foo then /testextensions' MEMBER)"
+check "classify: leading whitespace"      "kind=run,command=testall,"          "$(out '  /testall' MEMBER)"
+check "classify: trailing args"           "kind=run,command=testall,"          "$(out '/testall please' MEMBER)"
+check "classify: case-insensitive"        "kind=run,command=testall,"          "$(out '/TestAll' MEMBER)"
+check "classify: empty body"              "kind=ignore,"                       "$(out '' MEMBER)"
 
 # --- find_running -----------------------------------------------------------
 RUNS='{"workflow_runs":[
