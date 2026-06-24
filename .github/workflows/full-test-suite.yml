@@ -25,11 +25,6 @@ on:
         required: false
         type: boolean
         default: false
-      pr_number:
-        description: 'If set, post a pass/fail summary as a comment on this PR'
-        required: false
-        type: string
-        default: ''
 
 jobs:
   build-and-test:
@@ -97,31 +92,3 @@ jobs:
         run-all-suites: true
         skip-suite: village
         artifact-name: ${{ inputs.artifact-prefix }}-all-suites-logs-${{ github.run_number }}
-
-  # Posts a pass/fail summary as a PR comment when the run finishes. Only when
-  # pr_number is set (i.e. invoked by /testall). This is the companion to the
-  # "started" comment posted by slash-commands.yml.
-  report:
-    name: Report result
-    needs: build-and-test
-    if: always() && inputs.pr_number != ''
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write  # required to comment on the PR
-    steps:
-    - name: Post comment
-      env:
-        GH_TOKEN: ${{ github.token }}
-        RESULT: ${{ needs.build-and-test.result }}
-      run: |
-        case "$RESULT" in
-          success)   ICON="✅" ;;
-          cancelled) ICON="⚠️" ;;
-          *)         ICON="❌" ;;
-        esac
-        RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        BODY="$(printf '## %s \`/testall\` %s\n\nFull test suite (unit + big + all suites) finished with result \`%s\`.\n\n[View run](%s)' \
-          "$ICON" "$RESULT" "$RESULT" "$RUN_URL")"
-        gh pr comment "${{ inputs.pr_number }}" \
-          --repo "${{ github.repository }}" --body "$BODY"
