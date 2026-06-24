@@ -1,0 +1,58 @@
+name: Extension SDK Compatibility
+
+# Nightly + manual entry point for extension compatibility testing.
+# Delegates the actual build/test matrix to the reusable
+# extension-compat-suite.yml. Tests bundled extensions against the SDK at HEAD.
+#
+#   - Runs automatically after a successful nightly build (workflow_run).
+#   - Can be triggered manually to test a single platform, extension, or ABI.
+#
+# For on-demand testing against a PR's commit, see /testextensions in
+# slash-commands.yml, which calls the same reusable workflow.
+
+on:
+  workflow_run:
+    workflows: ["Nightly Build and Test"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Single platform to test (linux-x86_64, linux-aarch64, macos-arm64), or leave empty for all'
+        required: false
+        default: ''
+      extension:
+        description: 'Single extension to test (e.g. vsql-ai), or leave empty for all'
+        required: false
+        default: ''
+      abi:
+        description: 'ABI variant to test (stable, dev), or leave empty for both'
+        required: false
+        default: ''
+      ref:
+        description: 'Branch, tag, or commit SHA to test, or leave empty for the default branch'
+        required: false
+        default: ''
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Extension compatibility
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/extension-compat-suite.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      platform_filter: ${{ inputs.platform }}
+      extension_filter: ${{ inputs.extension }}
+      abi_filter: ${{ inputs.abi }}
+      # format() coerces the boolean to a non-empty string so a dispatch
+      # 'slack_notify: false' is preserved; workflow_run has no inputs => 'true'.
+      slack_notify: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.slack_notify) || 'true' }}
+    secrets: inherit

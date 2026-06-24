@@ -1,52 +1,60 @@
-name: Extension SDK Compatibility
+name: Extension SDK Compatibility (Reusable)
 
-# Tests that bundled extensions build and pass their MTR suites against the
-# SDK at HEAD.  Runs automatically after a successful nightly build, and can
-# be triggered manually to test a single platform, extension, or ABI variant.
+# Reusable workflow that builds bundled extensions against the SDK built from a
+# given ref and runs their MTR suites. Called by:
+#   - extension-compat.yml (nightly workflow_run + manual workflow_dispatch)
+#   - slash-commands.yml    (/testextensions on a PR)
+#
+# The SDK is compiled fresh from `ref` in build-server, and each extension is
+# built against that SDK artifact — so passing a PR's head SHA as `ref` tests
+# every extension against that exact commit.
 #
 # Extension test convention: each extension repo must have a mysql-test/
 # directory at its root containing t/ and r/ subdirectories. This directory
 # is mounted as mysql-test/suite/<extension-name>/ in the dev server package.
 
 on:
-  workflow_run:
-    workflows: ["Nightly Build and Test"]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      platform:
-        description: 'Single platform to test (linux-x86_64, linux-aarch64, macos-arm64), or leave empty for all'
-        required: false
-        default: ''
-      extension:
-        description: 'Single extension to test (e.g. vsql-ai), or leave empty for all'
-        required: false
-        default: ''
-      abi:
-        description: 'ABI variant to test (stable, dev), or leave empty for both'
-        required: false
-        default: ''
       ref:
-        description: 'Branch, tag, or commit SHA to test, or leave empty for the default branch'
+        description: 'Commit/branch/tag to build the server and SDK from'
+        required: true
+        type: string
+      platform_filter:
+        description: 'Limit to one platform (linux-x86_64, linux-aarch64, macos-arm64)'
         required: false
+        type: string
         default: ''
-      notify:
-        description: 'Send Slack notification with results'
+      extension_filter:
+        description: 'Limit to one extension (e.g. vsql-ai)'
         required: false
-        type: boolean
-        default: true
+        type: string
+        default: ''
+      abi_filter:
+        description: 'Limit to one ABI (stable, dev); empty means per-extension declared'
+        required: false
+        type: string
+        default: ''
+      pr_number:
+        description: 'If set, post a results summary as a comment on this PR'
+        required: false
+        type: string
+        default: ''
+      slack_notify:
+        description: "Send Slack notification with results ('true'/'false')"
+        required: false
+        type: string
+        default: 'true'
 
 permissions:
   contents: read
 
 jobs:
   # Reads bundled_extensions.txt and builds a cross-product matrix of
-  # (platform x extension x abi), filtered by any workflow_dispatch inputs.
+  # (platform x extension x abi), filtered by the inputs.
   prepare:
     name: Prepare matrix
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     outputs:
       build-matrix: ${{ steps.build-matrix.outputs.build-matrix }}
       test-matrix: ${{ steps.build-matrix.outputs.test-matrix }}
@@ -54,14 +62,14 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Build test matrix
         id: build-matrix
         env:
-          PLATFORM_FILTER: ${{ inputs.platform }}
-          EXTENSION_FILTER: ${{ inputs.extension }}
-          ABI_FILTER: ${{ inputs.abi }}
+          PLATFORM_FILTER: ${{ inputs.platform_filter }}
+          EXTENSION_FILTER: ${{ inputs.extension_filter }}
+          ABI_FILTER: ${{ inputs.abi_filter }}
         run: |
           # Delegate all matrix logic to the script so it can be tested locally:
           #   PLATFORM_FILTER=macos-arm64 ABI_FILTER=stable \
@@ -97,7 +105,7 @@ jobs:
         with:
           fetch-depth: 1
           path: source
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Install dependencies (Linux)
         if: matrix.os == 'linux'
@@ -162,7 +170,7 @@ jobs:
         with:
           fetch-depth: 1
           sparse-checkout: scripts/
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Download dev server
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -199,6 +207,7 @@ jobs:
           git clone "${CLONE_ARGS[@]}" ${{ matrix.url }} extension/
 
       - name: Build extension VEB
+        id: build_ext
         run: |
           NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
           DEV_ABI_FLAG=""
@@ -224,6 +233,7 @@ jobs:
           cp -r extension/mysql-test/. "$SUITE_DIR/"
 
       - name: Run MTR suite
+        id: run_mtr
         run: |
           if [ ! -d "extension/mysql-test" ]; then
             echo "Error: no mysql-test/ directory found in ${{ matrix.extension }}"
@@ -248,12 +258,70 @@ jobs:
             ${{ env.PACKAGE_DIR }}/mysql-test/var/log/
             ${{ env.PACKAGE_DIR }}/mysql-test/var/*/log/
 
-  # Sends a Slack summary after all test jobs complete.
-  # Runs automatically (workflow_run) or when notify is true (workflow_dispatch).
-  notify:
+      # Record a per-job result so the comment job can build a summary table.
+      # Matrix jobs cannot share an output, so each writes a tiny artifact.
+      # Logic lives in a script tested by scripts/ci_helpers/regtest_workflow_scripts.sh.
+      - name: Record result
+        if: always()
+        run: |
+          ./scripts/ci_helpers/villagesql_ext_record_result.sh \
+            "${{ matrix.extension }}" "${{ matrix.abi }}" "${{ matrix.platform }}" \
+            "${{ steps.build_ext.outcome }}" "${{ steps.run_mtr.outcome }}" \
+            extresults
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: extresult-${{ matrix.extension }}-${{ matrix.platform }}-${{ matrix.abi }}
+          path: extresults/
+          retention-days: 3
+
+  # Posts a per-extension pass/fail table as a PR comment when the run finishes.
+  # Only when pr_number is set (i.e. invoked by /testextensions). This is the
+  # companion to the "started" comment posted by slash-commands.yml.
+  comment:
+    name: PR comment
+    needs: [build-server, test-extension]
+    if: always() && inputs.pr_number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout scripts
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+
+      - name: Download results
+        # Don't fail the comment if no results exist (e.g. server build failed
+        # so no test-extension jobs ran) — the script reports that case.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: extresult-*
+          path: extresults/
+          merge-multiple: true
+
+      # Summary markdown is built by a script tested by
+      # scripts/ci_helpers/regtest_workflow_scripts.sh, then posted with gh.
+      - name: Post comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
+            extresults '${{ needs.build-server.result }}' "$RUN_URL")"
+          gh pr comment "${{ inputs.pr_number }}" \
+            --repo "${{ github.repository }}" --body "$BODY"
+
+  # Sends a Slack summary after all test jobs complete (nightly / dispatch).
+  slack_notify:
     name: Slack Notification
     needs: [build-server, test-extension]
-    if: always() && inputs.notify != 'false'
+    if: always() && inputs.slack_notify != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Compute overall status

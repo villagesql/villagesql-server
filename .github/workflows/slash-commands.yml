@@ -1,0 +1,145 @@
+name: Slash Commands
+
+# Single front door for slash-commands posted as PR comments. Parses the
+# command, resolves the PR head SHA, reacts, refuses duplicate runs, and routes
+# to a reusable workflow.
+#
+# NOTE: issue_comment workflows always run from the DEFAULT BRANCH version of
+# this file. Changes here only take effect once merged to main; a /command on a
+# PR runs the dispatcher as it exists on main, not on the PR branch.
+#
+# To add a command:
+#   1. Ensure a reusable workflow exists (uses: ./.github/workflows/<x>.yml).
+#   2. Add it to COMMANDS in the parse step (for validation + /help).
+#   3. Add a `run-<command>` caller job below, gated on the command name.
+
+on:
+  issue_comment:
+    types: [created]
+
+# run-name embeds the PR number so the parse job's already-running check can
+# associate in-flight runs with a PR (issue_comment runs all report the default
+# branch, so branch filtering is not usable).
+run-name: "PR #${{ github.event.issue.number }}: ${{ github.event.comment.body }}"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+
+jobs:
+  parse:
+    name: Parse command
+    runs-on: ubuntu-latest
+    if: github.event.issue.pull_request
+    outputs:
+      command: ${{ steps.parse.outputs.command }}
+      ref: ${{ steps.parse.outputs.ref }}
+      pr_number: ${{ steps.parse.outputs.pr_number }}
+      should_run: ${{ steps.parse.outputs.should_run }}
+    steps:
+      - name: Checkout scripts
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+
+      # Pure parsing/auth/dup-guard logic lives in scripts tested by
+      # scripts/ci_helpers/regtest_workflow_scripts.sh; this step is just the GitHub-API
+      # wiring (comments, reaction, run lookup) via gh. The untrusted comment
+      # body is passed through an env var (never interpolated into the script).
+      - name: Parse and validate
+        id: parse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          BODY: ${{ github.event.comment.body }}
+          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Registry of supported commands. Add new commands here and add a
+          # matching run-<command> caller job below.
+          COMMANDS: "testall testextensions"
+        run: |
+          set -euo pipefail
+
+          post() { gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$1"; }
+          stop() { echo "should_run=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          help_text() {
+            printf '**Slash commands**\n\n'
+            for c in $COMMANDS; do printf -- '- `/%s`\n' "$c"; done
+            printf -- '- `/help`\n'
+          }
+
+          # Classify (pure, tested). Read key=value lines without eval.
+          classout="$(./scripts/ci_helpers/villagesql_slash_classify.sh)"
+          kind="$(printf '%s\n' "$classout" | sed -n 's/^kind=//p')"
+          command="$(printf '%s\n' "$classout" | sed -n 's/^command=//p')"
+
+          case "$kind" in
+            ignore) stop ;;
+            help)   post "$(help_text)"; stop ;;
+            unknown)
+              post "$(printf 'Unknown command `/%s`.\n\n%s' "$command" "$(help_text)")"
+              stop ;;
+            unauthorized)
+              post "🔒 \`/$command\` is restricted to organization members. (Your association: \`$AUTHOR_ASSOCIATION\`.)"
+              stop ;;
+          esac
+
+          # kind == run. Best-effort duplicate guard: if a previous Slash
+          # Commands run for THIS PR is still in flight, point at it and stop.
+          runs_json="$(gh api "repos/$REPO/actions/workflows/slash-commands.yml/runs?per_page=50")"
+          dup="$(printf '%s' "$runs_json" \
+            | ./scripts/ci_helpers/villagesql_slash_find_running.sh "PR #$PR_NUMBER:" "$RUN_ID")"
+          if [ -n "$dup" ]; then
+            num="${dup%%$'\t'*}"; url="${dup#*$'\t'}"
+            post "⏳ A Slash Commands run is already in progress for this PR: [run #$num]($url). Waiting for it to finish — re-comment once it completes."
+            stop
+          fi
+
+          # Resolve PR head SHA.
+          ref="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid -q .headRefOid)"
+
+          # Acknowledge receipt (best-effort).
+          gh api -X POST "repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+            -f content=rocket >/dev/null 2>&1 || true
+
+          # "Started" comment; the result job posts a separate finish comment.
+          post "$(printf '## 🚀 \`/%s\` started\n\nRunning against \`%s\`. [View run](%s)' \
+            "$command" "${ref:0:12}" "$RUN_URL")"
+
+          {
+            echo "command=$command"
+            echo "ref=$ref"
+            echo "pr_number=$PR_NUMBER"
+            echo "should_run=true"
+          } >> "$GITHUB_OUTPUT"
+          echo "/$command on PR #$PR_NUMBER: testing $ref"
+
+  run-testall:
+    needs: parse
+    if: needs.parse.outputs.should_run == 'true' && needs.parse.outputs.command == 'testall'
+    uses: ./.github/workflows/full-test-suite.yml
+    with:
+      ref: ${{ needs.parse.outputs.ref }}
+      pr_number: ${{ needs.parse.outputs.pr_number }}
+      build-type: debug
+      artifact-prefix: testall
+      run-all-suites-conditional: false
+    secrets: inherit
+
+  run-testextensions:
+    needs: parse
+    if: needs.parse.outputs.should_run == 'true' && needs.parse.outputs.command == 'testextensions'
+    uses: ./.github/workflows/extension-compat-suite.yml
+    with:
+      ref: ${{ needs.parse.outputs.ref }}
+      pr_number: ${{ needs.parse.outputs.pr_number }}
+      platform_filter: linux-x86_64
+      # abi_filter omitted => both ABIs, per-extension declared
+      slack_notify: 'false'
+    secrets: inherit
