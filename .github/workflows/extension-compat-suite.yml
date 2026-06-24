@@ -314,8 +314,11 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
             extresults '${{ needs.build-server.result }}' "$RUN_URL")"
-          gh pr comment "${{ inputs.pr_number }}" \
-            --repo "${{ github.repository }}" --body "$BODY"
+          # REST issues-comments endpoint works with issues:write (gh pr comment
+          # uses GraphQL addComment, which needs pull-requests:write).
+          gh api --method POST \
+            "repos/${{ github.repository }}/issues/${{ inputs.pr_number }}/comments" \
+            -f body="$BODY" >/dev/null
 
   # Sends a Slack summary after all test jobs complete (nightly / dispatch).
   slack_notify:

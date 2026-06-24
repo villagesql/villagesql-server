@@ -66,7 +66,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          post() { gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$1"; }
+          # Post via the REST issues-comments endpoint (works with
+          # issues:write); gh pr comment uses GraphQL addComment, which would
+          # require pull-requests:write.
+          post() {
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" \
+              -f body="$1" >/dev/null
+          }
           stop() { echo "should_run=false" >> "$GITHUB_OUTPUT"; exit 0; }
           help_text() {
             printf '**Slash commands**\n\n'
