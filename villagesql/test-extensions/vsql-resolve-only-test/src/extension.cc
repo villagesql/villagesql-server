@@ -20,8 +20,7 @@
 // 'len' parameter) and provides resolve_params, so it is parameterized. With no
 // int_to_params, the bare declaration `CREATE TABLE t (v ext.RPARAM)` has no
 // way to obtain a width: resolve_params is never invoked (no parameters) and
-// persisted_length stays -1. This used to crash the server (assert(len > 0) in
-// PT_custom_type / make_field); the type now must be rejected at parse time.
+// persisted_length stays -1. The type now must be rejected at parse time.
 //
 // The type ops are no-op stubs: they exist only to satisfy the builder. The
 // column under test is never populated, because the bare declaration is

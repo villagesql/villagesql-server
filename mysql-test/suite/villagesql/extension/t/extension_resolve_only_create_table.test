@@ -4,8 +4,7 @@
 # RPARAM has persisted_length(-1) (its width is resolved from the 'len'
 # parameter) and provides resolve_params, so it is parameterized. With no
 # int_to_params, a bare declaration has no way to obtain a width: resolve_params
-# is never invoked (no parameters) and persisted_length stays -1. This used to
-# crash the server (assert(len > 0) in PT_custom_type / make_field). It must now
+# is never invoked (no parameters) and persisted_length stays -1. It must now
 # be rejected at parse time instead.
 #
 # Fixture: vsql_resolve_only_test exposes RPARAM.
