@@ -177,6 +177,11 @@ class TypeDescriptor {
   unsigned char implementation_type() const { return implementation_type_; }
   int64_t persisted_length() const { return persisted_length_; }
 
+  // True if the type is variable-length (size decided per value).
+  bool is_variable_length() const {
+    return length_kind() == LengthKind::Variable;
+  }
+
   // How the type's persisted size is determined (fixed footprint vs. decided
   // per value). Set at registration from the protocol-appropriate source: the
   // variable_length flag for VEF_PROTOCOL_4 types

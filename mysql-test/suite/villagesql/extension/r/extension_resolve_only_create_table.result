@@ -1,0 +1,28 @@
+# Install the fixture.
+INSTALL EXTENSION vsql_resolve_only_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_resolve_only_test';
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_resolve_only_test	0.0.1
+# The bare form is rejected at parse time (it used to crash the server).
+CREATE TABLE t_bare (id INT, v vsql_resolve_only_test.RPARAM);
+ERROR 42000: Fixed-length type 'vsql_resolve_only_test.RPARAM' requires parameters near 'vsql_resolve_only_test.RPARAM)' at line 1
+# The integer-length form is rejected too: it needs int_to_params, which
+# this type does not provide.
+CREATE TABLE t_int (id INT, v vsql_resolve_only_test.RPARAM(8));
+ERROR 42000: Fixed-length type 'vsql_resolve_only_test.RPARAM' requires parameters near 'vsql_resolve_only_test.RPARAM(8))' at line 1
+# The explicit-parameter form is accepted: resolve_params resolves the
+# width, so the type is otherwise valid -- only the bare form is rejected.
+CREATE TABLE t_param (id INT, v vsql_resolve_only_test.RPARAM('len=8'));
+SHOW CREATE TABLE t_param;
+Table	Create Table
+t_param	CREATE TABLE `t_param` (
+  `id` int DEFAULT NULL,
+  `v` vsql_resolve_only_test.RPARAM('len=8') DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_param;
+# Clean up.
+UNINSTALL EXTENSION vsql_resolve_only_test;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_resolve_only_test';
+EXTENSION_NAME	EXTENSION_VERSION

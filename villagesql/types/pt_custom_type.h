@@ -143,6 +143,14 @@ class PT_custom_type : public PT_type {
           PT_custom_type(pos, thd, type_name, nullptr, nullptr);
     }
 
+    // Note, this create function is called when params string is empty.
+    if (!descriptor->is_variable_length() && descriptor->is_parameterized() &&
+        !descriptor->int_to_params_fn().has_value()) {
+      thd->syntax_error_at(pos, "Fixed-length type '%s' requires parameters",
+                           descriptor->qualified_base_name().c_str());
+      return nullptr;
+    }
+
     const TypeContext *type_context = nullptr;
 
     // Handle types that accept a length spec. Note that this create function
