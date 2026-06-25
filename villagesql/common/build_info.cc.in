@@ -1,0 +1,44 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+// Generated from build_info.cc.in by cmake/gen_build_info.cmake at build time.
+// Do not edit; edit the template instead.
+
+#include "villagesql/include/build_info.h"
+
+namespace villagesql {
+namespace {
+
+constexpr BuildInfo kBuildInfo = {
+    "@GIT_SHA@",
+    @GIT_FILES_ADDED@,
+    @GIT_FILES_DELETED@,
+    @GIT_FILES_MODIFIED@,
+    "@BUILD_TIMESTAMP@",
+    "@BUILD_HOST@",
+    "@BUILD_OS@",
+    "@BUILD_ARCH@",
+};
+
+}  // namespace
+
+bool BuildInfo::is_dirty() const {
+  return files_added != 0 || files_deleted != 0 || files_modified != 0;
+}
+
+const BuildInfo &GetBuildInfo() { return kBuildInfo; }
+
+}  // namespace villagesql
