@@ -140,6 +140,30 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
 void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
                           const ExtensionRegistration &registration);
 
+// Open the .so and call vef_register: dlopen, look up the entry-point
+// symbols, invoke vef_register, validate the returned protocol. Does NOT
+// run any capability populate hooks. The caller observes only what the
+// target's vef_register declares; nothing in the live server is mutated by
+// the open beyond whatever the target's own static initializers do.
+//
+// Used by the version-update pre-check path so it can inspect a target
+// package without populating capabilities into the running server (which
+// would touch process-global state for the wrong reasons).
+//
+// The full load_vef_extension above is composed from this open plus a
+// populate_capabilities step; use that for the install/startup paths.
+//
+// Returns false on success, true on error (error_message populated).
+bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
+                        ExtensionRegistration &registration,
+                        std::string &error_message);
+
+// Symmetric counterpart to open_vef_extension: vef_unregister + dlclose, no
+// capability depopulate. Pair with open_vef_extension. Calling this on a
+// registration obtained from the full load_vef_extension would leak
+// capability state.
+void close_vef_extension(const ExtensionRegistration &registration);
+
 // Get the path to the .so file for an extension
 // Uses the convention:
 // {datadir}/.veb_expansion_cache/{name}/{sha256}/lib/{name}.so Returns empty
