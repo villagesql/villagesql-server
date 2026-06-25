@@ -72,17 +72,6 @@ class PT_custom_type : public PT_type {
       return;
     }
 
-    // Validate length specification against type characteristics
-    if (nullptr != length_spec && !type_context->is_parameterized()) {
-      // Non parameterized type with length specification - this is an error
-      std::string qname = type_context->qualified_name();
-      thd->syntax_error_at(pos,
-                           "Type '%s' is not parameterized and cannot have a "
-                           "length specification",
-                           qname.c_str());
-      return;
-    }
-
     // If no length_spec provided, generate it from the TypeContext's storage
     // length. For fixed-length types this comes from the descriptor; for
     // variable-length types it is the descriptor's max_persisted_length
@@ -171,6 +160,8 @@ class PT_custom_type : public PT_type {
           thd->syntax_error_at(
               pos, "Type '%s' does not accept a length specification",
               descriptor->qualified_base_name().c_str());
+          // it's OK to return nullptr only if an error has already been set in
+          // THD
           return nullptr;
         }
 
@@ -221,9 +212,10 @@ class PT_custom_type : public PT_type {
     } else {
       // non parameterized type
       if (length != nullptr) {
-        if (!current_thd->is_error())
-          villagesql_error("Length provided for non-parameterized type '%s'",
-                           MYF(0), descriptor->qualified_base_name().c_str());
+        thd->syntax_error_at(pos,
+                             "Type '%s' is not parameterized and cannot have a "
+                             "length specification",
+                             descriptor->qualified_base_name().c_str());
         return nullptr;
       }
       if (AcquireOrCreateTypeContext(descriptor, TypeParameters(),
@@ -231,6 +223,8 @@ class PT_custom_type : public PT_type {
         return nullptr;
     }
 
+    // in case type_context is still nullptr - PT_custom_type constructor will
+    // record the error
     PT_custom_type *ret = new (pt_mem_root)
         PT_custom_type(pos, thd, type_name, length, type_context);
     return ret;
