@@ -96,17 +96,22 @@ extern void BuildQualifiedParamsString(THD *thd, enum_sp_type sp_type,
                                        const sp_pcontext *root_ctx,
                                        LEX_STRING *out);
 
-// Fills *result with a TypeContext based on the type_name given. If
-// extension_name is non-empty, filters results to match that extension
-// (for qualified names like extension_name.type_name).
-// Returns false on success and true on failure. If the type isn't known the
-// function will return false (success), but the result will be nullptr. The
-// mem_root is used to scope the cleanup of the TypeContext.
-extern bool ResolveTypeToContext(std::string_view extension_name,
-                                 std::string_view type_name,
-                                 const TypeParameters &parameters,
-                                 MEM_ROOT &mem_root,
-                                 const TypeContext *&result);
+// Looks up just the TypeDescriptor for a (possibly extension-qualified) type
+// name. Returns false on success and true on internal failure.
+// If the type isn't known the function returns false (success) with result
+// nullptr.
+extern bool ResolveTypeDescriptor(std::string_view extension_name,
+                                  std::string_view type_name,
+                                  const TypeDescriptor *&result);
+
+// Acquires (create if necessary) the cached TypeContext for an already
+// resolved TypeDescriptor and its concrete parameters. The descriptor must be
+// non-null (typically obtained from ResolveTypeDescriptor). The mem_root scopes
+// the cleanup of the TypeContext. Returns false on success and true on failure.
+extern bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
+                                       const TypeParameters &parameters,
+                                       MEM_ROOT &mem_root,
+                                       const TypeContext *&result);
 
 // Pre-populate session-local temporary metadata from Create_field list so that
 // MaybeInjectCustomType can inject type contexts during open_table_from_share
