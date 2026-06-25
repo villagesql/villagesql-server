@@ -368,7 +368,9 @@ static bool validate_villagesql_tables(THD *thd) {
 // villagesql/schema/upgrade.h.
 bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
   // Upgrade from 0.0.1 to 0.0.3: add type_parameters column to custom_columns
-  if (from_version < Semver::from_components(0, 0, 3)) {
+  Semver version_003;
+  version_003.from_components(0, 0, 3);
+  if (from_version < version_003) {
     if (upgrade::upgrade_villagesql_from_0_0_1_to_0_0_3(thd)) return true;
   }
   // Future versions would be added here

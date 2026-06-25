@@ -320,68 +320,55 @@ bool Semver::parse(std::string_view s, std::string *error) {
     build_seg = s.substr(1);  // skip leading '+'
   }
 
-  // Parse each component into temporaries so that a failure partway through
-  // leaves the existing object state untouched.
-  unsigned long major_tmp = 0, minor_tmp = 0, patch_tmp = 0;
-  if (!parse_core(core, &major_tmp, &minor_tmp, &patch_tmp, error)) {
+  // Parse each component value.
+  unsigned long major = 0, minor = 0, patch = 0;
+  if (!parse_core(core, &major, &minor, &patch, error)) {
     return false;
   }
 
-  std::vector<std::string> prerelease_tmp;
-  if (has_prerelease &&
-      !parse_prerelease(prerelease_seg, &prerelease_tmp, error)) {
+  std::vector<std::string> prerelease;
+  if (has_prerelease && !parse_prerelease(prerelease_seg, &prerelease, error)) {
     return false;
   }
 
-  std::vector<std::string> build_metadata_tmp;
+  std::vector<std::string> build_metadata;
   if (has_build_metadata &&
-      !parse_build_metadata(build_seg, &build_metadata_tmp, error)) {
+      !parse_build_metadata(build_seg, &build_metadata, error)) {
     return false;
   }
 
-  major_ = major_tmp;
-  minor_ = minor_tmp;
-  patch_ = patch_tmp;
-  prerelease_.swap(prerelease_tmp);
-  build_metadata_.swap(build_metadata_tmp);
-  valid_ = true;
-  return true;
+  // Accept a small amount of duplicate validation for consistency in behavior.
+  return from_components(major, minor, patch, prerelease, build_metadata);
 }
 
-Semver Semver::from_components(unsigned long major, unsigned long minor,
-                               unsigned long patch,
-                               const std::vector<std::string> &prerelease,
-                               const std::vector<std::string> &build_metadata) {
-  Semver ver;
-
-  // Assume failure unless everything succeeds
-  ver.valid_ = false;
-
-  if (!check_version_bound(major, kMajorMax, "MAJOR", nullptr)) return ver;
-  if (!check_version_bound(minor, kMinorMax, "MINOR", nullptr)) return ver;
-  if (!check_version_bound(patch, kPatchMax, "PATCH", nullptr)) return ver;
+bool Semver::from_components(unsigned long major, unsigned long minor,
+                             unsigned long patch,
+                             const std::vector<std::string> &prerelease,
+                             const std::vector<std::string> &build_metadata) {
+  if (!check_version_bound(major, kMajorMax, "MAJOR", nullptr)) return false;
+  if (!check_version_bound(minor, kMinorMax, "MINOR", nullptr)) return false;
+  if (!check_version_bound(patch, kPatchMax, "PATCH", nullptr)) return false;
 
   // Validate identifiers if provided
   for (const auto &id : prerelease) {
-    if (!is_valid_identifier(id)) return ver;
+    if (!is_valid_identifier(id)) return false;
 
     // Check for leading zeros in numeric identifiers
-    if (is_numeric(id) && has_leading_zero(id)) return ver;
+    if (is_numeric(id) && has_leading_zero(id)) return false;
   }
 
   for (const auto &id : build_metadata) {
-    if (!is_valid_identifier(id)) return ver;
+    if (!is_valid_identifier(id)) return false;
   }
 
   // All of the components are valid
-  ver.major_ = major;
-  ver.minor_ = minor;
-  ver.patch_ = patch;
-  ver.prerelease_ = prerelease;
-  ver.build_metadata_ = build_metadata;
-  ver.valid_ = true;
-
-  return ver;
+  major_ = major;
+  minor_ = minor;
+  patch_ = patch;
+  prerelease_ = prerelease;
+  build_metadata_ = build_metadata;
+  valid_ = true;
+  return true;
 }
 
 std::string Semver::to_string() const {

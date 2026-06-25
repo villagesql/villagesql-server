@@ -58,19 +58,20 @@ class Semver {
   bool parse(std::string_view version_str, std::string *error = nullptr);
 
   /**
-   * Static factory method to create a Semver from components.
+   * Populate a Semver from components.  If any component fails validation,
+   * the result is false and this Semver is unchanged.
    *
    * @param major Major version number
    * @param minor Minor version number
    * @param patch Patch version number
    * @param prerelease Optional pre-release identifiers (e.g., {"alpha", "1"})
    * @param build_metadata Optional build metadata identifiers
-   * @return Semver object, always valid if component validation passes
+   * @return true if component validation passes
    */
-  static Semver from_components(
-      unsigned long major, unsigned long minor, unsigned long patch,
-      const std::vector<std::string> &prerelease = {},
-      const std::vector<std::string> &build_metadata = {});
+  bool from_components(unsigned long major, unsigned long minor,
+                       unsigned long patch,
+                       const std::vector<std::string> &prerelease = {},
+                       const std::vector<std::string> &build_metadata = {});
 
   /**
    * Check if this is a valid semver
