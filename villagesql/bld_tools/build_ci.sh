@@ -11,10 +11,11 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/vsql_script_utils.sh"
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPTS_DIR="$(cd "$TOOLS_DIR/../scripts" && pwd)"
+source "$SCRIPTS_DIR/vsql_script_utils.sh"
 
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPTS_DIR/../.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 BUILD_TYPE="${BUILD_TYPE:-release}"
 PARALLEL_JOBS="${PARALLEL_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")}"
