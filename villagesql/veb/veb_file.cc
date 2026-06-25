@@ -929,10 +929,9 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
-bool load_vef_extension_raw(const std::string &so_path,
-                            vef_protocol_t max_protocol,
-                            ExtensionRegistration &registration,
-                            std::string &error_message) {
+bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
+                        ExtensionRegistration &registration,
+                        std::string &error_message) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -1018,7 +1017,7 @@ bool load_vef_extension_raw(const std::string &so_path,
   return false;
 }
 
-void unload_vef_extension_raw(const ExtensionRegistration &registration) {
+void close_vef_extension(const ExtensionRegistration &registration) {
   if (registration.dlhandle == nullptr) {
     return;
   }
@@ -1037,8 +1036,7 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
                         const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
                         std::string &error_message) {
-  if (load_vef_extension_raw(so_path, max_protocol, registration,
-                             error_message)) {
+  if (open_vef_extension(so_path, max_protocol, registration, error_message)) {
     return true;
   }
 
@@ -1054,7 +1052,7 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
     depop_ctx.thd = ctx.thd;
     villagesql::services::depopulate_capabilities(depop_ctx,
                                                   registration.registration);
-    unload_vef_extension_raw(registration);
+    close_vef_extension(registration);
     registration.so_path.clear();
     registration.dlhandle = nullptr;
     registration.registration = nullptr;
@@ -1075,7 +1073,7 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
                                                   registration.registration);
   }
 
-  unload_vef_extension_raw(registration);
+  close_vef_extension(registration);
 }
 
 }  // namespace veb
