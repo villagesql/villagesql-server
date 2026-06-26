@@ -1,0 +1,2 @@
+ALTER EXTENSION vsql_simple VERSION '0.0.1' AT RESTART;
+ERROR HY000: Updating an extension version is not yet supported

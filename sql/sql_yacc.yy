@@ -2507,6 +2507,7 @@ simple_statement_or_begin:
 simple_statement:
           alter_database_stmt           { $$= nullptr; }
         | alter_event_stmt              { $$= nullptr; }
+        | alter_extension_stmt          { $$= nullptr; }
         | alter_function_stmt           { $$= nullptr; }
         | alter_instance_stmt
         | alter_library_stmt
@@ -19139,6 +19140,18 @@ install_stmt:
         | INSTALL_SYM COMPONENT_SYM TEXT_STRING_sys_list opt_install_set_value_list
           {
             $$ = NEW_PTN PT_install_component(@$, YYTHD, $3, $4);
+          }
+        ;
+
+// TODO(villagesql-rebase): ALTER EXTENSION grammar rule, check placement during MySQL rebase
+alter_extension_stmt:
+          ALTER EXTENSION_SYM IDENT_sys VERSION_SYM TEXT_STRING_sys AT_SYM RESTART_SYM
+          {
+            LEX *lex= Lex;
+            lex->sql_command= SQLCOM_INSTALL_EXTENSION;
+            lex->m_sql_cmd= new (YYMEM_ROOT) Sql_cmd_install_extension(
+                to_lex_cstring($3), to_lex_cstring($5),
+                /*update_version=*/true, /*at_restart=*/true);
           }
         ;
 

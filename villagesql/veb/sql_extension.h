@@ -30,15 +30,35 @@ class THD;
 extern char *opt_veb_dir_ptr;
 extern char opt_veb_dir[FN_REFLEN];
 
-// This class implements the INSTALL EXTENSION statement.
+// This class implements both the install path and the version-update path
+// for extensions. The two paths share an Sql_cmd because they share most of
+// the setup work (VEB resolution, MDL acquisition, victionary access); the
+// dispatch flags below select which path runs.
 class Sql_cmd_install_extension : public Sql_cmd {
  public:
   // version: requested VEB-manifest version (m_version.str == nullptr if no
-  // VERSION clause). When set, install opens {name}-{version}.veb and fails
-  // unless the manifest version matches. When omitted, install picks the only
-  // versioned VEB present, or {name}.veb if it exists.
-  Sql_cmd_install_extension(const LEX_CSTRING &name, const LEX_CSTRING &version)
-      : m_name(name), m_version(version) {}
+  // VERSION clause was given on the install path). When set, install opens
+  // {name}-{version}.veb and fails unless the manifest version matches.
+  // When omitted, install picks the only versioned VEB present, or
+  // {name}.veb if it exists.
+  //
+  // update_version: true when the statement updates an already-installed
+  // extension to a different version. Dispatched to execute_update_version,
+  // which currently rejects with a "not yet supported" error.
+  //
+  // at_restart: when update_version is true, indicates the version change
+  // should be deferred until the next server restart rather than applied
+  // live. Today this is always true when update_version is true; the flag
+  // is kept separate so a future live-update path reuses
+  // execute_update_version with the flag unset.
+  explicit Sql_cmd_install_extension(const LEX_CSTRING &name,
+                                     const LEX_CSTRING &version,
+                                     bool update_version = false,
+                                     bool at_restart = false)
+      : m_name(name),
+        m_version(version),
+        m_update_version(update_version),
+        m_at_restart(at_restart) {}
 
   enum_sql_command sql_command_code() const override {
     return SQLCOM_INSTALL_EXTENSION;
@@ -51,9 +71,12 @@ class Sql_cmd_install_extension : public Sql_cmd {
 
  private:
   bool execute_install(THD *thd);
+  bool execute_update_version(THD *thd);
 
   LEX_CSTRING m_name;
   LEX_CSTRING m_version;
+  bool m_update_version;
+  bool m_at_restart;
 };
 
 // This class implements the UNINSTALL EXTENSION statement.
