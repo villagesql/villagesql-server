@@ -87,6 +87,19 @@ CREATE TABLE bad2 (id INT, v vsql_tarray_test.TARRAY(300));
 --error ER_PARSE_ERROR
 CREATE TABLE bad3 (id INT, v vsql_tarray_test.TARRAY(0));
 
+--echo # A variable-length type must be able to encode an intrinsic default.
+--echo # The empty array "[]" encodes to zero bytes (not a usable default), so
+--echo # TARRAY declares intrinsic_default_str('[0]'). A bad value under
+--echo # INSERT IGNORE falls back to that sentinel rather than failing, and a
+--echo # NOT NULL TARRAY column is therefore backed by a valid default value.
+CREATE TABLE arr_def (
+  id INT PRIMARY KEY,
+  a vsql_tarray_test.TARRAY(4) NOT NULL
+);
+INSERT IGNORE INTO arr_def (id, a) VALUES (1, 'not-an-array');
+SELECT id, a, vsql_tarray_test.tarray_dim(a) AS na FROM arr_def ORDER BY id;
+DROP TABLE arr_def;
+
 --echo # Clean up.
 DROP TABLE arrs;
 UNINSTALL EXTENSION vsql_tarray_test;

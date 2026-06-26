@@ -1125,7 +1125,12 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
     return TYPE_ERR_BAD_VALUE;
   }
   const size_t cached_size = tc.intrinsic_default_size();
-  assert(cached_size == static_cast<size_t>(tc.persisted_length()));
+  // Fixed-length types store exactly persisted_length bytes; variable-length
+  // types store any non-empty value up to the field's max capacity.
+  assert(tc.is_variable_length()
+             ? cached_size > 0 &&
+                   cached_size <= static_cast<size_t>(tc.field_buffer_length())
+             : cached_size == static_cast<size_t>(tc.persisted_length()));
 
   field->set_notnull();
   return field->store(reinterpret_cast<const char *>(cached_buffer),

@@ -59,6 +59,12 @@
 //              - Parameterized version of NO_DEFAULT_TYPE for exercising
 //                parameterized intrinsic-default failures.
 //
+//   NO_DEFAULT_VAR_PARAM_TYPE(N)
+//              - Variable-length version of NO_DEFAULT_PARAM_TYPE (declared
+//                .variable_length_type()). Same from_string that rejects the
+//                empty string, so it has no intrinsic default; exercises the
+//                fatal no-default path through the variable-length branch.
+//
 //   LARGE_DECODE_TYPE(N)
 //              - Parameterized 8-byte type whose decoded string is N 'X'
 //                characters.  Used to exercise the server's result-buffer
@@ -235,6 +241,27 @@ void no_default_param_encode(vsql::MaybeParams<NoDefaultParams> &params,
   no_default_encode(from, out);
 }
 
+// resolve_params for the variable-length no-default type.
+bool no_default_var_resolve_params(
+    const std::map<std::string, std::string> &params,
+    vsql::ResolvedTypeParams *result, char *error_msg) {
+  auto it = params.find("length");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "NO_DEFAULT_VAR_PARAM_TYPE length is required");
+    return true;
+  }
+  int64_t length = std::stoll(it->second);
+  if (length <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "NO_DEFAULT_VAR_PARAM_TYPE length must be positive");
+    return true;
+  }
+  assert(result->persisted_length <= 0);
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
 void no_default_param_decode(vsql::CustomArgWith<NoDefaultParams> in,
                              vsql::StringResult out) {
   auto buffer = in.value();
@@ -369,6 +396,8 @@ static void test_result_kind(vsql::StringArg input, vsql::IntResult out) {
 static constexpr const char kFaultBlobTypeName[] = "FAULT_BLOB";
 static constexpr const char kNoDefaultTypeName[] = "NO_DEFAULT_TYPE";
 static constexpr const char kNoDefaultParamTypeName[] = "NO_DEFAULT_PARAM_TYPE";
+static constexpr const char kNoDefaultVarParamTypeName[] =
+    "NO_DEFAULT_VAR_PARAM_TYPE";
 static constexpr const char kLargeDecodeTypeName[] = "LARGE_DECODE_TYPE";
 
 constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
@@ -396,6 +425,26 @@ constexpr auto NO_DEFAULT_PARAM_TYPE =
                 &NoDefaultParams::to_strings>()
         .int_to_params<&no_default_int_to_params>()
         .resolve_params<&no_default_resolve_params>()
+        .from_string<&no_default_param_encode>()
+        .to_string<&no_default_param_decode>()
+        .compare<&no_default_param_compare>()
+        .build();
+
+// A variable-length version of NO_DEFAULT_PARAM_TYPE: same parameterized
+// int_to_params/from_string (from_string only accepts "(N)" and rejects the
+// empty string), but declared .variable_length_type() so it is classified as
+// variable-length. Exercises the fatal "no intrinsic default" path through the
+// variable-length branch of TypeContext::init_intrinsic_default (a variable
+// type that cannot encode a default is unusable, same as a fixed-length type).
+constexpr auto NO_DEFAULT_VAR_PARAM_TYPE =
+    vsql::make_type<kNoDefaultVarParamTypeName>()
+        .variable_length_type()
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kNoDefaultSize)
+        .params<NoDefaultParams, &NoDefaultParams::parse,
+                &NoDefaultParams::to_strings>()
+        .int_to_params<&no_default_int_to_params>()
+        .resolve_params<&no_default_var_resolve_params>()
         .from_string<&no_default_param_encode>()
         .to_string<&no_default_param_decode>()
         .compare<&no_default_param_compare>()
@@ -645,6 +694,7 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(FAULT_BLOB)
         .type(NO_DEFAULT_TYPE)
         .type(NO_DEFAULT_PARAM_TYPE)
+        .type(NO_DEFAULT_VAR_PARAM_TYPE)
         .type(LARGE_DECODE_TYPE)
         .type(PVEC)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR

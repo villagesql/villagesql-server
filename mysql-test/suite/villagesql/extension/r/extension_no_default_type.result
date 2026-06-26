@@ -5,4 +5,6 @@ CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
 ERROR HY000: Type 'vsql_test_only.NO_DEFAULT_TYPE' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4) NOT NULL);
 ERROR HY000: Type 'vsql_test_only.NO_DEFAULT_PARAM_TYPE(4)' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected persisted_length=4)
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_VAR_PARAM_TYPE(4) NOT NULL);
+ERROR HY000: Type 'vsql_test_only.NO_DEFAULT_VAR_PARAM_TYPE(4)' failed to initialize: from_string VDF failed to encode intrinsic default input '' (expected 1..4 bytes)
 UNINSTALL EXTENSION vsql_test_only;

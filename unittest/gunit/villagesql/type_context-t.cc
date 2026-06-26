@@ -42,6 +42,26 @@ static int dummy_compare(const unsigned char *, size_t, const unsigned char *,
   return 0;
 }
 
+// Encode that always produces a fixed 2-byte value, regardless of input. Models
+// a variable-length type (e.g. BITFIELD) whose empty default encodes to a small
+// non-empty value (a header). Returns false (success).
+static bool two_byte_encode(unsigned char *out, size_t out_cap, const char *,
+                            size_t, size_t *written) {
+  assert(out_cap >= 2);
+  out[0] = 0xAB;
+  out[1] = 0xCD;
+  *written = 2;
+  return false;
+}
+
+// Encode that produces an empty (zero-byte) value. Models a variable-length
+// type whose empty default is genuinely zero bytes (no usable default).
+static bool empty_encode(unsigned char *, size_t, const char *, size_t,
+                         size_t *written) {
+  *written = 0;
+  return false;
+}
+
 // resolve_params that succeeds and returns computed sizes.
 // Parses "dimension" from the canonical string, computes sizes.
 static void resolve_params_ok_vdf(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
@@ -213,6 +233,11 @@ class TypeContextTest : public ::testing::Test {
       const villagesql::TypeContextKey &key,
       const villagesql::TypeDescriptor *descriptor) {
     return villagesql::TypeContext(key, descriptor);
+  }
+
+  // Invoke the private init_intrinsic_default (TypeContextTest is a friend).
+  static bool init_default(villagesql::TypeContext &ctx, std::string &error) {
+    return ctx.init_intrinsic_default(error);
   }
 };
 
@@ -404,6 +429,101 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
   EXPECT_TRUE(v_unknown2.is_compatible_with(v_unknown));
   EXPECT_TRUE(v_unknown.is_assignable_with(v_unknown2));
   EXPECT_TRUE(v_unknown2.is_assignable_with(v_unknown));
+}
+
+// A variable-length type (persisted_length = -1, LengthKind::Variable) gets an
+// intrinsic default by encoding into its max capacity and accepting whatever
+// non-empty length the encoder produces.
+TEST_F(TypeContextTest, VariableLengthTypeEncodesIntrinsicDefault) {
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("BITFIELD", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_4, 1, /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
+      /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
+      villagesql::EncodeFunction(two_byte_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare));
+  villagesql::TypeContextKey key("BITFIELD", "test_ext", "1.0.0");
+  villagesql::TypeContext ctx = make_context(key, &desc);
+
+  ASSERT_TRUE(ctx.is_variable_length());
+  EXPECT_EQ(ctx.field_buffer_length(), 64);
+
+  std::string error;
+  EXPECT_FALSE(init_default(ctx, error));
+  EXPECT_TRUE(error.empty());
+  ASSERT_NE(ctx.intrinsic_default_buffer(), nullptr);
+  EXPECT_EQ(ctx.intrinsic_default_size(), 2u);
+  EXPECT_EQ(ctx.intrinsic_default_buffer()[0], 0xAB);
+  EXPECT_EQ(ctx.intrinsic_default_buffer()[1], 0xCD);
+}
+
+// A variable-length type whose encode produces zero bytes has no usable
+// default. Like a fixed-length type with no default (NO_DEFAULT_TYPE), this is
+// fatal: init reports an error and stores no buffer. Such a type must supply a
+// non-empty intrinsic_default_str/fn to be usable.
+
+// TODO(villagesql-beta): try to validate on install whether encode("") produces
+// valid default - in case no intrinsic_default_str/fn is provided. Or even
+// check if encode(instrinsic_default_str) produces a valid default.
+TEST_F(TypeContextTest, VariableLengthEmptyEncodeIsFatal) {
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("EMPTYVAR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_4, 1, /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
+      /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
+      villagesql::EncodeFunction(empty_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare));
+  villagesql::TypeContextKey key("EMPTYVAR", "test_ext", "1.0.0");
+  villagesql::TypeContext ctx = make_context(key, &desc);
+
+  std::string error;
+  EXPECT_TRUE(init_default(ctx, error));
+  EXPECT_FALSE(error.empty());
+  EXPECT_EQ(ctx.intrinsic_default_buffer(), nullptr);
+}
+
+// A fixed-length type encodes its default to exactly persisted_length bytes.
+TEST_F(TypeContextTest, FixedLengthTypeEncodesIntrinsicDefault) {
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("PAIR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_3, 1, /*persisted_len=*/2, /*max_unpersisted_len=*/256,
+      /*max_persisted_len=*/0, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(two_byte_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare));
+  villagesql::TypeContextKey key("PAIR", "test_ext", "1.0.0");
+  villagesql::TypeContext ctx = make_context(key, &desc);
+
+  std::string error;
+  EXPECT_FALSE(init_default(ctx, error));
+  EXPECT_TRUE(error.empty());
+  ASSERT_NE(ctx.intrinsic_default_buffer(), nullptr);
+  EXPECT_EQ(ctx.intrinsic_default_size(), 2u);
+}
+
+// A parameterized variable-length type declared without parameters (is_unknown)
+// cannot encode a default yet and is skipped (non-fatal, no buffer).
+TEST_F(TypeContextTest, UnknownParameterizedTypeSkipsIntrinsicDefault) {
+  static auto rp_ok_fd =
+      make_resolve_params_fd("rp_ok_default", &resolve_params_ok_vdf);
+
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("VARVECTOR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_4, 1, /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
+      /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
+      villagesql::EncodeFunction(two_byte_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsFunction(&rp_ok_fd));
+  // No parameters: this is an "unknown" parameterized type.
+  villagesql::TypeContextKey key("VARVECTOR", "test_ext", "1.0.0");
+  villagesql::TypeContext ctx = make_context(key, &desc);
+  ASSERT_TRUE(ctx.is_unknown());
+
+  std::string error;
+  EXPECT_FALSE(init_default(ctx, error));
+  EXPECT_TRUE(error.empty());
+  EXPECT_EQ(ctx.intrinsic_default_buffer(), nullptr);
 }
 
 }  // namespace villagesql_unittest
