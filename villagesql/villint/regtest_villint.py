@@ -130,7 +130,7 @@ class VillintTestRunner:
         self.source_dir = source_dir
         self.base_branch = base_branch
         self.villint_script = source_dir / "scripts" / "villint.sh"
-        self.test_cases_dir = source_dir / "scripts" / "regtest_villint_test_cases"
+        self.test_cases_dir = source_dir / "villagesql" / "villint" / "regtest_villint_test_cases"
         self.temp_dir = None
         self.test_branch = None
         self.debug = debug
@@ -562,8 +562,8 @@ def main():
     parser.add_argument(
         "--source-dir",
         type=Path,
-        default=Path(__file__).parent.parent,
-        help="Path to source repository (default: parent of script directory)",
+        default=Path(__file__).parent.parent.parent, # ./villagesql/villint
+        help="Path to source repository (default: grandparent of script directory)",
     )
     parser.add_argument(
         "--base-branch",
