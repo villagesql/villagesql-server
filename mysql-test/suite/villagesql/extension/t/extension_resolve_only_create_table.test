@@ -1,12 +1,6 @@
 # Regression check for a fixed-length parameterized custom type that provides
 # resolve_params but NOT int_to_params.
 #
-# RPARAM has persisted_length(-1) (its width is resolved from the 'len'
-# parameter) and provides resolve_params, so it is parameterized. With no
-# int_to_params, a bare declaration has no way to obtain a width: resolve_params
-# is never invoked (no parameters) and persisted_length stays -1. It must now
-# be rejected at parse time instead.
-#
 # Fixture: vsql_resolve_only_test exposes RPARAM.
 
 --echo # Install the fixture.
@@ -15,7 +9,8 @@ INSTALL EXTENSION vsql_resolve_only_test;
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
 WHERE extension_name = 'vsql_resolve_only_test';
 
---echo # The bare form is rejected at parse time (it used to crash the server).
+--echo # The bare form routes through resolve_params with empty parameters,
+--echo # which rejects the missing 'len' at parse time.
 --error ER_PARSE_ERROR
 CREATE TABLE t_bare (id INT, v vsql_resolve_only_test.RPARAM);
 

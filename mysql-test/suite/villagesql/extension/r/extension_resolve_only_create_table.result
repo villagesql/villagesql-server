@@ -4,13 +4,14 @@ SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
 WHERE extension_name = 'vsql_resolve_only_test';
 EXTENSION_NAME	EXTENSION_VERSION
 vsql_resolve_only_test	0.0.1
-# The bare form is rejected at parse time (it used to crash the server).
+# The bare form routes through resolve_params with empty parameters,
+# which rejects the missing 'len' at parse time.
 CREATE TABLE t_bare (id INT, v vsql_resolve_only_test.RPARAM);
-ERROR 42000: Fixed-length type 'vsql_resolve_only_test.RPARAM' requires parameters near 'vsql_resolve_only_test.RPARAM)' at line 1
+ERROR 42000: RPARAM requires a 'len' parameter near 'vsql_resolve_only_test.RPARAM)' at line 1
 # The integer-length form is rejected too: it needs int_to_params, which
 # this type does not provide.
 CREATE TABLE t_int (id INT, v vsql_resolve_only_test.RPARAM(8));
-ERROR 42000: Fixed-length type 'vsql_resolve_only_test.RPARAM' requires parameters near 'vsql_resolve_only_test.RPARAM(8))' at line 1
+ERROR 42000: Type 'vsql_resolve_only_test.RPARAM' does not accept a length specification near 'vsql_resolve_only_test.RPARAM(8))' at line 1
 # The explicit-parameter form is accepted: resolve_params resolves the
 # width, so the type is otherwise valid -- only the bare form is rejected.
 CREATE TABLE t_param (id INT, v vsql_resolve_only_test.RPARAM('len=8'));
