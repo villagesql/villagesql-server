@@ -1,6 +1,0 @@
-# ALTER EXTENSION ... VERSION '...' AT RESTART parses but is not yet
-# implemented; the server should reject it at execute time with a clear
-# error. This test will be superseded once the version-update path lands.
-
---error ER_VILLAGESQL_GENERIC_ERROR
-ALTER EXTENSION vsql_simple VERSION '0.0.1' AT RESTART;

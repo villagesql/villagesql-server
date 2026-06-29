@@ -34,6 +34,11 @@ extern char opt_veb_dir[FN_REFLEN];
 // for extensions. The two paths share an Sql_cmd because they share most of
 // the setup work (VEB resolution, MDL acquisition, victionary access); the
 // dispatch flags below select which path runs.
+//
+// TODO(villagesql-beta): evaluate giving `ALTER EXTENSION` its own
+// `enum_sql_command` value. Today both INSTALL and ALTER report as
+// `SQLCOM_INSTALL_EXTENSION` in the slow query log, audit log, and
+// performance_schema statement events; they should be distinguishable.
 class Sql_cmd_install_extension : public Sql_cmd {
  public:
   // version: requested VEB-manifest version (m_version.str == nullptr if no

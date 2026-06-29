@@ -41,3 +41,12 @@ vsql_add_test_extension(vsql-bad-var-no-resolve-test   vsql_bad_var_no_resolve_t
 vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
 vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)
 vsql_add_test_extension(vsql-resolve-only-test         vsql_resolve_only_test)
+
+# update_test installable + three target variants exercise the pre-checks
+# of the extension version-update path. The VEB filename is
+# update_test-<version>.veb; the manifest inside each variant carries the
+# matching version string so the manifest/filename check passes.
+vsql_add_test_extension(update-test-v1                 update_test  VERSION 1.0.0)
+vsql_add_test_extension(update-test-v1.1               update_test  VERSION 1.1.0)
+vsql_add_test_extension(update-test-v1.2               update_test  VERSION 1.2.0)
+vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.0)

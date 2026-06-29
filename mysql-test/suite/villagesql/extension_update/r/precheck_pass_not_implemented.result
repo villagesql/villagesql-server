@@ -1,0 +1,4 @@
+INSTALL EXTENSION update_test VERSION '1.0.0';
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+ERROR HY000: Extension 'update_test' version update from '1.0.0' to '2.0.0' is not yet implemented (pre-checks passed)
+UNINSTALL EXTENSION update_test;

@@ -1,0 +1,7 @@
+{
+  "name": "update_test",
+  "version": "1.0.0",
+  "description": "VillageSQL test extension: v1 of the update_test pair",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

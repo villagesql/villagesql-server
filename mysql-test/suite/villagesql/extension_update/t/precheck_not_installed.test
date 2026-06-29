@@ -1,0 +1,5 @@
+# Pre-check: ALTER EXTENSION ... AT RESTART on an extension that is not
+# installed must fail with "is not installed". No setup needed.
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;

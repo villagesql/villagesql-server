@@ -1,0 +1,8 @@
+# ALTER EXTENSION ... AT RESTART that targets the same version already
+# installed is a Note + no-op (idempotent).
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+
+UNINSTALL EXTENSION update_test;

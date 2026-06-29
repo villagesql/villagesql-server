@@ -1,0 +1,7 @@
+{
+  "name": "update_test",
+  "version": "1.2.0",
+  "description": "VillageSQL test extension: dropped-type variant in the update_test series (COUNTER removed)",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

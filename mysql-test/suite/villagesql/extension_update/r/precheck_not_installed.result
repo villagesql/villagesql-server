@@ -1,0 +1,2 @@
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+ERROR HY000: Extension 'update_test' is not installed

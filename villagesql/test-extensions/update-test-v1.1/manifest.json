@@ -1,0 +1,7 @@
+{
+  "name": "update_test",
+  "version": "1.1.0",
+  "description": "VillageSQL test extension: bad-length variant in the update_test series (COUNTER persisted_length differs from v1)",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}
