@@ -36,6 +36,12 @@ namespace villagesql {
  */
 class Semver {
  public:
+  // Inclusive upper bounds for each core version position. The bounds differ
+  // by position so that, for example, the patch number has the widest range.
+  static constexpr unsigned long kMajorMax = 10;
+  static constexpr unsigned long kMinorMax = 100;
+  static constexpr unsigned long kPatchMax = 1000;
+
   /**
    * Default constructor creates an invalid semver (0.0.0)
    */
@@ -52,29 +58,20 @@ class Semver {
   bool parse(std::string_view version_str, std::string *error = nullptr);
 
   /**
-   * Static factory method to parse and create a Semver.
-   *
-   * @param version_str String in semver format
-   * @param[out] error Optional error message if parsing fails
-   * @return Semver object, check is_valid() to see if parsing succeeded
-   */
-  static Semver from_string(std::string_view version_str,
-                            std::string *error = nullptr);
-
-  /**
-   * Static factory method to create a Semver from components.
+   * Populate a Semver from components.  If any component fails validation,
+   * the result is false and this Semver is unchanged.
    *
    * @param major Major version number
    * @param minor Minor version number
    * @param patch Patch version number
    * @param prerelease Optional pre-release identifiers (e.g., {"alpha", "1"})
    * @param build_metadata Optional build metadata identifiers
-   * @return Semver object, always valid if component validation passes
+   * @return true if component validation passes
    */
-  static Semver from_components(
-      unsigned long major, unsigned long minor, unsigned long patch,
-      const std::vector<std::string> &prerelease = {},
-      const std::vector<std::string> &build_metadata = {});
+  bool from_components(unsigned long major, unsigned long minor,
+                       unsigned long patch,
+                       const std::vector<std::string> &prerelease = {},
+                       const std::vector<std::string> &build_metadata = {});
 
   /**
    * Check if this is a valid semver
@@ -138,22 +135,6 @@ class Semver {
   bool operator>=(const Semver &other) const;
 
  private:
-  /**
-   * Compare pre-release identifiers according to semver rules.
-   * @return -1 if this < other, 0 if equal, 1 if this > other
-   */
-  int compare_prerelease(const Semver &other) const;
-
-  /**
-   * Check if a string is a valid identifier (alphanumeric + hyphen)
-   */
-  static bool is_valid_identifier(std::string_view id);
-
-  /**
-   * Check if a string contains only digits
-   */
-  static bool is_numeric(std::string_view str);
-
   unsigned long major_;
   unsigned long minor_;
   unsigned long patch_;

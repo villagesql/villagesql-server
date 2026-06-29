@@ -25,6 +25,18 @@ using namespace villagesql;
 
 class SemverTest : public ::testing::Test {};
 
+// Local helper to construct a Semver from components and return it.  Tests do a
+// lot of this, otherwise its uses are mostly one-offs. The result is invalid
+// (is_valid() == false) if any component fails validation.
+Semver from_components(unsigned long major, unsigned long minor,
+                       unsigned long patch,
+                       const std::vector<std::string> &prerelease = {},
+                       const std::vector<std::string> &build_metadata = {}) {
+  Semver v;
+  v.from_components(major, minor, patch, prerelease, build_metadata);
+  return v;
+}
+
 // Test basic parsing of valid semver strings
 TEST_F(SemverTest, ParseValidVersions) {
   Semver v1;
@@ -139,21 +151,6 @@ TEST_F(SemverTest, ToString) {
   EXPECT_EQ("1.0.0-beta+exp.sha.5114f85", v5.to_string());
 }
 
-// Test from_string factory method
-TEST_F(SemverTest, FromString) {
-  std::string error;
-  Semver v1 = Semver::from_string("1.2.3", &error);
-  EXPECT_TRUE(v1.is_valid());
-  EXPECT_TRUE(error.empty());
-  EXPECT_EQ(1u, v1.major());
-  EXPECT_EQ(2u, v1.minor());
-  EXPECT_EQ(3u, v1.patch());
-
-  Semver v2 = Semver::from_string("invalid", &error);
-  EXPECT_FALSE(v2.is_valid());
-  EXPECT_FALSE(error.empty());
-}
-
 // Test invalid version strings
 TEST_F(SemverTest, ParseInvalidVersions) {
   std::string error;
@@ -198,6 +195,19 @@ TEST_F(SemverTest, ParseInvalidVersions) {
 
   error.clear();
   EXPECT_FALSE(v.parse("1.2.03", &error));
+  EXPECT_FALSE(error.empty());
+
+  // Version numbers exceeding their per-position bounds
+  error.clear();
+  EXPECT_FALSE(v.parse("11.0.0", &error));
+  EXPECT_FALSE(error.empty());
+
+  error.clear();
+  EXPECT_FALSE(v.parse("0.101.0", &error));
+  EXPECT_FALSE(error.empty());
+
+  error.clear();
+  EXPECT_FALSE(v.parse("0.0.1001", &error));
   EXPECT_FALSE(error.empty());
 
   // Leading zeros in numeric pre-release identifiers
@@ -405,11 +415,11 @@ TEST_F(SemverTest, NumericVsAlphanumericPrerelease) {
 TEST_F(SemverTest, EdgeCases) {
   Semver v;
 
-  // Large version numbers
-  EXPECT_TRUE(v.parse("999999.999999.999999"));
-  EXPECT_EQ(999999u, v.major());
-  EXPECT_EQ(999999u, v.minor());
-  EXPECT_EQ(999999u, v.patch());
+  // Maximum allowed version numbers (bounds are inclusive)
+  EXPECT_TRUE(v.parse("10.100.1000"));
+  EXPECT_EQ(10u, v.major());
+  EXPECT_EQ(100u, v.minor());
+  EXPECT_EQ(1000u, v.patch());
 
   // Single character identifiers
   EXPECT_TRUE(v.parse("1.0.0-a"));
@@ -464,7 +474,7 @@ TEST_F(SemverTest, ReuseObject) {
 // Test from_components factory method
 TEST_F(SemverTest, FromComponents) {
   // Basic version without pre-release or build metadata
-  Semver v1 = Semver::from_components(1, 2, 3);
+  Semver v1 = from_components(1, 2, 3);
   EXPECT_TRUE(v1.is_valid());
   EXPECT_EQ(1u, v1.major());
   EXPECT_EQ(2u, v1.minor());
@@ -474,14 +484,14 @@ TEST_F(SemverTest, FromComponents) {
   EXPECT_EQ("1.2.3", v1.to_string());
 
   // Version with pre-release
-  Semver v2 = Semver::from_components(1, 0, 0, {"alpha"});
+  Semver v2 = from_components(1, 0, 0, {"alpha"});
   EXPECT_TRUE(v2.is_valid());
   EXPECT_EQ(1u, v2.prerelease().size());
   EXPECT_EQ("alpha", v2.prerelease()[0]);
   EXPECT_EQ("1.0.0-alpha", v2.to_string());
 
   // Version with pre-release and build metadata
-  Semver v3 = Semver::from_components(2, 1, 0, {"beta", "1"}, {"build", "123"});
+  Semver v3 = from_components(2, 1, 0, {"beta", "1"}, {"build", "123"});
   EXPECT_TRUE(v3.is_valid());
   EXPECT_TRUE(v3.has_prerelease());
   EXPECT_TRUE(v3.has_build_metadata());
@@ -494,14 +504,14 @@ TEST_F(SemverTest, FromComponents) {
   EXPECT_EQ("2.1.0-beta.1+build.123", v3.to_string());
 
   // Version with only build metadata
-  Semver v4 = Semver::from_components(3, 0, 0, {}, {"sha", "abc123"});
+  Semver v4 = from_components(3, 0, 0, {}, {"sha", "abc123"});
   EXPECT_TRUE(v4.is_valid());
   EXPECT_FALSE(v4.has_prerelease());
   EXPECT_TRUE(v4.has_build_metadata());
   EXPECT_EQ("3.0.0+sha.abc123", v4.to_string());
 
   // Zero version
-  Semver v5 = Semver::from_components(0, 0, 0);
+  Semver v5 = from_components(0, 0, 0);
   EXPECT_TRUE(v5.is_valid());
   EXPECT_EQ("0.0.0", v5.to_string());
 }
@@ -509,37 +519,37 @@ TEST_F(SemverTest, FromComponents) {
 // Test from_components with invalid identifiers
 TEST_F(SemverTest, FromComponentsInvalid) {
   // Invalid character in pre-release
-  Semver v1 = Semver::from_components(1, 0, 0, {"alpha@beta"});
+  Semver v1 = from_components(1, 0, 0, {"alpha@beta"});
   EXPECT_FALSE(v1.is_valid());
 
   // Leading zero in numeric pre-release identifier
-  Semver v2 = Semver::from_components(1, 0, 0, {"01"});
+  Semver v2 = from_components(1, 0, 0, {"01"});
   EXPECT_FALSE(v2.is_valid());
 
   // Empty identifier in pre-release
-  Semver v3 = Semver::from_components(1, 0, 0, {""});
+  Semver v3 = from_components(1, 0, 0, {""});
   EXPECT_FALSE(v3.is_valid());
 
   // Invalid character in build metadata
-  Semver v4 = Semver::from_components(1, 0, 0, {}, {"build$123"});
+  Semver v4 = from_components(1, 0, 0, {}, {"build$123"});
   EXPECT_FALSE(v4.is_valid());
 
   // Empty identifier in build metadata
-  Semver v5 = Semver::from_components(1, 0, 0, {}, {""});
+  Semver v5 = from_components(1, 0, 0, {}, {""});
   EXPECT_FALSE(v5.is_valid());
 
   // Valid numeric identifier with leading zero is OK if it's actually "0"
-  Semver v6 = Semver::from_components(1, 0, 0, {"0", "alpha"});
+  Semver v6 = from_components(1, 0, 0, {"0", "alpha"});
   EXPECT_TRUE(v6.is_valid());
   EXPECT_EQ("1.0.0-0.alpha", v6.to_string());
 }
 
 // Test comparison with versions created from components
 TEST_F(SemverTest, FromComponentsComparison) {
-  Semver v1 = Semver::from_components(1, 2, 3);
-  Semver v2 = Semver::from_components(1, 2, 3);
-  Semver v3 = Semver::from_components(1, 2, 4);
-  Semver v4 = Semver::from_components(1, 2, 3, {"alpha"});
+  Semver v1 = from_components(1, 2, 3);
+  Semver v2 = from_components(1, 2, 3);
+  Semver v3 = from_components(1, 2, 4);
+  Semver v4 = from_components(1, 2, 3, {"alpha"});
 
   EXPECT_TRUE(v1 == v2);
   EXPECT_TRUE(v1 < v3);
@@ -547,11 +557,11 @@ TEST_F(SemverTest, FromComponentsComparison) {
   EXPECT_FALSE(v1 < v2);
 }
 
-// Test that from_components and from_string produce equivalent results
-TEST_F(SemverTest, FromComponentsEquivalentToFromString) {
-  Semver v1 =
-      Semver::from_components(1, 2, 3, {"alpha", "1"}, {"build", "123"});
-  Semver v2 = Semver::from_string("1.2.3-alpha.1+build.123");
+// Test that from_components and parse produce equivalent results
+TEST_F(SemverTest, FromComponentsEquivalentToParse) {
+  Semver v1 = from_components(1, 2, 3, {"alpha", "1"}, {"build", "123"});
+  Semver v2;
+  v2.parse("1.2.3-alpha.1+build.123");
 
   EXPECT_TRUE(v1.is_valid());
   EXPECT_TRUE(v2.is_valid());
