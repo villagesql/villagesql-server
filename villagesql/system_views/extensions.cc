@@ -22,7 +22,14 @@
 #include "string_with_len.h"
 
 namespace {
-enum { FIELD_EXTENSION_NAME, FIELD_EXTENSION_VERSION };
+enum {
+  FIELD_EXTENSION_NAME,
+  FIELD_EXTENSION_VERSION,
+  FIELD_PENDING_VERSION,
+  FIELD_PENDING_REQUESTED_AT,
+  FIELD_PENDING_LAST_ERROR,
+  FIELD_PENDING_LAST_ERROR_AT
+};
 
 const dd::String_type s_view_name{STRING_WITH_LEN("EXTENSIONS")};
 const villagesql::system_views::Extensions *s_instance =
@@ -43,6 +50,18 @@ Extensions::Extensions(const dd::String_type &n) {
                          "ext.extension_name");
   m_target_def.add_field(FIELD_EXTENSION_VERSION, "EXTENSION_VERSION",
                          "ext.extension_version");
+  // Pending-action projection. The columns are placeholders today --
+  // always NULL because no underlying pending_action storage exists
+  // yet. A follow-up patch (ALTER EXTENSION ... AT RESTART) replaces
+  // the NULL projections with JSON_EXTRACT expressions over the
+  // pending_action column it adds to villagesql.extensions.
+  m_target_def.add_field(FIELD_PENDING_VERSION, "PENDING_VERSION", "NULL");
+  m_target_def.add_field(FIELD_PENDING_REQUESTED_AT, "PENDING_REQUESTED_AT",
+                         "NULL");
+  m_target_def.add_field(FIELD_PENDING_LAST_ERROR, "PENDING_LAST_ERROR",
+                         "NULL");
+  m_target_def.add_field(FIELD_PENDING_LAST_ERROR_AT, "PENDING_LAST_ERROR_AT",
+                         "NULL");
 
   // FROM
   m_target_def.add_from("villagesql.extensions ext");

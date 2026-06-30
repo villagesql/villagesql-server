@@ -163,7 +163,7 @@ UNINSTALL EXTENSION CaseSensitive;
 INSTALL EXTENSION path_traversal;
 ERROR HY000: Suspicious file path in VEB: '../escape.txt'
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 #
 # SYMLINK SECURITY TESTS
 #
@@ -175,7 +175,7 @@ Created symlink_relative.veb with contents:
 INSTALL EXTENSION symlink_relative;
 ERROR HY000: VEB contains symlink 'evil_link' pointing outside extraction directory (target: '../outside_target.txt', resolves to: '../outside_target.txt')
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 # Test 2: Symlink with absolute path pointing outside
 Creating test extension: symlink_absolute.veb
 Created symlink_absolute.veb with contents:
@@ -184,7 +184,7 @@ Created symlink_absolute.veb with contents:
 INSTALL EXTENSION symlink_absolute;
 ERROR HY000: VEB contains symlink 'evil_absolute_link' with absolute target: '/etc/passwd'
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 # Test 3: Deep directory traversal with many ../
 Creating test extension: deep_traversal.veb
 Created deep_traversal.veb with contents:
@@ -193,7 +193,7 @@ Created deep_traversal.veb with contents:
 INSTALL EXTENSION deep_traversal;
 ERROR HY000: VEB contains symlink 'deep_link' pointing outside extraction directory (target: '../../../../../../etc/passwd', resolves to: '../../../../../../etc/passwd')
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 # Test 4: Symlink in subdirectory pointing outside
 Creating test extension: nested_symlink.veb
 Created nested_symlink.veb with contents:
@@ -204,5 +204,5 @@ Created nested_symlink.veb with contents:
 INSTALL EXTENSION nested_symlink;
 ERROR HY000: VEB contains symlink 'subdir/evil' pointing outside extraction directory (target: '../../outside.txt', resolves to: '../../outside.txt')
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 include/rpl/deprecated/show_binlog_events.inc
