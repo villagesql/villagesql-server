@@ -227,6 +227,16 @@ MySQL wraps many syscalls; e.g. `my_stat()` instead of `stat()`. Check for wrapp
 - Use `fn_format(result, filename, directory, extension, flags)` from `my_sys.h` for joining paths.
 Do not use literal "/", because that will fail on Windows.
 
+### Shell Script Naming
+
+Name shell (`/bin/bash`) scripts using `snake_case` — all lowercase letters with underscores as the word separator (e.g. `build_ci.sh`, `setup_dev_db.sh`).
+
+- Do NOT use hyphens/dashes as word separators. The hyphen is also the minus operator in many contexts, which adds friction in common development practices (e.g. cut-and-paste) due to variant names and inconsistent word boundaries.
+- Do NOT use capitalization schemes (e.g. `TitleName`, `camelCase`). All-lowercase is common practice for script names.
+- Include a `.sh` suffix when appropriate.
+
+This aligns with MySQL script practice: in the `scripts/` tree, only the Perl (`.pl`) files use hyphens. Existing VillageSQL scripts that use hyphens are grandfathered; apply this convention to new scripts.
+
 ### Include Order for RapidJSON Headers
 When using RapidJSON headers, `my_rapidjson_size_t.h` must be included **before** other rapidjson headers for compilation to work correctly. Use separate include blocks (separated by blank lines) to have clang-format preserve this order.
 
