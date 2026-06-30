@@ -12331,6 +12331,16 @@ inline int create_index(
   innodb_session_t *&priv = thd_to_innodb_session(trx->mysql_thd);
   dict_table_t *handler = priv->lookup_table_handler(table_name);
 
+  // TODO(villagesql-indexing): Support custom indexes on partitioned tables.
+  if (key->custom_index_context != nullptr &&
+      dd_table_is_partitioned(*dd_table)) {
+    villagesql_error(
+        "InnoDB: Custom index is not supported on partitioned tables", MYF(0));
+    dict_mem_index_free(index);
+    error = ER_VILLAGESQL_GENERIC_ERROR;
+    goto do_cleanup;
+  }
+
   // Record the custom index descriptor carried on the KEY before the index is
   // added to the dictionary cache.
   using villagesql::innodb::Custom_index;
