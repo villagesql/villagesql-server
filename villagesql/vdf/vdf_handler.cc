@@ -21,6 +21,7 @@
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"
 #include "sql/current_thd.h"
+#include "sql/derror.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
 #include "sql/sql_class.h"
@@ -48,11 +49,35 @@ static bool is_inferrable_string_const(Item *arg) {
   return false;
 }
 
+// Default result-buffer size for STRING/CUSTOM returns when the extension does
+// not declare its own buffer_size. Most JSON/text results fit in 1 KiB, so
+// this avoids a reallocation in the common case.
+static constexpr size_t kDefaultResultBufferSize = 1024;
+
+// Result-buffer growth quantum. Reallocations round up to a multiple of this
+// so a value that creeps larger row-over-row settles after one grow rather
+// than reallocating repeatedly. Must be a power of two.
+static constexpr size_t kResultBufferQuantum = 1024;
+
+static size_t RoundUpResultBuffer(size_t needed) {
+  return (needed + (kResultBufferQuantum - 1)) & ~(kResultBufferQuantum - 1);
+}
+
 vdf_handler::vdf_handler(udf_func *u_d) : m_udf(u_d) {}
 
 bool vdf_handler::returns_string() const {
   return m_udf && m_udf->vdf_func_desc &&
          m_udf->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING;
+}
+
+bool vdf_handler::MaybeResizeBuffer(size_t needed) {
+  if (needed <= m_result_buffer_size) return false;
+  const size_t new_size = RoundUpResultBuffer(needed);
+  char *buf = pointer_cast<char *>((*THR_MALLOC)->Alloc(new_size));
+  if (buf == nullptr) return true;
+  m_result_buffer = buf;
+  m_result_buffer_size = new_size;
+  return false;
 }
 
 bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
@@ -91,29 +116,25 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
   if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_CUSTOM) {
-    m_result_buffer_size = m_udf->vdf_func_desc->buffer_size > 0
-                               ? m_udf->vdf_func_desc->buffer_size
-                               : 256;
+    size_t needed = m_udf->vdf_func_desc->buffer_size > 0
+                        ? m_udf->vdf_func_desc->buffer_size
+                        : kDefaultResultBufferSize;
     // STRING-returning VDFs whose argument is a custom type (e.g. the type's
     // to_string / decode VDF) emit output whose size scales with the input
     // value, bounded by max_decode_buffer_length on the argument's
     // TypeContext.  Raise the buffer to fit so that, for example,
     // SVECTOR::to_string(v) has room to decode a wide vector.  prerun can
-    // still grow the buffer further below if it requests more.
+    // still grow the buffer further below if it requests more, and val_str
+    // grows it at row time if the VDF reports its output did not fit.
     if (return_type == VEF_TYPE_STRING) {
       for (uint i = 0; i < arg_count; i++) {
         const auto *tc = m_args[i]->get_type_context();
         if (tc == nullptr) continue;
-        const size_t needed =
-            static_cast<size_t>(tc->max_decode_buffer_length());
-        if (needed > 0 && needed > m_result_buffer_size) {
-          m_result_buffer_size = needed;
-        }
+        const size_t dec = static_cast<size_t>(tc->max_decode_buffer_length());
+        if (dec > needed) needed = dec;
       }
     }
-    m_result_buffer =
-        pointer_cast<char *>((*THR_MALLOC)->Alloc(m_result_buffer_size));
-    if (!m_result_buffer) return true;
+    if (MaybeResizeBuffer(needed)) return true;
   }
 
   m_context.protocol = m_udf->vdf_protocol;
@@ -243,13 +264,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     m_vdf_args.user_data = prerun_result.user_data;
 
     // Handle buffer size request
-    // TODO(villagesql): refactor to MaybeResizeBuffer()
-    if (prerun_result.result_buffer_size > m_result_buffer_size) {
-      m_result_buffer_size = prerun_result.result_buffer_size;
-      m_result_buffer =
-          pointer_cast<char *>((*THR_MALLOC)->Alloc(m_result_buffer_size));
-      if (!m_result_buffer) return true;
-    }
+    if (MaybeResizeBuffer(prerun_result.result_buffer_size)) return true;
   }
 
   // Set return type_context if this VDF returns a custom type. Pass the
@@ -274,13 +289,9 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     if (m_return_type_context != nullptr) {
       const int64_t buffer_len = m_return_type_context->field_buffer_length();
       assert(!m_return_type_context->is_variable_length() || buffer_len > 0);
-      // TODO(villagesql): refactor to MaybeResizeBuffer()
       if (buffer_len > 0 &&
-          static_cast<size_t>(buffer_len) > m_result_buffer_size) {
-        m_result_buffer_size = static_cast<size_t>(buffer_len);
-        m_result_buffer =
-            pointer_cast<char *>((*THR_MALLOC)->Alloc(m_result_buffer_size));
-        if (!m_result_buffer) return true;
+          MaybeResizeBuffer(static_cast<size_t>(buffer_len))) {
+        return true;
       }
     }
   }
@@ -514,36 +525,72 @@ String *vdf_handler::val_str(String *str, String *save_str,
                              const CHARSET_INFO *charset) {
   marshal_args();
 
-  // Set up result structure based on return type
-  vef_vdf_result_t result{};
-  result.type = VEF_RESULT_VALUE;
-  result.actual_len = 0;
-  m_error_msg[0] = '\0';
-  result.error_msg = m_error_msg;
-
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
   const bool is_binary = (return_type == VEF_TYPE_CUSTOM);
 
-  if (is_binary) {
-    result.bin_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
-    result.max_bin_len = m_result_buffer_size;
-    result.alt_bin_buf = nullptr;
-    if (m_return_type_context != nullptr) {
-      const auto &params = m_return_type_context->parameters();
-      result.type_params = {params.count(), params.key_data(),
-                            params.value_data()};
-    } else {
-      result.type_params = {0, nullptr, nullptr};
-    }
-  } else {
-    result.str_buf = m_result_buffer;
-    result.max_str_len = m_result_buffer_size;
-    result.alt_str_buf = nullptr;
-  }
+  // Call the VDF, growing the result buffer and retrying once if the VDF
+  // reports (via actual_len) that its output did not fit. The SDK result
+  // wrappers follow an snprintf-style contract: they copy what fits but set
+  // actual_len to the full size that *would* have been written. One retry
+  // always suffices because actual_len tells us exactly how large the buffer
+  // must be. marshal_args() stays outside the loop: the re-invocation runs on
+  // the already-marshaled arguments (aggregates re-serialize their accumulated
+  // state; deterministic scalars reproduce the same bytes).
+  vef_vdf_result_t result{};
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    result = vef_vdf_result_t{};
+    result.type = VEF_RESULT_VALUE;
+    result.actual_len = 0;
+    m_error_msg[0] = '\0';
+    result.error_msg = m_error_msg;
 
-  // Call the VDF function
-  m_udf->vdf_func_desc->vdf(&m_context, &m_vdf_args, &result);
+    if (is_binary) {
+      result.bin_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
+      result.max_bin_len = m_result_buffer_size;
+      result.alt_bin_buf = nullptr;
+      if (m_return_type_context != nullptr) {
+        const auto &params = m_return_type_context->parameters();
+        result.type_params = {params.count(), params.key_data(),
+                              params.value_data()};
+      } else {
+        result.type_params = {0, nullptr, nullptr};
+      }
+    } else {
+      result.str_buf = m_result_buffer;
+      result.max_str_len = m_result_buffer_size;
+      result.alt_str_buf = nullptr;
+    }
+
+    m_udf->vdf_func_desc->vdf(&m_context, &m_vdf_args, &result);
+
+    if (result.type != VEF_RESULT_VALUE ||
+        result.actual_len <= m_result_buffer_size) {
+      break;
+    }
+
+    // The output overflowed our buffer. Grow to fit and retry once.
+    if (attempt == 1) {
+      // A well-behaved VDF reports a stable size, so the grown buffer must
+      // fit. Guard against a pathological VDF rather than loop forever.
+      my_printf_error(ER_UDF_ERROR,
+                      "VDF result for function '%s' did not fit after resize",
+                      MYF(0), func_name);
+      return nullptr;
+    }
+    // Mirror MySQL's built-in string functions (e.g. CONCAT, REPEAT): a result
+    // larger than max_allowed_packet is a row-level warning and NULL, not a
+    // fatal error that aborts the statement.
+    if (result.actual_len > current_thd->variables.max_allowed_packet) {
+      push_warning_printf(
+          current_thd, Sql_condition::SL_WARNING,
+          ER_WARN_ALLOWED_PACKET_OVERFLOWED,
+          ER_THD(current_thd, ER_WARN_ALLOWED_PACKET_OVERFLOWED), func_name,
+          current_thd->variables.max_allowed_packet);
+      return nullptr;
+    }
+    if (MaybeResizeBuffer(result.actual_len)) return nullptr;
+  }
 
   // Handle result
   switch (result.type) {
