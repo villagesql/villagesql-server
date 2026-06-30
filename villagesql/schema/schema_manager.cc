@@ -239,8 +239,11 @@ static const TABLE_FIELD_TYPE extensions_fields[] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("veb_sha256")},
      {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("pending_action")},
+     {STRING_WITH_LEN("json")},
      {nullptr, 0}}};
-static const TABLE_FIELD_DEF extensions_def = {3, extensions_fields};
+static const TABLE_FIELD_DEF extensions_def = {4, extensions_fields};
 
 // Define expected structure for custom_indexes table
 static const TABLE_FIELD_TYPE custom_indexes_fields[] = {
@@ -372,6 +375,12 @@ bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
   version_003.from_components(0, 0, 3);
   if (from_version < version_003) {
     if (upgrade::upgrade_villagesql_from_0_0_1_to_0_0_3(thd)) return true;
+  }
+  // Upgrade from 0.0.4 to 0.0.5: add pending_action column to extensions
+  Semver version_005;
+  version_005.from_components(0, 0, 5);
+  if (from_version < version_005) {
+    if (upgrade::upgrade_villagesql_from_0_0_4_to_0_0_5(thd)) return true;
   }
   // Future versions would be added here
 
