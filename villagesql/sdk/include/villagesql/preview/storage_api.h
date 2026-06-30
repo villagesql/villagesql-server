@@ -823,6 +823,50 @@ class Arena {
   }
 };
 
+// StorageCtx<T> wraps the persistent storage reference and a user context of
+// type T allocated from the InnoDB arena. The storage builder wrappers
+// construct it before calling the extension and delete the Arena on column
+// drop, which automatically calls ~T(). Extensions receive a ready-to-use
+// StorageCtx<T>* with user() already populated and must not free any of this
+// memory manually.
+template <typename T>
+class StorageCtx {
+ public:
+  explicit StorageCtx(Arena *arena) : m_arena(arena) {
+    verify_layout();
+    m_user = m_arena->construct<T>();
+  }
+
+  T *user() { return m_user; }
+  const T *user() const { return m_user; }
+
+  // Returns the arena for additional allocations beyond the user context.
+  Arena &arena() { return *m_arena; }
+
+  void set_ref(vef_storage_ref_t ref) { m_ctx.ref = ref; }
+  vef_storage_ref_t get_ref() const { return m_ctx.ref; }
+
+ private:
+  vef_storage_ctx_t m_ctx{};
+  // Raw pointer to the owning Arena.
+  // - Cannot use std::unique_ptr: StorageCtx<T> must remain standard-layout
+  //   for ABI compatibility (it is cast to vef_storage_ctx_t).
+  // - The Arena itself is heap-allocated and owned by the storage_builder
+  //   wrappers (Create/Load/Drop).
+  Arena *m_arena = nullptr;
+  T *m_user = nullptr;
+
+  // Verify ABI layout requirements. Called from the constructor so these fire
+  // when StorageCtx<T> is first instantiated with a concrete type.
+  static void verify_layout() {
+    static_assert(std::is_standard_layout_v<StorageCtx>,
+                  "StorageCtx<T> must be standard layout for ABI "
+                  "cast — check that no non-standard-layout member was added");
+    static_assert(offsetof(StorageCtx, m_ctx) == 0,
+                  "StorageCtx<T> must begin with m_ctx for ABI cast");
+  }
+};
+
 // Type aliases and types for the Custom Type Storage Interface. These appear
 // in vef_type_storage_intf_t function signatures and are used by extensions
 // to implement column storage.
@@ -834,50 +878,8 @@ struct Column {
 
   static constexpr Ref EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
 
-  // StorageCtx<T> wraps the persistent storage reference and a user context of
-  // type T allocated from the InnoDB arena. The storage builder wrappers
-  // construct it before calling the extension and delete the Arena on column
-  // drop, which automatically calls ~T(). Extensions receive a ready-to-use
-  // StorageCtx<T>* with user() already populated and must not free any of this
-  // memory manually.
   template <typename T>
-  class StorageCtx {
-   public:
-    explicit StorageCtx(Arena *arena) : m_arena(arena) {
-      verify_layout();
-      m_user = m_arena->construct<T>();
-    }
-
-    T *user() { return m_user; }
-    const T *user() const { return m_user; }
-
-    // Returns the arena for additional allocations beyond the user context.
-    Arena &arena() { return *m_arena; }
-
-    void set_ref(StorageRef ref) { m_ctx.ref = ref; }
-    StorageRef get_ref() const { return m_ctx.ref; }
-
-   private:
-    vef_storage_ctx_t m_ctx{};
-    // Raw pointer to the owning Arena.
-    // - Cannot use std::unique_ptr: StorageCtx<T> must remain standard-layout
-    //   for ABI compatibility (it is cast to vef_storage_ctx_t).
-    // - The Arena itself is heap-allocated and owned by the storage_builder
-    //   wrappers (Create/Load/Drop).
-    Arena *m_arena = nullptr;
-    T *m_user = nullptr;
-
-    // Verify ABI layout requirements. Called from the constructor so these fire
-    // when StorageCtx<T> is first instantiated with a concrete type.
-    static void verify_layout() {
-      static_assert(
-          std::is_standard_layout_v<StorageCtx>,
-          "Column::StorageCtx<T> must be standard layout for ABI "
-          "cast — check that no non-standard-layout member was added");
-      static_assert(offsetof(StorageCtx, m_ctx) == 0,
-                    "Column::StorageCtx<T> must begin with m_ctx for ABI cast");
-    }
-  };
+  using StorageCtx = vsql::preview_storage::StorageCtx<T>;
 };
 
 }  // namespace vsql::preview_storage

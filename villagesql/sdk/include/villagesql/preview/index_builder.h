@@ -34,7 +34,7 @@
 //   struct HNSWOptions {
 //     int M = 16;
 //     int ef_construction = 200;
-//     static bool parse(const vef_index_param_t *params, uint32_t count,
+//     static bool parse(const Index::Parameter *params, uint32_t count,
 //                       HNSWOptions *out, char *error_msg,
 //                       uint32_t error_msg_len);
 //   };
@@ -67,52 +67,60 @@
 //               .restore<&hnsw_restore>()
 //               .end<&hnsw_end_scan>()
 //           .global()
-//               .capabilities(IndexSupport::KNN)
-//               .storage_props(IndexStorage::HAS_COLUMN_REF |
-//                              IndexStorage::REF_LOOKUP)
+//               .capabilities(Index::Support::KNN)
+//               .storage_props(Index::Storage::HAS_COLUMN_REF |
+//                              Index::Storage::REF_LOOKUP)
 //               .options<HNSWOptions, &HNSWOptions::parse>()
 //               .build();
 //
 // EXTENSION FUNCTION SIGNATURES
 // ------------------------------
+// using namespace vsql::preview_index_builder;
+// using vsql::preview_storage::MtrCtx;
+// using vsql::preview_storage::Segment;
+// using vsql::preview_storage::Space;
 //
-// Ctx = IndexStorageCtx<HNSWContext>. Extensions access per-index state via
+// Ctx = Index::StorageCtx<HNSWContext>. Extensions access per-index state via
 // ctx->user() and the InnoDB arena via ctx->arena().
 //
 //   Lifecycle:
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_space_ref_t,
-//             vef_storage_trx_ref_t, char*, uint32_t);           // create
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_trx_ref_t,
+//     bool fn(Ctx*, const Index&, Space::Ref,
+//             Segment::TrxRef, char*, uint32_t);                 // create
+//     bool fn(Ctx*, const Index&, Segment::TrxRef,
 //             char*, uint32_t);                                   // drop
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_ref_t,
+//     bool fn(Ctx*, const Index&, Index::StorageRef,
 //             char*, uint32_t);                                   // load
 //
 //   DML:
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_trx_ref_t,
-//             vef_storage_col_data_t* keys, vef_storage_col_data_t* pkeys,
-//             vef_storage_col_ref_t* key_ref, char*, uint32_t);  // insert
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_trx_ref_t,
-//             vef_storage_col_ref_t* key_ref,
-//             vef_storage_col_data_t* keys, vef_storage_col_data_t* pkeys,
+//     bool fn(Ctx*, const Index&, Segment::TrxRef,
+//             IndexScanKey::KeyPartData* keys,
+//             IndexScanKey::KeyPartData* pkeys,
+//             IndexScanKey::KeyPartRef* key_ref, char*, uint32_t); // insert
+//     bool fn(Ctx*, const Index&, Segment::TrxRef,
+//             IndexScanKey::KeyPartRef* key_ref,
+//             IndexScanKey::KeyPartData* keys,
+//             IndexScanKey::KeyPartData* pkeys,
 //             bool delete_mark, char*, uint32_t);                // mark_delete
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_trx_ref_t,
-//             vef_storage_col_ref_t* key_ref,
-//             vef_storage_col_data_t* keys, vef_storage_col_data_t* pkeys,
+//     bool fn(Ctx*, const Index&, Segment::TrxRef,
+//             IndexScanKey::KeyPartRef* key_ref,
+//             IndexScanKey::KeyPartData* keys,
+//             IndexScanKey::KeyPartData* pkeys,
 //             char*, uint32_t);                                   // purge
 //
 //   Scan:
-//     bool fn(Ctx*, const vef_index_ctx_t*, vef_storage_mtr_ref_t,
-//             const vef_index_scan_desc_t*, vef_index_cursor_ref_t*, bool*,
+//     bool fn(Ctx*, const Index&, MtrCtx::Ref,
+//             const IndexScanDesc&, Index::Cursor*, bool*,
 //             char*, uint32_t);                                   // begin
-//     bool fn(vef_index_cursor_ref_t, vef_index_cursor_op_t, bool*,
+//     bool fn(Index::Cursor, Index::CursorOp, bool*,
 //             char*, uint32_t);                                   // position
-//     bool fn(vef_index_cursor_ref_t, vef_storage_col_ref_t*,
-//             vef_storage_col_data_t* keys, vef_storage_col_data_t* pkeys,
+//     bool fn(Index::Cursor, IndexScanKey::KeyPartRef*,
+//             IndexScanKey::KeyPartData* keys,
+//             IndexScanKey::KeyPartData* pkeys,
 //             char*, uint32_t);                                   // fetch
-//     bool fn(vef_index_cursor_ref_t, char*, uint32_t);          // save
-//     bool fn(vef_index_cursor_ref_t, vef_storage_mtr_ref_t, bool*,
+//     bool fn(Index::Cursor, char*, uint32_t);                   // save
+//     bool fn(Index::Cursor, MtrCtx::Ref, bool*,
 //             char*, uint32_t);                                   // restore
-//     void fn(vef_index_cursor_ref_t*);                          // end
+//     void fn(Index::Cursor*);                                   // end
 //
 // CURSOR OWNERSHIP
 // ----------------
@@ -152,7 +160,7 @@
 //           .using_index(kMyIndex)
 //           .with_function(1, MY_INDEX_FN)    // fn_id 1 -> MY_INDEX_FN
 //           .with_function(2, MY_HELPER_FN)   // fn_id 2 -> MY_HELPER_FN
-//           .ordering(IndexOrdering::ASC)
+//           .ordering(Index::Ordering::ASC)
 //           .build();
 //
 // EXTENSION REGISTRATION
@@ -202,9 +210,9 @@
 //               .restore<&my_restore>()
 //               .end<&my_end_scan>()
 //           .global()
-//               .capabilities(IndexSupport::POINT_LOOKUP |
-//                             IndexSupport::RANGE_SCAN | ...)
-//               .storage_props(IndexStorage::HAS_ROW_REF | ...)
+//               .capabilities(Index::Support::POINT_LOOKUP |
+//                             Index::Support::RANGE_SCAN | ...)
+//               .storage_props(Index::Storage::HAS_ROW_REF | ...)
 //               .options<MyOptions, &MyOptions::parse>()
 //               .build();
 //
@@ -215,7 +223,7 @@
 //           .using_index(kMyIndex)
 //           .with_function(1, MY_INDEX_FN)
 //           .with_function(2, MY_HELPER_FN)
-//           .ordering(IndexOrdering::ASC)
+//           .ordering(Index::Ordering::ASC)
 //           .build();
 //
 //   // Step 4 - capability tokens (static: SDK holds pointers into them).
@@ -248,80 +256,175 @@ namespace vsql::preview_index_builder {
 
 using Arena = vsql::preview_storage::Arena;
 
-// Index capability flags for use with .capabilities(). These mirror the
-// VEF_INDEX_CAP_* constants in index.h and can be combined with |.
-enum class IndexSupport : vef_index_cap_t {
-  POINT_LOOKUP = VEF_INDEX_CAP_POINT_LOOKUP,
-  RANGE_SCAN = VEF_INDEX_CAP_RANGE_SCAN,
-  REVERSE_SCAN = VEF_INDEX_CAP_REVERSE_SCAN,
-  ORDER_BY = VEF_INDEX_CAP_ORDER_BY,
-  KNN = VEF_INDEX_CAP_KNN,
-};
+using vsql::preview_storage::detail::ERROR_MSG_SIZE;
+using vsql::preview_storage::detail::tl_error_msg;
 
-constexpr IndexSupport operator|(IndexSupport a, IndexSupport b) {
-  return static_cast<IndexSupport>(static_cast<vef_index_cap_t>(a) |
-                                   static_cast<vef_index_cap_t>(b));
-}
-
-// Index storage property flags for use with .storage_props(). These mirror
-// the VEF_INDEX_STORAGE_* constants in index.h and can be combined with |.
-enum class IndexStorage : vef_index_storage_t {
-  HAS_COLUMN_REF = VEF_INDEX_STORAGE_HAS_COLUMN_REF,
-  HAS_ROW_REF = VEF_INDEX_STORAGE_HAS_ROW_REF,
-  REF_LOOKUP = VEF_INDEX_STORAGE_REF_LOOKUP,
-};
-
-constexpr IndexStorage operator|(IndexStorage a, IndexStorage b) {
-  return static_cast<IndexStorage>(static_cast<vef_index_storage_t>(a) |
-                                   static_cast<vef_index_storage_t>(b));
-}
-
-// Ordering flags for use with make_index_profile().ordering(). Values can be
-// combined with | to indicate a profile supports both scan directions.
-enum class IndexOrdering : uint8_t {
-  NONE = VEF_INDEX_ORDERING_NONE,
-  ASC = VEF_INDEX_ORDERING_ASC,
-  DESC = VEF_INDEX_ORDERING_DESC,
-};
-
-constexpr IndexOrdering operator|(IndexOrdering a, IndexOrdering b) {
-  return static_cast<IndexOrdering>(static_cast<uint8_t>(a) |
-                                    static_cast<uint8_t>(b));
-}
-
-// The SDK allocates IndexStorageCtx<T> and T from the InnoDB arena before
-// calling create/load, and destroys the arena (which calls ~T) after drop
-// returns. Extensions must not delete ctx, ctx->user(), or the arena directly.
-template <typename T>
-class IndexStorageCtx {
+// Wraps vef_index_ctx_t to expose server-provided index callbacks as typed C++
+// methods. Constructed from the const vef_index_ctx_t* passed to every
+// extension function; the pointer is valid for the lifetime of the loaded index
+// storage, so Index may be cached inside Index::StorageCtx or cursor state.
+class Index {
  public:
-  explicit IndexStorageCtx(Arena *arena) : m_arena(arena) {
-    verify_layout();
-    m_user = m_arena->construct<T>();
+  using Ref = vef_index_ref_t;
+  using StorageRef = vef_storage_ref_t;
+  using Cursor = vef_index_cursor_ref_t;
+  using Parameter = vef_index_param_t;
+
+  // The SDK allocates Index::StorageCtx<T> and T from the InnoDB arena before
+  // calling create/load, and destroys the arena (which calls ~T) after drop
+  // returns. Extensions must not delete ctx, ctx->user(), or the arena
+  // directly.
+  template <typename T>
+  using StorageCtx = vsql::preview_storage::StorageCtx<T>;
+
+  // Capability flags for use with .capabilities(). Can be combined with |.
+  enum class Support : vef_index_cap_t {
+    POINT_LOOKUP = VEF_INDEX_CAP_POINT_LOOKUP,
+    RANGE_SCAN = VEF_INDEX_CAP_RANGE_SCAN,
+    REVERSE_SCAN = VEF_INDEX_CAP_REVERSE_SCAN,
+    ORDER_BY = VEF_INDEX_CAP_ORDER_BY,
+    KNN = VEF_INDEX_CAP_KNN,
+  };
+
+  // Storage property flags for use with .storage_props(). Can be combined with
+  // |.
+  enum class Storage : vef_index_storage_t {
+    HAS_COLUMN_REF = VEF_INDEX_STORAGE_HAS_COLUMN_REF,
+    HAS_ROW_REF = VEF_INDEX_STORAGE_HAS_ROW_REF,
+    REF_LOOKUP = VEF_INDEX_STORAGE_REF_LOOKUP,
+  };
+
+  // Ordering flags for use with make_index_profile().ordering(). Can be
+  // combined with | to indicate a profile supports both scan directions.
+  enum class Ordering : uint8_t {
+    NONE = VEF_INDEX_ORDERING_NONE,
+    ASC = VEF_INDEX_ORDERING_ASC,
+    DESC = VEF_INDEX_ORDERING_DESC,
+  };
+
+  enum class CursorOp : vef_index_cursor_op_t {
+    Next = VEF_INDEX_CURSOR_OP_NEXT,
+    Prev = VEF_INDEX_CURSOR_OP_PREV,
+  };
+
+  explicit Index(const vef_index_ctx_t &ctx) : ctx_(ctx) {}
+
+  uint32_t get_primary_num_key_cols() const {
+    return ctx_.num_primary_key_columns;
   }
 
-  T *user() { return m_user; }
-  const T *user() const { return m_user; }
-  Arena &arena() { return *m_arena; }
+  uint32_t get_primary_max_col_len(uint32_t key_pos) const {
+    return ctx_.key_len_fn(ctx_.index_ref, key_pos, true);
+  }
 
-  void set_ref(vef_storage_ref_t ref) { m_ctx.ref = ref; }
-  vef_storage_ref_t get_ref() const { return m_ctx.ref; }
+  template <typename T>
+  const T *options() const {
+    return static_cast<const T *>(ctx_.options);
+  }
+
+  template <typename Result, typename... Args>
+  void profile(uint32_t fn_id, Result *result, const Args &...args) const {
+    const void *argv[] = {static_cast<const void *>(&args)...};
+    ctx_.profile_fn(ctx_.index_ref, fn_id, argv, sizeof...(Args), result);
+  }
+
+  template <typename Result, typename... Args>
+  void helper(uint32_t fn_id, Result *result, const Args &...args) const {
+    const void *argv[] = {static_cast<const void *>(&args)...};
+    ctx_.helper_fn(ctx_.index_ref, fn_id, argv, sizeof...(Args), result);
+  }
+
+  bool col_ref_to_data(vef_storage_col_ref_t col_ref,
+                       vef_storage_col_data_t *col_data) const {
+    return ctx_.col_ref_to_data_fn(ctx_.index_ref, col_ref, col_data,
+                                   tl_error_msg, ERROR_MSG_SIZE);
+  }
+
+  bool col_data_to_ref(vef_storage_col_data_t col_data,
+                       vef_storage_col_ref_t *col_ref) const {
+    return ctx_.col_data_to_ref_fn(ctx_.index_ref, col_data, col_ref,
+                                   tl_error_msg, ERROR_MSG_SIZE);
+  }
+
+  const char *get_error() const { return tl_error_msg; }
 
  private:
-  vef_storage_ctx_t m_ctx{};
-  Arena *m_arena = nullptr;
-  T *m_user = nullptr;
+  const vef_index_ctx_t &ctx_;
+};
 
-  // IndexStorageCtx<T> wraps vef_storage_ctx_t with a typed per-index context
-  // T. Must be standard layout so the SDK can cast it to/from
-  // vef_storage_ctx_t*.
-  static void verify_layout() {
-    static_assert(std::is_standard_layout_v<IndexStorageCtx>,
-                  "IndexStorageCtx<T> must be standard layout for ABI cast — "
-                  "check that no non-standard-layout member was added");
-    static_assert(offsetof(IndexStorageCtx, m_ctx) == 0,
-                  "IndexStorageCtx<T> must begin with m_ctx for ABI cast");
+constexpr Index::Support operator|(Index::Support a, Index::Support b) {
+  return static_cast<Index::Support>(static_cast<vef_index_cap_t>(a) |
+                                     static_cast<vef_index_cap_t>(b));
+}
+
+constexpr Index::Storage operator|(Index::Storage a, Index::Storage b) {
+  return static_cast<Index::Storage>(static_cast<vef_index_storage_t>(a) |
+                                     static_cast<vef_index_storage_t>(b));
+}
+
+constexpr Index::Ordering operator|(Index::Ordering a, Index::Ordering b) {
+  return static_cast<Index::Ordering>(static_cast<uint8_t>(a) |
+                                      static_cast<uint8_t>(b));
+}
+
+// Wraps vef_index_scan_key_t for typed access to scan key data.
+class IndexScanKey {
+ public:
+  using KeyPartData = vef_storage_col_data_t;
+  using KeyPartRef = vef_storage_col_ref_t;
+
+  enum class Type : vef_index_scan_key_type_t {
+    Begin = VEF_INDEX_SCAN_KEY_TYPE_BEGIN,
+    End = VEF_INDEX_SCAN_KEY_TYPE_END,
+    KnnQuery = VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY,
+  };
+  static constexpr KeyPartRef EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
+
+  explicit IndexScanKey(const vef_index_scan_key_t &key) : key_(key) {}
+
+  Type type() const { return static_cast<Type>(key_.type); }
+  uint32_t num_columns() const { return key_.num_key_columns; }
+  bool is_bounded() const { return key_.key_columns != nullptr; }
+  bool include_key() const { return static_cast<bool>(key_.include_key); }
+
+  bool is_begin() const { return type() == Type::Begin; }
+  bool is_end() const { return type() == Type::End; }
+  bool is_knn() const { return type() == Type::KnnQuery; }
+
+  const KeyPartData &operator[](uint32_t i) const {
+    return key_.key_columns[i];
   }
+
+ private:
+  const vef_index_scan_key_t &key_;
+};
+
+// Wraps vef_index_scan_desc_t for typed access to scan descriptor data.
+class IndexScanDesc {
+ public:
+  enum class Type : vef_index_scan_type_t {
+    Point = VEF_INDEX_SCAN_TYPE_POINT,
+    Range = VEF_INDEX_SCAN_TYPE_RANGE,
+    Knn = VEF_INDEX_SCAN_TYPE_KNN,
+  };
+
+  explicit IndexScanDesc(const vef_index_scan_desc_t &desc) : desc_(desc) {}
+
+  Type scan_type() const { return static_cast<Type>(desc_.scan_type); }
+  bool is_point() const { return scan_type() == Type::Point; }
+  bool is_range() const { return scan_type() == Type::Range; }
+  bool is_knn() const { return scan_type() == Type::Knn; }
+
+  bool reverse() const { return static_cast<bool>(desc_.reverse); }
+  uint32_t limit() const { return desc_.limit; }
+  uint32_t num_keys() const { return desc_.num_keys; }
+
+  IndexScanKey operator[](uint32_t i) const {
+    return IndexScanKey{desc_.keys[i]};
+  }
+
+ private:
+  const vef_index_scan_desc_t &desc_;
 };
 
 namespace detail {
@@ -329,6 +432,66 @@ namespace detail {
 // Note: Wrapper static methods use C++ linkage. The C++ standard does not
 // allow extern "C" on template instantiations. The ABI boundary relies on C
 // and C++ having compatible calling conventions on all supported platforms.
+
+using vsql::preview_storage::MtrCtx;
+using vsql::preview_storage::Segment;
+using vsql::preview_storage::Space;
+
+// Expected extension function pointer types. Each builder setter
+// static_asserts that F exactly matches the corresponding type alias.
+
+// Lifecycle
+template <typename Context>
+using CreateFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                          Space::Ref, Segment::TrxRef, char *, uint32_t);
+
+template <typename Context>
+using DropFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                        Segment::TrxRef, char *, uint32_t);
+
+template <typename Context>
+using LoadFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                        Index::StorageRef, char *, uint32_t);
+
+// DML
+template <typename Context>
+using InsertFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                          Segment::TrxRef, IndexScanKey::KeyPartData *,
+                          IndexScanKey::KeyPartData *,
+                          IndexScanKey::KeyPartRef *, char *, uint32_t);
+
+template <typename Context>
+using MarkDeleteFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                              Segment::TrxRef, IndexScanKey::KeyPartRef *,
+                              IndexScanKey::KeyPartData *,
+                              IndexScanKey::KeyPartData *, bool, char *,
+                              uint32_t);
+
+template <typename Context>
+using PurgeFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                         Segment::TrxRef, IndexScanKey::KeyPartRef *,
+                         IndexScanKey::KeyPartData *,
+                         IndexScanKey::KeyPartData *, char *, uint32_t);
+
+// Scan
+template <typename Context>
+using ScanBeginFn = bool (*)(Index::StorageCtx<Context> *, const Index &,
+                             MtrCtx::Ref, const IndexScanDesc &,
+                             Index::Cursor *, bool *, char *, uint32_t);
+
+using ScanPositionFn = bool (*)(Index::Cursor, Index::CursorOp, bool *, char *,
+                                uint32_t);
+
+using ScanFetchFn = bool (*)(Index::Cursor, IndexScanKey::KeyPartRef *,
+                             IndexScanKey::KeyPartData *,
+                             IndexScanKey::KeyPartData *, char *, uint32_t);
+
+using ScanSaveFn = bool (*)(Index::Cursor, char *, uint32_t);
+
+using ScanRestoreFn = bool (*)(Index::Cursor, MtrCtx::Ref, bool *, char *,
+                               uint32_t);
+
+using ScanEndFn = void (*)(Index::Cursor *);
 
 template <auto F, typename Context>
 struct CreateWrapper {
@@ -344,7 +507,7 @@ struct CreateWrapper {
       snprintf(error_msg, error_msg_len, "out of memory allocating arena");
       return true;
     }
-    auto *ctx = arena->construct<IndexStorageCtx<Context>>(arena);
+    auto *ctx = arena->construct<Index::StorageCtx<Context>>(arena);
     if (ctx == nullptr || ctx->user() == nullptr) {
       delete arena;
       snprintf(error_msg, error_msg_len,
@@ -352,7 +515,8 @@ struct CreateWrapper {
       return true;
     }
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
-    bool err = F(ctx, index_ctx, space_ref, trx_ref, error_msg, error_msg_len);
+    const Index index{*index_ctx};
+    bool err = F(ctx, index, space_ref, trx_ref, error_msg, error_msg_len);
     if (err) {
       delete arena;
       *storage = nullptr;
@@ -366,9 +530,10 @@ struct DropWrapper {
   static bool invoke(const vef_index_ctx_t *index_ctx,
                      vef_storage_ctx_t *storage, vef_storage_trx_ref_t trx_ref,
                      char *error_msg, uint32_t error_msg_len) {
-    auto *ctx = reinterpret_cast<IndexStorageCtx<Context> *>(storage);
+    auto *ctx = reinterpret_cast<Index::StorageCtx<Context> *>(storage);
     Arena *arena = &ctx->arena();
-    bool err = F(ctx, index_ctx, trx_ref, error_msg, error_msg_len);
+    const Index index{*index_ctx};
+    bool err = F(ctx, index, trx_ref, error_msg, error_msg_len);
     delete arena;
     return err;
   }
@@ -387,7 +552,7 @@ struct LoadWrapper {
       snprintf(error_msg, error_msg_len, "out of memory allocating arena");
       return true;
     }
-    auto *ctx = arena->construct<IndexStorageCtx<Context>>(arena);
+    auto *ctx = arena->construct<Index::StorageCtx<Context>>(arena);
     if (ctx == nullptr || ctx->user() == nullptr) {
       delete arena;
       snprintf(error_msg, error_msg_len,
@@ -395,7 +560,8 @@ struct LoadWrapper {
       return true;
     }
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
-    bool err = F(ctx, index_ctx, storage_ref, error_msg, error_msg_len);
+    const Index index{*index_ctx};
+    bool err = F(ctx, index, storage_ref, error_msg, error_msg_len);
     if (err) {
       delete arena;
       *storage = nullptr;
@@ -412,7 +578,8 @@ struct InsertWrapper {
                      vef_storage_col_data_t *pkey_columns,
                      vef_storage_col_ref_t *key_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(reinterpret_cast<IndexStorageCtx<Context> *>(storage), index_ctx,
+    const Index index{*index_ctx};
+    return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_columns, pkey_columns, key_ref, error_msg,
              error_msg_len);
   }
@@ -426,7 +593,8 @@ struct MarkDeleteWrapper {
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns, bool delete_mark,
                      char *error_msg, uint32_t error_msg_len) {
-    return F(reinterpret_cast<IndexStorageCtx<Context> *>(storage), index_ctx,
+    const Index index{*index_ctx};
+    return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_ref, key_columns, pkey_columns, delete_mark,
              error_msg, error_msg_len);
   }
@@ -440,7 +608,8 @@ struct PurgeWrapper {
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(reinterpret_cast<IndexStorageCtx<Context> *>(storage), index_ctx,
+    const Index index{*index_ctx};
+    return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_ref, key_columns, pkey_columns, error_msg,
              error_msg_len);
   }
@@ -453,21 +622,19 @@ struct ScanBeginWrapper {
                      const vef_index_scan_desc_t *scan_desc,
                      vef_index_cursor_ref_t *cursor, bool *eof, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(reinterpret_cast<IndexStorageCtx<Context> *>(storage), index_ctx,
-             mctx, scan_desc, cursor, eof, error_msg, error_msg_len);
+    const Index index{*index_ctx};
+    const IndexScanDesc desc{*scan_desc};
+    return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
+             mctx, desc, cursor, eof, error_msg, error_msg_len);
   }
 };
-
-// For the remaining scan functions (position, fetch, save, restore, end) the
-// user function signature matches the ABI signature directly — no storage
-// context cast is needed. These wrappers are thin pass-throughs for calling
-// convention consistency.
 
 template <auto F>
 struct ScanPositionWrapper {
   static bool invoke(vef_index_cursor_ref_t cursor, vef_index_cursor_op_t op,
                      bool *eof, char *error_msg, uint32_t error_msg_len) {
-    return F(cursor, op, eof, error_msg, error_msg_len);
+    return F(cursor, static_cast<Index::CursorOp>(op), eof, error_msg,
+             error_msg_len);
   }
 };
 
@@ -549,7 +716,7 @@ struct IndexTypeDesc {
 // Methods within a section may appear in any order.
 //
 // Context is the extension-defined per-index storage state. The SDK allocates
-// IndexStorageCtx<Context> from the InnoDB arena before calling create/load,
+// Index::StorageCtx<Context> from the InnoDB arena before calling create/load,
 // and destroys the arena (which calls ~Context) after drop returns.
 
 // Forward declarations.
@@ -576,27 +743,30 @@ class LifecycleBuilder {
 
   template <auto F>
   constexpr LifecycleBuilder<Context, Bits | kCreate> create() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "create: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::CreateFn<Context>>,
+        "create: expected bool(*)(Index::StorageCtx<Context>*, const Index&, "
+        "Space::Ref, Segment::TrxRef, char*, uint32_t)");
     intf_.create = detail::CreateWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr LifecycleBuilder<Context, Bits | kLoad> load() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "load: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::LoadFn<Context>>,
+        "load: expected bool(*)(Index::StorageCtx<Context>*, const Index&, "
+        "Index::StorageRef, char*, uint32_t)");
     intf_.load = detail::LoadWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr LifecycleBuilder<Context, Bits | kDrop> drop() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "drop: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::DropFn<Context>>,
+        "drop: expected bool(*)(Index::StorageCtx<Context>*, const Index&, "
+        "Segment::TrxRef, char*, uint32_t)");
     intf_.drop = detail::DropWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
@@ -645,27 +815,33 @@ class DMLBuilder {
 
   template <auto F>
   constexpr DMLBuilder<Context, Bits | kInsert> insert() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "insert: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::InsertFn<Context>>,
+        "insert: expected bool(*)(Index::StorageCtx<Context>*, const Index&, "
+        "Segment::TrxRef, KeyPartData* keys, KeyPartData* pkeys, "
+        "KeyPartRef* key_ref, char*, uint32_t)");
     intf_.insert = detail::InsertWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr DMLBuilder<Context, Bits | kMarkDelete> mark_delete() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "mark_delete: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::MarkDeleteFn<Context>>,
+                  "mark_delete: expected bool(*)(Index::StorageCtx<Context>*, "
+                  "const Index&, Segment::TrxRef, KeyPartRef* key_ref, "
+                  "KeyPartData* keys, KeyPartData* pkeys, bool delete_mark, "
+                  "char*, uint32_t)");
     intf_.mark_delete = detail::MarkDeleteWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr DMLBuilder<Context, Bits | kPurge> purge() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "purge: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::PurgeFn<Context>>,
+        "purge: expected bool(*)(Index::StorageCtx<Context>*, const Index&, "
+        "Segment::TrxRef, KeyPartRef* key_ref, KeyPartData* keys, "
+        "KeyPartData* pkeys, char*, uint32_t)");
     intf_.purge = detail::PurgeWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
@@ -711,54 +887,56 @@ class ScanBuilder {
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kBegin> begin() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "begin: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::ScanBeginFn<Context>>,
+        "begin: expected bool(*)(Index::StorageCtx<Context>*, const Index&, "
+        "MtrCtx::Ref, const IndexScanDesc&, Index::Cursor*, bool*, "
+        "char*, uint32_t)");
     intf_.scan_begin = detail::ScanBeginWrapper<F, Context>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kPosition> position() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "position: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::ScanPositionFn>,
+        "position: expected bool(*)(Index::Cursor, Index::CursorOp, bool*, "
+        "char*, uint32_t)");
     intf_.scan_position = detail::ScanPositionWrapper<F>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kFetch> fetch() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "fetch: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::ScanFetchFn>,
+                  "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
+                  "KeyPartData* keys, KeyPartData* pkeys, char*, uint32_t)");
     intf_.scan_fetch = detail::ScanFetchWrapper<F>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kSave> save() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "save: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::ScanSaveFn>,
+                  "save: expected bool(*)(Index::Cursor, char*, uint32_t)");
     intf_.scan_save = detail::ScanSaveWrapper<F>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kRestore> restore() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "restore: F must be a plain function pointer");
+    static_assert(
+        std::is_same_v<decltype(F), detail::ScanRestoreFn>,
+        "restore: expected bool(*)(Index::Cursor, MtrCtx::Ref, bool*, "
+        "char*, uint32_t)");
     intf_.scan_restore = detail::ScanRestoreWrapper<F>::invoke;
     return {name_, intf_};
   }
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kEnd> end() && {
-    static_assert(std::is_pointer_v<decltype(F)> &&
-                      std::is_function_v<std::remove_pointer_t<decltype(F)>>,
-                  "end: F must be a plain function pointer");
+    static_assert(std::is_same_v<decltype(F), detail::ScanEndFn>,
+                  "end: expected void(*)(Index::Cursor*)");
     intf_.scan_end = detail::ScanEndWrapper<F>::invoke;
     return {name_, intf_};
   }
@@ -805,13 +983,13 @@ class GlobalBuilder {
       : name_(name), intf_(intf) {}
 
   constexpr GlobalBuilder<Context, Bits | kCapabilities> capabilities(
-      IndexSupport caps) && {
+      Index::Support caps) && {
     intf_.capabilities = static_cast<vef_index_cap_t>(caps);
     return {name_, intf_};
   }
 
   constexpr GlobalBuilder<Context, Bits | kStorageProps> storage_props(
-      IndexStorage props) && {
+      Index::Storage props) && {
     intf_.storage_props = static_cast<vef_index_storage_t>(props);
     return {name_, intf_};
   }
@@ -915,7 +1093,7 @@ class IndexProfileBuilder {
     desc_.name = name;
     desc_.type_name = nullptr;
     desc_.index_type_name = nullptr;
-    desc_.ordering = static_cast<uint8_t>(IndexOrdering::NONE);
+    desc_.ordering = static_cast<uint8_t>(Index::Ordering::NONE);
     desc_.default_for_type = false;
   }
 
@@ -947,7 +1125,7 @@ class IndexProfileBuilder {
     return *this;
   }
 
-  IndexProfileBuilder &ordering(IndexOrdering ord) {
+  IndexProfileBuilder &ordering(Index::Ordering ord) {
     desc_.ordering = static_cast<uint8_t>(ord);
     return *this;
   }

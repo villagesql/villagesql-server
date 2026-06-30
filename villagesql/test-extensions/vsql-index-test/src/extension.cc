@@ -57,6 +57,10 @@
 
 using namespace vsql::preview_index_builder;
 
+using vsql::preview_storage::MtrCtx;
+using vsql::preview_storage::Segment;
+using vsql::preview_storage::Space;
+
 // Options parsed from WITH (...) at CREATE INDEX time.
 // Passed as index_ctx->options during create(); available via index_ctx in
 // every call.
@@ -68,7 +72,7 @@ struct DummyHNSWOptions {
 // Per-index dummy state. No real data is stored.
 struct DummyHNSWCtx {};
 
-using Ctx = IndexStorageCtx<DummyHNSWCtx>;
+using Ctx = Index::StorageCtx<DummyHNSWCtx>;
 
 // A minimal stub cursor. begin() sets *cursor to point at this; end() frees it.
 struct DummyCursor {};
@@ -77,21 +81,20 @@ struct DummyCursor {};
 // Lifecycle stubs
 // ============================================================================
 
-static bool dummy_create(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
-                         vef_storage_space_ref_t /*space_ref*/,
-                         vef_storage_trx_ref_t /*trx_ref*/, char * /*err*/,
-                         uint32_t /*err_len*/) {
+static bool dummy_create(Ctx * /*ctx*/, const Index & /*index*/,
+                         Space::Ref /*space_ref*/, Segment::TrxRef /*trx_ref*/,
+                         char * /*err*/, uint32_t /*err_len*/) {
   return false;
 }
 
-static bool dummy_drop(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
-                       vef_storage_trx_ref_t /*trx_ref*/, char * /*err*/,
+static bool dummy_drop(Ctx * /*ctx*/, const Index & /*index*/,
+                       Segment::TrxRef /*trx_ref*/, char * /*err*/,
                        uint32_t /*err_len*/) {
   return false;
 }
 
-static bool dummy_load(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
-                       vef_storage_ref_t /*storage_ref*/, char * /*err*/,
+static bool dummy_load(Ctx * /*ctx*/, const Index & /*index*/,
+                       Index::StorageRef /*storage_ref*/, char * /*err*/,
                        uint32_t /*err_len*/) {
   return false;
 }
@@ -100,31 +103,30 @@ static bool dummy_load(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
 // DML stubs
 // ============================================================================
 
-static bool dummy_insert(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
-                         vef_storage_trx_ref_t /*trx_ref*/,
-                         vef_storage_col_data_t * /*key_columns*/,
-                         vef_storage_col_data_t * /*pkey_columns*/,
-                         vef_storage_col_ref_t * /*key_ref*/, char * /*err*/,
+static bool dummy_insert(Ctx * /*ctx*/, const Index & /*index*/,
+                         Segment::TrxRef /*trx_ref*/,
+                         IndexScanKey::KeyPartData * /*key_columns*/,
+                         IndexScanKey::KeyPartData * /*pkey_columns*/,
+                         IndexScanKey::KeyPartRef * /*key_ref*/, char * /*err*/,
                          uint32_t /*err_len*/) {
   return false;
 }
 
-static bool dummy_mark_delete(Ctx * /*ctx*/,
-                              const vef_index_ctx_t * /*index_ctx*/,
-                              vef_storage_trx_ref_t /*trx_ref*/,
-                              vef_storage_col_ref_t * /*key_ref*/,
-                              vef_storage_col_data_t * /*key_columns*/,
-                              vef_storage_col_data_t * /*pkey_columns*/,
+static bool dummy_mark_delete(Ctx * /*ctx*/, const Index & /*index*/,
+                              Segment::TrxRef /*trx_ref*/,
+                              IndexScanKey::KeyPartRef * /*key_ref*/,
+                              IndexScanKey::KeyPartData * /*key_columns*/,
+                              IndexScanKey::KeyPartData * /*pkey_columns*/,
                               bool /*delete_mark*/, char * /*err*/,
                               uint32_t /*err_len*/) {
   return false;
 }
 
-static bool dummy_purge(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
-                        vef_storage_trx_ref_t /*trx_ref*/,
-                        vef_storage_col_ref_t * /*key_ref*/,
-                        vef_storage_col_data_t * /*key_columns*/,
-                        vef_storage_col_data_t * /*pkey_columns*/,
+static bool dummy_purge(Ctx * /*ctx*/, const Index & /*index*/,
+                        Segment::TrxRef /*trx_ref*/,
+                        IndexScanKey::KeyPartRef * /*key_ref*/,
+                        IndexScanKey::KeyPartData * /*key_columns*/,
+                        IndexScanKey::KeyPartData * /*pkey_columns*/,
                         char * /*err*/, uint32_t /*err_len*/) {
   return false;
 }
@@ -133,44 +135,42 @@ static bool dummy_purge(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
 // Scan stubs
 // ============================================================================
 
-static bool dummy_begin(Ctx * /*ctx*/, const vef_index_ctx_t * /*index_ctx*/,
-                        vef_storage_mtr_ref_t /*mctx*/,
-                        const vef_index_scan_desc_t * /*scan_desc*/,
-                        vef_index_cursor_ref_t *cursor, bool *eof,
-                        char * /*err*/, uint32_t /*err_len*/) {
+static bool dummy_begin(Ctx * /*ctx*/, const Index & /*index*/,
+                        MtrCtx::Ref /*mctx*/,
+                        const IndexScanDesc & /*scan_desc*/,
+                        Index::Cursor *cursor, bool *eof, char * /*err*/,
+                        uint32_t /*err_len*/) {
   *cursor = new DummyCursor{};
   *eof = true;
   return false;
 }
 
-static bool dummy_position(vef_index_cursor_ref_t /*cursor*/,
-                           vef_index_cursor_op_t /*op*/, bool *eof,
-                           char * /*err*/, uint32_t /*err_len*/) {
+static bool dummy_position(Index::Cursor /*cursor*/, Index::CursorOp /*op*/,
+                           bool *eof, char * /*err*/, uint32_t /*err_len*/) {
   *eof = true;
   return false;
 }
 
-static bool dummy_fetch(vef_index_cursor_ref_t /*cursor*/,
-                        vef_storage_col_ref_t * /*key_ref*/,
-                        vef_storage_col_data_t * /*key_columns*/,
-                        vef_storage_col_data_t * /*pkey_columns*/,
+static bool dummy_fetch(Index::Cursor /*cursor*/,
+                        IndexScanKey::KeyPartRef * /*key_ref*/,
+                        IndexScanKey::KeyPartData * /*key_columns*/,
+                        IndexScanKey::KeyPartData * /*pkey_columns*/,
                         char * /*err*/, uint32_t /*err_len*/) {
   return false;
 }
 
-static bool dummy_save(vef_index_cursor_ref_t /*cursor*/, char * /*err*/,
+static bool dummy_save(Index::Cursor /*cursor*/, char * /*err*/,
                        uint32_t /*err_len*/) {
   return false;
 }
 
-static bool dummy_restore(vef_index_cursor_ref_t /*cursor*/,
-                          vef_storage_mtr_ref_t /*mctx*/, bool *eof,
-                          char * /*err*/, uint32_t /*err_len*/) {
+static bool dummy_restore(Index::Cursor /*cursor*/, MtrCtx::Ref /*mctx*/,
+                          bool *eof, char * /*err*/, uint32_t /*err_len*/) {
   *eof = true;
   return false;
 }
 
-static void dummy_end(vef_index_cursor_ref_t *cursor) {
+static void dummy_end(Index::Cursor *cursor) {
   delete static_cast<DummyCursor *>(*cursor);
   *cursor = nullptr;
 }
@@ -284,8 +284,8 @@ static constexpr auto DUMMY_HNSW_INDEX =
             .end<&dummy_end>()
 
         .global()
-            .capabilities(IndexSupport::KNN)
-            .storage_props(IndexStorage::HAS_COLUMN_REF | IndexStorage::REF_LOOKUP)
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF | Index::Storage::REF_LOOKUP)
             .options<DummyHNSWOptions, &dummy_parse_options>()
 
         .build();
@@ -329,7 +329,7 @@ static const auto DUMMY_HNSW_L2_PROFILE = make_index_profile(kDummyProfileL2)
                                               .using_index(kDummyHNSW)
                                               .with_function(1, DUMMY_L2_FN)
                                               .with_helper(1, DUMMY_HELPER_FN)
-                                              .ordering(IndexOrdering::ASC)
+                                              .ordering(Index::Ordering::ASC)
                                               .default_for_type(true)
                                               .build();
 
