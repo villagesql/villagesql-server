@@ -3,7 +3,7 @@
 # For allowlisted files, we just verify the file exists and was modified
 # We don't require VillageSQL copyright for allowlisted third-party files
 
-FILE="extra/libbacktrace/sha9ae4f4a/internal.h"
+FILE="extra/libbacktrace/sha793921876c981/internal.h"
 
 # Check if file exists
 if [ ! -f "$FILE" ]; then
