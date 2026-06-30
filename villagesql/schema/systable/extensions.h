@@ -17,6 +17,7 @@
 #ifndef VILLAGESQL_SCHEMA_SYSTABLE_EXTENSIONS_H_
 #define VILLAGESQL_SCHEMA_SYSTABLE_EXTENSIONS_H_
 
+#include <optional>
 #include <string>
 
 #include "villagesql/schema/systable/helpers.h"
@@ -29,6 +30,108 @@ namespace villagesql {
 // Forward declaration for TableTraits
 template <typename EntryType>
 struct TableTraits;
+
+// A deferred action queued against an installed extension, applied at the
+// next server restart.
+//
+// PendingAction is the public surface for callers; the wire format used by
+// the storage layer is intentionally hidden behind Serialize / Deserialize.
+// Callers construct an action via the factory methods, ask for its kind, and
+// read typed fields via the getters. Adding a new kind in a future slice
+// requires extending this class only; no caller of has_pending_action(),
+// is_version_update(), target_version(), or similar should need to change.
+//
+// At v1 only one kind exists ("version_update"). The class is structured so
+// the wire format and internal layout can evolve without breaking callers.
+class PendingAction {
+ public:
+  // Construct a "version_update" action representing a request to swap the
+  // installed extension to target_version at the next restart. requested_at
+  // is captured here (server local clock) so callers don't need to know how
+  // timestamps are stamped.
+  static PendingAction CreateVersionUpdate(std::string target_version,
+                                           std::string target_veb_sha256);
+
+  // Annotate this action with a failure reason (and the time it was
+  // observed). Used at restart-apply time: when the swap cannot proceed,
+  // the caller stamps the action so the row remains queryable as
+  // "pending, attempted, failed". Replaces any previous failure record.
+  void MarkFailed(std::string error_message);
+
+  // Table-level round-trip for the systable I/O layer. The class owns its
+  // own column-name(s); callers pass the table and the class finds the
+  // right field(s).
+  //
+  // ReadFromTable: NULL column sets `out` to std::nullopt. Non-NULL is
+  // parsed; on failure returns true with error_message populated.
+  //
+  // StoreToTable: nullopt stores NULL; engaged optional stores the
+  // serialized form.
+  //
+  // Returns true on internal errors (e.g. expected column missing).
+  static bool ReadFromTable(TABLE &table, std::optional<PendingAction> &out,
+                            std::string &error_message);
+  static bool StoreToTable(TABLE &table,
+                           const std::optional<PendingAction> &value,
+                           std::string &error_message);
+
+  // SQL expressions for I_S view definitions to project individual logical
+  // fields of a pending action against a row of the extensions table aliased
+  // as `table_alias`. Returned strings are ready to feed to
+  // `m_target_def.add_field`'s SQL-expression argument.
+  //
+  // The view definitions stay free of any knowledge that the underlying
+  // storage is JSON; future schema-shape changes affect only the
+  // implementations below.
+  static std::string TargetVersionSqlExpr(const char *table_alias);
+  static std::string RequestedAtSqlExpr(const char *table_alias);
+  static std::string LastErrorSqlExpr(const char *table_alias);
+  static std::string LastErrorAtSqlExpr(const char *table_alias);
+
+  // Default-constructed action is in an unspecified but valid state. Used
+  // by the storage layer as the out-parameter buffer for Deserialize.
+  // Callers should construct via CreateVersionUpdate instead.
+  PendingAction() = default;
+
+  // Kind discriminator. Today there is exactly one kind.
+  bool is_version_update() const;
+
+  // Version-update getters. Valid only when is_version_update() is true.
+  const std::string &target_version() const;
+  const std::string &target_veb_sha256() const;
+
+  // Common to all kinds.
+  const std::string &requested_at() const;
+
+  // Failure record. Empty when the action has not yet been attempted or
+  // the latest attempt succeeded. Non-empty when the last attempt
+  // recorded an error via MarkFailed.
+  const std::string &last_error() const;
+  const std::string &last_error_at() const;
+  bool has_failure() const;
+
+ private:
+  // Wire format: build / parse the JSON serialization of this action.
+  // Used internally by ReadFromTable / StoreToTable. Deserialize returns
+  // true on failure with error_message set.
+  std::string Serialize() const;
+  static bool Deserialize(const std::string &raw, PendingAction &out,
+                          std::string &error_message);
+
+  // Internal layout is private. Field names and JSON shape may change
+  // without breaking callers as long as the public getters keep returning
+  // semantically equivalent values.
+  enum class Kind {
+    kVersionUpdate,
+  };
+
+  Kind kind_{Kind::kVersionUpdate};
+  std::string target_version_;
+  std::string target_veb_sha256_;
+  std::string requested_at_;
+  std::string last_error_;
+  std::string last_error_at_;
+};
 
 // Key for extensions table entries
 // Format: "normalized_extension_name"
@@ -69,6 +172,12 @@ struct ExtensionEntry {
   std::string extension_version;
   std::string veb_sha256;
 
+  // Pending deferred action for this extension. Absent (std::nullopt) when
+  // no action is pending; present when one has been queued for the next
+  // restart. The PendingAction class encapsulates the wire format and the
+  // typed accessors; callers should not depend on the storage layout.
+  std::optional<PendingAction> pending_action;
+
   // Full constructor with all fields
   ExtensionEntry(ExtensionKey key, std::string version, std::string sha256)
       : extension_version(std::move(version)),
@@ -85,6 +194,9 @@ struct ExtensionEntry {
 
   // Accessor for key component (delegate to key)
   const std::string &extension_name() const { return key_.extension_name(); }
+
+  // Convenience: true if a deferred action is pending for this extension.
+  bool has_pending_action() const { return pending_action.has_value(); }
 
  protected:
   void set_key(ExtensionKey key) { key_ = std::move(key); }

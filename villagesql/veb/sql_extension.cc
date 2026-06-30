@@ -96,11 +96,10 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   return execute_install(thd);
 }
 
-// Update an installed extension to a different version. Currently runs the
-// compatibility pre-checks against the target package and then stops short
-// of any catalog mutation — durable pending-update storage lands in a
-// later slice. A successful pre-check is reported to the operator as
-// "pre-checks passed; pending-update storage not yet implemented".
+// Update an installed extension to a different version. Runs the
+// compatibility pre-checks against the target package and, on success,
+// records a pending update on the extension row that a future restart
+// will apply.
 //
 // The flow:
 //   1. Standard install-style prologue: name validation, global read lock,
@@ -112,8 +111,8 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
 //      dlopen / vef_register / dlclose cycle. Capability populate is NOT
 //      run for the target — only vef_register's own side effects are
 //      observable in the live server during the precheck.
-//   5. Emit the precheck error verbatim on failure, or a "not yet
-//      implemented" placeholder on success.
+//   5. On precheck success, open villagesql.extensions for writing, set
+//      pending_action on the row, and flush the victionary.
 bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
   // Not replicated; updates are operator actions, not statement-replicated.
   const Disable_binlog_guard binlog_guard(thd);
@@ -255,14 +254,56 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
     return end_transaction(thd, true);
   }
 
-  // Pre-checks passed; the remainder of the update path is not yet
-  // implemented in this slice.
-  villagesql_error(
-      "Extension '%s' version update from '%s' to '%s' is not yet implemented "
-      "(pre-checks passed)",
-      MYF(0), extension_name.c_str(), current_version.c_str(),
-      target_version.c_str());
-  return end_transaction(thd, true);
+  // Pre-checks passed. Open villagesql.extensions for writing before
+  // marking and committing the pending action.
+  Table_ref ext_table(villagesql::SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                      villagesql::SchemaManager::EXTENSIONS_TABLE_NAME,
+                      TL_WRITE, MDL_SHARED_WRITE);
+  if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
+    villagesql_error("Cannot open extensions table", MYF(0));
+    return end_transaction(thd, true);
+  }
+
+  // Record the pending action on the extension row so the next restart
+  // can apply the version swap.
+  bool mark_success = false;
+  {
+    auto write_lock = victionary.get_write_lock();
+    const auto *existing = victionary.extensions().get_committed(
+        villagesql::ExtensionKey(extension_name));
+    if (existing == nullptr) {
+      // Concurrent UNINSTALL between the read-lock check above and here.
+      villagesql_error("Extension '%s' is not installed", MYF(0),
+                       extension_name.c_str());
+    } else {
+      villagesql::ExtensionEntry updated(*existing);
+      updated.pending_action = villagesql::PendingAction::CreateVersionUpdate(
+          target_version, target_sha256);
+      if (victionary.extensions().MarkForUpdate(*thd, std::move(updated),
+                                                existing->key())) {
+        villagesql_error("Failed to record pending update for extension '%s'",
+                         MYF(0), extension_name.c_str());
+      } else {
+        mark_success = true;
+      }
+    }
+  }
+  if (!mark_success) return end_transaction(thd, true);
+
+  if (victionary.write_all_uncommitted_entries(thd)) {
+    villagesql_error("Failed to record pending update for extension '%s'",
+                     MYF(0), extension_name.c_str());
+    return end_transaction(thd, true);
+  }
+
+  LogVSQL(INFORMATION_LEVEL,
+          "Recorded pending update for extension '%s' from version '%s' to "
+          "'%s'; applied on next server restart",
+          extension_name.c_str(), current_version.c_str(),
+          target_version.c_str());
+
+  my_ok(thd);
+  return end_transaction(thd, false);
 }
 
 bool Sql_cmd_install_extension::execute_install(THD *thd) {
