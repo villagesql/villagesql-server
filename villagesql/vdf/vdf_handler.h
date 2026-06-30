@@ -87,6 +87,12 @@ class vdf_handler {
   // Process result string and return appropriate String pointer
   String *result_string(const char *res, size_t res_length, String *str,
                         String *save_str, const CHARSET_INFO *charset);
+
+  // Grow m_result_buffer to hold at least `needed` bytes, rounding up to a
+  // fixed quantum so a result that grows by a few bytes row-over-row does not
+  // trigger a fresh allocation each time. No-op if already large enough.
+  // Returns true on allocation failure.
+  bool MaybeResizeBuffer(size_t needed);
 };
 
 }  // namespace vdf
