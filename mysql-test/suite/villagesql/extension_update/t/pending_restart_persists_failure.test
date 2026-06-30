@@ -1,0 +1,41 @@
+# At server startup, any pending action that the restart-apply path cannot
+# carry out must be marked as failed so the operator can see what went wrong
+# via INFORMATION_SCHEMA.EXTENSIONS without parsing the error log.
+#
+# Today the restart-apply is not yet implemented; every pending action is
+# rejected with a "not yet implemented" failure. The test exercises:
+#   1. queue a pending update via ALTER ... AT RESTART
+#   2. restart the server
+#   3. observe PENDING_LAST_ERROR / PENDING_LAST_ERROR_AT populated
+#   4. observe the original pending fields are still present (operator
+#      can re-queue the current version to clear, or re-issue)
+
+call mtr.add_suppression("Extension 'update_test' has a pending update");
+call mtr.add_suppression("not yet implemented");
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+--source include/restart_mysqld.inc
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Confirm the failure record survives a second restart (it's persisted, not
+# just re-derived).
+--source include/restart_mysqld.inc
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Operator clears the pending action by re-queueing the current version;
+# the failure goes with it.
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+UNINSTALL EXTENSION update_test;
