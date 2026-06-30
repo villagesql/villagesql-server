@@ -137,6 +137,13 @@ CREATE TABLE t_empty_str (id INT PRIMARY KEY, name VARCHAR(20));
 SELECT agg_vdf_ext.vdf_concat(name) AS result FROM t_empty_str;
 DROP TABLE t_empty_str;
 
+# Regression test for #612: a STRING-returning aggregate VDF must report a
+# utf8mb4 charset, not binary. Otherwise the mysql client treats the result as
+# binary and displays it as hex (0x...). The scalar VDF STRING path already
+# sets utf8mb4_bin; this verifies the aggregate path does too.
+SELECT CHARSET(agg_vdf_ext.vdf_concat(category)) AS concat_charset FROM t1;
+SELECT COLLATION(agg_vdf_ext.vdf_concat(category)) AS concat_collation FROM t1;
+
 # vdf_max: raw ABI aggregate with GROUP BY
 SELECT category, agg_vdf_ext.vdf_max(val) AS max_val
 FROM t1
