@@ -260,6 +260,8 @@ enum dd_index_keys {
   DD_INDEX_ROOT,
   /** Creating transaction ID */
   DD_INDEX_TRX_ID,
+  /** Extended storage reference for custom index */
+  DD_INDEX_EXTENDED_STORAGE_REF,
   /** Sentinel */
   DD_INDEX__LAST
 };
@@ -267,7 +269,7 @@ enum dd_index_keys {
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
 const char *const dd_index_key_strings[DD_INDEX__LAST] = {
-    "id", "space_id", "table_id", "root", "trx_id"};
+    "id", "space_id", "table_id", "root", "trx_id", "village_store"};
 
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */

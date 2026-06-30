@@ -2497,9 +2497,13 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   // Carry the Custom_index runtime state onto the cache-internal index by
   // re-loading it onto new_index's heap. The prototype's Custom_index is
   // destroyed by dict_mem_index_free(index) at the end of this function.
-  if (index->custom_index != nullptr) {
-    villagesql::innodb::Custom_index::load(
-        new_index, index->custom_index->index_context().get());
+  {
+    dberr_t cerr = villagesql::innodb::Custom_index::load(new_index, index);
+    if (cerr != DB_SUCCESS) {
+      dict_mem_index_free(new_index);
+      dict_mem_index_free(index);
+      return cerr;
+    }
   }
 
   if (dict_index_too_big_for_tree(table, new_index)) {

@@ -18,6 +18,7 @@
 #include <memory>
 #include <new>
 
+#include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
@@ -104,19 +105,38 @@ static dberr_t parse_index_options(dict_index_t *index,
   return DB_SUCCESS;
 }
 
+static dberr_t init_index_ctx(dict_index_t *index) {
+  vef_index_ctx_t *ctx = index->custom_index->index_ctx();
+  ctx->version = VEF_INDEX_TYPE_INTF_VERSION;
+  ctx->index_ref = static_cast<vef_index_ref_t>(index);
+  ctx->num_key_columns = index->n_user_defined_cols;
+  ctx->num_primary_key_columns = primary_key_columns(index);
+  ctx->profile_fn = vef_index_profile_stub;
+  ctx->helper_fn = vef_index_profile_stub;
+  ctx->key_len_fn = vef_index_max_key_len_stub;
+  ctx->options = nullptr;
+
+  const vef_type_index_intf_t &intf =
+      index->custom_index->index_context()->descriptor()->intf();
+  return parse_index_options(index, intf, &ctx->options);
+}
+
 bool Custom_index::is_custom(const dict_index_t *index) {
   return index != nullptr && index->custom_index != nullptr;
 }
 
-void Custom_index::load(dict_index_t *index, const IndexContext *ctx) {
-  if (ctx == nullptr) return;
+dberr_t Custom_index::check_and_set(dict_index_t *index,
+                                    const IndexContext *ctx,
+                                    const dd::Index *dd_index) {
+  if (ctx == nullptr) return DB_SUCCESS;
 
   auto ic = AcquireIndexContextClientManaged(ctx);
   if (ic == nullptr) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Failed to acquire custom index context for index "
         << index->name;
-    return;
+    ut_ad(false);
+    return DB_VILLAGESQL_ERROR;
   }
 
   // mem_heap_alloc guarantees UNIV_MEM_ALIGNMENT-byte alignment; ensure that is
@@ -129,10 +149,64 @@ void Custom_index::load(dict_index_t *index, const IndexContext *ctx) {
   // do not currently support AHI.
   index->disable_ahi = true;
 
-  // TODO(villagesql-indexing): Call parse_index_options() here to populate
-  // ctx->options when opening an already-created index. Requires load() to
-  // also invoke the extension's load function to reconnect to persisted storage
-  // before options are meaningful.
+  if (dd_index == nullptr) return DB_SUCCESS;
+
+  const char *store_key = dd_index_key_strings[DD_INDEX_EXTENDED_STORAGE_REF];
+  if (!dd_index->se_private_data().exists(store_key)) {
+    return DB_SUCCESS;
+  }
+
+  StorageRef storage_ref = EMPTY_STORAGE_REF;
+  dd_index->se_private_data().get(store_key, &storage_ref);
+  index->custom_index->storage_ref_ = storage_ref;
+
+  return DB_SUCCESS;
+}
+
+dberr_t Custom_index::load(dict_index_t *new_index,
+                           const dict_index_t *old_index) {
+  if (old_index->custom_index == nullptr) return DB_SUCCESS;
+
+  dberr_t err = check_and_set(
+      new_index, old_index->custom_index->index_context().get(), nullptr);
+  if (err != DB_SUCCESS) return err;
+
+  new_index->custom_index->storage_ref_ = old_index->custom_index->storage_ref_;
+  if (!new_index->custom_index->has_storage_ref()) return DB_SUCCESS;
+
+  dberr_t init_err = init_index_ctx(new_index);
+  if (init_err != DB_SUCCESS) return init_err;
+
+  const vef_type_index_intf_t &intf =
+      new_index->custom_index->index_context()->descriptor()->intf();
+
+  auto arena_alloc = [](vef_storage_arena_t *actx, uint32_t sz) -> void * {
+    return mem_heap_zalloc(reinterpret_cast<mem_heap_t *>(actx), sz);
+  };
+
+  StorageCtx *storage = nullptr;
+  char error_msg[ERROR_MSG_SIZE] = {};
+
+  ut_ad(intf.load);
+  bool failed =
+      intf.load == nullptr ||
+      intf.load(new_index->custom_index->index_ctx(),
+                new_index->custom_index->storage_ref(),
+                reinterpret_cast<vef_storage_arena_t *>(new_index->heap),
+                arena_alloc, &storage, error_msg, sizeof(error_msg));
+
+  // No dict_sys->size adjustment here: the index is not yet in the dictionary
+  // cache, so dict_index_add_to_cache() will account for the heap growth.
+
+  error_msg[sizeof(error_msg) - 1] = '\0';
+  if (failed) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: Error loading custom index storage: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  new_index->custom_index->set_storage_ctx(storage);
+  return DB_SUCCESS;
 }
 
 dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
@@ -143,21 +217,11 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
   index->page = FIL_NULL;
   index->trx_id = trx_id;
 
+  dberr_t init_err = init_index_ctx(index);
+  if (init_err != DB_SUCCESS) return init_err;
+
   const vef_type_index_intf_t &intf =
       index->custom_index->index_context()->descriptor()->intf();
-
-  vef_index_ctx_t *ctx = index->custom_index->index_ctx();
-  ctx->version = VEF_INDEX_TYPE_INTF_VERSION;
-  ctx->index_ref = static_cast<vef_index_ref_t>(index);
-  ctx->num_key_columns = index->n_user_defined_cols;
-  ctx->num_primary_key_columns = primary_key_columns(index);
-  ctx->profile_fn = vef_index_profile_stub;
-  ctx->helper_fn = vef_index_profile_stub;
-  ctx->key_len_fn = vef_index_max_key_len_stub;
-  ctx->options = nullptr;
-
-  dberr_t parse_err = parse_index_options(index, intf, &ctx->options);
-  if (parse_err != DB_SUCCESS) return parse_err;
 
   auto arena_alloc = [](vef_storage_arena_t *actx, uint32_t sz) -> void * {
     return mem_heap_zalloc(reinterpret_cast<mem_heap_t *>(actx), sz);
@@ -165,14 +229,24 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
 
   StorageCtx *storage = nullptr;
   char error_msg[ERROR_MSG_SIZE] = {};
+  auto old_size = mem_heap_get_size(index->heap);
 
   ut_ad(intf.create);
   bool failed =
       intf.create == nullptr ||
-      intf.create(ctx, static_cast<vef_storage_space_ref_t>(index->space),
+      intf.create(index->custom_index->index_ctx(),
+                  static_cast<vef_storage_space_ref_t>(index->space),
                   static_cast<vef_storage_trx_ref_t>(trx_id),
                   reinterpret_cast<vef_storage_arena_t *>(index->heap),
                   arena_alloc, &storage, error_msg, sizeof(error_msg));
+
+  // dict_sys->size track the total memory occupied by dictionary heaps.
+  auto new_size = mem_heap_get_size(index->heap);
+  ut_a(new_size >= old_size);
+  ut_ad(!dict_sys_mutex_own());
+  dict_sys_mutex_enter();
+  dict_sys->size += new_size - old_size;
+  dict_sys_mutex_exit();
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
@@ -222,6 +296,28 @@ void Custom_index::free_all(dict_index_t *index) {
     index->custom_index = nullptr;
   }
 }
+
+template <typename Index>
+void Custom_index::save_ref(const dict_index_t *index, Index *dd_index) {
+  if (dd_index == nullptr || index == nullptr ||
+      index->custom_index == nullptr) {
+    return;
+  }
+  const char *store_key = dd_index_key_strings[DD_INDEX_EXTENDED_STORAGE_REF];
+
+  Custom_index *custom_index = index->custom_index;
+  if (!custom_index->storage_ctx()) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: dd_write: Uninitialized custom index store";
+    return;
+  }
+  dd_index->se_private_data().set(store_key, custom_index->storage_ctx_->ref);
+}
+
+template void Custom_index::save_ref<dd::Index>(const dict_index_t *,
+                                                dd::Index *);
+template void Custom_index::save_ref<dd::Partition_index>(
+    const dict_index_t *, dd::Partition_index *);
 
 }  // namespace innodb
 }  // namespace villagesql

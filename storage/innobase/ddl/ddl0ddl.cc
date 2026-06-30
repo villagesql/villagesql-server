@@ -202,10 +202,18 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
 
   index->set_committed(index_def->m_rebuild);
 
-  // Record the custom index descriptor before the index is added to the
-  // dictionary cache so it propagates onto the cache-internal index.
   using villagesql::innodb::Custom_index;
-  Custom_index::load(index, index_def->m_custom_index_context);
+  {
+    dberr_t cerr = Custom_index::check_and_set(
+        index, index_def->m_custom_index_context, nullptr);
+    if (cerr != DB_SUCCESS) {
+      trx->error_state = cerr;
+      trx_set_detailed_error(trx,
+                             "InnoDB: Custom index invalid metadata state");
+      dict_mem_index_free(index);
+      return nullptr;
+    }
+  }
 
   bool has_new_v_col{};
 

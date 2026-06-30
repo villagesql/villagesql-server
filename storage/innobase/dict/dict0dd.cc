@@ -81,6 +81,7 @@ Data dictionary interface */
 #include "sql_table.h"
 #include "univ.i"  // Using OS_PATH_SEPARATOR
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 #endif             /* !UNIV_HOTBACKUP */
 
 const char *DD_instant_col_val_coder::encode(const byte *stream, size_t in_len,
@@ -2608,6 +2609,8 @@ static void dd_write_index(dd::Object_id dd_space_id, Index *dd_index,
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page);
   p.set(dd_index_key_strings[DD_INDEX_TRX_ID], index->trx_id);
+
+  villagesql::innodb::Custom_index::save_ref(index, dd_index);
 }
 
 template void dd_write_index<dd::Index>(dd::Object_id, dd::Index *,
@@ -2980,8 +2983,11 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
                   dict_mem_index_free(index);
                   my_error(ER_INDEX_COLUMN_TOO_LONG, MYF(0), max_len);
                   return HA_ERR_TOO_BIG_ROW;);
-
-  villagesql::innodb::Custom_index::load(index, key.custom_index_context);
+  {
+    dberr_t cerr = villagesql::innodb::Custom_index::check_and_set(
+        index, key.custom_index_context, dd_index);
+    if (cerr != DB_SUCCESS) return cerr;
+  }
 
   for (unsigned i = 0; i < key.user_defined_key_parts; i++) {
     const KEY_PART_INFO *key_part = &key.key_part[i];

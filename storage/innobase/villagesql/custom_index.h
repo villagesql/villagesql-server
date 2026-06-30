@@ -28,6 +28,9 @@
 // Forward declarations
 struct dict_index_t;
 struct dict_table_t;
+namespace dd {
+class Index;
+}
 
 namespace villagesql {
 
@@ -45,8 +48,10 @@ namespace innodb {
 class Custom_index {
  public:
   using StorageCtx = vef_storage_ctx_t;
+  using StorageRef = vef_storage_ref_t;
 
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
+  static constexpr StorageRef EMPTY_STORAGE_REF = 0;
 
   explicit Custom_index(std::shared_ptr<const IndexContext> index_context)
       : index_context_(std::move(index_context)) {}
@@ -65,23 +70,33 @@ class Custom_index {
   StorageCtx *storage_ctx() const { return storage_ctx_; }
   void set_storage_ctx(StorageCtx *ctx) { storage_ctx_ = ctx; }
 
-  // Creates the Custom_index runtime state on index->heap and sets
-  // index->custom_index. No-op when ctx is null.
-  // TODO(villagesql-indexing): load() is currently incomplete and only supports
-  // the create path. Once the implementation is complete, revisit whether this
-  // should return a dberr_t so callers can propagate load failures.
-  static void load(dict_index_t *index, const IndexContext *ctx);
+  // Persistent storage reference read from dd::Index se_private_data by
+  // check_and_set(). Used by load() to reconnect to extension storage.
+  StorageRef storage_ref() const { return storage_ref_; }
+  bool has_storage_ref() const { return storage_ref_ != EMPTY_STORAGE_REF; }
+
+  // Allocates Custom_index on index->heap, sets index->custom_index.
+  static dberr_t check_and_set(dict_index_t *index, const IndexContext *ctx,
+                               const dd::Index *dd_index);
+
+  // Loads custom index in extended storage. Carries the Custom_index runtime
+  // state from old_index onto new_index's heap.
+  static dberr_t load(dict_index_t *new_index, const dict_index_t *old_index);
 
   // Returns true if index has Custom_index runtime state.
   static bool is_custom(const dict_index_t *index);
 
   // Creates the extension-managed storage for a custom index, invoking the
-  // registered index-type create function. No-op (DB_SUCCESS) when the index
-  // is not backed by a custom index type.
+  // registered index-type create function.
   static dberr_t create(dict_index_t *index, trx_id_t trx_id);
 
   // Drops the extension-managed storage for a custom index.
   static dberr_t drop(dict_index_t *index, trx_id_t trx_id);
+
+  // Persists the custom index storage reference into dd::Index se_private_data.
+  // Called from dd_write_index() after standard index metadata is written.
+  template <typename Index>
+  static void save_ref(const dict_index_t *index, Index *dd_index);
 
   // Frees the Custom_index runtime state for an index. Called from
   // dict_mem_index_free() before the index heap is released.
@@ -90,7 +105,8 @@ class Custom_index {
  private:
   std::shared_ptr<const IndexContext> index_context_;
   vef_index_ctx_t index_ctx_{};
-  StorageCtx *storage_ctx_{nullptr};
+  StorageCtx *storage_ctx_ = nullptr;
+  StorageRef storage_ref_ = EMPTY_STORAGE_REF;
 };
 
 }  // namespace innodb
