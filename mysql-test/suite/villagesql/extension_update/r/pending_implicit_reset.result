@@ -1,0 +1,21 @@
+INSTALL EXTENSION update_test VERSION '1.0.0';
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+Warnings:
+Note	3219	Extension 'update_test' is already at version '1.0.0'
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'update_test';
+PENDING_VERSION
+NULL
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'update_test';
+PENDING_VERSION
+2.0.0
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+Warnings:
+Note	3219	Cleared pending update for extension 'update_test' (target matches current version '1.0.0')
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'update_test';
+PENDING_VERSION
+NULL
+UNINSTALL EXTENSION update_test;
