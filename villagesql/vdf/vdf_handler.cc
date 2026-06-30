@@ -130,8 +130,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
       for (uint i = 0; i < arg_count; i++) {
         const auto *tc = m_args[i]->get_type_context();
         if (tc == nullptr) continue;
-        const size_t dec = static_cast<size_t>(tc->max_decode_buffer_length());
-        if (dec > needed) needed = dec;
+        needed = std::max(needed,
+                          static_cast<size_t>(tc->max_decode_buffer_length()));
       }
     }
     if (MaybeResizeBuffer(needed)) return true;
