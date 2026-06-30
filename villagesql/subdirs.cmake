@@ -24,3 +24,18 @@ ADD_SUBDIRECTORY(../villagesql/system_views ${CMAKE_CURRENT_BINARY_DIR}/villages
 ADD_SUBDIRECTORY(../villagesql/types ${CMAKE_CURRENT_BINARY_DIR}/villagesql/types)
 ADD_SUBDIRECTORY(../villagesql/vdf ${CMAKE_CURRENT_BINARY_DIR}/villagesql/vdf)
 ADD_SUBDIRECTORY(../villagesql/veb ${CMAKE_CURRENT_BINARY_DIR}/villagesql/veb)
+
+IF(MY_COMPILER_IS_GNU_OR_CLANG)
+  FOREACH(vsql_target
+    villagesql_common
+    villagesql_schema
+    villagesql_services
+    villagesql_sql
+    villagesql_system_views
+    villagesql_types
+    villagesql_vdf
+    villagesql_veb
+  )
+    TARGET_COMPILE_OPTIONS(${vsql_target} PRIVATE -Werror)
+  ENDFOREACH()
+ENDIF()
