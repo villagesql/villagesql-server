@@ -8,7 +8,7 @@ INSTALL EXTENSION min_protocol_test;
 ERROR HY000: Failed to load VEF extension 'min_protocol_test': vef_register returned an error: requires VEF protocol 3, server offered 1
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 # Install with default protocol (protocol 4, meets the requirement)
 SET @vef_debug_protocol_override = NULL;
 INSTALL EXTENSION min_protocol_test;
