@@ -161,6 +161,20 @@ is_ignored() {
   return 1
 }
 
+get_villint_dir() {
+  local script_dir="$(dirname "${BASH_SOURCE[0]}")"
+  local source_dir="$(cd "$script_dir/.." && pwd)"
+  echo "$source_dir/villagesql/villint"
+}
+
+get_allowed_list() {
+  echo "$(get_villint_dir)/regtest_villint_data/allowlist_nonstandard_copyrights.txt"
+}
+
+get_clang_format_version() {
+  cat "$(get_villint_dir)/clang-format-version"
+}
+
 # Whitelist of allowed TODO tags for VillageSQL code
 ALLOWED_TODO_TAGS=(
   "villagesql"
@@ -272,9 +286,7 @@ fix_copyright() {
       echo "  Added VillageSQL Contributors to existing copyright"
     else
       # Non-standard copyright - check if it's in the allowlist
-      # Get the directory where this script lives
-      local script_dir="$(dirname "${BASH_SOURCE[0]}")"
-      local allowlist="$script_dir/regtest_villint_data/allowlist_nonstandard_copyrights.txt"
+      local allowlist=$(get_allowed_list)
       # Check for exact match or prefix match (allows directory patterns)
       if [ -f "$allowlist" ]; then
         if grep -qxF "$file" "$allowlist"; then
@@ -296,7 +308,7 @@ fix_copyright() {
       echo "ERROR: Non-standard copyright in $file" >&2
       echo "  This file has a copyright notice but it's not the standard Oracle/MySQL format." >&2
       echo "  Either update the copyright to match the standard format, or add this file to:" >&2
-      echo "  scripts/regtest_villint_data/allowlist_nonstandard_copyrights.txt" >&2
+      echo "  $allowlist" >&2
       return 1
     fi
   else
@@ -347,9 +359,7 @@ fix_copyright_cmake() {
       echo "  Added VillageSQL Contributors to existing copyright"
     else
       # Non-standard copyright - check if it's in the allowlist
-      # Get the directory where this script lives
-      local script_dir="$(dirname "${BASH_SOURCE[0]}")"
-      local allowlist="$script_dir/regtest_villint_data/allowlist_nonstandard_copyrights.txt"
+      local allowlist=$(get_allowed_list)
       # Check for exact match or prefix match (allows directory patterns)
       if [ -f "$allowlist" ]; then
         if grep -qxF "$file" "$allowlist"; then
@@ -401,8 +411,7 @@ EOF
 # --- Main Logic ---
 
 # Check for required tools
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REQUIRED_CLANG_FORMAT_VERSION=$(cat "$SCRIPT_DIR/clang-format-version")
+REQUIRED_CLANG_FORMAT_VERSION=$(get_clang_format_version)
 
 die_clang_format() {
   echo "Error: $1" >&2
