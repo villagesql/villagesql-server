@@ -382,7 +382,7 @@ bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
   }
   // Upgrade from 0.0.4 to 0.0.5: add pending_action column to extensions
   Semver version_005;
-  version_005.from_components(0, 0, 5);
+  version_005.from_components(0, 0, 5, from_version.code_base());
   if (from_version < version_005) {
     if (upgrade::upgrade_villagesql_from_0_0_4_to_0_0_5(thd)) return true;
   }
