@@ -14,7 +14,7 @@ id	n
 # Suppress idle background flushing so the column-store pages written by
 # the rebuild stay dirty in the buffer pool until the crash.
 SET GLOBAL innodb_idle_flush_pct = 0;
-# Rebuild the table: clustered bulk load -> insert_direct(no_redo=true)
+# Rebuild the table: clustered bulk load -> insert_direct() with no redo logging
 ALTER TABLE t1 FORCE, ALGORITHM=INPLACE;
 # Values right after rebuild (in-memory; pages dirty, not yet flushed)
 SELECT id, n FROM t1 ORDER BY id;

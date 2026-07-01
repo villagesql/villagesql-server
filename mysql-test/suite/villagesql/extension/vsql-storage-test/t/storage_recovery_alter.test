@@ -1,7 +1,7 @@
 # Crash-recovery test for the column-store (extended storage) bulk-load DDL path.
 #
 # A table-rebuild DDL (ALTER TABLE ... FORCE, ALGORITHM=INPLACE) re-inserts each
-# extended-storage value through Custom_column::insert_direct(..., no_redo=true)
+# extended-storage value through Custom_column::insert_direct()
 # (btr0load.cc Page_load::insert). Those column-store pages are written with
 # MTR_LOG_NO_REDO and are NOT attached to the bulk-load Flush_observer, so they
 # are neither redo-logged nor force-flushed before the DDL commits.
@@ -10,8 +10,6 @@
 # durable, buffer pool NOT flushed) and verifies the STORED_INT values survive
 # recovery. If the durability hole is real, the values are lost/garbage after
 # recovery (RED). A correct implementation preserves them (GREEN).
-#
-# See Docs/CUSTOM_COLUMN_NO_REDO_DURABILITY.md for the full analysis.
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 
@@ -31,7 +29,7 @@ SELECT id, n FROM t1 ORDER BY id;
 --echo # the rebuild stay dirty in the buffer pool until the crash.
 SET GLOBAL innodb_idle_flush_pct = 0;
 
---echo # Rebuild the table: clustered bulk load -> insert_direct(no_redo=true)
+--echo # Rebuild the table: clustered bulk load -> insert_direct() with no redo logging
 ALTER TABLE t1 FORCE, ALGORITHM=INPLACE;
 
 --echo # Values right after rebuild (in-memory; pages dirty, not yet flushed)
