@@ -59,6 +59,16 @@
 //           .param(COMPLEX)
 //           .build()))
 //
+// Optional result sizing on the function builder:
+//   .buffer_size(n)         // initial row-time output buffer; grows on demand
+//   .max_result_length(n)   // max STRING result length; sizes the result
+//                           // column so a materialized STRING result is not
+//                           // truncated at the argument width. Without it the
+//                           // column falls back to the argument width, like a
+//                           // classic UDF that does not set
+//                           initid->max_length.
+//                           // Has no effect for non-STRING return types.
+//
 // For aggregate VDFs (SQL SUM, COUNT, etc.), see make_aggregate_func in
 // vsql/func_builder.h. For per-statement lifecycle hooks (prerun/postrun),
 // see vsql/pre_post_run.h. For full documentation see the individual

@@ -4046,11 +4046,10 @@ bool Item_sum_udf_str::resolve_type(THD *) {
   for (uint i = 0; i < arg_count; i++)
     max_length = max(max_length, args[i]->max_length);
   if (udf.is_vdf_returns_string()) {
-    // VDFs returning STRING produce text, not binary. Tag the result with a
-    // utf8mb4 collation so the client displays it as text instead of hex. This
-    // mirrors the scalar path in Item_func_udf_str::resolve_type().
-    // TODO(villagesql): Allow VDFs to choose an encoding.
-    set_data_type_string(max_length, &my_charset_utf8mb4_bin);
+    // VDFs returning STRING produce text, not binary; size the result field
+    // from the declared max output length, falling back to the argument width.
+    // Mirrors the scalar path in Item_func_udf_str::resolve_type().
+    udf.set_vdf_string_result_type(this, max_length);
   } else {
     set_data_type(MYSQL_TYPE_VARCHAR);
   }
