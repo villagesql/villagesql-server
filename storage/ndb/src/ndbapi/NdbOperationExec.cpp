@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1220,7 +1221,7 @@ int NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr, Uint64 aTransId,
           if (res) return res;
         }
       }  // for numExtraSetValues
-    }    // if m_extraSetValues!=null
+    }  // if m_extraSetValues!=null
 
     /* Don't need these any more */
     m_extraSetValues = nullptr;
