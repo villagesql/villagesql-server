@@ -519,10 +519,14 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
 }
 
 dberr_t Custom_column::insert_direct(dict_table_t *table, trx_id_t trx_id,
-                                     dtuple_t *tuple, bool no_redo) {
+                                     dtuple_t *tuple,
+                                     Flush_observer *observer) {
   if (!table->has_extended_storage) {
     return DB_SUCCESS;
   }
+
+  // Durability of these no-redo pages depends on the observer flush; required.
+  ut_a(observer != nullptr);
 
   dict_index_t *index = table->first_index();
   ut_a(index->is_clustered());
@@ -538,14 +542,12 @@ dberr_t Custom_column::insert_direct(dict_table_t *table, trx_id_t trx_id,
     dict_col_t *col = index->get_field(i)->col;
     ut_a(col->stored_by_extn());
 
-    if (!no_redo) {
-      log_free_check();
-    }
+    // No-redo content writes, force-flushed by the observer before commit
+    // (allocation is redo-logged in the storage ABI). See Page_load::init.
     mtr_t mtr;
     mtr_start(&mtr);
-    if (no_redo) {
-      mtr.set_log_mode(MTR_LOG_NO_REDO);
-    }
+    mtr.set_log_mode(MTR_LOG_NO_REDO);
+    mtr.set_flush_observer(observer);
 
     Custom_column::Ref ref_val = Custom_column::EMPTY_REF;
     auto err =
