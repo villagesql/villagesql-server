@@ -371,14 +371,18 @@ static bool validate_villagesql_tables(THD *thd) {
 // villagesql/schema/upgrade.h.
 bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
   // Upgrade from 0.0.1 to 0.0.3: add type_parameters column to custom_columns
+  // Build the threshold with the same code base as from_version so the
+  // comparison is ordered (versions with differing code bases are unordered).
   Semver version_003;
-  version_003.from_components(0, 0, 3);
+  version_003.from_components(0, 0, 3, from_version.code_base());
   if (from_version < version_003) {
+    // Upgrade from 0.0.1 to 0.0.3: add type_parameters column to
+    // custom_columns.
     if (upgrade::upgrade_villagesql_from_0_0_1_to_0_0_3(thd)) return true;
   }
   // Upgrade from 0.0.4 to 0.0.5: add pending_action column to extensions
   Semver version_005;
-  version_005.from_components(0, 0, 5);
+  version_005.from_components(0, 0, 5, from_version.code_base());
   if (from_version < version_005) {
     if (upgrade::upgrade_villagesql_from_0_0_4_to_0_0_5(thd)) return true;
   }
@@ -765,8 +769,14 @@ void SchemaManagerStatus::set_version(const Semver &ver) {
   version = new Semver(ver);
 
   if (!upgrade_needed) {
-    // If ver is not valid, then treat it as an upgrade.
-    upgrade_needed = new bool(!ver.is_valid() || ver < GetBuildVersion());
+    // Treat as an upgrade when the stored version is invalid, when its code
+    // base differs from the build (including legacy stored versions that
+    // predate code bases and were assigned the legacy code base), or when it
+    // is numerically older than the build.
+    const Semver build_version = GetBuildVersion();
+    upgrade_needed = new bool(!ver.is_valid() ||
+                              ver.code_base() != build_version.code_base() ||
+                              ver < build_version);
   }
 }
 
@@ -844,7 +854,7 @@ bool SchemaManagerStatus::read_villagesql_version(THD *thd, Semver *version) {
   }
 
   std::string error_msg;
-  if (!version->parse(version_str, &error_msg)) {
+  if (!version->parse_schema_version(version_str, &error_msg)) {
     LogVSQL(ERROR_LEVEL, "Failed to parse schema version string \"%s\": %s",
             version_str.c_str(), error_msg.c_str());
     return true;  // It is an error to have an unparsable value
