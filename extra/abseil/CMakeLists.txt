@@ -66,6 +66,14 @@ IF(HAS_WARN_FLAG)
   STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
 ENDIF()
 
+# absl/meta/type_traits.h:511:36:
+# warning: builtin __is_trivially_relocatable is deprecated; use
+#    511 |   __builtin_is_cpp_trivially_relocatable instead [-Wdeprecated-builtins]
+MY_CHECK_CXX_COMPILER_WARNING("-Wdeprecated-builtins" HAS_WARN_FLAG)
+IF(HAS_WARN_FLAG)
+  ADD_COMPILE_OPTIONS("${HAS_WARN_FLAG}")
+ENDIF()
+
 IF(FREEBSD)
   # Missing posix_memalign()
   ADD_DEFINITIONS(-D_LIBCPP_HAS_NO_LIBRARY_ALIGNED_ALLOCATION)
