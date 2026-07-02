@@ -40,7 +40,7 @@ jobs:
     - name: Show ccache statistics
       run: ccache -s
 
-    - name: Run tests
+    - name: Run standard tests (unit, integration, only suite village)
       uses: ./source/.github/actions/run-tests
       with:
         artifact-name: nightly-test-logs-${{ github.run_number }}
@@ -49,6 +49,7 @@ jobs:
       uses: ./source/.github/actions/run-tests
       with:
         run-unit-tests: false
+        run-integration-tests: false
         run-big-tests: true
         artifact-name: nightly-big-test-logs-${{ github.run_number }}
 
