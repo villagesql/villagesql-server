@@ -14375,7 +14375,8 @@ static void test_bug14210() {
   rc = mysql_stmt_prepare(stmt, stmt_text, (ulong)strlen(stmt_text));
   check_execute(stmt, rc);
   rc = mysql_stmt_execute(stmt);
-  while ((rc = mysql_stmt_fetch(stmt)) == 0);
+  while ((rc = mysql_stmt_fetch(stmt)) == 0)
+    ;
   DIE_UNLESS(rc == MYSQL_NO_DATA);
 
   rc = mysql_stmt_close(stmt);
@@ -16112,7 +16113,8 @@ static void test_bug29687() {
     rc = mysql_stmt_execute(stmt);
     check_execute(stmt, rc);
     mysql_stmt_store_result(stmt);
-    while (mysql_stmt_fetch(stmt) == 0);
+    while (mysql_stmt_fetch(stmt) == 0)
+      ;
     mysql_stmt_free_result(stmt);
   }
 
@@ -17768,7 +17770,8 @@ static void test_bug47485() {
   rc = mysql_stmt_store_result(stmt);
   check_execute(stmt, rc);
 
-  while (!(rc = mysql_stmt_fetch(stmt)));
+  while (!(rc = mysql_stmt_fetch(stmt)))
+    ;
 
   DIE_UNLESS(rc == MYSQL_NO_DATA);
 
@@ -17794,7 +17797,8 @@ static void test_bug47485() {
   rc = mysql_stmt_execute(stmt);
   check_execute(stmt, rc);
 
-  while (!(rc = mysql_stmt_fetch(stmt)));
+  while (!(rc = mysql_stmt_fetch(stmt)))
+    ;
 
   DIE_UNLESS(rc == MYSQL_NO_DATA);
 
@@ -18523,30 +18527,45 @@ static void test_wl6791() {
   int rc;
   uint idx;
   MYSQL *l_mysql;
-  enum mysql_option
-      uint_opts[] = {MYSQL_OPT_CONNECT_TIMEOUT, MYSQL_OPT_READ_TIMEOUT,
-                     MYSQL_OPT_WRITE_TIMEOUT,   MYSQL_OPT_PROTOCOL,
-                     MYSQL_OPT_LOCAL_INFILE,    MYSQL_OPT_SSL_MODE},
-      bool_opts[] = {MYSQL_OPT_COMPRESS,
-                     MYSQL_REPORT_DATA_TRUNCATION,
-                     MYSQL_OPT_RECONNECT,
-                     MYSQL_ENABLE_CLEARTEXT_PLUGIN,
-                     MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS,
-                     MYSQL_OPT_OPTIONAL_RESULTSET_METADATA},
-      const_char_opts[] =
-          {MYSQL_READ_DEFAULT_FILE, MYSQL_READ_DEFAULT_GROUP,
-           MYSQL_SET_CHARSET_DIR, MYSQL_SET_CHARSET_NAME,
+  enum mysql_option uint_opts[] = {MYSQL_OPT_CONNECT_TIMEOUT,
+                                   MYSQL_OPT_READ_TIMEOUT,
+                                   MYSQL_OPT_WRITE_TIMEOUT,
+                                   MYSQL_OPT_PROTOCOL,
+                                   MYSQL_OPT_LOCAL_INFILE,
+                                   MYSQL_OPT_SSL_MODE},
+                    bool_opts[] = {MYSQL_OPT_COMPRESS,
+                                   MYSQL_REPORT_DATA_TRUNCATION,
+                                   MYSQL_OPT_RECONNECT,
+                                   MYSQL_ENABLE_CLEARTEXT_PLUGIN,
+                                   MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS,
+                                   MYSQL_OPT_OPTIONAL_RESULTSET_METADATA},
+                    const_char_opts[] =
+  {
+    MYSQL_READ_DEFAULT_FILE,
+    MYSQL_READ_DEFAULT_GROUP,
+    MYSQL_SET_CHARSET_DIR,
+    MYSQL_SET_CHARSET_NAME,
 #if defined(_WIN32)
-           /* mysql_options() is a no-op on non-supporting platforms. */
-           MYSQL_SHARED_MEMORY_BASE_NAME,
+    /* mysql_options() is a no-op on non-supporting platforms. */
+    MYSQL_SHARED_MEMORY_BASE_NAME,
 #endif
-           MYSQL_OPT_BIND, MYSQL_PLUGIN_DIR, MYSQL_DEFAULT_AUTH,
-           MYSQL_OPT_SSL_KEY, MYSQL_OPT_SSL_CERT, MYSQL_OPT_SSL_CA,
-           MYSQL_OPT_SSL_CAPATH, MYSQL_OPT_SSL_CIPHER,
-           MYSQL_OPT_TLS_CIPHERSUITES, MYSQL_OPT_TLS_SNI_SERVERNAME,
-           MYSQL_OPT_SSL_CRL, MYSQL_OPT_SSL_CRLPATH, MYSQL_SERVER_PUBLIC_KEY},
-      err_opts[] = {MYSQL_OPT_NAMED_PIPE, MYSQL_OPT_CONNECT_ATTR_RESET,
-                    MYSQL_OPT_CONNECT_ATTR_DELETE, MYSQL_INIT_COMMAND};
+    MYSQL_OPT_BIND,
+    MYSQL_PLUGIN_DIR,
+    MYSQL_DEFAULT_AUTH,
+    MYSQL_OPT_SSL_KEY,
+    MYSQL_OPT_SSL_CERT,
+    MYSQL_OPT_SSL_CA,
+    MYSQL_OPT_SSL_CAPATH,
+    MYSQL_OPT_SSL_CIPHER,
+    MYSQL_OPT_TLS_CIPHERSUITES,
+    MYSQL_OPT_TLS_SNI_SERVERNAME,
+    MYSQL_OPT_SSL_CRL,
+    MYSQL_OPT_SSL_CRLPATH,
+    MYSQL_SERVER_PUBLIC_KEY
+  },
+                    err_opts[] = {
+                        MYSQL_OPT_NAMED_PIPE, MYSQL_OPT_CONNECT_ATTR_RESET,
+                        MYSQL_OPT_CONNECT_ATTR_DELETE, MYSQL_INIT_COMMAND};
 
   myheader("test_wl6791");
 
@@ -19211,7 +19230,8 @@ static void test_bug21199582() {
           rc = mysql_stmt_bind_result(stmt, &out_param_bind2);
           check_execute(stmt, rc);
 
-          while (!mysql_stmt_fetch(stmt));
+          while (!mysql_stmt_fetch(stmt))
+            ;
 
           mysql_free_result(result);
         }
@@ -20186,7 +20206,8 @@ static void test_bug31048553() {
   fprintf(stdout, "\n mysql_fetch_row() passed");
 
   while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-         NET_ASYNC_COMPLETE);
+         NET_ASYNC_COMPLETE)
+    ;
   /* 2nd row fetched */
   DIE_UNLESS(strcmp(row[0], "20") == 0);
   fprintf(stdout, "\n mysql_fetch_row_nonblocking() passed");
@@ -20198,7 +20219,8 @@ static void test_bug31048553() {
     DIE_UNLESS(strcmp(row[0], "30") == 0);
   } else {
     while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-           NET_ASYNC_COMPLETE);
+           NET_ASYNC_COMPLETE)
+      ;
     /* 3rd row fetched */
     DIE_UNLESS(strcmp(row[0], "30") == 0);
     fprintf(stdout, "\n mysql_fetch_row_nonblocking() passed");
@@ -20214,8 +20236,8 @@ static void test_bug31048553() {
   DIE_UNLESS(row == nullptr);
   DIE_UNLESS(mysql_errno(mysql_local) == 0);
 
-  while ((status = mysql_free_result_nonblocking(result)) !=
-         NET_ASYNC_COMPLETE);
+  while ((status = mysql_free_result_nonblocking(result)) != NET_ASYNC_COMPLETE)
+    ;
   fprintf(stdout, "\n mysql_free_result_nonblocking() passed");
 
   if (mysql_query(mysql_local, "DROP TABLE test_table")) {
@@ -20388,7 +20410,8 @@ static void test_wl11381() {
   fprintf(stdout, "\n mysql_fetch_row() passed");
 
   while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-         NET_ASYNC_COMPLETE);
+         NET_ASYNC_COMPLETE)
+    ;
   /* 2nd row fetched */
   DIE_UNLESS(strcmp(row[0], "20") == 0);
   fprintf(stdout, "\n mysql_fetch_row_nonblocking() passed");
@@ -20400,14 +20423,15 @@ static void test_wl11381() {
     DIE_UNLESS(strcmp(row[0], "30") == 0);
   } else {
     while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-           NET_ASYNC_COMPLETE);
+           NET_ASYNC_COMPLETE)
+      ;
     /* 3rd row fetched */
     DIE_UNLESS(strcmp(row[0], "30") == 0);
     fprintf(stdout, "\n mysql_fetch_row_nonblocking() passed");
   }
 
-  while ((status = mysql_free_result_nonblocking(result)) !=
-         NET_ASYNC_COMPLETE);
+  while ((status = mysql_free_result_nonblocking(result)) != NET_ASYNC_COMPLETE)
+    ;
   fprintf(stdout, "\n mysql_free_result_nonblocking() passed");
 
   if (mysql_query(mysql_local, "DROP TABLE IF EXISTS test_table1")) {
@@ -20492,8 +20516,8 @@ static void test_wl11381() {
     exit(1);
   }
   result = mysql_use_result(mysql_local);
-  while ((status = mysql_free_result_nonblocking(result)) !=
-         NET_ASYNC_COMPLETE);
+  while ((status = mysql_free_result_nonblocking(result)) != NET_ASYNC_COMPLETE)
+    ;
   mysql_close(mysql_local);
 }
 
@@ -21136,7 +21160,8 @@ static void test_wl13510() {
     }
     DIE_IF(!select_result);
     while ((status = mysql_fetch_row_nonblocking(select_result, &select_row)) !=
-           NET_ASYNC_COMPLETE);
+           NET_ASYNC_COMPLETE)
+      ;
 
     DIE_IF(!select_row[0]);
 
@@ -21167,7 +21192,8 @@ static void test_wl13510() {
     }
     DIE_IF(!select_result);
     while ((status = mysql_fetch_row_nonblocking(
-                select_digest_result, &select_row)) != NET_ASYNC_COMPLETE);
+                select_digest_result, &select_row)) != NET_ASYNC_COMPLETE)
+      ;
     DIE_IF(!select_row[0]);
     fprintf(stdout, "\n digest : %s\n", select_row[0]);
 
@@ -21183,9 +21209,11 @@ static void test_wl13510() {
 
     /* Cleanup */
     while ((status = mysql_free_result_nonblocking(select_result)) !=
-           NET_ASYNC_COMPLETE);
+           NET_ASYNC_COMPLETE)
+      ;
     while ((status = mysql_free_result_nonblocking(select_digest_result)) !=
-           NET_ASYNC_COMPLETE);
+           NET_ASYNC_COMPLETE)
+      ;
     mysql_free_result(digest_result);
     mysql_close(mysql_local);
   };
@@ -21273,7 +21301,8 @@ static void test_wl13510_multi_statements() {
       if (result) {
         (void)my_process_result_set(result);
         while ((status = mysql_free_result_nonblocking(result)) !=
-               NET_ASYNC_COMPLETE);
+               NET_ASYNC_COMPLETE)
+          ;
       } else if (!opt_silent)
         fprintf(stdout, "OK, %ld row(s) affected, %ld warning(s)\n",
                 (ulong)mysql_affected_rows(mysql_local),
@@ -21307,7 +21336,8 @@ static void test_wl13510_multi_statements() {
 
     result = mysql_use_result(mysql_local);
     while ((status = mysql_free_result_nonblocking(result)) !=
-           NET_ASYNC_COMPLETE);
+           NET_ASYNC_COMPLETE)
+      ;
     mysql_close(mysql_local);
   };
 
@@ -21380,13 +21410,16 @@ static void test_bug31082201() {
   result = mysql_use_result(mysql_local);
 
   while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-         NET_ASYNC_COMPLETE);
+         NET_ASYNC_COMPLETE)
+    ;
   // one row fetched
   DIE_UNLESS(mysql_num_rows(result) == 1);
   while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-         NET_ASYNC_COMPLETE);
+         NET_ASYNC_COMPLETE)
+    ;
   while ((status = mysql_fetch_row_nonblocking(result, &row)) !=
-         NET_ASYNC_COMPLETE);
+         NET_ASYNC_COMPLETE)
+    ;
   // fetched 3 rows
   DIE_UNLESS(mysql_num_rows(result) == 3);
   mysql_free_result(result);
