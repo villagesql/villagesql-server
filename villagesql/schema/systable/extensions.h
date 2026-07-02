@@ -19,6 +19,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "villagesql/schema/systable/helpers.h"
 
@@ -31,24 +32,15 @@ namespace villagesql {
 template <typename EntryType>
 struct TableTraits;
 
-// A deferred action queued against an installed extension, applied at the
-// next server restart.
-//
-// PendingAction is the public surface for callers; the wire format used by
-// the storage layer is intentionally hidden behind Serialize / Deserialize.
-// Callers construct an action via the factory methods, ask for its kind, and
-// read typed fields via the getters. Adding a new kind in a future slice
-// requires extending this class only; no caller of has_pending_action(),
-// is_version_update(), target_version(), or similar should need to change.
-//
-// At v1 only one kind exists ("version_update"). The class is structured so
-// the wire format and internal layout can evolve without breaking callers.
+// A deferred version update queued against an installed extension, applied
+// at the next server restart. The class encapsulates the JSON wire format
+// used by the storage layer so callers work with typed accessors instead
+// of raw JSON.
 class PendingAction {
  public:
-  // Construct a "version_update" action representing a request to swap the
-  // installed extension to target_version at the next restart. requested_at
-  // is captured here (server local clock) so callers don't need to know how
-  // timestamps are stamped.
+  // Construct a request to swap the installed extension to target_version
+  // at the next restart. requested_at is captured here (server local clock)
+  // so callers don't need to know how timestamps are stamped.
   static PendingAction CreateVersionUpdate(std::string target_version,
                                            std::string target_veb_sha256);
 
@@ -76,31 +68,28 @@ class PendingAction {
                            std::string &error_message);
 
   // SQL expressions for I_S view definitions to project individual logical
-  // fields of a pending action against a row of the extensions table aliased
-  // as `table_alias`. Returned strings are ready to feed to
+  // fields of a pending action against a row of the extensions table
+  // aliased as `table_alias`. Returned strings are ready to feed to
   // `m_target_def.add_field`'s SQL-expression argument.
   //
   // The view definitions stay free of any knowledge that the underlying
   // storage is JSON; future schema-shape changes affect only the
   // implementations below.
-  static std::string TargetVersionSqlExpr(const char *table_alias);
-  static std::string RequestedAtSqlExpr(const char *table_alias);
-  static std::string LastErrorSqlExpr(const char *table_alias);
-  static std::string LastErrorAtSqlExpr(const char *table_alias);
+  static std::string TargetVersionSqlExpr(std::string_view table_alias);
+  static std::string RequestedAtSqlExpr(std::string_view table_alias);
+  static std::string LastErrorSqlExpr(std::string_view table_alias);
+  static std::string LastErrorAtSqlExpr(std::string_view table_alias);
 
   // Default-constructed action is in an unspecified but valid state. Used
-  // by the storage layer as the out-parameter buffer for Deserialize.
-  // Callers should construct via CreateVersionUpdate instead.
+  // by the storage layer as the out-parameter buffer for Deserialize;
+  // callers should not read from a default-constructed PendingAction
+  // before Deserialize or CreateVersionUpdate has populated it.
   PendingAction() = default;
 
-  // Kind discriminator. Today there is exactly one kind.
-  bool is_version_update() const;
-
-  // Version-update getters. Valid only when is_version_update() is true.
+  // Getters. The returned references are valid for as long as this
+  // PendingAction is alive.
   const std::string &target_version() const;
   const std::string &target_veb_sha256() const;
-
-  // Common to all kinds.
   const std::string &requested_at() const;
 
   // Failure record. Empty when the action has not yet been attempted or
@@ -121,11 +110,6 @@ class PendingAction {
   // Internal layout is private. Field names and JSON shape may change
   // without breaking callers as long as the public getters keep returning
   // semantically equivalent values.
-  enum class Kind {
-    kVersionUpdate,
-  };
-
-  Kind kind_{Kind::kVersionUpdate};
   std::string target_version_;
   std::string target_veb_sha256_;
   std::string requested_at_;

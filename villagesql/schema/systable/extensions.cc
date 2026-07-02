@@ -27,6 +27,7 @@
 #include "sql/sql_base.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/helpers.h"
 
 #include "my_rapidjson_size_t.h"  // IWYU pragma: keep
@@ -40,16 +41,14 @@ namespace villagesql {
 
 namespace {
 
-// Wire-stable string for the version_update kind. Changing this string is a
-// data-format break; callers and tests should pin it.
-constexpr const char kKindVersionUpdate[] = "version_update";
-
 // Single source of truth for the column name carrying a PendingAction.
-// Future versions of the table layout would consult schema state here.
 constexpr const char kPendingActionColumn[] = "pending_action";
 
 // Format the current UTC time as ISO-8601 with microseconds:
 // "YYYY-MM-DDTHH:MM:SS.uuuuuuZ".
+//
+// TODO(villagesql-ga): move to a shared time-formatting utility once a
+// second caller wants it.
 std::string CurrentTimestampUtc() {
   using clock = std::chrono::system_clock;
   const auto now = clock::now();
@@ -85,7 +84,6 @@ std::string CurrentTimestampUtc() {
 PendingAction PendingAction::CreateVersionUpdate(
     std::string target_version, std::string target_veb_sha256) {
   PendingAction a;
-  a.kind_ = Kind::kVersionUpdate;
   a.target_version_ = std::move(target_version);
   a.target_veb_sha256_ = std::move(target_veb_sha256);
   a.requested_at_ = CurrentTimestampUtc();
@@ -95,10 +93,6 @@ PendingAction PendingAction::CreateVersionUpdate(
 void PendingAction::MarkFailed(std::string error_message) {
   last_error_ = std::move(error_message);
   last_error_at_ = CurrentTimestampUtc();
-}
-
-bool PendingAction::is_version_update() const {
-  return kind_ == Kind::kVersionUpdate;
 }
 
 const std::string &PendingAction::target_version() const {
@@ -124,18 +118,12 @@ std::string PendingAction::Serialize() const {
   rapidjson::Writer<rapidjson::StringBuffer> w(sb);
 
   w.StartObject();
-  w.Key("kind");
-  switch (kind_) {
-    case Kind::kVersionUpdate:
-      w.String(kKindVersionUpdate);
-      w.Key("target_version");
-      w.String(target_version_.c_str(),
-               static_cast<rapidjson::SizeType>(target_version_.size()));
-      w.Key("target_veb_sha256");
-      w.String(target_veb_sha256_.c_str(),
-               static_cast<rapidjson::SizeType>(target_veb_sha256_.size()));
-      break;
-  }
+  w.Key("target_version");
+  w.String(target_version_.c_str(),
+           static_cast<rapidjson::SizeType>(target_version_.size()));
+  w.Key("target_veb_sha256");
+  w.String(target_veb_sha256_.c_str(),
+           static_cast<rapidjson::SizeType>(target_veb_sha256_.size()));
   w.Key("requested_at");
   w.String(requested_at_.c_str(),
            static_cast<rapidjson::SizeType>(requested_at_.size()));
@@ -158,7 +146,8 @@ bool PendingAction::ReadFromTable(TABLE &table,
   Field *f = find_field_in_table_sef(&table, kPendingActionColumn);
   if (f == nullptr) {
     error_message = std::string("column '") + kPendingActionColumn +
-                    "' not found in extensions table";
+                    "' not found in " + SchemaManager::EXTENSIONS_TABLE_NAME +
+                    " table";
     return true;
   }
   if (f->is_null()) {
@@ -173,24 +162,38 @@ bool PendingAction::ReadFromTable(TABLE &table,
   return false;
 }
 
-std::string PendingAction::TargetVersionSqlExpr(const char *table_alias) {
-  return std::string("JSON_UNQUOTE(JSON_EXTRACT(") + table_alias + "." +
-         kPendingActionColumn + ", '$.target_version'))";
+namespace {
+// Build a JSON_UNQUOTE(JSON_EXTRACT(alias.pending_action, '$.field')) SQL
+// expression. Shared body for the four *SqlExpr helpers.
+std::string BuildSqlExpr(std::string_view table_alias,
+                         std::string_view json_path) {
+  // Realistic inputs are a 64-char identifier plus a short json path;
+  // 256 leaves comfortable margin for the fixed literal wrapper.
+  char buf[256];
+  const int n = std::snprintf(
+      buf, sizeof(buf), "JSON_UNQUOTE(JSON_EXTRACT(%.*s.%s, '$.%.*s'))",
+      static_cast<int>(table_alias.size()), table_alias.data(),
+      kPendingActionColumn, static_cast<int>(json_path.size()),
+      json_path.data());
+  if (n < 0 || static_cast<size_t>(n) >= sizeof(buf)) return std::string();
+  return std::string(buf, static_cast<size_t>(n));
+}
+}  // namespace
+
+std::string PendingAction::TargetVersionSqlExpr(std::string_view table_alias) {
+  return BuildSqlExpr(table_alias, "target_version");
 }
 
-std::string PendingAction::RequestedAtSqlExpr(const char *table_alias) {
-  return std::string("JSON_UNQUOTE(JSON_EXTRACT(") + table_alias + "." +
-         kPendingActionColumn + ", '$.requested_at'))";
+std::string PendingAction::RequestedAtSqlExpr(std::string_view table_alias) {
+  return BuildSqlExpr(table_alias, "requested_at");
 }
 
-std::string PendingAction::LastErrorSqlExpr(const char *table_alias) {
-  return std::string("JSON_UNQUOTE(JSON_EXTRACT(") + table_alias + "." +
-         kPendingActionColumn + ", '$.last_error'))";
+std::string PendingAction::LastErrorSqlExpr(std::string_view table_alias) {
+  return BuildSqlExpr(table_alias, "last_error");
 }
 
-std::string PendingAction::LastErrorAtSqlExpr(const char *table_alias) {
-  return std::string("JSON_UNQUOTE(JSON_EXTRACT(") + table_alias + "." +
-         kPendingActionColumn + ", '$.last_error_at'))";
+std::string PendingAction::LastErrorAtSqlExpr(std::string_view table_alias) {
+  return BuildSqlExpr(table_alias, "last_error_at");
 }
 
 bool PendingAction::StoreToTable(TABLE &table,
@@ -199,7 +202,8 @@ bool PendingAction::StoreToTable(TABLE &table,
   Field *f = find_field_in_table_sef(&table, kPendingActionColumn);
   if (f == nullptr) {
     error_message = std::string("column '") + kPendingActionColumn +
-                    "' not found in extensions table";
+                    "' not found in " + SchemaManager::EXTENSIONS_TABLE_NAME +
+                    " table";
     return true;
   }
   if (!value.has_value()) {
@@ -225,39 +229,23 @@ bool PendingAction::Deserialize(const std::string &raw, PendingAction &out,
     return true;
   }
 
-  const auto kind_it = doc.FindMember("kind");
-  if (kind_it == doc.MemberEnd() || !kind_it->value.IsString()) {
-    error_message = "pending_action JSON is missing string field 'kind'";
-    return true;
-  }
-  const std::string kind_str = kind_it->value.GetString();
-
   PendingAction tmp;
-  if (kind_str == kKindVersionUpdate) {
-    tmp.kind_ = Kind::kVersionUpdate;
 
-    const auto tv = doc.FindMember("target_version");
-    if (tv == doc.MemberEnd() || !tv->value.IsString()) {
-      error_message =
-          "pending_action JSON kind 'version_update' is missing string field "
-          "'target_version'";
-      return true;
-    }
-    tmp.target_version_ = tv->value.GetString();
-
-    const auto ts = doc.FindMember("target_veb_sha256");
-    if (ts == doc.MemberEnd() || !ts->value.IsString()) {
-      error_message =
-          "pending_action JSON kind 'version_update' is missing string field "
-          "'target_veb_sha256'";
-      return true;
-    }
-    tmp.target_veb_sha256_ = ts->value.GetString();
-  } else {
+  const auto tv = doc.FindMember("target_version");
+  if (tv == doc.MemberEnd() || !tv->value.IsString()) {
     error_message =
-        std::string("pending_action JSON kind '") + kind_str + "' is unknown";
+        "pending_action JSON is missing string field 'target_version'";
     return true;
   }
+  tmp.target_version_ = tv->value.GetString();
+
+  const auto ts = doc.FindMember("target_veb_sha256");
+  if (ts == doc.MemberEnd() || !ts->value.IsString()) {
+    error_message =
+        "pending_action JSON is missing string field 'target_veb_sha256'";
+    return true;
+  }
+  tmp.target_veb_sha256_ = ts->value.GetString();
 
   const auto ra = doc.FindMember("requested_at");
   if (ra == doc.MemberEnd() || !ra->value.IsString()) {

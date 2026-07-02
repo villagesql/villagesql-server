@@ -260,7 +260,8 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
                       villagesql::SchemaManager::EXTENSIONS_TABLE_NAME,
                       TL_WRITE, MDL_SHARED_WRITE);
   if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
-    villagesql_error("Cannot open extensions table", MYF(0));
+    villagesql_error("Cannot open %s table", MYF(0),
+                     villagesql::SchemaManager::EXTENSIONS_TABLE_NAME);
     return end_transaction(thd, true);
   }
 
