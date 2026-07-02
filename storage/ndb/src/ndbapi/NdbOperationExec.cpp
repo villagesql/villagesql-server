@@ -1221,7 +1221,7 @@ int NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr, Uint64 aTransId,
           if (res) return res;
         }
       }  // for numExtraSetValues
-    }  // if m_extraSetValues!=null
+    }    // if m_extraSetValues!=null
 
     /* Don't need these any more */
     m_extraSetValues = nullptr;
