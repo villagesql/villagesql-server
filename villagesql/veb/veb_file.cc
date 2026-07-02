@@ -105,6 +105,32 @@ std::string get_extension_so_path(const std::string &extension_name,
   return std::string(path_buf);
 }
 
+bool ResolveTargetSoPath(const std::string &extension_name,
+                         const std::string &target_version,
+                         std::string *resolved_sha, std::string *so_path,
+                         std::string *error_message) {
+  std::string expanded_path;
+  if (expand_veb_to_directory(extension_name, target_version, expanded_path,
+                              *resolved_sha)) {
+    char msg[512];
+    snprintf(msg, sizeof(msg),
+             "Cannot resolve target VEB for '%s' version '%s'",
+             extension_name.c_str(), target_version.c_str());
+    *error_message = msg;
+    return true;
+  }
+
+  *so_path = get_extension_so_path(extension_name, *resolved_sha);
+  if (so_path->empty()) {
+    char msg[512];
+    snprintf(msg, sizeof(msg), "Failed to construct .so path for '%s'",
+             extension_name.c_str());
+    *error_message = msg;
+    return true;
+  }
+  return false;
+}
+
 // Helper to format error messages like "manifest.json" inside "foo.veb"
 static void format_archive_file_path(char *buffer, size_t buffer_size,
                                      const char *filename,

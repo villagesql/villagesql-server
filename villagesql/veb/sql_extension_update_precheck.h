@@ -22,6 +22,9 @@
 #include <vector>
 
 namespace villagesql {
+
+class VictionaryClient;
+
 namespace veb {
 
 // Pure pre-check entry point for the extension version-update path.
@@ -123,6 +126,21 @@ struct UpdatePreCheckResult {
 // wire format. See Docs/EXTENSION_UPDATE_AT_RESTART.md "Pre-Check API
 // Shape: Subprocess-Ready" and "Extension Author Contract".
 UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input);
+
+// Populate `input` from the victionary: sets extension_name / current_version
+// / target_version / target_so_path / server_protocol, then walks the
+// type_descriptors, columns, and sp_params committed sets to populate the
+// three dependent snapshots.
+//
+// The caller is responsible for holding the victionary read lock (or a write
+// lock) across the call. The caller resolves the target VEB and constructs
+// the .so path; this helper does not touch the filesystem.
+void BuildUpdatePreCheckSnapshot(const VictionaryClient &victionary,
+                                 const std::string &extension_name,
+                                 const std::string &current_version,
+                                 const std::string &target_version,
+                                 std::string target_so_path,
+                                 UpdatePreCheckInput *input);
 
 }  // namespace veb
 }  // namespace villagesql

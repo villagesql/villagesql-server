@@ -171,6 +171,20 @@ void close_vef_extension(const ExtensionRegistration &registration);
 std::string get_extension_so_path(const std::string &extension_name,
                                   const std::string &sha256);
 
+// Resolve the target VEB on disk and construct the dlopen-ready path to its
+// .so. On success returns false and populates *resolved_sha with the target
+// VEB's on-disk sha256 and *so_path with the .so path. On failure returns
+// true; *error_message is populated with a human-readable reason.
+//
+// Note: expand_veb_to_directory (called inside) may also emit villagesql_error
+// as a side effect on some failure paths. Callers in a SQL context can rely
+// on that; callers in a non-SQL context (e.g. bootstrap load) should use
+// *error_message and ignore whatever villagesql_error emitted.
+bool ResolveTargetSoPath(const std::string &extension_name,
+                         const std::string &target_version,
+                         std::string *resolved_sha, std::string *so_path,
+                         std::string *error_message);
+
 }  // namespace veb
 }  // namespace villagesql
 

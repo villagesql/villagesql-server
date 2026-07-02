@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "villagesql/schema/victionary_client.h"
 #include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
@@ -151,6 +152,53 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
   if (!r.ok) return r;
 
   return ok();
+}
+
+void BuildUpdatePreCheckSnapshot(const VictionaryClient &victionary,
+                                 const std::string &extension_name,
+                                 const std::string &current_version,
+                                 const std::string &target_version,
+                                 std::string target_so_path,
+                                 UpdatePreCheckInput *input) {
+  input->extension_name = extension_name;
+  input->current_version = current_version;
+  input->target_version = target_version;
+  input->target_so_path = std::move(target_so_path);
+  input->server_protocol = static_cast<int>(vef_server_protocol_version);
+
+  for (const auto *td : victionary.type_descriptors().get_all_committed()) {
+    if (td == nullptr || td->extension_name() != extension_name ||
+        td->extension_version() != current_version)
+      continue;
+    CurrentTypeSnapshot s;
+    s.type_name = td->type_name();
+    s.persisted_length = td->persisted_length();
+    input->current_types.push_back(std::move(s));
+  }
+
+  for (const auto *col : victionary.columns().get_all_committed()) {
+    if (col == nullptr || col->extension_name != extension_name ||
+        col->extension_version != current_version)
+      continue;
+    DependentColumnSnapshot s;
+    s.db_name = col->db_name();
+    s.table_name = col->table_name();
+    s.column_name = col->column_name();
+    s.type_name = col->type_name;
+    input->dependent_columns.push_back(std::move(s));
+  }
+
+  for (const auto *sp : victionary.sp_params().get_all_committed()) {
+    if (sp == nullptr || sp->extension_name != extension_name ||
+        sp->extension_version != current_version)
+      continue;
+    DependentSpParamSnapshot s;
+    s.db_name = sp->db_name();
+    s.sp_name = sp->sp_name();
+    s.param_name = sp->param_name();
+    s.type_name = sp->type_name;
+    input->dependent_sp_params.push_back(std::move(s));
+  }
 }
 
 }  // namespace veb
