@@ -75,7 +75,7 @@ jobs:
       # We normally pin two components so devs needn't update on every patch,
       # and pin the full three only when a patch release changes formatting
       # output and we must force everyone onto the same build.
-      run: pip install "clang-format==$(cat scripts/clang-format-version).*"
+      run: pip install "clang-format==$(cat villagesql/villint/clang-format-version).*"
 
     - name: Run villint linter
       run: |

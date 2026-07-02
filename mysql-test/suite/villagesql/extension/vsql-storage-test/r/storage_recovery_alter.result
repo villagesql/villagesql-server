@@ -1,0 +1,52 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+# Install the column-store test extension (provides STORED_INT)
+INSTALL EXTENSION vsql_storage_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '111');
+INSERT INTO t1 VALUES (2, '222');
+INSERT INTO t1 VALUES (3, '333');
+# Values before rebuild
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+# Suppress idle background flushing so the column-store pages written by
+# the rebuild stay dirty in the buffer pool until the crash.
+SET GLOBAL innodb_idle_flush_pct = 0;
+# Rebuild the table: clustered bulk load -> insert_direct() with no redo logging
+ALTER TABLE t1 FORCE, ALGORITHM=INPLACE;
+# Values right after rebuild (in-memory; pages dirty, not yet flushed)
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+# Crash WITHOUT flushing the buffer pool (redo durable only).
+SET GLOBAL innodb_fast_shutdown = 2;
+# Kill and restart
+# ---- after crash recovery ----
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `n` vsql_storage_test.STORED_INT DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+# The custom-column values must survive recovery (111, 222, 333).
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+SELECT COUNT(*) AS rows_total FROM t1;
+rows_total
+3
+DROP TABLE t1;
+# Cleanup
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

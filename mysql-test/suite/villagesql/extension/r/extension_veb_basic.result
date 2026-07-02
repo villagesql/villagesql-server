@@ -4,13 +4,13 @@ Creating extension test_veb_ext using SDK...
 Created test_veb_ext.veb
 INSTALL EXTENSION test_veb_ext;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
-test_veb_ext	1.2.3
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+test_veb_ext	1.2.3	NULL	NULL	NULL	NULL
 Verified expansion cache structure: .veb_expansion_cache/test_veb_ext/<SHA256>/
 Manifest exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/manifest.json
 Lib directory exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/
 Shared library exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/test_veb_ext.so
 UNINSTALL EXTENSION test_veb_ext;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
-EXTENSION_NAME	EXTENSION_VERSION
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
 include/rpl/deprecated/show_binlog_events.inc

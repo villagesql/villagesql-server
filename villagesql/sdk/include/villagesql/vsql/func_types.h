@@ -223,9 +223,13 @@ class StringResult {
     r_->type = VEF_RESULT_VALUE;
   }
   void set(std::string_view sv) {
-    size_t len = sv.size() < r_->max_str_len ? sv.size() : r_->max_str_len;
-    memcpy(r_->str_buf, sv.data(), len);
-    set_length(len);
+    size_t copy_len = sv.size() < r_->max_str_len ? sv.size() : r_->max_str_len;
+    memcpy(r_->str_buf, sv.data(), copy_len);
+    // Report the full size even when it does not fit: the server detects
+    // actual_len > max_str_len, grows the buffer, and re-invokes the VDF
+    // (snprintf-style overflow contract). Only copy_len bytes are valid until
+    // that retry.
+    set_length(sv.size());
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
   void warning(std::string_view msg) {

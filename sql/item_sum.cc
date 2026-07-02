@@ -4042,10 +4042,18 @@ my_decimal *Item_sum_udf_int::val_decimal(my_decimal *dec) {
 /** Default max_length is max argument length. */
 
 bool Item_sum_udf_str::resolve_type(THD *) {
-  set_data_type(MYSQL_TYPE_VARCHAR);
   max_length = 0;
   for (uint i = 0; i < arg_count; i++)
     max_length = max(max_length, args[i]->max_length);
+  if (udf.is_vdf_returns_string()) {
+    // VDFs returning STRING produce text, not binary. Tag the result with a
+    // utf8mb4 collation so the client displays it as text instead of hex. This
+    // mirrors the scalar path in Item_func_udf_str::resolve_type().
+    // TODO(villagesql): Allow VDFs to choose an encoding.
+    set_data_type_string(max_length, &my_charset_utf8mb4_bin);
+  } else {
+    set_data_type(MYSQL_TYPE_VARCHAR);
+  }
   return false;
 }
 
