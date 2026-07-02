@@ -61,9 +61,10 @@ jobs:
       run: ./scripts/validate-pr-title.sh "$PR_TITLE"
 
     - name: Install clang-format
-      # Pinned via PyPI to the release in scripts/clang-format-version so CI
-      # uses a deterministic version.  The previous apt.llvm.org install
-      # pulled `clang-format-22` from `llvm-toolchain-noble-22`, which is a
+      # Pinned via PyPI to the release villint reports
+      # `villint.sh --clang-format-version`) so CI uses a deterministic
+      # version. The previous apt.llvm.org install pulled
+      # `clang-format-22` from `llvm-toolchain-noble-22`, which is a
       # *moving snapshot* of LLVM main -- two CI runs days apart could see
       # different formatting behavior even when the package name was unchanged.
       #
@@ -75,7 +76,7 @@ jobs:
       # We normally pin two components so devs needn't update on every patch,
       # and pin the full three only when a patch release changes formatting
       # output and we must force everyone onto the same build.
-      run: pip install "clang-format==$(cat villagesql/villint/clang-format-version).*"
+      run: pip install "clang-format==$(./scripts/villint.sh --clang-format-version).*"
 
     - name: Run villint linter
       run: |
