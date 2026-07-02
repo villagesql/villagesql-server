@@ -230,7 +230,7 @@ static char *test_mysql_command_services_apis_udf(UDF_INIT *, UDF_ARGS *args,
   uint64_t row_count = 0;
   unsigned int num_column = 0;
   std::string result_set;
-  
+
   //  Execute the SQL specified in the argument.
   if (cmd_factory_srv->init(&mysql_h)) {
     return nullptr;
