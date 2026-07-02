@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -111,6 +112,7 @@
 #include "sql/log.h"
 #include "sql/mysqld.h"
 #include "sql/sql_rewrite.h"
+#include "villagesql/services/preview/auth.h"
 
 #include <openssl/rand.h>  // RAND_bytes
 /**
@@ -1356,6 +1358,15 @@ bool set_and_validate_user_attributes(
 
       /* check if plugin is loaded */
       if (!plugin) {
+        // VillageSQL: an unknown plugin name may be a VEF extension auth
+        // method; let the VEF layer decide whether to accept the account.
+        if (auto handled = villagesql::services::handle_vef_user_bind(
+                {Str->first_factor_auth_info.plugin.str,
+                 Str->first_factor_auth_info.plugin.length},
+                Str->first_factor_auth_info.uses_identified_by_clause)) {
+          what_to_set.m_what = NONE_ATTR;
+          return *handled;
+        }
         what_to_set.m_what = NONE_ATTR;
         my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0),
                  Str->first_factor_auth_info.plugin.str);
@@ -1638,6 +1649,15 @@ bool set_and_validate_user_attributes(
 
   plugin = my_plugin_lock_by_name(nullptr, Str->first_factor_auth_info.plugin,
                                   MYSQL_AUTHENTICATION_PLUGIN);
+
+  // VillageSQL: an unknown plugin name may be a VEF extension auth method;
+  // accept it the same way an installed plugin name is accepted.
+  if (!plugin && villagesql::services::auth_method_exists(
+                     {Str->first_factor_auth_info.plugin.str,
+                      Str->first_factor_auth_info.plugin.length})) {
+    what_to_set.m_what = NONE_ATTR;
+    return false;
+  }
 
   /* check if plugin is loaded */
   if (!plugin) {

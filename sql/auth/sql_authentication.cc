@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -102,6 +103,7 @@
 #include "string_with_len.h"
 #include "strmake.h"
 #include "template_utils.h"
+#include "villagesql/services/preview/auth.h"
 #include "violite.h"
 
 struct MEM_ROOT;
@@ -1154,7 +1156,24 @@ const uint MAX_UNKNOWN_ACCOUNTS = 1000;
 Map_with_rw_lock<Auth_id, uint> *unknown_accounts = nullptr;
 
 inline const char *client_plugin_name(plugin_ref ref) {
+  // VillageSQL: ref may be null for a VEF extension-provided auth method, which
+  // has no MySQL plugin. Callers that can receive a VEF auth (e.g.
+  // server_mpvio_read_packet) already handle a null return.
+  if (ref == nullptr) return nullptr;
   return ((st_mysql_auth *)(plugin_decl(ref)->info))->client_auth_plugin;
+}
+
+// VillageSQL: the client-side auth plugin name the handshake should
+// advertise/expect for this connection. For normal plugin-based auth this is
+// the plugin's client_auth_plugin; for a VEF extension auth method
+// (mpvio->plugin == null) it is the name the seam stashed on mpvio. Used at the
+// handshake sites that otherwise read client_plugin_name(mpvio->plugin)
+// directly.
+inline const char *mpvio_client_plugin_name(MPVIO_EXT *mpvio) {
+  if (mpvio->plugin != nullptr) return client_plugin_name(mpvio->plugin);
+  // A VEF auth method is required to pin a non-null client_auth_plugin at
+  // INSTALL EXTENSION, so this is non-null on the VEF path.
+  return mpvio->vef_client_auth_plugin;
 }
 
 LEX_CSTRING validate_password_plugin_name = {
@@ -2077,9 +2096,12 @@ static bool send_plugin_request_packet(MPVIO_EXT *mpvio, const uchar *data,
     mpvio->status = MPVIO_EXT::FAILURE;  // the status is no longer RESTART
 
   /* Send the client side authentication plugin name */
-  std::string client_auth_plugin(
-      ((st_mysql_auth *)(plugin_decl(mpvio->plugin)->info))
-          ->client_auth_plugin);
+  // VillageSQL: via mpvio_client_plugin_name() (not client_plugin_name()) so a
+  // VEF auth method, which has no MySQL plugin, yields its pinned client plugin
+  // instead. That name is required to be non-null at INSTALL EXTENSION, so it
+  // is never null here -- same non-null contract the plugin path already relies
+  // on.
+  std::string client_auth_plugin(mpvio_client_plugin_name(mpvio));
 
   assert(client_auth_plugin.c_str());
 
@@ -3458,7 +3480,9 @@ static int server_mpvio_read_packet(MYSQL_PLUGIN_VIO *param, uchar **buf) {
       cached data straight away and avoid one round trip.
     */
 
-    auto client_auth_plugin_name = client_plugin_name(mpvio->plugin);
+    // VillageSQL: via mpvio_client_plugin_name() so a VEF method (which has no
+    // MySQL plugin) resolves its pinned client plugin instead.
+    auto client_auth_plugin_name = mpvio_client_plugin_name(mpvio);
     if (client_auth_plugin_name == nullptr ||
         my_strcasecmp(system_charset_info, mpvio->cached_client_reply.plugin,
                       client_auth_plugin_name) == 0) {
@@ -3558,6 +3582,10 @@ static int do_auth_once(THD *thd, const LEX_CSTRING &auth_plugin_name,
     res = auth->authenticate_user(mpvio, &mpvio->auth_info);
 
     if (unlock_plugin) plugin_unlock(thd, plugin);
+  } else if (villagesql::services::try_vef_authenticate(thd, auth_plugin_name,
+                                                        mpvio, &res)) {
+    // VillageSQL: handled by a VEF extension-provided authenticator (res set,
+    // fail closed).
   } else {
     /* Server cannot load the required plugin. */
     Host_errors errors;
