@@ -831,8 +831,7 @@ bool load_installed_extensions(THD *thd) {
 
       installed_extensions.insert(extension_name);
 
-      // Phase 2 of ALTER EXTENSION ... AT RESTART. If the extension row
-      // carries a pending action, this is where we'd apply it: re-run the
+      // A pending action means we have an upgrade to perform: re-run the
       // pre-checks against the current catalog, rewrite the catalog rows
       // to the target version, and load the target .so instead of the
       // current one. None of that is implemented yet; log loudly, mark
@@ -842,21 +841,14 @@ bool load_installed_extensions(THD *thd) {
       // the failure record happens after this loop releases the
       // victionary write lock; here we just snapshot what to write.
       if (entry->has_pending_action()) {
-        if (entry->pending_action->is_version_update()) {
-          LogVSQL(WARNING_LEVEL,
-                  "Extension '%s' has a pending update to version '%s' "
-                  "(requested at %s); not yet applied. Loading current "
-                  "version '%s'.",
-                  extension_name.c_str(),
-                  entry->pending_action->target_version().c_str(),
-                  entry->pending_action->requested_at().c_str(),
-                  expected_version.c_str());
-        } else {
-          LogVSQL(WARNING_LEVEL,
-                  "Extension '%s' has a pending action; not yet applied. "
-                  "Loading current version '%s'.",
-                  extension_name.c_str(), expected_version.c_str());
-        }
+        LogVSQL(WARNING_LEVEL,
+                "Extension '%s' has a pending update to version '%s' "
+                "(requested at %s); not yet applied. Loading current "
+                "version '%s'.",
+                extension_name.c_str(),
+                entry->pending_action->target_version().c_str(),
+                entry->pending_action->requested_at().c_str(),
+                expected_version.c_str());
         PendingAction updated = *entry->pending_action;
         updated.MarkFailed(
             "Restart-time apply of pending update is not yet implemented");
@@ -878,16 +870,25 @@ bool load_installed_extensions(THD *thd) {
 
   // Persist failure records for any pending actions we couldn't apply at
   // restart. Done outside the victionary write lock so open_and_lock_tables
-  // can acquire its own MDLs cleanly. The enclosing transaction (set up by
-  // do_init_extension_infrastructure) commits these writes on success.
+  // can acquire its own MDLs cleanly.
+  //
+  // Transaction lifecycle: the enclosing frame in
+  // do_init_extension_infrastructure (villagesql/sql/initialize.cc) wraps
+  // this whole function in an autocommit-off transaction and issues
+  // trans_commit_stmt + trans_commit if we return false, or trans_rollback
+  // if we return true. So write_all_uncommitted_entries below just needs
+  // to flush the victionary's uncommitted operations into the row buffer;
+  // the caller commits the storage engine transaction.
   if (!pending_failures_to_persist.empty()) {
     Table_ref ext_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
                         SchemaManager::EXTENSIONS_TABLE_NAME, TL_WRITE,
                         MDL_SHARED_WRITE);
     if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
       LogVSQL(ERROR_LEVEL,
-              "Failed to open villagesql.extensions to record pending-update "
-              "failure(s); failure state will not be persisted this restart");
+              "Failed to open %s.%s to record pending-update failure(s); "
+              "failure state will not be persisted this restart",
+              SchemaManager::VILLAGESQL_SCHEMA_NAME,
+              SchemaManager::EXTENSIONS_TABLE_NAME);
     } else {
       bool any_marked = false;
       {
@@ -912,8 +913,9 @@ bool load_installed_extensions(THD *thd) {
       }
       if (any_marked && victionary.write_all_uncommitted_entries(thd)) {
         LogVSQL(ERROR_LEVEL,
-                "Failed to persist pending-update failure record(s) to "
-                "villagesql.extensions");
+                "Failed to persist pending-update failure record(s) to %s.%s",
+                SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                SchemaManager::EXTENSIONS_TABLE_NAME);
       }
       // Close the open tables before returning from this function. The
       // enclosing bootstrap context doesn't run statement-end cleanup, so
