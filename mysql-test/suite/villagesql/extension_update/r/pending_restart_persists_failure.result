@@ -1,0 +1,26 @@
+call mtr.add_suppression("Extension 'update_test' has a pending update");
+call mtr.add_suppression("not yet implemented");
+INSTALL EXTENSION update_test VERSION '1.0.0';
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	2.0.0	NULL
+# restart
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	2.0.0	Restart-time apply of pending update is not yet implemented
+# restart
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	2.0.0	Restart-time apply of pending update is not yet implemented
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+Warnings:
+Note	3219	Cleared pending update for extension 'update_test' (target matches current version '1.0.0')
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	NULL	NULL
+UNINSTALL EXTENSION update_test;

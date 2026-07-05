@@ -1,0 +1,22 @@
+# UNINSTALL EXTENSION with a pending action removes the extension row,
+# carrying any pending action with it. There is no orphaned pending state
+# to inspect or clean up afterwards.
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+# Queue a pending update.
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+# UNINSTALL with pending is allowed; the row goes away.
+UNINSTALL EXTENSION update_test;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+# Re-install: pending state must NOT carry over from before uninstall.
+INSTALL EXTENSION update_test VERSION '1.0.0';
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+UNINSTALL EXTENSION update_test;

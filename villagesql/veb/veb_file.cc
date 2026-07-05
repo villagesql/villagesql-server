@@ -43,6 +43,7 @@
 #include "sql_string.h"
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
+#include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
 #include "villagesql/services/sys_var_access.h"
@@ -798,6 +799,19 @@ bool load_installed_extensions(THD *thd) {
   int success_count = 0;
   std::set<std::string> installed_extensions;
 
+  // Collected during the main pass: entries that had a pending action this
+  // restart didn't apply, paired with the new pending_action value
+  // (annotated with a "not yet implemented" failure) to persist after the
+  // loop. Kept by value so we don't depend on the victionary cache after
+  // the lock is released.
+  struct PendingFailureToPersist {
+    ExtensionKey key;
+    PendingAction updated;
+    std::string original_extension_version;
+    std::string original_veb_sha256;
+  };
+  std::vector<PendingFailureToPersist> pending_failures_to_persist;
+
   {
     auto lock_guard = victionary.get_write_lock();
 
@@ -817,6 +831,31 @@ bool load_installed_extensions(THD *thd) {
 
       installed_extensions.insert(extension_name);
 
+      // A pending action means we have an upgrade to perform: re-run the
+      // pre-checks against the current catalog, rewrite the catalog rows
+      // to the target version, and load the target .so instead of the
+      // current one. None of that is implemented yet; log loudly, mark
+      // the pending action as failed so the state is queryable via
+      // INFORMATION_SCHEMA.EXTENSIONS, and load the currently-installed
+      // version so the server still comes up. The actual persistence of
+      // the failure record happens after this loop releases the
+      // victionary write lock; here we just snapshot what to write.
+      if (entry->has_pending_action()) {
+        LogVSQL(WARNING_LEVEL,
+                "Extension '%s' has a pending update to version '%s' "
+                "(requested at %s); not yet applied. Loading current "
+                "version '%s'.",
+                extension_name.c_str(),
+                entry->pending_action->target_version().c_str(),
+                entry->pending_action->requested_at().c_str(),
+                expected_version.c_str());
+        PendingAction updated = *entry->pending_action;
+        updated.MarkFailed(
+            "Restart-time apply of pending update is not yet implemented");
+        pending_failures_to_persist.push_back(
+            {entry->key(), std::move(updated), expected_version, sha256});
+      }
+
       ExtensionRegistration registration;
       if (load_one_extension(thd, extension_name, expected_version, sha256,
                              &registration)) {
@@ -828,6 +867,62 @@ bool load_installed_extensions(THD *thd) {
 
   LogVSQL(INFORMATION_LEVEL, "Validated %d of %d installed extensions",
           success_count, row_count);
+
+  // Persist failure records for any pending actions we couldn't apply at
+  // restart. Done outside the victionary write lock so open_and_lock_tables
+  // can acquire its own MDLs cleanly.
+  //
+  // Transaction lifecycle: the enclosing frame in
+  // do_init_extension_infrastructure (villagesql/sql/initialize.cc) wraps
+  // this whole function in an autocommit-off transaction and issues
+  // trans_commit_stmt + trans_commit if we return false, or trans_rollback
+  // if we return true. So write_all_uncommitted_entries below just needs
+  // to flush the victionary's uncommitted operations into the row buffer;
+  // the caller commits the storage engine transaction.
+  if (!pending_failures_to_persist.empty()) {
+    Table_ref ext_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                        SchemaManager::EXTENSIONS_TABLE_NAME, TL_WRITE,
+                        MDL_SHARED_WRITE);
+    if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
+      LogVSQL(ERROR_LEVEL,
+              "Failed to open %s.%s to record pending-update failure(s); "
+              "failure state will not be persisted this restart",
+              SchemaManager::VILLAGESQL_SCHEMA_NAME,
+              SchemaManager::EXTENSIONS_TABLE_NAME);
+    } else {
+      bool any_marked = false;
+      {
+        // Hold the victionary write lock only for the in-memory mark step;
+        // write_all_uncommitted_entries below takes a read lock internally
+        // and the rwlock is not reentrant.
+        auto write_lock = victionary.get_write_lock();
+        for (auto &pending : pending_failures_to_persist) {
+          ExtensionEntry updated(pending.key,
+                                 std::move(pending.original_extension_version),
+                                 std::move(pending.original_veb_sha256));
+          updated.pending_action = std::move(pending.updated);
+          if (victionary.extensions().MarkForUpdate(*thd, std::move(updated),
+                                                    pending.key)) {
+            LogVSQL(ERROR_LEVEL,
+                    "Failed to mark pending-update failure for extension '%s'",
+                    pending.key.extension_name().c_str());
+          } else {
+            any_marked = true;
+          }
+        }
+      }
+      if (any_marked && victionary.write_all_uncommitted_entries(thd)) {
+        LogVSQL(ERROR_LEVEL,
+                "Failed to persist pending-update failure record(s) to %s.%s",
+                SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                SchemaManager::EXTENSIONS_TABLE_NAME);
+      }
+      // Close the open tables before returning from this function. The
+      // enclosing bootstrap context doesn't run statement-end cleanup, so
+      // leaked open tables trip an assertion in THD::cleanup at shutdown.
+      close_thread_tables(thd);
+    }
+  }
 
   // Clean up orphaned expansion directories
   cleanup_orphaned_expansion_directories(installed_extensions);
