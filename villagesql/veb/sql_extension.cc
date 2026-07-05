@@ -254,19 +254,20 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
   }
 
   // Resolve the target VEB on disk and the .so path it expands to. This is
-  // caller-side (it touches the filesystem and emits villagesql_error on
-  // failure); only the .so path is passed into the pure precheck below.
-  std::string target_expanded_path;
+  // caller-side (it touches the filesystem); only the .so path is passed into
+  // the pure precheck below. On failure the helper populates resolve_error;
+  // expand_veb_to_directory may also have emitted villagesql_error internally,
+  // so pass the helper's message through only if the error state is otherwise
+  // empty.
   std::string target_sha256;
-  if (villagesql::veb::expand_veb_to_directory(
-          extension_name, target_version, target_expanded_path, target_sha256))
-    return end_transaction(thd, true);
-
-  std::string target_so_path =
-      villagesql::veb::get_extension_so_path(extension_name, target_sha256);
-  if (target_so_path.empty()) {
-    villagesql_error("Failed to construct .so path for extension '%s'", MYF(0),
-                     extension_name.c_str());
+  std::string target_so_path;
+  std::string resolve_error;
+  if (villagesql::veb::ResolveTargetSoPath(extension_name, target_version,
+                                           &target_sha256, &target_so_path,
+                                           &resolve_error)) {
+    if (!thd->is_error()) {
+      villagesql_error("%s", MYF(0), resolve_error.c_str());
+    }
     return end_transaction(thd, true);
   }
 
@@ -274,53 +275,11 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
   // copies everything the check needs out of the victionary so the precheck
   // itself stays free of victionary, THD, and logging access.
   villagesql::veb::UpdatePreCheckInput input;
-  input.extension_name = extension_name;
-  input.current_version = current_version;
-  input.target_version = target_version;
-  input.target_so_path = std::move(target_so_path);
-  input.server_protocol =
-      static_cast<int>(villagesql::veb::vef_server_protocol_version);
-
   {
     auto read_lock = victionary.get_read_lock();
-
-    const auto &all_type_descs =
-        victionary.type_descriptors().get_all_committed();
-    for (const auto *td : all_type_descs) {
-      if (td->extension_name() != extension_name ||
-          td->extension_version() != current_version)
-        continue;
-      villagesql::veb::CurrentTypeSnapshot s;
-      s.type_name = td->type_name();
-      s.persisted_length = td->persisted_length();
-      input.current_types.push_back(std::move(s));
-    }
-
-    const auto &all_columns = victionary.columns().get_all_committed();
-    for (const auto *col : all_columns) {
-      if (col->extension_name != extension_name ||
-          col->extension_version != current_version)
-        continue;
-      villagesql::veb::DependentColumnSnapshot s;
-      s.db_name = col->db_name();
-      s.table_name = col->table_name();
-      s.column_name = col->column_name();
-      s.type_name = col->type_name;
-      input.dependent_columns.push_back(std::move(s));
-    }
-
-    const auto &all_sp_params = victionary.sp_params().get_all_committed();
-    for (const auto *sp : all_sp_params) {
-      if (sp->extension_name != extension_name ||
-          sp->extension_version != current_version)
-        continue;
-      villagesql::veb::DependentSpParamSnapshot s;
-      s.db_name = sp->db_name();
-      s.sp_name = sp->sp_name();
-      s.param_name = sp->param_name();
-      s.type_name = sp->type_name;
-      input.dependent_sp_params.push_back(std::move(s));
-    }
+    villagesql::veb::BuildUpdatePreCheckSnapshot(
+        victionary, extension_name, current_version, target_version,
+        std::move(target_so_path), &input);
   }
 
   // The precheck owns the target dlopen / vef_register / dlclose cycle;
