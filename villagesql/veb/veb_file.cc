@@ -902,7 +902,23 @@ bool load_installed_extensions(THD *thd) {
         if (villagesql::veb::ResolveTargetSoPath(
                 extension_name, target_version, &resolved_target_sha,
                 &target_so_path, &failure_reason)) {
-          // failure_reason already populated by the helper.
+          // failure_reason already populated by the helper. In the restart
+          // context we surface failures via pending_last_error, not the SQL
+          // diagnostics area -- but expand_veb_to_directory (called inside
+          // the helper) may have emitted a villagesql_error internally that
+          // stashed an error on THD. Clear it so downstream code doesn't see
+          // a spurious thd->is_error() from a decision we're already
+          // recording as a pending-action failure.
+          //
+          // TODO(villagesql-ga): internal helpers (expand_veb_to_directory
+          // and its callers) mix two error surfaces: the THD diagnostics area
+          // (villagesql_error) and structured error-string out-params.
+          // Consolidate on structured errors internally and translate to
+          // villagesql_error only at the SQL boundary (ALTER call site).
+          // This removes the need for this defensive clear_error and makes
+          // the subprocess-precheck story consistent -- see the TODOs on
+          // RunUpdatePreCheck and BuildUpdatePreCheckSnapshot.
+          if (thd->is_error()) thd->clear_error();
         } else if (resolved_target_sha != target_sha) {
           char msg[512];
           snprintf(msg, sizeof(msg),
