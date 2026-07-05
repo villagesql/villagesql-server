@@ -20,6 +20,7 @@
 
 #include "sql/dd/string_type.h"
 #include "string_with_len.h"
+#include "villagesql/schema/systable/extensions.h"
 
 namespace {
 enum {
@@ -50,18 +51,17 @@ Extensions::Extensions(const dd::String_type &n) {
                          "ext.extension_name");
   m_target_def.add_field(FIELD_EXTENSION_VERSION, "EXTENSION_VERSION",
                          "ext.extension_version");
-  // Pending-action projection. The columns are placeholders today --
-  // always NULL because no underlying pending_action storage exists
-  // yet. A follow-up patch (ALTER EXTENSION ... AT RESTART) replaces
-  // the NULL projections with JSON_EXTRACT expressions over the
-  // pending_action column it adds to villagesql.extensions.
-  m_target_def.add_field(FIELD_PENDING_VERSION, "PENDING_VERSION", "NULL");
+  // Pending-action projection. PendingAction supplies the SQL expressions
+  // that yield each logical field, so the underlying storage shape stays
+  // encapsulated. The columns are NULL when no action is pending.
+  m_target_def.add_field(FIELD_PENDING_VERSION, "PENDING_VERSION",
+                         PendingAction::TargetVersionSqlExpr("ext").c_str());
   m_target_def.add_field(FIELD_PENDING_REQUESTED_AT, "PENDING_REQUESTED_AT",
-                         "NULL");
+                         PendingAction::RequestedAtSqlExpr("ext").c_str());
   m_target_def.add_field(FIELD_PENDING_LAST_ERROR, "PENDING_LAST_ERROR",
-                         "NULL");
+                         PendingAction::LastErrorSqlExpr("ext").c_str());
   m_target_def.add_field(FIELD_PENDING_LAST_ERROR_AT, "PENDING_LAST_ERROR_AT",
-                         "NULL");
+                         PendingAction::LastErrorAtSqlExpr("ext").c_str());
 
   // FROM
   m_target_def.add_from("villagesql.extensions ext");
