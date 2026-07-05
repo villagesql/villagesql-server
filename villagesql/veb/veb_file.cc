@@ -1013,6 +1013,11 @@ bool load_installed_extensions(THD *thd) {
   // the new version). Done outside the victionary write lock so
   // open_and_lock_tables can acquire its own MDLs cleanly.
   //
+  // Reachability: everything in this persist block only executes when at
+  // least one extension had a pending action at startup. A vanilla startup
+  // with no pending actions skips the block entirely (both decision
+  // vectors are empty) and the atomicity logic below is unreachable.
+  //
   // Transaction lifecycle: the enclosing frame in
   // do_init_extension_infrastructure (villagesql/sql/initialize.cc) wraps
   // this whole function in an autocommit-off transaction and issues
@@ -1020,6 +1025,18 @@ bool load_installed_extensions(THD *thd) {
   // if we return true. So write_all_uncommitted_entries below just needs
   // to flush the victionary's uncommitted operations into the row buffer;
   // the caller commits the storage engine transaction.
+  //
+  // Failure policy: any MarkForUpdate or write_all_uncommitted_entries
+  // failure below returns true (server startup fails). Realistic causes
+  // are (a) OOM, which the underlying my_error already marks
+  // ME_FATALERROR, or (b) a bug in this code or the victionary layer
+  // (e.g. divergence between the in-memory cache and the on-disk system
+  // tables). Both are conditions where refusing to come up is safer than
+  // committing partial pending-action state.
+  //
+  // TODO(villagesql-ga): a corrupt pending_action row can currently
+  // prevent server startup with no easy recovery path other than direct
+  // table surgery. Design an operator recovery mechanism.
   if (!pending_failures_to_persist.empty() ||
       !pending_applies_to_persist.empty()) {
     // Open all four tables the persist step may need. custom_columns,
@@ -1051,7 +1068,14 @@ bool load_installed_extensions(THD *thd) {
               SchemaManager::COLUMNS_TABLE_NAME,
               SchemaManager::SP_PARAMS_TABLE_NAME,
               SchemaManager::INDEXES_TABLE_NAME);
+      return true;
     } else {
+      // Close the open tables on any exit from the persist block. The
+      // enclosing bootstrap context doesn't run statement-end cleanup, so
+      // leaked open tables trip an assertion in THD::cleanup at shutdown.
+      auto close_guard =
+          create_scope_guard([thd] { close_thread_tables(thd); });
+
       bool any_marked = false;
       {
         // Hold the victionary write lock only for the in-memory mark step;
@@ -1071,9 +1095,9 @@ bool load_installed_extensions(THD *thd) {
             LogVSQL(ERROR_LEVEL,
                     "Failed to mark pending-update failure for extension '%s'",
                     pending.key.extension_name().c_str());
-          } else {
-            any_marked = true;
+            return true;
           }
+          any_marked = true;
         }
 
         // Applies: rewrite the extensions row to the target version + sha
@@ -1088,7 +1112,7 @@ bool load_installed_extensions(THD *thd) {
                                                     pending.key)) {
             LogVSQL(ERROR_LEVEL, "Failed to stage extension-row apply for '%s'",
                     pending.key.extension_name().c_str());
-            continue;
+            return true;
           }
           any_marked = true;
 
@@ -1127,6 +1151,7 @@ bool load_installed_extensions(THD *thd) {
                       "column '%s.%s.%s'",
                       ext_name.c_str(), col->db_name().c_str(),
                       col->table_name().c_str(), col->column_name().c_str());
+              return true;
             }
           }
 
@@ -1145,6 +1170,7 @@ bool load_installed_extensions(THD *thd) {
                       "param '%s.%s.%s'",
                       ext_name.c_str(), sp->db_name().c_str(),
                       sp->sp_name().c_str(), sp->param_name().c_str());
+              return true;
             }
           }
 
@@ -1164,6 +1190,7 @@ bool load_installed_extensions(THD *thd) {
                       "index '%s.%s.%s'",
                       ext_name.c_str(), idx->db_name().c_str(),
                       idx->table_name().c_str(), idx->index_name().c_str());
+              return true;
             }
           }
         }
@@ -1177,11 +1204,8 @@ bool load_installed_extensions(THD *thd) {
                 SchemaManager::COLUMNS_TABLE_NAME,
                 SchemaManager::SP_PARAMS_TABLE_NAME,
                 SchemaManager::INDEXES_TABLE_NAME);
+        return true;
       }
-      // Close the open tables before returning from this function. The
-      // enclosing bootstrap context doesn't run statement-end cleanup, so
-      // leaked open tables trip an assertion in THD::cleanup at shutdown.
-      close_thread_tables(thd);
     }
   }
 
