@@ -258,7 +258,7 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
   // the pure precheck below. On failure the helper populates resolve_error;
   // expand_veb_to_directory may also have emitted villagesql_error internally,
   // so pass the helper's message through only if the error state is otherwise
-  // empty (defensive; behaviour matches the pre-helper code).
+  // empty.
   std::string target_sha256;
   std::string target_so_path;
   std::string resolve_error;
