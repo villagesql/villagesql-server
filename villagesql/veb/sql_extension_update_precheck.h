@@ -105,6 +105,15 @@ struct UpdatePreCheckInput {
   // is not present in the loaded target registration.
   std::vector<DependentColumnSnapshot> dependent_columns;
   std::vector<DependentSpParamSnapshot> dependent_sp_params;
+
+  // TODO(villagesql-beta): the apply path rewrites custom_indexes rows
+  // to the target version unconditionally, but this precheck does not
+  // verify that every in-use index_type / index_profile survives in the
+  // target registration (analogous to the dropped-type check for
+  // columns). Without that check, an apply can leave custom_indexes
+  // rows pointing at a version that no longer defines their index_type
+  // -- catalog corruption. Add a DependentIndexSnapshot list and a
+  // dropped-index-type / dropped-index-profile check before beta.
 };
 
 struct UpdatePreCheckResult {
