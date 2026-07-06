@@ -2544,6 +2544,7 @@ CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/include/mysql_version.h.in
                ${CMAKE_BINARY_DIR}/include/mysql_version.h )
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/include/mysql_server_suffix.h.in
                ${CMAKE_BINARY_DIR}/include/mysql_server_suffix.h)
+# villagesql/include/version.h is also re-generated at build time
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/villagesql/include/version.h.in
                ${CMAKE_BINARY_DIR}/villagesql/include/version.h )
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/sql/sql_builtin.cc.in
