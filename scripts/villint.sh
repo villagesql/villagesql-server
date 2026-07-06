@@ -207,7 +207,7 @@ check_todo_tags() {
   local added_lines
   if is_jj_workspace; then
     if jj file show -r "$COMMIT_ISH" "$file" >/dev/null 2>&1; then
-      added_lines=$(jj diff --from "$COMMIT_ISH" --git "$file" 2>/dev/null | grep '^+' | grep -v '^+++' | sed 's/^+//')
+      added_lines=$(jj diff --from "$COMMIT_ISH" --git "$file" --context=0 2>/dev/null | grep '^+' | grep -v '^+++' | sed 's/^+//')
     else
       # New file - all lines are added
       added_lines=$(cat "$file")
@@ -607,7 +607,7 @@ for file in $C_FILES; do
       # "new file" arm dropped --from, which made jj diff against the
       # working-copy parent (empty for a clean checkout) and silently
       # skip the file entirely.
-      ranges_str=$(jj diff --from "$COMMIT_ISH" --git "$file" 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
+      ranges_str=$(jj diff --from "$COMMIT_ISH" --git "$file" --context=0 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
     else
       # Check if the file is tracked by git to determine the correct diff command.
       if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
