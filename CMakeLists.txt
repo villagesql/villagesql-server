@@ -1124,6 +1124,8 @@ MACRO(MY_SANITIZER_CHECK SAN_OPT ADD_OPTIMIZATION RESULT)
       IF(NOT SANITIZE_MAINTAINER_MODE)
         SET(MYSQL_MAINTAINER_MODE OFF CACHE BOOL
           "MySQL maintainer-specific development environment" FORCE)
+        SET(VILLAGESQL_WERROR OFF CACHE BOOL
+          "Turn compiler warnings into errors" FORCE)
       ENDIF()
     ENDIF()
     SET(${RESULT} 1)
@@ -2257,6 +2259,12 @@ OPTION(MYSQL_MAINTAINER_MODE
 INCLUDE(maintainer)
 INCLUDE(msvc_cppcheck)
 DO_MSVC_CPPCHECK()
+
+OPTION(VILLAGESQL_WERROR "Turn compiler warnings into errors" ON)
+IF(VILLAGESQL_WERROR AND MY_COMPILER_IS_GNU_OR_CLANG)
+  STRING_APPEND(CMAKE_C_FLAGS   " -Werror")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -Werror")
+ENDIF()
 
 # Silence some warnings for unused performance schema stuff.
 IF(DISABLE_ALL_PSI AND MY_COMPILER_IS_GNU_OR_CLANG)

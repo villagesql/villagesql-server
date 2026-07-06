@@ -1,4 +1,5 @@
 # Copyright (c) 2022, 2026, Oracle and/or its affiliates.
+#    Copyright (c) 2026 VillageSQL Contributors
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +37,21 @@ ROUTER_ADD_SHARED_LIBRARY(destination_status
 
   OUTPUT_NAME "mysqlrouter_destination_status"
   )
+
+# Downgrade -Werror to warning for gcc.
+# gcc 13 reports a false positive when a net::ip::tcp::endpoint (whose storage
+# is a sockaddr_in/sockaddr_in6 union) is moved into the std::variant inside
+# mysql_harness::DestinationEndpoint: the bytes beyond the IPv4 sockaddr are
+# never read, but gcc cannot see that.
+IF(MY_COMPILER_IS_GNU)
+  MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    ADD_COMPILE_FLAGS(
+      unreachable_destinations_quarantine.cc
+      COMPILE_FLAGS ${HAS_WARN_FLAG}
+      )
+  ENDIF()
+ENDIF()
 
 # destination status plugin
 

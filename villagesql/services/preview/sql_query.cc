@@ -15,6 +15,7 @@
 
 #include "villagesql/services/preview/sql_query.h"
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -229,8 +230,12 @@ static void collect_warnings(THD *thd, vef_sql_result_t *result) {
     d.severity = sev;
     const char *ss = cond->returned_sqlstate();
     if (ss != nullptr) {
-      std::strncpy(d.sqlstate, ss, sizeof(d.sqlstate) - 1);
-      d.sqlstate[sizeof(d.sqlstate) - 1] = '\0';
+      // Not strncpy(): GCC's -Wstringop-truncation fires on the (safe) case
+      // where the source is exactly as long as the destination minus its
+      // terminator, which is the normal case for a 5-character SQLSTATE.
+      const size_t ss_len = std::min(std::strlen(ss), sizeof(d.sqlstate) - 1);
+      std::memcpy(d.sqlstate, ss, ss_len);
+      d.sqlstate[ss_len] = '\0';
     }
     const char *msg = cond->message_text();
     if (msg != nullptr) d.message.assign(msg, cond->message_octet_length());

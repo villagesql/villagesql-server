@@ -243,7 +243,11 @@ static void signal_stop(vef_thread_handle_t *handle) {
 
   if (handle->stop_pipe[1] != -1) {
     char byte = 1;
-    (void)write(handle->stop_pipe[1], &byte, 1);
+    // Best effort: if the pipe write fails the worker still notices the kill
+    // on its next wakeup. A plain (void) cast does not silence glibc's
+    // warn_unused_result on write(), so consume the result explicitly.
+    [[maybe_unused]] const ssize_t written =
+        write(handle->stop_pipe[1], &byte, 1);
   }
 }
 

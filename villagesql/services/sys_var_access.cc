@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "my_compiler.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
@@ -80,7 +81,15 @@ bool get_variable(const char *component_name, const char *name, void **val,
     char buf[1024];
     void *ptr = buf;
     size_t len = sizeof(buf) - 1;
+    // TODO(villagesql-rebase): component_sys_variable_register::get_variable is
+    // deprecated in favour of mysql_system_variable_reader::get(), which needs
+    // a THD and an explicit variable scope. Migrate once we can test the new
+    // service; until then suppress the deprecation so -Werror builds pass.
+    MY_COMPILER_DIAGNOSTIC_PUSH()
+    MY_COMPILER_CLANG_DIAGNOSTIC_IGNORE("-Wdeprecated-declarations")
+    MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wdeprecated-declarations")
     result = svc->get_variable(component_name, name, &ptr, &len);
+    MY_COMPILER_DIAGNOSTIC_POP()
     if (!result) {
       char *copy = static_cast<char *>(malloc(len + 1));
       if (copy == nullptr) {
