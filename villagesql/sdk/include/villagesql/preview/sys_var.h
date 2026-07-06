@@ -71,7 +71,7 @@ class SysVarChange {
     vef_invalue_t v{};
     switch (c->type) {
       case VEF_VAR_BOOL:
-        v.int_value = static_cast<long long>(c->bool_val);
+        v.int_value = static_cast<int64_t>(c->bool_val);
         break;
       case VEF_VAR_INT:
         v.int_value = c->int_val;
@@ -113,10 +113,10 @@ struct SysVarDescriptor {
       bool def_val;
     } boolean;
     struct {
-      long long *value_ptr;
-      long long def_val;
-      long long min_val;
-      long long max_val;
+      int64_t *value_ptr;
+      int64_t def_val;
+      int64_t min_val;
+      int64_t max_val;
     } integer;
     struct {
       double *value_ptr;
@@ -147,7 +147,7 @@ struct SysVarDescriptor {
 //
 // Usage:
 //
-//   static long long g_threshold = 1000;
+//   static int64_t g_threshold = 1000;
 //   static bool g_enabled = true;
 //
 //   namespace sv = vsql::preview_sys_var;
@@ -214,7 +214,7 @@ class SysVarCapability
            std::string &out) const {
     if (abi_ == nullptr || abi_->get == nullptr) return true;
     void *val = nullptr;
-    size_t val_len = 0;
+    uint64_t val_len = 0;
     if (abi_->get(extension_name.data(), var_name.data(), &val, &val_len))
       return true;
     out.assign(static_cast<const char *>(val), val_len);
@@ -290,8 +290,8 @@ inline SysVarDescriptor make_bool(const char *name, const char *comment,
 }
 
 inline SysVarDescriptor make_int(const char *name, const char *comment,
-                                 long long *value_ptr, long long def_val,
-                                 long long min_val, long long max_val) {
+                                 int64_t *value_ptr, int64_t def_val,
+                                 int64_t min_val, int64_t max_val) {
   SysVarDescriptor d;
   d.type = INT;
   d.name = name;

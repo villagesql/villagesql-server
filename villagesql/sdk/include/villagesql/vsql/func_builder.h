@@ -240,7 +240,7 @@ class FuncBuilder {
   }
 
   constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &buffer_size(
-      size_t s) {
+      uint64_t s) {
     buffer_size_ = s;
     return *this;
   }
@@ -425,7 +425,7 @@ class FuncBuilder {
   const char *name_;
   const char *return_type_;
   std::array<const char *, NumParams> param_types_;
-  size_t buffer_size_;
+  uint64_t buffer_size_;
   uint64_t max_result_length_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
@@ -472,7 +472,7 @@ class AggFuncBuilder {
     return next;
   }
 
-  constexpr AggFuncBuilder<State, Func, NumParams> &buffer_size(size_t s) {
+  constexpr AggFuncBuilder<State, Func, NumParams> &buffer_size(uint64_t s) {
     buffer_size_ = s;
     return *this;
   }
@@ -596,7 +596,7 @@ class AggFuncBuilder {
   const char *name_;
   const char *return_type_;
   std::array<const char *, NumParams> param_types_;
-  size_t buffer_size_;
+  uint64_t buffer_size_;
   uint64_t max_result_length_;
   bool deterministic_;
   vef_vdf_clear_func_t clear_;

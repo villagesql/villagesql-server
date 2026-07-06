@@ -94,7 +94,7 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
             break;
           case VEF_VAR_INT:
             change.int_val = *static_cast<const long long *>(save);
-            *static_cast<long long *>(val_ptr) = change.int_val;
+            *static_cast<int64_t *>(val_ptr) = change.int_val;
             break;
           case VEF_VAR_DOUBLE:
             change.dbl_val = *static_cast<const double *>(save);
