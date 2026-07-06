@@ -896,52 +896,32 @@ bool load_installed_extensions(THD *thd) {
 
         std::string failure_reason;
 
-        // Precheck: build the same snapshot the live ALTER path uses.
-        //
-        // Scratch diagnostics area: the precheck callees below
-        // (ResolveTargetSoPath, RunUpdatePreCheck, ...) return
-        // structured error_message out-params, but internally they may
-        // transitively call villagesql_error (e.g.
+        // At the restart-apply site we surface pending-update failures via
+        // pending_last_error, not the SQL diagnostics area. The precheck
+        // callees below (ResolveTargetSoPath, RunUpdatePreCheck, ...) all
+        // return structured error_message out-params, but internally they
+        // may transitively call villagesql_error (e.g.
         // expand_veb_to_directory) which stashes a condition onto THD's
-        // diagnostics area via current_thd. At the restart-apply site
-        // we surface failures via pending_last_error, not the SQL DA,
-        // so we push a scratch DA for the duration of these calls; any
-        // condition lands in the scratch and is discarded when we pop.
-        // The parent DA is never touched. This is MySQL's
-        // designed-for-purpose mechanism for the pattern.
+        // diagnostics area via current_thd. Push a scratch diagnostics
+        // area for the duration of the precheck block so any such
+        // condition lands in the scratch and is discarded when we pop; the
+        // parent DA is never touched. This is MySQL's designed-for-purpose
+        // mechanism for exactly this pattern.
         //
-        // Test coverage for the two DA states:
-        // - Scratch-DA-active: pending_restart_persists_failure.test
-        //   drives a precheck failure and verifies the message
-        //   surfaces via pending_last_error, not the client DA.
-        // - Parent-DA-after-pop: pending_apply_success.test drives a
-        //   successful precheck; execution then leaves the scratch
-        //   scope and continues under the parent DA.
+        // TODO(villagesql-ga): consolidate internal helpers on structured
+        // error-string out-params and translate to villagesql_error only at
+        // the SQL boundary (ALTER call site). That would remove the need
+        // for this scratch DA entirely and align the internal call surface
+        // with the subprocess-precheck story.
         //
-        // TODO(villagesql-ga): consolidate internal helpers on
-        // structured error-string out-params and translate to
-        // villagesql_error only at the SQL boundary (ALTER call site).
-        // That would remove the need for this scratch DA entirely and
-        // align the internal call surface with the subprocess-precheck
-        // story.
+        // TODO(villagesql): load_installed_extensions has grown large;
+        // break the per-extension work into a purpose-driven helper.
         //
-        // TODO(villagesql): load_installed_extensions has grown large
-        // and the control flow (per-extension decision + scratch DA +
-        // persist block) is difficult to follow at this scope. Break
-        // the per-extension work out into a purpose-driven helper so
-        // each step's contract (precheck, decide, stage) is obvious
-        // from the call site.
-
-        // The push/pop pair is deliberately manual (no scope guard)
-        // because the block is short, linear, and has no early-exit
-        // paths today. IMPORTANT: if anyone later adds a `return`,
-        // `goto`, exception path, or any other early exit between the
-        // push and pop below, they MUST pop the DA before that exit --
-        // otherwise the scratch DA is left dangling on THD. If more
-        // exit paths get introduced, switch to a create_scope_guard.
+        // Manual push/pop: scope is short and linear; no guard needed.
         Diagnostics_area scratch_da(false);
         thd->push_diagnostics_area(&scratch_da);
 
+        // Precheck: build the same snapshot the live ALTER path uses.
         std::string resolved_target_sha;
         std::string target_so_path;
         if (villagesql::veb::ResolveTargetSoPath(
@@ -968,7 +948,6 @@ bool load_installed_extensions(THD *thd) {
         }
 
         thd->pop_diagnostics_area();
-        // Parent DA is active from here on.
 
         if (failure_reason.empty()) {
           // Apply the pending update. Load the target .so instead of the
