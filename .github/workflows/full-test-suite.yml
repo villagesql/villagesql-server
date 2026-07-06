@@ -3,6 +3,23 @@ name: Full Test Suite
 # Workflow to run the full test suite
 
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to checkout and test (default main)'
+        required: false
+        type: string
+        default: 'main'
+      build-type:
+        description: 'Build type (debug or release)'
+        required: false
+        type: string
+        default: 'debug'
+      artifact-prefix:
+        description: 'Prefix for artifact names'
+        required: false
+        type: string
+        default: 'full-test'
   workflow_dispatch:
     inputs:
       ref:
