@@ -896,43 +896,27 @@ bool load_installed_extensions(THD *thd) {
 
         std::string failure_reason;
 
-        // TODO(villagesql-ga): load_installed_extensions has grown large
-        // and the control flow (per-extension decision + scratch DA +
-        // persist block) is difficult to follow at this scope. Break the
-        // per-extension work out into a purpose-driven helper so each
-        // step's contract (precheck, decide, stage) is obvious from the
-        // call site.
-
-        // At the restart-apply site we surface pending-update failures
-        // via pending_last_error, not the SQL diagnostics area. The
-        // precheck callees below (ResolveTargetSoPath, RunUpdatePreCheck,
-        // ...) all return structured error_message out-params, but
-        // internally they may transitively call villagesql_error (e.g.
-        // expand_veb_to_directory) which stashes a condition onto THD's
-        // diagnostics area via current_thd. Push a scratch diagnostics
-        // area so any such condition lands in the scratch and is
-        // discarded when we pop; the parent DA is never touched. This
-        // is MySQL's designed-for-purpose mechanism for exactly this
-        // pattern.
+        // Precheck: build the same snapshot the live ALTER path uses.
         //
-        // Scope: the scratch DA is scoped to the end of the enclosing
-        // if (entry->has_pending_action()) body. It covers the precheck
-        // calls (which can emit into the scratch) plus the apply/fail
-        // classification and staging (which do not touch the DA at all).
-        // load_one_extension below runs under the parent DA -- it
-        // surfaces its errors via LogVSQL rather than villagesql_error,
-        // so it does not need the scratch.
+        // Scratch diagnostics area: the precheck callees below
+        // (ResolveTargetSoPath, RunUpdatePreCheck, ...) return
+        // structured error_message out-params, but internally they may
+        // transitively call villagesql_error (e.g.
+        // expand_veb_to_directory) which stashes a condition onto THD's
+        // diagnostics area via current_thd. At the restart-apply site
+        // we surface failures via pending_last_error, not the SQL DA,
+        // so we push a scratch DA for the duration of these calls; any
+        // condition lands in the scratch and is discarded when we pop.
+        // The parent DA is never touched. This is MySQL's
+        // designed-for-purpose mechanism for the pattern.
         //
         // Test coverage for the two DA states:
         // - Scratch-DA-active: pending_restart_persists_failure.test
-        //   exercises a precheck that fails at restart, which drives at
-        //   least one internal villagesql_error into the scratch DA and
-        //   verifies the failure surfaces via pending_last_error rather
-        //   than leaking out as a client-visible SQL error.
-        // - Parent-DA-after-pop: pending_apply_success.test exercises
-        //   a precheck that passes; execution then leaves the scratch
-        //   scope and continues under the parent DA (load_one_extension
-        //   + persist block).
+        //   drives a precheck failure and verifies the message
+        //   surfaces via pending_last_error, not the client DA.
+        // - Parent-DA-after-pop: pending_apply_success.test drives a
+        //   successful precheck; execution then leaves the scratch
+        //   scope and continues under the parent DA.
         //
         // TODO(villagesql-ga): consolidate internal helpers on
         // structured error-string out-params and translate to
@@ -940,12 +924,24 @@ bool load_installed_extensions(THD *thd) {
         // That would remove the need for this scratch DA entirely and
         // align the internal call surface with the subprocess-precheck
         // story.
+        //
+        // TODO(villagesql): load_installed_extensions has grown large
+        // and the control flow (per-extension decision + scratch DA +
+        // persist block) is difficult to follow at this scope. Break
+        // the per-extension work out into a purpose-driven helper so
+        // each step's contract (precheck, decide, stage) is obvious
+        // from the call site.
+
+        // The push/pop pair is deliberately manual (no scope guard)
+        // because the block is short, linear, and has no early-exit
+        // paths today. IMPORTANT: if anyone later adds a `return`,
+        // `goto`, exception path, or any other early exit between the
+        // push and pop below, they MUST pop the DA before that exit --
+        // otherwise the scratch DA is left dangling on THD. If more
+        // exit paths get introduced, switch to a create_scope_guard.
         Diagnostics_area scratch_da(false);
         thd->push_diagnostics_area(&scratch_da);
-        auto pop_scratch_da_guard =
-            create_scope_guard([thd] { thd->pop_diagnostics_area(); });
 
-        // Precheck: build the same snapshot the live ALTER path uses.
         std::string resolved_target_sha;
         std::string target_so_path;
         if (villagesql::veb::ResolveTargetSoPath(
@@ -970,6 +966,9 @@ bool load_installed_extensions(THD *thd) {
               villagesql::veb::RunUpdatePreCheck(input);
           if (!result.ok) failure_reason = result.error_message;
         }
+
+        thd->pop_diagnostics_area();
+        // Parent DA is active from here on.
 
         if (failure_reason.empty()) {
           // Apply the pending update. Load the target .so instead of the
@@ -1067,14 +1066,9 @@ bool load_installed_extensions(THD *thd) {
   // tables). Both are conditions where refusing to come up is safer than
   // committing partial pending-action state.
   //
-  // TODO(villagesql-beta): a corrupt pending_action row can currently
-  // prevent server startup with no easy recovery path other than direct
-  // table surgery. Design an operator recovery mechanism. Options to
-  // review in the follow-up include an operator flag to skip pending
-  // actions at startup, a mechanism to keep the current version and
-  // discard pending-action staging without failing startup, or a
-  // structural change that gates the update code path so it isn't
-  // entered at all when opted out. Undecided; needs its own design pass.
+  // TODO(villagesql-beta): a corrupt pending_action row can prevent
+  // startup. Follow-up adds --villagesql-skip-extension-updates as the
+  // operator escape hatch.
   if (!pending_failures_to_persist.empty() ||
       !pending_applies_to_persist.empty()) {
     // Open all four tables the persist step may need. custom_columns,
