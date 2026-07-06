@@ -77,7 +77,7 @@ void counter_double(vsql::CustomArg in, vsql::IntResult out) {
   auto data = in.value();
   int val = 0;
   memcpy(&val, data.data(), kCounterLen);
-  out.set(static_cast<long long>(val) * 2);
+  out.set(static_cast<int64_t>(val) * 2);
 }
 
 static int64_t g_threshold;

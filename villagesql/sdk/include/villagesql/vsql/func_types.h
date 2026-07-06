@@ -84,7 +84,7 @@ class IntArg {
  public:
   explicit IntArg(const vef_invalue_t *v) : v_(v) {}
   bool is_null() const { return v_->is_null; }
-  long long value() const { return v_->int_value; }
+  int64_t value() const { return v_->int_value; }
 
  private:
   const vef_invalue_t *v_;
@@ -159,7 +159,7 @@ class IntResult {
  public:
   explicit IntResult(vef_vdf_result_t *r) : r_(r) {}
 
-  void set(long long v) {
+  void set(int64_t v) {
     r_->int_value = v;
     r_->type = VEF_RESULT_VALUE;
   }

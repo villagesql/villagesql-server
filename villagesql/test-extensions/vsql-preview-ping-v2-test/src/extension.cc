@@ -77,7 +77,7 @@ static void ping_v2_value_impl(IntResult out) {
     out.set_null();
     return;
   }
-  out.set(static_cast<long long>(g_ping.abi->ping()));
+  out.set(g_ping.abi->ping());
 }
 
 static void pong_value_impl(IntResult out) {
@@ -85,7 +85,7 @@ static void pong_value_impl(IntResult out) {
     out.set_null();
     return;
   }
-  out.set(static_cast<long long>(g_ping.abi->pong()));
+  out.set(g_ping.abi->pong());
 }
 
 VEF_GENERATE_ENTRY_POINTS(

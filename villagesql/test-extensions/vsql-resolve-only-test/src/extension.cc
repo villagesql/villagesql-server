@@ -28,6 +28,7 @@
 
 #include <villagesql/vsql.h>
 
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -68,8 +69,8 @@ bool rparam_resolve_params(const std::map<std::string, std::string> &params,
   int64_t len = strtoll(it->second.c_str(), nullptr, 10);
   if (len <= 0 || len > kRparamMaxLen) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "RPARAM 'len' must be a positive integer <= %lld",
-             static_cast<long long>(kRparamMaxLen));
+             "RPARAM 'len' must be a positive integer <= %" PRId64,
+             kRparamMaxLen);
     return true;
   }
   result->persisted_length = len;

@@ -152,7 +152,7 @@
 //
 // Example — nullable integer sum:
 //
-//   using SumState = std::optional<long long>;
+//   using SumState = std::optional<int64_t>;
 //
 //   void my_clear(SumState &s) { s = std::nullopt; }
 //   void my_acc(SumState &s, IntArg v) {
@@ -183,7 +183,7 @@
 //
 // Example — non-nullable count:
 //
-//   using CountState = long long;
+//   using CountState = int64_t;
 //   void count_clear(CountState &s) { s = 0; }
 //   void count_acc(CountState &s, IntArg v) { if (!v.is_null()) ++s; }
 //   void count_result(const CountState &s, IntResult out) { out.set(s); }

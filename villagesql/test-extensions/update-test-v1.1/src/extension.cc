@@ -20,6 +20,7 @@
 
 #include <villagesql/vsql.h>
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstring>
 
@@ -33,8 +34,8 @@ void counter_from_string(std::string_view from, vsql::CustomResult out) {
       from.size() < sizeof(temp) - 1 ? from.size() : sizeof(temp) - 1;
   memcpy(temp, from.data(), copy_len);
   temp[copy_len] = '\0';
-  long long val = 0;
-  sscanf(temp, "%lld", &val);
+  int64_t val = 0;
+  sscanf(temp, "%" SCNd64, &val);
   auto buf = out.buffer();
   memcpy(buf.data(), &val, kCounterLen);
   out.set_length(kCounterLen);
@@ -46,10 +47,10 @@ void counter_to_string(vsql::CustomArg in, vsql::StringResult out) {
     return;
   }
   auto data = in.value();
-  long long val = 0;
+  int64_t val = 0;
   memcpy(&val, data.data(), kCounterLen);
   auto buf = out.buffer();
-  int n = snprintf(buf.data(), buf.size(), "v1.1:%lld", val);
+  int n = snprintf(buf.data(), buf.size(), "v1.1:%" PRId64, val);
   if (n < 0) n = 0;
   out.set_length(static_cast<size_t>(n));
 }
@@ -57,7 +58,7 @@ void counter_to_string(vsql::CustomArg in, vsql::StringResult out) {
 int counter_compare(vsql::CustomArg a, vsql::CustomArg b) {
   auto da = a.value();
   auto db = b.value();
-  long long va = 0, vb = 0;
+  int64_t va = 0, vb = 0;
   memcpy(&va, da.data(), kCounterLen);
   memcpy(&vb, db.data(), kCounterLen);
   return (va > vb) - (va < vb);
@@ -69,7 +70,7 @@ void counter_double(vsql::CustomArg in, vsql::IntResult out) {
     return;
   }
   auto data = in.value();
-  long long val = 0;
+  int64_t val = 0;
   memcpy(&val, data.data(), kCounterLen);
   out.set(val * 2);
 }

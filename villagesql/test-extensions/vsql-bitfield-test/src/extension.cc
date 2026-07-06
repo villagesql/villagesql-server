@@ -166,9 +166,9 @@ void bitfield_length(vsql::CustomArg in, vsql::IntResult out) {
     return;
   }
   auto data = in.value();
-  long long nbits = data.size() >= static_cast<size_t>(kBitfieldHeaderLen)
-                        ? static_cast<long long>(load_bit_count(data.data()))
-                        : 0;
+  int64_t nbits = data.size() >= static_cast<size_t>(kBitfieldHeaderLen)
+                      ? load_bit_count(data.data())
+                      : 0;
   out.set(nbits);
 }
 
@@ -184,7 +184,7 @@ void bitfield_popcount(vsql::CustomArg in, vsql::IntResult out) {
     return;
   }
   const size_t nbits = load_bit_count(data.data());
-  long long count = 0;
+  int64_t count = 0;
   for (size_t i = 0; i < nbits; i++) {
     count += get_bit(data.data() + kBitfieldHeaderLen, i);
   }

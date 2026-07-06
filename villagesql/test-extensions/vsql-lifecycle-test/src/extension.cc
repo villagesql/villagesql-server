@@ -27,7 +27,7 @@
 
 using namespace vsql;
 
-static std::atomic<long long> g_tick_count{0};
+static std::atomic<int64_t> g_tick_count{0};
 
 static vef_next_wakeup_t monitor_work(vef_wakeup_reason_t reason,
                                       struct vef_thread_handle_t *, void *) {

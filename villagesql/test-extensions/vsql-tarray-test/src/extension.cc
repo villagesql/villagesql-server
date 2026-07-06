@@ -36,6 +36,7 @@
 #include <villagesql/vsql.h>
 
 #include <cassert>
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -161,8 +162,9 @@ bool tarray_int_to_params(int64_t value,
   if (value <= 0) {
     snprintf(
         error_msg, VEF_MAX_ERROR_LEN,
-        "tarray_int_to_params: TARRAY max_size must be positive (got %lld)",
-        static_cast<long long>(value));
+        "tarray_int_to_params: TARRAY max_size must be positive (got %" PRId64
+        ")",
+        value);
     return true;
   }
   params["max_size"] = std::to_string(value);
@@ -209,11 +211,9 @@ bool tarray_resolve_params(const std::map<std::string, std::string> &params,
 
   if (max_size * bpe > kTarrayMaxLen) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "tarray_resolve_params: TARRAY max_size %lld * element size %lld "
-             "exceeds the %lld-byte "
-             "limit",
-             static_cast<long long>(max_size), static_cast<long long>(bpe),
-             static_cast<long long>(kTarrayMaxLen));
+             "tarray_resolve_params: TARRAY max_size %" PRId64
+             " * element size %" PRId64 " exceeds the %" PRId64 "-byte limit",
+             max_size, bpe, kTarrayMaxLen);
     return true;
   }
 
@@ -409,7 +409,7 @@ void tarray_dim(vsql::CustomArgWith<TarrayParams> in, vsql::IntResult out) {
   }
   const int64_t bpe = in.params().bytes_per_elem;
   assert(bpe > 0);
-  out.set(static_cast<long long>(in.value().size() / static_cast<size_t>(bpe)));
+  out.set(in.value().size() / static_cast<size_t>(bpe));
 }
 
 // Concatenate two TARRAY values: (TARRAY, TARRAY) -> TARRAY. Both share the

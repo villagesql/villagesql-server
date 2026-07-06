@@ -24,6 +24,7 @@
 #define VILLAGESQL_PREVIEW_SYS_VAR_H
 
 #include <array>
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -71,7 +72,7 @@ class SysVarChange {
     vef_invalue_t v{};
     switch (c->type) {
       case VEF_VAR_BOOL:
-        v.int_value = static_cast<int64_t>(c->bool_val);
+        v.int_value = c->bool_val;
         break;
       case VEF_VAR_INT:
         v.int_value = c->int_val;
@@ -232,10 +233,10 @@ class SysVarCapability
   //
   // Returns false on success, true on error.
   bool set(std::string_view extension_name, std::string_view var_name,
-           const char *scope, long long value) const {
+           const char *scope, int64_t value) const {
     if (abi_ == nullptr || abi_->set == nullptr) return true;
     char buf[32];
-    snprintf(buf, sizeof(buf), "%lld", value);
+    snprintf(buf, sizeof(buf), "%" PRId64, value);
     return abi_->set(extension_name.data(), var_name.data(), scope, buf);
   }
 

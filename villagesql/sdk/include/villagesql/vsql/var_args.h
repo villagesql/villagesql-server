@@ -76,7 +76,7 @@ class AnyArg {
   bool is_custom() const { return v_->type == VEF_TYPE_CUSTOM; }
 
   // Precondition: is_int().
-  long long as_int() const { return v_->int_value; }
+  int64_t as_int() const { return v_->int_value; }
   // Precondition: is_real().
   double as_real() const { return v_->real_value; }
   // Precondition: is_str().

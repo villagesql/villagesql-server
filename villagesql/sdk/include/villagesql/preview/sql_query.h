@@ -229,8 +229,8 @@ class Result {
     return {row_[i], lengths_[i]};
   }
 
-  // Column value as a long long. Returns 0 for NULL.
-  long long column_int(unsigned int i) const {
+  // Column value as an int64_t. Returns 0 for NULL.
+  int64_t column_int(unsigned int i) const {
     if (row_ == nullptr || row_[i] == nullptr) return 0;
     return std::strtoll(row_[i], nullptr, 10);
   }
@@ -335,7 +335,7 @@ class SqlQuery {
       return {row_[i], lengths_[i]};
     }
 
-    long long column_int(unsigned int i) const {
+    int64_t column_int(unsigned int i) const {
       if (row_ == nullptr || row_[i] == nullptr) return 0;
       return std::strtoll(row_[i], nullptr, 10);
     }

@@ -28,6 +28,7 @@
 //   SET GLOBAL vsql_slow_query_log.enabled = ON;
 
 #include <cerrno>
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -74,11 +75,10 @@ static void slow_query_hook(const se::StatementEventArgs &args,
           args.client_ip() ? args.client_ip() : "", args.connection_id());
   fprintf(f,
           "# Schema: %s  Query_time: %.6f  Lock_time: %.6f"
-          "  Rows_sent: %llu  Rows_examined: %llu\n",
+          "  Rows_sent: %" PRIu64 "  Rows_examined: %" PRIu64 "\n",
           args.schema() ? args.schema() : "", args.query_time_secs(),
-          args.lock_time_secs(), (unsigned long long)args.rows_sent(),
-          (unsigned long long)args.rows_examined());
-  fprintf(f, "SET timestamp=%llu;\n", (unsigned long long)now);
+          args.lock_time_secs(), args.rows_sent(), args.rows_examined());
+  fprintf(f, "SET timestamp=%" PRIu64 ";\n", static_cast<uint64_t>(now));
   auto q = args.query();
   fprintf(f, "%.*s;\n", (int)q.size(), q.data());
   fclose(f);

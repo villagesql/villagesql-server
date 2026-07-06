@@ -36,7 +36,7 @@ namespace vsql::preview_ping {
 // or if the same instance is passed to .with() more than once.
 class PingCapability : public ::vsql::detail::CapabilityBase<PingCapability> {
  public:
-  long long ping() const;
+  int64_t ping() const;
 
  private:
   template <typename Capability>
