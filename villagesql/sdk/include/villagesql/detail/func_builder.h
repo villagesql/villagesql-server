@@ -1053,10 +1053,6 @@ struct StaticFuncDesc {
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
   constexpr vef_protocol_t required_protocol() const {
-    static_assert(VEF_PROTOCOL_4 > VEF_PROTOCOL_3,
-                  "protocol enum must be monotonically increasing: the "
-                  "varargs + max_result_length combined case relies on "
-                  "VEF_PROTOCOL_4 satisfying the VEF_PROTOCOL_3 requirement");
     if (max_result_length_ > 0) return VEF_PROTOCOL_4;
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }
