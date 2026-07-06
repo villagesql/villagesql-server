@@ -42,8 +42,8 @@ namespace sv = vsql::preview_status_var;
 // Counters incremented on every add() call. Concurrent increments from
 // multiple query threads may occasionally be lost (non-atomic ++), which is
 // acceptable for approximate counters exposed via SHOW STATUS.
-static long long g_add_calls = 0;
-static long long g_null_calls = 0;
+static int64_t g_add_calls = 0;
+static int64_t g_null_calls = 0;
 
 static auto STATUS_VARS = sv::make_capability({
     sv::make_int("add_calls", &g_add_calls),
