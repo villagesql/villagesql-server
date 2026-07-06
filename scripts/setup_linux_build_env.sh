@@ -10,6 +10,7 @@ apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
          build-essential \
          cmake \
          libssl-dev \
+         libcurl4-openssl-dev \
          pkg-config \
          bison \
          libncurses5-dev \

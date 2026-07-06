@@ -79,6 +79,7 @@ RUN groupadd -r mysql && useradd -r -g mysql mysql
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gosu \
         libaio1t64 \
+        libcurl4 \
         libncurses6 \
         libssl3 \
         libtirpc3t64 \
