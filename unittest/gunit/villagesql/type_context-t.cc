@@ -99,7 +99,8 @@ static vef_func_desc_t make_resolve_params_fd(const char *name,
           VEF_MAX_TYPE_PARAMS_STRING_LEN,
           false,
           nullptr,
-          nullptr};
+          nullptr,
+          0};
 }
 
 class TypeParametersTest : public ::testing::Test {

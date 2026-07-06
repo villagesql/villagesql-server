@@ -289,6 +289,7 @@ struct FuncWithMetadata {
         param_types{},
         num_params(0),
         buffer_size(0),
+        max_result_length(0),
         deterministic(false),
         is_varargs(false),
         check_params_cache_bound(nullptr),
@@ -303,6 +304,7 @@ struct FuncWithMetadata {
   std::array<vef_type_t, kMaxParams> param_types;
   size_t num_params;
   size_t buffer_size;
+  uint64_t max_result_length;
   bool deterministic;
   // When true, the function accepts a variable number of arguments. The
   // server skips argument validation and delegates to prerun. num_params
@@ -1033,6 +1035,7 @@ struct StaticFuncDesc {
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
   size_t buffer_size_;
+  uint64_t max_result_length_;
   bool deterministic_;
   bool is_varargs_;
   bool (*check_params_cache_bound_)();
@@ -1050,9 +1053,11 @@ struct StaticFuncDesc {
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
   constexpr vef_protocol_t required_protocol() const {
+    if (max_result_length_ > 0) return VEF_PROTOCOL_4;
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }
   constexpr size_t buffer_size() const { return buffer_size_; }
+  constexpr uint64_t max_result_length() const { return max_result_length_; }
   constexpr bool deterministic() const { return deterministic_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
     return check_params_cache_bound_;
@@ -1080,6 +1085,7 @@ struct StaticFuncDesc {
         clear_(meta.clear),
         accumulate_(meta.accumulate),
         buffer_size_(meta.buffer_size),
+        max_result_length_(meta.max_result_length),
         deterministic_(meta.deterministic),
         is_varargs_(meta.is_varargs),
         check_params_cache_bound_(meta.check_params_cache_bound),

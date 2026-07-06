@@ -1,0 +1,89 @@
+# A STRING-returning VDF can declare its maximum output length so
+# the result column is sized to hold the full value when materialized (temp
+# tables for GROUP BY/DISTINCT, CREATE TABLE ... SELECT, UNION). This mirrors a
+# classic loadable UDF setting initid->max_length in its init function.
+#
+# - A declared length (max_result_length) sizes the result column, so a
+#   materialized result up to that length is stored in full.
+# - No declaration falls back to the argument width -- exactly like a classic
+#   UDF that leaves initid->max_length unset. The streamed value is still full;
+#   only a materialized result is bounded by that width.
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = rlen_ext
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_result_length.cc
+--source include/villagesql/create_extension_sdk.inc
+--source include/villagesql/binlog_check_begin.inc
+
+INSTALL EXTENSION rlen_ext;
+
+# Declared max_result_length(1000): the result column is text, so a
+# materialized result up to that length is stored in full. bounded_str(1000)
+# returns a run of 1000 characters.
+CREATE TABLE b AS SELECT rlen_ext.bounded_str(1000) AS s;
+SELECT LENGTH(s) AS stored_len FROM b;
+SHOW CREATE TABLE b;
+DROP TABLE b;
+
+# No declared length: the result column falls back to the argument width, like
+# a classic UDF that does not set initid->max_length. The streamed value is
+# still returned in full (the result buffer grows on demand)...
+SELECT LENGTH(rlen_ext.unbounded_str(2000)) AS streamed_len;
+
+# ...but the materialized column is sized to the argument, not the output. Shown
+# with a value that fits so SHOW CREATE TABLE reveals the narrow column without
+# a truncation error.
+CREATE TABLE u AS SELECT rlen_ext.unbounded_str(1) AS s;
+SHOW CREATE TABLE u;
+DROP TABLE u;
+
+# Truncation path: without a declared max_result_length, a result wider than
+# the argument-derived column is truncated when materialized. Disable strict
+# mode so the overflow becomes a warning rather than an error, letting the
+# truncated value survive so we can observe it.
+SET @saved_sql_mode = @@sql_mode;
+SET @@sql_mode = '';
+--disable_warnings
+CREATE TABLE trunc_t AS SELECT rlen_ext.unbounded_str(100) AS s;
+--enable_warnings
+SELECT LENGTH(s) < 100 AS was_truncated FROM trunc_t;
+DROP TABLE trunc_t;
+SET @@sql_mode = @saved_sql_mode;
+
+# Aggregate path: bounded_concat declares max_result_length(5000), so the
+# result column is text. Verify the full concatenated value is stored in full.
+CREATE TABLE rlen_src (grp INT, s VARCHAR(50));
+INSERT INTO rlen_src VALUES (1, REPEAT('a', 40)), (1, REPEAT('b', 40)), (2, 'x');
+CREATE TABLE rlen_agg AS
+  SELECT grp, rlen_ext.bounded_concat(s) AS c FROM rlen_src GROUP BY grp;
+SELECT grp, LENGTH(c) AS c_len FROM rlen_agg ORDER BY grp;
+SHOW CREATE TABLE rlen_agg;
+DROP TABLE rlen_agg, rlen_src;
+
+# Cap: huge_str declares max_result_length(20000000), which exceeds
+# MAX_BLOB_WIDTH (16777216) and is capped there. The result column is longtext.
+CREATE TABLE cap_t AS SELECT rlen_ext.huge_str(5) AS s;
+SELECT LENGTH(s) AS cap_len FROM cap_t;
+SHOW CREATE TABLE cap_t;
+DROP TABLE cap_t;
+
+# Varargs + max_result_length: using .varargs() and .max_result_length(200)
+# together requires VEF_PROTOCOL_4 (max_result_length takes priority in
+# required_protocol()). The result column is varchar(200) from the declared
+# length, not an argument-derived width.
+CREATE TABLE va AS SELECT rlen_ext.varargs_str_join('abc','def') AS s;
+SHOW CREATE TABLE va;
+DROP TABLE va;
+
+UNINSTALL EXTENSION rlen_ext;
+
+--source include/villagesql/binlog_check_end.inc
