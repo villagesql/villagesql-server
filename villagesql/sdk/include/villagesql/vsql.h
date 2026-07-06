@@ -68,8 +68,8 @@
 //                          // field. Without it the column falls back to the
 //                          // argument width, like a classic UDF that does not
 //                          // set initid->max_length.
-//                          // Should not be specified for non-STRING return
-//                          // types.
+//                          // Only valid for a STRING return type: declare
+//                          // .returns(STRING) before it, or the build fails.
 //
 // For aggregate VDFs (SQL SUM, COUNT, etc.), see make_aggregate_func in
 // vsql/func_builder.h. For per-statement lifecycle hooks (prerun/postrun),

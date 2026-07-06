@@ -78,6 +78,20 @@ constexpr const char *STRING = "STRING";
 constexpr const char *INT = "INT";
 constexpr const char *REAL = "REAL";
 
+namespace detail {
+
+// Compile-time traps for function-builder misuse. These are intentionally left
+// undefined and are NOT constexpr. Every extension is registered inside a
+// `static constexpr` builder chain (see VEF_GENERATE_ENTRY_POINTS), so the
+// whole chain is constant-evaluated; reaching a call to one of these during
+// that evaluation is ill-formed and the function name is the compiler's
+// diagnostic. (If a builder is instead used at runtime, the bad path fails to
+// link, for the same absence of a definition.)
+[[noreturn]] void max_result_length_is_only_valid_for_a_STRING_return_type();
+[[noreturn]] void call_returns_before_max_result_length();
+
+}  // namespace detail
+
 // Encode: string -> custom binary. The function reports its outcome by
 // calling out.set_length(n), out.set_null(), out.warning(msg), or
 // out.error(msg). If none is called, the result is undefined.
@@ -235,9 +249,18 @@ class FuncBuilder {
   // result column is sized to hold the full value when materialized. A
   // STRING-returning VDF that does not declare this falls back to the argument
   // width (a large result then truncates when materialized). Bumps the required
-  // protocol to VEF_PROTOCOL_4 — do not call this on non-STRING VDFs.
+  // protocol to VEF_PROTOCOL_4.
+  //
+  // Only valid for a STRING return type. Call .returns(STRING) before this so
+  // the return type is known here: a non-STRING return (or an undeclared one)
+  // is rejected at build time rather than silently ignored.
   constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &max_result_length(
       uint64_t n) {
+    if (return_type_ == nullptr) {
+      detail::call_returns_before_max_result_length();
+    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
+      detail::max_result_length_is_only_valid_for_a_STRING_return_type();
+    }
     max_result_length_ = n;
     return *this;
   }
@@ -458,9 +481,18 @@ class AggFuncBuilder {
   // result column is sized to hold the full value when materialized. An
   // aggregate returning STRING that does not declare this falls back to the
   // argument width (a large result then truncates when materialized). Bumps the
-  // required protocol to VEF_PROTOCOL_4 — do not call this on non-STRING VDFs.
+  // required protocol to VEF_PROTOCOL_4.
+  //
+  // Only valid for a STRING return type. Call .returns(STRING) before this so
+  // the return type is known here: a non-STRING return (or an undeclared one)
+  // is rejected at build time rather than silently ignored.
   constexpr AggFuncBuilder<State, Func, NumParams> &max_result_length(
       uint64_t n) {
+    if (return_type_ == nullptr) {
+      detail::call_returns_before_max_result_length();
+    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
+      detail::max_result_length_is_only_valid_for_a_STRING_return_type();
+    }
     max_result_length_ = n;
     return *this;
   }
