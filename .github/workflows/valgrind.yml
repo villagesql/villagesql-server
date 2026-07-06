@@ -47,7 +47,7 @@ jobs:
 
     - name: Build VillageSQL with Valgrind support
       working-directory: ./source
-      run: ./scripts/build-ci.sh
+      run: ./villagesql/bld_tools/build_ci.sh
       env:
         PARALLEL_JOBS: 16
         BUILD_TYPE: debug
