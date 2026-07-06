@@ -122,7 +122,8 @@ typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
 // (output buffer) are defined by the specific function registered at fn_id;
 // the extension determines these conventions when it registers the profile.
 // Profile functions are infallible.
-typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref, uint32_t fn_id,
+typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref,
+                                     uint32_t key_pos, uint32_t fn_id,
                                      const void *const *args, uint32_t nargs,
                                      void *result);
 
@@ -637,6 +638,7 @@ typedef struct {
 typedef struct {
   uint32_t fn_id;
   const char *name;
+  vef_protocol_t protocol;
   vef_vdf_func_t vdf;
   vef_signature_t signature;
   uint8_t is_deterministic;
@@ -657,7 +659,7 @@ typedef struct {
   // function_count is zero.
   const vef_index_profile_fn_binding_t *functions;
   // Helper functions invoked only by the index implementation via
-  // vef_index_ctx_t.profile_fn. fn_ids are independent of function fn_ids.
+  // vef_index_ctx_t.helper_fn. fn_ids are independent of function fn_ids.
   uint32_t helper_count;
   // Pointer to a flat array of helper_count bindings. NULL when
   // helper_count is zero.
