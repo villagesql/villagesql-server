@@ -39,6 +39,18 @@ namespace vsql {
 // so ADL on old-API types and the explicit using in vef_fill_func_ptrs both
 // resolve to the same entity — eliminating overload ambiguity.
 namespace func_builder {
+
+// Detection idiom: true when FuncData exposes max_result_length() (the typed
+// builder does; older stable raw builders do not). Allows materialize_func_desc
+// to stay generic over old and new without changing the previous stable
+// APIs/ABIs.
+template <typename T, typename = void>
+struct has_max_result_length : std::false_type {};
+template <typename T>
+struct has_max_result_length<
+    T, std::void_t<decltype(std::declval<const T &>().max_result_length())>>
+    : std::true_type {};
+
 template <typename FuncData, size_t Index>
 __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     const FuncData &func_data) {
@@ -62,6 +74,14 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   desc.prerun = func_data.prerun();
   desc.postrun = func_data.postrun();
   desc.buffer_size = func_data.buffer_size();
+  // max_result_length is only present on the typed builder; the older stable
+  // raw builders do not expose it, so default to 0 (fall back to argument
+  // width).
+  if constexpr (has_max_result_length<FuncData>::value) {
+    desc.max_result_length = func_data.max_result_length();
+  } else {
+    desc.max_result_length = 0;
+  }
   desc.deterministic = func_data.deterministic();
   desc.clear = func_data.clear();
   desc.accumulate = func_data.accumulate();
