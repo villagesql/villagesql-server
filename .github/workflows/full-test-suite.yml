@@ -1,15 +1,15 @@
-name: Full Test Suite (Reusable)
+name: Full Test Suite
 
-# Reusable workflow for running the full test suite
-# Called by testall.yml and nightly-tag-test.yml
+# Workflow to run the full test suite
 
 on:
   workflow_call:
     inputs:
       ref:
-        description: 'Git ref to checkout and test'
-        required: true
+        description: 'Git ref to checkout and test (default main)'
+        required: false
         type: string
+        default: 'main'
       build-type:
         description: 'Build type (debug or release)'
         required: false
@@ -68,7 +68,7 @@ jobs:
         PARALLEL_JOBS: 16
         BUILD_TYPE: ${{ inputs.build-type }}
 
-    - name: Run standard tests (unit, integration, only suite village)
+    - name: Run standard tests (unit, integration with only suite village)
       uses: ./source/.github/actions/run-tests
       with:
         artifact-name: ${{ inputs.artifact-prefix }}-logs-${{ github.run_number }}
@@ -83,9 +83,7 @@ jobs:
     - name: Run all test suites (excluding VillageSQL)
       uses: ./source/.github/actions/run-tests
       with:
-        # Don't repeat any standard test
         run-unit-tests: false
-        run-integration-tests: false
         run-all-suites: true
         skip-suite: village
         artifact-name: ${{ inputs.artifact-prefix }}-all-suites-logs-${{ github.run_number }}
