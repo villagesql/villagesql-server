@@ -896,29 +896,35 @@ bool load_installed_extensions(THD *thd) {
 
         std::string failure_reason;
 
+        // At the restart-apply site we surface pending-update failures via
+        // pending_last_error, not the SQL diagnostics area. The precheck
+        // callees below (ResolveTargetSoPath, RunUpdatePreCheck, ...) all
+        // return structured error_message out-params, but internally they
+        // may transitively call villagesql_error (e.g.
+        // expand_veb_to_directory) which stashes a condition onto THD's
+        // diagnostics area via current_thd. Push a scratch diagnostics
+        // area for the duration of the precheck block so any such
+        // condition lands in the scratch and is discarded when we pop; the
+        // parent DA is never touched. This is MySQL's designed-for-purpose
+        // mechanism for exactly this pattern.
+        //
+        // TODO(villagesql-ga): consolidate internal helpers on structured
+        // error-string out-params and translate to villagesql_error only at
+        // the SQL boundary (ALTER call site). That would remove the need
+        // for this scratch DA entirely and align the internal call surface
+        // with the subprocess-precheck story.
+        Diagnostics_area scratch_da(false);
+        thd->push_diagnostics_area(&scratch_da);
+        auto pop_scratch_da_guard =
+            create_scope_guard([thd] { thd->pop_diagnostics_area(); });
+
         // Precheck: build the same snapshot the live ALTER path uses.
         std::string resolved_target_sha;
         std::string target_so_path;
         if (villagesql::veb::ResolveTargetSoPath(
                 extension_name, target_version, &resolved_target_sha,
                 &target_so_path, &failure_reason)) {
-          // failure_reason already populated by the helper. In the restart
-          // context we surface failures via pending_last_error, not the SQL
-          // diagnostics area -- but expand_veb_to_directory (called inside
-          // the helper) may have emitted a villagesql_error internally that
-          // stashed an error on THD. Clear it so downstream code doesn't see
-          // a spurious thd->is_error() from a decision we're already
-          // recording as a pending-action failure.
-          //
-          // TODO(villagesql-ga): internal helpers (expand_veb_to_directory
-          // and its callers) mix two error surfaces: the THD diagnostics area
-          // (villagesql_error) and structured error-string out-params.
-          // Consolidate on structured errors internally and translate to
-          // villagesql_error only at the SQL boundary (ALTER call site).
-          // This removes the need for this defensive clear_error and makes
-          // the subprocess-precheck story consistent -- see the TODOs on
-          // RunUpdatePreCheck and BuildUpdatePreCheckSnapshot.
-          if (thd->is_error()) thd->clear_error();
+          // failure_reason already populated by the helper.
         } else if (resolved_target_sha != target_sha) {
           char msg[512];
           snprintf(msg, sizeof(msg),
@@ -1034,9 +1040,14 @@ bool load_installed_extensions(THD *thd) {
   // tables). Both are conditions where refusing to come up is safer than
   // committing partial pending-action state.
   //
-  // TODO(villagesql-ga): a corrupt pending_action row can currently
+  // TODO(villagesql-beta): a corrupt pending_action row can currently
   // prevent server startup with no easy recovery path other than direct
-  // table surgery. Design an operator recovery mechanism.
+  // table surgery. Design an operator recovery mechanism. Options to
+  // review in the follow-up include an operator flag to skip pending
+  // actions at startup, a mechanism to keep the current version and
+  // discard pending-action staging without failing startup, or a
+  // structural change that gates the update code path so it isn't
+  // entered at all when opted out. Undecided; needs its own design pass.
   if (!pending_failures_to_persist.empty() ||
       !pending_applies_to_persist.empty()) {
     // Open all four tables the persist step may need. custom_columns,
@@ -1209,7 +1220,14 @@ bool load_installed_extensions(THD *thd) {
     }
   }
 
-  // Clean up orphaned expansion directories
+  // Remove expansion-cache directories for extensions no longer installed.
+  // The cache is a fast path only -- nothing consults it as authoritative
+  // state -- so skipping cleanup on failure paths (which all return true
+  // and abort startup) is safe. The sweep is idempotent and authoritative:
+  // it walks every top-level directory in the cache and removes any not
+  // present in the installed_extensions set. Nothing is missed by skipped
+  // runs; whenever the operator does get a successful startup, the cache
+  // is fully reconciled in one pass.
   cleanup_orphaned_expansion_directories(installed_extensions);
 
   return false;
