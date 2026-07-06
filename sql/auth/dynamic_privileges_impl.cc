@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -319,6 +320,10 @@ bool dynamic_privilege_init(void) {
       service->register_privilege(STRING_WITH_LEN("ALLOW_NONEXISTENT_DEFINER"));
   ret += service->register_privilege(STRING_WITH_LEN("TRANSACTION_GTID_TAG"));
   ret += service->register_privilege(STRING_WITH_LEN("OPTIMIZE_LOCAL_TABLE"));
+  // VillageSQL: guards the extension DDL (INSTALL/UNINSTALL/ALTER EXTENSION),
+  // which dlopens unsandboxed native code. Required in addition to (or SUPER
+  // as a fallback for) running those statements.
+  ret += service->register_privilege(STRING_WITH_LEN("EXTENSION_ADMIN"));
 
   return ret != 0;
 }

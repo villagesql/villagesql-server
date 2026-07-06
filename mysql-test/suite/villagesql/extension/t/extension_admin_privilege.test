@@ -1,0 +1,61 @@
+# Test that the extension DDL (INSTALL / UNINSTALL / ALTER EXTENSION) is guarded
+# by the EXTENSION_ADMIN dynamic privilege, with SUPER as a fallback.
+#
+# These statements dlopen unsandboxed native code, so they must not be runnable
+# by an unprivileged account. Verifies:
+#  - an unprivileged user is denied INSTALL / UNINSTALL / ALTER EXTENSION
+#  - a user granted EXTENSION_ADMIN can install and uninstall vsql_complex
+#  - a user with SUPER (but not EXTENSION_ADMIN) can too (the fallback)
+
+--source include/not_windows.inc
+
+--echo #
+--echo # An unprivileged user is denied all three extension DDL statements.
+--echo # (The privilege check fires before any VEB is touched, so vsql_complex
+--echo # need not exist yet.)
+--echo #
+CREATE USER ext_none@localhost;
+GRANT SELECT ON *.* TO ext_none@localhost;
+
+connect(con1, localhost, ext_none,,);
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+INSTALL EXTENSION vsql_complex;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+ALTER EXTENSION vsql_complex VERSION '1.0.0' AT RESTART;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+UNINSTALL EXTENSION vsql_complex;
+connection default;
+disconnect con1;
+
+--echo #
+--echo # A user granted EXTENSION_ADMIN can install and uninstall.
+--echo #
+CREATE USER ext_admin@localhost;
+GRANT EXTENSION_ADMIN ON *.* TO ext_admin@localhost;
+
+connect(con1, localhost, ext_admin,,);
+INSTALL EXTENSION vsql_complex;
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'vsql_complex';
+UNINSTALL EXTENSION vsql_complex;
+connection default;
+disconnect con1;
+
+--echo #
+--echo # A user with SUPER (but not EXTENSION_ADMIN) can also run them (fallback).
+--echo #
+CREATE USER ext_super@localhost;
+GRANT SUPER ON *.* TO ext_super@localhost;
+
+connect(con1, localhost, ext_super,,);
+INSTALL EXTENSION vsql_complex;
+UNINSTALL EXTENSION vsql_complex;
+connection default;
+disconnect con1;
+
+--echo #
+--echo # Cleanup.
+--echo #
+DROP USER ext_none@localhost;
+DROP USER ext_admin@localhost;
+DROP USER ext_super@localhost;
