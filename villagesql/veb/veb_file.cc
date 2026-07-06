@@ -896,23 +896,50 @@ bool load_installed_extensions(THD *thd) {
 
         std::string failure_reason;
 
-        // At the restart-apply site we surface pending-update failures via
-        // pending_last_error, not the SQL diagnostics area. The precheck
-        // callees below (ResolveTargetSoPath, RunUpdatePreCheck, ...) all
-        // return structured error_message out-params, but internally they
-        // may transitively call villagesql_error (e.g.
+        // TODO(villagesql-ga): load_installed_extensions has grown large
+        // and the control flow (per-extension decision + scratch DA +
+        // persist block) is difficult to follow at this scope. Break the
+        // per-extension work out into a purpose-driven helper so each
+        // step's contract (precheck, decide, stage) is obvious from the
+        // call site.
+
+        // At the restart-apply site we surface pending-update failures
+        // via pending_last_error, not the SQL diagnostics area. The
+        // precheck callees below (ResolveTargetSoPath, RunUpdatePreCheck,
+        // ...) all return structured error_message out-params, but
+        // internally they may transitively call villagesql_error (e.g.
         // expand_veb_to_directory) which stashes a condition onto THD's
         // diagnostics area via current_thd. Push a scratch diagnostics
-        // area for the duration of the precheck block so any such
-        // condition lands in the scratch and is discarded when we pop; the
-        // parent DA is never touched. This is MySQL's designed-for-purpose
-        // mechanism for exactly this pattern.
+        // area so any such condition lands in the scratch and is
+        // discarded when we pop; the parent DA is never touched. This
+        // is MySQL's designed-for-purpose mechanism for exactly this
+        // pattern.
         //
-        // TODO(villagesql-ga): consolidate internal helpers on structured
-        // error-string out-params and translate to villagesql_error only at
-        // the SQL boundary (ALTER call site). That would remove the need
-        // for this scratch DA entirely and align the internal call surface
-        // with the subprocess-precheck story.
+        // Scope: the scratch DA is scoped to the end of the enclosing
+        // if (entry->has_pending_action()) body. It covers the precheck
+        // calls (which can emit into the scratch) plus the apply/fail
+        // classification and staging (which do not touch the DA at all).
+        // load_one_extension below runs under the parent DA -- it
+        // surfaces its errors via LogVSQL rather than villagesql_error,
+        // so it does not need the scratch.
+        //
+        // Test coverage for the two DA states:
+        // - Scratch-DA-active: pending_restart_persists_failure.test
+        //   exercises a precheck that fails at restart, which drives at
+        //   least one internal villagesql_error into the scratch DA and
+        //   verifies the failure surfaces via pending_last_error rather
+        //   than leaking out as a client-visible SQL error.
+        // - Parent-DA-after-pop: pending_apply_success.test exercises
+        //   a precheck that passes; execution then leaves the scratch
+        //   scope and continues under the parent DA (load_one_extension
+        //   + persist block).
+        //
+        // TODO(villagesql-ga): consolidate internal helpers on
+        // structured error-string out-params and translate to
+        // villagesql_error only at the SQL boundary (ALTER call site).
+        // That would remove the need for this scratch DA entirely and
+        // align the internal call surface with the subprocess-precheck
+        // story.
         Diagnostics_area scratch_da(false);
         thd->push_diagnostics_area(&scratch_da);
         auto pop_scratch_da_guard =
