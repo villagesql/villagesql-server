@@ -10,6 +10,7 @@ FIX_EOF=true  # Default to fixing EOF newlines
 FIX_COPYRIGHT=true  # Default to fixing copyrights
 COMMIT_ISH=""  # Will be computed if not specified
 CMDLINE_IGNORE_PATTERNS=()  # Array to store command-line ignore patterns
+PRINT_CLANG_FORMAT_VERSION=false  # Print the pinned clang-format version and exit
 
 usage() {
   echo "Usage: $(basename "$0") [-c] [-o] [--fixeof|--no-fixeof] [--fixcopyright|--no-fixcopyright] [--commit <commit-ish>] [--ignore <pattern>]"
@@ -28,6 +29,8 @@ usage() {
   echo "                        Defaults to 'origin' if not set"
   echo "  --ignore <pattern>: Ignore files matching pattern (can be used multiple times)."
   echo "                      Supports exact paths, directory recursion, and glob patterns."
+  echo "  --clang-format-version:"
+  echo "                      Print the pinned clang-format version and exit."
   echo "  -h, --help:         Show this help message."
   exit 1
 }
@@ -77,6 +80,10 @@ while [[ $# -gt 0 ]]; do
       CMDLINE_IGNORE_PATTERNS+=("$2")
       shift # past argument
       shift # past value
+      ;;
+    --clang-format-version)
+      PRINT_CLANG_FORMAT_VERSION=true
+      shift # past argument
       ;;
     -h|--help)
       usage
@@ -412,6 +419,12 @@ EOF
 
 # Check for required tools
 REQUIRED_CLANG_FORMAT_VERSION=$(get_clang_format_version)
+
+# Handle introspection requests first
+if [ "$PRINT_CLANG_FORMAT_VERSION" = true ]; then
+  echo "$REQUIRED_CLANG_FORMAT_VERSION"
+  exit 0
+fi
 
 die_clang_format() {
   echo "Error: $1" >&2

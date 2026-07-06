@@ -21,7 +21,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-# We currently use clang-format 22.1.5 (see scripts/clang-format-version).
+# We currently use clang-format 22.1 (see scripts/villint.sh --clang-format-version).
 #
 # This file was originally seeded from
 #
