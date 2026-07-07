@@ -243,7 +243,10 @@ static void signal_stop(vef_thread_handle_t *handle) {
 
   if (handle->stop_pipe[1] != -1) {
     char byte = 1;
-    (void)write(handle->stop_pipe[1], &byte, 1);
+    // Best-effort wakeup: if the pipe already holds a pending byte this write
+    // may fail, which is harmless. Assign the result (rather than a (void)
+    // cast, which GCC ignores for warn_unused_result) and mark it unused.
+    [[maybe_unused]] ssize_t written = write(handle->stop_pipe[1], &byte, 1);
   }
 }
 

@@ -229,7 +229,10 @@ static void collect_warnings(THD *thd, vef_sql_result_t *result) {
     d.severity = sev;
     const char *ss = cond->returned_sqlstate();
     if (ss != nullptr) {
-      std::strncpy(d.sqlstate, ss, sizeof(d.sqlstate) - 1);
+      // memcpy, not strncpy: GCC's -Wstringop-truncation flags strncpy here
+      // because the source is exactly 5 bytes; we null-terminate on the next
+      // line, so a fixed-size copy is equivalent and warning-free.
+      std::memcpy(d.sqlstate, ss, sizeof(d.sqlstate) - 1);
       d.sqlstate[sizeof(d.sqlstate) - 1] = '\0';
     }
     const char *msg = cond->message_text();
