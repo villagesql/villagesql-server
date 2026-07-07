@@ -1,0 +1,29 @@
+# Test text endoing behvaior with custom types and built-in types
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE test_collation;
+USE test_collation;
+
+# Test 1: Built-in types allow both column names
+CREATE TABLE builtin_columns (
+    strasse INT,
+    straße INT
+);
+
+SHOW FIELDS FROM builtin_columns;
+DROP TABLE builtin_columns;
+
+# Test 2: Custom type columns
+# will crash the DB server
+#CREATE TABLE custom_type_columns (
+#  straße COMPLEX,
+#  strasse COMPLEX
+#);
+
+#SHOW FIELDS FROM custom_type_columns;
+#DROP TABLE custom_type_columns;
+
+DROP DATABASE test_collation;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,12 @@
+CREATE DATABASE test_collation;
+USE test_collation;
+CREATE TABLE builtin_columns (
+strasse INT,
+straße INT
+);
+SHOW FIELDS FROM builtin_columns;
+Field	Type	Null	Key	Default	Extra
+strasse	int	YES		NULL	
+straße	int	YES		NULL	
+DROP TABLE builtin_columns;
+DROP DATABASE test_collation;
