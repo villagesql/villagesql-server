@@ -13,9 +13,9 @@ set -euo pipefail
 DST_DIR="${1:?Usage: $0 <dst_dir> <veb_src_dir>}"
 VEB_SRC_DIR="${2:?Usage: $0 <dst_dir> <veb_src_dir>}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-source "$SCRIPT_DIR/vsql_script_utils.sh"
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
 
 if [[ ! -f "$EXTENSIONS_LIST" ]]; then
@@ -57,6 +57,5 @@ while IFS= read -r line; do
         exit 1
     fi
 
-    cp "$EXT_SRC_VEB" "$DST_DIR/$EXT_FILE"
-
+    cp "$EXT_SRC_VEB" "$DST_DIR/$EXT_FILE" || log_info "Duplicate $REPO_NAME already installed"
 done < "$EXTENSIONS_LIST"

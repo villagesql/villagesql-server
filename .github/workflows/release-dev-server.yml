@@ -8,6 +8,19 @@ name: Release Dev Server
 #   - [self-hosted, linux, x86_64]    - existing CI runner
 #   - linux on arm64 (GitHub-hosted)  - Apple Silicon
 #   - macos-latest (GitHub-hosted)    - Apple Silicon
+#
+# The release build process builds binaries from several repositories.
+# The main repository is villagesql-server and this repo is checked
+# out into the top-level source tree.  The bundled extension are checked
+# out into the exts top-level source tree.  The end results from the
+# release build is placed into the build tree.
+#
+# <github.workspace>
+# - source: clone of villagesql-server
+# - build: cmake compilation sandbox
+# - exts: sandbox for bundled extensions
+#   - sources: clones of each bundled extension
+#   - builds: sandboxes for extension builds
 
 on:
   push:
@@ -76,6 +89,7 @@ jobs:
     env:
       BUILD_DIR: ${{ github.workspace }}/build
       OUTPUT_DIR: ${{ github.workspace }}/output
+      EXTS_ROOT: ${{ github.workspace }}/exts
       BUILD_BUNDLED_EXTENSIONS: "1"
 
     steps:
@@ -92,23 +106,24 @@ jobs:
           cache-boost: 'true'
           setup-ccache: 'false'
 
+      - name: Checkout bundled extensions
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1'
+        run: |
+          mkdir -p "$EXTS_ROOT/sources"
+          source/villagesql/bld_tools/checkout_bundled_extensions.sh \
+            "$EXTS_ROOT/sources"
+
       # Bundled-extension build deps. Slated for separate revision; preserved
       # as inline steps so BUILD_BUNDLED_EXTENSIONS builds keep working.
       - name: Install bundled-extension dependencies (Linux)
-        if: matrix.os == 'linux'
-        run: |
-          if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
-            sudo source/scripts/setup_linux_ext_deps.sh
-          fi
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && matrix.os == 'linux'
+        run: sudo source/scripts/setup_linux_ext_deps.sh
 
       - name: Install bundled-extension dependencies (macOS)
-        if: matrix.os == 'macos'
-        run: |
-          if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
-            source/scripts/setup_macos_ext_deps.sh
-          fi
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && matrix.os == 'macos'
+        run: source/scripts/setup_macos_ext_deps.sh
 
-      - name: Build the dev server and bundled extensions
+      - name: Build the dev server
         run: |
           if [[ "${{ github.event_name }}" != "workflow_dispatch" || "${{ inputs.release_build }}" == "true" ]]; then
             PRE_RELEASE=""
@@ -122,10 +137,25 @@ jobs:
             EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
           fi
 
+          SOURCE_DIR="$SOURCE_DIR" \
           BUILD_DIR="$BUILD_DIR" \
           CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
           VSQL_PRE_RELEASE_VERSION="${PRE_RELEASE}" \
-            source/villagesql/bld_tools/make_villagesql_dev_server.sh
+            source/villagesql/bld_tools/build_ci.sh
+
+      - name: Build bundled extensions
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1'
+        run: |
+          SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
+          source/villagesql/bld_tools/build_bundled_extensions.sh \
+            "$EXTS_ROOT/sources" "${SDK_STAGING_DIR}" "${BUILD_DIR}/veb_output_directory"
+
+      - name: Test bundled extensions
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1'
+        run: |
+          source/villagesql/bld_tools/test_extension_vebs.sh" \
+            "$BUILD_DIR" \
+            "$EXTS_ROOT/sources"
 
       - name: Package dev server tarball
         run: |
