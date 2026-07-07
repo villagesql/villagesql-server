@@ -22,6 +22,7 @@
 
 #include "villagesql/include/semver.h"
 
+#define VSQL_CODE_BASE              "@VSQL_CODE_BASE@"
 #define VSQL_MAJOR_VERSION          @VSQL_MAJOR_VERSION@
 #define VSQL_MINOR_VERSION          @VSQL_MINOR_VERSION@
 #define VSQL_PATCH_VERSION          @VSQL_PATCH_VERSION@
@@ -40,7 +41,7 @@ inline Semver GetBuildVersion() {
   }
   Semver v;
   v.from_components(VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION,
-                    VSQL_PATCH_VERSION, prerelease);
+                    VSQL_PATCH_VERSION,  VSQL_CODE_BASE, prerelease);
   return v;
 }
 

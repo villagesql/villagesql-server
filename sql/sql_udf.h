@@ -171,6 +171,14 @@ class udf_handler {
   // m_vdf is instantiated.
   bool is_vdf_returns_string() const;
 
+  // Set `item`'s data type for a STRING-returning VDF result. Uses the max
+  // output length the extension declared (max_result_length),
+  // falling back to `default_length` (the argument-derived width the caller
+  // computed) when none is declared -- mirroring a classic UDF that does not
+  // set initid->max_length. Callable before m_vdf is instantiated (uses
+  // vdf_func_desc).
+  void set_vdf_string_result_type(Item *item, uint32 default_length) const;
+
   const char *name() const { return u_d ? u_d->name.str : "?"; }
   const char *qualified_name() const { return u_d->qualified_name.str; }
   Item_result result_type() const {

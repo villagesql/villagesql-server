@@ -371,8 +371,15 @@ extern "C" int vef_storage_page_allocate_and_load(
 
   mtr_t *mtr = static_cast<mtr_t *>(mtr_ref);
 
-  buf_block_t *buf_block =
-      fseg_alloc_free_page(segment_header, 0, FSP_NO_DIR, mtr);
+  // Allocate in a separate redo-logged mtr, latching/initializing the page in
+  // the caller's content mtr, so allocation is crash-recoverable even when the
+  // contents are written no-redo. Mirrors Page_load::init in btr0load.cc.
+  mtr_t alloc_mtr;
+  alloc_mtr.start();
+  buf_block_t *buf_block = fseg_alloc_free_page_general(
+      segment_header, 0, FSP_NO_DIR, false, &alloc_mtr, mtr);
+  alloc_mtr.commit();
+
   if (buf_block == nullptr) {
     ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Failed to allocate page.";

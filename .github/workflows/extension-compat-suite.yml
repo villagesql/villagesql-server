@@ -106,19 +106,11 @@ jobs:
           path: source
           ref: ${{ inputs.ref }}
 
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'linux'
-        run: sudo source/scripts/setup_linux_build_env.sh
-
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos'
-        run: brew install bison cmake openssl
-
-      - name: Cache Boost
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Setup VillageSQL build environment
+        uses: ./source/.github/actions/setup-villagesql-build
         with:
-          path: /tmp/boost
-          key: boost-${{ runner.os }}-${{ runner.arch }}
+          cache-boost: 'true'
+          setup-ccache: 'false'
 
       - name: Build server and SDK
         run: |

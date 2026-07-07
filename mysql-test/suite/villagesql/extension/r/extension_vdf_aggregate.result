@@ -123,6 +123,12 @@ SELECT agg_vdf_ext.vdf_concat(name) AS result FROM t_empty_str;
 result
 NULL
 DROP TABLE t_empty_str;
+SELECT CHARSET(agg_vdf_ext.vdf_concat(category)) AS concat_charset FROM t1;
+concat_charset
+utf8mb4
+SELECT COLLATION(agg_vdf_ext.vdf_concat(category)) AS concat_collation FROM t1;
+concat_collation
+utf8mb4_bin
 SELECT category, agg_vdf_ext.vdf_max(val) AS max_val
 FROM t1
 GROUP BY category

@@ -183,7 +183,11 @@ typedef enum : unsigned int {
                    //   vef_register() returns.
                    //   (vef_required_capability_t, required_capabilities,
                    //   required_capability_count in vef_registration_t)
-  VEF_PROTOCOL_4,  // Under development, not stable.
+  VEF_PROTOCOL_4,  // Under development, not stable. Adds:
+                   // + max_result_length on vef_func_desc_t: an extension may
+                   //   declare the maximum length of a STRING result so the
+                   //   result column is sized to hold the full value instead of
+                   //   the argument width (fixes materialization truncation).
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -630,6 +634,20 @@ typedef struct {
   // It is an error to set exactly one of these; both must be present or absent.
   vef_vdf_clear_func_t clear;
   vef_vdf_accumulate_func_t accumulate;
+
+  // protocol >= VEF_PROTOCOL_4
+  // Declared maximum length of this function's STRING result, in characters
+  // (the result is utf8mb4; for ASCII/JSON output one character is one byte).
+  // The server uses it to size the result column so a materialized result
+  // (temp tables for GROUP BY/DISTINCT, CREATE TABLE ... SELECT, UNION) is not
+  // truncated at the argument width. 0 = fall back to the argument width (like
+  // a classic UDF that leaves initid->max_length unset, in which case a large
+  // result truncates when materialized). Not allowed for non-STRING return
+  // types. Capped at MAX_BLOB_WIDTH.
+  //
+  // Distinct from buffer_size, which is only the initial row-time output buffer
+  // (it grows on demand); this bounds the column the result is stored into.
+  uint64_t max_result_length;
 } vef_func_desc_t;
 
 // =============================================================================

@@ -115,6 +115,25 @@ cmd_init() {
 cmd_start() {
     set -e
 
+    # Parse start-specific flags. Everything after `--` is forwarded verbatim
+    # to mysqld so users can enable/disable features for local testing.
+    local extra_mysqld_args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --)
+                shift
+                extra_mysqld_args=("$@")
+                break
+                ;;
+            *)
+                echo "Error: Unknown start option: $1"
+                echo "Use '--' to pass arbitrary flags to mysqld:"
+                echo "  ./villagesql${DIR_ARG} start -- --skip-name-resolve"
+                exit 1
+                ;;
+        esac
+    done
+
     if [[ ! -d "$DIR" ]]; then
         echo "Error: Instance directory not found at $DIR"
         echo "Run './villagesql${DIR_ARG} init' first."
@@ -170,7 +189,8 @@ cmd_start() {
         --pid-file="$pidfile" \
         --log-error="$logfile" \
         --log-error-verbosity=3 \
-        "${init_file_args[@]}" &
+        "${init_file_args[@]}" \
+        "${extra_mysqld_args[@]}" &
 
     local server_pid=$!
     echo "Server starting (PID: $server_pid)..."
@@ -387,7 +407,8 @@ cmd_help() {
     echo ""
     echo "Commands:"
     echo "  init [--password]  Initialize the database (run once before first use)"
-    echo "  start       Start the VillageSQL server"
+    echo "  start [-- <mysqld args>...]"
+    echo "              Start the VillageSQL server. Args after '--' are passed to mysqld."
     echo "  connect     Connect to the running server (extra args passed to mysql)"
     echo "  stop        Stop the VillageSQL server"
     echo "  status      Check whether the server is running"
@@ -411,6 +432,7 @@ cmd_help() {
     echo "  ./villagesql --dir /tmp/test-instance init"
     echo "  ./villagesql --dir /tmp/test-instance start"
     echo "  MYSQL_PORT=3308 ./villagesql --dir ./second start"
+    echo "  ./villagesql start -- --skip-name-resolve --general-log"
 }
 
 # Build a DIR_ARG string for use in user-facing messages so they can copy-paste
@@ -423,7 +445,7 @@ esac
 
 case "$1" in
     init)    shift; cmd_init "$@" ;;
-    start)   cmd_start ;;
+    start)   shift; cmd_start "$@" ;;
     connect) shift; cmd_connect "$@" ;;
     stop)    cmd_stop ;;
     status)  cmd_status ;;

@@ -490,8 +490,10 @@ dberr_t Page_load::insert(const dtuple_t *tuple, const big_rec_t *big_rec,
     // Insert extended column data before record conversion so that
     // rec_convert_dtuple_to_rec writes the REF directly into the record.
     // const_cast is safe: insert_direct mutates only the extended ref bytes.
+    // The observer force-flushes the no-redo column-store pages before commit.
     auto err = villagesql::innodb::Custom_column::insert_direct(
-        m_index->table, m_trx_id, const_cast<dtuple_t *>(tuple), true);
+        m_index->table, m_trx_id, const_cast<dtuple_t *>(tuple),
+        m_flush_observer);
     if (err != DB_SUCCESS) {
       return err;
     }

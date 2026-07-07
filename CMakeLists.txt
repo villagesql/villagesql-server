@@ -1112,6 +1112,8 @@ MACRO(MY_SANITIZER_CHECK SAN_OPT ADD_OPTIMIZATION RESULT)
       IF(NOT SANITIZE_MAINTAINER_MODE)
         SET(MYSQL_MAINTAINER_MODE OFF CACHE BOOL
           "MySQL maintainer-specific development environment" FORCE)
+        SET(VILLAGESQL_WERROR OFF CACHE BOOL
+          "Turn compiler warnings into errors" FORCE)
       ENDIF()
     ENDIF()
     SET(${RESULT} 1)
@@ -2207,6 +2209,12 @@ INCLUDE(maintainer)
 INCLUDE(msvc_cppcheck)
 DO_MSVC_CPPCHECK()
 
+OPTION(VILLAGESQL_WERROR "Turn compiler warnings into errors" ON)
+IF(VILLAGESQL_WERROR AND MY_COMPILER_IS_GNU_OR_CLANG)
+  STRING_APPEND(CMAKE_C_FLAGS   " -Werror")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -Werror")
+ENDIF()
+
 IF(WITH_UNIT_TESTS)
   ENABLE_TESTING()
   INCLUDE(googletest)
@@ -2462,6 +2470,7 @@ CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/include/mysql_version.h.in
                ${CMAKE_BINARY_DIR}/include/mysql_version.h )
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/include/mysql_server_suffix.h.in
                ${CMAKE_BINARY_DIR}/include/mysql_server_suffix.h)
+# villagesql/include/version.h is also re-generated at build time
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/villagesql/include/version.h.in
                ${CMAKE_BINARY_DIR}/villagesql/include/version.h )
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/sql/sql_builtin.cc.in
