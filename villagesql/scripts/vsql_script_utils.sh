@@ -25,6 +25,7 @@ vsql_parse_version() {
     local source_dir="$1"
     local f="$source_dir/VSQL_VERSION"
     [[ -f "$f" ]] || die "VSQL_VERSION file not found at $f"
+    VSQL_CODE_BASE=$(grep "^VSQL_CODE_BASE=" "$f" | cut -d'=' -f2)
     VSQL_MAJOR=$(grep "^VSQL_MAJOR_VERSION=" "$f" | cut -d'=' -f2)
     VSQL_MINOR=$(grep "^VSQL_MINOR_VERSION=" "$f" | cut -d'=' -f2)
     VSQL_PATCH=$(grep "^VSQL_PATCH_VERSION=" "$f" | cut -d'=' -f2)
