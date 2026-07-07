@@ -57,7 +57,7 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   static vef_signature_t signature;
   static vef_func_desc_t desc;
 
-  signature.param_count = static_cast<unsigned int>(func_data.num_params());
+  signature.param_count = static_cast<uint32_t>(func_data.num_params());
   // For varargs functions num_params() returns the VEF_PARAM_VARARGS sentinel
   // and params() is meaningless; null it out so the server reads
   // param_count alone.

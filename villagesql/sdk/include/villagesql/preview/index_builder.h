@@ -1337,7 +1337,7 @@ class IndexProfileCapability
               b.vdf = fb.function.vdf;
               b.signature.return_type = fb.function.return_type;
               b.signature.param_count =
-                  static_cast<unsigned int>(fb.function.num_params);
+                  static_cast<uint32_t>(fb.function.num_params);
               b.signature.params = fb.function.num_params > 0
                                        ? fb.function.param_types.data()
                                        : nullptr;

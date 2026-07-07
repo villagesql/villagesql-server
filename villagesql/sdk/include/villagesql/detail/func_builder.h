@@ -77,7 +77,7 @@ inline vef_invalue_t promote_v1(const vef_invalue_v1_t &v) {
 }
 
 inline vef_invalue_t get_invalue(vef_context_t *ctx, vef_vdf_args_t *args,
-                                 unsigned int i) {
+                                 uint32_t i) {
   if (ctx->protocol >= VEF_PROTOCOL_3) return *args->values[i];
   return promote_v1(args->values_v1[i]);
 }
@@ -366,7 +366,7 @@ struct AggAccumulateWrapper {
                           vef_vdf_result_t *, std::index_sequence<Is...>) {
     auto &state = *static_cast<State *>(args->user_data);
     std::array<vef_invalue_t, NumParams> vals{
-        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+        get_invalue(ctx, args, static_cast<uint32_t>(Is))...};
     Func(state, make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...);
   }
 };
@@ -443,7 +443,7 @@ struct Wrapper {
                           std::index_sequence<Is...>) {
     using Params = typename FuncParamTypes<decltype(Func)>::type;
     std::array<vef_invalue_t, NumParams> vals{
-        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+        get_invalue(ctx, args, static_cast<uint32_t>(Is))...};
     Func(make_arg<std::tuple_element_t<Is, Params>>(&vals[Is])...,
          make_result<std::tuple_element_t<NumParams, Params>>(result));
   }
@@ -509,7 +509,7 @@ struct WrapperTypedState {
     using Params = typename FuncParamTypes<decltype(Func)>::type;
     State &state = *static_cast<State *>(args->user_data);
     std::array<vef_invalue_t, NumParams> vals{
-        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+        get_invalue(ctx, args, static_cast<uint32_t>(Is))...};
     Func(state, make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
          make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
   }
@@ -549,7 +549,7 @@ struct WrapperVoidStarState {
                           std::index_sequence<Is...>) {
     using Params = typename FuncParamTypes<decltype(Func)>::type;
     std::array<vef_invalue_t, NumParams> vals{
-        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+        get_invalue(ctx, args, static_cast<uint32_t>(Is))...};
     Func(args->user_data,
          make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
          make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
@@ -587,7 +587,7 @@ struct WrapperVoidStarRefState {
                           std::index_sequence<Is...>) {
     using Params = typename FuncParamTypes<decltype(Func)>::type;
     std::array<vef_invalue_t, NumParams> vals{
-        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+        get_invalue(ctx, args, static_cast<uint32_t>(Is))...};
     Func(args->user_data,
          make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
          make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
