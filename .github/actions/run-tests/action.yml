@@ -58,7 +58,7 @@ runs:
       working-directory: ${{ env.SOURCE_DIR }}
       run: |
         # Build command with flags
-        CMD="./scripts/test-ci.sh"
+        CMD="./villagesql/bld_tools/test_ci.sh"
 
         # Unit tests flag
         if [ "${{ inputs.run-unit-tests }}" = "false" ]; then
