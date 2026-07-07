@@ -36,5 +36,20 @@ bool upgrade_villagesql_from_0_0_1_to_0_0_3(THD *thd) {
       {ER_DUP_FIELDNAME});
 }
 
+bool upgrade_villagesql_from_0_0_4_to_0_0_5(THD *thd) {
+  // Add pending_action column to extensions table. Stores a JSON blob
+  // describing a deferred action (today: version_update via
+  // ALTER EXTENSION ... AT RESTART). NULL when no action is pending.
+  LogVSQL(INFORMATION_LEVEL,
+          "Upgrading extensions: adding pending_action column");
+  return execute_statement_ignore_errors(
+      thd,
+      "ALTER TABLE villagesql.extensions "
+      "ADD COLUMN pending_action JSON NULL "
+      "COMMENT 'Pending deferred action (e.g. version update). "
+      "NULL when no action is pending.'",
+      {ER_DUP_FIELDNAME});
+}
+
 }  // namespace upgrade
 }  // namespace villagesql

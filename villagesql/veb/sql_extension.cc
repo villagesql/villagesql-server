@@ -96,24 +96,32 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   return execute_install(thd);
 }
 
-// Update an installed extension to a different version. Currently runs the
-// compatibility pre-checks against the target package and then stops short
-// of any catalog mutation — durable pending-update storage lands in a
-// later slice. A successful pre-check is reported to the operator as
-// "pre-checks passed; pending-update storage not yet implemented".
+// Update an installed extension to a different version, recording the
+// change as a pending action that the next restart applies.
 //
-// The flow:
+// Policy:
+//   - Target == current, no pending action: Note + no-op. Idempotent.
+//   - Target == current, pending action exists: clear the pending action
+//     (implicit reset) with a Note. Cancels a previously queued update.
+//   - Target != current, pending action exists: error. The operator must
+//     clear the pending action first (re-queue the current version) before
+//     queueing a different target.
+//   - Target != current, no pending action: run the precheck against the
+//     target package; on success, record the pending action.
+//
+// The flow for the recording path:
 //   1. Standard install-style prologue: name validation, global read lock,
 //      backup lock, X MDL on the extension name.
-//   2. Confirm the extension is installed; capture its current version.
+//   2. Confirm the extension is installed; capture its current version and
+//      whether it already has a pending action.
 //   3. Resolve the target VEB on disk to a .so path.
 //   4. Build an UpdatePreCheckInput snapshot from the victionary under the
 //      read lock and call RunUpdatePreCheck; the precheck owns the target
 //      dlopen / vef_register / dlclose cycle. Capability populate is NOT
 //      run for the target — only vef_register's own side effects are
 //      observable in the live server during the precheck.
-//   5. Emit the precheck error verbatim on failure, or a "not yet
-//      implemented" placeholder on success.
+//   5. On precheck success, open villagesql.extensions for writing, set
+//      pending_action on the row, and flush the victionary.
 bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
   // Not replicated; updates are operator actions, not statement-replicated.
   const Disable_binlog_guard binlog_guard(thd);
@@ -147,9 +155,11 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
 
   auto &victionary = villagesql::VictionaryClient::instance();
 
-  // Look up the currently installed version under the read lock. Release the
-  // read lock before end_transaction (rollback grabs the write lock).
+  // Look up the currently installed version and any pending action under the
+  // read lock. Release the read lock before end_transaction (rollback grabs
+  // the write lock).
   std::string current_version;
+  bool already_has_pending = false;
   {
     auto read_lock = victionary.get_read_lock();
     const auto *existing = victionary.extensions().get_committed(
@@ -159,35 +169,105 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
                        extension_name.c_str());
     } else {
       current_version = existing->extension_version;
+      already_has_pending = existing->has_pending_action();
     }
   }
   if (thd->is_error()) return end_transaction(thd, true);
 
-  // Target same as current: Note + no-op. Idempotent; lets scripts re-run
-  // an ALTER without first checking whether the version was already applied.
+  // Target same as current. Either a Note + no-op (no pending action) or
+  // an implicit reset (pending action exists -- clear it). Either way we
+  // do not run the precheck; in the reset case we just clear pending_action
+  // on the extension row.
   if (current_version == target_version) {
+    if (!already_has_pending) {
+      push_warning_printf(thd, Sql_condition::SL_NOTE,
+                          ER_VILLAGESQL_GENERIC_ERROR,
+                          "Extension '%s' is already at version '%s'",
+                          extension_name.c_str(), target_version.c_str());
+      my_ok(thd);
+      return end_transaction(thd, false);
+    }
+
+    // Implicit reset: target matches current and a pending action exists.
+    // Open the extensions table for writing, clear pending_action, commit.
+    Table_ref ext_table(villagesql::SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                        villagesql::SchemaManager::EXTENSIONS_TABLE_NAME,
+                        TL_WRITE, MDL_SHARED_WRITE);
+    if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
+      villagesql_error("Cannot open %s table", MYF(0),
+                       villagesql::SchemaManager::EXTENSIONS_TABLE_NAME);
+      return end_transaction(thd, true);
+    }
+
+    // The X-MDL we hold on the extension name above guarantees no
+    // concurrent UNINSTALL or ALTER on this extension; the row still
+    // exists and still has the pending action we observed under the read
+    // lock.
+    bool reset_success = false;
+    {
+      auto write_lock = victionary.get_write_lock();
+      const auto *existing = victionary.extensions().get_committed(
+          villagesql::ExtensionKey(extension_name));
+      villagesql::ExtensionEntry updated(*existing);
+      updated.pending_action.reset();
+      if (victionary.extensions().MarkForUpdate(*thd, std::move(updated),
+                                                existing->key())) {
+        villagesql_error("Failed to clear pending action for extension '%s'",
+                         MYF(0), extension_name.c_str());
+      } else {
+        reset_success = true;
+      }
+    }
+    if (!reset_success) return end_transaction(thd, true);
+
+    if (victionary.write_all_uncommitted_entries(thd)) {
+      villagesql_error("Failed to clear pending action for extension '%s'",
+                       MYF(0), extension_name.c_str());
+      return end_transaction(thd, true);
+    }
+
     push_warning_printf(thd, Sql_condition::SL_NOTE,
                         ER_VILLAGESQL_GENERIC_ERROR,
-                        "Extension '%s' is already at version '%s'",
+                        "Cleared pending update for extension '%s' "
+                        "(target matches current version '%s')",
                         extension_name.c_str(), target_version.c_str());
+    LogVSQL(INFORMATION_LEVEL,
+            "Cleared pending action for extension '%s' (implicit reset via "
+            "ALTER EXTENSION ... VERSION '%s' AT RESTART)",
+            extension_name.c_str(), target_version.c_str());
     my_ok(thd);
     return end_transaction(thd, false);
   }
 
-  // Resolve the target VEB on disk and the .so path it expands to. This is
-  // caller-side (it touches the filesystem and emits villagesql_error on
-  // failure); only the .so path is passed into the pure precheck below.
-  std::string target_expanded_path;
-  std::string target_sha256;
-  if (villagesql::veb::expand_veb_to_directory(
-          extension_name, target_version, target_expanded_path, target_sha256))
+  // Target differs from current and a pending action already exists -- the
+  // operator must clear it before queueing a new target. Re-issuing with
+  // the current version (handled above) cancels the existing pending
+  // action.
+  if (already_has_pending) {
+    villagesql_error(
+        "Extension '%s' already has a pending update; clear it with "
+        "ALTER EXTENSION %s VERSION '%s' AT RESTART before queueing a "
+        "different version",
+        MYF(0), extension_name.c_str(), extension_name.c_str(),
+        current_version.c_str());
     return end_transaction(thd, true);
+  }
 
-  std::string target_so_path =
-      villagesql::veb::get_extension_so_path(extension_name, target_sha256);
-  if (target_so_path.empty()) {
-    villagesql_error("Failed to construct .so path for extension '%s'", MYF(0),
-                     extension_name.c_str());
+  // Resolve the target VEB on disk and the .so path it expands to. This is
+  // caller-side (it touches the filesystem); only the .so path is passed into
+  // the pure precheck below. On failure the helper populates resolve_error;
+  // expand_veb_to_directory may also have emitted villagesql_error internally,
+  // so pass the helper's message through only if the error state is otherwise
+  // empty.
+  std::string target_sha256;
+  std::string target_so_path;
+  std::string resolve_error;
+  if (villagesql::veb::ResolveTargetSoPath(extension_name, target_version,
+                                           &target_sha256, &target_so_path,
+                                           &resolve_error)) {
+    if (!thd->is_error()) {
+      villagesql_error("%s", MYF(0), resolve_error.c_str());
+    }
     return end_transaction(thd, true);
   }
 
@@ -195,53 +275,11 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
   // copies everything the check needs out of the victionary so the precheck
   // itself stays free of victionary, THD, and logging access.
   villagesql::veb::UpdatePreCheckInput input;
-  input.extension_name = extension_name;
-  input.current_version = current_version;
-  input.target_version = target_version;
-  input.target_so_path = std::move(target_so_path);
-  input.server_protocol =
-      static_cast<int>(villagesql::veb::vef_server_protocol_version);
-
   {
     auto read_lock = victionary.get_read_lock();
-
-    const auto &all_type_descs =
-        victionary.type_descriptors().get_all_committed();
-    for (const auto *td : all_type_descs) {
-      if (td->extension_name() != extension_name ||
-          td->extension_version() != current_version)
-        continue;
-      villagesql::veb::CurrentTypeSnapshot s;
-      s.type_name = td->type_name();
-      s.persisted_length = td->persisted_length();
-      input.current_types.push_back(std::move(s));
-    }
-
-    const auto &all_columns = victionary.columns().get_all_committed();
-    for (const auto *col : all_columns) {
-      if (col->extension_name != extension_name ||
-          col->extension_version != current_version)
-        continue;
-      villagesql::veb::DependentColumnSnapshot s;
-      s.db_name = col->db_name();
-      s.table_name = col->table_name();
-      s.column_name = col->column_name();
-      s.type_name = col->type_name;
-      input.dependent_columns.push_back(std::move(s));
-    }
-
-    const auto &all_sp_params = victionary.sp_params().get_all_committed();
-    for (const auto *sp : all_sp_params) {
-      if (sp->extension_name != extension_name ||
-          sp->extension_version != current_version)
-        continue;
-      villagesql::veb::DependentSpParamSnapshot s;
-      s.db_name = sp->db_name();
-      s.sp_name = sp->sp_name();
-      s.param_name = sp->param_name();
-      s.type_name = sp->type_name;
-      input.dependent_sp_params.push_back(std::move(s));
-    }
+    villagesql::veb::BuildUpdatePreCheckSnapshot(
+        victionary, extension_name, current_version, target_version,
+        std::move(target_so_path), &input);
   }
 
   // The precheck owns the target dlopen / vef_register / dlclose cycle;
@@ -255,14 +293,53 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
     return end_transaction(thd, true);
   }
 
-  // Pre-checks passed; the remainder of the update path is not yet
-  // implemented in this slice.
-  villagesql_error(
-      "Extension '%s' version update from '%s' to '%s' is not yet implemented "
-      "(pre-checks passed)",
-      MYF(0), extension_name.c_str(), current_version.c_str(),
-      target_version.c_str());
-  return end_transaction(thd, true);
+  // Pre-checks passed. Open villagesql.extensions for writing before
+  // marking and committing the pending action.
+  Table_ref ext_table(villagesql::SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                      villagesql::SchemaManager::EXTENSIONS_TABLE_NAME,
+                      TL_WRITE, MDL_SHARED_WRITE);
+  if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
+    villagesql_error("Cannot open %s table", MYF(0),
+                     villagesql::SchemaManager::EXTENSIONS_TABLE_NAME);
+    return end_transaction(thd, true);
+  }
+
+  // Record the pending action on the extension row so the next restart
+  // can apply the version swap. The X-MDL we hold on the extension name
+  // guarantees no concurrent UNINSTALL or ALTER on this extension; the
+  // row still exists and still has no pending action.
+  bool mark_success = false;
+  {
+    auto write_lock = victionary.get_write_lock();
+    const auto *existing = victionary.extensions().get_committed(
+        villagesql::ExtensionKey(extension_name));
+    villagesql::ExtensionEntry updated(*existing);
+    updated.pending_action = villagesql::PendingAction::CreateVersionUpdate(
+        target_version, target_sha256);
+    if (victionary.extensions().MarkForUpdate(*thd, std::move(updated),
+                                              existing->key())) {
+      villagesql_error("Failed to record pending update for extension '%s'",
+                       MYF(0), extension_name.c_str());
+    } else {
+      mark_success = true;
+    }
+  }
+  if (!mark_success) return end_transaction(thd, true);
+
+  if (victionary.write_all_uncommitted_entries(thd)) {
+    villagesql_error("Failed to record pending update for extension '%s'",
+                     MYF(0), extension_name.c_str());
+    return end_transaction(thd, true);
+  }
+
+  LogVSQL(INFORMATION_LEVEL,
+          "Recorded pending update for extension '%s' from version '%s' to "
+          "'%s'; applied on next server restart",
+          extension_name.c_str(), current_version.c_str(),
+          target_version.c_str());
+
+  my_ok(thd);
+  return end_transaction(thd, false);
 }
 
 bool Sql_cmd_install_extension::execute_install(THD *thd) {

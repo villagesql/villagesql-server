@@ -1,0 +1,49 @@
+# A pending update that passed precheck at ALTER time can still fail at
+# restart-apply time if the catalog changed in between. Here the operator
+# queues an update to v1.2.0 (which drops the COUNTER type entirely) when
+# no column uses COUNTER, then adds a dependent column before the restart.
+# Restart-time precheck now sees the dependent column and rejects the
+# apply. The server comes up at v1.0.0 with the failure recorded on the
+# row.
+
+call mtr.add_suppression("pending update to version .* not applied");
+call mtr.add_suppression("Cannot update extension");
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+# At this point no column depends on COUNTER, so dropping the type is
+# safe and the ALTER-time precheck accepts the target.
+ALTER EXTENSION update_test VERSION '1.2.0' AT RESTART;
+
+# Now add a column that uses COUNTER. The pending update was already
+# staged; the catalog state visible to the restart-apply precheck will
+# include this column.
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '7');
+
+--source include/restart_mysqld.inc
+
+# The apply was rejected at restart. Installed version is still 1.0.0;
+# pending fields remain queryable; PENDING_LAST_ERROR carries the
+# precheck reason.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# The table is still usable against the current (v1) version of the type.
+SELECT id, val FROM t ORDER BY id;
+
+# Confirm the failure record survives a second restart (it's persisted,
+# not just re-derived).
+--source include/restart_mysqld.inc
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Operator clears the pending action by re-queueing the current version;
+# the failure goes with it.
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+DROP TABLE t;
+UNINSTALL EXTENSION update_test;

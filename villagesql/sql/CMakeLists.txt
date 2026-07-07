@@ -30,4 +30,6 @@ TARGET_LINK_LIBRARIES(villagesql_sql PRIVATE extra::rapidjson)
 
 ADD_DEPENDENCIES(villagesql_sql GenError)
 ADD_DEPENDENCIES(villagesql_sql GenServerSource)
+# initialize.cc includes the generated villagesql/include/version.h
+ADD_DEPENDENCIES(villagesql_sql villagesql_version_gen)
 TARGET_LINK_LIBRARIES(villagesql_sql PRIVATE extra::unordered_dense)

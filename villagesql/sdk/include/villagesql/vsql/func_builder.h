@@ -78,6 +78,20 @@ constexpr const char *STRING = "STRING";
 constexpr const char *INT = "INT";
 constexpr const char *REAL = "REAL";
 
+namespace detail {
+
+// Compile-time traps for function-builder misuse. These are intentionally left
+// undefined and are NOT constexpr. Every extension is registered inside a
+// `static constexpr` builder chain (see VEF_GENERATE_ENTRY_POINTS), so the
+// whole chain is constant-evaluated; reaching a call to one of these during
+// that evaluation is ill-formed and the function name is the compiler's
+// diagnostic. (If a builder is instead used at runtime, the bad path fails to
+// link, for the same absence of a definition.)
+[[noreturn]] void max_result_length_is_only_valid_for_a_STRING_return_type();
+[[noreturn]] void call_returns_before_max_result_length();
+
+}  // namespace detail
+
 // Encode: string -> custom binary. The function reports its outcome by
 // calling out.set_length(n), out.set_null(), out.warning(msg), or
 // out.error(msg). If none is called, the result is undefined.
@@ -174,6 +188,7 @@ class FuncBuilder {
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
@@ -197,6 +212,7 @@ class FuncBuilder {
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
@@ -216,6 +232,7 @@ class FuncBuilder {
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
@@ -225,6 +242,26 @@ class FuncBuilder {
   constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &buffer_size(
       size_t s) {
     buffer_size_ = s;
+    return *this;
+  }
+
+  // Declare the maximum length of the STRING result, in characters, so the
+  // result column is sized to hold the full value when materialized. A
+  // STRING-returning VDF that does not declare this falls back to the argument
+  // width (a large result then truncates when materialized). Bumps the required
+  // protocol to VEF_PROTOCOL_4.
+  //
+  // Only valid for a STRING return type. Call .returns(STRING) before this so
+  // the return type is known here: a non-STRING return (or an undeclared one)
+  // is rejected at build time rather than silently ignored.
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &max_result_length(
+      uint64_t n) {
+    if (return_type_ == nullptr) {
+      detail::call_returns_before_max_result_length();
+    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
+      detail::max_result_length_is_only_valid_for_a_STRING_return_type();
+    }
+    max_result_length_ = n;
     return *this;
   }
 
@@ -246,6 +283,7 @@ class FuncBuilder {
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
     next.prerun_ = &detail::typed_prerun_wrapper<Hook>;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
@@ -364,6 +402,7 @@ class FuncBuilder {
     meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
+    meta.max_result_length = max_result_length_;
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
@@ -378,6 +417,7 @@ class FuncBuilder {
         return_type_(nullptr),
         param_types_{},
         buffer_size_(0),
+        max_result_length_(0),
         prerun_(nullptr),
         postrun_(nullptr),
         deterministic_(false) {}
@@ -386,6 +426,7 @@ class FuncBuilder {
   const char *return_type_;
   std::array<const char *, NumParams> param_types_;
   size_t buffer_size_;
+  uint64_t max_result_length_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   bool deterministic_;
@@ -420,6 +461,7 @@ class AggFuncBuilder {
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
     next.clear_ = clear_;
     next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
@@ -432,6 +474,26 @@ class AggFuncBuilder {
 
   constexpr AggFuncBuilder<State, Func, NumParams> &buffer_size(size_t s) {
     buffer_size_ = s;
+    return *this;
+  }
+
+  // Declare the maximum length of the STRING result, in characters, so the
+  // result column is sized to hold the full value when materialized. An
+  // aggregate returning STRING that does not declare this falls back to the
+  // argument width (a large result then truncates when materialized). Bumps the
+  // required protocol to VEF_PROTOCOL_4.
+  //
+  // Only valid for a STRING return type. Call .returns(STRING) before this so
+  // the return type is known here: a non-STRING return (or an undeclared one)
+  // is rejected at build time rather than silently ignored.
+  constexpr AggFuncBuilder<State, Func, NumParams> &max_result_length(
+      uint64_t n) {
+    if (return_type_ == nullptr) {
+      detail::call_returns_before_max_result_length();
+    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
+      detail::max_result_length_is_only_valid_for_a_STRING_return_type();
+    }
+    max_result_length_ = n;
     return *this;
   }
 
@@ -508,6 +570,7 @@ class AggFuncBuilder {
     meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
+    meta.max_result_length = max_result_length_;
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
@@ -525,6 +588,7 @@ class AggFuncBuilder {
         return_type_(nullptr),
         param_types_{},
         buffer_size_(0),
+        max_result_length_(0),
         deterministic_(false),
         clear_(nullptr),
         accumulate_(nullptr) {}
@@ -533,6 +597,7 @@ class AggFuncBuilder {
   const char *return_type_;
   std::array<const char *, NumParams> param_types_;
   size_t buffer_size_;
+  uint64_t max_result_length_;
   bool deterministic_;
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;

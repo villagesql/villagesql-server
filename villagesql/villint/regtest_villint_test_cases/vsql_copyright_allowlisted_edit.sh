@@ -4,7 +4,7 @@
 
 set -e
 
-FILE="extra/libbacktrace/sha9ae4f4a/internal.h"
+FILE="extra/libbacktrace/sha793921876c981/internal.h"
 
 echo "Modifying allowlisted file: $FILE"
 

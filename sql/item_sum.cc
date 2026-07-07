@@ -4042,10 +4042,17 @@ my_decimal *Item_sum_udf_int::val_decimal(my_decimal *dec) {
 /** Default max_length is max argument length. */
 
 bool Item_sum_udf_str::resolve_type(THD *) {
-  set_data_type(MYSQL_TYPE_VARCHAR);
   max_length = 0;
   for (uint i = 0; i < arg_count; i++)
     max_length = max(max_length, args[i]->max_length);
+  if (udf.is_vdf_returns_string()) {
+    // VDFs returning STRING produce text, not binary; size the result field
+    // from the declared max output length, falling back to the argument width.
+    // Mirrors the scalar path in Item_func_udf_str::resolve_type().
+    udf.set_vdf_string_result_type(this, max_length);
+  } else {
+    set_data_type(MYSQL_TYPE_VARCHAR);
+  }
   return false;
 }
 

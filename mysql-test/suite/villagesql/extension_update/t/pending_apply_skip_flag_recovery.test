@@ -1,0 +1,104 @@
+# Operator recovery scenario for --villagesql-skip-extension-updates.
+#
+# Flow:
+#   1. Install extension at v1, queue an ALTER to v2 AT RESTART.
+#   2. Attempt to start the server with a debug hook that forces
+#      write_all_uncommitted_entries to appear to fail during the persist
+#      step. This trips the fail-startup path -- server does not come up.
+#   3. Recover: restart with --villagesql-skip-extension-updates. Server
+#      comes up, extension is still at v1, pending action is intact.
+#   4. Clear the pending action via a same-version ALTER (implicit reset).
+#   5. Restart normally (no flag, no debug hook). Server comes up cleanly
+#      with no pending action.
+#
+# This exercises:
+#   - The debug-injected persist failure that would otherwise be hard to
+#     reproduce (write_all_uncommitted_entries returning true typically
+#     requires a real SE-layer failure).
+#   - The skip flag as the operator escape hatch: state is preserved,
+#     nothing on disk is mutated by the flag itself.
+#   - Return to normal operation after clearing.
+
+--source include/have_debug.inc
+
+call mtr.add_suppression("Failed to persist pending-update decision");
+call mtr.add_suppression("Extension loading failed");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("Aborting");
+call mtr.add_suppression("--villagesql-skip-extension-updates is set");
+
+# Step 1: install + queue a pending update.
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '10');
+
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Step 2: try to start server with the debug hook that forces persist
+# failure. Server should refuse to start (exit 1).
+# We spawn mysqld directly via --exec so mtr does not try to supervise
+# the process. The expect file is set to "wait" so mtr will not attempt
+# to auto-restart while we drive the failing spawn ourselves.
+
+let SEARCH_FILE = $MYSQLTEST_VARDIR/log/my_fail_start.err;
+--error 0,1
+--remove_file $SEARCH_FILE
+
+--let $_server_id = `SELECT @@server_id`
+--let $_expect_file_name = $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
+--exec echo "wait" > $_expect_file_name
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+# suite.opt (--vsql_allow_preview_extensions=ON) is not inherited by
+# direct --exec of $MYSQLD_CMD, so we must pass it explicitly here.
+# Otherwise update_test refuses to load and the server exits before
+# reaching the pending-persist step.
+--echo # Attempt startup with persist-failure DBUG hook -- expect exit 1
+--error 1
+--exec $MYSQLD_CMD --vsql_allow_preview_extensions=ON --log-error=$SEARCH_FILE --debug=+d,villagesql_fail_pending_persist
+
+--echo # Server correctly refused to start; verify the failure was
+--echo # the injected persist failure.
+let SEARCH_PATTERN = Failed to persist pending-update decision;
+--source include/search_pattern.inc
+
+# Step 3: recover with --villagesql-skip-extension-updates. Server comes
+# up, extension is still at v1, pending action intact.
+
+--let $restart_parameters = restart:--villagesql-skip-extension-updates
+--source include/start_mysqld.inc
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Table still renders via v1 (extension still loaded at 1.0.0).
+SELECT id, val FROM t ORDER BY id;
+
+# Step 4: clear the pending action via same-version ALTER. The
+# same-version-implicit-reset path does not require the flag.
+
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Step 5: restart normally, no flag, no debug hook. Should come up
+# cleanly.
+
+--let $restart_parameters =
+--source include/restart_mysqld.inc
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Cleanup
+DROP TABLE t;
+UNINSTALL EXTENSION update_test;
+
+--error 0,1
+--remove_file $SEARCH_FILE

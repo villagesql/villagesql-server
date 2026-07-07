@@ -1,0 +1,36 @@
+# Restart-time apply of a queued version update. After the restart the
+# extension row is at the target version, the pending action is cleared,
+# and SELECTs against custom columns resolve through the target version's
+# to_string implementation.
+#
+# v1's COUNTER::to_string emits "v1:N"; v2's emits "v2:N" for the same
+# on-disk bytes. Observing "v2:..." after the restart proves the swap
+# happened and that dependent custom_columns rows were rewritten to the
+# new extension_version (otherwise the type would resolve against a
+# stale version).
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
+
+# Before the update, SELECT renders via v1.to_string.
+SELECT id, val FROM t ORDER BY id;
+
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+
+# Pending fields populated, version still 1.0.0.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+--source include/restart_mysqld.inc
+
+# Installed version is now 2.0.0; pending fields cleared.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Same on-disk bytes, now rendered via v2.to_string.
+SELECT id, val FROM t ORDER BY id;
+
+DROP TABLE t;
+UNINSTALL EXTENSION update_test;

@@ -4518,6 +4518,37 @@ bool udf_handler::is_vdf_returns_string() const {
          u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING;
 }
 
+void udf_handler::set_vdf_string_result_type(Item *item,
+                                             uint32 default_length) const {
+  assert(is_vdf_returns_string());
+  // Size the result field for a STRING-returning VDF, mirroring a classic
+  // loadable UDF. Prefer the max output length the extension declared
+  // (max_result_length); otherwise fall back to default_length,
+  // the argument-derived width the caller computed. A classic UDF that does
+  // not set initid->max_length behaves the same, so an undeclared result is
+  // sized to the arguments and a large one truncates on materialization.
+  //
+  // A declared length is a count of result characters and is passed straight
+  // through: it is NOT scaled by mbmaxlen, so an N-character ASCII/JSON result
+  // is not clipped to N/4. Both paths are capped at MAX_BLOB_WIDTH, like a
+  // classic UDF (see the init path in udf_handler::fix_fields).
+  // set_data_type_string then buckets to VARCHAR / MEDIUM / LONG blob by
+  // length.
+  // TODO(villagesql): Allow VDFs to choose an encoding.
+  uint64_t len = 0;
+  if (u_d != nullptr && u_d->vdf_func_desc != nullptr &&
+      u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_4) {
+    len = u_d->vdf_func_desc->max_result_length;
+  }
+  if (len == 0) {
+    len = default_length;
+  }
+  if (len > MAX_BLOB_WIDTH) {
+    len = MAX_BLOB_WIDTH;
+  }
+  item->set_data_type_string(static_cast<uint32>(len), &my_charset_utf8mb4_bin);
+}
+
 void udf_handler::cleanup() {
   if (!m_original || !m_initialized) return;
 
@@ -5241,8 +5272,7 @@ bool Item_func_udf_str::resolve_type(THD *) {
     result_length = max(result_length, args[i]->max_length);
   // If the UDF has an init function, this may be overridden later.
   if (udf.is_vdf_returns_string()) {
-    // TODO(villagesql): Allow VDFs to choose an encoding.
-    set_data_type_string(result_length, &my_charset_utf8mb4_bin);
+    udf.set_vdf_string_result_type(this, result_length);
   } else {
     set_data_type_string(result_length, &my_charset_bin);
   }

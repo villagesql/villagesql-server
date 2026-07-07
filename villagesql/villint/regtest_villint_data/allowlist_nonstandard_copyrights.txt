@@ -2,5 +2,5 @@
 # Add one file path per line (relative to repository root)
 # Example:
 # extra/some_third_party/file.cc
-extra/libbacktrace/sha9ae4f4a/internal.h
+extra/libbacktrace/sha793921876c981/internal.h
 extra/libarchive/

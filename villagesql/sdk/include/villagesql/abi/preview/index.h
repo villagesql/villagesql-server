@@ -94,6 +94,26 @@ typedef void *vef_index_ref_t;
 typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
                                              uint32_t key_pos, bool is_primary);
 
+// Resolve a column reference to column data.
+// The caller pre-allocates col_data; the server fills in its data pointer and
+// length to reference the stored column value.
+// Returns false on success, true on error (writes to error_msg).
+typedef bool (*vef_index_col_ref_to_data_fn)(vef_index_ref_t index_ref,
+                                             vef_storage_col_ref_t col_ref,
+                                             vef_storage_col_data_t *col_data,
+                                             char *error_msg,
+                                             uint32_t error_msg_len);
+
+// Derive a stable column reference from column data.
+// col_data must describe a value that was previously inserted into column
+// storage; the server computes the stable col_ref for that stored value.
+// Returns false on success, true on error (writes to error_msg).
+typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
+                                             vef_storage_col_data_t col_data,
+                                             vef_storage_col_ref_t *col_ref,
+                                             char *error_msg,
+                                             uint32_t error_msg_len);
+
 // Call a helper function from the index profile by its registered ID.
 // An index profile is declared by the extension when registering an index type.
 // It enumerates helper functions (e.g. distance, compare) each identified by a
@@ -103,7 +123,8 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 // the extension determines these conventions when it registers the profile.
 // Profile functions are infallible.
 typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref, uint32_t fn_id,
-                                     void *args, uint32_t nargs, void *result);
+                                     const void *const *args, uint32_t nargs,
+                                     void *result);
 
 // Index context passed by the server to every extension function. The pointer
 // remains valid for the lifetime of the loaded index storage; the extension
@@ -129,6 +150,14 @@ typedef struct {
 
   // Get maximum key storage length. Always non-NULL.
   vef_index_max_key_len_fn key_len_fn;
+
+  // Convert a column reference to column data. Always non-NULL when
+  // VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props; otherwise NULL.
+  vef_index_col_ref_to_data_fn col_ref_to_data_fn;
+
+  // Derive a stable column reference from column data. Always non-NULL when
+  // VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props; otherwise NULL.
+  vef_index_col_data_to_ref_fn col_data_to_ref_fn;
 
   // Pointer to the options struct filled by parse() at CREATE INDEX time.
   // Valid only during the create() call; NULL for all other calls and when

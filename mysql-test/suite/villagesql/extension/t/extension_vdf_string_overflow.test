@@ -1,0 +1,98 @@
+# A STRING-returning VDF writes its result through the SDK StringResult wrapper.
+# The wrapper follows an snprintf-style overflow contract: it copies what
+# fits but reports the full size via actual_len. The server (vdf_handler) sees
+# actual_len > buffer size, grows the buffer (rounded up to a 1 KiB quantum),
+# and re-invokes the VDF so the full value is returned.
+#
+# vdf_concat is an aggregate STRING-returning VDF (out.set(state)) -- the same
+# shape as the STATS_TTEST aggregate in the bug report. By concatenating enough
+# rows we drive its output past the limit, exercising the grow-and-retry path.
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+# Build and install the aggregate VDF test extension (provides vdf_concat)
+--let $extension_name = agg_vdf_ext
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION agg_vdf_ext;
+
+# Each row holds a fixed 50-byte string. vdf_concat joins them with a single
+# ',' separator, so for N rows the result is exactly N*50 + (N-1) bytes,
+# independent of aggregation order (only the length is asserted; the order in
+# which rows are concatenated is not guaranteed).
+CREATE TABLE s_data (id INT PRIMARY KEY AUTO_INCREMENT, s VARCHAR(60));
+
+--disable_query_log
+let $i = 100;
+while ($i)
+{
+  eval INSERT INTO s_data (s) VALUES (REPEAT(CHAR(65 + ($i % 26)), 50));
+  dec $i;
+}
+--enable_query_log
+
+# 30 rows -> 30*50 + 29 = 1529 bytes. Past the 1 KiB default buffer, so this
+# requires one grow-and-retry.
+SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data WHERE id <= 30;
+
+# 100 rows -> 100*50 + 99 = 5099 bytes. A larger result reached via the same
+# high-water-mark buffer.
+SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data;
+
+# The value is intact, not just long: a full 50-byte field from the middle of
+# the stream must survive uncorrupted (the rows include a run of 50 'A's).
+SELECT INSTR(agg_vdf_ext.vdf_concat(s), REPEAT('A', 50)) > 0 AS field_intact
+FROM s_data;
+
+# vdf_concat does not declare a max output length, so -- like a classic UDF
+# that leaves initid->max_length unset -- its result column falls back to the
+# argument width. The streamed value is still returned in full; only a result
+# *stored* into a Field would be bounded by that width. Declaring
+# max_result_length is how an extension opts into a wide materialized column;
+# that path is covered by extension_vdf_result_length.test.
+#
+# Each group concatenates 20*50 + 19 = 1019 bytes; streamed after grouping it
+# comes back in full.
+CREATE TABLE g_data (id INT PRIMARY KEY AUTO_INCREMENT, grp INT, s VARCHAR(60));
+--disable_query_log
+let $i = 40;
+while ($i)
+{
+  eval INSERT INTO g_data (grp, s) VALUES ($i % 2, REPEAT('z', 50));
+  dec $i;
+}
+--enable_query_log
+SELECT grp, LENGTH(agg_vdf_ext.vdf_concat(s)) AS len
+FROM g_data
+GROUP BY grp
+ORDER BY grp;
+DROP TABLE g_data;
+
+# Buffer growth is capped by max_allowed_packet: like MySQL's built-in string
+# functions (CONCAT, REPEAT, ...), a result larger than the cap yields a
+# row-level warning and NULL, not a truncated value or a fatal error. Use a
+# fresh connection so the low global value takes effect without disturbing the
+# default connection.
+SET @old_map = @@global.max_allowed_packet;
+SET GLOBAL max_allowed_packet = 1024;
+
+--connect (con_cap, localhost, root,,)
+SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data;
+SHOW WARNINGS;
+--connection default
+--disconnect con_cap
+
+SET GLOBAL max_allowed_packet = @old_map;
+
+# Cleanup
+DROP TABLE s_data;
+UNINSTALL EXTENSION agg_vdf_ext;
