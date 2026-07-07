@@ -7391,25 +7391,35 @@ type:
           {
             $$= NEW_PTN PT_json_type(@$);
           }
-        | IDENT_sys opt_field_length
+        | IDENT_sys %prec PREFER_PARENTHESES
           {
-            // Custom data type, potentially - we will find out when constructing.
-            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, {}, $1, $2);
+            // Custom data type with no length or parameters: TYPE
+            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, {}, $1);
           }
-        | IDENT_sys '.' IDENT_sys opt_field_length
+        | IDENT_sys field_length
+          {
+            // Custom type with an integer length: TYPE(N)
+            $$= villagesql::PT_custom_type::create_with_length(YYMEM_ROOT, @$, Lex->thd, {}, $1, $2);
+          }
+        | IDENT_sys '.' IDENT_sys %prec PREFER_PARENTHESES
           {
             // Qualified custom type: extension_name.type_name
-            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, $1, $3, $4);
+            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, $1, $3);
+          }
+        | IDENT_sys '.' IDENT_sys field_length
+          {
+            // Qualified custom type with an integer length: extension_name.type_name(N)
+            $$= villagesql::PT_custom_type::create_with_length(YYMEM_ROOT, @$, Lex->thd, $1, $3, $4);
           }
         | IDENT_sys '(' TEXT_STRING_literal ')'
           {
             // Custom type with string parameters: TYPE('key=value,...')
-            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, {}, $1, nullptr, $3.str, $3.length);
+            $$= villagesql::PT_custom_type::create_with_params(YYMEM_ROOT, @$, Lex->thd, {}, $1, $3.str, $3.length);
           }
         | IDENT_sys '.' IDENT_sys '(' TEXT_STRING_literal ')'
           {
             // Qualified custom type with string parameters
-            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, $1, $3, nullptr, $5.str, $5.length);
+            $$= villagesql::PT_custom_type::create_with_params(YYMEM_ROOT, @$, Lex->thd, $1, $3, $5.str, $5.length);
           }
         ;
 
