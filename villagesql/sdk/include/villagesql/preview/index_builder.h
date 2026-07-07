@@ -84,43 +84,43 @@
 // ctx->user() and the InnoDB arena via ctx->arena().
 //
 //   Lifecycle:
-//     bool fn(Ctx*, const Index&, Space::Ref,
-//             Segment::TrxRef, char*, uint32_t);                 // create
-//     bool fn(Ctx*, const Index&, Segment::TrxRef,
-//             char*, uint32_t);                                   // drop
-//     bool fn(Ctx*, const Index&, Index::StorageRef,
-//             char*, uint32_t);                                   // load
+//     bool create(Ctx*, const Index&, Space::Ref,
+//                 Segment::TrxRef, char*, uint32_t);
+//     bool drop(Ctx*, const Index&, Segment::TrxRef,
+//               char*, uint32_t);
+//     bool load(Ctx*, const Index&, Index::StorageRef,
+//               char*, uint32_t);
 //
 //   DML:
-//     bool fn(Ctx*, const Index&, Segment::TrxRef,
-//             IndexScanKey::KeyPartData* keys,
-//             IndexScanKey::KeyPartData* pkeys,
-//             IndexScanKey::KeyPartRef* key_ref, char*, uint32_t); // insert
-//     bool fn(Ctx*, const Index&, Segment::TrxRef,
-//             IndexScanKey::KeyPartRef* key_ref,
-//             IndexScanKey::KeyPartData* keys,
-//             IndexScanKey::KeyPartData* pkeys,
-//             bool delete_mark, char*, uint32_t);                // mark_delete
-//     bool fn(Ctx*, const Index&, Segment::TrxRef,
-//             IndexScanKey::KeyPartRef* key_ref,
-//             IndexScanKey::KeyPartData* keys,
-//             IndexScanKey::KeyPartData* pkeys,
-//             char*, uint32_t);                                   // purge
+//     bool insert(Ctx*, const Index&, Segment::TrxRef,
+//                 IndexScanKey::KeyPartData* keys,
+//                 IndexScanKey::KeyPartData* pkeys,
+//                 IndexScanKey::KeyPartRef* key_ref, char*, uint32_t);
+//     bool mark_delete(Ctx*, const Index&, Segment::TrxRef,
+//                      IndexScanKey::KeyPartRef* key_ref,
+//                      IndexScanKey::KeyPartData* keys,
+//                      IndexScanKey::KeyPartData* pkeys,
+//                      bool delete_mark, char*, uint32_t);
+//     bool purge(Ctx*, const Index&, Segment::TrxRef,
+//                IndexScanKey::KeyPartRef* key_ref,
+//                IndexScanKey::KeyPartData* keys,
+//                IndexScanKey::KeyPartData* pkeys,
+//                char*, uint32_t);
 //
 //   Scan:
-//     bool fn(Ctx*, const Index&, MtrCtx::Ref,
-//             const IndexScanDesc&, Index::Cursor*, bool*,
-//             char*, uint32_t);                                   // begin
-//     bool fn(Index::Cursor, Index::CursorOp, bool*,
-//             char*, uint32_t);                                   // position
-//     bool fn(Index::Cursor, IndexScanKey::KeyPartRef*,
-//             IndexScanKey::KeyPartData* keys,
-//             IndexScanKey::KeyPartData* pkeys,
-//             char*, uint32_t);                                   // fetch
-//     bool fn(Index::Cursor, char*, uint32_t);                   // save
-//     bool fn(Index::Cursor, MtrCtx::Ref, bool*,
-//             char*, uint32_t);                                   // restore
-//     void fn(Index::Cursor*);                                   // end
+//     bool begin(Ctx*, const Index&, MtrCtx::Ref,
+//                const IndexScanDesc&, Index::Cursor*, bool*,
+//                char*, uint32_t);
+//     bool position(Index::Cursor, Index::CursorOp, bool*,
+//                   char*, uint32_t);
+//     bool fetch(Index::Cursor, IndexScanKey::KeyPartRef*,
+//                IndexScanKey::KeyPartData* keys,
+//                IndexScanKey::KeyPartData* pkeys,
+//                char*, uint32_t);
+//     bool save(Index::Cursor, char*, uint32_t);
+//     bool restore(Index::Cursor, MtrCtx::Ref, bool*,
+//                  char*, uint32_t);
+//     void end(Index::Cursor*);
 //
 // CURSOR OWNERSHIP
 // ----------------
@@ -259,10 +259,68 @@ using Arena = vsql::preview_storage::Arena;
 using vsql::preview_storage::detail::ERROR_MSG_SIZE;
 using vsql::preview_storage::detail::tl_error_msg;
 
-// Wraps vef_index_ctx_t to expose server-provided index callbacks as typed C++
-// methods. Constructed from the const vef_index_ctx_t* passed to every
-// extension function; the pointer is valid for the lifetime of the loaded index
-// storage, so Index may be cached inside Index::StorageCtx or cursor state.
+// Represents a scan key used to define an index scan boundary.
+class IndexScanKey {
+ public:
+  using KeyPartData = vef_storage_col_data_t;
+  using KeyPartRef = vef_storage_col_ref_t;
+
+  enum class Type : vef_index_scan_key_type_t {
+    Begin = VEF_INDEX_SCAN_KEY_TYPE_BEGIN,
+    End = VEF_INDEX_SCAN_KEY_TYPE_END,
+    KnnQuery = VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY,
+  };
+  static constexpr KeyPartRef EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
+
+  explicit IndexScanKey(const vef_index_scan_key_t &key) : key_(key) {}
+
+  Type type() const { return static_cast<Type>(key_.type); }
+  uint32_t num_columns() const { return key_.num_key_columns; }
+  bool is_bounded() const { return key_.key_columns != nullptr; }
+  bool include_key() const { return static_cast<bool>(key_.include_key); }
+
+  bool is_begin() const { return type() == Type::Begin; }
+  bool is_end() const { return type() == Type::End; }
+  bool is_knn() const { return type() == Type::KnnQuery; }
+
+  const KeyPartData &operator[](uint32_t i) const {
+    return key_.key_columns[i];
+  }
+
+ private:
+  const vef_index_scan_key_t &key_;
+};
+
+// Describes an index scan, including its type, scan direction, and scan keys.
+class IndexScanDesc {
+ public:
+  enum class Type : vef_index_scan_type_t {
+    Point = VEF_INDEX_SCAN_TYPE_POINT,
+    Range = VEF_INDEX_SCAN_TYPE_RANGE,
+    Knn = VEF_INDEX_SCAN_TYPE_KNN,
+  };
+
+  explicit IndexScanDesc(const vef_index_scan_desc_t &desc) : desc_(desc) {}
+
+  Type scan_type() const { return static_cast<Type>(desc_.scan_type); }
+  bool is_point() const { return scan_type() == Type::Point; }
+  bool is_range() const { return scan_type() == Type::Range; }
+  bool is_knn() const { return scan_type() == Type::Knn; }
+
+  bool reverse() const { return static_cast<bool>(desc_.reverse); }
+  uint32_t limit() const { return desc_.limit; }
+  uint32_t num_keys() const { return desc_.num_keys; }
+
+  IndexScanKey operator[](uint32_t i) const {
+    return IndexScanKey{desc_.keys[i]};
+  }
+
+ private:
+  const vef_index_scan_desc_t &desc_;
+};
+
+// Provides access to the index definition and services required by an
+// extension.
 class Index {
  public:
   using Ref = vef_index_ref_t;
@@ -334,15 +392,15 @@ class Index {
     ctx_.helper_fn(ctx_.index_ref, fn_id, argv, sizeof...(Args), result);
   }
 
-  bool col_ref_to_data(vef_storage_col_ref_t col_ref,
-                       vef_storage_col_data_t *col_data) const {
-    return ctx_.col_ref_to_data_fn(ctx_.index_ref, col_ref, col_data,
+  bool get_key_data(IndexScanKey::KeyPartRef key_ref,
+                    IndexScanKey::KeyPartData *key_data) const {
+    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_ref, key_data,
                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
-  bool col_data_to_ref(vef_storage_col_data_t col_data,
-                       vef_storage_col_ref_t *col_ref) const {
-    return ctx_.col_data_to_ref_fn(ctx_.index_ref, col_data, col_ref,
+  bool get_key_ref(IndexScanKey::KeyPartData key_data,
+                   IndexScanKey::KeyPartRef *key_ref) const {
+    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_data, key_ref,
                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
@@ -366,66 +424,6 @@ constexpr Index::Ordering operator|(Index::Ordering a, Index::Ordering b) {
   return static_cast<Index::Ordering>(static_cast<uint8_t>(a) |
                                       static_cast<uint8_t>(b));
 }
-
-// Wraps vef_index_scan_key_t for typed access to scan key data.
-class IndexScanKey {
- public:
-  using KeyPartData = vef_storage_col_data_t;
-  using KeyPartRef = vef_storage_col_ref_t;
-
-  enum class Type : vef_index_scan_key_type_t {
-    Begin = VEF_INDEX_SCAN_KEY_TYPE_BEGIN,
-    End = VEF_INDEX_SCAN_KEY_TYPE_END,
-    KnnQuery = VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY,
-  };
-  static constexpr KeyPartRef EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
-
-  explicit IndexScanKey(const vef_index_scan_key_t &key) : key_(key) {}
-
-  Type type() const { return static_cast<Type>(key_.type); }
-  uint32_t num_columns() const { return key_.num_key_columns; }
-  bool is_bounded() const { return key_.key_columns != nullptr; }
-  bool include_key() const { return static_cast<bool>(key_.include_key); }
-
-  bool is_begin() const { return type() == Type::Begin; }
-  bool is_end() const { return type() == Type::End; }
-  bool is_knn() const { return type() == Type::KnnQuery; }
-
-  const KeyPartData &operator[](uint32_t i) const {
-    return key_.key_columns[i];
-  }
-
- private:
-  const vef_index_scan_key_t &key_;
-};
-
-// Wraps vef_index_scan_desc_t for typed access to scan descriptor data.
-class IndexScanDesc {
- public:
-  enum class Type : vef_index_scan_type_t {
-    Point = VEF_INDEX_SCAN_TYPE_POINT,
-    Range = VEF_INDEX_SCAN_TYPE_RANGE,
-    Knn = VEF_INDEX_SCAN_TYPE_KNN,
-  };
-
-  explicit IndexScanDesc(const vef_index_scan_desc_t &desc) : desc_(desc) {}
-
-  Type scan_type() const { return static_cast<Type>(desc_.scan_type); }
-  bool is_point() const { return scan_type() == Type::Point; }
-  bool is_range() const { return scan_type() == Type::Range; }
-  bool is_knn() const { return scan_type() == Type::Knn; }
-
-  bool reverse() const { return static_cast<bool>(desc_.reverse); }
-  uint32_t limit() const { return desc_.limit; }
-  uint32_t num_keys() const { return desc_.num_keys; }
-
-  IndexScanKey operator[](uint32_t i) const {
-    return IndexScanKey{desc_.keys[i]};
-  }
-
- private:
-  const vef_index_scan_desc_t &desc_;
-};
 
 namespace detail {
 
