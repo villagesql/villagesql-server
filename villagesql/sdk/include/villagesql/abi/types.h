@@ -190,6 +190,42 @@ typedef enum : unsigned int {
                    //   the argument width (fixes materialization truncation).
 } vef_protocol_t;
 
+// =============================================================================
+// PRACTICAL LIMITS
+// =============================================================================
+// A field or parameter's type is wide enough to carry any supported value with
+// room to spare; its width is not a promise that the full range is usable. The
+// supported range is the limit documented below. Exceeding a limit has defined
+// behavior -- never undefined behavior:
+//
+// VEF_MAX_RESULT_LENGTH (16 MiB): the largest max_result_length, and the width
+// of a materialized STRING/CUSTOM result column. A larger declared value is
+// capped to it; a produced value wider than the column is truncated when
+// materialized.
+//
+// VEF_MAX_ERROR_LEN (512 bytes): the size of error_msg buffers. A longer
+// message is truncated to fit.
+//
+// VEF_MAX_TYPE_PARAMS_STRING_LEN (1024 bytes): the size of the int_to_params /
+// resolve_params "k=v,..." strings. On overflow the required length is reported
+// via actual_len and the caller retries with a larger buffer.
+//
+// Two bounds are not single numeric constants: function arity is limited to 8
+// fixed parameters by the typed C++ builder (kMaxParams) unless varargs
+// (VEF_PARAM_VARARGS) is used; and persisted_length / max_persisted_length are
+// bounded by the backing storage field width (also VEF_MAX_RESULT_LENGTH) and
+// by the type's own declared maximum.
+// =============================================================================
+
+// TODO(villagesql-windows): consider making the ABI use fixed-width types. For
+// now, we don't think this matters, but it may become an issue for Windows,
+// which has different native lengths, especially if we support Windows+WASM.
+
+// Maximum length of a materialized result column: utf8mb4 characters for a
+// STRING result, bytes for a CUSTOM result. Equals the server's MAX_BLOB_WIDTH.
+// See PRACTICAL LIMITS above.
+#define VEF_MAX_RESULT_LENGTH 16777216
+
 // Max length of error messages in caller-provided buffers.
 #define VEF_MAX_ERROR_LEN 512
 
@@ -643,7 +679,7 @@ typedef struct {
   // truncated at the argument width. 0 = fall back to the argument width (like
   // a classic UDF that leaves initid->max_length unset, in which case a large
   // result truncates when materialized). Not allowed for non-STRING return
-  // types. Capped at MAX_BLOB_WIDTH.
+  // types. Capped at VEF_MAX_RESULT_LENGTH (see PRACTICAL LIMITS).
   //
   // Distinct from buffer_size, which is only the initial row-time output buffer
   // (it grows on demand); this bounds the column the result is stored into.

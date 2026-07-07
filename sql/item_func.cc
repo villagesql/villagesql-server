@@ -4543,6 +4543,10 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   if (len == 0) {
     len = default_length;
   }
+  // VEF_MAX_RESULT_LENGTH is the ABI's documented name for this cap; keep the
+  // two in lockstep so the header's contract matches what is enforced here.
+  static_assert(VEF_MAX_RESULT_LENGTH == MAX_BLOB_WIDTH,
+                "VEF_MAX_RESULT_LENGTH must equal MAX_BLOB_WIDTH");
   if (len > MAX_BLOB_WIDTH) {
     len = MAX_BLOB_WIDTH;
   }
