@@ -215,7 +215,7 @@ class Result {
   explicit operator bool() const { return handle_ != nullptr; }
 
   // Number of columns in the result set.
-  unsigned int num_columns() const {
+  uint32_t num_columns() const {
     if (handle_ == nullptr || cap_.abi_ == nullptr ||
         cap_.abi_->num_columns == nullptr)
       return 0;
@@ -224,19 +224,19 @@ class Result {
 
   // Column value as a string_view. Valid until the next next() call.
   // Returns a null string_view (data() == nullptr) for SQL NULL.
-  std::string_view column_str(unsigned int i) const {
+  std::string_view column_str(uint32_t i) const {
     if (row_ == nullptr || row_[i] == nullptr) return {};
     return {row_[i], lengths_[i]};
   }
 
   // Column value as an int64_t. Returns 0 for NULL.
-  int64_t column_int(unsigned int i) const {
+  int64_t column_int(uint32_t i) const {
     if (row_ == nullptr || row_[i] == nullptr) return 0;
     return std::strtoll(row_[i], nullptr, 10);
   }
 
   // Column value as a double. Returns 0.0 for NULL.
-  double column_real(unsigned int i) const {
+  double column_real(uint32_t i) const {
     if (row_ == nullptr || row_[i] == nullptr) return 0.0;
     return std::strtod(row_[i], nullptr);
   }
@@ -269,7 +269,7 @@ class Result {
   }
 
   // Number of warnings/notes attached to the result.
-  unsigned int warning_count() const {
+  uint32_t warning_count() const {
     if (handle_ == nullptr || cap_.abi_ == nullptr ||
         cap_.abi_->warning_count == nullptr)
       return 0;
@@ -277,7 +277,7 @@ class Result {
   }
 
   // i-th warning (0-based). Returns a default Diag if i is out of range.
-  Diag warning(unsigned int i) const {
+  Diag warning(uint32_t i) const {
     Diag d;
     if (handle_ == nullptr || cap_.abi_ == nullptr ||
         cap_.abi_->get_warning == nullptr)
@@ -324,23 +324,22 @@ class SqlQuery {
   // duration of the callback; do not store across rows.
   class Row {
    public:
-    Row(const char **row, const unsigned long *lengths,
-        unsigned int num_columns)
+    Row(const char **row, const unsigned long *lengths, uint32_t num_columns)
         : row_(row), lengths_(lengths), num_columns_(num_columns) {}
 
-    unsigned int num_columns() const { return num_columns_; }
+    uint32_t num_columns() const { return num_columns_; }
 
-    std::string_view column_str(unsigned int i) const {
+    std::string_view column_str(uint32_t i) const {
       if (row_ == nullptr || row_[i] == nullptr) return {};
       return {row_[i], lengths_[i]};
     }
 
-    int64_t column_int(unsigned int i) const {
+    int64_t column_int(uint32_t i) const {
       if (row_ == nullptr || row_[i] == nullptr) return 0;
       return std::strtoll(row_[i], nullptr, 10);
     }
 
-    double column_real(unsigned int i) const {
+    double column_real(uint32_t i) const {
       if (row_ == nullptr || row_[i] == nullptr) return 0.0;
       return std::strtod(row_[i], nullptr);
     }
@@ -348,7 +347,7 @@ class SqlQuery {
    private:
     const char **row_{nullptr};
     const unsigned long *lengths_{nullptr};
-    unsigned int num_columns_{0};
+    uint32_t num_columns_{0};
   };
 
   // Execute the query and invoke fn once per row, without buffering the full
@@ -370,8 +369,8 @@ class SqlQuery {
 
     vef_sql_result_t *h = session_.cap().abi_->for_each_row(
         session_.handle(), sql_.data(), sql_.size(),
-        [](const char **row, const unsigned long *lengths,
-           unsigned int num_columns, void *raw) -> bool {
+        [](const char **row, const unsigned long *lengths, uint32_t num_columns,
+           void *raw) -> bool {
           auto *c = static_cast<Ctx *>(raw);
           Row r{row, lengths, num_columns};
           c->fn(r);
