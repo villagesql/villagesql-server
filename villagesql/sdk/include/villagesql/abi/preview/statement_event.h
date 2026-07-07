@@ -106,7 +106,7 @@ typedef struct {
   // Query text. Not null-terminated; use query_len.
   // Lifetime: copy before return.
   const char *query;
-  size_t query_len;
+  uint64_t query_len;
 
   // Authenticated user name, or empty string.
   // Lifetime: connection lifetime.

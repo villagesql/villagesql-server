@@ -50,7 +50,7 @@ extern "C" {
 // Status variable type. Unlike system variables (which are configurable),
 // status variables are read-only counters and gauges exposed via SHOW STATUS.
 typedef enum {
-  VEF_STATUS_VAR_INT = 0,     // long long counter/gauge (shown as unsigned)
+  VEF_STATUS_VAR_INT = 0,     // int64_t counter/gauge (shown as unsigned)
   VEF_STATUS_VAR_DOUBLE = 1,  // double gauge
 } vef_status_var_type_t;
 
@@ -69,7 +69,7 @@ typedef struct {
   // lifetime of the extension. The extension writes to this; the server reads
   // it at SHOW STATUS time.
   union {
-    long long *integer_ptr;
+    int64_t *integer_ptr;
     double *double_ptr;
   };
 } vef_status_var_desc_t;

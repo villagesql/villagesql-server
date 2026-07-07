@@ -47,6 +47,23 @@ server.
 Any changes to the ABI/API must be done in the Unstable/Development version of the headers.
 See [API_ABI.md](API_ABI.md) for more details on the API and ABI.
 
+### Fixed-Width Types
+
+Use fixed-width integer types (`int64_t`, `uint64_t`, `uint32_t`, ...) in the
+ABI/API — never platform-dependent types such as `size_t`, `long`, `long long`,
+or `unsigned int`. The width of `size_t`/`long` varies by platform, and even
+same-width types are distinct: `int64_t` is `long` on 64-bit Linux but
+`long long` on macOS. Platform types make the binary layout and the function
+signatures non-portable across the platforms an extension may target — a
+mismatch that frequently compiles on one platform and fails on another. Format
+integer values with the `<cinttypes>` macros (`PRId64`, `PRIu64`, `SCNd64`)
+instead of `%lld`/`%llu` with casts.
+
+This applies to the ABI headers and the C++ API surface. Server-side code that
+bridges to MySQL's own machinery (e.g. a `PLUGIN_VAR_LONGLONG` system variable)
+should still use MySQL's types (`longlong`) at that boundary, since it must
+match the type of the object MySQL owns.
+
 ### Stabilizing a Protocol
 
 When the functionality in the new protocol is ready, then it should be

@@ -63,8 +63,8 @@ typedef enum {
 typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
                                                     const char *auth_id,
                                                     unsigned char *buf,
-                                                    size_t buf_len,
-                                                    size_t *out_len);
+                                                    uint64_t buf_len,
+                                                    uint64_t *out_len);
 
 // Write a secret to the MySQL keyring component.
 //   data_id:   identifier for the secret.
@@ -74,7 +74,7 @@ typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
 typedef vef_keyring_result_t (*vef_write_keyring_fn)(const char *data_id,
                                                      const char *auth_id,
                                                      const unsigned char *data,
-                                                     size_t data_len);
+                                                     uint64_t data_len);
 
 typedef struct {
   // Capability ABI version. Always the first field in every capability vtable.
