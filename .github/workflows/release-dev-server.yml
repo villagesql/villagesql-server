@@ -108,10 +108,8 @@ jobs:
             source/scripts/setup_macos_ext_deps.sh
           fi
 
-      - name: Build and package dev server
+      - name: Build the dev server and bundled extensions
         run: |
-          mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
-
           if [[ "${{ github.event_name }}" != "workflow_dispatch" || "${{ inputs.release_build }}" == "true" ]]; then
             PRE_RELEASE=""
           else
@@ -125,10 +123,18 @@ jobs:
           fi
 
           BUILD_DIR="$BUILD_DIR" \
-          OUTPUT_DIR="$OUTPUT_DIR" \
           CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
           VSQL_PRE_RELEASE_VERSION="${PRE_RELEASE}" \
-            source/scripts/make_villagesql_dev_server.sh
+            source/villagesql/bld_tools/make_villagesql_dev_server.sh
+
+      - name: Package dev server tarball
+        run: |
+          mkdir -p "$OUTPUT_DIR"
+
+          BUILD_DIR="$BUILD_DIR" \
+          OUTPUT_DIR="$OUTPUT_DIR" \
+          BUILD_BUNDLED_EXTENSIONS="${BUILD_BUNDLED_EXTENSIONS:-0}" \
+            source/villagesql/bld_tools/package_dev_server.sh
 
       - name: Run integration tests
         run: |
