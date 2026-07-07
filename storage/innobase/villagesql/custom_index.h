@@ -53,12 +53,16 @@ class Custom_index {
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
   static constexpr StorageRef EMPTY_STORAGE_REF = 0;
 
-  explicit Custom_index(std::shared_ptr<const IndexContext> index_context)
-      : index_context_(std::move(index_context)) {}
+  explicit Custom_index(std::shared_ptr<const IndexContext> index_metadata)
+      : index_metadata_(std::move(index_metadata)) {}
 
-  const std::shared_ptr<const IndexContext> &index_context() const {
-    return index_context_;
+  // Custom index metadata from victionary.
+  const std::shared_ptr<const IndexContext> &index_meta() const {
+    return index_metadata_;
   }
+
+  // Custom index extension interface.
+  const vef_type_index_intf_t &interface() const;
 
   // ABI index context handed to every extension index function. The pointer
   // remains valid for the lifetime of this Custom_index (the index heap).
@@ -73,13 +77,13 @@ class Custom_index {
   // Persistent storage reference read from dd::Index se_private_data by
   // check_and_set(). Used by load() to reconnect to extension storage.
   StorageRef storage_ref() const { return storage_ref_; }
-  bool has_storage_ref() const { return storage_ref_ != EMPTY_STORAGE_REF; }
 
-  // Allocates Custom_index on index->heap, sets index->custom_index.
-  static dberr_t check_and_set(dict_index_t *index, const IndexContext *ctx,
-                               const dd::Index *dd_index);
+  // Sets up index->custom_index and restores its persistent storage
+  // reference from the DD, if available.
+  static dberr_t attach(dict_index_t *index, const IndexContext *meta,
+                        const dd::Index *dd_index);
 
-  // Loads custom index in extended storage. Carries the Custom_index runtime
+  // Loads index from custom index storage. Carries the Custom_index runtime
   // state from old_index onto new_index's heap.
   static dberr_t load(dict_index_t *new_index, const dict_index_t *old_index);
 
@@ -103,10 +107,10 @@ class Custom_index {
   static void free_all(dict_index_t *index);
 
  private:
-  std::shared_ptr<const IndexContext> index_context_;
+  std::shared_ptr<const IndexContext> index_metadata_;
   vef_index_ctx_t index_ctx_{};
   StorageCtx *storage_ctx_ = nullptr;
-  StorageRef storage_ref_ = EMPTY_STORAGE_REF;
+  StorageRef storage_ref_{};
 };
 
 }  // namespace innodb

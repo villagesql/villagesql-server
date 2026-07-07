@@ -2494,18 +2494,6 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   if (index->rtr_srs.get() != nullptr)
     new_index->rtr_srs.reset(index->rtr_srs->clone());
 
-  // Carry the Custom_index runtime state onto the cache-internal index by
-  // re-loading it onto new_index's heap. The prototype's Custom_index is
-  // destroyed by dict_mem_index_free(index) at the end of this function.
-  {
-    dberr_t cerr = villagesql::innodb::Custom_index::load(new_index, index);
-    if (cerr != DB_SUCCESS) {
-      dict_mem_index_free(new_index);
-      dict_mem_index_free(index);
-      return cerr;
-    }
-  }
-
   if (dict_index_too_big_for_tree(table, new_index)) {
     if (strict) {
       dict_mem_index_free(new_index);
@@ -2578,6 +2566,18 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   } else {
     /* The rules should not prevent caching for intrinsic tables */
     ut_ad(!table->is_intrinsic());
+  }
+
+  // Carry the Custom_index runtime state onto the cache-internal index by
+  // re-loading it onto new_index's heap. The prototype's Custom_index is
+  // destroyed by dict_mem_index_free(index) at the end of this function.
+  {
+    dberr_t cerr = villagesql::innodb::Custom_index::load(new_index, index);
+    if (cerr != DB_SUCCESS) {
+      dict_mem_index_free(new_index);
+      dict_mem_index_free(index);
+      return cerr;
+    }
   }
 
   dict_sys_mutex_enter();

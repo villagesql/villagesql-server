@@ -2984,7 +2984,7 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
                   my_error(ER_INDEX_COLUMN_TOO_LONG, MYF(0), max_len);
                   return HA_ERR_TOO_BIG_ROW;);
   {
-    dberr_t cerr = villagesql::innodb::Custom_index::check_and_set(
+    dberr_t cerr = villagesql::innodb::Custom_index::attach(
         index, key.custom_index_context, dd_index);
     if (cerr != DB_SUCCESS) return cerr;
   }

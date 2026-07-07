@@ -204,8 +204,8 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
 
   using villagesql::innodb::Custom_index;
   {
-    dberr_t cerr = Custom_index::check_and_set(
-        index, index_def->m_custom_index_context, nullptr);
+    dberr_t cerr =
+        Custom_index::attach(index, index_def->m_custom_index_context, nullptr);
     if (cerr != DB_SUCCESS) {
       trx->error_state = cerr;
       trx_set_detailed_error(trx,

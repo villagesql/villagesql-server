@@ -12336,7 +12336,7 @@ inline int create_index(
   using villagesql::innodb::Custom_index;
   {
     dberr_t cerr =
-        Custom_index::check_and_set(index, key->custom_index_context, nullptr);
+        Custom_index::attach(index, key->custom_index_context, nullptr);
     if (cerr != DB_SUCCESS) {
       dict_mem_index_free(index);
       error = convert_error_code_to_mysql(cerr, flags, nullptr);
