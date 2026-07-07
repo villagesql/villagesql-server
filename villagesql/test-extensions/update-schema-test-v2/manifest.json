@@ -1,0 +1,7 @@
+{
+  "name": "update_schema_test",
+  "version": "2.0.0",
+  "description": "VillageSQL test extension for demonstrating on-disk representation migration across an ALTER EXTENSION version bump. v2 keeps MYTYPE (4-byte int, backward-compatible with v1) and adds MYTYPE_V2 (8-byte int) plus a mytype_to_v2 VDF that converts MYTYPE values to MYTYPE_V2.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

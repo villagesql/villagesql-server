@@ -1,0 +1,53 @@
+call mtr.add_suppression("pending update to version .* not applied");
+call mtr.add_suppression("Cannot update extension");
+INSTALL EXTENSION update_test VERSION '1.0.0';
+INSTALL EXTENSION update_schema_test VERSION '1.0.0';
+ALTER EXTENSION update_test VERSION '1.2.0' AT RESTART;
+ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('update_test', 'update_schema_test')
+ORDER BY extension_name;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_schema_test	1.0.0	2.0.0	NULL
+update_test	1.0.0	1.2.0	NULL
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '7');
+CREATE TABLE u (id INT PRIMARY KEY, val update_schema_test.MYTYPE);
+INSERT INTO u VALUES (1, '10'), (2, '20');
+# restart
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('update_test', 'update_schema_test')
+ORDER BY extension_name;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_schema_test	2.0.0	NULL	NULL
+update_test	1.0.0	1.2.0	Cannot update extension 'update_test': type 'COUNTER' is being dropped but column test.t.val depends on it
+SELECT id, val FROM t ORDER BY id;
+id	val
+1	v1:7
+SELECT id, val FROM u ORDER BY id;
+id	val
+1	v1:10
+2	v1:20
+ALTER TABLE u
+ADD COLUMN val_v2 update_schema_test.MYTYPE_V2
+AS (update_schema_test.mytype_to_v2(val)) STORED;
+SELECT id, val, val_v2 FROM u ORDER BY id;
+id	val	val_v2
+1	v1:10	v2:10
+2	v1:20	v2:20
+DROP TABLE t;
+DROP TABLE u;
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+Warnings:
+Note	3219	Cleared pending update for extension 'update_test' (target matches current version '1.0.0')
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('update_test', 'update_schema_test')
+ORDER BY extension_name;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_schema_test	2.0.0	NULL	NULL
+update_test	1.0.0	NULL	NULL
+UNINSTALL EXTENSION update_test;
+UNINSTALL EXTENSION update_schema_test;

@@ -1,0 +1,74 @@
+# Two extensions with pending updates in one restart: mixed outcomes.
+#
+# Apply-time decisions are per-extension and independent — one
+# extension's restart-apply failure must not roll back another's staging.
+#
+# A = update_test 1.0.0 -> 1.2.0. v1.2.0 drops the COUNTER type entirely.
+#   Between ALTER and restart we add a column that depends on COUNTER,
+#   the same mechanism used by pending_restart_persists_failure to force
+#   a restart-time precheck rejection.
+# B = update_schema_test 1.0.0 -> 2.0.0. v2.0.0 keeps MYTYPE and adds
+#   MYTYPE_V2. Precheck passes both at ALTER time and at restart time.
+#
+# After restart: A stays at 1.0.0 with pending_last_error populated;
+# B is at 2.0.0 with pending fields cleared.
+
+call mtr.add_suppression("pending update to version .* not applied");
+call mtr.add_suppression("Cannot update extension");
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+INSTALL EXTENSION update_schema_test VERSION '1.0.0';
+
+# Queue both pending updates. A's target drops COUNTER; at this point no
+# column depends on COUNTER so precheck accepts it.
+ALTER EXTENSION update_test VERSION '1.2.0' AT RESTART;
+ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+
+# Both pending actions visible.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name IN ('update_test', 'update_schema_test')
+  ORDER BY extension_name;
+
+# Add a column dependent on update_test.COUNTER. Restart-apply precheck
+# for A will now reject v1.2.0. B is unaffected.
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '7');
+
+# Independent B-side table so we can observe B's apply after restart.
+CREATE TABLE u (id INT PRIMARY KEY, val update_schema_test.MYTYPE);
+INSERT INTO u VALUES (1, '10'), (2, '20');
+
+--source include/restart_mysqld.inc
+
+# A rolled back at restart: still at 1.0.0, pending_last_error populated.
+# B applied cleanly: at 2.0.0, pending_last_error NULL, pending_version NULL.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name IN ('update_test', 'update_schema_test')
+  ORDER BY extension_name;
+
+# A's dependent column still usable at v1.
+SELECT id, val FROM t ORDER BY id;
+
+# B's data readable and renders unchanged (MYTYPE compat across v1/v2).
+SELECT id, val FROM u ORDER BY id;
+
+# B's new MYTYPE_V2 type is available.
+ALTER TABLE u
+  ADD COLUMN val_v2 update_schema_test.MYTYPE_V2
+    AS (update_schema_test.mytype_to_v2(val)) STORED;
+SELECT id, val, val_v2 FROM u ORDER BY id;
+
+DROP TABLE t;
+DROP TABLE u;
+
+# Clear A's pending action by re-queueing its current version.
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name IN ('update_test', 'update_schema_test')
+  ORDER BY extension_name;
+
+UNINSTALL EXTENSION update_test;
+UNINSTALL EXTENSION update_schema_test;

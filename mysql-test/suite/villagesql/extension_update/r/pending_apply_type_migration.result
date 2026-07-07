@@ -1,0 +1,36 @@
+INSTALL EXTENSION update_schema_test VERSION '1.0.0';
+CREATE TABLE t (id INT PRIMARY KEY, val MYTYPE);
+INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
+SELECT id, val FROM t ORDER BY id;
+id	val
+1	v1:10
+2	v1:20
+3	v1:5
+ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+# restart
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_schema_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_schema_test	2.0.0	NULL	NULL
+SELECT id, val FROM t ORDER BY id;
+id	val
+1	v1:10
+2	v1:20
+3	v1:5
+ALTER TABLE t
+ADD COLUMN val_v2 MYTYPE_V2 AS (mytype_to_v2(val)) STORED;
+SELECT id, val, val_v2 FROM t ORDER BY id;
+id	val	val_v2
+1	v1:10	v2:10
+2	v1:20	v2:20
+3	v1:5	v2:5
+ALTER TABLE t
+MODIFY COLUMN val_v2 MYTYPE_V2,
+DROP COLUMN val;
+SELECT id, val_v2 FROM t ORDER BY id;
+id	val_v2
+1	v2:10
+2	v2:20
+3	v2:5
+DROP TABLE t;
+UNINSTALL EXTENSION update_schema_test;

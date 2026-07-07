@@ -50,3 +50,10 @@ vsql_add_test_extension(update-test-v1                 update_test  VERSION 1.0.
 vsql_add_test_extension(update-test-v1.1               update_test  VERSION 1.1.0)
 vsql_add_test_extension(update-test-v1.2               update_test  VERSION 1.2.0)
 vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.0)
+
+# update_schema_test v1/v2 exercise on-disk representation migration across
+# ALTER EXTENSION ... AT RESTART: v1 registers MYTYPE (4-byte int), v2 keeps
+# MYTYPE (backward-compatible) and adds MYTYPE_V2 (8-byte int) plus a
+# mytype_to_v2 conversion VDF.
+vsql_add_test_extension(update-schema-test-v1          update_schema_test  VERSION 1.0.0)
+vsql_add_test_extension(update-schema-test-v2          update_schema_test  VERSION 2.0.0)
