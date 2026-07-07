@@ -60,15 +60,25 @@ ALTER TABLE u
     AS (update_schema_test.mytype_to_v2(val)) STORED;
 SELECT id, val, val_v2 FROM u ORDER BY id;
 
+# Operator resolves the blocker: drop the COUNTER-dependent table. A's
+# pending action survives on disk (persisted across the failed apply)
+# and will be retried on the next restart.
 DROP TABLE t;
-DROP TABLE u;
 
-# Clear A's pending action by re-queueing its current version.
-ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+--source include/restart_mysqld.inc
+
+# A now applies cleanly: at 1.2.0, no pending action.
 SELECT extension_name, extension_version, pending_version, pending_last_error
   FROM INFORMATION_SCHEMA.EXTENSIONS
   WHERE extension_name IN ('update_test', 'update_schema_test')
   ORDER BY extension_name;
 
+# TODO(villagesql-beta): DROP TABLE for a table with a stored generated
+# column whose expression calls a custom VDF fails to resolve the VDF's
+# custom-type argument during a cold share reopen (post-restart, no
+# prior touch in this session). Warm the share first as a workaround.
+SHOW CREATE TABLE u;
+
+DROP TABLE u;
 UNINSTALL EXTENSION update_test;
 UNINSTALL EXTENSION update_schema_test;

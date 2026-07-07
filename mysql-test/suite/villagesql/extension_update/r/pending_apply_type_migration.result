@@ -25,10 +25,10 @@ id	val	val_v2
 2	v1:20	v2:20
 3	v1:5	v2:5
 ALTER TABLE t
-MODIFY COLUMN val_v2 MYTYPE_V2,
-DROP COLUMN val;
-SELECT id, val_v2 FROM t ORDER BY id;
-id	val_v2
+DROP COLUMN val,
+CHANGE COLUMN val_v2 val MYTYPE_V2;
+SELECT id, val FROM t ORDER BY id;
+id	val
 1	v2:10
 2	v2:20
 3	v2:5

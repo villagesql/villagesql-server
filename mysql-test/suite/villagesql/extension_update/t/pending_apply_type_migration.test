@@ -42,14 +42,16 @@ ALTER TABLE t
 # Both columns visible; val_v2 renders as "v2:N".
 SELECT id, val, val_v2 FROM t ORDER BY id;
 
-# One combined ALTER: detach val_v2 from the generated expression AND
-# drop the old val column. Server does a single rebuild.
+# One combined ALTER: detach val_v2 from the generated expression, drop
+# the old val column, and rename val_v2 back to val so the final schema
+# shape matches the original (just with the wider MYTYPE_V2 type). Single
+# rebuild.
 ALTER TABLE t
-  MODIFY COLUMN val_v2 MYTYPE_V2,
-  DROP COLUMN val;
+  DROP COLUMN val,
+  CHANGE COLUMN val_v2 val MYTYPE_V2;
 
-# Final schema: id, val_v2 (MYTYPE_V2). Values render as "v2:N".
-SELECT id, val_v2 FROM t ORDER BY id;
+# Final schema: id, val (MYTYPE_V2). Values render as "v2:N".
+SELECT id, val FROM t ORDER BY id;
 
 DROP TABLE t;
 UNINSTALL EXTENSION update_schema_test;
