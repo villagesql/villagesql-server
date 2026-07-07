@@ -84,6 +84,18 @@ class PT_custom_type : public PT_type {
     }
   }
 
+  // Resolve the type descriptor for the given (extension_name, type_name). On
+  // success, sets descriptor (which may be nullptr if the type was not found)
+  // and returns false. Returns true if descriptor resolution itself failed
+  // with an error already recorded.
+  static bool resolve_descriptor(const LEX_STRING &extension_name,
+                                 const LEX_STRING &type_name,
+                                 const TypeDescriptor *&descriptor) {
+    descriptor = nullptr;
+    return ResolveTypeDescriptor(to_string_view(extension_name),
+                                 to_string_view(type_name), descriptor);
+  }
+
  public:
   // During parsing, type_name is not yet validated. However, when we construct
   // this object, we could find out there actually was an error in specifying
@@ -113,6 +125,32 @@ class PT_custom_type : public PT_type {
       return true;
     }
 
+    // Validate the resolved persisted_length against the type's declared
+    // length kind. Fixed-length types must resolve to a concrete positive
+    // footprint; variable-length types size their storage per value, so
+    // they must not report a fixed persisted_length here.
+    if (descriptor->is_variable_length()) {
+      if (resolved.persisted_length > 0) {
+        thd->syntax_error_at(
+            pos,
+            "Variable-length type '%s' resolved an unexpected fixed "
+            "persisted_length (%" PRId64
+            "); variable-length types size storage per value, so "
+            "persisted_length should be <= 0 (stay unset)",
+            descriptor->qualified_base_name().c_str(),
+            resolved.persisted_length);
+        return true;
+      }
+    } else if (resolved.persisted_length <= 0) {
+      thd->syntax_error_at(
+          pos,
+          "Type '%s' resolved an invalid persisted_length (%" PRId64
+          "); fixed-length types must resolve to a concrete footprint, so "
+          "persisted_length should be > 0",
+          descriptor->qualified_base_name().c_str(), resolved.persisted_length);
+      return true;
+    }
+
     TypeParameters params(params_str);
 
     type_context = nullptr;
@@ -123,17 +161,15 @@ class PT_custom_type : public PT_type {
     return false;
   }
 
-  // Factory for TYPE(N) and unparameterized syntax.
+  // Factory for the bare, unparameterized custom type syntax: TYPE (no length,
+  // no parameters).
   static PT_custom_type *create(MEM_ROOT *pt_mem_root, const POS &pos, THD *thd,
                                 const LEX_STRING &extension_name,
-                                const LEX_STRING &type_name,
-                                const char *length) {
+                                const LEX_STRING &type_name) {
     // Resolve the descriptor first so we can inspect the type's
-    // characteristics. We defer creating the TypeContext until
-    // the concrete parameters are known.
+    // characteristics.
     const TypeDescriptor *descriptor = nullptr;
-    if (ResolveTypeDescriptor(to_string_view(extension_name),
-                              to_string_view(type_name), descriptor)) {
+    if (resolve_descriptor(extension_name, type_name, descriptor)) {
       return nullptr;
     }
 
@@ -143,115 +179,123 @@ class PT_custom_type : public PT_type {
           PT_custom_type(pos, thd, type_name, nullptr, nullptr);
     }
 
-    // Note, this create function is called when params string is empty.
-    if (!descriptor->is_variable_length() && descriptor->is_parameterized() &&
-        !descriptor->int_to_params_fn().has_value()) {
-      thd->syntax_error_at(pos, "Fixed-length type '%s' requires parameters",
-                           descriptor->qualified_base_name().c_str());
-      return nullptr;
-    }
-
     const TypeContext *type_context = nullptr;
 
-    // Handle types that accept a length spec. Note that this create function
-    // only handles TYPE(N) syntax and unparameterized types. Parameterized
-    // types with TYPE('key=value,...') syntax are handled by the other create()
-    // overload.
     if (descriptor->is_parameterized()) {
-      // type provides resolve_params, check if also provides int_to_params for
-      // TYPE(N) syntax. In case it does, and length is provided, we will
-      // convert the length to parameters and resolve the TypeContext. In case
-      // it does, and length is not provided -> this is an error.
-      if (length != nullptr) {
-        // TYPE(N) syntax used - convert N to parameters via callbacks
-        if (!descriptor->int_to_params_fn().has_value()) {
-          thd->syntax_error_at(
-              pos, "Type '%s' does not accept a length specification",
-              descriptor->qualified_base_name().c_str());
-          // it's OK to return nullptr only if an error has already been set in
-          // THD
-          return nullptr;
-        }
-
-        // Parse the length string to int64_t
-        char *endptr = nullptr;
-        int64_t int_value = strtoll(length, &endptr, 10);
-        if (endptr == length || *endptr != '\0' || int_value <= 0) {
-          thd->syntax_error_at(pos, "Invalid length '%s' for type '%s'", length,
-                               descriptor->qualified_base_name().c_str());
-          return nullptr;
-        }
-
-        // Call int_to_params to convert integer to canonical parameter string
-        std::string params_str;
-        char error_msg[VEF_MAX_ERROR_LEN] = {0};
-        if (descriptor->int_to_params_fn()->invoke(int_value, &params_str,
-                                                   error_msg)) {
-          thd->syntax_error_at(pos, "%s", error_msg);
-          return nullptr;
-        }
-
-        // Normalize to canonical form (lowercase, sorted) just like the
-        // TYPE('k=v,...') path does via from_raw.
-        TypeParameters canonical = TypeParameters::from_raw(params_str);
-        if (canonical.empty()) {
-          thd->syntax_error_at(pos, "Invalid parameter string for type '%s'",
-                               descriptor->qualified_base_name().c_str());
-          return nullptr;
-        }
-
-        // resolve_params_and_context will call AcquireOrCreateTypeContext after
-        // resolving the parameters
-        if (resolve_params_and_context(pos, thd, descriptor, canonical.str(),
-                                       type_context)) {
-          return nullptr;
-        }
-
-        // length is now consumed - pass nullptr to constructor
-        length = nullptr;
-      } else {
+      if (descriptor->int_to_params_fn().has_value()) {
         // No length provided for TYPE(N)
-        if (descriptor->int_to_params_fn().has_value()) {
-          thd->syntax_error_at(pos, "Type '%s' requires a length specification",
-                               descriptor->qualified_base_name().c_str());
-          return nullptr;
-        }
-      }
-    } else {
-      // non parameterized type
-      if (length != nullptr) {
-        thd->syntax_error_at(pos,
-                             "Type '%s' is not parameterized and cannot have a "
-                             "length specification",
+        thd->syntax_error_at(pos, "Type '%s' requires a length specification",
                              descriptor->qualified_base_name().c_str());
         return nullptr;
       }
+
+      // resolve_params is the single validation gate for parameterized types
+      // (fixed- or variable-length). Invoke it with empty parameters so the
+      // type can either resolve its defaults or report that parameters are
+      // required.
+      if (resolve_params_and_context(pos, thd, descriptor, std::string(),
+                                     type_context))
+        return nullptr;
+    } else {
+      // Non-parameterized type - acquire the context with empty parameters.
       if (AcquireOrCreateTypeContext(descriptor, TypeParameters(),
                                      *thd->mem_root, type_context))
         return nullptr;
     }
 
-    // in case type_context is still nullptr - PT_custom_type constructor will
-    // record the error
-    PT_custom_type *ret = new (pt_mem_root)
-        PT_custom_type(pos, thd, type_name, length, type_context);
-    return ret;
+    return new (pt_mem_root)
+        PT_custom_type(pos, thd, type_name, nullptr, type_context);
   }
 
-  // Factory for TYPE('key=value,...') string parameter syntax.
-  static PT_custom_type *create(MEM_ROOT *pt_mem_root, const POS &pos, THD *thd,
-                                const LEX_STRING &extension_name,
-                                const LEX_STRING &type_name, const char *length,
-                                const char *params_str, size_t params_str_len) {
-    // If no string params provided, fall through to the normal path
-    if (params_str == nullptr) {
-      return create(pt_mem_root, pos, thd, extension_name, type_name, length);
+  // Factory for the TYPE(N) integer length syntax. length is guaranteed to be
+  // a non-null numeric string by the grammar (field_length).
+  static PT_custom_type *create_with_length(MEM_ROOT *pt_mem_root,
+                                            const POS &pos, THD *thd,
+                                            const LEX_STRING &extension_name,
+                                            const LEX_STRING &type_name,
+                                            const char *length) {
+    assert(length != nullptr);
+
+    const TypeDescriptor *descriptor = nullptr;
+    if (resolve_descriptor(extension_name, type_name, descriptor)) {
+      return nullptr;
     }
+
+    if (descriptor == nullptr) {
+      // Type not found - constructor records the error.
+      return new (pt_mem_root)
+          PT_custom_type(pos, thd, type_name, nullptr, nullptr);
+    }
+
+    if (!descriptor->is_parameterized()) {
+      thd->syntax_error_at(pos,
+                           "Type '%s' is not parameterized and cannot have a "
+                           "length specification",
+                           descriptor->qualified_base_name().c_str());
+      return nullptr;
+    }
+
+    // type provides resolve_params; it must also provide int_to_params to
+    // support the TYPE(N) syntax.
+    if (!descriptor->int_to_params_fn().has_value()) {
+      thd->syntax_error_at(pos,
+                           "Type '%s' does not accept a length specification",
+                           descriptor->qualified_base_name().c_str());
+      return nullptr;
+    }
+
+    // Parse the length string to int64_t
+    char *endptr = nullptr;
+    int64_t int_value = strtoll(length, &endptr, 10);
+    if (endptr == length || *endptr != '\0' || int_value <= 0) {
+      thd->syntax_error_at(pos, "Invalid length '%s' for type '%s'", length,
+                           descriptor->qualified_base_name().c_str());
+      return nullptr;
+    }
+
+    // Call int_to_params to convert integer to canonical parameter string
+    std::string params_str;
+    char error_msg[VEF_MAX_ERROR_LEN] = {0};
+    if (descriptor->int_to_params_fn()->invoke(int_value, &params_str,
+                                               error_msg)) {
+      thd->syntax_error_at(pos, "%s", error_msg);
+      return nullptr;
+    }
+
+    // Normalize to canonical form (lowercase, sorted) just like the
+    // TYPE('k=v,...') path does via from_raw.
+    TypeParameters canonical = TypeParameters::from_raw(params_str);
+    if (canonical.empty()) {
+      thd->syntax_error_at(pos, "Invalid parameter string for type '%s'",
+                           descriptor->qualified_base_name().c_str());
+      return nullptr;
+    }
+
+    // resolve_params_and_context will call AcquireOrCreateTypeContext after
+    // resolving the parameters
+    const TypeContext *type_context = nullptr;
+    if (resolve_params_and_context(pos, thd, descriptor, canonical.str(),
+                                   type_context)) {
+      return nullptr;
+    }
+
+    return new (pt_mem_root)
+        PT_custom_type(pos, thd, type_name, nullptr, type_context);
+  }
+
+  // Factory for TYPE('key=value,...') string parameter syntax. params_str is
+  // guaranteed non-null by the grammar (TEXT_STRING_literal).
+  static PT_custom_type *create_with_params(MEM_ROOT *pt_mem_root,
+                                            const POS &pos, THD *thd,
+                                            const LEX_STRING &extension_name,
+                                            const LEX_STRING &type_name,
+                                            const char *params_str,
+                                            size_t params_str_len) {
+    assert(params_str != nullptr);
 
     // Resolve the descriptor first
     const TypeDescriptor *descriptor = nullptr;
-    if (ResolveTypeDescriptor(to_string_view(extension_name),
-                              to_string_view(type_name), descriptor)) {
+    if (resolve_descriptor(extension_name, type_name, descriptor)) {
       return nullptr;
     }
 
