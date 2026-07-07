@@ -866,6 +866,29 @@ bool load_installed_extensions(THD *thd) {
 
     row_count = all_extensions.size();
 
+    // Log a warning once if --villagesql-skip-extension-updates is set
+    // AND there are pending actions to bypass. The operator queries
+    // I_S.EXTENSIONS to see them and clears each via a same-version
+    // ALTER EXTENSION ... AT RESTART on the next startup (without the
+    // flag). Nothing is mutated by the flag itself.
+    if (opt_villagesql_skip_extension_updates) {
+      int pending_count = 0;
+      for (const ExtensionEntry *e : all_extensions) {
+        if (e && e->has_pending_action()) ++pending_count;
+      }
+      if (pending_count > 0) {
+        LogVSQL(
+            WARNING_LEVEL,
+            "--villagesql-skip-extension-updates is set: bypassing %d "
+            "pending extension update(s). Extensions load at their "
+            "currently-installed version. Query "
+            "INFORMATION_SCHEMA.EXTENSIONS to see the pending actions; clear "
+            "each via ALTER EXTENSION <name> "
+            "VERSION '<current>' AT RESTART, then restart without the flag.",
+            pending_count);
+      }
+    }
+
     // Validate and register each extension
     for (const ExtensionEntry *entry : all_extensions) {
       if (!entry) continue;
@@ -888,7 +911,11 @@ bool load_installed_extensions(THD *thd) {
       std::string sha_to_load = sha256;
       bool staged_apply = false;
 
-      if (entry->has_pending_action()) {
+      // --villagesql-skip-extension-updates bypasses pending-action
+      // processing (warning logged once above). The row is left
+      // untouched on disk.
+      if (entry->has_pending_action() &&
+          !opt_villagesql_skip_extension_updates) {
         const std::string target_version =
             entry->pending_action->target_version();
         const std::string target_sha =
@@ -1045,9 +1072,10 @@ bool load_installed_extensions(THD *thd) {
   // tables). Both are conditions where refusing to come up is safer than
   // committing partial pending-action state.
   //
-  // TODO(villagesql-beta): a corrupt pending_action row can prevent
-  // startup. Follow-up adds --villagesql-skip-extension-updates as the
-  // operator escape hatch.
+  // Operator recovery: --villagesql-skip-extension-updates bypasses the
+  // pending-action processing entirely for the restart, so a corrupt
+  // pending_action row that would otherwise trigger a startup failure
+  // here can be worked around. See the warning-log-and-gate above.
   if (!pending_failures_to_persist.empty() ||
       !pending_applies_to_persist.empty()) {
     // Open all four tables the persist step may need. custom_columns,
@@ -1206,7 +1234,13 @@ bool load_installed_extensions(THD *thd) {
           }
         }
       }
-      if (any_marked && victionary.write_all_uncommitted_entries(thd)) {
+      // DBUG hook: with --debug=+d,villagesql_fail_pending_persist the
+      // write is treated as if the SE-layer call failed. Used by mtr
+      // tests to exercise the fail-startup and recovery-via-skip-flag
+      // paths without needing a real SE-layer failure.
+      if (any_marked &&
+          (victionary.write_all_uncommitted_entries(thd) ||
+           DBUG_EVALUATE_IF("villagesql_fail_pending_persist", true, false))) {
         LogVSQL(ERROR_LEVEL,
                 "Failed to persist pending-update decision(s) to %s.%s / %s / "
                 "%s / %s",
