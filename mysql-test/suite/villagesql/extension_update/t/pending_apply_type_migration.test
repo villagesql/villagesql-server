@@ -1,0 +1,57 @@
+# On-disk representation migration across ALTER EXTENSION ... AT RESTART.
+#
+# Scenario:
+#   1. Install update_schema_test v1 (registers MYTYPE, 4-byte int).
+#   2. Create a table with a MYTYPE column and load data.
+#   3. ALTER EXTENSION ... VERSION '2.0.0' AT RESTART, then restart.
+#      v2 keeps MYTYPE (backward-compatible) and adds MYTYPE_V2 (8-byte int)
+#      plus a mytype_to_v2(MYTYPE) -> MYTYPE_V2 conversion VDF.
+#   4. Application-driven ALTER TABLE migrates data column-by-column:
+#      - ADD a stored generated MYTYPE_V2 column populated by mytype_to_v2.
+#      - MODIFY that column to drop the generated expression AND DROP the
+#        original MYTYPE column, combined into a single ALTER TABLE so the
+#        rebuild happens once.
+#   5. Verify decode output switched from "v1:N" to "v2:N".
+
+INSTALL EXTENSION update_schema_test VERSION '1.0.0';
+
+CREATE TABLE t (id INT PRIMARY KEY, val MYTYPE);
+INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
+
+# v1 decoder emits "v1:N".
+SELECT id, val FROM t ORDER BY id;
+
+ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+
+--source include/restart_mysqld.inc
+
+# Installed version is now 2.0.0 with no pending action.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_schema_test';
+
+# Existing MYTYPE column still readable after the version bump. v2
+# re-registers MYTYPE with the same layout and same "v1:N" formatter, so
+# output is unchanged.
+SELECT id, val FROM t ORDER BY id;
+
+# Add a stored generated MYTYPE_V2 column populated from val via the
+# conversion VDF. Full table rebuild.
+ALTER TABLE t
+  ADD COLUMN val_v2 MYTYPE_V2 AS (mytype_to_v2(val)) STORED;
+
+# Both columns visible; val_v2 renders as "v2:N".
+SELECT id, val, val_v2 FROM t ORDER BY id;
+
+# One combined ALTER: detach val_v2 from the generated expression, drop
+# the old val column, and rename val_v2 back to val so the final schema
+# shape matches the original (just with the wider MYTYPE_V2 type). Single
+# rebuild.
+ALTER TABLE t
+  DROP COLUMN val,
+  CHANGE COLUMN val_v2 val MYTYPE_V2;
+
+# Final schema: id, val (MYTYPE_V2). Values render as "v2:N".
+SELECT id, val FROM t ORDER BY id;
+
+DROP TABLE t;
+UNINSTALL EXTENSION update_schema_test;
