@@ -162,7 +162,7 @@
 //          │                                                   │
 //
 
-typedef enum : unsigned int {
+typedef enum : uint32_t {
   VEF_PROTOCOL_0,  // Not used
   VEF_PROTOCOL_1,  // Stable as of v0.0.1, likely to be deprecated.
   VEF_PROTOCOL_2,  // Deprecated. Was the unstable development version before
@@ -200,9 +200,9 @@ typedef enum : unsigned int {
 //   A) How do we handle encodings and collations?
 //   B) Resizing the buffer can probably be done in a smarter way.
 typedef struct {
-  unsigned int major;
-  unsigned int minor;
-  unsigned int patch;
+  uint32_t major;
+  uint32_t minor;
+  uint32_t patch;
 
   // Owned by whoever owns this struct.
   const char *extra;
@@ -249,15 +249,15 @@ typedef struct {
 
   union {
     struct {
-      size_t str_len;
+      uint64_t str_len;
       const char *str_value;
     };
     struct {
-      size_t bin_len;
+      uint64_t bin_len;
       const unsigned char *bin_value;
     };
     double real_value;
-    long long int_value;
+    int64_t int_value;
   };
 } vef_invalue_v1_t;
 
@@ -266,7 +266,7 @@ typedef struct {
 // keys[i] pairs with values[i]. count == 0 for non-parameterized or
 // non-custom types.
 typedef struct {
-  unsigned int count;
+  uint32_t count;
   const char *const *keys;
   const char *const *values;
 } vef_type_params_t;
@@ -289,12 +289,12 @@ typedef struct {
   // INPUT: caller-supplied buffer for the canonical "k=v,k=v" params string.
   char *buf;
   // INPUT: capacity of buf in bytes.
-  size_t max_buf_len;
+  uint64_t max_buf_len;
   // OUTPUT: number of bytes that would have been written (no NUL). 0 means
   // no params were inferred (e.g., the extension's from_string did not call
   // p.set(), the call errored, or the type does not register
   // params_to_strings).
-  size_t actual_len;
+  uint64_t actual_len;
   // OUTPUT: true if actual_len > max_buf_len. When true, buf is not safe to
   // read; the caller should retry with a larger buffer.
   bool overflow;
@@ -310,13 +310,13 @@ typedef struct {
   union {
     // For TYPE_STRING: human-readable text
     struct {
-      size_t str_len;
+      uint64_t str_len;
       const char *str_value;
     };
 
     // For TYPE_CUSTOM: binary data (persisted format)
     struct {
-      size_t bin_len;
+      uint64_t bin_len;
       const unsigned char *bin_value;
 
       // protocol >= VEF_PROTOCOL_3
@@ -330,7 +330,7 @@ typedef struct {
     double real_value;
 
     // For TYPE_INT
-    long long int_value;
+    int64_t int_value;
   };
 } vef_invalue_t;
 
@@ -365,7 +365,7 @@ typedef struct {
   // The actual length of the result (set iff type is IS_VALUE for
   // STRING/CUSTOM) If type is IS_BUF_TOO_SMALL, this indicates the required
   // buffer size. For REAL and INT types, this field is unused.
-  size_t actual_len;
+  uint64_t actual_len;
 
   // Caller-provided buffer for error message (size VEF_MAX_ERROR_LEN).
   // Write a null-terminated string here if type == IS_ERROR.
@@ -378,7 +378,7 @@ typedef struct {
       char *str_buf;
 
       // Size of str_buf in bytes
-      size_t max_str_len;
+      uint64_t max_str_len;
 
       // Callee can return a different pointer than str_buf, e.g., if it already
       // has the result in its memory and wants to avoid a copy. To do this,
@@ -401,7 +401,7 @@ typedef struct {
       unsigned char *bin_buf;
 
       // Size of bin_buf in bytes
-      size_t max_bin_len;
+      uint64_t max_bin_len;
 
       // Callee can return a different pointer than bin_buf. Same semantics
       // as alt_str_buf above.
@@ -416,7 +416,7 @@ typedef struct {
     double real_value;
 
     // For INT return type
-    long long int_value;
+    int64_t int_value;
   };
 
   // protocol >= VEF_PROTOCOL_3
@@ -454,7 +454,7 @@ typedef struct {
   void *user_data;
 
   // Number of input values
-  unsigned int value_count;
+  uint32_t value_count;
 
   // Check ctx->protocol to determine which union member to read.
   union {
@@ -485,7 +485,7 @@ typedef struct {
 #define VEF_PARAM_VARARGS UINT_MAX
 
 typedef struct {
-  unsigned int param_count;
+  uint32_t param_count;
   const vef_type_t *params;
 
   vef_type_t return_type;
@@ -512,7 +512,7 @@ typedef void (*vef_vdf_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
 
 typedef struct {
   // Number of arguments that will be passed to each vdf call
-  unsigned int arg_count;
+  uint32_t arg_count;
 
   // Type of each argument. Array has arg_count elements.
   vef_type_t *arg_types;
@@ -536,7 +536,7 @@ typedef struct {
   char *error_msg;
 
   // Requested result buffer size (0 = use default from type)
-  size_t result_buffer_size;
+  uint64_t result_buffer_size;
 
   // Extension-allocated state. Set this to pass data to vdf and postrun.
   // Caller initializes to NULL.
@@ -612,7 +612,7 @@ typedef struct {
   vef_postrun_func_t postrun;
 
   // Minimum buffer size requested for string results (0 = use default)
-  size_t buffer_size;
+  uint64_t buffer_size;
 
   // protocol >= VEF_PROTOCOL_3
   // If true, the function always returns the same result for the same inputs
@@ -850,10 +850,10 @@ typedef struct vef_registration_t {
   vef_version_t sdk_version;
   const char *deprecated_extension_name;
 
-  unsigned int func_count;
+  uint32_t func_count;
   vef_func_desc_t **funcs;
 
-  unsigned int type_count;
+  uint32_t type_count;
   vef_type_desc_t **types;
 
   // protocol >= VEF_PROTOCOL_3
@@ -862,7 +862,7 @@ typedef struct vef_registration_t {
   // the capability struct pointed to by each entry before vef_register()
   // returns. If a capability is unavailable or there is an ABI struct
   // mismatch, loading the extension fails with an error.
-  unsigned int required_capability_count;
+  uint32_t required_capability_count;
   const vef_required_capability_t *required_capabilities;
 } vef_registration_t;
 

@@ -48,7 +48,7 @@ struct StatusVarDescriptor {
   Type type;
   const char *name;
   union {
-    long long *integer_ptr;
+    int64_t *integer_ptr;
     double *double_ptr;
   };
 };
@@ -59,8 +59,8 @@ struct StatusVarDescriptor {
 //
 // Usage:
 //
-//   static long long g_hits = 0;
-//   static long long g_misses = 0;
+//   static int64_t g_hits = 0;
+//   static int64_t g_misses = 0;
 //
 //   namespace sv = vsql::preview_status_var;
 //
@@ -122,7 +122,7 @@ class StatusVarCapability
 //       sv::make_int   ("hits",    &g_hits),
 //       sv::make_double("latency", &g_latency),
 //   });
-inline StatusVarDescriptor make_int(const char *name, long long *value_ptr) {
+inline StatusVarDescriptor make_int(const char *name, int64_t *value_ptr) {
   StatusVarDescriptor d;
   d.type = INT;
   d.name = name;

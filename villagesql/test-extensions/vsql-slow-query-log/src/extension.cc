@@ -43,7 +43,7 @@ namespace sv = vsql::preview_sys_var;
 namespace se = vsql::preview_statement_event;
 
 static bool g_enabled;
-static long long g_threshold_ms;
+static int64_t g_threshold_ms;
 static char *g_log_filename;
 
 static std::mutex g_log_mutex;
