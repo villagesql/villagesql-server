@@ -3502,11 +3502,6 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
   if (drop_ctx.has_base_atomic_tables() || drop_ctx.has_views() ||
       drop_ctx.has_base_nonexistent_tables()) {
-    // VillageSQL: Track custom columns and acquire necessary MDL locks.
-    if (!drop_temporary && villagesql::Metadata_modifier::process_drop(
-                               thd, drop_ctx.base_atomic_tables)) {
-      goto err_with_rollback;
-    }
     /*
       Handle base tables in SEs which support atomic DDL, as well as views
       and non-existent tables.
@@ -3587,6 +3582,19 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
           MDL_key::TABLE, table->db, table->table_name, MDL_EXCLUSIVE));
     }
 #endif
+
+    // VillageSQL: Stage deletion of custom-column metadata for the atomic
+    // tables now that the storage engine has finished its drop work. If we
+    // staged earlier (before the SE-side drop loop), InnoDB's uncached share
+    // reopen would observe the pending DELETE via VictionaryClient::get(thd)
+    // and fail to inject the Field's TypeContext -- breaking fix_fields on
+    // stored generated expressions that call custom-type VDFs. The staged
+    // deletes are still written by the Metadata_modifier::store() call
+    // below and rolled back with the outer transaction on error.
+    if (!drop_temporary && villagesql::Metadata_modifier::process_drop(
+                               thd, drop_ctx.base_atomic_tables)) {
+      goto err_with_rollback;
+    }
 
     DEBUG_SYNC(thd, "rm_table_no_locks_before_binlog");
 

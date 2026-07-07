@@ -1,0 +1,22 @@
+# Regression: DROP TABLE for a table with a stored generated column
+# whose expression calls a custom-type VDF must work from a cold share
+# reopen. Historically failed because DROP staged the DELETE on the
+# corresponding villagesql.custom_columns row before InnoDB's uncached
+# share reopen ran MaybeInjectCustomType, which then saw the pending
+# DELETE and skipped injection -- breaking fix_fields on the generated
+# expression.
+
+INSTALL EXTENSION update_schema_test VERSION '2.0.0';
+
+CREATE TABLE u (id INT PRIMARY KEY, val update_schema_test.MYTYPE);
+INSERT INTO u VALUES (1, '10'), (2, '20');
+
+ALTER TABLE u
+  ADD COLUMN val_v2 update_schema_test.MYTYPE_V2
+    AS (update_schema_test.mytype_to_v2(val)) STORED;
+
+--source include/restart_mysqld.inc
+
+DROP TABLE u;
+
+UNINSTALL EXTENSION update_schema_test;

@@ -46,14 +46,6 @@ ORDER BY extension_name;
 EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
 update_schema_test	2.0.0	NULL	NULL
 update_test	1.2.0	NULL	NULL
-SHOW CREATE TABLE u;
-Table	Create Table
-u	CREATE TABLE `u` (
-  `id` int NOT NULL,
-  `val` update_schema_test.MYTYPE DEFAULT NULL,
-  `val_v2` update_schema_test.MYTYPE_V2 GENERATED ALWAYS AS (update_schema_test.mytype_to_v2(`val`)) STORED,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE u;
 UNINSTALL EXTENSION update_test;
 UNINSTALL EXTENSION update_schema_test;

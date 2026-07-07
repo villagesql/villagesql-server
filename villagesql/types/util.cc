@@ -123,15 +123,26 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
     return false;
   }
 
-  // Extract identifiers directly
-  std::string db_name = std::string(share.db.str, share.db.length);
+  // Extract identifiers directly. Some upstream paths pass a filesystem-shaped
+  // "<db>/<table>" cache key into init_tmp_table_share() (e.g. InnoDB's
+  // acquire_uncached_table on the DROP TABLE path). init_tmp_table_share sets
+  // share.db from strlen(key), so we can observe "<db>/<table>" here instead
+  // of "<db>". Strip anything from the first '/' onward. Schema names cannot
+  // contain '/', so this is safe.
+  // TODO(villagesql-back-to-mysql): fix upstream so share.db never carries the
+  // "<db>/<table>" shape and remove this workaround.
+  std::string db_name(share.db.str, share.db.length);
+  const size_t slash = db_name.find('/');
+  if (slash != std::string::npos) {
+    db_name.resize(slash);
+  }
+  std::string table_name(share.table_name.str, share.table_name.length);
 
   // Skip special databases
   if (::villagesql::is_system_schema(db_name.c_str())) {
     return false;
   }
 
-  std::string table_name(share.table_name.str, share.table_name.length);
   std::string column_name(field->field_name);
   ColumnKey col_key(db_name, table_name, column_name);
 

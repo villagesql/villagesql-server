@@ -73,12 +73,6 @@ SELECT extension_name, extension_version, pending_version, pending_last_error
   WHERE extension_name IN ('update_test', 'update_schema_test')
   ORDER BY extension_name;
 
-# TODO(villagesql-beta): DROP TABLE for a table with a stored generated
-# column whose expression calls a custom VDF fails to resolve the VDF's
-# custom-type argument during a cold share reopen (post-restart, no
-# prior touch in this session). Warm the share first as a workaround.
-SHOW CREATE TABLE u;
-
 DROP TABLE u;
 UNINSTALL EXTENSION update_test;
 UNINSTALL EXTENSION update_schema_test;
