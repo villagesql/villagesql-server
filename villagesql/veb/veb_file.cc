@@ -877,14 +877,15 @@ bool load_installed_extensions(THD *thd) {
         if (e && e->has_pending_action()) ++pending_count;
       }
       if (pending_count > 0) {
-        LogVSQL(WARNING_LEVEL,
-                "--villagesql-skip-extension-updates is set: bypassing %d "
-                "pending extension update(s). Extensions load at their "
-                "currently-installed version. Query I_S.EXTENSIONS to see "
-                "the pending actions; clear each via ALTER EXTENSION <name> "
-                "VERSION '<current>' AT RESTART, then restart without the "
-                "flag.",
-                pending_count);
+        LogVSQL(
+            WARNING_LEVEL,
+            "--villagesql-skip-extension-updates is set: bypassing %d "
+            "pending extension update(s). Extensions load at their "
+            "currently-installed version. Query "
+            "INFORMATION_SCHEMA.EXTENSIONS to see the pending actions; clear "
+            "each via ALTER EXTENSION <name> "
+            "VERSION '<current>' AT RESTART, then restart without the flag.",
+            pending_count);
       }
     }
 
@@ -1074,7 +1075,7 @@ bool load_installed_extensions(THD *thd) {
   // Operator recovery: --villagesql-skip-extension-updates bypasses the
   // pending-action processing entirely for the restart, so a corrupt
   // pending_action row that would otherwise trigger a startup failure
-  // here can be worked around. See the announce/gate above.
+  // here can be worked around. See the warning-log-and-gate above.
   if (!pending_failures_to_persist.empty() ||
       !pending_applies_to_persist.empty()) {
     // Open all four tables the persist step may need. custom_columns,
