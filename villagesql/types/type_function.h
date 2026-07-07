@@ -133,9 +133,17 @@ class ResolveParamsFunction {
 
   // Validates parameters and computes storage characteristics.
   // Takes a canonical "key=value,..." string.
+  //
+  // If the type's resolve_params uses the mutating overload, it may rewrite the
+  // parameters (e.g. fill in defaults). When rewritten_params is non-null and
+  // the VDF emitted a rewritten parameter string, it is written there in
+  // canonical "key=value,..." form; callers should treat it as the new
+  // canonical parameter string. When the VDF emits no rewrite, rewritten_params
+  // is left untouched.
+  //
   // Returns false on success, true on error (writes to error_msg).
   bool invoke(const std::string &params_str, ResolvedTypeParams *result,
-              char *error_msg) const;
+              char *error_msg, std::string *rewritten_params = nullptr) const;
 
  private:
   const vef_func_desc_t *vdf_{nullptr};

@@ -178,7 +178,18 @@ void TypeContext::resolve_cached_values() {
         std::string result;
         char err[VEF_MAX_ERROR_LEN] = {0};
         if (!descriptor_->int_to_params_fn()->invoke(n, &result, err)) {
-          TypeParameters candidate = TypeParameters::from_raw(result);
+          // int_to_params may emit only a subset of the params.
+          // Need to call resolve_params to fill in defaults.
+          // A type providing int_to_params must also provide resolve_params
+          // (enforced at registration), so it is always present here.
+          assert(descriptor_->resolve_params_fn().has_value());
+          ResolvedTypeParams tmp = {};
+          char rerr[VEF_MAX_ERROR_LEN] = {0};
+          std::string canonical = result;
+          if (descriptor_->resolve_params_fn()->invoke(result, &tmp, rerr,
+                                                       &canonical))
+            continue;
+          TypeParameters candidate = TypeParameters::from_raw(canonical);
           if (candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);

@@ -13,16 +13,20 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-// Test fixture for issue #535: a variable-length, NON-parameterized bit field
-// type whose length (in bits) is decided per value.
+// A variable-length bit field type whose length (in bits) is decided
+// per value, with an optional per-column upper bound.
 //
-// BITFIELD declares a max_persisted_length upper bound and NO
-// params/int_to_params/resolve_params, and its element is a single BIT rather
-// than a byte or a fixed-width number. A column is declared without any length
-// or parameters:
-//   CREATE TABLE t (b vsql_bitfield_test.BITFIELD);
-// and each value keeps its own bit length; bit fields of different lengths
-// coexist in the same column.
+// BITFIELD declares a max_persisted_length upper bound and its element is a
+// single BIT rather than a byte or a fixed-width number. Each value keeps its
+// own bit length, so bit fields of different lengths coexist in the same
+// column. The column accepts an optional 'max_number_of_bits' parameter that
+// caps how many bits any value in the column may hold:
+//   CREATE TABLE t (b vsql_bitfield_test.BITFIELD);                  -- max 8
+//   CREATE TABLE t (b vsql_bitfield_test.BITFIELD('max_number_of_bits=64'));
+// The bare form has no parameters, so resolve_params runs with an empty map and
+// falls back to kBitfieldMaxBits. Because the type is parameterized
+// (params + resolve_params), from_string takes a MaybeParams<BitfieldParams>
+// and to_string/compare take CustomArgWith<BitfieldParams>.
 //
 // from_string packs each '0'/'1' character into one BIT (8 bits per byte), so a
 // 64-character string of bits stores in 8 bytes of packed bits, not 64. The
@@ -43,11 +47,17 @@
 #include <villagesql/vsql.h>
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <map>
+#include <string>
 #include <string_view>
 
-// Maximum number of bits a BITFIELD value may hold. The bit count is stored in
-// a 2-byte little-endian header, so it must fit in a uint16.
+// Absolute cap on the number of bits a BITFIELD value may hold. The bit count
+// is stored in a 2-byte little-endian header, so it must fit in a uint16. The
+// per-column cap (the 'max_number_of_bits' parameter, below) must not exceed
+// this.
 constexpr int64_t kBitfieldMaxBits = 4096;
 constexpr int64_t kBitfieldHeaderLen = 2;
 // Upper bound on the stored value: 2-byte header plus ceil(maxBits/8) packed
@@ -72,12 +82,67 @@ static int get_bit(const unsigned char *data, size_t i) {
   return (data[i / 8] >> (7 - (i % 8))) & 1;
 }
 
+// Type parameter: the maximum number of bits any value in the column may hold.
+// Defaults to kBitfieldMaxBits when the column omits the parameter.
+struct BitfieldParams {
+  int64_t max_bits = kBitfieldMaxBits;
+
+  static BitfieldParams parse(
+      const std::map<std::string, std::string> &params) {
+    BitfieldParams p;
+    auto it = params.find("max_number_of_bits");
+    if (it != params.end())
+      p.max_bits = strtoll(it->second.c_str(), nullptr, 10);
+    return p;
+  }
+
+  static void to_strings(const BitfieldParams &p,
+                         std::map<std::string, std::string> &out) {
+    out["max_number_of_bits"] = std::to_string(p.max_bits);
+  }
+};
+
+// resolve_params validates 'max_number_of_bits' (default kBitfieldMaxBits) and
+// computes the storage sizes for this parameterization. The bare form routes
+// here with an empty map and falls back to the default, so a missing parameter
+// is accepted rather than rejected.
+bool bitfield_resolve_params(std::map<std::string, std::string> &params,
+                             vsql::ResolvedTypeParams *result,
+                             char *error_msg) {
+  auto it = params.find("max_number_of_bits");
+  int64_t max_bits = it != params.end()
+                         ? strtoll(it->second.c_str(), nullptr, 10)
+                         : kBitfieldMaxBits;
+  if (max_bits <= 0 || max_bits > kBitfieldMaxBits) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "BITFIELD 'max_number_of_bits' must be a positive integer <= %lld",
+             static_cast<long long>(kBitfieldMaxBits));
+    return true;
+  }
+  params["max_number_of_bits"] = std::to_string(max_bits);
+  // Variable-length: persisted_length is the upper bound on the backing field
+  // for this parameterization (header + ceil(max_bits/8)); the per-value length
+  // is still reported via out.set_length() in from_string.
+  result->max_decode_buffer_length = max_bits;
+  return false;
+}
+
 // STRING -> binary: pack each '0'/'1' character into one bit. The number of
-// bits is decided per value (not a type parameter); the actual byte length is
-// reported via out.set_length().
-void bitfield_from_string(std::string_view from, vsql::CustomResult out) {
+// bits is decided per value; the actual byte length is reported via
+// out.set_length(). The column's 'max_number_of_bits' caps how many bits a
+// value may hold. params is unknown only on the constant-string inference path;
+// there we fall back to the default cap.
+void bitfield_from_string(vsql::MaybeParams<BitfieldParams> &p,
+                          std::string_view from, vsql::CustomResult out) {
+  if (!p.is_known()) p.set(BitfieldParams{});
+  const int64_t max_bits = p.value().max_bits;
+
   auto buf = out.buffer();
   const size_t nbits = from.size();
+  if (static_cast<int64_t>(nbits) > max_bits) {
+    out.warning("BITFIELD: value exceeds max_number_of_bits");
+    return;
+  }
   const size_t nbytes = (nbits + 7) / 8;
   if (kBitfieldHeaderLen + nbytes > buf.size()) {
     out.warning("BITFIELD: value exceeds max length");
@@ -101,8 +166,12 @@ void bitfield_from_string(std::string_view from, vsql::CustomResult out) {
   out.set_length(kBitfieldHeaderLen + nbytes);
 }
 
-// binary -> STRING: emit exactly bit-count '0'/'1' characters, MSB-first.
-void bitfield_to_string(vsql::CustomArg in, vsql::StringResult out) {
+// binary -> STRING: emit exactly bit-count '0'/'1' characters, MSB-first. The
+// bit count is read from the value's header, so the params are not needed here;
+// the CustomArgWith<BitfieldParams> signature is required only because the type
+// is parameterized.
+void bitfield_to_string(vsql::CustomArgWith<BitfieldParams> in,
+                        vsql::StringResult out) {
   auto data = in.value();
   auto buf = out.buffer();
   if (data.size() < static_cast<size_t>(kBitfieldHeaderLen)) {
@@ -119,7 +188,9 @@ void bitfield_to_string(vsql::CustomArg in, vsql::StringResult out) {
 }
 
 // Bit-by-bit comparison; a shorter bit field sorts first on a common prefix.
-int bitfield_compare(vsql::CustomArg a, vsql::CustomArg b) {
+// Comparison is purely on the stored bits, so the params are not consulted.
+int bitfield_compare(vsql::CustomArgWith<BitfieldParams> a,
+                     vsql::CustomArgWith<BitfieldParams> b) {
   auto da = a.value();
   auto db = b.value();
   size_t nabits = da.size() >= static_cast<size_t>(kBitfieldHeaderLen)
@@ -197,6 +268,9 @@ constexpr auto BITFIELD = vsql::make_type<kBitfieldTypeName>()
                               .variable_length_type()
                               .max_persisted_length(kBitfieldMaxLen)
                               .max_decode_buffer_length(kBitfieldMaxText)
+                              .params<BitfieldParams, &BitfieldParams::parse,
+                                      &BitfieldParams::to_strings>()
+                              .resolve_params<&bitfield_resolve_params>()
                               .from_string<&bitfield_from_string>()
                               .to_string<&bitfield_to_string>()
                               .compare<&bitfield_compare>()

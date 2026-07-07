@@ -66,6 +66,16 @@ using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
              vsql::ResolvedTypeParams *result, char *error_msg);
 
+// resolve_params (mutating overload): same as ResolveTypeParamsFunc but the
+// params map is passed by non-const reference, so the type may rewrite it
+// (e.g. fill in default values. The rewritten map is serialized back and
+// becomes the canonical parameter string persisted for the type. The rewrite
+// must be idempotent: resolving the rewritten params again must yield the same
+// params and storage sizes.
+using ResolveTypeParamsMutableFunc =
+    bool (*)(std::map<std::string, std::string> &params,
+             vsql::ResolvedTypeParams *result, char *error_msg);
+
 }  // namespace func_builder
 }  // namespace vsql
 
@@ -780,7 +790,7 @@ constexpr detail::StaticFuncDesc<1> make_int_to_params(const char *name) {
 }
 
 // make_resolve_params<&fn>("name") — (STRING) -> STRING.
-template <ResolveTypeParamsFunc Func>
+template <auto Func>
 constexpr detail::StaticFuncDesc<1> make_resolve_params(const char *name) {
   detail::FuncWithMetadata meta{};
   meta.f = &detail::ResolveParamsWrapper<Func>::invoke;

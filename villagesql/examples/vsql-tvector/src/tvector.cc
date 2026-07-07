@@ -132,9 +132,9 @@ size_t bytes_per_element(const std::map<std::string, std::string> &params) {
 }
 
 // Convert TYPE(N) integer to parameter key-value pairs.
-// Populates params map with {"dimension": "<N>", "type": "float"}.
-// Setting type explicitly ensures TVECTOR(3) produces the same canonical
-// params as TVECTOR('dimension=3,type=float').
+// Populates params map with the single {"dimension": "<N>"} pair; the "type"
+// default is supplied by tvector_resolve_params. TVECTOR(3) thus canonicalizes
+// to the same params as TVECTOR('dimension=3,type=float').
 bool tvector_int_to_params(int64_t value,
                            std::map<std::string, std::string> &params,
                            char *error_msg) {
@@ -145,12 +145,13 @@ bool tvector_int_to_params(int64_t value,
     return true;
   }
   params["dimension"] = std::to_string(value);
-  params["type"] = "float";
   return false;
 }
 
 // Validate type parameters and compute storage characteristics.
-bool tvector_resolve_params(const std::map<std::string, std::string> &params,
+// TVECTOR(N) and TVECTOR('dimension=N') both canonicalize to
+// 'dimension=N,type=float'.
+bool tvector_resolve_params(std::map<std::string, std::string> &params,
                             vsql::ResolvedTypeParams *result, char *error_msg) {
   auto it = params.find("dimension");
   if (it == params.end()) {
@@ -172,10 +173,11 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
     return true;
   }
 
-  // Validate "type" parameter if present.
+  // Validate "type" if present; otherwise fill in the default.
   auto type_it = params.find("type");
-  if (type_it != params.end() && type_it->second != "float" &&
-      type_it->second != "double") {
+  if (type_it == params.end()) {
+    params["type"] = "float";
+  } else if (type_it->second != "float" && type_it->second != "double") {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "TVECTOR: type must be 'float' or 'double', got '%s'",
              type_it->second.c_str());
