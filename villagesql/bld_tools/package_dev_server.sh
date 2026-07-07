@@ -4,7 +4,7 @@
 # Package a previously-built VillageSQL development server into a release
 # tarball. This is the packaging part of the build -> test -> package pipeline;
 # it assumes the server has already been built in BUILD_DIR (e.g. by
-# villlagesq/scripts/bld_tools/build_ci.sh) and, when BUILD_BUNDLED_EXTENSIONS=1,
+# villlagesq/bld_tools/build_ci.sh) and, when BUILD_BUNDLED_EXTENSIONS=1,
 # that the bundled extension VEBs have already been built into
 # $BUILD_DIR/veb_output_directory.
 #
@@ -21,7 +21,7 @@ TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$TOOLS_DIR/../scripts" && pwd)"
 source "$SCRIPTS_DIR/vsql_script_utils.sh"
 
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPTS_DIR/../.." && pwd)}"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PWD}"
 STAGING_DIR="${TMPDIR:-/tmp}/villagesql_dev_staging_$$"
@@ -134,7 +134,7 @@ fi
 if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
     log_step "Step 4: Adding bundled extensions..."
 
-    "$SOURCE_DIR/scripts/include_bundled_extensions.sh" \
+    "$SOURCE_DIR/villagesql/bld_tools/include_bundled_extensions.sh" \
             "lib/veb" \
             "$BUILD_DIR/veb_output_directory"
 
