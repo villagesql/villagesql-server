@@ -1,15 +1,15 @@
-name: Full Test Suite (Reusable)
+name: Full Test Suite
 
-# Reusable workflow for running the full test suite
-# Called by testall.yml and nightly-tag-test.yml
+# Workflow to run the full test suite
 
 on:
   workflow_call:
     inputs:
       ref:
-        description: 'Git ref to checkout and test'
-        required: true
+        description: 'Git ref to checkout and test (default main)'
+        required: false
         type: string
+        default: 'main'
       build-type:
         description: 'Build type (debug or release)'
         required: false
@@ -20,11 +20,23 @@ on:
         required: false
         type: string
         default: 'full-test'
-      run-all-suites-conditional:
-        description: 'Check should_run_all_tests.sh before running all suites'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to checkout and test (default main)'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: 'main'
+      build-type:
+        description: 'Build type (debug or release)'
+        required: false
+        type: string
+        default: 'debug'
+      artifact-prefix:
+        description: 'Prefix for artifact names'
+        required: false
+        type: string
+        default: 'full-test'
 
 jobs:
   build-and-test:
@@ -57,8 +69,7 @@ jobs:
         PARALLEL_JOBS: 16
         BUILD_TYPE: ${{ inputs.build-type }}
 
-
-    - name: Run tests
+    - name: Run standard tests (unit, integration with only suite village)
       uses: ./source/.github/actions/run-tests
       with:
         artifact-name: ${{ inputs.artifact-prefix }}-logs-${{ github.run_number }}
@@ -70,22 +81,7 @@ jobs:
         run-big-tests: true
         artifact-name: ${{ inputs.artifact-prefix }}-big-test-logs-${{ github.run_number }}
 
-    - name: Check if should run all tests
-      if: inputs.run-all-suites-conditional
-      id: check-all-tests
-      working-directory: ./source
-      run: |
-        if ./scripts/should_run_all_tests.sh; then
-          echo "run=true" >> $GITHUB_OUTPUT
-        else
-          echo "run=false" >> $GITHUB_OUTPUT
-          echo "Skipping all test suites - commit unchanged from previous nightly"
-        fi
-
     - name: Run all test suites (excluding VillageSQL)
-      if: >
-        !inputs.run-all-suites-conditional ||
-        steps.check-all-tests.outputs.run == 'true'
       uses: ./source/.github/actions/run-tests
       with:
         run-unit-tests: false

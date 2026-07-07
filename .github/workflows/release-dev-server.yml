@@ -86,29 +86,27 @@ jobs:
           path: source
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-      - name: Install dependencies (Linux)
+      - name: Setup VillageSQL build environment
+        uses: ./source/.github/actions/setup-villagesql-build
+        with:
+          cache-boost: 'true'
+          setup-ccache: 'false'
+
+      # Bundled-extension build deps. Slated for separate revision; preserved
+      # as inline steps so BUILD_BUNDLED_EXTENSIONS builds keep working.
+      - name: Install bundled-extension dependencies (Linux)
         if: matrix.os == 'linux'
         run: |
-          # TODO(villagesql) Unify this across all build environments
-          sudo source/scripts/setup_linux_build_env.sh
           if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
             sudo source/scripts/setup_linux_ext_deps.sh
           fi
 
-      - name: Install dependencies (macOS)
+      - name: Install bundled-extension dependencies (macOS)
         if: matrix.os == 'macos'
         run: |
-          # TODO(villagesql) Unify this across all build environments
-          brew install bison cmake openssl
           if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
             source/scripts/setup_macos_ext_deps.sh
           fi
-
-      - name: Cache Boost
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: /tmp/boost
-          key: boost-${{ runner.os }}-${{ runner.arch }}
 
       - name: Build and package dev server
         run: |

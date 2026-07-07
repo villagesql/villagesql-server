@@ -1,0 +1,12 @@
+# max_result_length() only sizes a STRING result column, so the typed function
+# builder rejects it for any other return type -- at extension build time, not
+# silently. This is a negative-compile test: it builds a fixture that declares
+# .returns(INT) then .max_result_length(1000) and asserts the SDK build is
+# rejected, naming the trap that enforces the rule.
+#
+# See extension_vdf_result_length.test for the positive (STRING) behavior.
+
+--let $extension_name = rlen_non_string
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_max_result_length_non_string.cc
+--let $build_failure_grep = max_result_length_is_only_valid_for_a_STRING_return_type
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

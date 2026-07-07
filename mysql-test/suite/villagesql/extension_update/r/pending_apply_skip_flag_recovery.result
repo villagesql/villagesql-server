@@ -1,0 +1,39 @@
+call mtr.add_suppression("Failed to persist pending-update decision");
+call mtr.add_suppression("Extension loading failed");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("Aborting");
+call mtr.add_suppression("--villagesql-skip-extension-updates is set");
+INSTALL EXTENSION update_test VERSION '1.0.0';
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '10');
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	2.0.0	NULL
+# Attempt startup with persist-failure DBUG hook -- expect exit 1
+# Server correctly refused to start; verify the failure was
+# the injected persist failure.
+Pattern "Failed to persist pending-update decision" found
+# restart:--villagesql-skip-extension-updates
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	2.0.0	NULL
+SELECT id, val FROM t ORDER BY id;
+id	val
+1	v1:10
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+Warnings:
+Note	3219	Cleared pending update for extension 'update_test' (target matches current version '1.0.0')
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	NULL	NULL
+# restart
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	1.0.0	NULL	NULL
+DROP TABLE t;
+UNINSTALL EXTENSION update_test;

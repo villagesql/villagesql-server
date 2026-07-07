@@ -53,12 +53,15 @@ SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data;
 SELECT INSTR(agg_vdf_ext.vdf_concat(s), REPEAT('A', 50)) > 0 AS field_intact
 FROM s_data;
 
-# After grouping, the aggregate value streams straight to the client, so a
-# per-group result past the buffer default still comes back in full -- the
-# buffer fix applies on this path too. Each group concatenates 20*50 + 19 =
-# 1019 bytes.
+# vdf_concat does not declare a max output length, so -- like a classic UDF
+# that leaves initid->max_length unset -- its result column falls back to the
+# argument width. The streamed value is still returned in full; only a result
+# *stored* into a Field would be bounded by that width. Declaring
+# max_result_length is how an extension opts into a wide materialized column;
+# that path is covered by extension_vdf_result_length.test.
 #
-# TODO(villagesql-beta): fix materialization cutoff
+# Each group concatenates 20*50 + 19 = 1019 bytes; streamed after grouping it
+# comes back in full.
 CREATE TABLE g_data (id INT PRIMARY KEY AUTO_INCREMENT, grp INT, s VARCHAR(60));
 --disable_query_log
 let $i = 40;

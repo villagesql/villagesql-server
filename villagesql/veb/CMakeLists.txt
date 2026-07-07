@@ -40,3 +40,6 @@ TARGET_INCLUDE_DIRECTORIES(villagesql_veb SYSTEM PRIVATE
 ADD_DEPENDENCIES(villagesql_veb GenError)
 ADD_DEPENDENCIES(villagesql_veb GenServerSource)
 ADD_DEPENDENCIES(villagesql_veb villagesql_common)
+
+# veb_file.cc includes the generated villagesql/include/version.h
+ADD_DEPENDENCIES(villagesql_veb villagesql_version_gen)
