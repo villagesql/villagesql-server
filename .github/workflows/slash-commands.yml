@@ -144,7 +144,6 @@ jobs:
       ref: ${{ needs.parse.outputs.ref }}
       build-type: debug
       artifact-prefix: testall
-      run-all-suites-conditional: false
     secrets: inherit
 
   # "Finished" comment for /testall. Lives in the caller (not full-test-suite.yml)

@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "villagesql/schema/victionary_client.h"
 #include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
@@ -151,6 +152,66 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
   if (!r.ok) return r;
 
   return ok();
+}
+
+// NOTE: when adding a new extension-owned systable that participates in an
+// UPDATE (i.e. its rows carry an extension_name + extension_version), both
+// this function and the UNINSTALL EXTENSION code in sql_extension.cc need to
+// be updated to walk the new map. See the TODO(villagesql-ga) in
+// veb_file.cc::load_installed_extensions for the planned centralization of
+// this enumeration on VictionaryClient.
+//
+// TODO(villagesql): string parameters here are inconsistent -- names use
+// const std::string & but target_so_path uses std::string + std::move.
+// Settle on a single convention (probably std::string_view for the reads
+// and std::string by-value for the one field that gets moved into `input`).
+void BuildUpdatePreCheckSnapshot(const VictionaryClient &victionary,
+                                 const std::string &extension_name,
+                                 const std::string &current_version,
+                                 const std::string &target_version,
+                                 std::string target_so_path,
+                                 UpdatePreCheckInput *input) {
+  victionary.assert_read_or_write_lock_held();
+
+  input->extension_name = extension_name;
+  input->current_version = current_version;
+  input->target_version = target_version;
+  input->target_so_path = std::move(target_so_path);
+  input->server_protocol = static_cast<int>(vef_server_protocol_version);
+
+  for (const auto *td : victionary.type_descriptors().get_all_committed()) {
+    if (td == nullptr || td->extension_name() != extension_name ||
+        td->extension_version() != current_version)
+      continue;
+    CurrentTypeSnapshot s;
+    s.type_name = td->type_name();
+    s.persisted_length = td->persisted_length();
+    input->current_types.push_back(std::move(s));
+  }
+
+  for (const auto *col : victionary.columns().get_all_committed()) {
+    if (col == nullptr || col->extension_name != extension_name ||
+        col->extension_version != current_version)
+      continue;
+    DependentColumnSnapshot s;
+    s.db_name = col->db_name();
+    s.table_name = col->table_name();
+    s.column_name = col->column_name();
+    s.type_name = col->type_name;
+    input->dependent_columns.push_back(std::move(s));
+  }
+
+  for (const auto *sp : victionary.sp_params().get_all_committed()) {
+    if (sp == nullptr || sp->extension_name != extension_name ||
+        sp->extension_version != current_version)
+      continue;
+    DependentSpParamSnapshot s;
+    s.db_name = sp->db_name();
+    s.sp_name = sp->sp_name();
+    s.param_name = sp->param_name();
+    s.type_name = sp->type_name;
+    input->dependent_sp_params.push_back(std::move(s));
+  }
 }
 
 }  // namespace veb

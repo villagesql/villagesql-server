@@ -12,9 +12,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 source "$SCRIPT_DIR/vsql_script_utils.sh"
 
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 BUILD_TYPE="${BUILD_TYPE:-release}"
 PARALLEL_JOBS="${PARALLEL_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")}"
@@ -22,6 +22,7 @@ PARALLEL_JOBS="${PARALLEL_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 
 log_step "VillageSQL CI Build"
 echo ""
 
+# Verify source directory exists
 if [[ ! -d "$SOURCE_DIR" ]]; then
     die "Source directory not found: $SOURCE_DIR"
 fi

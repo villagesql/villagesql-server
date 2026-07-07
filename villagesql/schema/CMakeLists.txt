@@ -41,6 +41,8 @@ TARGET_LINK_LIBRARIES(villagesql_schema PRIVATE extra::rapidjson)
 
 ADD_DEPENDENCIES(villagesql_schema GenError)
 ADD_DEPENDENCIES(villagesql_schema GenServerSource)
+# schema_manager.cc includes the generated villagesql/include/version.h
+ADD_DEPENDENCIES(villagesql_schema villagesql_version_gen)
 TARGET_LINK_LIBRARIES(villagesql_schema PRIVATE extra::unordered_dense)
 
 # Configure VillageSQL schema file with version substitution for build directory

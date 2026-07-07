@@ -43,11 +43,13 @@
 #include "sql_string.h"
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
+#include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
 #include "villagesql/services/sys_var_access.h"
 #include "villagesql/veb/register.h"
 #include "villagesql/veb/sql_extension.h"
+#include "villagesql/veb/sql_extension_update_precheck.h"
 #include "villagesql/veb/validate.h"
 
 #include <archive.h>
@@ -102,6 +104,32 @@ std::string get_extension_so_path(const std::string &extension_name,
   fn_format(path_buf, so_filename.c_str(), lib_dir.c_str(), "", 0);
 
   return std::string(path_buf);
+}
+
+bool ResolveTargetSoPath(const std::string &extension_name,
+                         const std::string &target_version,
+                         std::string *resolved_sha, std::string *so_path,
+                         std::string *error_message) {
+  std::string expanded_path;
+  if (expand_veb_to_directory(extension_name, target_version, expanded_path,
+                              *resolved_sha)) {
+    char msg[512];
+    snprintf(msg, sizeof(msg),
+             "Cannot resolve target VEB for '%s' version '%s'",
+             extension_name.c_str(), target_version.c_str());
+    *error_message = msg;
+    return true;
+  }
+
+  *so_path = get_extension_so_path(extension_name, *resolved_sha);
+  if (so_path->empty()) {
+    char msg[512];
+    snprintf(msg, sizeof(msg), "Failed to construct .so path for '%s'",
+             extension_name.c_str());
+    *error_message = msg;
+    return true;
+  }
+  return false;
 }
 
 // Helper to format error messages like "manifest.json" inside "foo.veb"
@@ -798,6 +826,37 @@ bool load_installed_extensions(THD *thd) {
   int success_count = 0;
   std::set<std::string> installed_extensions;
 
+  // Collected during the main pass.
+  //
+  // pending_failures_to_persist: rows whose pending action we could not
+  // apply this restart (precheck failed, extension has custom indexes we
+  // don't yet support swapping, or target .so failed to load). The row
+  // stays at its current version; pending_action is stamped MarkFailed
+  // so it's queryable via INFORMATION_SCHEMA.EXTENSIONS.
+  //
+  // pending_applies_to_persist: rows whose pending action we successfully
+  // applied. The extension row is rewritten to the target version + sha
+  // with pending_action cleared, and every dependent custom_columns and
+  // custom_sp_params row referencing the extension is rewritten to the
+  // new version.
+  //
+  // Both kept by value so we don't depend on victionary pointers after
+  // the write lock is released.
+  struct PendingFailureToPersist {
+    ExtensionKey key;
+    PendingAction updated;
+    std::string original_extension_version;
+    std::string original_veb_sha256;
+  };
+  struct PendingApplyToPersist {
+    ExtensionKey key;
+    std::string target_version;
+    std::string target_veb_sha256;
+    std::string current_version;  // for filtering dependent rows below
+  };
+  std::vector<PendingFailureToPersist> pending_failures_to_persist;
+  std::vector<PendingApplyToPersist> pending_applies_to_persist;
+
   {
     auto lock_guard = victionary.get_write_lock();
 
@@ -806,6 +865,29 @@ bool load_installed_extensions(THD *thd) {
         victionary.extensions().get_all_committed();
 
     row_count = all_extensions.size();
+
+    // Log a warning once if --villagesql-skip-extension-updates is set
+    // AND there are pending actions to bypass. The operator queries
+    // I_S.EXTENSIONS to see them and clears each via a same-version
+    // ALTER EXTENSION ... AT RESTART on the next startup (without the
+    // flag). Nothing is mutated by the flag itself.
+    if (opt_villagesql_skip_extension_updates) {
+      int pending_count = 0;
+      for (const ExtensionEntry *e : all_extensions) {
+        if (e && e->has_pending_action()) ++pending_count;
+      }
+      if (pending_count > 0) {
+        LogVSQL(
+            WARNING_LEVEL,
+            "--villagesql-skip-extension-updates is set: bypassing %d "
+            "pending extension update(s). Extensions load at their "
+            "currently-installed version. Query "
+            "INFORMATION_SCHEMA.EXTENSIONS to see the pending actions; clear "
+            "each via ALTER EXTENSION <name> "
+            "VERSION '<current>' AT RESTART, then restart without the flag.",
+            pending_count);
+      }
+    }
 
     // Validate and register each extension
     for (const ExtensionEntry *entry : all_extensions) {
@@ -817,10 +899,144 @@ bool load_installed_extensions(THD *thd) {
 
       installed_extensions.insert(extension_name);
 
+      // A pending action means we have an upgrade to perform. Decide
+      // whether we can apply it this restart. If yes, load the target
+      // .so and stage row rewrites; if no, stamp MarkFailed with the
+      // reason and load the current .so instead. version_to_load /
+      // sha_to_load below control which .so we hand to load_one_extension.
+      // staged_apply records whether an apply record was pushed for this
+      // extension, so the load-failure branch can roll it back without
+      // peeking at pending_applies_to_persist.back().
+      std::string version_to_load = expected_version;
+      std::string sha_to_load = sha256;
+      bool staged_apply = false;
+
+      // --villagesql-skip-extension-updates bypasses pending-action
+      // processing (warning logged once above). The row is left
+      // untouched on disk.
+      if (entry->has_pending_action() &&
+          !opt_villagesql_skip_extension_updates) {
+        const std::string target_version =
+            entry->pending_action->target_version();
+        const std::string target_sha =
+            entry->pending_action->target_veb_sha256();
+
+        std::string failure_reason;
+
+        // At the restart-apply site we surface pending-update failures via
+        // pending_last_error, not the SQL diagnostics area. The precheck
+        // callees below (ResolveTargetSoPath, RunUpdatePreCheck, ...) all
+        // return structured error_message out-params, but internally they
+        // may transitively call villagesql_error (e.g.
+        // expand_veb_to_directory) which stashes a condition onto THD's
+        // diagnostics area via current_thd. Push a scratch diagnostics
+        // area for the duration of the precheck block so any such
+        // condition lands in the scratch and is discarded when we pop; the
+        // parent DA is never touched. This is MySQL's designed-for-purpose
+        // mechanism for exactly this pattern.
+        //
+        // TODO(villagesql-ga): consolidate internal helpers on structured
+        // error-string out-params and translate to villagesql_error only at
+        // the SQL boundary (ALTER call site). That would remove the need
+        // for this scratch DA entirely and align the internal call surface
+        // with the subprocess-precheck story.
+        //
+        // TODO(villagesql): load_installed_extensions has grown large;
+        // break the per-extension work into a purpose-driven helper.
+        //
+        // Manual push/pop: scope is short and linear; no guard needed.
+        Diagnostics_area scratch_da(false);
+        thd->push_diagnostics_area(&scratch_da);
+
+        // Precheck: build the same snapshot the live ALTER path uses.
+        std::string resolved_target_sha;
+        std::string target_so_path;
+        if (villagesql::veb::ResolveTargetSoPath(
+                extension_name, target_version, &resolved_target_sha,
+                &target_so_path, &failure_reason)) {
+          // failure_reason already populated by the helper.
+        } else if (resolved_target_sha != target_sha) {
+          char msg[512];
+          snprintf(msg, sizeof(msg),
+                   "Target VEB sha256 changed since ALTER: expected %s, "
+                   "got %s",
+                   target_sha.c_str(), resolved_target_sha.c_str());
+          failure_reason = msg;
+        } else {
+          // The enclosing scope already holds the victionary write lock,
+          // which is stronger than the read lock the helper requires.
+          villagesql::veb::UpdatePreCheckInput input;
+          villagesql::veb::BuildUpdatePreCheckSnapshot(
+              victionary, extension_name, expected_version, target_version,
+              std::move(target_so_path), &input);
+          const villagesql::veb::UpdatePreCheckResult result =
+              villagesql::veb::RunUpdatePreCheck(input);
+          if (!result.ok) failure_reason = result.error_message;
+        }
+
+        thd->pop_diagnostics_area();
+
+        if (failure_reason.empty()) {
+          // Apply the pending update. Load the target .so instead of the
+          // current one; stage row rewrites for the extensions row and the
+          // dependent custom_columns / custom_sp_params rows.
+          LogVSQL(INFORMATION_LEVEL,
+                  "Extension '%s': applying pending update from '%s' to '%s' "
+                  "(requested at %s)",
+                  extension_name.c_str(), expected_version.c_str(),
+                  target_version.c_str(),
+                  entry->pending_action->requested_at().c_str());
+          pending_applies_to_persist.push_back(
+              {entry->key(), target_version, target_sha, expected_version});
+          staged_apply = true;
+          version_to_load = target_version;
+          sha_to_load = target_sha;
+        } else {
+          LogVSQL(WARNING_LEVEL,
+                  "Extension '%s' pending update to version '%s' not applied: "
+                  "%s. Loading current version '%s'.",
+                  extension_name.c_str(), target_version.c_str(),
+                  failure_reason.c_str(), expected_version.c_str());
+          PendingAction updated = *entry->pending_action;
+          updated.MarkFailed(std::move(failure_reason));
+          pending_failures_to_persist.push_back(
+              {entry->key(), std::move(updated), expected_version, sha256});
+        }
+      }
+
       ExtensionRegistration registration;
-      if (load_one_extension(thd, extension_name, expected_version, sha256,
+      if (load_one_extension(thd, extension_name, version_to_load, sha_to_load,
                              &registration)) {
-        return true;
+        // If we were trying to apply a pending update and the target .so
+        // failed to load, roll back to the current version: pop the apply
+        // record, add a failure record with the load-failure reason, and
+        // retry with the current .so. The server always comes up.
+        // staged_apply implies the apply record was pushed in this
+        // iteration and no other push_back has happened since, so it is
+        // safe to pop_back() -- but we also assert via extension_name
+        // match to catch code changes that break the invariant.
+        if (staged_apply) {
+          assert(!pending_applies_to_persist.empty() &&
+                 pending_applies_to_persist.back().key.extension_name() ==
+                     extension_name);
+          pending_applies_to_persist.pop_back();
+          LogVSQL(WARNING_LEVEL,
+                  "Extension '%s' pending update to version '%s' not applied: "
+                  "target .so failed to load. Falling back to current version "
+                  "'%s'.",
+                  extension_name.c_str(), version_to_load.c_str(),
+                  expected_version.c_str());
+          PendingAction updated = *entry->pending_action;
+          updated.MarkFailed("Target .so failed to load at restart");
+          pending_failures_to_persist.push_back(
+              {entry->key(), std::move(updated), expected_version, sha256});
+          if (load_one_extension(thd, extension_name, expected_version, sha256,
+                                 &registration)) {
+            return true;
+          }
+        } else {
+          return true;
+        }
       }
       success_count++;
     }
@@ -829,7 +1045,223 @@ bool load_installed_extensions(THD *thd) {
   LogVSQL(INFORMATION_LEVEL, "Validated %d of %d installed extensions",
           success_count, row_count);
 
-  // Clean up orphaned expansion directories
+  // Persist any pending-update decisions we made during the loop: either
+  // stamp a failure onto the row (row stays at current version) or apply
+  // the update (rewrite extensions + custom_columns + custom_sp_params to
+  // the new version). Done outside the victionary write lock so
+  // open_and_lock_tables can acquire its own MDLs cleanly.
+  //
+  // Reachability: everything in this persist block only executes when at
+  // least one extension had a pending action at startup. A vanilla startup
+  // with no pending actions skips the block entirely (both decision
+  // vectors are empty) and the atomicity logic below is unreachable.
+  //
+  // Transaction lifecycle: the enclosing frame in
+  // do_init_extension_infrastructure (villagesql/sql/initialize.cc) wraps
+  // this whole function in an autocommit-off transaction and issues
+  // trans_commit_stmt + trans_commit if we return false, or trans_rollback
+  // if we return true. So write_all_uncommitted_entries below just needs
+  // to flush the victionary's uncommitted operations into the row buffer;
+  // the caller commits the storage engine transaction.
+  //
+  // Failure policy: any MarkForUpdate or write_all_uncommitted_entries
+  // failure below returns true (server startup fails). Realistic causes
+  // are (a) OOM, which the underlying my_error already marks
+  // ME_FATALERROR, or (b) a bug in this code or the victionary layer
+  // (e.g. divergence between the in-memory cache and the on-disk system
+  // tables). Both are conditions where refusing to come up is safer than
+  // committing partial pending-action state.
+  //
+  // Operator recovery: --villagesql-skip-extension-updates bypasses the
+  // pending-action processing entirely for the restart, so a corrupt
+  // pending_action row that would otherwise trigger a startup failure
+  // here can be worked around. See the warning-log-and-gate above.
+  if (!pending_failures_to_persist.empty() ||
+      !pending_applies_to_persist.empty()) {
+    // Open all four tables the persist step may need. custom_columns,
+    // custom_sp_params, and custom_indexes are only touched when we're
+    // applying an update, but it's simpler to open them unconditionally
+    // than to branch on the decision vector shapes.
+    Table_ref ext_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                        SchemaManager::EXTENSIONS_TABLE_NAME, TL_WRITE,
+                        MDL_SHARED_WRITE);
+    Table_ref columns_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                            SchemaManager::COLUMNS_TABLE_NAME, TL_WRITE,
+                            MDL_SHARED_WRITE);
+    Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                              SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                              MDL_SHARED_WRITE);
+    Table_ref indexes_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                            SchemaManager::INDEXES_TABLE_NAME, TL_WRITE,
+                            MDL_SHARED_WRITE);
+    ext_table.next_global = ext_table.next_local = &columns_table;
+    columns_table.next_global = columns_table.next_local = &sp_params_table;
+    sp_params_table.next_global = sp_params_table.next_local = &indexes_table;
+    indexes_table.next_global = indexes_table.next_local = nullptr;
+    if (open_and_lock_tables(thd, &ext_table, MYSQL_LOCK_IGNORE_TIMEOUT)) {
+      LogVSQL(ERROR_LEVEL,
+              "Failed to open %s.%s / %s / %s / %s to persist pending-update "
+              "decisions; state will not be persisted this restart",
+              SchemaManager::VILLAGESQL_SCHEMA_NAME,
+              SchemaManager::EXTENSIONS_TABLE_NAME,
+              SchemaManager::COLUMNS_TABLE_NAME,
+              SchemaManager::SP_PARAMS_TABLE_NAME,
+              SchemaManager::INDEXES_TABLE_NAME);
+      return true;
+    } else {
+      // Close the open tables on any exit from the persist block. The
+      // enclosing bootstrap context doesn't run statement-end cleanup, so
+      // leaked open tables trip an assertion in THD::cleanup at shutdown.
+      auto close_guard =
+          create_scope_guard([thd] { close_thread_tables(thd); });
+
+      bool any_marked = false;
+      {
+        // Hold the victionary write lock only for the in-memory mark step;
+        // write_all_uncommitted_entries below takes a read lock internally
+        // and the rwlock is not reentrant.
+        auto write_lock = victionary.get_write_lock();
+
+        // Failures: rewrite the extensions row with a MarkFailed pending
+        // action. Version + sha stay at the current values.
+        for (auto &pending : pending_failures_to_persist) {
+          ExtensionEntry updated(pending.key,
+                                 std::move(pending.original_extension_version),
+                                 std::move(pending.original_veb_sha256));
+          updated.pending_action = std::move(pending.updated);
+          if (victionary.extensions().MarkForUpdate(*thd, std::move(updated),
+                                                    pending.key)) {
+            LogVSQL(ERROR_LEVEL,
+                    "Failed to mark pending-update failure for extension '%s'",
+                    pending.key.extension_name().c_str());
+            return true;
+          }
+          any_marked = true;
+        }
+
+        // Applies: rewrite the extensions row to the target version + sha
+        // with pending_action cleared, then rewrite every dependent
+        // custom_columns and custom_sp_params row that references the
+        // current version.
+        for (auto &pending : pending_applies_to_persist) {
+          ExtensionEntry updated(pending.key, pending.target_version,
+                                 pending.target_veb_sha256);
+          // pending_action left std::nullopt: the swap is done.
+          if (victionary.extensions().MarkForUpdate(*thd, std::move(updated),
+                                                    pending.key)) {
+            LogVSQL(ERROR_LEVEL, "Failed to stage extension-row apply for '%s'",
+                    pending.key.extension_name().c_str());
+            return true;
+          }
+          any_marked = true;
+
+          const std::string &ext_name = pending.key.extension_name();
+          const std::string &from_version = pending.current_version;
+          const std::string &to_version = pending.target_version;
+
+          // TODO(villagesql-ga): the set of extension-owned systables
+          // (columns, sp_params, custom_indexes, ...) is enumerated by
+          // name at every caller that operates on an extension's rows:
+          // UNINSTALL EXTENSION (delete sweep + use-count check),
+          // update-precheck (snapshot build), and this apply site
+          // (rewrite extension_version). Adding a new extension-owned
+          // table today requires editing every caller. Centralize the
+          // enumeration on VictionaryClient -- e.g. an
+          // UninstallExtensionRows(match) closed operation, a
+          // RewriteExtensionVersion(match, to_version) closed operation,
+          // and a visit_extension_dependent_maps(visitor) for the
+          // non-uniform callers (precheck snapshot, use-count check).
+          // Design once, migrate all sites, one follow-up PR.
+
+          // Snapshot the committed dependent rows before mutating, then
+          // rewrite each one to the new extension_version.
+          std::vector<const ColumnEntry *> dep_cols =
+              victionary.columns().get_all_committed();
+          for (const auto *col : dep_cols) {
+            if (col == nullptr || col->extension_name != ext_name ||
+                col->extension_version != from_version)
+              continue;
+            ColumnEntry new_col(col->key(), col->extension_name, to_version,
+                                col->type_name, col->type_parameters);
+            if (victionary.columns().MarkForUpdate(*thd, std::move(new_col),
+                                                   col->key())) {
+              LogVSQL(ERROR_LEVEL,
+                      "Failed to stage custom_columns rewrite for '%s' "
+                      "column '%s.%s.%s'",
+                      ext_name.c_str(), col->db_name().c_str(),
+                      col->table_name().c_str(), col->column_name().c_str());
+              return true;
+            }
+          }
+
+          std::vector<const SpParamEntry *> dep_sps =
+              victionary.sp_params().get_all_committed();
+          for (const auto *sp : dep_sps) {
+            if (sp == nullptr || sp->extension_name != ext_name ||
+                sp->extension_version != from_version)
+              continue;
+            SpParamEntry new_sp(sp->key(), sp->extension_name, to_version,
+                                sp->type_name, sp->type_parameters);
+            if (victionary.sp_params().MarkForUpdate(*thd, std::move(new_sp),
+                                                     sp->key())) {
+              LogVSQL(ERROR_LEVEL,
+                      "Failed to stage custom_sp_params rewrite for '%s' "
+                      "param '%s.%s.%s'",
+                      ext_name.c_str(), sp->db_name().c_str(),
+                      sp->sp_name().c_str(), sp->param_name().c_str());
+              return true;
+            }
+          }
+
+          std::vector<const IndexEntry *> dep_indexes =
+              victionary.custom_indexes().get_all_committed();
+          for (const auto *idx : dep_indexes) {
+            if (idx == nullptr || idx->extension_name != ext_name ||
+                idx->extension_version != from_version)
+              continue;
+            IndexEntry new_idx(idx->key(), idx->index_id, idx->extension_name,
+                               to_version, idx->index_type_name,
+                               idx->index_type_parameters);
+            if (victionary.custom_indexes().MarkForUpdate(
+                    *thd, std::move(new_idx), idx->key())) {
+              LogVSQL(ERROR_LEVEL,
+                      "Failed to stage custom_indexes rewrite for '%s' "
+                      "index '%s.%s.%s'",
+                      ext_name.c_str(), idx->db_name().c_str(),
+                      idx->table_name().c_str(), idx->index_name().c_str());
+              return true;
+            }
+          }
+        }
+      }
+      // DBUG hook: with --debug=+d,villagesql_fail_pending_persist the
+      // write is treated as if the SE-layer call failed. Used by mtr
+      // tests to exercise the fail-startup and recovery-via-skip-flag
+      // paths without needing a real SE-layer failure.
+      if (any_marked &&
+          (victionary.write_all_uncommitted_entries(thd) ||
+           DBUG_EVALUATE_IF("villagesql_fail_pending_persist", true, false))) {
+        LogVSQL(ERROR_LEVEL,
+                "Failed to persist pending-update decision(s) to %s.%s / %s / "
+                "%s / %s",
+                SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                SchemaManager::EXTENSIONS_TABLE_NAME,
+                SchemaManager::COLUMNS_TABLE_NAME,
+                SchemaManager::SP_PARAMS_TABLE_NAME,
+                SchemaManager::INDEXES_TABLE_NAME);
+        return true;
+      }
+    }
+  }
+
+  // Remove expansion-cache directories for extensions no longer installed.
+  // The cache is a fast path only -- nothing consults it as authoritative
+  // state -- so skipping cleanup on failure paths (which all return true
+  // and abort startup) is safe. The sweep is idempotent and authoritative:
+  // it walks every top-level directory in the cache and removes any not
+  // present in the installed_extensions set. Nothing is missed by skipped
+  // runs; whenever the operator does get a successful startup, the cache
+  // is fully reconciled in one pass.
   cleanup_orphaned_expansion_directories(installed_extensions);
 
   return false;

@@ -10,23 +10,26 @@ inputs:
     description: 'Whether to use GitHub Actions cache for ccache'
     required: false
     default: 'true'
+  cache-boost:
+    description: 'Whether to cache downloaded Boost sources at /tmp/boost'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies (Linux)
-      if: runner.os == 'Linux'
+    - name: Install build dependencies
       working-directory: ./source
       shell: bash
       run: |
-        sudo scripts/setup_linux_build_env.sh
+        villagesql/bld_tools/setup_build_env.sh "${{ runner.os }}"
 
-    - name: Install dependencies (macOS)
-      if: runner.os == 'macOS'
-      working-directory: ./source
-      shell: bash
-      run: |
-        brew install bison cmake openssl
+    - name: Cache Boost
+      if: inputs.cache-boost == 'true'
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: /tmp/boost
+        key: boost-${{ runner.os }}-${{ runner.arch }}
 
     - name: Setup ccache
       if: inputs.setup-ccache == 'true'

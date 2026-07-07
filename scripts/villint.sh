@@ -10,6 +10,7 @@ FIX_EOF=true  # Default to fixing EOF newlines
 FIX_COPYRIGHT=true  # Default to fixing copyrights
 COMMIT_ISH=""  # Will be computed if not specified
 CMDLINE_IGNORE_PATTERNS=()  # Array to store command-line ignore patterns
+PRINT_CLANG_FORMAT_VERSION=false  # Print the pinned clang-format version and exit
 
 usage() {
   echo "Usage: $(basename "$0") [-c] [-o] [--fixeof|--no-fixeof] [--fixcopyright|--no-fixcopyright] [--commit <commit-ish>] [--ignore <pattern>]"
@@ -28,6 +29,8 @@ usage() {
   echo "                        Defaults to 'origin' if not set"
   echo "  --ignore <pattern>: Ignore files matching pattern (can be used multiple times)."
   echo "                      Supports exact paths, directory recursion, and glob patterns."
+  echo "  --clang-format-version:"
+  echo "                      Print the pinned clang-format version and exit."
   echo "  -h, --help:         Show this help message."
   exit 1
 }
@@ -77,6 +80,10 @@ while [[ $# -gt 0 ]]; do
       CMDLINE_IGNORE_PATTERNS+=("$2")
       shift # past argument
       shift # past value
+      ;;
+    --clang-format-version)
+      PRINT_CLANG_FORMAT_VERSION=true
+      shift # past argument
       ;;
     -h|--help)
       usage
@@ -161,6 +168,20 @@ is_ignored() {
   return 1
 }
 
+get_villint_dir() {
+  local script_dir="$(dirname "${BASH_SOURCE[0]}")"
+  local source_dir="$(cd "$script_dir/.." && pwd)"
+  echo "$source_dir/villagesql/villint"
+}
+
+get_allowed_list() {
+  echo "$(get_villint_dir)/regtest_villint_data/allowlist_nonstandard_copyrights.txt"
+}
+
+get_clang_format_version() {
+  cat "$(get_villint_dir)/clang-format-version"
+}
+
 # Whitelist of allowed TODO tags for VillageSQL code
 ALLOWED_TODO_TAGS=(
   "villagesql"
@@ -186,7 +207,7 @@ check_todo_tags() {
   local added_lines
   if is_jj_workspace; then
     if jj file show -r "$COMMIT_ISH" "$file" >/dev/null 2>&1; then
-      added_lines=$(jj diff --from "$COMMIT_ISH" --git "$file" 2>/dev/null | grep '^+' | grep -v '^+++' | sed 's/^+//')
+      added_lines=$(jj diff --from "$COMMIT_ISH" --git "$file" --context=0 2>/dev/null | grep '^+' | grep -v '^+++' | sed 's/^+//')
     else
       # New file - all lines are added
       added_lines=$(cat "$file")
@@ -272,9 +293,7 @@ fix_copyright() {
       echo "  Added VillageSQL Contributors to existing copyright"
     else
       # Non-standard copyright - check if it's in the allowlist
-      # Get the directory where this script lives
-      local script_dir="$(dirname "${BASH_SOURCE[0]}")"
-      local allowlist="$script_dir/regtest_villint_data/allowlist_nonstandard_copyrights.txt"
+      local allowlist=$(get_allowed_list)
       # Check for exact match or prefix match (allows directory patterns)
       if [ -f "$allowlist" ]; then
         if grep -qxF "$file" "$allowlist"; then
@@ -296,7 +315,7 @@ fix_copyright() {
       echo "ERROR: Non-standard copyright in $file" >&2
       echo "  This file has a copyright notice but it's not the standard Oracle/MySQL format." >&2
       echo "  Either update the copyright to match the standard format, or add this file to:" >&2
-      echo "  scripts/regtest_villint_data/allowlist_nonstandard_copyrights.txt" >&2
+      echo "  $allowlist" >&2
       return 1
     fi
   else
@@ -347,9 +366,7 @@ fix_copyright_cmake() {
       echo "  Added VillageSQL Contributors to existing copyright"
     else
       # Non-standard copyright - check if it's in the allowlist
-      # Get the directory where this script lives
-      local script_dir="$(dirname "${BASH_SOURCE[0]}")"
-      local allowlist="$script_dir/regtest_villint_data/allowlist_nonstandard_copyrights.txt"
+      local allowlist=$(get_allowed_list)
       # Check for exact match or prefix match (allows directory patterns)
       if [ -f "$allowlist" ]; then
         if grep -qxF "$file" "$allowlist"; then
@@ -401,8 +418,13 @@ EOF
 # --- Main Logic ---
 
 # Check for required tools
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REQUIRED_CLANG_FORMAT_VERSION=$(cat "$SCRIPT_DIR/clang-format-version")
+REQUIRED_CLANG_FORMAT_VERSION=$(get_clang_format_version)
+
+# Handle introspection requests first
+if [ "$PRINT_CLANG_FORMAT_VERSION" = true ]; then
+  echo "$REQUIRED_CLANG_FORMAT_VERSION"
+  exit 0
+fi
 
 die_clang_format() {
   echo "Error: $1" >&2
@@ -585,7 +607,7 @@ for file in $C_FILES; do
       # "new file" arm dropped --from, which made jj diff against the
       # working-copy parent (empty for a clean checkout) and silently
       # skip the file entirely.
-      ranges_str=$(jj diff --from "$COMMIT_ISH" --git "$file" 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
+      ranges_str=$(jj diff --from "$COMMIT_ISH" --git "$file" --context=0 2>/dev/null | grep -E '^@@' | sed -E 's/^@@.* \+([0-9]+),?([0-9]*).*/\1,\2/')
     else
       # Check if the file is tracked by git to determine the correct diff command.
       if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then

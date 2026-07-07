@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS villagesql.extensions (
   extension_name VARCHAR(64) NOT NULL COMMENT 'Extension name',
   extension_version VARCHAR(64) NOT NULL COMMENT 'Version of the extension',
   veb_sha256 VARCHAR(64) NOT NULL COMMENT 'SHA256 hash of the VEB file in hex',
+  pending_action JSON NULL COMMENT 'Pending deferred action (e.g. version update). NULL when no action is pending.',
   PRIMARY KEY (extension_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ROW_FORMAT=DYNAMIC
