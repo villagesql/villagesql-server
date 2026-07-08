@@ -180,8 +180,8 @@ TEST_F(VictionaryClientTest, GetUncommittedEntries) {
 
 // Test commit/rollback with fake THD
 TEST_F(VictionaryClientTest, CommitRollbackWithFakeTHD) {
-  // Mock THD pointer
-  THD *fake_thd = reinterpret_cast<THD *>(0x1234);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x1230);
 
   // Commit and rollback should be safe even with no entries
   client_->commit_all_tables(fake_thd);
@@ -214,8 +214,8 @@ TEST_F(VictionaryClientTest, WriteLockGuard) {
   entry.value = "test_value";
   entry.description = "Test entry";
 
-  // Use a fake THD pointer for testing (we don't actually access THD internals)
-  THD *fake_thd = reinterpret_cast<THD *>(0x1234);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x1238);
 
   {
     auto guard = client_->get_write_lock();
@@ -423,8 +423,8 @@ TEST_F(VictionaryClientTest, KeyPrefixTypes) {
 
 // Test prefix queries work correctly with current normalization
 TEST_F(VictionaryClientTest, PrefixQueriesBasic) {
-  // Use a fake THD pointer for testing
-  THD *fake_thd = reinterpret_cast<THD *>(0x1234);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x1230);
 
   {
     auto guard = client_->get_write_lock();
@@ -510,6 +510,7 @@ TEST_F(VictionaryClientTest, NormalizationFunctionsAllSettings) {
 
 // Test basic DELETE operation
 TEST_F(VictionaryClientTest, DeleteOperation) {
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
   THD *fake_thd = reinterpret_cast<THD *>(0x5678);
 
   // First, add a column to committed state
@@ -549,7 +550,8 @@ TEST_F(VictionaryClientTest, DeleteOperation) {
 
 // Test UPDATE operation with column rename
 TEST_F(VictionaryClientTest, UpdateOperationWithRename) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x9ABC);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x9AB0);
 
   // Add a column
   ColumnKey old_key("db1", "table1", "old_name");
@@ -590,6 +592,7 @@ TEST_F(VictionaryClientTest, UpdateOperationWithRename) {
 
 // Test multiple operations on same key (DELETE then INSERT)
 TEST_F(VictionaryClientTest, MultipleOperationsSameKey) {
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
   THD *fake_thd = reinterpret_cast<THD *>(0xDEF0);
 
   // Add initial column
@@ -607,7 +610,8 @@ TEST_F(VictionaryClientTest, MultipleOperationsSameKey) {
 
   // Now in same transaction: DELETE then INSERT with same key but different
   // type
-  THD *fake_thd2 = reinterpret_cast<THD *>(0xDEF1);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd2 = reinterpret_cast<THD *>(0xDEF8);
 
   ColumnEntry entry2(key);
   entry2.extension_name = "ext2";
@@ -635,7 +639,8 @@ TEST_F(VictionaryClientTest, MultipleOperationsSameKey) {
 
 // Test MarkTableForRename
 TEST_F(VictionaryClientTest, MarkTableForRename) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x1111);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x1110);
 
   // Define keys and common metadata
   ColumnKey old_key1("db1", "old_table", "col1");
@@ -662,7 +667,8 @@ TEST_F(VictionaryClientTest, MarkTableForRename) {
   client_->commit_all_tables(fake_thd);
 
   // Rename the table - mark each column for update
-  THD *fake_thd2 = reinterpret_cast<THD *>(0x2222);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd2 = reinterpret_cast<THD *>(0x2220);
   {
     auto guard = client_->get_write_lock();
 
@@ -698,7 +704,8 @@ TEST_F(VictionaryClientTest, MarkTableForRename) {
 
 // Test GetCustomColumnsForTable
 TEST_F(VictionaryClientTest, GetCustomColumnsForTable) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x3333);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x3330);
 
   // Add columns for multiple tables
   ColumnEntry t1c1(ColumnKey("db1", "table1", "col1"));
@@ -751,7 +758,8 @@ TEST_F(VictionaryClientTest, GetCustomColumnsForTable) {
 
 // Test transaction rollback discards operations
 TEST_F(VictionaryClientTest, TransactionRollback) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x4444);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x4448);
 
   // Add a column and commit it
   ColumnKey key("db1", "table1", "col1");
@@ -767,7 +775,8 @@ TEST_F(VictionaryClientTest, TransactionRollback) {
   client_->commit_all_tables(fake_thd);
 
   // Start new transaction, mark for deletion
-  THD *fake_thd2 = reinterpret_cast<THD *>(0x5555);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd2 = reinterpret_cast<THD *>(0x5558);
   {
     auto guard = client_->get_write_lock();
     EXPECT_FALSE(client_->columns().MarkForDeletion(*fake_thd2, key));
@@ -785,7 +794,8 @@ TEST_F(VictionaryClientTest, TransactionRollback) {
 
 // Test operation ordering with complex scenario
 TEST_F(VictionaryClientTest, ComplexOperationOrdering) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x6666);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x6660);
 
   // Scenario: RENAME col1→col2, DROP col2 (original), ADD col1 (new)
   // This tests that operations are applied in the correct order
@@ -813,7 +823,8 @@ TEST_F(VictionaryClientTest, ComplexOperationOrdering) {
   client_->commit_all_tables(fake_thd);
 
   // Transaction: RENAME col1→col2, DELETE col2, INSERT col1
-  THD *fake_thd2 = reinterpret_cast<THD *>(0x7777);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd2 = reinterpret_cast<THD *>(0x7778);
 
   // Operation 1: Rename col1 to col2 (overwrites old col2)
   ColumnEntry col1_renamed(key2);
@@ -859,7 +870,8 @@ TEST_F(VictionaryClientTest, ComplexOperationOrdering) {
 
 // Test ExtensionEntry operations (added in PR 129)
 TEST_F(VictionaryClientTest, ExtensionEntry_BasicOperations) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x1234);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x1238);
 
   // Create test extensions
   ExtensionKey key1("myext");
@@ -902,6 +914,7 @@ TEST_F(VictionaryClientTest, ExtensionEntry_BasicOperations) {
 
 // Test get_all_committed for extensions
 TEST_F(VictionaryClientTest, ExtensionEntry_GetAllCommitted) {
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
   THD *fake_thd = reinterpret_cast<THD *>(0x5678);
 
   // Add multiple extensions
@@ -952,7 +965,8 @@ TEST_F(VictionaryClientTest, ExtensionEntry_GetAllCommitted) {
 // Validates that operations on different keys don't interfere with each other
 // Tests scenarios: UPDATE, DELETE+INSERT (recreate), and DELETE
 TEST_F(VictionaryClientTest, GetMultipleInterleavedKeys) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAAAA);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAAA0);
 
   // Define keys first for later reference
   ColumnKey key1("db1", "table1", "col1");
@@ -1083,7 +1097,8 @@ TEST_F(VictionaryClientTest, GetMultipleInterleavedKeys) {
 
 // Test get() returns uncommitted INSERT before commit
 TEST_F(VictionaryClientTest, GetUncommittedInsert) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAAAA);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAAA8);
 
   ColumnKey key("db1", "table1", "col1");
   ColumnEntry entry(key);
@@ -1122,8 +1137,9 @@ TEST_F(VictionaryClientTest, GetUncommittedInsert) {
 
 // Test get() returns nullptr for uncommitted DELETE
 TEST_F(VictionaryClientTest, GetUncommittedDelete) {
-  THD *fake_thd1 = reinterpret_cast<THD *>(0xBBBB);
-  THD *fake_thd2 = reinterpret_cast<THD *>(0xCCCC);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd1 = reinterpret_cast<THD *>(0xBBB0);
+  THD *fake_thd2 = reinterpret_cast<THD *>(0xCCC8);
 
   // First, insert and commit an entry
   ColumnKey key("db1", "table1", "col1");
@@ -1164,8 +1180,9 @@ TEST_F(VictionaryClientTest, GetUncommittedDelete) {
 
 // Test get() returns updated entry for uncommitted UPDATE
 TEST_F(VictionaryClientTest, GetUncommittedUpdate) {
-  THD *fake_thd1 = reinterpret_cast<THD *>(0xDDDD);
-  THD *fake_thd2 = reinterpret_cast<THD *>(0xEEEE);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd1 = reinterpret_cast<THD *>(0xDDD0);
+  THD *fake_thd2 = reinterpret_cast<THD *>(0xEEE8);
 
   // Insert initial entry
   ColumnKey key("db1", "table1", "col1");
@@ -1207,8 +1224,9 @@ TEST_F(VictionaryClientTest, GetUncommittedUpdate) {
 
 // Test get() with UPDATE that changes the key (rename)
 TEST_F(VictionaryClientTest, GetUncommittedUpdateWithKeyChange) {
-  THD *fake_thd1 = reinterpret_cast<THD *>(0xFFFF);
-  THD *fake_thd2 = reinterpret_cast<THD *>(0x0001);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd1 = reinterpret_cast<THD *>(0xFFF8);
+  THD *fake_thd2 = reinterpret_cast<THD *>(0x0008);
 
   // Insert initial entry
   ColumnKey old_key("db1", "table1", "old_col");
@@ -1261,7 +1279,8 @@ TEST_F(VictionaryClientTest, GetUncommittedUpdateWithKeyChange) {
 
 // Test get() returns most recent operation when multiple operations on same key
 TEST_F(VictionaryClientTest, GetMultipleUncommittedOperations) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x0002);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x0020);
 
   ColumnKey key("db1", "table1", "col1");
   ColumnEntry entry1(key);
@@ -1299,7 +1318,8 @@ TEST_F(VictionaryClientTest, GetMultipleUncommittedOperations) {
 
 // Test get() returns nullptr after DELETE even if there were prior operations
 TEST_F(VictionaryClientTest, GetDeleteAfterMultipleOperations) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x0003);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x0030);
 
   ColumnKey key("db1", "table1", "col1");
   ColumnEntry entry1(key);
@@ -1329,7 +1349,8 @@ TEST_F(VictionaryClientTest, GetDeleteAfterMultipleOperations) {
 
 // Test get() with nullptr THD falls back to get_committed()
 TEST_F(VictionaryClientTest, GetWithNullTHD) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x0004);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x0040);
 
   ColumnKey key("db1", "table1", "col1");
   ColumnEntry entry(key);
@@ -1360,8 +1381,9 @@ TEST_F(VictionaryClientTest, GetWithNullTHD) {
 
 // Test get() from different THD doesn't see uncommitted operations
 TEST_F(VictionaryClientTest, GetFromDifferentTHD) {
-  THD *fake_thd1 = reinterpret_cast<THD *>(0x0005);
-  THD *fake_thd2 = reinterpret_cast<THD *>(0x0006);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd1 = reinterpret_cast<THD *>(0x0050);
+  THD *fake_thd2 = reinterpret_cast<THD *>(0x0058);
 
   ColumnKey key("db1", "table1", "col1");
   ColumnEntry entry(key);
@@ -1390,8 +1412,9 @@ TEST_F(VictionaryClientTest, GetFromDifferentTHD) {
 
 // Test get() after rollback returns committed state
 TEST_F(VictionaryClientTest, GetAfterRollback) {
-  THD *fake_thd1 = reinterpret_cast<THD *>(0x0007);
-  THD *fake_thd2 = reinterpret_cast<THD *>(0x0008);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd1 = reinterpret_cast<THD *>(0x0070);
+  THD *fake_thd2 = reinterpret_cast<THD *>(0x0078);
 
   // Commit an entry
   ColumnKey key("db1", "table1", "col1");
@@ -1486,7 +1509,8 @@ TEST_F(MemoryOnlySystemTableMapTest, InsertAndCommit) {
   villagesql::SystemTableMap<villagesql::TypeDescriptor,
                              villagesql::PersistenceMode::MEMORY_ONLY>
       map(&lock_);
-  THD *fake_thd = reinterpret_cast<THD *>(0x1234);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x1230);
 
   villagesql::TypeDescriptorKey key("MYTYPE", "myext", "1.0");
   villagesql::TypeDescriptor entry(key);
@@ -1524,6 +1548,7 @@ TEST_F(MemoryOnlySystemTableMapTest, InsertAndRollback) {
   villagesql::SystemTableMap<villagesql::TypeDescriptor,
                              villagesql::PersistenceMode::MEMORY_ONLY>
       map(&lock_);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
   THD *fake_thd = reinterpret_cast<THD *>(0x5678);
 
   villagesql::TypeDescriptorKey key("ROLLBACK_TYPE", "ext", "1.0");
@@ -1560,6 +1585,7 @@ TEST_F(MemoryOnlySystemTableMapTest, DeleteAndCommit) {
   villagesql::SystemTableMap<villagesql::TypeDescriptor,
                              villagesql::PersistenceMode::MEMORY_ONLY>
       map(&lock_);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
   THD *fake_thd = reinterpret_cast<THD *>(0xDEF0);
 
   villagesql::TypeDescriptorKey key("DELETE_TYPE", "ext", "1.0");
@@ -1599,8 +1625,9 @@ TEST_F(MemoryOnlySystemTableMapTest, TransactionIsolation) {
   villagesql::SystemTableMap<villagesql::TypeDescriptor,
                              villagesql::PersistenceMode::MEMORY_ONLY>
       map(&lock_);
-  THD *thd_A = reinterpret_cast<THD *>(0x2222);
-  THD *thd_B = reinterpret_cast<THD *>(0x3333);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *thd_A = reinterpret_cast<THD *>(0x2228);
+  THD *thd_B = reinterpret_cast<THD *>(0x3338);
 
   villagesql::TypeDescriptorKey key("ISOLATED_TYPE", "ext", "1.0");
   villagesql::TypeDescriptor entry(key);
@@ -1649,7 +1676,8 @@ static int test_compare(const unsigned char *, size_t, const unsigned char *,
 
 // Test TypeDescriptor operations through VictionaryClient
 TEST_F(VictionaryClientTest, TypeDescriptorOperations) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xDE5C);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xDE58);
 
   // Create a TypeDescriptor
   villagesql::TypeDescriptor desc(
@@ -1707,7 +1735,8 @@ TEST_F(VictionaryClientTest, TypeDescriptorOperations) {
 
 // Test TypeDescriptor rollback through VictionaryClient
 TEST_F(VictionaryClientTest, TypeDescriptorRollback) {
-  THD *fake_thd = reinterpret_cast<THD *>(0x8011);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x8018);
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("ROLLBACK_TYPE", "ext", "1.0"),
@@ -1741,7 +1770,8 @@ TEST_F(VictionaryClientTest, TypeDescriptorRollback) {
 
 // Test basic acquire functionality - returns valid pointer for existing entry
 TEST_F(VictionaryClientTest, AcquireBasic) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xACE1);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xACE0);
 
   // Create and commit an entry
   ColumnKey key("testdb", "testtable", "col1");
@@ -1791,7 +1821,8 @@ TEST_F(VictionaryClientTest, AcquireNonExistent) {
 
 // Test that acquire keeps entry alive via reference counting
 TEST_F(VictionaryClientTest, AcquireKeepsEntryAlive) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xACE2);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xACE8);
 
   // Create and commit a TypeDescriptor entry
   TypeDescriptorKey key("REFCOUNT_TYPE", "ext", "1.0");
@@ -1848,7 +1879,8 @@ TEST_F(VictionaryClientTest, AcquireKeepsEntryAlive) {
 
 // Test acquire with key_type overload
 TEST_F(VictionaryClientTest, AcquireWithKeyType) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xACE3);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xACF0);
 
   PropertyKey key("test_property");
   PropertyEntry entry(key);
@@ -1877,7 +1909,8 @@ TEST_F(VictionaryClientTest, AcquireWithKeyType) {
 
 // Test multiple acquires on the same entry
 TEST_F(VictionaryClientTest, AcquireMultipleTimes) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xACE4);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xACF8);
 
   ColumnKey key("db", "table", "col");
   ColumnEntry entry(key);
@@ -1920,7 +1953,8 @@ TEST_F(VictionaryClientTest, AcquireMultipleTimes) {
 
 // Test acquire_or_create creates a new entry when not present
 TEST_F(VictionaryClientTest, AcquireOrCreateNew) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xA0C1);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xA0C0);
 
   // Create a TypeDescriptor for the type
   TypeDescriptor type_desc(TypeDescriptorKey("AOTEST_TYPE", "test_ext", "1.0.0"));
@@ -1968,7 +2002,8 @@ TEST_F(VictionaryClientTest, AcquireOrCreateNew) {
 
 // Test acquire_or_create returns existing entry when present
 TEST_F(VictionaryClientTest, AcquireOrCreateExisting) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xA0C2);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xA0C8);
 
   // Create a TypeDescriptor for the type
   TypeDescriptor type_desc(TypeDescriptorKey("AOTEST_TYPE2", "test_ext", "1.0.0"));
@@ -2057,7 +2092,8 @@ TEST_F(VictionaryClientTest, AcquireOrCreateFailure) {
 
 // Test acquire_or_create with TypeParameters
 TEST_F(VictionaryClientTest, AcquireOrCreateWithParameters) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xA0C3);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xA0D0);
 
   // Create a TypeDescriptor for the type
   TypeDescriptor type_desc(TypeDescriptorKey("VECTOR", "vector_ext", "2.0.0"));
@@ -2151,7 +2187,8 @@ TEST_F(VictionaryClientTest, SpParamKeyNormalization) {
 
 // Test sp_params insert, commit, and lookup
 TEST_F(VictionaryClientTest, SpParamInsertAndLookup) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAA01);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA00);
 
   SpParamKey key("testdb", "test_proc", "p1");
   SpParamEntry entry(key, "test_ext", "1.0", "VECTOR", "{\"dim\":\"3\"}");
@@ -2175,7 +2212,8 @@ TEST_F(VictionaryClientTest, SpParamInsertAndLookup) {
 
 // Test sp_params prefix query finds all params for a stored procedure
 TEST_F(VictionaryClientTest, SpParamPrefixQuery) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAA02);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA08);
 
   SpParamEntry p1(SpParamKey("db1", "proc1", "param1"), "ext1", "1.0",
                   "VECTOR");
@@ -2206,7 +2244,8 @@ TEST_F(VictionaryClientTest, SpParamPrefixQuery) {
 
 // Test sp_params delete by key
 TEST_F(VictionaryClientTest, SpParamDelete) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAA03);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA10);
 
   SpParamKey key("db1", "proc1", "param1");
   SpParamEntry entry(key, "ext1", "1.0", "VECTOR");
@@ -2217,7 +2256,8 @@ TEST_F(VictionaryClientTest, SpParamDelete) {
   }
   client_->commit_all_tables(fake_thd);
 
-  THD *fake_thd2 = reinterpret_cast<THD *>(0xAA04);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd2 = reinterpret_cast<THD *>(0xAA18);
   {
     auto guard = client_->get_write_lock();
     EXPECT_FALSE(client_->sp_params().MarkForDeletion(*fake_thd2, key));
@@ -2232,7 +2272,8 @@ TEST_F(VictionaryClientTest, SpParamDelete) {
 
 // Test sp_params rollback discards pending entries
 TEST_F(VictionaryClientTest, SpParamRollback) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAA05);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA20);
 
   SpParamKey key("db1", "proc1", "param1");
   SpParamEntry entry(key, "ext1", "1.0", "VECTOR");
@@ -2253,7 +2294,8 @@ TEST_F(VictionaryClientTest, SpParamRollback) {
 // entries on other system tables. This mirrors the assert in
 // PersistCustomSpParams() in metadata_modifier.cc.
 TEST_F(VictionaryClientTest, SpParamOnlyHasUncommittedOnSpParams) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xAA06);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xAA28);
 
   SpParamEntry entry(SpParamKey("db1", "proc1", "param1"), "ext1", "1.0",
                      "VECTOR");
