@@ -1,0 +1,183 @@
+name: Build Server Branch
+
+# Builds the dev-server package for a SINGLE target, runs the integration
+# tests, and uploads the package + SDK as run-scoped artifacts.
+#
+# Invoked once per target by release-server-branch (workflow_call), or manually
+# for one target (workflow_dispatch). Multi-target fan-out lives in
+# release-server-branch, which also owns the platform -> runner/os mapping and
+# passes the resolved runner and os in directly.
+#
+# <github.workspace>
+# - source: clone of villagesql-server
+# - build:  cmake compilation sandbox
+# - exts:   sandbox for bundled extensions
+#   - sources: clones of each bundled extension
+#   - builds:  sandboxes for extension builds
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git tag, branch, or SHA to build from.'
+        required: true
+        type: string
+      platform:
+        description: 'Platform label used to name the devserver artifact (e.g. linux-x86_64).'
+        required: true
+        type: string
+      release_build:
+        description: 'Strip the -dev suffix from the version.'
+        required: true
+        type: boolean
+      os:
+        description: 'Build OS family: linux or macos.'
+        required: true
+        type: string
+      runner:
+        description: 'JSON-encoded runs-on value (array or quoted string), e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git tag, branch, or SHA to build from (e.g. 0.0.4 or main).'
+        required: true
+        type: string
+      platform:
+        description: 'Platform label used to name the server artifact.'
+        required: false
+        type: choice
+        options:
+          - linux-x86_64
+          - linux-aarch64
+          - macos-arm64
+        default: linux-x86_64
+      release_build:
+        description: 'Release build: strip the -dev suffix from the version. Leave unchecked to include -dev (safe default).'
+        required: false
+        type: boolean
+        default: false
+      os:
+        description: 'Build OS family.'
+        required: true
+        type: choice
+        options:
+          - linux
+          - macos
+        default: linux
+      runner:
+        description: 'JSON-encoded runs-on value, e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
+        required: true
+        type: string
+        default: '["self-hosted","linux","x86_64"]'
+
+permissions:
+  contents: read
+
+jobs:
+  build-package:
+    name: Build (${{ inputs.platform }})
+    runs-on: ${{ fromJSON(inputs.runner) }}
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+      OUTPUT_DIR: ${{ github.workspace }}/output
+      EXTS_ROOT: ${{ github.workspace }}/exts
+      BUILD_BUNDLED_EXTENSIONS: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          path: source
+          ref: ${{ inputs.ref }}
+
+      - name: Setup VillageSQL build environment
+        uses: ./source/.github/actions/setup-villagesql-build
+        with:
+          cache-boost: 'true'
+          setup-ccache: 'false'
+
+      - name: Checkout bundled extensions
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1'
+        run: |
+          mkdir -p "$EXTS_ROOT/sources"
+          source/villagesql/bld_tools/checkout_bundled_extensions.sh \
+            "$EXTS_ROOT/sources"
+
+      # Bundled-extension build deps. Slated for separate revision; preserved
+      # as inline steps so BUILD_BUNDLED_EXTENSIONS builds keep working.
+      - name: Install bundled-extension dependencies (Linux)
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && inputs.os == 'linux'
+        run: sudo source/scripts/setup_linux_ext_deps.sh
+
+      - name: Install bundled-extension dependencies (macOS)
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && inputs.os == 'macos'
+        run: source/scripts/setup_macos_ext_deps.sh
+
+      - name: Build the dev server
+        run: |
+          if [[ "${{ inputs.release_build }}" == "true" ]]; then
+            PRE_RELEASE=""
+          else
+            PRE_RELEASE="dev"
+          fi
+          echo "pre_release_version: '${PRE_RELEASE}'"
+
+          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${PRE_RELEASE}"
+          if [ "${{ inputs.os }}" = "macos" ]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
+          fi
+
+          SOURCE_DIR="$SOURCE_DIR" \
+          BUILD_DIR="$BUILD_DIR" \
+          CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
+          VSQL_PRE_RELEASE_VERSION="${PRE_RELEASE}" \
+            source/villagesql/bld_tools/build_ci.sh
+
+      - name: Build bundled extensions
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1'
+        run: |
+          SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
+          source/villagesql/bld_tools/build_bundled_extensions.sh \
+            "$EXTS_ROOT/sources" "${SDK_STAGING_DIR}" "${BUILD_DIR}/veb_output_directory"
+
+      - name: Test bundled extensions
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1'
+        run: |
+          source/villagesql/bld_tools/test_extension_vebs.sh \
+            "$BUILD_DIR" \
+            "$EXTS_ROOT/sources"
+
+      - name: Package dev server tarball
+        run: |
+          mkdir -p "$OUTPUT_DIR"
+
+          BUILD_DIR="$BUILD_DIR" \
+          OUTPUT_DIR="$OUTPUT_DIR" \
+          BUILD_BUNDLED_EXTENSIONS="${BUILD_BUNDLED_EXTENSIONS:-0}" \
+            source/villagesql/bld_tools/package_dev_server.sh
+
+      - name: Run integration tests
+        run: |
+          TARBALL=$(ls "$OUTPUT_DIR"/*.tar.gz | head -1)
+          TEST_DIR=$(mktemp -d)
+          tar xzf "$TARBALL" -C "$TEST_DIR"
+          PACKAGE_DIR=$(echo "$TEST_DIR"/villagesql-dev-server-*)
+          source/villagesql/dev_server/tests/integration_test.sh "$PACKAGE_DIR"
+          rm -rf "$TEST_DIR"
+
+      - name: Upload package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: devserver-${{ inputs.platform }}
+          path: ${{ env.OUTPUT_DIR }}/*.tar.gz
+
+      - name: Upload SDK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-${{ inputs.platform }}
+          path: ${{ env.BUILD_DIR }}/villagesql-extension-sdk-*.tar.gz

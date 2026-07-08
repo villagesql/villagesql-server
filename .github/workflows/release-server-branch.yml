@@ -1,0 +1,105 @@
+name: Release Server Branch
+
+# Builds the dev-server package for ALL target platforms by fanning out over
+# build-server-branch (one call per target), then attaches the resulting
+# tarballs to an existing GitHub Release.
+#
+# This workflow handles the multi-target case only; single-target builds live
+# in build-server-branch.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git tag, branch, or SHA to build from.'
+        required: true
+        type: string
+      release_tag:
+        description: 'GitHub Release to attach artifacts to. Defaults to "ref". Blank to skip upload.'
+        required: false
+        type: string
+        default: ''
+      release_build:
+        description: 'Strip the -dev suffix from the version.'
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git tag, branch, or SHA to build from (e.g. 0.0.4 or main).'
+        required: true
+        type: string
+      release_tag:
+        description: 'GitHub Release to attach artifacts to. Defaults to "ref". Leave blank to skip upload (useful for test builds — artifacts are still available for download from the Actions run page).'
+        required: false
+        type: string
+        default: ''
+      release_build:
+        description: 'Release build: strip the -dev suffix from the version. Leave unchecked to include -dev (safe default).'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: [self-hosted, linux, x86_64]
+            platform: linux-x86_64
+            os: linux
+          - runner: ubuntu-24.04-arm
+            platform: linux-aarch64
+            os: linux
+          - runner: macos-latest
+            platform: macos-arm64
+            os: macos
+    uses: ./.github/workflows/build-server-branch.yml
+    with:
+      ref: ${{ inputs.ref }}
+      runner: ${{ toJSON(matrix.runner) }}
+      os: ${{ matrix.os }}
+      platform: ${{ matrix.platform }}
+      release_build: ${{ inputs.release_build }}
+
+  attach-release-artifacts:
+    name: Attach Release Artifacts
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Determine release tag
+        id: tag
+        run: echo "tag=${{ inputs.release_tag || inputs.ref }}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: devserver-*
+          merge-multiple: true
+          path: packages/
+
+      - name: Download SDK
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-linux-x86_64
+          path: packages/
+
+      - name: Attach artifacts to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          if gh release view "$TAG" &>/dev/null; then
+            gh release upload "$TAG" packages/*.tar.gz --clobber
+          else
+            echo "No GitHub Release found for '$TAG' — skipping upload. Download artifacts from the Actions run page."
+          fi
