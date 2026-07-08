@@ -248,8 +248,9 @@ class FuncBuilder {
   // Declare the maximum length of the STRING result, in characters, so the
   // result column is sized to hold the full value when materialized. A
   // STRING-returning VDF that does not declare this falls back to the argument
-  // width (a large result then truncates when materialized). Bumps the required
-  // protocol to VEF_PROTOCOL_4.
+  // width (a large result then truncates when materialized). Values above
+  // VEF_MAX_RESULT_LENGTH are capped by the server. Bumps the required protocol
+  // to VEF_PROTOCOL_4.
   //
   // Only valid for a STRING return type. Call .returns(STRING) before this so
   // the return type is known here: a non-STRING return (or an undeclared one)
@@ -480,8 +481,9 @@ class AggFuncBuilder {
   // Declare the maximum length of the STRING result, in characters, so the
   // result column is sized to hold the full value when materialized. An
   // aggregate returning STRING that does not declare this falls back to the
-  // argument width (a large result then truncates when materialized). Bumps the
-  // required protocol to VEF_PROTOCOL_4.
+  // argument width (a large result then truncates when materialized). Values
+  // above VEF_MAX_RESULT_LENGTH are capped by the server. Bumps the required
+  // protocol to VEF_PROTOCOL_4.
   //
   // Only valid for a STRING return type. Call .returns(STRING) before this so
   // the return type is known here: a non-STRING return (or an undeclared one)
