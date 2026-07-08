@@ -105,13 +105,16 @@ let $expected_system_view_count = 51;
 # COLUMNS override -- both in villagesql/system_views/) changes the I_S schema, so
 # its checksum differs from vanilla 9.7's. Following VillageSQL's 8.4 convention
 # (keep IS_DD_VERSION, override the published checksum rather than bump the DD
-# version), the 90500 lctn=1 row in I_S_published_schema below holds VillageSQL's
+# version), the 90500 rows in I_S_published_schema below hold VillageSQL's
 # actual checksum, NOT vanilla 9.7's. IS_DD_VERSION stays 90500 (no DD-upgrade
 # change); the rejected alternative was bumping IS_DD_VERSION to 90700, which
 # would force a DD upgrade (datadirs regenerate the I_S views) -- deliberately
 # not done.
-# TODO(villagesql-rebase): the lctn=0 (case-sensitive FS) 90500 row still holds
-# vanilla's checksum -- re-record it on Linux CI; that FS combo can't run on macOS.
+# The 90500 lctn=0 (case-sensitive FS) row is re-recorded on Linux and includes
+# the EXTENSIONS PENDING_* columns.
+# TODO(villagesql-rebase): the 90500 lctn=1 (case-insensitive FS) row predates
+# those PENDING_* columns and is stale -- re-record it on macOS; that FS combo
+# can't run on Linux.
 
 --echo ########################################################################
 --echo # PART 1
@@ -371,7 +374,7 @@ INSERT INTO I_S_published_schema
         '027170b29c123596a675415c0e95542856cdd7bb837da87a74ce3c9bff8103fd');
 INSERT INTO I_S_published_schema
   VALUES ('90500', '90500', 0,
-        '7d93c94a2e79e52648902f8cd51988bfe4dc9627b9f477ef82440bbff17c12c8');
+        '9cbf818f92a37b9b8a5598f5374214b403cbf6de2aadedb05ea26c6d0756c703');
 INSERT INTO I_S_published_schema
   VALUES ('90500', '90500', 1,
         'b617baf217455673d80419170ab2142912134ebcaa454bf810b5f5c74b6ed8e2');
