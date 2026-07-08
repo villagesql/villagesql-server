@@ -255,7 +255,7 @@ class FuncBuilder {
   // the return type is known here: a non-STRING return (or an undeclared one)
   // is rejected at build time rather than silently ignored.
   constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &max_result_length(
-      uint64_t n) {
+      size_t n) {
     if (return_type_ == nullptr) {
       detail::call_returns_before_max_result_length();
     } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
@@ -426,7 +426,7 @@ class FuncBuilder {
   const char *return_type_;
   std::array<const char *, NumParams> param_types_;
   size_t buffer_size_;
-  uint64_t max_result_length_;
+  size_t max_result_length_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   bool deterministic_;
@@ -487,7 +487,7 @@ class AggFuncBuilder {
   // the return type is known here: a non-STRING return (or an undeclared one)
   // is rejected at build time rather than silently ignored.
   constexpr AggFuncBuilder<State, Func, NumParams> &max_result_length(
-      uint64_t n) {
+      size_t n) {
     if (return_type_ == nullptr) {
       detail::call_returns_before_max_result_length();
     } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
@@ -597,7 +597,7 @@ class AggFuncBuilder {
   const char *return_type_;
   std::array<const char *, NumParams> param_types_;
   size_t buffer_size_;
-  uint64_t max_result_length_;
+  size_t max_result_length_;
   bool deterministic_;
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;

@@ -4859,7 +4859,7 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   // set_data_type_string then buckets to VARCHAR / MEDIUM / LONG blob by
   // length.
   // TODO(villagesql): Allow VDFs to choose an encoding.
-  uint64_t len = 0;
+  size_t len = 0;
   if (u_d != nullptr && u_d->vdf_func_desc != nullptr &&
       u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_4) {
     len = u_d->vdf_func_desc->max_result_length;

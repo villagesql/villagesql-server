@@ -304,7 +304,7 @@ struct FuncWithMetadata {
   std::array<vef_type_t, kMaxParams> param_types;
   size_t num_params;
   size_t buffer_size;
-  uint64_t max_result_length;
+  size_t max_result_length;
   bool deterministic;
   // When true, the function accepts a variable number of arguments. The
   // server skips argument validation and delegates to prerun. num_params
@@ -1035,7 +1035,7 @@ struct StaticFuncDesc {
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
   size_t buffer_size_;
-  uint64_t max_result_length_;
+  size_t max_result_length_;
   bool deterministic_;
   bool is_varargs_;
   bool (*check_params_cache_bound_)();
@@ -1057,7 +1057,7 @@ struct StaticFuncDesc {
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }
   constexpr size_t buffer_size() const { return buffer_size_; }
-  constexpr uint64_t max_result_length() const { return max_result_length_; }
+  constexpr size_t max_result_length() const { return max_result_length_; }
   constexpr bool deterministic() const { return deterministic_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
     return check_params_cache_bound_;
