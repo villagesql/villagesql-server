@@ -153,7 +153,8 @@ class CustomIndexesVictionaryTest : public ::testing::Test {
 // "42." must match "42.0", "42.1", etc. but must NOT match "420.*" entries
 // because '0'(48) > '.'(46) so "420" > "42/" (the upper bound for "42.").
 TEST_F(CustomIndexesVictionaryTest, IndexColumnKeyPrefixExcludesLongerIds) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xB001);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xB000);
 
   {
     auto guard = client_->get_write_lock();
@@ -197,7 +198,8 @@ TEST_F(CustomIndexesVictionaryTest, AllocateIndexId) {
 
 // Test GetCustomIndexesForTable end-to-end.
 TEST_F(CustomIndexesVictionaryTest, GetCustomIndexesForTable) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xB002);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xB008);
 
   {
     auto guard = client_->get_write_lock();
@@ -231,7 +233,8 @@ TEST_F(CustomIndexesVictionaryTest, GetCustomIndexesForTable) {
 
 // Test that staging an index entry only marks the index maps dirty.
 TEST_F(CustomIndexesVictionaryTest, IndexOnlyHasUncommittedOnIndexMaps) {
-  THD *fake_thd = reinterpret_cast<THD *>(0xB003);
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xB010);
 
   uint64_t id = client_->allocate_index_id();
   IndexEntry entry(IndexKey("db", "t", "idx"), id, "ext", "1.0", "MY_INDEX");
