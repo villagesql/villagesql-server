@@ -19,6 +19,12 @@ lower(name)	file_size	autoextend_size
 innodb_temporary	12582912	0
 test/t5	114688	0
 ts1	147456	0
+villagesql/extensions	114688	0
+villagesql/custom_columns	131072	0
+villagesql/custom_sp_params	131072	0
+villagesql/custom_indexes	131072	0
+villagesql/custom_index_columns	114688	0
+villagesql/properties	114688	0
 # Update autoextend_size attribute both for the implicit as
 # well as explicit tablespaces
 ALTER TABLE t5 AUTOEXTEND_SIZE 4M;
@@ -30,6 +36,12 @@ lower(name)	file_size	autoextend_size
 innodb_temporary	12582912	0
 test/t5	114688	4194304
 ts1	147456	4194304
+villagesql/extensions	114688	0
+villagesql/custom_columns	131072	0
+villagesql/custom_sp_params	131072	0
+villagesql/custom_indexes	131072	0
+villagesql/custom_index_columns	114688	0
+villagesql/properties	114688	0
 # Cleanup
 # Shutdown server
 # Remove the copied files

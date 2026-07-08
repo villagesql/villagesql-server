@@ -93,6 +93,7 @@ Database: information_schema
 | ENGINES                               |
 | EVENTS                                |
 | EXTENSIONS                            |
+| EXTENSION_REGISTRATION                |
 | FILES                                 |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
@@ -177,6 +178,7 @@ Database: INFORMATION_SCHEMA
 | ENGINES                               |
 | EVENTS                                |
 | EXTENSIONS                            |
+| EXTENSION_REGISTRATION                |
 | FILES                                 |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |

@@ -69,7 +69,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -107,7 +107,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -149,7 +149,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -187,7 +187,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -229,7 +229,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -267,7 +267,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -309,7 +309,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -347,7 +347,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -389,7 +389,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -427,7 +427,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -469,7 +469,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -507,7 +507,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -549,7 +549,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -587,7 +587,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -629,7 +629,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -667,7 +667,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -709,7 +709,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -747,7 +747,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 (a,b) VALUES
 ('MySQL Tutorial','DBMS stands for DataBase')  ,
@@ -789,7 +789,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 #
@@ -819,7 +819,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 SET GLOBAL innodb_file_per_table=default;
@@ -850,7 +850,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in REMOTE_DIR
 fts_aux_index_1.ibd
@@ -907,7 +907,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t1 ADD FULLTEXT INDEX (title), TABLESPACE=s_def;
 Warnings:
@@ -934,7 +934,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 CREATE TABLE t1 (a VARCHAR(200), b TEXT, FULLTEXT fts_idx(a,b), c INT PRIMARY KEY) TABLESPACE=s_def ROW_FORMAT=compact;
@@ -960,7 +960,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 VALUES
 ('MySQL Tutorial','DBMS stands for DataBase', 1)  ,
@@ -998,7 +998,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT c FROM t1 WHERE MATCH (a,b)
 AGAINST ('Tutorial' IN NATURAL LANGUAGE MODE);
@@ -1029,7 +1029,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT pk FROM t1 WHERE MATCH (a,b)
 AGAINST ('Tutorial' IN NATURAL LANGUAGE MODE);
@@ -1059,7 +1059,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Test with DROP FTS Index & ADD FTS Index
 ALTER TABLE t1 DROP INDEX fts_idx, ADD FULLTEXT INDEX fts_idx(a,b);
@@ -1085,7 +1085,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT pk FROM t1 WHERE MATCH (a,b)
 AGAINST ('Tutorial' IN NATURAL LANGUAGE MODE);
@@ -1117,7 +1117,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t1 VALUES
 ('MySQL Tutorial','DBMS stands for DataBase', 1)  ,
@@ -1155,7 +1155,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT c FROM t1 WHERE MATCH (a,b)
 AGAINST ('Tutorial' IN NATURAL LANGUAGE MODE);
@@ -1186,7 +1186,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT pk FROM t1 WHERE MATCH (a,b)
 AGAINST ('Tutorial' IN NATURAL LANGUAGE MODE);
@@ -1216,7 +1216,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Test with DROP FTS Index & ADD FTS Index
 ALTER TABLE t1 DROP INDEX fts_idx, ADD FULLTEXT INDEX fts_idx(a,b);
@@ -1242,7 +1242,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT pk FROM t1 WHERE MATCH (a,b)
 AGAINST ('Tutorial' IN NATURAL LANGUAGE MODE);

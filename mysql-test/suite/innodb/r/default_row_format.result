@@ -17,7 +17,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -33,7 +33,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -49,7 +49,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -65,7 +65,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -82,7 +82,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -149,7 +149,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -165,7 +165,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -181,7 +181,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -197,7 +197,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -214,7 +214,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -281,7 +281,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -297,7 +297,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -313,7 +313,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -329,7 +329,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -346,7 +346,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -414,7 +414,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SET GLOBAL innodb_default_row_format=DYNAMIC;
 ALTER TABLE t1 DROP PRIMARY KEY, ADD COLUMN c INT PRIMARY KEY;
@@ -430,7 +430,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -451,7 +451,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SET GLOBAL innodb_default_row_format = DYNAMIC;
 ALTER TABLE t1 DROP PRIMARY KEY, ADD COLUMN c INT PRIMARY KEY;
@@ -468,7 +468,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -488,7 +488,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SET GLOBAL innoDB_default_row_format = COMPACT;
 ALTER TABLE t1 ADD COLUMN c2 BLOB, ALGORITHM=COPY;
@@ -505,7 +505,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -525,7 +525,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SET GLOBAL innoDB_default_row_format = COMPACT;
 ALTER TABLE t1 ADD COLUMN c2 BLOB, ALGORITHM=COPY;
@@ -543,7 +543,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
@@ -563,7 +563,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SET GLOBAL innodb_default_row_format=DYNAMIC;
 ALTER TABLE t1 DROP INDEX k1;
@@ -580,7 +580,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t1;
 
