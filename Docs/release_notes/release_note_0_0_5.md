@@ -1,6 +1,6 @@
 # VillageSQL 0.0.5
 
-Release commit: `2acd413be74` (merge of `mysql-8.4.10` into `main`)
+Release commit: `16509322376` (#737)
 
 ## Highlights
 
@@ -10,14 +10,23 @@ Release commit: `2acd413be74` (merge of `mysql-8.4.10` into `main`)
 - **VEF protocol v4** — Variable-length types require `VEF_PROTOCOL_4`; new `veb_register_type_v4` registration entry point and VEB file version bump. (`6ec2c78a271`, #664; `b320b92d921`, #647; `bdd55eb16c1`, #606)
 - **VDF result buffers** — Result buffer now grows to fit VDF output, and the charset is set correctly on aggregate results. (`76416fa8ac0`, #728; `74f43784fce`, #719)
 - **Parameter resolution fixes** — Correct handling when a parameterized type's `persisted_length` is still `-1` before `resolve_params` runs, plus resolve-params refinements. (`a80de3b94d5`, #683; `0b40842d30d`, #693; `b3dc7428e05`, #677)
+- **Standardized ABI** — The custom-type ABI is standardized on fixed-width integer types (`uint32_t`, `int64_t`). (`ba56076ba7d`, #755)
+- **VDF materialization sizing** — VDFs can declare a maximum result length in the ABI/API; when unspecified, sizing is derived from argument sizes up to 16 MB. (`b4af801d2ea`, #743)
 
 ### Extension Framework
 
 - **ALTER EXTENSION** — New `ALTER EXTENSION` syntax with pre-check validation, plus supporting refactors. (`8bb2f1c190e`, #667; `99aa8d2c354`, #686; `78b47849186`, #689)
+- **ALTER EXTENSION refinements** — Actions now apply independently, stacked ALTERs behave correctly, and an escape flag was added. (`9014577d139`, #738; `376969b31f7`, #718; `f290ce22c1b`, #748)
+- **Pending action persistence** — Pending extension actions are persisted in a store and recovered at server restart. (`ebb1aec2220`, #717; `a5502be85e6`, #727)
+- **Cleaner uninstalls** — Uninstall is no longer blocked by VDF dependencies. (`2b8a80aeb4b`, #680)
 - **INSTALL EXTENSION ... VERSION** — Optional `VERSION` clause asserts the VEB manifest version on install and fails before writing any rows on mismatch. (`e1c01fbd279`, #569)
 - **VEF statement events** — Read-only query hooks; the after-execution hook is implemented in this release. (`ebb782cceb7`, #645)
 - **INFORMATION_SCHEMA.EXTENSIONS** — Gains four pending-action columns: `PENDING_VERSION`, `PENDING_REQUESTED_AT`, `PENDING_LAST_ERROR`, and `PENDING_LAST_ERROR_AT`. (`de93ebb9d10`, #714; `34dc18bda0a`, #715)
 - **Chained capability registration fix** — Fixed registration of chained capabilities. (`7b75f2b7aae`, #614)
+
+### Stability
+
+- **DROP TABLE after restart** — Fixed a bug when dropping a table following a server restart. (`7580cde82cd`, #761)
 
 ### Build & Compatibility
 
