@@ -145,9 +145,23 @@ void on_statement_postexecute(THD *thd) {
   vef_statement_event_args_t args{};
   args.phase = VEF_STATEMENT_EVENT_POSTEXECUTE;
 
-  const LEX_CSTRING query = thd->query();
-  args.query = query.str;
-  args.query_len = query.length;
+  // Use the server's rewritten (redacted) query when one exists, else the raw
+  // text -- the same rule the general/slow/binary logs follow
+  // (sql/sql_class.h: "If rewritten_query is non-empty, the rewritten query it
+  // contains should be used in logs"). Password obfuscation is the rewriting
+  // this guards: SET PASSWORD, CREATE/ALTER USER ... IDENTIFIED BY, replication
+  // SOURCE_PASSWORD, CREATE SERVER OPTIONS(PASSWORD ...), etc., whose raw text
+  // carries a cleartext secret. Without this the secret would reach every
+  // statement_event sink. The hook fires on the owning connection thread
+  // post-execute, so reading rewritten_query() needs no LOCK_thd_query.
+  if (thd->rewritten_query().length() != 0) {
+    args.query = thd->rewritten_query().ptr();
+    args.query_len = thd->rewritten_query().length();
+  } else {
+    const LEX_CSTRING query = thd->query();
+    args.query = query.str;
+    args.query_len = query.length;
+  }
 
   const Security_context *sctx = thd->security_context();
   args.user = sctx->priv_user().str;
