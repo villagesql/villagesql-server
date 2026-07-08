@@ -103,7 +103,12 @@ typedef enum {
 typedef struct {
   vef_statement_event_phase_t phase;
 
-  // Query text. Not null-terminated; use query_len.
+  // Query text. Not null-terminated; use query_len. This is the server's
+  // rewritten (redacted) form when one exists -- the same text the general,
+  // slow, and binary logs use -- so credential-bearing statements (SET
+  // PASSWORD, CREATE/ALTER USER ... IDENTIFIED BY, replication SOURCE_PASSWORD,
+  // CREATE SERVER OPTIONS(PASSWORD ...)) arrive with the secret obfuscated, not
+  // in cleartext. For grouping regardless of literals, prefer digest_text.
   // Lifetime: copy before return.
   const char *query;
   size_t query_len;
