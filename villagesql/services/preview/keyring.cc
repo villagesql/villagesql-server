@@ -26,8 +26,8 @@ namespace villagesql::services {
 namespace {
 
 vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
-                                  unsigned char *buf, uint64_t buf_len,
-                                  uint64_t *out_len) {
+                                  unsigned char *buf, size_t buf_len,
+                                  size_t *out_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return VEF_KEYRING_ERROR;
 
@@ -62,8 +62,7 @@ vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
 }
 
 vef_keyring_result_t write_keyring(const char *data_id, const char *auth_id,
-                                   const unsigned char *data,
-                                   uint64_t data_len) {
+                                   const unsigned char *data, size_t data_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return VEF_KEYRING_ERROR;
 

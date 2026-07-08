@@ -63,7 +63,7 @@ typedef struct {
   // Only the field matching type is valid.
   union {
     bool bool_val;
-    int64_t int_val;
+    long long int_val;
     double dbl_val;
     // For VEF_VAR_STR: points to the newly allocated string. Valid for the
     // duration of the callback; do not retain the pointer.
@@ -98,10 +98,10 @@ typedef struct {
       bool def_val;
     } boolean;
     struct {
-      int64_t *value_ptr;
-      int64_t def_val;
-      int64_t min_val;
-      int64_t max_val;
+      long long *value_ptr;
+      long long def_val;
+      long long min_val;
+      long long max_val;
     } integer;
     struct {
       double *value_ptr;
@@ -134,7 +134,7 @@ typedef struct {
 // Returns false on success, true on error.
 typedef bool (*vef_sys_var_get_func_t)(const char *component_name,
                                        const char *name, void **val,
-                                       uint64_t *val_len);
+                                       size_t *val_len);
 
 // Sets a system variable to a string value.
 //
