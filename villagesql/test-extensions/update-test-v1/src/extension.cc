@@ -80,7 +80,7 @@ void counter_double(vsql::CustomArg in, vsql::IntResult out) {
   out.set(static_cast<long long>(val) * 2);
 }
 
-static int64_t g_threshold;
+static long long g_threshold;
 
 // INT sys var in range [0, 1000]. Used by extension_update tests to
 // exercise persisted-value behavior across version updates.

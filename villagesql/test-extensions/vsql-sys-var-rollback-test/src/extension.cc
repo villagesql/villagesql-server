@@ -25,7 +25,7 @@
 using namespace vsql;
 namespace sv = vsql::preview_sys_var;
 
-static int64_t g_good_int;
+static long long g_good_int;
 static double g_bad_double;
 
 static auto SYS_VARS = sv::make_capability({

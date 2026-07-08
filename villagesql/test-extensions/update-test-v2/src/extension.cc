@@ -84,7 +84,7 @@ void counter_double(vsql::CustomArg in, vsql::IntResult out) {
   out.set(static_cast<long long>(val) * 3);
 }
 
-static int64_t g_threshold;
+static long long g_threshold;
 
 static auto SYS_VARS = sv::make_capability({
     sv::make_int("threshold", "v2 threshold: INT in range [0, 1000]",

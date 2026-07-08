@@ -17,7 +17,7 @@
 #ifndef VILLAGESQL_SERVICES_SYS_VAR_ACCESS_H
 #define VILLAGESQL_SERVICES_SYS_VAR_ACCESS_H
 
-#include <cstdint>
+#include <stddef.h>
 #include <string_view>
 
 namespace villagesql::services {
@@ -55,7 +55,7 @@ void unregister_one_sys_var(std::string_view extension_name,
 //
 // Returns false on success, true on error.
 bool get_variable(const char *component_name, const char *name, void **val,
-                  uint64_t *val_len);
+                  size_t *val_len);
 
 // Set the value of a system variable.
 //

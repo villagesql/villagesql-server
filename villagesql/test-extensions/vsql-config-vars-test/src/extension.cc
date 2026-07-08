@@ -39,7 +39,7 @@
 using namespace vsql;
 namespace sv = vsql::preview_sys_var;
 
-static int64_t g_max_items;
+static long long g_max_items;
 static char *g_label;
 
 static auto SYS_VARS = sv::make_capability({

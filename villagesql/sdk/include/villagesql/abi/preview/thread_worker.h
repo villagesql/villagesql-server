@@ -58,7 +58,7 @@ struct vef_thread_handle_t;
 // To set a new poll fd, return its value (must be > 0).
 // To explicitly clear the poll fd, return poll_fd == -1.
 typedef struct {
-  uint32_t sleep_ms;
+  unsigned int sleep_ms;
   int poll_fd;
 } vef_next_wakeup_t;
 
@@ -88,7 +88,7 @@ typedef struct {
   // Default interval between wakeups in milliseconds. Used as the initial
   // sleep_ms until work_fn returns a non-zero value. 0 means no periodic
   // wakeup (thread only wakes on poll_fd or explicit stop).
-  uint32_t sleep_ms;
+  unsigned int sleep_ms;
 
   // Thread name suffix (e.g. "monitor"). The server prepends the extension
   // name to form the full thread name (e.g. "my_ext/monitor").
