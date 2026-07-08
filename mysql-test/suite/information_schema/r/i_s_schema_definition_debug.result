@@ -215,8 +215,8 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   IF (col.numeric_precision = 0, NULL, col.numeric_precision) AS NUMERIC_PRECISION,
   IF (col.numeric_scale = 0 && col.numeric_precision = 0,    NULL, col.numeric_scale) AS NUMERIC_SCALE,
   col.datetime_precision AS DATETIME_PRECISION,
-  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, cs.name))  ELSE NULL END AS CHARACTER_SET_NAME,
-  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, coll.name))  ELSE NULL END AS COLLATION_NAME,
+  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VECTOR' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, cs.name))  ELSE NULL END AS CHARACTER_SET_NAME,
+  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VECTOR' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, coll.name))  ELSE NULL END AS COLLATION_NAME,
   COALESCE(CONCAT(vcc.extension_name, '.', vcc.type_name), col.column_type_utf8) AS COLUMN_TYPE,
   col.column_key AS COLUMN_KEY,
   INTERNAL_GET_DD_COLUMN_EXTRA(ISNULL(col.generation_expression_utf8),  col.is_virtual, col.is_auto_increment, col.update_option,   IF(LENGTH(col.default_option), TRUE, FALSE), col.options,   col.hidden, tbl.type) AS EXTRA,
@@ -249,8 +249,8 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   IF (col.numeric_precision = 0, NULL, col.numeric_precision) AS NUMERIC_PRECISION,
   IF (col.numeric_scale = 0 && col.numeric_precision = 0,    NULL, col.numeric_scale) AS NUMERIC_SCALE,
   col.datetime_precision AS DATETIME_PRECISION,
-  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, cs.name))  ELSE NULL END AS CHARACTER_SET_NAME,
-  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, coll.name))  ELSE NULL END AS COLLATION_NAME,
+  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_VECTOR' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, cs.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, cs.name))  ELSE NULL END AS CHARACTER_SET_NAME,
+  CASE col.type  WHEN 'MYSQL_TYPE_STRING' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VAR_STRING' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VARCHAR' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_TINY_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN     (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_VECTOR' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, coll.name))  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, coll.name))  ELSE NULL END AS COLLATION_NAME,
   COALESCE(CONCAT(vcc.extension_name, '.', vcc.type_name), col.column_type_utf8) AS COLUMN_TYPE,
   col.column_key AS COLUMN_KEY,
   INTERNAL_GET_DD_COLUMN_EXTRA(ISNULL(col.generation_expression_utf8),  col.is_virtual, col.is_auto_increment, col.update_option,   IF(LENGTH(col.default_option), TRUE, FALSE), col.options,   col.hidden, tbl.type) AS EXTRA,
@@ -385,12 +385,20 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
 ");
 CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EXTENSIONS AS SELECT 
   ext.extension_name AS EXTENSION_NAME,
-  ext.extension_version AS EXTENSION_VERSION FROM 
+  ext.extension_version AS EXTENSION_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.target_version')) AS PENDING_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.requested_at')) AS PENDING_REQUESTED_AT,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error')) AS PENDING_LAST_ERROR,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error_at')) AS PENDING_LAST_ERROR_AT FROM 
   villagesql.extensions ext
 
 INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EXTENSIONS AS SELECT 
   ext.extension_name AS EXTENSION_NAME,
-  ext.extension_version AS EXTENSION_VERSION FROM 
+  ext.extension_version AS EXTENSION_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.target_version')) AS PENDING_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.requested_at')) AS PENDING_REQUESTED_AT,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error')) AS PENDING_LAST_ERROR,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error_at')) AS PENDING_LAST_ERROR_AT FROM 
   villagesql.extensions ext
 ");
 CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.FILES AS SELECT 
