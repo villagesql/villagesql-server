@@ -13,7 +13,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_index_table_error';
@@ -30,7 +30,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 CREATE TABLE t1 (id INT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY, title VARCHAR(200)) ENGINE=InnoDB ;
@@ -45,7 +45,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 t1.ibd
@@ -64,7 +64,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 t1.ibd
@@ -83,7 +83,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 t1.ibd
@@ -124,7 +124,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 fts_aux_index_1.ibd
@@ -165,7 +165,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 fts_aux_index_1.ibd
@@ -206,7 +206,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 fts_aux_index_1.ibd
@@ -246,7 +246,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 fts_aux_index_1.ibd
@@ -287,7 +287,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 fts_aux_index_1.ibd
@@ -345,7 +345,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_index_table_error';
@@ -362,7 +362,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 CREATE TABLE t1 (id INT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY, title VARCHAR(200)) ENGINE=InnoDB TABLESPACE=s_def;
@@ -377,7 +377,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_aux_table_error';
@@ -395,7 +395,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_index_table_error';
@@ -413,7 +413,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 DROP TABLE t1;
@@ -453,7 +453,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_aux_table_error';
@@ -482,7 +482,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_index_table_error';
@@ -511,7 +511,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_aux_table_error';
@@ -539,7 +539,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 SET DEBUG = '+d,ib_fts_index_table_error';
@@ -568,7 +568,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
 DROP TABLE t1;

@@ -117,7 +117,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -159,7 +159,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -212,7 +212,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -262,7 +262,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -313,7 +313,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -364,7 +364,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -410,7 +410,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -658,7 +658,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -728,7 +728,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -789,7 +789,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -863,7 +863,7 @@ villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/custom_indexes	villagesql/custom_indexes	33	11	Dynamic	0	Single
 villagesql/custom_index_columns	villagesql/custom_index_columns	33	9	Dynamic	0	Single
 villagesql/custom_sp_params	villagesql/custom_sp_params	33	10	Dynamic	0	Single
-villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
+villagesql/extensions	villagesql/extensions	33	7	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
