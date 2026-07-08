@@ -385,12 +385,20 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
 ");
 CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EXTENSIONS AS SELECT 
   ext.extension_name AS EXTENSION_NAME,
-  ext.extension_version AS EXTENSION_VERSION FROM 
+  ext.extension_version AS EXTENSION_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.target_version')) AS PENDING_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.requested_at')) AS PENDING_REQUESTED_AT,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error')) AS PENDING_LAST_ERROR,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error_at')) AS PENDING_LAST_ERROR_AT FROM 
   villagesql.extensions ext
 
 INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EXTENSIONS AS SELECT 
   ext.extension_name AS EXTENSION_NAME,
-  ext.extension_version AS EXTENSION_VERSION FROM 
+  ext.extension_version AS EXTENSION_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.target_version')) AS PENDING_VERSION,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.requested_at')) AS PENDING_REQUESTED_AT,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error')) AS PENDING_LAST_ERROR,
+  JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error_at')) AS PENDING_LAST_ERROR_AT FROM 
   villagesql.extensions ext
 ");
 CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.FILES AS SELECT 
