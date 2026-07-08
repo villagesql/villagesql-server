@@ -67,7 +67,7 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
 }  // namespace
 
 bool get_variable(const char *component_name, const char *name, void **val,
-                  uint64_t *val_len) {
+                  size_t *val_len) {
   SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
   if (registry == nullptr) return true;
 

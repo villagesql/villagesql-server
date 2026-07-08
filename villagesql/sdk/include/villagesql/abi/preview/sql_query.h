@@ -83,7 +83,7 @@ typedef struct {
   const char *sqlstate;
   // UTF-8 message. Never null; may be empty.
   const char *message;
-  uint64_t message_len;
+  size_t message_len;
 } vef_sql_diag_t;
 
 // Open a session bound to the background thread's security context.
@@ -101,12 +101,12 @@ typedef void (*vef_sql_close_session_fn)(vef_sql_session_t *session);
 // The entire result set is buffered before returning.
 typedef vef_sql_result_t *(*vef_sql_execute_fn)(vef_sql_session_t *session,
                                                 const char *sql,
-                                                uint64_t sql_len);
+                                                size_t sql_len);
 
 // Row callback for for_each_row. Called once per row with the same row/lengths
 // pointers as fetch_row. Return true to continue, false to stop early.
 typedef bool (*vef_sql_row_cb)(const char **row, const unsigned long *lengths,
-                               uint32_t num_columns, void *ctx);
+                               unsigned int num_columns, void *ctx);
 
 // Execute a SQL statement and invoke cb once per row as rows are produced,
 // without buffering the full result set. sql is UTF-8, sql_len bytes.
@@ -116,7 +116,7 @@ typedef bool (*vef_sql_row_cb)(const char **row, const unsigned long *lengths,
 // The handle must be closed with close_result.
 typedef vef_sql_result_t *(*vef_sql_for_each_row_fn)(vef_sql_session_t *session,
                                                      const char *sql,
-                                                     uint64_t sql_len,
+                                                     size_t sql_len,
                                                      vef_sql_row_cb cb,
                                                      void *ctx);
 
@@ -128,7 +128,7 @@ typedef bool (*vef_sql_fetch_row_fn)(vef_sql_result_t *result,
                                      const unsigned long **lengths_out);
 
 // Number of columns in the result set. Valid after a successful execute().
-typedef uint32_t (*vef_sql_num_columns_fn)(vef_sql_result_t *result);
+typedef unsigned int (*vef_sql_num_columns_fn)(vef_sql_result_t *result);
 
 // Close the result handle. Must be called for every non-NULL handle returned
 // by execute or for_each_row.
@@ -145,12 +145,13 @@ typedef bool (*vef_sql_get_error_fn)(const vef_sql_result_t *result,
                                      vef_sql_diag_t *out);
 
 // Number of warning/note diagnostics attached to the result.
-typedef uint32_t (*vef_sql_warning_count_fn)(const vef_sql_result_t *result);
+typedef unsigned int (*vef_sql_warning_count_fn)(
+    const vef_sql_result_t *result);
 
 // Copy the i-th warning into *out. Returns true if i < warning_count();
 // false (and leaves *out untouched) otherwise.
 typedef bool (*vef_sql_get_warning_fn)(const vef_sql_result_t *result,
-                                       uint32_t i, vef_sql_diag_t *out);
+                                       unsigned int i, vef_sql_diag_t *out);
 
 // Server-provided vtable for SQL execution.
 typedef struct {

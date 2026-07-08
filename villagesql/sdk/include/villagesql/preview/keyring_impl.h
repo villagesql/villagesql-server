@@ -25,7 +25,7 @@ inline KeyringCapability::ReadResult KeyringCapability::read(
     std::string_view data_id, std::string_view auth_id) const {
   std::string value;
   value.resize(4096);
-  uint64_t out_len = 0;
+  size_t out_len = 0;
   vef_keyring_result_t result = abi_->read(
       data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
       reinterpret_cast<unsigned char *>(value.data()), value.size(), &out_len);

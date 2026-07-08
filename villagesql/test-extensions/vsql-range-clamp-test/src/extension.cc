@@ -48,7 +48,7 @@
 // be used here because on_change is called while MySQL holds the sys_var lock,
 // and calling set() would attempt to re-acquire the same lock and deadlock.
 //
-// Direct writes to the other variable's int64_t global are safe: MySQL reads
+// Direct writes to the other variable's long long global are safe: MySQL reads
 // them under the same lock that protects the write path, so the adjusted value
 // is visible to other sessions on their next read.
 
@@ -58,8 +58,8 @@
 using namespace vsql;
 namespace sv = vsql::preview_sys_var;
 
-static int64_t g_min_setting = 0;
-static int64_t g_max_setting = 100;
+static long long g_min_setting = 0;
+static long long g_max_setting = 100;
 static char *g_label = nullptr;
 static char g_last_label[256] = "";
 

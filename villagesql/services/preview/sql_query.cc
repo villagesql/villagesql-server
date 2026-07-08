@@ -395,7 +395,7 @@ static vef_sql_session_t *sql_open_session(vef_thread_handle_t *handle) {
 static void sql_close_session(vef_sql_session_t *session) { delete session; }
 
 static vef_sql_result_t *sql_execute(vef_sql_session_t *session,
-                                     const char *sql, uint64_t sql_len) {
+                                     const char *sql, size_t sql_len) {
   if (session == nullptr || session->handle == nullptr ||
       session->handle->thd == nullptr)
     return nullptr;
@@ -436,7 +436,7 @@ static vef_sql_result_t *sql_execute(vef_sql_session_t *session,
 }
 
 static vef_sql_result_t *sql_for_each_row(vef_sql_session_t *session,
-                                          const char *sql, uint64_t sql_len,
+                                          const char *sql, size_t sql_len,
                                           vef_sql_row_cb cb, void *ctx) {
   if (session == nullptr || session->handle == nullptr ||
       session->handle->thd == nullptr || cb == nullptr)

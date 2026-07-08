@@ -303,7 +303,7 @@ struct FuncWithMetadata {
   vef_type_t return_type;
   std::array<vef_type_t, kMaxParams> param_types;
   size_t num_params;
-  uint64_t buffer_size;
+  size_t buffer_size;
   uint64_t max_result_length;
   bool deterministic;
   // When true, the function accepts a variable number of arguments. The
@@ -714,7 +714,7 @@ struct TypeHashVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    result->int_value = static_cast<int64_t>(Func(CustomArg(&arg)));
+    result->int_value = static_cast<long long>(Func(CustomArg(&arg)));
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -868,7 +868,7 @@ struct TypeHashWithCacheVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    result->int_value = static_cast<int64_t>(Func(CustomArgWith<P>(&arg)));
+    result->int_value = static_cast<long long>(Func(CustomArgWith<P>(&arg)));
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -1034,7 +1034,7 @@ struct StaticFuncDesc {
   vef_postrun_func_t postrun_;
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
-  uint64_t buffer_size_;
+  size_t buffer_size_;
   uint64_t max_result_length_;
   bool deterministic_;
   bool is_varargs_;
@@ -1056,7 +1056,7 @@ struct StaticFuncDesc {
     if (max_result_length_ > 0) return VEF_PROTOCOL_4;
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }
-  constexpr uint64_t buffer_size() const { return buffer_size_; }
+  constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr uint64_t max_result_length() const { return max_result_length_; }
   constexpr bool deterministic() const { return deterministic_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
