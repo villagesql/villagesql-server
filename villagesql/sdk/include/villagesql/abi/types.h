@@ -647,7 +647,7 @@ typedef struct {
   //
   // Distinct from buffer_size, which is only the initial row-time output buffer
   // (it grows on demand); this bounds the column the result is stored into.
-  uint64_t max_result_length;
+  size_t max_result_length;
 } vef_func_desc_t;
 
 // =============================================================================
