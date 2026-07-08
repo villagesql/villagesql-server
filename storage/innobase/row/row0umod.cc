@@ -245,6 +245,11 @@ check_if_purged:
     err = Custom_column::rollback_inserted(node->table, node->undo_row,
                                            &node->pcur);
     mtr_start(mtr);
+    // Restarting the mtr resets it to the default redo-logging mode, so the
+    // no-redo mode the caller established for temporary tables must be
+    // re-applied; otherwise modifying the system temporary tablespace below
+    // trips fsp_space_modify_check.
+    dict_disable_redo_if_temporary(node->table, mtr);
     if (err != DB_SUCCESS) return err;
 
     // Ensure one time execution.
