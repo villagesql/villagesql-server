@@ -175,6 +175,7 @@ information_schema
 mysql
 performance_schema
 sys
+villagesql
 DROP TABLE t1;
 DROP TABLE t2;
 DROP PROCEDURE execute_dml;
