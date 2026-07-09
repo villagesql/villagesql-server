@@ -59,23 +59,47 @@ bool TypeContext::init_intrinsic_default(std::string &error_out) {
   if (descriptor_->protocol() < VEF_PROTOCOL_3) return false;
 
   // Pre-encode the intrinsic default value. Returns false (success) when a
-  // default is stored. Returns true (failure) when no source produces a valid
-  // default. Variable-length types with no resolved size skip this entirely.
+  // default is stored or when none is needed. Returns true (failure) when the
+  // type cannot produce its required default; this is fatal for both
+  // fixed-length and variable-length types.
   //
   // Sources tried in order:
   // 1. intrinsic_default_fn VDF: returns a string, which the server converts.
   // 2. intrinsic_default_str: encode the extension-supplied string literal.
   // 3. encode(""): encode the empty string.
   //
-  // Variable-length types with no resolved parameters have persisted_length_ <=
-  // 0, meaning no fixed storage size is known. Skip pre-encoding a default:
-  // there is no buffer size to target, and such types require parameters before
-  // use.
-  if (persisted_length_ <= 0) return false;
+  // Parameterized types declared without parameters (is_unknown) cannot encode
+  // a default yet: both the storage size and the encode behavior depend on the
+  // parameters supplied at column-definition time. Skip them.
+  if (is_unknown()) return false;
 
-  const size_t storage_size = static_cast<size_t>(persisted_length_);
+  // Buffer capacity to encode the default into. Fixed-length and
+  // parameter-resolved types have an exact persisted_length and must encode to
+  // exactly that many bytes. Variable-length types have no fixed size: encode
+  // into the field's max capacity (max_persisted_length) and accept whatever
+  // non-empty length the encoder produces (e.g. an empty bitmap/array).
+  const bool variable_length = is_variable_length();
+  const int64_t capacity =
+      variable_length ? field_buffer_length() : persisted_length_;
+
+  // No known storage size (e.g. a fixed-length type whose parameter resolution
+  // failed). Nothing to encode a default against.
+  if (capacity <= 0) return false;
+
+  const size_t storage_size = static_cast<size_t>(capacity);
   std::vector<unsigned char> buffer(storage_size);
   size_t encoded_length = 0;
+
+  // A fixed-length encode must produce exactly storage_size bytes. A
+  // variable-length encode may produce anything in 1..storage_size.
+  const auto length_ok = [&](size_t len) {
+    return variable_length ? (len > 0 && len <= storage_size)
+                           : (len == storage_size);
+  };
+  const std::string size_expectation =
+      variable_length
+          ? "expected 1.." + std::to_string(storage_size) + " bytes"
+          : "expected persisted_length=" + std::to_string(storage_size);
 
   // Sources 1, 2, and 3 all produce a string that is then converted.
   // Source 1 calls the intrinsic_default VDF to get the string.
@@ -114,38 +138,36 @@ bool TypeContext::init_intrinsic_default(std::string &error_out) {
     auto r =
         vdf_call.invoke(StringSlice(input_str.c_str(), input_str.size()),
                         pointer_cast<uchar *>(buffer.data()), storage_size);
-    if (r && *r == storage_size) {
+    if (r && length_ok(*r)) {
+      buffer.resize(*r);
       intrinsic_default_buffer_ = std::move(buffer);
       intrinsic_default_size_ = *r;
       return false;
     }
     if (!r) {
       error_out = "from_string VDF failed to encode intrinsic default input '" +
-                  input_str + "' (expected persisted_length=" +
-                  std::to_string(storage_size) + ")";
+                  input_str + "' (" + size_expectation + ")";
     } else {
-      error_out =
-          "from_string VDF encoded intrinsic default input '" + input_str +
-          "' to " + std::to_string(*r) +
-          " bytes, expected persisted_length=" + std::to_string(storage_size);
+      error_out = "from_string VDF encoded intrinsic default input '" +
+                  input_str + "' to " + std::to_string(*r) + " bytes, " +
+                  size_expectation;
     }
   } else if (op.fn() != nullptr) {
     bool fn_failed = op.fn()(buffer.data(), storage_size, input_str.c_str(),
                              input_str.size(), &encoded_length);
-    if (!fn_failed && encoded_length == storage_size) {
+    if (!fn_failed && length_ok(encoded_length)) {
+      buffer.resize(encoded_length);
       intrinsic_default_buffer_ = std::move(buffer);
       intrinsic_default_size_ = encoded_length;
       return false;
     }
     if (fn_failed) {
-      error_out =
-          "encode function failed for intrinsic default input '" + input_str +
-          "' (expected persisted_length=" + std::to_string(storage_size) + ")";
+      error_out = "encode function failed for intrinsic default input '" +
+                  input_str + "' (" + size_expectation + ")";
     } else {
-      error_out =
-          "encode function encoded intrinsic default input '" + input_str +
-          "' to " + std::to_string(encoded_length) +
-          " bytes, expected persisted_length=" + std::to_string(storage_size);
+      error_out = "encode function encoded intrinsic default input '" +
+                  input_str + "' to " + std::to_string(encoded_length) +
+                  " bytes, " + size_expectation;
     }
   } else {
     error_out =

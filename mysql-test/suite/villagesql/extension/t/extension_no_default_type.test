@@ -12,4 +12,10 @@ CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4) NOT NULL);
 
+# NO_DEFAULT_VAR_PARAM_TYPE is declared .variable_length_type() and its from_string
+# rejects the empty string, so it has no intrinsic default. A type that cannot encode
+# a default is unusable, so any reference fails at initialization.
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_VAR_PARAM_TYPE(4) NOT NULL);
+
 UNINSTALL EXTENSION vsql_test_only;

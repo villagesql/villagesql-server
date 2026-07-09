@@ -82,6 +82,22 @@ ERROR 42000: tarray_resolve_params: TARRAY max_size 300 * element size 2 exceeds
 # A non-positive shorthand is rejected by the parser before int_to_params.
 CREATE TABLE bad3 (id INT, v vsql_tarray_test.TARRAY(0));
 ERROR 42000: Invalid length '0' for type 'vsql_tarray_test.TARRAY' near 'vsql_tarray_test.TARRAY(0))' at line 1
+# A variable-length type must be able to encode an intrinsic default.
+# The empty array "[]" encodes to zero bytes (not a usable default), so
+# TARRAY declares intrinsic_default_str('[0]'). A bad value under
+# INSERT IGNORE falls back to that sentinel rather than failing, and a
+# NOT NULL TARRAY column is therefore backed by a valid default value.
+CREATE TABLE arr_def (
+id INT PRIMARY KEY,
+a vsql_tarray_test.TARRAY(4) NOT NULL
+);
+INSERT IGNORE INTO arr_def (id, a) VALUES (1, 'not-an-array');
+Warnings:
+Warning	1366	Incorrect TARRAY value: 'not-an-array' for column 'a' at row 1
+SELECT id, a, vsql_tarray_test.tarray_dim(a) AS na FROM arr_def ORDER BY id;
+id	a	na
+1	[0]	1
+DROP TABLE arr_def;
 # Clean up.
 DROP TABLE arrs;
 UNINSTALL EXTENSION vsql_tarray_test;
