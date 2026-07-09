@@ -2,7 +2,7 @@
 
 Draft release notes — the release commit will be recorded when 0.0.5 is tagged.
 
-## Highlights
+## What's New
 
 ### Custom Types
 
@@ -25,7 +25,6 @@ Draft release notes — the release commit will be recorded when 0.0.5 is tagged
 ### Build & Compatibility
 
 - **MySQL 8.4.10** — Merged upstream `mysql-8.4.10`, which includes two upstream security fixes: an unauthenticated repeated X Protocol TLS upgrade crash (Bug#39204635) and an out-of-bounds read (Bug#39116965). (`2acd413be74`; `874935c05dd`; `6adc159923b`; `413d194f649`)
-- **Fixed-width ABI** — Standardized the extension ABI on fixed-width integer types (`uint32_t`, `int64_t`). (`ba56076ba7d`, #755)
 
 ## Community
 
