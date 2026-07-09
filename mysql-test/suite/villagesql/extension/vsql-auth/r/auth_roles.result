@@ -1,0 +1,30 @@
+call mtr.add_suppression("VEF auth: role .* is not granted; skipping");
+INSTALL EXTENSION vsql_auth_test;
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+CREATE ROLE vsql_role_granted;
+CREATE ROLE vsql_role_denied;
+GRANT vsql_role_granted TO vsql_auth_test_user;
+CREATE ROLE `vsql_role@weird`;
+GRANT `vsql_role@weird` TO vsql_auth_test_user;
+SELECT CURRENT_USER(), CURRENT_ROLE();
+CURRENT_USER()	CURRENT_ROLE()
+vsql_auth_test_user@%	`vsql_role_granted`@`%`
+SELECT CURRENT_ROLE();
+CURRENT_ROLE()
+`vsql_role@weird`@`%`
+SELECT CURRENT_ROLE();
+CURRENT_ROLE()
+NONE
+SET DEFAULT ROLE vsql_role_granted TO vsql_auth_test_user;
+SELECT CURRENT_ROLE();
+CURRENT_ROLE()
+`vsql_role_granted`@`%`
+UNINSTALL EXTENSION vsql_auth_test;
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;
+DROP ROLE vsql_role_granted;
+DROP ROLE vsql_role_denied;
+DROP ROLE `vsql_role@weird`;
