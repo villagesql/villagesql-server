@@ -44,7 +44,7 @@ DROP TABLE complex_with_builtin;
 #SHOW FIELDS FROM custom_type_columns;
 #DROP TABLE custom_type_columns;
 
-# Known crash: same collision, reached via ALTER TABLE ADD COLUMN
+# TODO(villagesql-crash): same collision, reached via ALTER TABLE ADD COLUMN
 # instead of CREATE TABLE
 #CREATE TABLE custom_type_columns_alter (
 #    ss COMPLEX
