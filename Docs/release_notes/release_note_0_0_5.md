@@ -1,6 +1,6 @@
 # VillageSQL 0.0.5
 
-Draft release notes — the release commit will be recorded when 0.0.5 is tagged.
+Release commit: `e50a465556a` (#802)
 
 ## What's New
 
