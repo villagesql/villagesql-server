@@ -6,10 +6,10 @@ Draft release notes — the release commit will be recorded when 0.0.5 is tagged
 
 ### Custom Types
 
-- **Variable-length custom types** — Types can now declare `persisted_length = -1` to store variadic-size values backed by a `VARBINARY`, keeping only the bytes each value needs while coexisting with fixed-size values in one column. (`077d3a52b6d`, #638; #535)
+- **Variable-length custom types** — Types can now declare `persisted_length = -1` to store variadic-size values backed by a `VARBINARY`, keeping only the bytes each value needs while coexisting with fixed-size values in one column. A `NOT NULL` variable-length column is backed by a proper intrinsic default rather than an empty value. (`077d3a52b6d`, #638; #535; `8549101999d`, #788)
 - **VEF protocol v4** — Variable-length types require `VEF_PROTOCOL_4`; new `veb_register_type_v4` registration entry point and VEB file version bump. (`6ec2c78a271`, #664; `b320b92d921`, #647; `bdd55eb16c1`, #606)
 - **VDF result buffers** — Result buffers grow to fit VDF output, VDFs can declare a maximum result length (otherwise it is derived from argument sizes, up to 16 MB), and the charset is set correctly on aggregate results. (`76416fa8ac0`, #728; `74f43784fce`, #719; `b4af801d2ea`, #743)
-- **Parameter resolution fixes** — Correct handling when a parameterized type's `persisted_length` is still `-1` before `resolve_params` runs, plus resolve-params refinements. (`a80de3b94d5`, #683; `0b40842d30d`, #693; `b3dc7428e05`, #677)
+- **Parameter defaults and resolution** — Parameterized types can supply default parameters: a mutating `resolve_params` fills in omitted values, which become the canonical persisted form, so even a bare declaration carries explicit params. Also correct handling when a type's `persisted_length` is still `-1` before `resolve_params` runs. (`34d04b95e90`, #770; `a80de3b94d5`, #683; `0b40842d30d`, #693; `b3dc7428e05`, #677)
 - **DROP TABLE with custom VDF generated columns** — Fixed a failure when dropping a table with a generated column backed by a custom VDF after a server restart. (`7580cde82cd`, #761)
 
 ### Extension Framework
