@@ -162,9 +162,10 @@ void TypeContext::resolve_cached_values() {
 
   // Build qualified_name_: "ext.type", "ext.type(N)", or
   // "ext.type('k1=v1,k2=v2,...')".
-  // When int_to_params is available, try each integer-valued parameter to see
-  // if int_to_params(N) reproduces our exact params. If so, use the shorter
-  // TYPE(N) form. Otherwise fall back to TYPE('k=v,...').
+  // When int_to_params is available, try each integer-valued parameter and,
+  // after filling defaults via resolve_params, check if the result reproduces
+  // our exact params. If so, use the shorter TYPE(N) form. Otherwise fall back
+  // to TYPE('k=v,...').
   qualified_name_ = descriptor_->qualified_base_name();
   if (!key_.parameters().empty()) {
     bool used_shorthand = false;
@@ -178,7 +179,21 @@ void TypeContext::resolve_cached_values() {
         std::string result;
         char err[VEF_MAX_ERROR_LEN] = {0};
         if (!descriptor_->int_to_params_fn()->invoke(n, &result, err)) {
-          TypeParameters candidate = TypeParameters::from_raw(result);
+          // Check whether TYPE(N) reproduces the stored params. Responsibility
+          // for filling in defaults is now split between int_to_params and
+          // resolve_params: int_to_params (should) emits only the pair derived
+          // from N, so we run resolve_params on its output here to fill the
+          // rest before comparing. A type providing int_to_params must also
+          // provide resolve_params (enforced at registration), so it is always
+          // present here.
+          assert(descriptor_->resolve_params_fn().has_value());
+          ResolvedTypeParams tmp = {};
+          char rerr[VEF_MAX_ERROR_LEN] = {0};
+          std::string canonical = result;
+          if (descriptor_->resolve_params_fn()->invoke(result, &tmp, rerr,
+                                                       &canonical))
+            continue;
+          TypeParameters candidate = TypeParameters::from_raw(canonical);
           if (candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);

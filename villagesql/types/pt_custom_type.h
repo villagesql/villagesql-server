@@ -119,8 +119,12 @@ class PT_custom_type : public PT_type {
                                          const TypeContext *&type_context) {
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
     ResolvedTypeParams resolved = {};
+    // A type using the mutating resolve_params overload can rewrite its params
+    // (e.g. fill in defaults). When it does, the rewritten string becomes the
+    // canonical parameters we key the context on and persist.
+    std::string canonical_params = params_str;
     if (descriptor->resolve_params_fn()->invoke(params_str, &resolved,
-                                                error_msg)) {
+                                                error_msg, &canonical_params)) {
       thd->syntax_error_at(pos, "%s", error_msg);
       return true;
     }
@@ -151,7 +155,11 @@ class PT_custom_type : public PT_type {
       return true;
     }
 
-    TypeParameters params(params_str);
+    // Re-canonicalize in case resolve_params rewrote the params. from_raw
+    // normalizes ordering/case; a no-op when the params were left unchanged.
+    TypeParameters params = canonical_params == params_str
+                                ? TypeParameters(params_str)
+                                : TypeParameters::from_raw(canonical_params);
 
     type_context = nullptr;
     if (AcquireOrCreateTypeContext(descriptor, params, *thd->mem_root,

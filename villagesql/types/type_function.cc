@@ -19,10 +19,51 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 #include "villagesql/types/special_vdf_call.h"
 
 namespace villagesql {
+
+namespace {
+
+// Parses the optional rewritten-params section that mutating resolve_params VDF
+// appends after peristed_length,max_decode_buffer_length fields:
+// "<byte-len>[,key=value,...]". Section is the text following the ',' that
+// introduces it, and points into a NUL-terminated buffer. On success writes
+// the params string to *params (empty when the length is 0) and returns false;
+// on malformed input writes error_msg and returns true.
+bool parse_rewritten_params(std::string_view section, std::string *params,
+                            char *error_msg) {
+  char *len_end = nullptr;
+  long long params_len = strtoll(section.data(), &len_end, 10);
+  if (len_end == section.data() || params_len < 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned invalid rewritten params length");
+    return true;
+  }
+
+  params->clear();
+  if (params_len == 0) return false;
+
+  size_t consumed = static_cast<size_t>(len_end - section.data());
+  if (*len_end != ',') {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned malformed rewritten params");
+    return true;
+  }
+  consumed++;  // the ',' separating the length from the params bytes
+  if (section.size() - consumed < static_cast<size_t>(params_len)) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned rewritten params shorter than its "
+             "declared length");
+    return true;
+  }
+  params->assign(section.data() + consumed, static_cast<size_t>(params_len));
+  return false;
+}
+
+}  // namespace
 
 bool IntToParamsFunction::invoke(int64_t value, std::string *result,
                                  char *error_msg) const {
@@ -42,8 +83,8 @@ bool IntToParamsFunction::invoke(int64_t value, std::string *result,
 }
 
 bool ResolveParamsFunction::invoke(const std::string &params_str,
-                                   ResolvedTypeParams *result,
-                                   char *error_msg) const {
+                                   ResolvedTypeParams *result, char *error_msg,
+                                   std::string *rewritten_params) const {
   char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
   SpecialVdfCall<StringResult, StringArg> call(vdf_);
   call.init();
@@ -58,7 +99,12 @@ bool ResolveParamsFunction::invoke(const std::string &params_str,
       call.alt_str_buf() != nullptr ? call.alt_str_buf() : str_buffer;
   std::string output(result_data, *r);
 
-  // Parse "persisted_length,max_decode_buffer_length"
+  // Parse "persisted_length,max_decode_buffer_length" with an optional trailing
+  // rewritten-params section from the mutating resolve_params overload:
+  //   "persisted_length,max_decode_buffer_length,<byte-len>[,key=value,...]"
+  // The byte length makes the params section self-delimiting, so it reads
+  // exactly that many bytes and further trailing fields could be added after
+  // them without ambiguity.
   size_t comma = output.find(',');
   if (comma == std::string::npos) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
@@ -75,11 +121,23 @@ bool ResolveParamsFunction::invoke(const std::string &params_str,
   }
   result->max_decode_buffer_length =
       strtoll(output.c_str() + comma + 1, &endptr, 10);
-  if (*endptr != '\0') {
+  // endptr now points at the terminator: '\0' for the two-field (const) form,
+  // or ',' introducing the rewritten-params section for the mutating overload.
+  if (*endptr == '\0') return false;
+  if (*endptr != ',') {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "resolve_params VDF returned invalid max_decode_buffer_length");
     return true;
   }
+
+  // Rewritten-params section from the mutating overload:
+  // "<byte-len>[,key=value,...]", starting just past this comma.
+  std::string_view section(
+      endptr + 1,
+      output.size() - static_cast<size_t>(endptr + 1 - output.c_str()));
+  std::string params;
+  if (parse_rewritten_params(section, &params, error_msg)) return true;
+  if (rewritten_params != nullptr) *rewritten_params = std::move(params);
 
   return false;
 }
