@@ -343,9 +343,7 @@ class TypeContext {
   // Pre-encode the intrinsic default value. Called once by
   // TableTraits<TypeContext>::create() after construction. Returns true on
   // failure. Sources tried in order: (1) intrinsic_default_fn,
-  // (2) intrinsic_default_str, (3) encode(""). Skipped for variable-length
-  // types where persisted_length_ <= 0 (no storage size known yet — these
-  // types require parameters before use).
+  // (2) intrinsic_default_str, (3) encode("").
   bool init_intrinsic_default(std::string &error_out);
 
   void resolve_cached_values();

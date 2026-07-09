@@ -461,6 +461,7 @@ constexpr auto TARRAY =
         .from_string<&tarray_from_string>()
         .to_string<&tarray_to_string>()
         .compare<&tarray_compare>()
+        .intrinsic_default_str("[0]")
         .build();
 
 using namespace vsql;
