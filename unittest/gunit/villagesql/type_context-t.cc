@@ -45,9 +45,12 @@ static int dummy_compare(const unsigned char *, size_t, const unsigned char *,
 // Encode that always produces a fixed 2-byte value, regardless of input. Models
 // a variable-length type (e.g. BITFIELD) whose empty default encodes to a small
 // non-empty value (a header). Returns false (success).
-static bool two_byte_encode(unsigned char *out, size_t out_cap [[maybe_unused]],
-                            const char *, size_t, size_t *written) {
-  assert(out_cap >= 2);
+static bool two_byte_encode(unsigned char *out, size_t out_cap, const char *,
+                            size_t, size_t *written) {
+  if (out_cap < 2) {
+    ADD_FAILURE() << "out_cap too small: " << out_cap;
+    return true;  // false == success, so true == failure
+  }
   out[0] = 0xAB;
   out[1] = 0xCD;
   *written = 2;
