@@ -18,6 +18,19 @@ call mtr.add_suppression("Ignoring tablespace `test/bug16720368` because it coul
 call mtr.add_suppression("Found 1 prepared XA transactions");
 call mtr.add_suppression("Operating system error.*in a file operation");
 call mtr.add_suppression("Error number 22 means 'Invalid argument'");
+# This message is a stale-errno misreport, not a real file error. On Linux, under
+# the default O_DIRECT flush method, InnoDB probes for hardware atomic-write support
+# in fil_fusionio_enable_atomic_write() via ioctl(DFS_IOCTL_ATOMIC_WRITE_SET). On any
+# non-FusionIO device that ioctl fails with ENOTTY (errno 25); the failure is expected
+# and ignored, but errno is left set. Later, when this test opens the deliberately
+# corrupted tablespace, os_file_get_last_error() reports that leftover errno even
+# though the actual failure is logical page corruption, not a failed syscall. The
+# reported number is therefore a stale, platform-dependent value (25 on Linux; e.g. 2
+# on macOS, already covered by the branches above) and is unrelated to O_DIRECT
+# support. This stale-errno reporting also exists in base MySQL 8.4.10; a proper fix
+# would require refactoring the upstream os_file_get_last_error() callers to inspect
+# errno only after a confirmed failure, so for now we suppress the benign message.
+call mtr.add_suppression("Error number [0-9]* means 'Inappropriate ioctl for device'");
 call mtr.add_suppression("\(The error means\|If you are\)");
 call mtr.add_suppression("Skip re-populating collations and character sets tables in InnoDB read-only mode.");
 call mtr.add_suppression("Error number [0-9]* means 'Resource temporarily unavailable'");
