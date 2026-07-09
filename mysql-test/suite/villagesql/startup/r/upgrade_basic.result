@@ -14,7 +14,7 @@ properties_table_exists
 1
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.5-dev
+version	mysql-8.4_0.0.6-dev
 # Test 2: Version update simulation
 SELECT 'Version Update Test' AS test_case;
 test_case
@@ -30,7 +30,7 @@ version	0
 UPDATE villagesql.properties SET value = @original_version WHERE name = 'version';
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.5-dev
+version	mysql-8.4_0.0.6-dev
 # Test 3: Properties completeness
 SELECT 'Properties Completeness' AS test_case;
 test_case
