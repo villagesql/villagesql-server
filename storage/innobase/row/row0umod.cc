@@ -238,7 +238,7 @@ check_if_purged:
   // a different function. That would have eliminated the need for reverse
   // movement using goto. However, it would make it future merge with MySQL
   // harder.
-  if (!checked_custom) {
+  if (node->table->has_extended_storage && !checked_custom) {
     node->pcur.commit_specify_mtr(mtr);
     // Remove extended column data, if any.
     using villagesql::innodb::Custom_column;
