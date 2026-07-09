@@ -911,6 +911,65 @@ struct IntrinsicDefaultWithCacheWrapper {
   }
 };
 
+// Serialize a params map into the canonical "key=value,key=value,..." string.
+// Keys and values may not be empty (keys) or contain ',' or '='. On violation,
+// writes error_msg and returns true. op_name is the operation being serialized
+// for; it prefixes the error message.
+inline bool serialize_type_params(
+    const std::map<std::string, std::string> &params, const char *op_name,
+    std::string &out, char *error_msg) {
+  // TODO(villagesql-beta): decide on a broader character set policy.
+  out.clear();
+  for (const auto &[key, value] : params) {
+    if (key.empty() || key.find_first_of(",=") != std::string::npos) {
+      snprintf(error_msg, VEF_MAX_ERROR_LEN,
+               "%s: key '%s' is empty or contains ',' or '='", op_name,
+               key.c_str());
+      return true;
+    }
+    if (value.find_first_of(",=") != std::string::npos) {
+      snprintf(error_msg, VEF_MAX_ERROR_LEN,
+               "%s: value '%s' contains ',' or '='", op_name, value.c_str());
+      return true;
+    }
+    if (!out.empty()) out += ',';
+    out += key;
+    out += '=';
+    out += value;
+  }
+  return false;
+}
+
+// Appends ",<byte-len>[,key=value,...]" to result->str_buf, advancing
+// actual_len. Used only by the mutating resolve_params overload so the server
+// adopts the rewritten params as canonical. Prefixing the byte length of the
+// serialized blob makes the params section self-delimiting: the server reads
+// exactly that many bytes, leaving room to append further trailing fields later
+// without ambiguity. Returns true and writes error_msg on a serialization error
+// or if the combined result would overflow str_buf.
+inline bool add_mutated_params(const std::map<std::string, std::string> &params,
+                               vef_vdf_result_t *result) {
+  std::string serialized;
+  if (serialize_type_params(params, "resolve_params", serialized,
+                            result->error_msg)) {
+    return true;
+  }
+  std::string tail = ",";
+  tail += std::to_string(serialized.size());
+  if (!serialized.empty()) {
+    tail += ',';
+    tail += serialized;
+  }
+  if (result->actual_len + tail.size() > result->max_str_len) {
+    snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params result too large for buffer");
+    return true;
+  }
+  memcpy(result->str_buf + result->actual_len, tail.data(), tail.size());
+  result->actual_len += tail.size();
+  return false;
+}
+
 // IntToParamsWrapper: wraps IntToTypeParamsFunc into a VDF.
 // VDF signature: (INT) -> STRING.
 template <IntToTypeParamsFunc Func>
@@ -930,27 +989,11 @@ struct IntToParamsWrapper {
       return;
     }
 
-    // TODO(villagesql-beta): decide on a broader character set policy.
     std::string serialized;
-    for (const auto &[key, value] : params) {
-      if (key.empty() || key.find_first_of(",=") != std::string::npos) {
-        result->type = VEF_RESULT_ERROR;
-        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-                 "int_to_params: key '%s' is empty or contains ',' or '='",
-                 key.c_str());
-        return;
-      }
-      if (value.find_first_of(",=") != std::string::npos) {
-        result->type = VEF_RESULT_ERROR;
-        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-                 "int_to_params: value '%s' contains ',' or '='",
-                 value.c_str());
-        return;
-      }
-      if (!serialized.empty()) serialized += ',';
-      serialized += key;
-      serialized += '=';
-      serialized += value;
+    if (serialize_type_params(params, "int_to_params", serialized,
+                              result->error_msg)) {
+      result->type = VEF_RESULT_ERROR;
+      return;
     }
 
     if (serialized.size() > result->max_str_len) {
@@ -966,10 +1009,19 @@ struct IntToParamsWrapper {
   }
 };
 
-// ResolveParamsWrapper: wraps ResolveTypeParamsFunc into a VDF.
+// ResolveParamsWrapper: wraps a resolve_params callback into a VDF.
 // VDF signature: (STRING) -> STRING.
-template <ResolveTypeParamsFunc Func>
+//
+// The result is "persisted_length,max_decode_buffer_length". When Func is the
+// mutating overload (ResolveTypeParamsMutableFunc), the (possibly rewritten)
+// params are appended as "...,<byte-len>[,key=value,...]" so the server can
+// adopt them as the canonical parameters. The const overload emits only the two
+// numbers.
+template <auto Func>
 struct ResolveParamsWrapper {
+  static constexpr bool is_mutable =
+      std::is_same_v<decltype(Func), ResolveTypeParamsMutableFunc>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -1012,9 +1064,18 @@ struct ResolveParamsWrapper {
                "resolve_params result too large for buffer");
       return;
     }
+    result->actual_len = static_cast<size_t>(written);
+
+    // The mutating overload may have rewritten params; append them so the
+    // server adopts the rewritten set as canonical.
+    if constexpr (is_mutable) {
+      if (add_mutated_params(params, result)) {
+        result->type = VEF_RESULT_ERROR;
+        return;
+      }
+    }
 
     result->type = VEF_RESULT_VALUE;
-    result->actual_len = static_cast<size_t>(written);
   }
 };
 

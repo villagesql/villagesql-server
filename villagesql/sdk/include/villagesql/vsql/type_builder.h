@@ -240,16 +240,28 @@ class TypeBuilder {
 
   // resolve_params: VDF that validates params and computes storage sizes.
   // Auto-generates VDF name "TYPENAME::resolve_params".
-  // Function signature:
+  // Function signature (either overload is accepted):
   //   bool fn(const std::map<std::string,std::string>&,
   //           vsql::ResolvedTypeParams*, char* error_msg)
+  //   bool fn(std::map<std::string,std::string>&,
+  //           vsql::ResolvedTypeParams*, char* error_msg)
+  // The second (non-const) form may rewrite the params map; the rewritten map
+  // becomes the canonical parameter string persisted for the type and must
+  // resolve idempotently.
   template <auto Func>
   constexpr auto resolve_params() const {
     using namespace detail;
+    static_assert(!HasResolveParams,
+                  "resolve_params<Func>() called more than once; a type may "
+                  "provide only one resolve_params (const or non-const)");
     static_assert(
-        std::is_same_v<decltype(Func), func_builder::ResolveTypeParamsFunc>,
+        std::is_same_v<decltype(Func), func_builder::ResolveTypeParamsFunc> ||
+            std::is_same_v<decltype(Func),
+                           func_builder::ResolveTypeParamsMutableFunc>,
         "resolve_params<Func>() requires: "
         "bool fn(const std::map<std::string,std::string>&, "
+        "vsql::ResolvedTypeParams*, char*) or "
+        "bool fn(std::map<std::string,std::string>&, "
         "vsql::ResolvedTypeParams*, char*)");
     constexpr const char *vdf_name =
         kTypeOpVdfName<Name, TypeOp::kResolveParams>.buf;
