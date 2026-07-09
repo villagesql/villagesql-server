@@ -804,6 +804,10 @@ information_schema	COLUMNS	COLUMN_TYPE
 information_schema	COLUMNS	DATA_TYPE
 information_schema	COLUMNS	GENERATION_EXPRESSION
 information_schema	EVENTS	EVENT_DEFINITION
+information_schema	EXTENSIONS	PENDING_LAST_ERROR
+information_schema	EXTENSIONS	PENDING_LAST_ERROR_AT
+information_schema	EXTENSIONS	PENDING_REQUESTED_AT
+information_schema	EXTENSIONS	PENDING_VERSION
 information_schema	PARAMETERS	DATA_TYPE
 information_schema	ROUTINES	DATA_TYPE
 information_schema	ROUTINES	DTD_IDENTIFIER
@@ -1355,6 +1359,7 @@ COLUMN_STATISTICS	information_schema.COLUMN_STATISTICS	1
 ENABLED_ROLES	information_schema.ENABLED_ROLES	1
 ENGINES	information_schema.ENGINES	1
 EVENTS	information_schema.EVENTS	1
+EXTENSIONS	information_schema.EXTENSIONS	1
 EXTENSION_REGISTRATION	information_schema.EXTENSION_REGISTRATION	1
 FILES	information_schema.FILES	1
 KEY_COLUMN_USAGE	information_schema.KEY_COLUMN_USAGE	1

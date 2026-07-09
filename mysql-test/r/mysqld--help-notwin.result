@@ -1599,6 +1599,11 @@ The following options may be given as the first argument:
  build (one whose VillageSQL version has a pre-release
  suffix, e.g. '-dev'). Upgrading from a dev build is
  disallowed by default.
+ --villagesql-skip-extension-updates 
+ At startup, skip processing of pending ALTER EXTENSION
+ ... AT RESTART actions. Extensions load at their
+ currently-installed version; pending_action rows remain
+ intact.
  --vsql-allow-preview-extensions 
  Allow loading extensions that use preview capabilities.
  Preview capabilities are unstable and may change or be
@@ -2036,6 +2041,7 @@ validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
 villagesql-allow-unsafe-dev-upgrade FALSE
+villagesql-skip-extension-updates FALSE
 vsql-allow-preview-extensions FALSE
 wait-timeout 28800
 windowing-use-high-precision TRUE
