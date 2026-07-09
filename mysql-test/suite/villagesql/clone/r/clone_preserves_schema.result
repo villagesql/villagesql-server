@@ -1,0 +1,59 @@
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+# Donor has the villagesql schema
+SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'villagesql';
+SCHEMA_NAME
+villagesql
+Install clone plugin on recipient server
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+CREATE TABLE t_recipient(col1 INT PRIMARY KEY, col2 int);
+INSERT INTO t_recipient VALUES(1, 10);
+CREATE UNDO TABLESPACE undo_005 ADD DATAFILE 'undo_005.ibu';
+CREATE TABLESPACE tbs1_recipient ADD DATAFILE 'tbs1_data1.ibd';
+# Remote clone with replace, crashing during recovery. The recipient wipes
+# its data, adopts the donor, crashes mid-recovery, then mysqld_safe restarts
+# it to finish recovery. If villagesql was dropped and not re-established, the
+# recipient aborts on that restart and never comes back (test fails here).
+SET GLOBAL debug = '+d,clone_recovery_crash_point';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
+CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' ;
+select ID, STATE, ERROR_NO, ERROR_MESSAGE from performance_schema.clone_status;
+ID	STATE	ERROR_NO	ERROR_MESSAGE
+1	Failed	1815	Recovery failed. Please Retry Clone. For details, look into server error log.
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Completed
+1	RECOVERY	Failed
+SET GLOBAL debug = '-d,clone_recovery_crash_point';
+# Recipient is back up and still has the villagesql schema
+SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'villagesql';
+SCHEMA_NAME
+villagesql
+# Cleanup: the crash leaves the clone in a "retry" state. Re-clone cleanly so
+# the recipient is left consistent (this also restores MTR's helper 'mtr'
+# schema, which the post-test check-warnings step needs).
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
+CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' ;
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+1	Completed	0
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Completed
+1	RECOVERY	Completed
+Uninstall clone plugin on recipient server
+UNINSTALL PLUGIN clone;
+UNINSTALL PLUGIN clone;
