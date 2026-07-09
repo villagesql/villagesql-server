@@ -1,0 +1,30 @@
+CREATE DATABASE test_collation;
+USE test_collation;
+CREATE TABLE builtin_columns (
+strasse INT,
+straße INT
+);
+SHOW FIELDS FROM builtin_columns;
+Field	Type	Null	Key	Default	Extra
+strasse	int	YES		NULL	
+straße	int	YES		NULL	
+DROP TABLE builtin_columns;
+CREATE TABLE builtin_with_complex (
+ss int,
+ß vsql_complex.COMPLEX
+);
+SHOW FIELDS FROM builtin_with_complex;
+Field	Type	Null	Key	Default	Extra
+ss	vsql_complex.COMPLEX	YES		NULL	
+ß	vsql_complex.COMPLEX	YES		NULL	
+DROP TABLE builtin_with_complex;
+CREATE TABLE complex_with_builtin (
+ß COMPLEX,
+ss int
+);
+SHOW FIELDS FROM complex_with_builtin;
+Field	Type	Null	Key	Default	Extra
+ß	vsql_complex.COMPLEX	YES		NULL	
+ss	vsql_complex.COMPLEX	YES		NULL	
+DROP TABLE complex_with_builtin;
+DROP DATABASE test_collation;
