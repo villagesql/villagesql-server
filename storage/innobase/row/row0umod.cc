@@ -238,13 +238,18 @@ check_if_purged:
   // a different function. That would have eliminated the need for reverse
   // movement using goto. However, it would make it future merge with MySQL
   // harder.
-  if (!checked_custom) {
+  if (node->table->has_extended_storage && !checked_custom) {
     node->pcur.commit_specify_mtr(mtr);
     // Remove extended column data, if any.
     using villagesql::innodb::Custom_column;
     err = Custom_column::rollback_inserted(node->table, node->undo_row,
                                            &node->pcur);
     mtr_start(mtr);
+    // Restarting the mtr resets it to the default redo-logging mode, so the
+    // no-redo mode the caller established for temporary tables must be
+    // re-applied; otherwise modifying the system temporary tablespace below
+    // trips fsp_space_modify_check.
+    dict_disable_redo_if_temporary(node->table, mtr);
     if (err != DB_SUCCESS) return err;
 
     // Ensure one time execution.
