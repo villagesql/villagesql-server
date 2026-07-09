@@ -23,9 +23,6 @@ name: Release Dev Server
 #   - builds: sandboxes for extension builds
 
 on:
-  push:
-    tags:
-      - '[0-9]*.[0-9]*.[0-9]*'
   workflow_dispatch:
     inputs:
       tag:
