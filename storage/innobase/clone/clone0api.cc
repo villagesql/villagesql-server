@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -57,6 +58,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/types/schema.h"
 #include "sql/dd/types/table.h"
 #include "sql/rpl_msr.h"  // is_slave_configured()
+
+#include "villagesql/schema/util.h"
 
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
@@ -1820,6 +1823,7 @@ class Fixup_data {
   @return true iff system schema. */
   bool is_system_schema(const char *schema_name) const {
     if (0 == strcmp(schema_name, MYSQL_SCHEMA_NAME.str) ||
+        villagesql::is_villagesql_schema(schema_name) ||
         0 == strcmp(schema_name, "sys") ||
         0 == strcmp(schema_name, PERFORMANCE_SCHEMA_DB_NAME.str) ||
         0 == strcmp(schema_name, INFORMATION_SCHEMA_NAME.str)) {
@@ -1860,6 +1864,11 @@ class Fixup_data {
     /* Skip all in information_schema and performance_schema tables. */
     if (0 == strcmp(schema_name, PERFORMANCE_SCHEMA_DB_NAME.str) ||
         0 == strcmp(schema_name, INFORMATION_SCHEMA_NAME.str)) {
+      return (true);
+    }
+
+    /* Skip all in villagesql schema. */
+    if (villagesql::is_villagesql_schema(schema_name)) {
       return (true);
     }
 
