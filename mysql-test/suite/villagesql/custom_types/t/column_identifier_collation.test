@@ -33,7 +33,7 @@ CREATE TABLE complex_with_builtin (
 SHOW FIELDS FROM complex_with_builtin;
 DROP TABLE complex_with_builtin;
 
-# Known crash: CREATE TABLE with custom-type columns that fold into a
+# TODO(villagesql-crash): CREATE TABLE with custom-type columns that fold into a
 # duplicate identifier under custom_columns ai (accent insensitive)
 # collation
 #CREATE TABLE custom_type_columns (
