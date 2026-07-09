@@ -27,12 +27,12 @@ namespace villagesql {
 
 namespace {
 
-// Parses the optional rewritten-params section a mutating resolve_params VDF
-// appends after the two length fields: "<byte-len>[,key=value,...]". section is
-// the text following the ',' that introduces it, and points into a
-// NUL-terminated buffer. On success writes the params string to *params (empty
-// when the length is 0) and returns false; on malformed input writes error_msg
-// and returns true.
+// Parses the optional rewritten-params section that mutating resolve_params VDF
+// appends after peristed_length,max_decode_buffer_length fields:
+// "<byte-len>[,key=value,...]". Section is the text following the ',' that
+// introduces it, and points into a NUL-terminated buffer. On success writes
+// the params string to *params (empty when the length is 0) and returns false;
+// on malformed input writes error_msg and returns true.
 bool parse_rewritten_params(std::string_view section, std::string *params,
                             char *error_msg) {
   char *len_end = nullptr;
