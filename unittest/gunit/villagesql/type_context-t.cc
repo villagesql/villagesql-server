@@ -47,7 +47,10 @@ static int dummy_compare(const unsigned char *, size_t, const unsigned char *,
 // non-empty value (a header). Returns false (success).
 static bool two_byte_encode(unsigned char *out, size_t out_cap, const char *,
                             size_t, size_t *written) {
-  assert(out_cap >= 2);
+  if (out_cap < 2) {
+    ADD_FAILURE() << "out_cap too small: " << out_cap;
+    return true;  // false == success, so true == failure
+  }
   out[0] = 0xAB;
   out[1] = 0xCD;
   *written = 2;
