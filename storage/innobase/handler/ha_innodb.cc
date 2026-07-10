@@ -12330,13 +12330,21 @@ inline int create_index(
   index = dict_mem_index_create(table_name, key->name, 0, ind_type,
                                 key->user_defined_key_parts);
 
+  innodb_session_t *&priv = thd_to_innodb_session(trx->mysql_thd);
+  dict_table_t *handler = priv->lookup_table_handler(table_name);
+
   // Record the custom index descriptor carried on the KEY before the index is
   // added to the dictionary cache.
   using villagesql::innodb::Custom_index;
-  Custom_index::load(index, key->custom_index_context);
-
-  innodb_session_t *&priv = thd_to_innodb_session(trx->mysql_thd);
-  dict_table_t *handler = priv->lookup_table_handler(table_name);
+  {
+    dberr_t cerr =
+        Custom_index::attach(index, key->custom_index_context, nullptr);
+    if (cerr != DB_SUCCESS) {
+      dict_mem_index_free(index);
+      error = convert_error_code_to_mysql(cerr, flags, nullptr);
+      goto do_cleanup;
+    }
+  }
 
   if (handler != nullptr) {
     /* This setting will enforce SQL NULL == SQL NULL.
@@ -12382,6 +12390,7 @@ inline int create_index(
           "InnoDB: Indexing for types with column storage is supported only "
           "with custom index.",
           MYF(0));
+      dict_mem_index_free(index);
       error = ER_VILLAGESQL_GENERIC_ERROR;
       goto do_cleanup;
     }
