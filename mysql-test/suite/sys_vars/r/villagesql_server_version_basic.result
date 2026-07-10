@@ -3,10 +3,10 @@
 # Test 1: Check that the variable exists and is readable
 SHOW VARIABLES LIKE 'villagesql_server_version';
 Variable_name	Value
-villagesql_server_version	mysql-9.7_0.0.5
+villagesql_server_version	mysql-9.7_0.0.6
 SELECT @@GLOBAL.villagesql_server_version AS server_version;
 server_version
-mysql-9.7_0.0.5
+mysql-9.7_0.0.6
 # Test 2: Verify the variable is READ_ONLY
 SET GLOBAL villagesql_server_version = '999';
 ERROR HY000: Variable 'villagesql_server_version' is a read only variable
