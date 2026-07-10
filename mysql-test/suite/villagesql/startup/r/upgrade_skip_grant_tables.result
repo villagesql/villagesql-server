@@ -16,7 +16,7 @@ properties_table_exists
 1
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-9.7_0.0.5-dev
+version	mysql-9.7_0.0.6-dev
 # Shutdown and cleanup
 # Restart with original datadir
 # Test passed - VillageSQL installed correctly with --skip-grant-tables!
