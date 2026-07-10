@@ -76,6 +76,23 @@ ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a dummy_type_vector,
   ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
 DROP TABLE t_readd;
 
+--echo # --- Custom index on partitioned table ---
+CREATE TABLE t_part (id INT PRIMARY KEY, a dummy_type_vector)
+  PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (100),
+    PARTITION p1 VALUES LESS THAN MAXVALUE);
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t_part (a) USING EXTENDED(dummy_index_hnsw);
+DROP TABLE t_part;
+
+--echo # --- Custom index on partitioned table via CREATE TABLE ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t_part (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX idx (a) USING EXTENDED(dummy_index_hnsw))
+  PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (100),
+    PARTITION p1 VALUES LESS THAN MAXVALUE);
+
 --echo # --- UNINSTALL blocked by existing custom type ---
 # Default: column check fires first.
 CREATE INDEX idx_block ON t (a) USING EXTENDED(dummy_index_hnsw);
