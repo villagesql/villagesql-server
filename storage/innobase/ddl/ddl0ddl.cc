@@ -221,6 +221,15 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
     }
   }
 
+  // TODO(villagesql-indexing): Support custom indexes on partitioned tables.
+  if (Custom_index::is_custom(index) && dict_table_is_partition(table)) {
+    trx->error_state = DB_VILLAGESQL_ERROR;
+    trx_set_detailed_error(
+        trx, "InnoDB: Custom index is not supported on partitioned tables");
+    dict_mem_index_free(index);
+    return nullptr;
+  }
+
   bool has_new_v_col{};
 
   for (size_t i = 0; i < n_fields; i++) {
