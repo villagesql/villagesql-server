@@ -1,0 +1,65 @@
+# Column-identifier behavior and differences between builtin and custom types.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE test_collation;
+USE test_collation;
+
+# Builtin-type columns: encoding is not accent insensitive (ai)
+# and both columns are distinct
+CREATE TABLE builtin_columns (
+    strasse INT,
+    straße INT
+);
+
+SHOW FIELDS FROM builtin_columns;
+DROP TABLE builtin_columns;
+
+# Custom type with accented identifier mixed with builtin column
+# No duplicate collision here
+CREATE TABLE builtin_with_complex (
+    ss int,
+    ß vsql_complex.COMPLEX
+);
+
+SHOW FIELDS FROM builtin_with_complex;
+DROP TABLE builtin_with_complex;
+
+CREATE TABLE complex_with_builtin (
+    ß COMPLEX,
+    ss int
+);
+
+SHOW FIELDS FROM complex_with_builtin;
+DROP TABLE complex_with_builtin;
+
+# TODO(villagesql-crash): CREATE TABLE with custom-type columns that fold into a
+# duplicate identifier under custom_columns ai (accent insensitive)
+# collation
+# Duplicate keys cause a crash in debug-build only, not on release.
+# Caused by assert in villagesql/schema/systable/custom_columns.cc
+# Release mode ERROR 3219 (HY000): Cannot write to VillageSQL system tables.
+#CREATE TABLE custom_type_columns (
+#    ß COMPLEX,
+#    ss COMPLEX
+#);
+#
+#SHOW FIELDS FROM custom_type_columns;
+#DROP TABLE custom_type_columns;
+
+# TODO(villagesql-crash): same collision, reached via ALTER TABLE ADD COLUMN
+# instead of CREATE TABLE
+# Duplicate keys cause a crash in debug-build only, not on release.
+# Caused by assert in villagesql/schema/systable/custom_columns.cc
+# Release mode ERROR 3219 (HY000): Cannot write to VillageSQL system tables.
+#CREATE TABLE custom_type_columns_alter (
+#    ss COMPLEX
+#);
+#
+#ALTER TABLE custom_type_columns_alter ADD COLUMN (ß COMPLEX);
+#
+#DROP TABLE custom_type_columns_alter;
+
+DROP DATABASE test_collation;
+
+--source include/villagesql/uninstall_complex_extension.inc
