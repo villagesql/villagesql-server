@@ -8,6 +8,10 @@
 #   BUILD_TYPE         - debug or release (default: release, uses RelWithDebInfo)
 #   PARALLEL_JOBS      - parallel make jobs (default: auto-detected)
 #   CMAKE_EXTRA_FLAGS  - additional cmake flags appended verbatim
+#
+# Control pre-release version naming by including "-DVSQL_PRE_RELEASE_VERSION="
+# in the CMAKE_EXTRA_FLAGS variable. A blank value as above will remove the
+# default '-dev' prerelease version label.
 
 set -euo pipefail
 

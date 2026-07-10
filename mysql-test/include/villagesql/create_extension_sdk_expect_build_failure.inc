@@ -28,8 +28,11 @@ if (!$extension_version)
 }
 
 --let $build_dir = `SELECT @@basedir`
---let $sdk_version = `SELECT @@villagesql_server_version`
---let $sdk_dir = $build_dir/villagesql-extension-sdk-$sdk_version
+# @@villagesql_server_version includes the code base as a prefix, separated
+# from the abbreviated version by an underscore (e.g. "mysql-8.4_0.0.5").
+# The SDK directory name uses the abbreviated version.
+--let $sdk_abbr = `SELECT SUBSTRING_INDEX(@@villagesql_server_version, '_', -1)`
+--let $sdk_dir = $build_dir/villagesql-extension-sdk-$sdk_abbr
 --let $ext_build_dir = $MYSQLTEST_VARDIR/tmp/ext_build_$extension_name
 
 --exec test -d "$sdk_dir" || (echo "ERROR: SDK not found at $sdk_dir. Run 'make sdk' first." && exit 1)
