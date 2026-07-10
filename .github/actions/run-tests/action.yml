@@ -106,6 +106,7 @@ runs:
         path: |
           ${{ env.BUILD_DIR }}/mysql-test-report.xml
           ${{ env.BUILD_DIR }}/mysql-test/var/log/
+          ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
           ${{ env.BUILD_DIR }}/mysql-test/var/ctest.log
           ${{ env.BUILD_DIR }}/Testing/Temporary/LastTest.log
           ${{ env.BUILD_DIR }}/CMakeCache.txt
