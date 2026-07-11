@@ -24,9 +24,10 @@
 # The tarball follows the standard CMake package layout so that
 # find_package(VillageSQLExtensionFramework) works automatically when
 # CMAKE_PREFIX_PATH points to the extracted SDK directory.
+# The SDK name should not include the code base.
 
 set(SDK_VERSION "${VSQL_VERSION_STRING}")
-set(SDK_NAME "villagesql-extension-sdk-${SDK_VERSION}")
+set(SDK_NAME "villagesql-extension-sdk-${VSQL_ABBR_VERSION}")
 set(SDK_STAGING_DIR "${CMAKE_BINARY_DIR}/${SDK_NAME}")
 
 # The stable SDK snapshot to package and use for ABI compliance tests.
