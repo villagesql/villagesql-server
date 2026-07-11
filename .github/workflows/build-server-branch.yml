@@ -86,6 +86,12 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       EXTS_ROOT: ${{ github.workspace }}/exts
       BUILD_BUNDLED_EXTENSIONS: "1"
+      # SPOOKY ACTION AT A DISTANCE: Resolve the release/-dev decision once, at
+      # job scope, so every step sees the same value. Scripts that re-derive the
+      # version from VSQL_VERSION (get_sdk.sh, package_dev_server.sh) key off
+      # this env var; leave it unset and they fall back to VSQL_VERSION file's
+      # 'dev' suffix regardless of release_build.
+      VSQL_PRE_RELEASE_VERSION: ${{ !inputs.release_build && 'dev' || '' }}
 
     steps:
       - name: Checkout
@@ -120,14 +126,9 @@ jobs:
 
       - name: Build the dev server
         run: |
-          if [[ "${{ inputs.release_build }}" == "true" ]]; then
-            PRE_RELEASE=""
-          else
-            PRE_RELEASE="dev"
-          fi
-          echo "pre_release_version: '${PRE_RELEASE}'"
+          echo "pre_release_version: '${VSQL_PRE_RELEASE_VERSION}'"
 
-          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${PRE_RELEASE}"
+          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${VSQL_PRE_RELEASE_VERSION}"
           if [ "${{ inputs.os }}" = "macos" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
           fi
@@ -135,7 +136,6 @@ jobs:
           SOURCE_DIR="$SOURCE_DIR" \
           BUILD_DIR="$BUILD_DIR" \
           CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
-          VSQL_PRE_RELEASE_VERSION="${PRE_RELEASE}" \
             source/villagesql/bld_tools/build_ci.sh
 
       - name: Build bundled extensions

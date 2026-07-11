@@ -39,7 +39,7 @@ trap cleanup EXIT
 vsql_parse_version "$SOURCE_DIR"
 vsql_platform_info
 
-PACKAGE_NAME="villagesql-dev-server-${VSQL_VERSION}-${PLATFORM}-${ARCH}"
+PACKAGE_NAME="villagesql-dev-server-${VSQL_CODE_BASE}_${VSQL_VERSION}-${PLATFORM}-${ARCH}"
 TARBALL_NAME="${PACKAGE_NAME}.tar.gz"
 
 log_info "VillageSQL Version: $VSQL_VERSION"
