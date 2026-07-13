@@ -112,6 +112,16 @@ jobs:
           cache-boost: 'true'
           setup-ccache: 'false'
 
+      - name: Build server and SDK delegate
+        uses: ./source/.github/workflows/build-server-branch.yml
+        with:
+          ref: ${{ inputs.ref }}
+          runner: ${{ toJSON(matrix.runner) }}
+          os: ${{ 'linux' }}
+          platform: ${{ inputs.platform_filter }}
+          release_build: ${{ false }}
+          bundled_extensions: ${{ false }}
+
       - name: Build server and SDK
         run: |
           mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
