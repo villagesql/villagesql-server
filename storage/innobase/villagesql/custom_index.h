@@ -74,9 +74,26 @@ class Custom_index {
   StorageCtx *storage_ctx() const { return storage_ctx_; }
   void set_storage_ctx(StorageCtx *ctx) { storage_ctx_ = ctx; }
 
-  // Persistent storage reference read from dd::Index se_private_data by
-  // check_and_set(). Used by load() to reconnect to extension storage.
-  StorageRef storage_ref() const { return storage_ref_; }
+  // Persistent storage reference
+  StorageRef storage_ref() const {
+    ut_ad(storage_ref_initialized_);
+    return storage_ref_;
+  }
+
+  // Copy storage reference from a reference index, if initialized.
+  // @return true if a reference could be set, false otherwise
+  bool copy_storage_ref(Custom_index *ref_index) {
+    if (!ref_index->storage_ref_initialized_) return false;
+    storage_ref_initialized_ = true;
+    storage_ref_ = ref_index->storage_ref_;
+    return true;
+  }
+
+  // Set storage reference
+  void set_storage_ref(StorageRef ref) {
+    storage_ref_ = ref;
+    storage_ref_initialized_ = true;
+  }
 
   // Sets up index->custom_index and restores its persistent storage
   // reference from the DD, if available.
@@ -111,6 +128,7 @@ class Custom_index {
   vef_index_ctx_t index_ctx_{};
   StorageCtx *storage_ctx_ = nullptr;
   StorageRef storage_ref_{};
+  bool storage_ref_initialized_ = false;
 };
 
 }  // namespace innodb

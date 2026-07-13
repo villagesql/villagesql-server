@@ -147,8 +147,10 @@ dberr_t Custom_index::attach(dict_index_t *index, const IndexContext *meta,
     return DB_SUCCESS;
   }
 
-  dd_index->se_private_data().get(store_key,
-                                  &index->custom_index->storage_ref_);
+  StorageRef storage_ref;
+  dd_index->se_private_data().get(store_key, &storage_ref);
+
+  index->custom_index->set_storage_ref(storage_ref);
   return DB_SUCCESS;
 }
 
@@ -161,11 +163,14 @@ dberr_t Custom_index::load(dict_index_t *new_index,
       attach(new_index, old_custom_index->index_meta().get(), nullptr);
   if (err != DB_SUCCESS) return err;
 
-  Custom_index *custom_index = new_index->custom_index;
-  custom_index->storage_ref_ = old_custom_index->storage_ref_;
-
   dberr_t init_err = init_index_ctx(new_index);
   if (init_err != DB_SUCCESS) return init_err;
+
+  Custom_index *custom_index = new_index->custom_index;
+
+  // We proceed to load only if we have a storage reference from DD. It
+  // means the index was already created and needs to be loaded.
+  if (!custom_index->copy_storage_ref(old_custom_index)) return DB_SUCCESS;
 
   auto arena_alloc = [](vef_storage_arena_t *actx, uint32_t sz) -> void * {
     return mem_heap_zalloc(reinterpret_cast<mem_heap_t *>(actx), sz);
@@ -190,6 +195,7 @@ dberr_t Custom_index::load(dict_index_t *new_index,
     return DB_VILLAGESQL_ERROR;
   }
 
+  storage->ref = custom_index->storage_ref();
   custom_index->set_storage_ctx(storage);
   return DB_SUCCESS;
 }
