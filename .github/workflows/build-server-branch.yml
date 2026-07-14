@@ -76,6 +76,7 @@ permissions:
   contents: read
 
 jobs:
+
   build-package:
     name: Build (${{ inputs.platform }})
     runs-on: ${{ fromJSON(inputs.runner) }}
@@ -85,6 +86,8 @@ jobs:
       BUILD_DIR: ${{ github.workspace }}/build
       OUTPUT_DIR: ${{ github.workspace }}/output
       EXTS_ROOT: ${{ github.workspace }}/exts
+      RUN_UNIT_TESTS: "1"
+      RUN_INTEGRATION_TESTS: "1"
       BUILD_BUNDLED_EXTENSIONS: "1"
       # SPOOKY ACTION AT A DISTANCE: Resolve the release/-dev decision once, at
       # job scope, so every step sees the same value. Scripts that re-derive the
@@ -94,12 +97,28 @@ jobs:
       VSQL_PRE_RELEASE_VERSION: ${{ !inputs.release_build && 'dev' || '' }}
 
     steps:
+      - name: Report Parameters
+        run: |
+          echo "Git Rev: ${{ inputs.ref }}"
+          echo "Platform: ${{ inputs.platform }}"
+          echo "Release Bld: ${{ inputs.release_build }}"
+          echo "OS: ${{ inputs.os }}"
+          echo "Runner: ${{ inputs.runner }}"
+          echo "Run Unit Tests: $RUN_UNIT_TESTS"
+          echo "Run Integration Tests: $RUN_INTEGRATION_TESTS"
+          echo "Bundle Extension: $BUILD_BUNDLED_EXTENSIONS"
+
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
           path: source
           ref: ${{ inputs.ref }}
+
+      - name: Report Checkout
+        run: |
+          echo "Git SHA1: $(git -C source rev-parse ${{ inputs.ref }})"
+          echo "Git Commit: $(git -C source log -n1 --oneline)"
 
       - name: Setup VillageSQL build environment
         uses: ./source/.github/actions/setup-villagesql-build
@@ -126,8 +145,6 @@ jobs:
 
       - name: Build the dev server
         run: |
-          echo "pre_release_version: '${VSQL_PRE_RELEASE_VERSION}'"
-
           EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${VSQL_PRE_RELEASE_VERSION}"
           if [ "${{ inputs.os }}" = "macos" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
@@ -137,6 +154,13 @@ jobs:
           BUILD_DIR="$BUILD_DIR" \
           CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
             source/villagesql/bld_tools/build_ci.sh
+
+      - name: Run unit tests
+        if: env.RUN_UNIT_TESTS == '1'
+        run: |
+          uses: ./source/.github/actions/run-tests
+          with:
+            artifact-name: unit-tests
 
       - name: Build bundled extensions
         if: env.BUILD_BUNDLED_EXTENSIONS == '1'
@@ -162,6 +186,7 @@ jobs:
             source/villagesql/bld_tools/package_dev_server.sh
 
       - name: Run integration tests
+        if: env.RUN_INTEGRATION_TESTS == '1'
         run: |
           TARBALL=$(ls "$OUTPUT_DIR"/*.tar.gz | head -1)
           TEST_DIR=$(mktemp -d)
