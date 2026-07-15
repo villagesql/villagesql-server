@@ -125,12 +125,19 @@ template <bool HasFromString = false, bool HasToString = false,
           bool HasCompare = false, typename ParamsType = void,
           bool HasIntToParams = false, bool HasResolveParams = false,
           bool HasMaxPersistedLength = false, bool HasVariableLength = false,
-          typename EFT = std::tuple<>, const char *Name = nullptr>
+          bool HasPersistedLength = false, bool HasIntrinsicDefaultStr = false,
+          bool HasIntrinsicDefaultVdf = false, typename EFT = std::tuple<>,
+          const char *Name = nullptr>
 class TypeBuilder {
  public:
-  constexpr TypeBuilder &persisted_length(int64_t len) {
-    state_.desc.vef_desc.persisted_length = len;
-    return *this;
+  constexpr auto persisted_length(int64_t len) const {
+    detail::TypeBuilderState s = state_;
+    s.desc.vef_desc.persisted_length = len;
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, /*HasPersistedLength=*/true,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf, EFT,
+                       Name>{s, embedded_funcs_};
   }
 
   constexpr TypeBuilder &max_decode_buffer_length(int64_t len) {
@@ -152,8 +159,9 @@ class TypeBuilder {
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
-                       /*HasVariableLength=*/true, EFT, Name>{s,
-                                                              embedded_funcs_};
+                       /*HasVariableLength=*/true, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf, EFT,
+                       Name>{s, embedded_funcs_};
   }
 
   // Upper bound on persisted_length across all valid parameterizations.
@@ -173,8 +181,9 @@ class TypeBuilder {
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams,
-                       /*HasMaxPersistedLength=*/true, HasVariableLength, EFT,
-                       Name>{s, embedded_funcs_};
+                       /*HasMaxPersistedLength=*/true, HasVariableLength,
+                       HasPersistedLength, HasIntrinsicDefaultStr,
+                       HasIntrinsicDefaultVdf, EFT, Name>{s, embedded_funcs_};
   }
 
   // -------------------------------------------------------------------------
@@ -211,7 +220,9 @@ class TypeBuilder {
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     return TypeBuilder<HasFromString, HasToString, HasCompare, P,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
-                       HasVariableLength, EFT, Name>{s, embedded_funcs_};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf, EFT,
+                       Name>{s, embedded_funcs_};
   }
 
   // int_to_params: VDF that converts MYTYPE(N) integer to a params string.
@@ -234,8 +245,9 @@ class TypeBuilder {
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType, true,
                        HasResolveParams, HasMaxPersistedLength,
-                       HasVariableLength, decltype(new_embedded), Name>{
-        s, new_embedded};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
   }
 
   // resolve_params: VDF that validates params and computes storage sizes.
@@ -272,8 +284,9 @@ class TypeBuilder {
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, true, HasMaxPersistedLength,
-                       HasVariableLength, decltype(new_embedded), Name>{
-        s, new_embedded};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
   }
 
   // -------------------------------------------------------------------------
@@ -304,8 +317,9 @@ class TypeBuilder {
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<true, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
-                       HasVariableLength, decltype(new_embedded), Name>{
-        s, new_embedded};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
   }
 
   template <auto Func>
@@ -328,8 +342,9 @@ class TypeBuilder {
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, true, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
-                       HasVariableLength, decltype(new_embedded), Name>{
-        s, new_embedded};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
   }
 
   template <auto Func>
@@ -352,8 +367,9 @@ class TypeBuilder {
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, true, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
-                       HasVariableLength, decltype(new_embedded), Name>{
-        s, new_embedded};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
   }
 
   template <auto Func>
@@ -375,8 +391,9 @@ class TypeBuilder {
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
-                       HasVariableLength, decltype(new_embedded), Name>{
-        s, new_embedded};
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
   }
 
   // intrinsic_default_str: literal string representation of the default value
@@ -384,10 +401,15 @@ class TypeBuilder {
   // type). The server encodes it via the type's from_string VDF at first use of
   // the type. Use intrinsic_default_vdf() instead when the default must be
   // computed.
-  constexpr TypeBuilder &intrinsic_default_str(const char *str) {
-    state_.desc.vef_desc.intrinsic_default_str = str;
-    require_atleast_min(state_.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    return *this;
+  constexpr auto intrinsic_default_str(const char *str) const {
+    detail::TypeBuilderState s = state_;
+    s.desc.vef_desc.intrinsic_default_str = str;
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, HasPersistedLength,
+                       /*HasIntrinsicDefaultStr=*/true, HasIntrinsicDefaultVdf,
+                       EFT, Name>{s, embedded_funcs_};
   }
 
   // intrinsic_default_vdf: name of a separately-registered VDF that writes the
@@ -396,10 +418,15 @@ class TypeBuilder {
   //
   // TODO(villagesql-beta): embed intrinsic_default inline once the vsql API
   // supports auto-generating its VDF name too.
-  constexpr TypeBuilder &intrinsic_default_vdf(const char *vdf_name) {
-    state_.desc.vef_desc.intrinsic_default_vdf_name = vdf_name;
-    require_atleast_min(state_.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    return *this;
+  constexpr auto intrinsic_default_vdf(const char *vdf_name) const {
+    detail::TypeBuilderState s = state_;
+    s.desc.vef_desc.intrinsic_default_vdf_name = vdf_name;
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, /*HasIntrinsicDefaultVdf=*/true,
+                       EFT, Name>{s, embedded_funcs_};
   }
 
   // -------------------------------------------------------------------------
@@ -421,6 +448,19 @@ class TypeBuilder {
                   "vsql::TypeBuilder: params<P, &parse_fn>() is required when "
                   "resolve_params() is used");
     static_assert(
+        std::is_void_v<ParamsType> || HasResolveParams,
+        "vsql::TypeBuilder: resolve_params() is required when params<P>() is "
+        "used — a parameterized type must declare a resolver; int_to_params() "
+        "is the optional TYPE(N) shorthand.");
+    static_assert(
+        !HasIntToParams || HasResolveParams,
+        "vsql::TypeBuilder: resolve_params() is required when int_to_params() "
+        "is used — int_to_params() only converts the TYPE(N) shorthand into a "
+        "parameter string, while resolve_params() is the gate that validates "
+        "the parameters and resolves the storage size. Without "
+        "resolve_params() "
+        "the type is not parameterized and the length can never be resolved.");
+    static_assert(
         std::is_void_v<ParamsType> || HasMaxPersistedLength,
         "vsql::TypeBuilder: parameterized types must call "
         ".max_persisted_length(N) before build() — required so constant-string "
@@ -431,18 +471,34 @@ class TypeBuilder {
         "vsql::TypeBuilder: variable-length types must call "
         ".max_persisted_length(N) before build() — required so the server can "
         "allocate a buffer for the backing field.");
+    static_assert(
+        !HasMaxPersistedLength || HasVariableLength || HasResolveParams,
+        "vsql::TypeBuilder: max_persisted_length() is only valid for "
+        "variable-length or parameterized types; a fixed non-parameterized "
+        "type must not set it.");
+    static_assert(
+        !(HasVariableLength && HasPersistedLength),
+        "vsql::TypeBuilder: variable-length types must not declare a "
+        "persisted_length() — their size is decided per value; declare only "
+        "max_persisted_length().");
+    static_assert(
+        !(HasIntrinsicDefaultStr && HasIntrinsicDefaultVdf),
+        "vsql::TypeBuilder: intrinsic_default_str() and "
+        "intrinsic_default_vdf() "
+        "are mutually exclusive — a type may declare at most one intrinsic "
+        "default source.");
     return TypeObject<EFT>{state_.desc, embedded_funcs_, state_.params_init_fn,
                            state_.params_to_strings_init_fn};
   }
 
   // Cross-specialization and make_type access.
-  template <bool, bool, bool, typename, bool, bool, bool, bool, typename,
-            const char *>
+  template <bool, bool, bool, typename, bool, bool, bool, bool, bool, bool,
+            bool, typename, const char *>
   friend class TypeBuilder;
 
   template <const char *N>
   friend constexpr TypeBuilder<false, false, false, void, false, false, false,
-                               false, std::tuple<>, N>
+                               false, false, false, false, std::tuple<>, N>
   make_type();
 
  private:
@@ -471,13 +527,13 @@ class TypeBuilder {
 
 template <const char *Name>
 constexpr TypeBuilder<false, false, false, void, false, false, false, false,
-                      std::tuple<>, Name>
+                      false, false, false, std::tuple<>, Name>
 make_type() {
   detail::TypeBuilderState s{};
   s.desc.vef_desc.name = Name;
   s.desc.vef_desc.protocol = VEF_PROTOCOL_1;
   return TypeBuilder<false, false, false, void, false, false, false, false,
-                     std::tuple<>, Name>{s};
+                     false, false, false, std::tuple<>, Name>{s};
 }
 
 }  // namespace vsql

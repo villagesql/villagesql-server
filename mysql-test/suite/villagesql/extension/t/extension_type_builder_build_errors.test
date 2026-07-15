@@ -1,0 +1,64 @@
+# Scenario: build() static_asserts catch missing/contradictory type-builder
+# configuration at COMPILE time, so the extension fails to build. Each case
+# below builds a throwaway extension and expects the
+# build to fail. The shared stub type-ops live in std_data/type_build_common.h,
+# copied next to each source so only the make_type(...) chain differs per case.
+
+--echo # A type without from_string() fails to build.
+--let $extension_name = type_missing_from_string
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_missing_from_string.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = from_string() is required before build()
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A type without to_string() fails to build.
+--let $extension_name = type_missing_to_string
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_missing_to_string.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = to_string() is required before build()
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A type with int_to_params() but no resolve_params() fails to build.
+--let $extension_name = int_to_params_no_resolve
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/int_to_params_no_resolve.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = resolve_params() is required when int_to_params()
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A parameterized type (params<P>) without resolve_params() fails to build.
+--let $extension_name = params_no_resolve
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/params_no_resolve.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = resolve_params() is required when params<P>()
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A variable-length type without max_persisted_length() fails to build.
+--let $extension_name = var_no_max_persisted
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/var_no_max_persisted.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = variable-length types must call
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A variable-length type that also declares persisted_length() fails to
+--echo # build (the two are mutually exclusive).
+--let $extension_name = var_with_persisted
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/var_with_persisted.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = variable-length types must not
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A type that sets both intrinsic_default_str and intrinsic_default_vdf
+--echo # fails to build (the two are mutually exclusive).
+--let $extension_name = both_intrinsic_defaults
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/both_intrinsic_defaults.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = intrinsic_default_str() and intrinsic_default_vdf()
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
+
+--echo # A fixed, non-parameterized type that sets max_persisted_length fails to
+--echo # build (it is only valid for variable-length or parameterized types).
+--let $extension_name = fixed_with_max
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/fixed_with_max.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--let $build_failure_grep = max_persisted_length() is only valid for
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc
