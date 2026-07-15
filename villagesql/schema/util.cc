@@ -24,4 +24,10 @@ bool is_villagesql_system_table(const TABLE *table) {
   return is_villagesql_schema(table->s->db.str);
 }
 
+uint count_global_tables(const Table_ref *first) {
+  uint n = 0;
+  for (const Table_ref *tl = first; tl != nullptr; tl = tl->next_global) ++n;
+  return n;
+}
+
 }  // namespace villagesql

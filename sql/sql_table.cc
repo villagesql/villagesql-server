@@ -199,6 +199,7 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "typelib.h"
+#include "villagesql/schema/util.h"
 #include "villagesql/sql/metadata_modifier.h"
 #include "villagesql/types/util.h"
 
@@ -17109,10 +17110,17 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   }
 
   // VillageSQL: Track custom columns and acquire necessary MDL locks.
+  // process_alter() may append VillageSQL system tables to the query-tables
+  // list; extend tables_opened so the lock_tables() calls below size their
+  // lock array for the longer next_global chain they will walk.
+  const uint tables_before = villagesql::count_global_tables(table_list);
   if (villagesql::Metadata_modifier::process_alter(thd, create_info, table_list,
                                                    alter_info)) {
     return true;
   }
+  alter_ctx.tables_opened +=
+      villagesql::count_global_tables(table_list) - tables_before;
+
   // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
   // rolls back victionary modifications unless disarmed after a successful
   // store().
