@@ -367,6 +367,17 @@ MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   )
 IF(TARGET merge_small_tests-t)
   DOWNGRADE_STRINGOP_WARNINGS(merge_small_tests-t)
+  # VillageSQL: On macOS with a static server_unittest_library (which is what
+  # WITH_SHARED_UNITTEST_LIBRARY=OFF selects -- forced when a sanitizer is on),
+  # this merged test cannot link: gunit_small's stub globals (LOCK_open,
+  # system_charset_info, THR_MALLOC, ...) collide with the real definitions
+  # pulled in from sql_main. Drop it from the default target so a plain "make"
+  # still builds the server (for MTR) instead of aborting. The villagesql/ unit
+  # tests avoid this collision by linking villagesql_test_main.cc, not
+  # gunit_small, so they remain buildable under a sanitizer.
+  IF(APPLE AND NOT WITH_SHARED_UNITTEST_LIBRARY)
+    SET_TARGET_PROPERTIES(merge_small_tests-t PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  ENDIF()
 ENDIF()
 
 LIST(APPEND ALL_LARGE_TESTS ../../storage/example/ha_example.cc)
@@ -382,6 +393,11 @@ IF(TARGET merge_large_tests-t)
     TARGET_LINK_OPTIONS(merge_large_tests-t PRIVATE -Wno-alloc-size-larger-than)
   ENDIF()
   DOWNGRADE_STRINGOP_WARNINGS(merge_large_tests-t)
+  # VillageSQL: Same static-link collision as merge_small_tests-t above; exclude
+  # from the default target on macOS when the unittest library is static.
+  IF(APPLE AND NOT WITH_SHARED_UNITTEST_LIBRARY)
+    SET_TARGET_PROPERTIES(merge_large_tests-t PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  ENDIF()
 ENDIF()
 
 FOREACH(test ${TESTS})
