@@ -50,12 +50,23 @@ jobs:
       BUILD_DIR: ${{ github.workspace }}/build
 
     steps:
+    - name: Report Parameters
+      run: |
+        echo "Git Rev: ${{ inputs.ref }}"
+        echo "Build type: ${{ inputs.build-type }}"
+        echo "Artifact prefix: ${{ inputs.artifact-prefix }}"
+
     - name: Checkout code
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         ref: ${{ inputs.ref }}
         fetch-depth: 50
         path: source
+
+    - name: Report Checkout
+      run: |
+        echo "Git SHA1: $(git -C source rev-parse ${{ inputs.ref }})"
+        echo "Git Commit: $(git -C source log -n1 --oneline)"
 
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
