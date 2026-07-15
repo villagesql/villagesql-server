@@ -123,12 +123,21 @@ bool ResolveParamsFunction::invoke(const std::string &params_str,
       strtoll(output.c_str() + comma + 1, &endptr, 10);
   // endptr now points at the terminator: '\0' for the two-field (const) form,
   // or ',' introducing the rewritten-params section for the mutating overload.
-  if (*endptr == '\0') return false;
-  if (*endptr != ',') {
+  if (*endptr != '\0' && *endptr != ',') {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "resolve_params VDF returned invalid max_decode_buffer_length");
     return true;
   }
+  // max_decode_buffer_length sizes the decode scratch buffer, so it must be
+  // positive for every parameterization, regardless of the type's length kind.
+  if (result->max_decode_buffer_length <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params resolved a non-positive max_decode_buffer_length "
+             "(%lld); it must be > 0",
+             static_cast<long long>(result->max_decode_buffer_length));
+    return true;
+  }
+  if (*endptr == '\0') return false;
 
   // Rewritten-params section from the mutating overload:
   // "<byte-len>[,key=value,...]", starting just past this comma.
