@@ -1,0 +1,27 @@
+# A type without from_string() fails to build.
+Attempting to build type_missing_from_string (expecting build failure)...
+Build failed as expected.
+# A type without to_string() fails to build.
+Attempting to build type_missing_to_string (expecting build failure)...
+Build failed as expected.
+# A type with int_to_params() but no resolve_params() fails to build.
+Attempting to build int_to_params_no_resolve (expecting build failure)...
+Build failed as expected.
+# A parameterized type (params<P>) without resolve_params() fails to build.
+Attempting to build params_no_resolve (expecting build failure)...
+Build failed as expected.
+# A variable-length type without max_persisted_length() fails to build.
+Attempting to build var_no_max_persisted (expecting build failure)...
+Build failed as expected.
+# A variable-length type that also declares persisted_length() fails to
+# build (the two are mutually exclusive).
+Attempting to build var_with_persisted (expecting build failure)...
+Build failed as expected.
+# A type that sets both intrinsic_default_str and intrinsic_default_vdf
+# fails to build (the two are mutually exclusive).
+Attempting to build both_intrinsic_defaults (expecting build failure)...
+Build failed as expected.
+# A fixed, non-parameterized type that sets max_persisted_length fails to
+# build (it is only valid for variable-length or parameterized types).
+Attempting to build fixed_with_max (expecting build failure)...
+Build failed as expected.

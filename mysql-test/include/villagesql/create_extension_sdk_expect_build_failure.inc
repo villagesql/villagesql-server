@@ -43,6 +43,13 @@ if (!$extension_version)
 
 --exec cp $extension_source $ext_build_dir/src/extension.cc
 
+# Optionally place a shared companion header next to extension.cc so the source
+# can #include it.
+if ($extension_common_header)
+{
+  --exec cp $extension_common_header $ext_build_dir/src/
+}
+
 --exec printf '%s' '{"name": "$extension_name", "version": "$extension_version"}' > $ext_build_dir/manifest.json
 
 --let $cmake_template = $MYSQL_TEST_DIR/suite/villagesql/data/extension_creator/CMakeLists.txt.template
@@ -72,4 +79,5 @@ if ($build_failure_grep)
 --let $extension_name =
 --let $extension_version =
 --let $extension_source =
+--let $extension_common_header =
 --let $build_failure_grep =
