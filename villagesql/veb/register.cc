@@ -17,6 +17,7 @@
 #include "villagesql/veb/register.h"
 
 #include <algorithm>
+#include <set>
 
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
@@ -34,12 +35,25 @@ bool register_validated_extension(THD &thd, ValidatedRegistration validated,
   auto &victionary = VictionaryClient::instance();
   victionary.assert_write_lock_held();
 
+  // Detects a type registered more than once within this same extension batch.
+  // get_committed() below only sees already-committed descriptors, not the ones
+  // marked for insertion earlier in this loop, so a same-named duplicate inside
+  // one extension would otherwise slip through.
+  std::set<TypeDescriptorKey> seen_type_keys;
+
   for (auto &descriptor : validated.types) {
     std::string type_name = descriptor.type_name();
     std::string ext_name = descriptor.extension_name();
 
     LogVSQL(INFORMATION_LEVEL, "Registering type '%s' from extension '%s'",
             type_name.c_str(), ext_name.c_str());
+
+    if (!seen_type_keys.insert(descriptor.key()).second) {
+      error_out = "type '" + type_name + "' already exists";
+      LogVSQL(ERROR_LEVEL, "Extension '%s': %s", ext_name.c_str(),
+              error_out.c_str());
+      return true;
+    }
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

@@ -1,0 +1,32 @@
+# Scenario: an extension that registers two types with the same name must be
+# rejected at INSTALL EXTENSION time. Fixture: vsql_dup_type_test registers
+# DUP_TYPE twice.
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("already exists");
+
+--echo # INSTALL fails: duplicate type name within one extension.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_dup_type_test;
+
+--echo # Verify extension was NOT installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_dup_type_test';
+
+--echo # Verify the error log names the duplicate.
+--perl
+use strict;
+my $error_log = $ENV{'MYSQLTEST_VARDIR'} . "/log/mysqld.1.err";
+open(FILE, "$error_log") or die("Unable to open error log: $error_log");
+my $found = 0;
+while (<FILE>) {
+  if (/already exists/) {
+    $found = 1;
+  }
+}
+close(FILE);
+if (!$found) {
+  die "Expected 'already exists' rejection message in error log";
+}
+print "Found duplicate rejection message in error log\n";
+EOF
