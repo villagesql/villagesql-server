@@ -194,6 +194,19 @@ static void destroy_thread_handle(vef_thread_handle_t *handle) {
   thd->release_resources();
   thd_manager->remove_thd(thd);
   thd_manager->dec_thread_running();
+
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  // Decouple the THD from the thread instrumentation before deleting it.
+  // create_thread_handle() associated this THD with the PFS thread via
+  // set_thread_THD(); if we don't clear that association, the
+  // delete_current_thread() call below aggregates this thread's status by
+  // dereferencing the (already freed) THD -- a use-after-free that UBSan's
+  // vptr check reports as a dynamic-type cache miss in get_thd_status_var().
+  // This mirrors the teardown order in connection_handler_per_thread.cc.
+  thd_set_psi(thd, nullptr);
+  mysql_thread_set_psi_THD(nullptr);
+#endif
+
   delete thd;
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
