@@ -75,18 +75,11 @@ jobs:
 
     - name: Build VillageSQL
       working-directory: ./source
-      run: |
-        ./villagesql/bld_tools/build_ci.sh
-
-        # Include the extra tests
-        cd "$BUILD_DIR"
-        make "-j$PARALLEL_JOBS" abi_v1_check-t abi_v2_check-t \
-          custom_indexes-t semver-t type_descriptor-t type_builder-t \
-          type_context-t validate-t victionary_client-t
-
       env:
         PARALLEL_JOBS: 16
         BUILD_TYPE: ${{ inputs.build-type }}
+      run: |
+        ./villagesql/bld_tools/build_ci.sh
 
     - name: Run standard tests (unit, integration with only suite village)
       uses: ./source/.github/actions/run-tests
