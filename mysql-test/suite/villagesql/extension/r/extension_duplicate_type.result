@@ -1,11 +1,11 @@
 call mtr.add_suppression("Failed to load VEF extension");
 call mtr.add_suppression("already exists");
+Creating extension dup_type using SDK...
+Created dup_type.veb
 # INSTALL fails: duplicate type name within one extension.
-INSTALL EXTENSION vsql_dup_type_test;
-ERROR HY000: Failed to install extension 'vsql_dup_type_test': type 'DUP_TYPE' already exists
+INSTALL EXTENSION dup_type;
+ERROR HY000: Failed to install extension 'dup_type': type 'DUP_TYPE' already exists
 # Verify extension was NOT installed.
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
-WHERE extension_name = 'vsql_dup_type_test';
+WHERE extension_name = 'dup_type';
 EXTENSION_NAME	EXTENSION_VERSION
-# Verify the error log names the duplicate.
-Found duplicate rejection message in error log

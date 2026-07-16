@@ -42,10 +42,6 @@ vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
 vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)
 vsql_add_test_extension(vsql-resolve-only-test         vsql_resolve_only_test)
 
-# Bad-registration test: an extension that registers two types with the same
-# name -- rejected at INSTALL EXTENSION.
-vsql_add_test_extension(vsql-dup-type-test             vsql_dup_type_test)
-
 # update_test installable + three target variants exercise the pre-checks
 # of the extension version-update path. The VEB filename is
 # update_test-<version>.veb; the manifest inside each variant carries the

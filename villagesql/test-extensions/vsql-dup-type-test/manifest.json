@@ -1,7 +1,0 @@
-{
-  "name": "vsql_dup_type_test",
-  "version": "0.0.1",
-  "description": "Bad-registration test: an extension that registers two types with the same name. INSTALL EXTENSION must fail.",
-  "author": "VillageSQL Community",
-  "license": "GPL-2.0"
-}
