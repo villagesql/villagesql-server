@@ -104,10 +104,14 @@ class Metadata_modifier {
   static bool process_drop(THD *thd, const TableContainer &tables);
 
   // Process custom columns for ALTER TABLE operations.
+  // If tables_opened is non-null, it is increased by the number of VillageSQL
+  // system tables appended to the query-tables list, so the caller can keep an
+  // Alter_table_ctx::tables_opened count in sync with the grown next_global
+  // chain that lock_tables() will walk.
   // Returns false on success, true on error.
   static bool process_alter(THD *thd, const HA_CREATE_INFO *create_info,
-                            Table_ref *table_list,
-                            const Alter_info *alter_info);
+                            Table_ref *table_list, const Alter_info *alter_info,
+                            uint *tables_opened = nullptr);
 
   // Process custom columns for RENAME TABLE operations.
   // table_list contains pairs of tables (old, new, old, new, ...).
@@ -224,7 +228,8 @@ class Metadata_modifier {
 
   // Add system tables for staged modifications to the query list.
   // Opens COLUMNS_TABLE_NAME only if marked_column, and INDEXES_TABLE_NAME
-  // and INDEX_COLUMNS_TABLE_NAME only if marked_index.
+  // and INDEX_COLUMNS_TABLE_NAME only if marked_index. Records the number of
+  // tables opened in system_tables_opened_.
   // Returns false on success, true on error.
   bool add_system_tables(THD *thd, bool marked_column, bool marked_index);
 
@@ -250,6 +255,8 @@ class Metadata_modifier {
   // Custom index entries staged for deletion
   std::vector<IndexEntry> to_remove_indexes_;
   std::vector<IndexColumnEntry> to_remove_index_columns_;
+  // Number of VillageSQL system tables opened by add_system_tables().
+  uint system_tables_opened_ = 0;
 };
 
 // Template implementation for process_drop

@@ -1066,6 +1066,7 @@ bool Metadata_modifier::add_system_tables(THD *thd, bool marked_column,
     villagesql_error("Cannot open VillageSQL system tables", MYF(0));
     return true;
   }
+  system_tables_opened_ = counter;
   return false;
 }
 
@@ -1143,12 +1144,17 @@ bool Metadata_modifier::process_create(THD *thd,
 bool Metadata_modifier::process_alter(THD *thd,
                                       const HA_CREATE_INFO *create_info,
                                       Table_ref *table_list,
-                                      const Alter_info *alter_info) {
+                                      const Alter_info *alter_info,
+                                      uint *tables_opened) {
   // Tmp tables are handles separately.
   if (!table_list || !table_list->table ||
       table_list->table->s->tmp_table != NO_TMP_TABLE) {
     return false;
   }
+
+#ifndef NDEBUG
+  const uint tables_before = count_global_tables(table_list);
+#endif
 
   Metadata_modifier custom_modifier;
 
@@ -1199,6 +1205,15 @@ bool Metadata_modifier::process_alter(THD *thd,
   if (custom_modifier.lock_and_apply(thd)) {
     return true;
   }
+
+  // Keep the caller's tables_opened count in sync with the system tables
+  // add_system_tables() appended to the query-tables list. The debug assertion
+  // verifies this internal count matches the actual growth of the next_global
+  // chain that lock_tables() will walk.
+  if (tables_opened != nullptr)
+    *tables_opened += custom_modifier.system_tables_opened_;
+  assert(count_global_tables(table_list) - tables_before ==
+         custom_modifier.system_tables_opened_);
 
   return false;
 }
