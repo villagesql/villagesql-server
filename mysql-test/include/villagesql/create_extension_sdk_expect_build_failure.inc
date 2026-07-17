@@ -9,6 +9,11 @@
 #   --let $build_failure_grep = optional string to grep for in build output
 #   --source include/villagesql/create_extension_sdk_expect_build_failure.inc
 #
+# Optional:
+#   --let $extension_common_header = /path/to/common.h
+#     Companion header(s) copied next to extension.cc so the source can
+#     #include them. May name several headers separated by spaces.
+#
 # If $build_failure_grep is set, the test also verifies that the build output
 # contains the expected string (e.g. a static_assert message).
 
@@ -43,8 +48,8 @@ if (!$extension_version)
 
 --exec cp $extension_source $ext_build_dir/src/extension.cc
 
-# Optionally place a shared companion header next to extension.cc so the source
-# can #include it.
+# Optionally place shared companion header(s) next to extension.cc so the source
+# can #include them.
 if ($extension_common_header)
 {
   --exec cp $extension_common_header $ext_build_dir/src/

@@ -231,6 +231,12 @@ bool register_preview_capabilities(THD &thd,
             index_type_name.c_str());
   }
 
+  // Detects an index profile registered more than once within this same
+  // extension batch. get_committed() below only sees already-committed
+  // descriptors, not the ones marked for insertion earlier in this loop, so a
+  // same-named duplicate inside one extension would otherwise slip through.
+  std::set<IndexProfileDescriptorKey> seen_index_profile_keys;
+
   for (auto &descriptor : preview.index_profiles) {
     std::string profile_name = descriptor.profile_name();
     std::string ext_name = descriptor.extension_name();
@@ -238,6 +244,13 @@ bool register_preview_capabilities(THD &thd,
     LogVSQL(INFORMATION_LEVEL,
             "Registering index profile '%s' from extension '%s'",
             profile_name.c_str(), ext_name.c_str());
+
+    if (!seen_index_profile_keys.insert(descriptor.key()).second) {
+      error_out = "index profile '" + profile_name + "' already exists";
+      LogVSQL(ERROR_LEVEL, "Extension '%s': %s", ext_name.c_str(),
+              error_out.c_str());
+      return true;
+    }
 
     const IndexProfileDescriptor *existing =
         victionary.index_profile_descriptors().get_committed(descriptor.key());

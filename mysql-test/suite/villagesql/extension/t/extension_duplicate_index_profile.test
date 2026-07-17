@@ -1,0 +1,26 @@
+# Scenario: an extension that registers two index profiles with the same name
+# must be rejected at INSTALL EXTENSION time. The extension
+# (std_data/dup_index_profile.cc) registers one type and one index type, then
+# DUP_PROFILE twice; it is built on the fly and installed here. Index profiles
+# are a preview capability, so preview extensions must be allowed first.
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("already exists");
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--let $extension_name = dup_index_profile
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/dup_index_profile.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/index_build_common.h $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # INSTALL fails: duplicate index-profile name within one extension.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION dup_index_profile;
+
+--echo # Verify extension was NOT installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'dup_index_profile';
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
