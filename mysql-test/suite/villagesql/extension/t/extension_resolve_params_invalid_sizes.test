@@ -1,0 +1,39 @@
+# Scenario: resolve_params must resolve a persisted_length consistent with the
+# type's length kind. A fixed-length type must resolve to a concrete positive
+# footprint; a variable-length type sizes storage per value and must leave
+# persisted_length <= 0. PT_custom_type enforces both at DDL time.
+#
+# Fixtures (all in vsql_test_only):
+#   BAD_LEN_PARAM_TYPE  - fixed-length; resolve_params returns persisted_length
+#                         = -1 (must be > 0).
+#   VAR_SETS_PERSISTED  - variable-length; resolve_params returns a positive
+#                         persisted_length (must stay <= 0).
+#   BAD_DECODE_BUF      - resolve_params resolves a non-positive
+#                         max_decode_buffer_length (must be > 0).
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Fixed-length, TYPE(N) shorthand: int_to_params succeeds, then
+--echo # resolve_params returns persisted_length = -1, rejected for a fixed type.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_LEN_PARAM_TYPE(4));
+
+--echo # Explicit parameter string: same resolve_params rejection.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_LEN_PARAM_TYPE('length=4'));
+
+--echo # Variable-length: resolve_params reports a positive persisted_length,
+--echo # which is rejected (variable-length types must leave it unset).
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v VAR_SETS_PERSISTED(4));
+
+--echo # resolve_params resolves a non-positive max_decode_buffer_length, which
+--echo # is rejected (it sizes the decode scratch buffer and must be > 0).
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_DECODE_BUF(4));
+
+--echo # No table was created.
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't';
+
+UNINSTALL EXTENSION vsql_test_only;

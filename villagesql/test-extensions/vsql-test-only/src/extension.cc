@@ -685,6 +685,214 @@ constexpr auto PVEC =
         .compare<&pvec_compare>()
         .build();
 
+// ---- resolve_params size-validation test types --------------------------
+//
+// Parameterized types that exercise the DDL-time checks on the sizes
+// resolve_params reports. They share a working 4-byte codec (param_test_*)
+// keyed on a LenParam.
+//
+//   OVERSIZED_PARAM_TYPE(N) - resolve_params resolves a persisted_length larger
+//                             than max_persisted_length (upper-bound check).
+//   BAD_LEN_PARAM_TYPE(N)   - fixed-length; resolve_params returns
+//                             persisted_length = -1 (must be > 0).
+//   VAR_SETS_PERSISTED(N)   - variable-length; resolve_params returns a
+//   positive
+//                             persisted_length (must stay <= 0).
+//   BAD_DECODE_BUF(N)       - resolve_params resolves a non-positive
+//                             max_decode_buffer_length (must be > 0).
+
+constexpr int64_t kParamTestSize = 4;
+
+struct LenParam {
+  int64_t length;
+
+  static LenParam parse(const std::map<std::string, std::string> &params) {
+    auto it = params.find("length");
+    return LenParam{it == params.end() ? 0 : std::stoll(it->second)};
+  }
+
+  static void to_strings(const LenParam &p,
+                         std::map<std::string, std::string> &out) {
+    out["length"] = std::to_string(p.length);
+  }
+};
+
+// Working 4-byte codec shared by the size-validation types. Text form is
+// "(N)"; the empty string encodes to all-zeros so the types have a usable
+// intrinsic default and their columns can be created.
+void param_test_encode(vsql::MaybeParams<LenParam> &params,
+                       std::string_view from, vsql::CustomResult out) {
+  if (!params.is_known()) params.set(LenParam{kParamTestSize});
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kParamTestSize)) return;
+  memset(buf.data(), 0, kParamTestSize);
+  unsigned int nn = 0;
+  if (!from.empty()) {
+    char tmp[64];
+    size_t copy = from.size() < sizeof(tmp) - 1 ? from.size() : sizeof(tmp) - 1;
+    memcpy(tmp, from.data(), copy);
+    tmp[copy] = '\0';
+    if (sscanf(tmp, "(%u)", &nn) != 1) return;  // encode failure
+  }
+  buf[0] = static_cast<unsigned char>(nn);
+  out.set_length(static_cast<size_t>(kParamTestSize));
+}
+
+void param_test_decode(vsql::CustomArgWith<LenParam> in,
+                       vsql::StringResult out) {
+  auto data = in.value();
+  if (data.size() < static_cast<size_t>(kParamTestSize)) return;
+  auto buf = out.buffer();
+  int written = snprintf(buf.data(), buf.size(), "(%u)", data[0]);
+  if (written < 0) return;
+  out.set_length(static_cast<size_t>(written));
+}
+
+int param_test_compare(vsql::CustomArgWith<LenParam>,
+                       vsql::CustomArgWith<LenParam>) {
+  return 0;
+}
+
+// BAD_LEN_PARAM_TYPE: resolve_params deliberately reports an invalid
+// persisted_length (-1) for a fixed-length type.
+bool bad_len_int_to_params(int64_t value,
+                           std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool bad_len_resolve_params(const std::map<std::string, std::string> &,
+                            vsql::ResolvedTypeParams *result, char *) {
+  result->persisted_length = -1;  // invalid for a fixed-length type
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// OVERSIZED_PARAM_TYPE: resolves to twice its max_persisted_length.
+constexpr int64_t kOversizedResolved = kParamTestSize * 2;
+
+bool oversized_int_to_params(int64_t value,
+                             std::map<std::string, std::string> &params,
+                             char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool oversized_resolve_params(const std::map<std::string, std::string> &params,
+                              vsql::ResolvedTypeParams *result,
+                              char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "OVERSIZED_PARAM_TYPE requires length");
+    return true;
+  }
+  result->persisted_length =
+      kOversizedResolved;  // exceeds max_persisted_length
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// VAR_SETS_PERSISTED: a variable-length type whose resolve_params wrongly
+// reports a positive persisted_length.
+bool var_sets_int_to_params(int64_t value,
+                            std::map<std::string, std::string> &params,
+                            char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool var_sets_resolve_params(const std::map<std::string, std::string> &params,
+                             vsql::ResolvedTypeParams *result,
+                             char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "VAR_SETS_PERSISTED requires length");
+    return true;
+  }
+  result->persisted_length = kParamTestSize;  // wrong: must stay <= 0 here
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// BAD_DECODE_BUF: resolve_params resolves a valid persisted_length but a
+// non-positive max_decode_buffer_length, which must be > 0. Exercises the
+// post-resolve_params max_decode_buffer_length check.
+bool bad_decode_buf_int_to_params(int64_t value,
+                                  std::map<std::string, std::string> &params,
+                                  char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool bad_decode_buf_resolve_params(
+    const std::map<std::string, std::string> &params,
+    vsql::ResolvedTypeParams *result, char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "BAD_DECODE_BUF requires length");
+    return true;
+  }
+  result->persisted_length = kParamTestSize;  // valid
+  result->max_decode_buffer_length = 0;       // invalid: must be > 0
+  return false;
+}
+
+static constexpr const char kBadLenParamTypeName[] = "BAD_LEN_PARAM_TYPE";
+static constexpr const char kOversizedParamTypeName[] = "OVERSIZED_PARAM_TYPE";
+static constexpr const char kVarSetsPersistedTypeName[] = "VAR_SETS_PERSISTED";
+static constexpr const char kBadDecodeBufTypeName[] = "BAD_DECODE_BUF";
+
+constexpr auto BAD_LEN_PARAM_TYPE =
+    vsql::make_type<kBadLenParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&bad_len_int_to_params>()
+        .resolve_params<&bad_len_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto OVERSIZED_PARAM_TYPE =
+    vsql::make_type<kOversizedParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&oversized_int_to_params>()
+        .resolve_params<&oversized_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto VAR_SETS_PERSISTED =
+    vsql::make_type<kVarSetsPersistedTypeName>()
+        .variable_length_type()
+        .max_persisted_length(kParamTestSize)
+        .max_decode_buffer_length(16)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&var_sets_int_to_params>()
+        .resolve_params<&var_sets_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto BAD_DECODE_BUF =
+    vsql::make_type<kBadDecodeBufTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&bad_decode_buf_int_to_params>()
+        .resolve_params<&bad_decode_buf_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -697,6 +905,11 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(NO_DEFAULT_VAR_PARAM_TYPE)
         .type(LARGE_DECODE_TYPE)
         .type(PVEC)
+        // resolve_params size-validation test types
+        .type(BAD_LEN_PARAM_TYPE)
+        .type(OVERSIZED_PARAM_TYPE)
+        .type(VAR_SETS_PERSISTED)
+        .type(BAD_DECODE_BUF)
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)
