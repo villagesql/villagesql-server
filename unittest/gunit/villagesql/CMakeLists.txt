@@ -15,7 +15,8 @@
 
 # Unit tests for VillageSQL-specific internal code
 
-# List of all VillageSQL unit tests
+# List of all VillageSQL unit tests.
+# Place additional test here as necesssary.
 SET(VILLAGESQL_UNIT_TESTS
   abi_v1_check-t
   abi_v2_check-t
@@ -65,17 +66,10 @@ MACRO(ADD_VILLAGESQL_TEST test_name)
   )
 ENDMACRO()
 
-# Add all VillageSQL unit tests
-ADD_VILLAGESQL_TEST(abi_v1_check-t)
-ADD_VILLAGESQL_TEST(abi_v2_check-t)
-ADD_VILLAGESQL_TEST(custom_indexes-t)
-ADD_VILLAGESQL_TEST(semver-t)
-ADD_VILLAGESQL_TEST(system_views_columns-t)
-ADD_VILLAGESQL_TEST(type_builder-t)
-ADD_VILLAGESQL_TEST(type_context-t)
-ADD_VILLAGESQL_TEST(type_descriptor-t)
-ADD_VILLAGESQL_TEST(validate-t)
-ADD_VILLAGESQL_TEST(victionary_client-t)
+# Register all VillageSQL unit tests from the list above.
+FOREACH(test_name ${VILLAGESQL_UNIT_TESTS})
+  ADD_VILLAGESQL_TEST(${test_name})
+ENDFOREACH()
 
 # Custom target to build all VillageSQL unit tests
 ADD_CUSTOM_TARGET(villagesql-unit-tests
@@ -86,4 +80,3 @@ ADD_CUSTOM_TARGET(villagesql-unit-tests
 IF(TARGET test-unit)
   ADD_DEPENDENCIES(test-unit villagesql-unit-tests)
 ENDIF()
-
