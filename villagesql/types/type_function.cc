@@ -16,6 +16,7 @@
 
 #include "villagesql/types/type_function.h"
 
+#include <cinttypes>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -133,8 +134,8 @@ bool ResolveParamsFunction::invoke(const std::string &params_str,
   if (result->max_decode_buffer_length <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "resolve_params resolved a non-positive max_decode_buffer_length "
-             "(%lld); it must be > 0",
-             static_cast<long long>(result->max_decode_buffer_length));
+             "(%" PRId64 "); it must be > 0",
+             result->max_decode_buffer_length);
     return true;
   }
   if (*endptr == '\0') return false;
