@@ -1,0 +1,80 @@
+name: Sanitizer Tests (ASan+UBSan)
+
+# Manual build + test run with AddressSanitizer and UndefinedBehaviorSanitizer
+# enabled, on Linux. Runs the VillageSQL unit tests (instrumented at compile
+# time) and the VillageSQL mysql-test suite (via --sanitize).
+#
+# Manual-only for now. Follow-ups before this runs daily:
+#   - Annotate deliberate leaks (lsan.supp / LSAN suppressions) so LeakSanitizer
+#     doesn't fail the run on known-intentional allocations.
+#   - Add a daily `schedule:` trigger.
+#   - Add a Slack #eng-health notification job (needs a SLACK_WEBHOOK_ENG_HEALTH
+#     secret bound to that channel).
+# Trigger via: Actions tab -> Run workflow, or `gh workflow run sanitizer.yml`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to test'
+        required: false
+        default: ''
+
+concurrency:
+  group: sanitizer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    name: Build and Run Sanitizer Tests
+    runs-on: self-hosted
+    permissions:
+      contents: read
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+      # MTR overwrites *SAN_OPTIONS for the server processes it spawns, so these
+      # values govern the ctest unit tests (which inherit the job environment)
+      # and make any sanitizer violation there fail the job rather than warn.
+      ASAN_OPTIONS: abort_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        ref: ${{ inputs.ref || github.ref }}
+        fetch-depth: 50
+        path: source
+
+    - name: Report Checkout
+      run: |
+        echo "Requested ref: ${{ inputs.ref || github.ref }}"
+        echo "Git SHA1: $(git -C source rev-parse HEAD)"
+        echo "Git Commit: $(git -C source log -n1 --oneline)"
+
+    - name: Setup VillageSQL build environment
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        # Skip the GitHub Actions ccache: it shares a repo-wide 10 GB quota
+        # (LRU-evicted) with the regular/nightly build caches, so a periodic
+        # sanitizer build would evict them and slow normal builds. Matches
+        # valgrind.yml / full-test-suite.yml.
+        setup-ccache: 'false'
+
+    - name: Build VillageSQL with ASan+UBSan
+      working-directory: ./source
+      # build_ci.sh also builds the villagesql-unit-tests target, so the unit
+      # tests are compiled with the sanitizers too.
+      run: ./villagesql/bld_tools/build_ci.sh
+      env:
+        BUILD_TYPE: debug
+        PARALLEL_JOBS: 16
+        CMAKE_EXTRA_FLAGS: -DWITH_ASAN=1 -DWITH_UBSAN=1
+
+    - name: Run sanitizer tests (unit + village suite)
+      uses: ./source/.github/actions/run-tests
+      with:
+        mysql-test-extra-flags: --sanitize
+        artifact-name: sanitizer-logs-${{ github.run_number }}

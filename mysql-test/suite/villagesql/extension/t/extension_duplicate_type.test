@@ -1,0 +1,19 @@
+# Scenario: an extension that registers two types with the same name must be
+# rejected at INSTALL EXTENSION time. The extension (std_data/dup_type.cc)
+# registers DUP_TYPE twice; it is built on the fly and installed here.
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("already exists");
+
+--let $extension_name = dup_type
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/dup_type.cc
+--let $extension_common_header = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_build_common.h
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # INSTALL fails: duplicate type name within one extension.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION dup_type;
+
+--echo # Verify extension was NOT installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'dup_type';

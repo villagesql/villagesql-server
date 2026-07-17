@@ -68,6 +68,10 @@ static int params_compare(vsql::CustomArgWith<TestParams>,
   return 0;
 }
 static size_t params_hash(vsql::CustomArgWith<TestParams>) { return 0; }
+static bool params_resolve(const std::map<std::string, std::string> &,
+                           vsql::ResolvedTypeParams *, char *) {
+  return false;
+}
 
 static constexpr const char kPlainName[] = "TESTPLAIN";
 static constexpr const char kParamsName[] = "TESTPARAMS";
@@ -172,6 +176,7 @@ TEST_F(TypeBuilderTest, ParameterizedBuildsCorrectly) {
       vsql::make_type<kParamsName>()
           .max_persisted_length(128)
           .params<TestParams, &TestParams::parse, &TestParams::to_strings>()
+          .resolve_params<&params_resolve>()
           .from_string<&params_encode>()
           .to_string<&params_decode>()
           .compare<&params_compare>()
@@ -188,6 +193,7 @@ TEST_F(TypeBuilderTest, ParameterizedWithHash) {
       vsql::make_type<kParamsName>()
           .max_persisted_length(128)
           .params<TestParams, &TestParams::parse, &TestParams::to_strings>()
+          .resolve_params<&params_resolve>()
           .from_string<&params_encode>()
           .to_string<&params_decode>()
           .compare<&params_compare>()
@@ -204,6 +210,7 @@ TEST_F(TypeBuilderTest, ParameterizedOperationsAnyOrder) {
       vsql::make_type<kParamsName>()
           .max_persisted_length(128)
           .params<TestParams, &TestParams::parse, &TestParams::to_strings>()
+          .resolve_params<&params_resolve>()
           .compare<&params_compare>()
           .to_string<&params_decode>()
           .from_string<&params_encode>()

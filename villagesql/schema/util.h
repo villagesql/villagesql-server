@@ -21,6 +21,7 @@
 #include "villagesql/schema/schema_manager.h"
 
 struct TABLE;
+class Table_ref;
 
 namespace villagesql {
 
@@ -60,6 +61,10 @@ inline bool is_villagesql_system_table(const char *schema_name,
 // This allows INFORMATION_SCHEMA views to query villagesql tables
 // without triggering InnoDB locking assertions.
 bool is_villagesql_system_table(const TABLE *table);
+
+// Number of tables reachable through the next_global chain from `first`
+// (0 if `first` is nullptr).
+uint count_global_tables(const Table_ref *first);
 
 }  // namespace villagesql
 
