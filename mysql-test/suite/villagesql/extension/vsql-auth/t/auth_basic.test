@@ -3,20 +3,32 @@
 # the do_auth_once VEF seam to the extension's handler.
 #
 # The vsql_auth_test extension registers method "vsql_auth_test": it accepts the
-# fixed token "vsql-auth-test-token" and maps to account vsql_auth_test_user.
+# fixed token "vsql-auth-test-token" and maps it to account vsql_auth_test_user.
 # It pairs with mysql_clear_password so the token arrives in the password slot
 # (client uses --enable_cleartext_plugin).
-
---source include/not_windows.inc
+#
+# Two accounts are involved because this exercises the identity-remap (proxy)
+# path -- the account you CONNECT AS differs from the account you RUN AS:
+#   - auth_user            : the account the client connects as. Bound to the
+#                            method (IDENTIFIED WITH vsql_auth_test), so it is
+#                            what actually authenticates.
+#   - vsql_auth_test_user  : the account the handler maps to. The session runs
+#                            AS this account (CURRENT_USER()), and it holds the
+#                            privileges. auth_user is exposed via @@external_user.
+# The auth_user -> vsql_auth_test_user hop uses MySQL's GRANT PROXY mechanism,
+# identical to the plugin auth path.
 
 --echo #
 --echo # Install the auth extension and bind an account to its method.
 --echo #
 INSTALL EXTENSION vsql_auth_test;
 
-# The handler maps the accepted token to vsql_auth_test_user; that account must
-# exist, and auth_user must be allowed to proxy onto it (identity remap goes
-# through MySQL's proxy mechanism, same as the plugin path).
+# auth_user connects; the handler maps it to vsql_auth_test_user, so both must
+# exist. The two GRANTs are what make the remap usable:
+#   - GRANT SELECT gives the mapped account (vsql_auth_test_user) something to
+#     do, proving the session really runs with its privileges.
+#   - GRANT PROXY lets auth_user assume vsql_auth_test_user's identity; without
+#     it the remap is denied, exactly as on the plugin auth path.
 CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
 CREATE USER vsql_auth_test_user;
 GRANT SELECT ON *.* TO vsql_auth_test_user;

@@ -11,7 +11,7 @@ GRANT PROXY ON vsql_auth_test_user TO auth_user;
 # original identity is exposed via @@external_user.
 #
 CURRENT_USER()	@@external_user
-vsql_auth_test_user@%	vsql_auth_test_user
+vsql_auth_test_user@%	auth_user
 #
 # Wrong token -> fail closed.
 #

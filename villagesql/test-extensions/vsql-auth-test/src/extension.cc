@@ -52,7 +52,9 @@ vef_auth_result_t authenticate(vef_auth_ctx_t *ctx, const vef_auth_ops_t *ops) {
   }
 
   ops->set_authenticated_as(ctx, kMappedAccount);
-  ops->set_external_user(ctx, kMappedAccount);
+  // @@external_user is the original identity for the audit trail: the account
+  // the client connected as, NOT the account we mapped to.
+  ops->set_external_user(ctx, ops->user_name(ctx));
   return VEF_AUTH_OK;
 }
 
