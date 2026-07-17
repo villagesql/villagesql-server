@@ -3,6 +3,9 @@ name: Build Server Branch
 # Builds the dev-server package for a SINGLE target, runs the integration
 # tests, and uploads the package + SDK as run-scoped artifacts.
 #
+# The bare minimum is to build the server, package it as a tarball, and upload
+# that artifact.  Everything else is optional, and enabled by default.
+#
 # Invoked once per target by release-server-branch (workflow_call), or manually
 # for one target (workflow_dispatch). Multi-target fan-out lives in
 # release-server-branch, which also owns the platform -> runner/os mapping and
@@ -38,6 +41,26 @@ on:
         description: 'JSON-encoded runs-on value (array or quoted string), e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
         required: true
         type: string
+      bundled_extensions:
+        description: 'Build (and test) the bundled extensions. Callers that build extensions separately (e.g. extension-compat-suite) pass false.'
+        required: false
+        type: boolean
+        default: true
+      run_unit_tests:
+        description: 'Run the server unit/MTR tests after building.'
+        required: false
+        type: boolean
+        default: true
+      run_integration_tests:
+        description: 'Run the packaged dev-server integration test after building.'
+        required: false
+        type: boolean
+        default: true
+      upload_sdk:
+        description: 'Upload the built extension SDK as a run-scoped artifact.'
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       ref:
@@ -71,6 +94,26 @@ on:
         required: true
         type: string
         default: '["self-hosted","linux","x86_64"]'
+      bundled_extensions:
+        description: 'Build (and test) the bundled extensions.'
+        required: false
+        type: boolean
+        default: true
+      run_unit_tests:
+        description: 'Run the server unit/MTR tests after building.'
+        required: false
+        type: boolean
+        default: true
+      run_integration_tests:
+        description: 'Run the packaged dev-server integration test after building.'
+        required: false
+        type: boolean
+        default: true
+      upload_sdk:
+        description: 'Upload the built extension SDK as a run-scoped artifact.'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -86,9 +129,10 @@ jobs:
       BUILD_DIR: ${{ github.workspace }}/build
       OUTPUT_DIR: ${{ github.workspace }}/output
       EXTS_ROOT: ${{ github.workspace }}/exts
-      RUN_UNIT_TESTS: "1"
-      RUN_INTEGRATION_TESTS: "1"
-      BUILD_BUNDLED_EXTENSIONS: "1"
+      RUN_UNIT_TESTS: ${{ inputs.run_unit_tests && '1' || '0' }}
+      RUN_INTEGRATION_TESTS: ${{ inputs.run_integration_tests && '1' || '0' }}
+      BUILD_BUNDLED_EXTENSIONS: ${{ inputs.bundled_extensions && '1' || '0' }}
+      UPLOAD_SDK: ${{ inputs.upload_sdk && '1' || '0' }}
       # SPOOKY ACTION AT A DISTANCE: Resolve the release/-dev decision once, at
       # job scope, so every step sees the same value. Scripts that re-derive the
       # version from VSQL_VERSION (get_sdk.sh, package_dev_server.sh) key off
@@ -104,9 +148,10 @@ jobs:
           echo "Release Bld: ${{ inputs.release_build }}"
           echo "OS: ${{ inputs.os }}"
           echo "Runner: ${{ inputs.runner }}"
-          echo "Run Unit Tests: $RUN_UNIT_TESTS"
-          echo "Run Integration Tests: $RUN_INTEGRATION_TESTS"
-          echo "Bundle Extension: $BUILD_BUNDLED_EXTENSIONS"
+          echo "Run Unit Tests: $RUN_UNIT_TESTS (${{ inputs.run_unit_tests }})"
+          echo "Run Integration Tests: $RUN_INTEGRATION_TESTS (${{ inputs.run_integration_tests }})"
+          echo "Bundle Extension: $BUILD_BUNDLED_EXTENSIONS (${{ inputs.bundled_extensions }})"
+          echo "Upload SDK: $UPLOAD_SDK (${{ inputs.upload_sdk }})"
 
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -157,10 +202,11 @@ jobs:
 
       - name: Run unit tests
         if: env.RUN_UNIT_TESTS == '1'
-        run: |
-          uses: ./source/.github/actions/run-tests
-          with:
-            artifact-name: unit-tests
+        uses: ./source/.github/actions/run-tests
+        with:
+          run-unit-tests: 'true'
+          run-integration-tests: 'false'
+          artifact-name: unit-tests
 
       - name: Build bundled extensions
         if: env.BUILD_BUNDLED_EXTENSIONS == '1'
@@ -202,6 +248,7 @@ jobs:
           path: ${{ env.OUTPUT_DIR }}/*.tar.gz
 
       - name: Upload SDK
+        if: env.UPLOAD_SDK == '1'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sdk-${{ inputs.platform }}
