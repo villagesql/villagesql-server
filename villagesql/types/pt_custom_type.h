@@ -155,6 +155,19 @@ class PT_custom_type : public PT_type {
       return true;
     }
 
+    // Fixed-length types must stay within the declared max_persisted_length
+    // upper bound.
+    if (!descriptor->is_variable_length() &&
+        resolved.persisted_length > descriptor->max_persisted_length()) {
+      thd->syntax_error_at(
+          pos,
+          "Type '%s' resolved a persisted_length (%" PRId64
+          ") that exceeds its declared max_persisted_length (%" PRId64 ")",
+          descriptor->qualified_base_name().c_str(), resolved.persisted_length,
+          descriptor->max_persisted_length());
+      return true;
+    }
+
     // Re-canonicalize in case resolve_params rewrote the params. from_raw
     // normalizes ordering/case; a no-op when the params were left unchanged.
     TypeParameters params = canonical_params == params_str
