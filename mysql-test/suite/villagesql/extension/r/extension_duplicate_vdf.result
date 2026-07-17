@@ -1,0 +1,11 @@
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("already exists");
+Creating extension dup_vdf using SDK...
+Created dup_vdf.veb
+# INSTALL fails: duplicate VDF name within one extension.
+INSTALL EXTENSION dup_vdf;
+ERROR HY000: Failed to install extension 'dup_vdf': VDF 'DUP_VDF' already exists
+# Verify extension was NOT installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'dup_vdf';
+EXTENSION_NAME	EXTENSION_VERSION
