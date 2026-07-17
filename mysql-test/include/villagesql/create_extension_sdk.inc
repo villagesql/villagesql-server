@@ -61,6 +61,14 @@ if (!$extension_version)
 # Copy source file
 --exec cp $extension_source $ext_build_dir/src/extension.cc
 
+# Optionally place a shared companion header next to extension.cc so the source
+# can #include it. Gated on $extension_common_header, so other consumers of this
+# include (which never set it) are unaffected.
+if ($extension_common_header)
+{
+  --exec cp $extension_common_header $ext_build_dir/src/
+}
+
 # Create manifest.json
 --exec printf '%s' '{"name": "$extension_name", "version": "$extension_version"$extension_manifest_extra}' > $ext_build_dir/manifest.json
 
@@ -105,3 +113,4 @@ if (!$extension_versioned)
 --let $extension_source =
 --let $extension_manifest_extra =
 --let $extension_versioned =
+--let $extension_common_header =
