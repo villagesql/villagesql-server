@@ -6,10 +6,9 @@ name: Build Server Branch
 # The bare minimum is to build the server, package it as a tarball, and upload
 # that artifact.  Everything else is optional, and enabled by default.
 #
-# Invoked once per target by release-server-branch (workflow_call), or manually
-# for one target (workflow_dispatch). Multi-target fan-out lives in
-# release-server-branch, which also owns the platform -> runner/os mapping and
-# passes the resolved runner and os in directly.
+# The server will be uploaded with the artifact name
+# devserver-${{ inputs.platform }}. The SDK (optional) will be uploaded with
+# the artifact name sdk-${{ inputs.platform }}.
 #
 # <github.workspace>
 # - source: clone of villagesql-server
