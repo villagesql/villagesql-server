@@ -25,7 +25,7 @@ FROM ubuntu:24.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies
-COPY scripts/setup_linux_build_env.sh /tmp/
+COPY villagesql/bld_tools/setup_linux_build_env.sh /tmp/
 RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/*
 
 # Copy source tree (excluding docker/ so script changes don't invalidate the
