@@ -76,12 +76,25 @@ bool register_validated_extension(THD &thd, ValidatedRegistration validated,
             type_name.c_str());
   }
 
+  // Detects a VDF registered more than once within this same extension batch.
+  // get_committed() below only sees already-committed descriptors, not the ones
+  // marked for insertion earlier in this loop, so a same-named duplicate inside
+  // one extension would otherwise slip through.
+  std::set<FuncKey> seen_func_keys;
+
   for (auto &descriptor : validated.funcs) {
     std::string func_name = descriptor.function_name();
     std::string ext_name = descriptor.extension_name();
 
     LogVSQL(INFORMATION_LEVEL, "Registering VDF '%s' from extension '%s'",
             func_name.c_str(), ext_name.c_str());
+
+    if (!seen_func_keys.insert(descriptor.key()).second) {
+      error_out = "VDF '" + func_name + "' already exists";
+      LogVSQL(ERROR_LEVEL, "Extension '%s': %s", ext_name.c_str(),
+              error_out.c_str());
+      return true;
+    }
 
     const FuncDescriptor *existing =
         victionary.funcs().get_committed(descriptor.key());
