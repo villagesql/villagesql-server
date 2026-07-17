@@ -135,7 +135,12 @@ class SystemTableMap {
 
   // Constructor takes pointer to parent's lock for assertions
   explicit SystemTableMap(mysql_rwlock_t *lock) : m_parent_lock(lock) {}
-  ~SystemTableMap() = default;
+
+  // Free any pending operations still staged at teardown. m_uncommitted holds
+  // an intrusive list that does not own its nodes, so a map destroyed with
+  // uncommitted operations (i.e. without a prior commit/rollback/clear) would
+  // otherwise leak them.
+  ~SystemTableMap() { delete_all_uncommitted(); }
 
   // Disable copy/move
   SystemTableMap(const SystemTableMap &) = delete;
@@ -509,7 +514,7 @@ class SystemTableMap {
   void clear() {
     assert_write_lock_held();
     m_committed.clear();
-    m_uncommitted.clear();
+    delete_all_uncommitted();
   }
 
   // ===== Table I/O (PERSISTENT mode only) =====
@@ -698,6 +703,23 @@ class SystemTableMap {
     // Try to acquire write lock - should fail if we have any lock
     assert(mysql_rwlock_trywrlock(m_parent_lock) != 0 &&
            "No lock held - able to acquire write lock");
+  }
+
+  // Delete every heap-allocated PendingOperation node across all THDs and empty
+  // the uncommitted map. SQL_I_List is intrusive and does not own its nodes, so
+  // they must be deleted explicitly, mirroring what commit()/rollback() do per
+  // THD. Used by clear() and the destructor; does not assert the lock so it is
+  // safe to call during teardown.
+  void delete_all_uncommitted() {
+    for (auto &[thd, list] : m_uncommitted) {
+      PendingOperation<EntryType> *op = list.first;
+      while (op) {
+        PendingOperation<EntryType> *next_op = op->next;
+        delete op;
+        op = next_op;
+      }
+    }
+    m_uncommitted.clear();
   }
 
   // Note: No locks - parent VictionaryClient's lock protects all access
