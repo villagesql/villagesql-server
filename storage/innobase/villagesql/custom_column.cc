@@ -141,6 +141,8 @@ void Custom_column::load(dict_table_t *table, dict_col_t *col,
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Error loading extended column store: " << error_msg;
     col->custom_column->set_storage_ctx(nullptr);
+  } else {
+    custom_column->storage_ctx_->ref = storage_ref;
   }
 }
 
