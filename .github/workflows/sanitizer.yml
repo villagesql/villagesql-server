@@ -73,8 +73,37 @@ jobs:
         PARALLEL_JOBS: 16
         CMAKE_EXTRA_FLAGS: -DWITH_ASAN=1 -DWITH_UBSAN=1
 
-    - name: Run sanitizer tests (unit + village suite)
+    # Run the unit tests and the mtr suite as independent steps so a failure in
+    # one does not prevent the other from running. test_ci.sh uses `set -e`, so
+    # a single combined invocation aborts at the first failing phase; splitting
+    # them (each continue-on-error) plus a final gate surfaces every failure in
+    # one run. Within each phase all tests still run: LeakSanitizer reports at
+    # process exit, and mtr already runs with --force --max-test-fail=0.
+    - name: Run VillageSQL unit tests (sanitizers)
+      id: unit
+      continue-on-error: true
       uses: ./source/.github/actions/run-tests
       with:
+        run-integration-tests: false
+        artifact-name: sanitizer-unit-logs-${{ github.run_number }}
+
+    - name: Run VillageSQL mtr suite (sanitizers)
+      id: mtr
+      continue-on-error: true
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-unit-tests: false
         mysql-test-extra-flags: --sanitize
-        artifact-name: sanitizer-logs-${{ github.run_number }}
+        artifact-name: sanitizer-mtr-logs-${{ github.run_number }}
+
+    - name: Fail if any sanitizer phase failed
+      if: always()
+      run: |
+        echo "Unit tests: ${{ steps.unit.outcome }}"
+        echo "MTR suite:  ${{ steps.mtr.outcome }}"
+        if [ "${{ steps.unit.outcome }}" != "success" ] || \
+           [ "${{ steps.mtr.outcome }}" != "success" ]; then
+          echo "::error::One or more sanitizer test phases failed; see the step logs and uploaded artifacts."
+          exit 1
+        fi
+        echo "All sanitizer test phases passed."
