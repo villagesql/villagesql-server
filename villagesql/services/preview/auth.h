@@ -36,7 +36,7 @@ namespace villagesql::services {
 
 // The "vsql::preview::auth" capability owns its own in-memory registry of
 // extension-provided auth methods (name -> handler config), entirely within
-// this capability -- no auth-specific code lives in the core victionary or the
+// this capability -- no auth-specific code lives in the core persistence or the
 // veb DDL path. An auth method is a runtime callback registration (a handler
 // pointer valid only while the .so is loaded), not persisted state, so it is
 // registered on extension load via on_populate and removed on unload via

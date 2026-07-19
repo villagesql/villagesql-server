@@ -38,9 +38,11 @@ using AuthCtx = vef_auth_ctx_t;
 
 // AuthCapability lets an extension register a single authentication method.
 // Construct it with the method name accounts bind to (CREATE USER ...
-// IDENTIFIED WITH <name>) and the handler the server invokes during the
-// handshake. Optionally pin the client-side auth plugin (e.g.
-// "mysql_clear_password" to receive a bearer token verbatim).
+// IDENTIFIED WITH <name>), the handler the server invokes during the handshake,
+// and the client-side auth plugin to pin (e.g. "mysql_clear_password" to
+// receive a bearer token verbatim). The client plugin is required -- the server
+// advertises exactly it during the handshake and rejects a method that leaves
+// it unset at INSTALL EXTENSION.
 //
 // Usage:
 //   static vef_auth_result_t my_authenticate(vef_auth_ctx_t *ctx,
@@ -52,12 +54,13 @@ using AuthCtx = vef_auth_ctx_t;
 //     return VEF_AUTH_OK;
 //   }
 //
-//   static vsql::preview_auth::AuthCapability g_auth{"my_auth",
-//   &my_authenticate}; VEF_GENERATE_ENTRY_POINTS(make_extension().with(g_auth))
+//   static vsql::preview_auth::AuthCapability g_auth{
+//       "my_auth", &my_authenticate, "mysql_clear_password"};
+//   VEF_GENERATE_ENTRY_POINTS(make_extension().with(g_auth))
 class AuthCapability : public ::vsql::detail::CapabilityBase<AuthCapability> {
  public:
   AuthCapability(const char *name, vef_auth_authenticate_func_t handler,
-                 const char *client_auth_plugin = nullptr) {
+                 const char *client_auth_plugin) {
     cc.name = name;
     cc.handler = handler;
     cc.client_auth_plugin = client_auth_plugin;

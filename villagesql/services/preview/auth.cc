@@ -35,7 +35,7 @@
 // The VEF auth ctx is just the connection's MPVIO_EXT. The extension handler
 // only ever sees vef_auth_ctx_t (opaque) + the ops table, so it never touches
 // MySQL internals directly.
-struct vef_auth_ctx_s {
+struct vef_auth_ctx_t {
   MPVIO_EXT *mpvio;
 };
 

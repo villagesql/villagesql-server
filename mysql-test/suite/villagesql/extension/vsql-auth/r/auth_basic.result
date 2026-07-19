@@ -33,7 +33,7 @@ ERROR 2059 (HY000): Authentication plugin 'mysql_clear_password' cannot be loade
 #
 UNINSTALL EXTENSION vsql_auth_test;
 mysql: [Warning] Using a password on the command line interface can be insecure.
-ERROR 1524 (HY000): Plugin 'vsql_auth_test' is not loaded
+ERROR 3219 (HY000): authentication method 'vsql_auth_test' is not available (no such plugin or extension auth method)
 #
 # Cleanup.
 #

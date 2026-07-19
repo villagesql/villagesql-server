@@ -16,11 +16,18 @@
 // VEF PREVIEW ABI HEADER -- UNSTABLE BINARY INTERFACE
 // =============================================================================
 // This header is both:
-//   - an ABI header -- extension authors should use the C++ API in
-//     <villagesql/vsql.h>, not these raw types. See villagesql/abi/README.md.
+//   - an ABI header -- these are the raw C types on the wire. Extension authors
+//     should use the C++ API in <villagesql/preview/auth.h> instead. (Preview
+//     capabilities are NOT surfaced through the stable <villagesql/vsql.h>
+//     umbrella; they are included explicitly.) See villagesql/abi/README.md.
 //   - a preview capability -- API and ABI may change or be removed without
 //     notice. See villagesql/preview/README.md.
 // =============================================================================
+//
+// TODO(villagesql): the other preview ABI headers (index, keyring, ping,
+// sql_query, statement_event, status_var, storage, sys_var, thread_worker) still
+// carry the old banner pointing authors at <villagesql/vsql.h>, which does not
+// include any preview capability. Sweep the same fix across all of them.
 
 #ifndef VILLAGESQL_ABI_PREVIEW_AUTH_H
 #define VILLAGESQL_ABI_PREVIEW_AUTH_H
@@ -70,10 +77,12 @@ typedef enum {
 // Opaque per-attempt context. The extension holds it only for the duration of
 // one authenticate call and uses the accessor vtable below; it must not retain
 // the pointer. Backed server-side by the handshake VIO + auth info.
-typedef struct vef_auth_ctx_s vef_auth_ctx_t;
+typedef struct vef_auth_ctx_t vef_auth_ctx_t;
 
 // Server-provided operations on the context. The server fills this vtable and
-// points the ctx at it; the extension only calls through it.
+// points the ctx at it; the extension only calls through it. Every function
+// pointer below is always populated by the server -- none are optional, so the
+// extension may call any of them without a null check.
 //
 // All const char* outputs are valid only for the duration of the handler call
 // (copy before returning if needed). Setters copy their input.
@@ -119,14 +128,17 @@ typedef vef_auth_result_t (*vef_auth_authenticate_func_t)(
 
 // Capability config (cc), filled in by the extension and passed to the server
 // via vef_required_capability_t.capability_config. Stored opaquely in the
-// victionary auth registry; the auth seam casts back to this. `name` is the
+// capability's auth registry; the auth seam casts back to this. `name` is the
 // auth-method name accounts bind to (IDENTIFIED WITH <name>); `handler` must
 // remain valid for the lifetime of the extension.
 typedef struct {
   const char *name;
   vef_auth_authenticate_func_t handler;
-  // Optional: the client-side auth plugin the server should require (e.g.
-  // "mysql_clear_password" to receive a bearer token). NULL = any.
+  // Required: the single client-side auth plugin the server pins for this
+  // method (e.g. "mysql_clear_password" to receive a bearer token). The server
+  // advertises exactly this plugin to the client during the handshake. Must be
+  // non-null and non-empty -- a method that leaves it unset is rejected at
+  // INSTALL EXTENSION.
   const char *client_auth_plugin;
 } vef_auth_cc_t;
 

@@ -103,6 +103,7 @@
 #include "string_with_len.h"
 #include "strmake.h"
 #include "template_utils.h"
+#include "villagesql/include/error.h"
 #include "villagesql/services/preview/auth.h"
 #include "violite.h"
 
@@ -3591,7 +3592,14 @@ static int do_auth_once(THD *thd, const LEX_CSTRING &auth_plugin_name,
     Host_errors errors;
     errors.m_no_auth_plugin = 1;
     inc_host_errors(mpvio->ip, &errors);
-    my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0), auth_plugin_name.str);
+    // VillageSQL: the account's auth method resolved to neither a loaded MySQL
+    // plugin nor a registered VEF extension auth method (e.g. its extension was
+    // uninstalled). "Plugin ... is not loaded" is misleading for the extension
+    // case and the two are indistinguishable here, so report a neutral
+    // VillageSQL error covering both.
+    villagesql_error("authentication method '%s' is not available "
+                     "(no such plugin or extension auth method)",
+                     MYF(0), auth_plugin_name.str);
     res = CR_ERROR;
   }
 
