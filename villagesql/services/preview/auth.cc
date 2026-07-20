@@ -27,6 +27,7 @@
 #include "mysql/plugin_auth_common.h"
 #include "mysqld_error.h"
 #include "sql/auth/sql_authentication.h"
+#include "sql/hostname_cache.h"  // Host_errors, inc_host_errors
 #include "strmake.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/systable/helpers.h"
@@ -278,6 +279,35 @@ bool try_vef_authenticate(THD *thd [[maybe_unused]],
   if (outcome == VefAuthOutcome::kNotVef) return false;
   *res = (outcome == VefAuthOutcome::kAccepted) ? CR_OK : CR_ERROR;
   return true;
+}
+
+int vsql_do_auth_once(THD *thd, const MYSQL_LEX_CSTRING &auth_plugin_name,
+                      MPVIO_EXT *mpvio) {
+  int res = CR_OK;
+  const int old_status = mpvio->status;
+  mpvio->plugin = nullptr;  // a VEF method has no MySQL plugin
+
+  if (!try_vef_authenticate(thd, auth_plugin_name, mpvio, &res)) {
+    // Neither a loaded MySQL plugin nor a registered VEF extension auth method
+    // (e.g. the extension was uninstalled). "Plugin ... is not loaded" is
+    // misleading for the extension case and the two are indistinguishable here,
+    // so report a neutral VillageSQL error covering both.
+    Host_errors errors;
+    errors.m_no_auth_plugin = 1;
+    inc_host_errors(mpvio->ip, &errors);
+    villagesql_error(
+        "authentication method '%s' is not available "
+        "(no such plugin or extension auth method)",
+        MYF(0), auth_plugin_name.str);
+    res = CR_ERROR;
+  }
+
+  // Mirror do_auth_once()'s tail: a handler that never called read/write leaves
+  // the status at RESTART; reset it so the caller sees a terminal state.
+  if (old_status == MPVIO_EXT::RESTART && mpvio->status == MPVIO_EXT::RESTART)
+    mpvio->status = MPVIO_EXT::FAILURE;
+
+  return res;
 }
 
 }  // namespace villagesql::services

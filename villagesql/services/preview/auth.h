@@ -134,15 +134,17 @@ VefAuthOutcome run_vef_authenticate(
     std::string_view method_name, vef_auth_ctx_t *ctx,
     const vef_auth_ops_t *ops, const VefClientPluginSink &on_client_plugin);
 
-// The MySQL-side handshake adapter. Bridges the server's MPVIO_EXT handshake
-// context to the VEF auth ABI (building the vef_auth_ops_t table over
-// MPVIO_EXT) and drives run_vef_authenticate. Called from do_auth_once() in
-// sql/auth/sql_authentication.cc when the auth method name is not a loaded
-// MySQL plugin. Returns true if a VEF method handled the attempt (setting *res
-// to CR_OK/CR_ERROR, fail closed); false if no such method is registered, so
-// the caller falls back to the plugin-not-loaded error.
-bool try_vef_authenticate(THD *thd, const MYSQL_LEX_CSTRING &auth_plugin_name,
-                          MPVIO_EXT *mpvio, int *res);
+// The do_auth_once() equivalent for a VEF extension-provided auth method (the
+// account's method is not a loaded MySQL plugin). Bridges the server's
+// MPVIO_EXT handshake context to the VEF auth ABI, drives the extension's
+// handler, and returns a CR_OK/CR_ERROR result (fail closed). If the name is
+// neither a plugin nor a registered VEF method (e.g. its extension was
+// uninstalled), reports a neutral VillageSQL "method not available" error.
+// Called from acl_authenticate() in sql/auth/sql_authentication.cc, which
+// routes here instead of the stock do_auth_once() when the method is not a
+// MySQL plugin -- keeping do_auth_once() itself vanilla.
+int vsql_do_auth_once(THD *thd, const MYSQL_LEX_CSTRING &auth_plugin_name,
+                      MPVIO_EXT *mpvio);
 
 }  // namespace villagesql::services
 

@@ -103,7 +103,6 @@
 #include "string_with_len.h"
 #include "strmake.h"
 #include "template_utils.h"
-#include "villagesql/include/error.h"
 #include "villagesql/services/preview/auth.h"
 #include "violite.h"
 
@@ -1157,10 +1156,6 @@ const uint MAX_UNKNOWN_ACCOUNTS = 1000;
 Map_with_rw_lock<Auth_id, uint> *unknown_accounts = nullptr;
 
 inline const char *client_plugin_name(plugin_ref ref) {
-  // VillageSQL: ref may be null for a VEF extension-provided auth method, which
-  // has no MySQL plugin. Callers that can receive a VEF auth (e.g.
-  // server_mpvio_read_packet) already handle a null return.
-  if (ref == nullptr) return nullptr;
   return ((st_mysql_auth *)(plugin_decl(ref)->info))->client_auth_plugin;
 }
 
@@ -3583,23 +3578,12 @@ static int do_auth_once(THD *thd, const LEX_CSTRING &auth_plugin_name,
     res = auth->authenticate_user(mpvio, &mpvio->auth_info);
 
     if (unlock_plugin) plugin_unlock(thd, plugin);
-  } else if (villagesql::services::try_vef_authenticate(thd, auth_plugin_name,
-                                                        mpvio, &res)) {
-    // VillageSQL: handled by a VEF extension-provided authenticator (res set,
-    // fail closed).
   } else {
     /* Server cannot load the required plugin. */
     Host_errors errors;
     errors.m_no_auth_plugin = 1;
     inc_host_errors(mpvio->ip, &errors);
-    // VillageSQL: the account's auth method resolved to neither a loaded MySQL
-    // plugin nor a registered VEF extension auth method (e.g. its extension was
-    // uninstalled). "Plugin ... is not loaded" is misleading for the extension
-    // case and the two are indistinguishable here, so report a neutral
-    // VillageSQL error covering both.
-    villagesql_error("authentication method '%s' is not available "
-                     "(no such plugin or extension auth method)",
-                     MYF(0), auth_plugin_name.str);
+    my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0), auth_plugin_name.str);
     res = CR_ERROR;
   }
 
@@ -4096,7 +4080,16 @@ int acl_authenticate(THD *thd, enum_server_command command) {
            my_strcasecmp(system_charset_info, auth_plugin_name.str,
                          mpvio.acl_user->plugin.str));
     auth_plugin_name = mpvio.acl_user->plugin;
-    res = do_auth_once(thd, auth_plugin_name, &mpvio);
+    // VillageSQL: if the account's method is not a loaded MySQL auth plugin,
+    // route to the VEF dispatcher. It authenticates a registered VEF method, or
+    // reports a neutral "method not available" error if the name is neither a
+    // plugin nor a VEF method (e.g. its extension was uninstalled). A real
+    // plugin stays on the stock path, keeping do_auth_once() itself vanilla.
+    if (!plugin_is_ready(auth_plugin_name, MYSQL_AUTHENTICATION_PLUGIN))
+      res = villagesql::services::vsql_do_auth_once(thd, auth_plugin_name,
+                                                    &mpvio);
+    else
+      res = do_auth_once(thd, auth_plugin_name, &mpvio);
   }
 
   if (res == CR_OK) {

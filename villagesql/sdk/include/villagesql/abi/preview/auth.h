@@ -25,9 +25,10 @@
 // =============================================================================
 //
 // TODO(villagesql): the other preview ABI headers (index, keyring, ping,
-// sql_query, statement_event, status_var, storage, sys_var, thread_worker) still
-// carry the old banner pointing authors at <villagesql/vsql.h>, which does not
-// include any preview capability. Sweep the same fix across all of them.
+// sql_query, statement_event, status_var, storage, sys_var, thread_worker)
+// still carry the old banner pointing authors at <villagesql/vsql.h>, which
+// does not include any preview capability. Sweep the same fix across all of
+// them.
 
 #ifndef VILLAGESQL_ABI_PREVIEW_AUTH_H
 #define VILLAGESQL_ABI_PREVIEW_AUTH_H
