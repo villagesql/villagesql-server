@@ -16,7 +16,6 @@
 #ifndef VILLAGESQL_SERVICES_PREVIEW_AUTH_H
 #define VILLAGESQL_SERVICES_PREVIEW_AUTH_H
 
-#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -103,36 +102,6 @@ bool auth_method_exists(std::string_view method_name);
 // hash.
 std::optional<bool> handle_vef_user_bind(std::string_view method_name,
                                          bool uses_identified_by_clause);
-
-// Outcome of driving a VEF authenticator for a connection.
-enum class VefAuthOutcome {
-  kNotVef,    // method_name is not a VEF auth method (fall back to plugins)
-  kAccepted,  // the extension authenticated the connection
-  kRejected,  // the extension declined (fail closed)
-};
-
-// Called once, under the auth-method reference, with the client-side auth
-// plugin name the VEF method pins (e.g. "mysql_clear_password"), or nullptr if
-// it pins none. The seam uses it to stash the name on the connection before the
-// handler's first read_packet triggers the handshake change-plugin request. The
-// pointer is only valid for the duration of this callback's owning
-// run_vef_authenticate() call (the extension stays loaded until it returns), so
-// the callback must copy it if it needs it to persist.
-using VefClientPluginSink = std::function<void(const char *client_plugin)>;
-
-// Drive a VEF extension-provided authenticator by method name. Fail-closed:
-// anything other than an explicit accept from the handler maps to kRejected. It
-// does NOT touch MySQL internals -- it talks to the extension handler purely
-// through the ABI ctx/ops the caller (sql/) supplies.
-//
-//   ctx / ops        : the server-owned handshake adapter (built in sql/, which
-//                      owns MPVIO_EXT); passed opaquely to the handler.
-//   on_client_plugin : invoked once, BEFORE the handler runs and while the
-//                      auth-method reference is held, with the pinned
-//                      client-plugin name.
-VefAuthOutcome run_vef_authenticate(
-    std::string_view method_name, vef_auth_ctx_t *ctx,
-    const vef_auth_ops_t *ops, const VefClientPluginSink &on_client_plugin);
 
 // The do_auth_once() equivalent for a VEF extension-provided auth method (the
 // account's method is not a loaded MySQL plugin). Bridges the server's

@@ -27,7 +27,7 @@
 #include "mysql/plugin_auth_common.h"
 #include "mysqld_error.h"
 #include "sql/auth/sql_authentication.h"
-#include "sql/hostname_cache.h"  // Host_errors, inc_host_errors
+#include "sql/hostname_cache.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/systable/helpers.h"
@@ -225,73 +225,55 @@ std::optional<bool> handle_vef_user_bind(std::string_view method_name,
   return false;
 }
 
-VefAuthOutcome run_vef_authenticate(
-    std::string_view method_name, vef_auth_ctx_t *ctx,
-    const vef_auth_ops_t *ops, const VefClientPluginSink &on_client_plugin) {
-  // Hold an in-flight reference for the ENTIRE handler call, so the extension's
-  // .so cannot be dlclose'd out from under a login in flight. on_depopulate
-  // (extension unload) removes the method then drains outstanding references
-  // before returning, so an unload that races this login waits for it to
-  // finish. The ref must be taken BEFORE the lookup and held across the handler
-  // call and client-plugin resolution below.
-  AuthMethodRef ref;
-  const vef_auth_cc_t *cc = find_auth_method(method_name);
-  if (cc == nullptr) return VefAuthOutcome::kNotVef;
-
-  // Registered but no handler -> fail closed (but it IS a VEF method).
-  if (cc->handler == nullptr) return VefAuthOutcome::kRejected;
-
-  // Hand the pinned client-plugin name to the caller under the SAME held
-  // reference, before driving the handler. Resolving it here (rather than via a
-  // separate ref-less lookup) is what keeps the pointer from dangling if the
-  // extension is uninstalled between resolution and use.
-  on_client_plugin(cc->client_auth_plugin);
-
-  // Run the extension's authenticator over the caller-supplied ctx/ops. Fail
-  // closed: only an explicit VEF_AUTH_OK accepts.
-  const vef_auth_result_t r = cc->handler(ctx, ops);
-  return (r == VEF_AUTH_OK) ? VefAuthOutcome::kAccepted
-                            : VefAuthOutcome::kRejected;
-}
-
-bool try_vef_authenticate(THD *thd [[maybe_unused]],
-                          const MYSQL_LEX_CSTRING &auth_plugin_name,
-                          MPVIO_EXT *mpvio, int *res) {
-  const std::string_view method_name(auth_plugin_name.str,
-                                     auth_plugin_name.length);
-
+// Drive a VEF extension-provided authenticator for a login. Looks the method
+// up by name, holds an in-flight reference across the whole handler call (so
+// the extension .so cannot be dlclose'd out from under a login -- on_depopulate
+// drains outstanding references before returning), and runs the handler over an
+// ops table built on this connection's MPVIO_EXT. Fail closed: only an explicit
+// VEF_AUTH_OK accepts. Internal to this file; the public seam is
+// vsql_do_auth_once() below.
+// Drive an already-resolved VEF auth method's handler for this login. The
+// caller passes a `cc` obtained from find_auth_method() while holding an
+// AuthMethodRef, so the config/.so stays alive for the whole call. Returns true
+// on failure (no handler, or the handler declined) -- fail closed: only an
+// explicit VEF_AUTH_OK succeeds. Internal to this file.
+static bool try_vef_authenticate(const vef_auth_cc_t *cc, MPVIO_EXT *mpvio) {
   // A VEF method has no MySQL plugin.
   mpvio->plugin = nullptr;
 
-  // The client-side plugin the handshake should advertise comes from the
-  // method's config. run_vef_authenticate resolves it under the auth-method
-  // reference and hands it to this sink before driving the handler; we stash it
-  // on mpvio so the handler's first read_packet -- which triggers the handshake
-  // change-plugin request read via mpvio_client_plugin_name() -- sees it.
-  // Resolving under the held reference (not a separate ref-less lookup) avoids
-  // a use-after-free of the extension-owned string.
-  vef_auth_ctx_t ctx{mpvio};
-  const VefAuthOutcome outcome = run_vef_authenticate(
-      method_name, &ctx, &g_vef_auth_ops, [mpvio](const char *client_plugin) {
-        mpvio->vef_client_auth_plugin = client_plugin;
-      });
+  // Registered but no handler -> fail closed.
+  if (cc->handler == nullptr) return true;
 
-  if (outcome == VefAuthOutcome::kNotVef) return false;
-  *res = (outcome == VefAuthOutcome::kAccepted) ? CR_OK : CR_ERROR;
-  return true;
+  // Stash the method's pinned client-plugin name on the connection before
+  // driving the handler: the handler's first read_packet triggers the handshake
+  // change-plugin request that reads it back via mpvio_client_plugin_name().
+  mpvio->vef_client_auth_plugin = cc->client_auth_plugin;
+
+  // Run the extension's authenticator over an ops table on this MPVIO_EXT.
+  vef_auth_ctx_t ctx{mpvio};
+  return cc->handler(&ctx, &g_vef_auth_ops) != VEF_AUTH_OK;
 }
 
-int vsql_do_auth_once(THD *thd, const MYSQL_LEX_CSTRING &auth_plugin_name,
+int vsql_do_auth_once(THD *thd [[maybe_unused]],
+                      const MYSQL_LEX_CSTRING &auth_plugin_name,
                       MPVIO_EXT *mpvio) {
   int res = CR_OK;
   const int old_status = mpvio->status;
-  mpvio->plugin = nullptr;  // a VEF method has no MySQL plugin
 
-  if (!try_vef_authenticate(thd, auth_plugin_name, mpvio, &res)) {
-    // Neither a loaded MySQL plugin nor a registered VEF extension auth method
-    // (e.g. the extension was uninstalled). "Plugin ... is not loaded" is
-    // misleading for the extension case and the two are indistinguishable here,
-    // so report a neutral VillageSQL error covering both.
+  // Hold an in-flight reference across BOTH the lookup and the handler call, so
+  // a racing UNINSTALL EXTENSION drains behind us rather than freeing the
+  // config / dlclose'ing the .so mid-login.
+  AuthMethodRef ref;
+  const std::string_view method_name(auth_plugin_name.str,
+                                     auth_plugin_name.length);
+  const vef_auth_cc_t *cc = find_auth_method(method_name);
+
+  if (cc == nullptr) {
+    // The method is neither a loaded MySQL plugin (the caller already ruled
+    // that out) nor a registered VEF extension auth method -- e.g. the
+    // extension was uninstalled. "Plugin ... is not loaded" is misleading for
+    // the extension case and the two are indistinguishable here, so report a
+    // neutral VillageSQL error covering both.
     Host_errors errors;
     errors.m_no_auth_plugin = 1;
     inc_host_errors(mpvio->ip, &errors);
@@ -300,6 +282,8 @@ int vsql_do_auth_once(THD *thd, const MYSQL_LEX_CSTRING &auth_plugin_name,
         "(no such plugin or extension auth method)",
         MYF(0), auth_plugin_name.str);
     res = CR_ERROR;
+  } else {
+    res = try_vef_authenticate(cc, mpvio) ? CR_ERROR : CR_OK;
   }
 
   // Mirror do_auth_once()'s tail: a handler that never called read/write leaves
