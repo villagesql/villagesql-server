@@ -80,6 +80,12 @@ struct WorkerState {
   std::thread thread;
   std::atomic<vef_thread_handle_t *> handle{kHandlePending};
 
+  // Serializes signal_stop() (run by the stopping thread) against the
+  // background thread's handle teardown, so the handle and its THD cannot be
+  // freed out from under an in-progress signal_stop(). Lives in WorkerState,
+  // which outlives the handle, so it stays valid across the teardown.
+  std::mutex stop_mu;
+
   // Current dynamic wakeup config, updated from work_fn return values.
   int current_poll_fd{-1};
   unsigned int current_sleep_ms{0};
@@ -294,8 +300,15 @@ static void thread_main(WorkerState *state) {
     }
 
     desc->work_fn(VEF_WAKEUP_DISABLE, handle, desc->arg);
-    state->handle.store(nullptr, std::memory_order_release);
-    destroy_thread_handle(handle);
+
+    // Publish nullptr and free the handle under stop_mu so that a concurrent
+    // worker_stop()/signal_stop() cannot dereference the handle, nor its THD,
+    // after it has been freed.
+    {
+      std::lock_guard<std::mutex> lock(state->stop_mu);
+      state->handle.store(nullptr, std::memory_order_release);
+      destroy_thread_handle(handle);
+    }
   }
 }
 
@@ -324,7 +337,14 @@ static void worker_stop(WorkerState *state) {
          kHandlePending) {
     std::this_thread::yield();
   }
-  if (handle != nullptr) signal_stop(handle);
+  // Signal the worker while holding stop_mu so its teardown cannot race with
+  // signal_stop(). The handle is re-read under the lock because the worker may
+  // already have torn down and published nullptr.
+  {
+    std::lock_guard<std::mutex> lock(state->stop_mu);
+    handle = state->handle.load(std::memory_order_acquire);
+    if (handle != nullptr) signal_stop(handle);
+  }
   state->thread.join();
 }
 
