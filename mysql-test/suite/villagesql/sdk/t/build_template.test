@@ -40,14 +40,18 @@
 --exec mkdir -p $sdk_dir/template/build
 
 # Run cmake
+# unset LD_PRELOAD so the toolchain sub-build does not run under the
+# LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise the uninstrumented
+# system gcc trips LeakSanitizer on GCC's own allocations and fails the build
+# (see include/villagesql/create_extension_sdk.inc for the full explanation).
 --echo # Running cmake...
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---exec cd $sdk_dir/template/build && cmake .. > cmake_output.txt 2>&1
+--exec cd $sdk_dir/template/build && unset LD_PRELOAD && cmake .. > cmake_output.txt 2>&1
 
 # Run make
 --echo # Running make...
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---exec cd $sdk_dir/template/build && make > make_output.txt 2>&1
+--exec cd $sdk_dir/template/build && unset LD_PRELOAD && make > make_output.txt 2>&1
 
 --echo # Verify VEB was created
 --file_exists $sdk_dir/template/build/my_extension.veb

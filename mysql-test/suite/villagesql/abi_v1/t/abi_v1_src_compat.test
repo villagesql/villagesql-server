@@ -24,8 +24,12 @@
 --echo # Building test extension against current SDK
 --exec rm -rf $test_dir
 --exec mkdir -p $test_dir/build
---exec sh -c "stable_sdk=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_stable_sdk.txt) && src_dir=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_source_dir.txt) && dev_inc=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_dev_sdk_include.txt) && cmake -S \$stable_sdk/test_extension -B $test_dir/build -DCMAKE_PREFIX_PATH=\$src_dir -DVillageSQLExtensionFramework_INCLUDE_DIR=\$dev_inc > $test_dir/cmake_out.txt 2>&1"
---exec sh -c "cmake --build $test_dir/build > $test_dir/make_out.txt 2>&1"
+# unset LD_PRELOAD so the toolchain sub-build does not run under the
+# LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise the uninstrumented
+# system gcc trips LeakSanitizer on GCC's own allocations and fails the build
+# (see include/villagesql/create_extension_sdk.inc for the full explanation).
+--exec sh -c "unset LD_PRELOAD && stable_sdk=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_stable_sdk.txt) && src_dir=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_source_dir.txt) && dev_inc=\$(cat $MYSQLTEST_VARDIR/tmp/vsql_dev_sdk_include.txt) && cmake -S \$stable_sdk/test_extension -B $test_dir/build -DCMAKE_PREFIX_PATH=\$src_dir -DVillageSQLExtensionFramework_INCLUDE_DIR=\$dev_inc > $test_dir/cmake_out.txt 2>&1"
+--exec sh -c "unset LD_PRELOAD && cmake --build $test_dir/build > $test_dir/make_out.txt 2>&1"
 
 --echo # Verify VEB was created
 --file_exists $test_dir/build/abi_v1_test.veb
