@@ -73,7 +73,7 @@ class AuthMethodRef {
 // --- Seam for core MySQL auth (sql/auth/) ---
 // The auth capability's core-facing entry points, called by core auth in
 // sql/auth/ (sql_user.cc for CREATE USER, sql_authentication.cc for the login
-// handshake via try_vef_authenticate below). Core calls these directly rather
+// handshake via vsql_do_auth_once() below). Core calls these directly rather
 // than reaching into the registry internals above -- mirroring how
 // sql/sql_audit.cc calls on_statement_postexecute() directly.
 

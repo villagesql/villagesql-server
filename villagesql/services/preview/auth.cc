@@ -225,13 +225,6 @@ std::optional<bool> handle_vef_user_bind(std::string_view method_name,
   return false;
 }
 
-// Drive a VEF extension-provided authenticator for a login. Looks the method
-// up by name, holds an in-flight reference across the whole handler call (so
-// the extension .so cannot be dlclose'd out from under a login -- on_depopulate
-// drains outstanding references before returning), and runs the handler over an
-// ops table built on this connection's MPVIO_EXT. Fail closed: only an explicit
-// VEF_AUTH_OK accepts. Internal to this file; the public seam is
-// vsql_do_auth_once() below.
 // Drive an already-resolved VEF auth method's handler for this login. The
 // caller passes a `cc` obtained from find_auth_method() while holding an
 // AuthMethodRef, so the config/.so stays alive for the whole call. Returns true
@@ -241,8 +234,9 @@ static bool try_vef_authenticate(const vef_auth_cc_t *cc, MPVIO_EXT *mpvio) {
   // A VEF method has no MySQL plugin.
   mpvio->plugin = nullptr;
 
-  // Registered but no handler -> fail closed.
-  if (cc->handler == nullptr) return true;
+  // on_populate_auth rejects a null handler at INSTALL, so a registered method
+  // always has one. Assert the invariant (and fail closed in release).
+  if (should_assert_if_null(cc->handler)) return true;
 
   // Stash the method's pinned client-plugin name on the connection before
   // driving the handler: the handler's first read_packet triggers the handshake
