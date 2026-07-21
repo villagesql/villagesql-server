@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -92,6 +93,12 @@ struct MPVIO_EXT : public MYSQL_PLUGIN_VIO {
   Thd_charset_adapter *charset_adapter;
   LEX_CSTRING acl_user_plugin;
   int vio_is_encrypted;
+  // VillageSQL: for a VEF extension-provided auth method there is no MySQL
+  // plugin (`plugin` is null), so the client-side auth plugin the handshake
+  // should advertise/expect comes from the method's config instead of from
+  // client_plugin_name(plugin). Set by the VEF auth seam before invoking the
+  // handler; nullptr for normal plugin-based auth.
+  const char *vef_client_auth_plugin;
   bool can_authenticate();
 };
 

@@ -29,6 +29,7 @@
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/thread_worker.h"
+#include "villagesql/services/preview/auth.h"
 #include "villagesql/services/preview/column_store.h"
 #include "villagesql/services/preview/index_profile.h"
 #include "villagesql/services/preview/index_type.h"
@@ -162,6 +163,15 @@ void register_builtin_capabilities() {
                       {.vtable = preview_index_type_vtable(),
                        .vtable_hash = "ver-1",
                        .capability_config_hash = "ver-1"});
+  // Auth: on_populate validates the method config and adds it to the auth
+  // capability's own in-memory registry; on_depopulate removes it and drains
+  // any in-flight login before unload. No auth-specific code in core.
+  register_capability(VEF_PREVIEW_AUTH_NAME,
+                      {.vtable = preview_auth_vtable(),
+                       .vtable_hash = "ver-1",
+                       .capability_config_hash = "ver-1",
+                       .on_populate = on_populate_auth,
+                       .on_depopulate = on_depopulate_auth});
   register_capability(VEF_PREVIEW_INDEX_PROFILE_NAME,
                       {.vtable = preview_index_profile_vtable(),
                        .vtable_hash = "ver-1",
