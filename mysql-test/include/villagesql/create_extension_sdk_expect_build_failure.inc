@@ -57,11 +57,15 @@ if ($extension_common_header)
 
 --echo Attempting to build $extension_name (expecting build failure)...
 
+# unset LD_PRELOAD so the toolchain sub-build does not run under the
+# LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise the uninstrumented
+# system gcc trips LeakSanitizer on GCC's own allocations and fails for the
+# wrong reason (see create_extension_sdk.inc for the full explanation).
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR $build_dir BUILD_DIR
---exec cd $ext_build_dir/build && cmake -DVillageSQL_SDK_DIR=$sdk_dir -DCMAKE_MODULE_PATH=$sdk_dir/lib/cmake/VillageSQLExtensionFramework -DVSQL_USE_DEV_ABI=ON .. > cmake_output.txt 2>&1 || (cat cmake_output.txt && exit 1)
+--exec cd $ext_build_dir/build && unset LD_PRELOAD && cmake -DVillageSQL_SDK_DIR=$sdk_dir -DCMAKE_MODULE_PATH=$sdk_dir/lib/cmake/VillageSQLExtensionFramework -DVSQL_USE_DEV_ABI=ON .. > cmake_output.txt 2>&1 || (cat cmake_output.txt && exit 1)
 
 # Run make and capture output; do not fail on non-zero exit.
---exec cd $ext_build_dir/build && make > make_output.txt 2>&1 || true
+--exec cd $ext_build_dir/build && unset LD_PRELOAD && make > make_output.txt 2>&1 || true
 
 # Verify the build actually failed (no VEB produced).
 --exec test ! -f $ext_build_dir/build/$extension_name.veb || (echo "ERROR: $extension_name.veb was produced; expected build failure" && exit 1)
