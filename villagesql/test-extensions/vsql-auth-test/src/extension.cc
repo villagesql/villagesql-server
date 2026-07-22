@@ -35,31 +35,36 @@ namespace {
 constexpr char kToken[] = "vsql-auth-test-token";
 constexpr char kMappedAccount[] = "vsql_auth_test_user";
 
+using vsql::preview_auth::AuthContext;
+using vsql::preview_auth::AuthResult;
+
 // The authenticator. Reads one packet (the token), compares it to the fixed
 // test token, and on success maps to the fixed account. Fail closed otherwise.
-vef_auth_result_t authenticate(vef_auth_ctx_t *ctx, const vef_auth_ops_t *ops) {
-  const unsigned char *pkt = nullptr;
-  const int64_t len = ops->read_packet(ctx, &pkt);
-  if (len <= 0 || pkt == nullptr) return VEF_AUTH_ERROR;
+AuthResult authenticate(AuthContext &c) {
+  auto pkt = c.read_packet();
+  if (pkt.empty()) return AuthResult::kError;
 
   // mysql_clear_password sends a NUL-terminated string; drop the trailing NUL.
-  size_t token_len = static_cast<size_t>(len);
+  size_t token_len = pkt.size();
   if (pkt[token_len - 1] == '\0') --token_len;
 
   if (token_len != std::strlen(kToken) ||
-      std::memcmp(pkt, kToken, token_len) != 0) {
-    return VEF_AUTH_REJECT;
+      std::memcmp(pkt.data(), kToken, token_len) != 0) {
+    return AuthResult::kReject;
   }
 
-  ops->set_authenticated_as(ctx, kMappedAccount);
+  c.authenticate_as(kMappedAccount);
   // @@external_user is the original identity for the audit trail: the account
   // the client connected as, NOT the account we mapped to.
-  ops->set_external_user(ctx, ops->user_name(ctx));
-  return VEF_AUTH_OK;
+  c.set_external_user(c.user_name());
+  return AuthResult::kOk;
 }
 
-vsql::preview_auth::AuthCapability g_auth{"vsql_auth_test", &authenticate,
-                                          "mysql_clear_password"};
+constexpr auto AUTH_METHOD =
+    vsql::preview_auth::make_auth<&authenticate>("vsql_auth_test")
+        .client_plugin("mysql_clear_password")
+        .build();
+vsql::preview_auth::AuthCapability g_auth{AUTH_METHOD};
 
 }  // namespace
 
