@@ -69,18 +69,6 @@ struct CHARSET_INFO;
 
 namespace dd {
 
-////////////////////////////////////////////////////////////////////////////////
-
-/**
-  Helper method for create_routine() to fill return type information of stored
-  routine from the sp_head.
-  from the sp_head.
-
-  @param[in]  thd        Thread handle.
-  @param[in]  sp         Stored routine object.
-  @param[out] sf         dd::Function object.
-*/
-
 // VillageSQL: returns the fully qualified custom type name if the field has a
 // custom type context, otherwise falls back to the standard sql type string.
 static dd::String_type get_param_type_utf8(TABLE *table,
@@ -92,6 +80,18 @@ static dd::String_type get_param_type_utf8(TABLE *table,
                                .c_str());
   return get_sql_type_by_create_field(table, field);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+  Helper method for create_routine() to fill return type information of stored
+  routine from the sp_head.
+  from the sp_head.
+
+  @param[in]  thd        Thread handle.
+  @param[in]  sp         Stored routine object.
+  @param[out] sf         dd::Function object.
+*/
 
 static void fill_dd_function_return_type(THD *thd, sp_head *sp, Function *sf) {
   DBUG_TRACE;
