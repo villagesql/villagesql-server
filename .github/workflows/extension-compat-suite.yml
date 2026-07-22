@@ -160,6 +160,8 @@ jobs:
 
       - name: Clone extension
         run: |
+          # Self-hosted runners reuse the workspace; wipe any stale clone.
+          rm -rf extension
           CLONE_ARGS=(--depth=1)
           [[ -n "${{ matrix.branch }}" ]] && CLONE_ARGS+=(--branch "${{ matrix.branch }}")
           git clone "${CLONE_ARGS[@]}" ${{ matrix.url }} extension/
