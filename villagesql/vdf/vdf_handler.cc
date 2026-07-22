@@ -171,8 +171,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   //
   // "String const" here covers string literals and user variables — anything
   // is_inferrable_string_const() accepts.
+  // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
+  // leave that byte uninitialized, so guard the read on the protocol version.
   if (signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
+      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
       m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
       is_inferrable_string_const(arguments[0])) {
     TypeInferenceSnapshot snap;
