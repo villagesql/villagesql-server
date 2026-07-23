@@ -132,32 +132,7 @@ extensions. If either fails to work it is a breaking change.
 
 ## TODOs
 
-### 0. Identify warts in the v1 ABI, and plan to address them
-
-There are at least two known issues in the existing ABI; there may be
-more.
-
-1. Raw function pointers should be removed:
-
-- `vef_encode_func_t`
-- `vef_decode_func_t`
-- `vef_compare_func_t`
-- `vef_hash_func_t`
-
-2. Unnecessary indirection. VDFs can return buffers that they have allocated via
-   `alt_*_buf` which is a char**, requiring an allocation of a buffer just to
-   receive the buffer from the extension. Instead if it were typed as a char*,
-   the extension can just write the pointer to the struct.
-
-### 1. Remove old ABI style calls
-
-The original calling convention exposed `vef_*_t*` argument types to VDF
-functions. This ABI-era pattern leaked into the API surface and is still
-supported by `func_builder.h`. Using it couples extension code directly to ABI
-types.
-
-
-### 2. Drop support for protocol v1
+### 1. Drop support for protocol v1
 
 There is very little usage of v1, and we expect the ABI and API to continue to
 evolve before Beta. Because of this we expect the cost of supporting v1 will
@@ -165,12 +140,6 @@ outweigh the benefit of maintaining it. Sufficient notice will be given to
 extension authors.
 
 
-### 3. Controls to prevent ABI breakages
+### 2. Controls to prevent ABI breakages
 
 Add presubmit checks to warn contributors if they have broken ABI compatibility.
-
-
-### 4. Compatibility testing with extensions in other repos
-
-As part of the release process we should test server binaries with existing
-extensions that are outside of the development repo.
