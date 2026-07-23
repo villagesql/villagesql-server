@@ -173,6 +173,8 @@ jobs:
       - name: Checkout bundled extensions
         if: env.BUILD_BUNDLED_EXTENSIONS == '1'
         run: |
+          # Self-hosted runners reuse the workspace; wipe stale extension clones
+          rm -rf "$EXTS_ROOT"
           mkdir -p "$EXTS_ROOT/sources"
           source/villagesql/bld_tools/checkout_bundled_extensions.sh \
             "$EXTS_ROOT/sources"

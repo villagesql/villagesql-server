@@ -67,7 +67,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             platform: linux-aarch64
             os: linux
-          - runner: macos-latest
+          - runner: [self-hosted, macOS, ARM64]
             platform: macos-arm64
             os: macos
     uses: ./.github/workflows/build-server-branch.yml
