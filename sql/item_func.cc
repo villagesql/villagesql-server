@@ -8283,6 +8283,10 @@ bool Item_func_sp::do_itemize(Parse_context *pc, Item **res) {
 void Item_func_sp::cleanup() {
   if (sp_result_field != nullptr) {
     sp_result_field->mem_free();
+    // VillageSQL: null both cached codecs, then free the mem_root backing them.
+    sp_result_field->set_type_encoder(nullptr);
+    sp_result_field->set_type_decoder(nullptr);
+    sp_result_field->table->mem_root.Clear();
     sp_result_field->table->in_use = nullptr;
   }
   m_sp = nullptr;
