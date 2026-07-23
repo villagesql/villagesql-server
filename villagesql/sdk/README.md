@@ -37,10 +37,15 @@ server.
 
 ### Current Protocol Versions
 
-| Version          | Status         | Notes                                                                      |
-| ---------------- | -------------- | -------------------------------------------------------------------------- |
-| `VEF_PROTOCOL_1` | Stable         | Base protocol. Planned to be deprecated before beta.                       |
-| `VEF_PROTOCOL_2` | In development | Adds `deterministic` flag, VDF-based type operations, parameterized types. |
+| Version          | Status         | Notes                                                                                                                                                                                              |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VEF_PROTOCOL_1` | Stable         | Base protocol (stable as of v0.0.1). Likely to be deprecated before beta.                                                                                                                        |
+| `VEF_PROTOCOL_2` | Deprecated     | Was the unstable development version before being promoted to `VEF_PROTOCOL_3`. The server rejects extensions that declare this version, and no `stable_sdk/v2` snapshot exists.                  |
+| `VEF_PROTOCOL_3` | Stable         | Stable as of v0.0.4. Adds the `deterministic` VDF attribute; VDF-based type operations (encode/decode/compare/hash and int_to_params/resolve_params name fields); a values pointer array; and the preview-capability system. |
+| `VEF_PROTOCOL_4` | In development | Adds `max_result_length` on `vef_func_desc_t` so a STRING result column can be sized to the full value instead of the argument width.                                                             |
+
+The enum in `villagesql/sdk/include/villagesql/abi/types.h` is the source of truth
+for protocol status; keep this table in sync with it.
 
 ### Changing the ABI/API
 
