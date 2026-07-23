@@ -15,6 +15,17 @@ This is VillageSQL Server, a fork of MySQL 8.4.6 LTS that adds VillageSQL Extens
 - [Adding System Tables](villagesql/schema/ADDING_SYSTEM_TABLES.md) - Guide for adding new VillageSQL system tables to victionary
 - [Error Handling](Docs/ERROR_HANDLING.md) - strategies for handling errors in VillageSQL and the boundary with MySQL
 - [CI Build Cache](.github/CI_BUILD_CACHE.md) - How CI build caching works, known issues, and diagnostics
+- [VEF SDK Overview](villagesql/sdk/README.md) - The extension SDK, protocol versions, and how to stabilize a protocol
+- [VEF API vs ABI](villagesql/sdk/API_ABI.md) - The API/ABI distinction and the rules for evolving each compatibly
+
+**When changing the VEF framework** (anything under `villagesql/sdk/`, especially
+the ABI in `villagesql/sdk/include/villagesql/abi/types.h`), update the SDK
+documentation in the same change:
+- Keep the protocol-version table in `villagesql/sdk/README.md` in sync with the
+  `vef_protocol_t` enum in `abi/types.h` (the enum is the source of truth).
+- Update `villagesql/sdk/API_ABI.md` when the API/ABI contract or its evolution
+  rules change, and the relevant `README.md` files under
+  `villagesql/sdk/include/villagesql/` (`abi/`, `preview/`).
 
 ## Key Development Commands
 
