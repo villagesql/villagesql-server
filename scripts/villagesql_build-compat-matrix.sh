@@ -54,7 +54,7 @@ fi
 ALL_PLATFORMS='[
   {"platform":"linux-x86_64","runner":["self-hosted","linux","x86_64"],"os":"linux"},
   {"platform":"linux-aarch64","runner":"ubuntu-24.04-arm","os":"linux"},
-  {"platform":"macos-arm64","runner":"macos-latest","os":"macos"}
+  {"platform":"macos-arm64","runner":["self-hosted","macOS","ARM64"],"os":"macos"}
 ]'
 
 if [ -n "${PLATFORM_FILTER:-}" ]; then
