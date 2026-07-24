@@ -39,8 +39,7 @@ enum class AuthResult {
 // AuthContext is the idiomatic C++ handshake context handed to an
 // authenticator. It wraps the raw ABI context + ops table (see
 // abi/preview/auth.h) so authors write against methods instead of threading a
-// ctx pointer through a C function table -- mirroring how VDFs use
-// IntArg/IntResult and index uses Index. The server owns the underlying
+// ctx pointer through a C function table. The server owns the underlying
 // context; do not retain an AuthContext beyond the handler call.
 class AuthContext {
  public:
@@ -57,9 +56,9 @@ class AuthContext {
     return {data, static_cast<size_t>(n)};
   }
 
-  // Send a packet to the client (e.g. a challenge). Returns true on success.
+  // Send a packet to the client (e.g. a challenge). Returns true on failure.
   bool write_packet(Span<const unsigned char> data) {
-    return ops_->write_packet(ctx_, data.data(), data.size()) == 0;
+    return ops_->write_packet(ctx_, data.data(), data.size()) != 0;
   }
 
   // The account name the client connected as. Empty before the first read.
@@ -93,13 +92,10 @@ class AuthContext {
 using AuthHandler = AuthResult (*)(AuthContext &);
 
 // AuthDescriptor is the passive, fluent builder for one authentication method.
-// It follows the same shape as the stable make_func / make_type builders and
-// the preview index_builder: the authenticate handler is a compile-time
-// template argument (make_auth<&handler>), config is set with chained setters,
-// and build() yields the descriptor. It does NOT self-register -- it is a value
-// you hand to an AuthCapability token (see below), mirroring how
-// make_index_profile(...).build() feeds
-// IndexProfileCapability().index_profile().
+// The authenticate handler is a compile-time template argument
+// (make_auth<&handler>), config is set with chained setters, and build() yields
+// the descriptor. It does NOT self-register -- it is a value you hand to an
+// AuthCapability token (see below).
 //
 // Splitting the fluent builder (this) from the self-registering token
 // (AuthCapability) is what lets auth use chained setters safely: the enrolling
@@ -154,10 +150,9 @@ vef_auth_result_t auth_shim(vef_auth_ctx_t *ctx, const vef_auth_ops_t *ops) {
 }  // namespace detail
 
 // make_auth<&handler>("name") -- entry point for the fluent auth builder. The
-// handler is a compile-time template argument (like make_func<&impl>), so a
-// null or wrong-signature handler is a compile error, not a runtime failure.
-// The advertised client plugin defaults to "mysql_clear_password"; override
-// with .client_plugin().
+// handler is a compile-time template argument, so a null or wrong-signature
+// handler is a compile error, not a runtime failure. The advertised client
+// plugin defaults to "mysql_clear_password"; override with .client_plugin().
 template <AuthHandler Handler>
 constexpr AuthDescriptor make_auth(const char *name) {
   AuthDescriptor d;
