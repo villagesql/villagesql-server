@@ -823,6 +823,24 @@ class Arena {
   }
 };
 
+namespace detail {
+
+// Allocates storage for the Arena object itself out of the extension memory
+// arena, rather than the process heap. The object's storage is reclaimed
+// together with the rest of the extension arena.
+//
+// TODO(villagesql-indexing): Add an unload hook so ~Arena() is invoked even
+// when the extension arena is reclaimed without explicitly destroying the
+// Arena object (e.g. dict cache eviction, table close, or server shutdown).
+inline void *AllocateArenaStorage(vef_storage_arena_t *arena_ctx,
+                                  vef_storage_arena_func_t arena_alloc) {
+  // Arena's alignment is already covered by the allocator's minimum guarantee.
+  static_assert(alignof(Arena) <= VEF_STORAGE_MIN_ALLOCATOR_ALIGNMENT);
+  return arena_alloc(arena_ctx, sizeof(Arena));
+}
+
+}  // namespace detail
+
 // StorageCtx<T> wraps the persistent storage reference and a user context of
 // type T allocated from the InnoDB arena. The storage builder wrappers
 // construct it before calling the extension and delete the Arena on column

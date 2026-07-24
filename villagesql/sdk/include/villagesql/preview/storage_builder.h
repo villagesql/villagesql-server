@@ -219,6 +219,7 @@ namespace detail {
 template <typename UserCtx>
 using StorageCtx = vsql::preview_storage::Column::StorageCtx<UserCtx>;
 using Arena = vsql::preview_storage::Arena;
+using vsql::preview_storage::detail::AllocateArenaStorage;
 
 // Expected extension function pointer types. Each StorageBuilder setter
 // static_asserts that F exactly matches the corresponding type alias.
@@ -278,14 +279,15 @@ struct CreateWrapper {
                      vef_storage_arena_func_t arena_alloc,
                      vef_storage_ctx_t **storage, char *error_msg,
                      uint32_t error_msg_len) {
-    auto *arena = new (std::nothrow) Arena(arena_ctx, arena_alloc);
-    if (arena == nullptr) {
+    void *arena_mem = AllocateArenaStorage(arena_ctx, arena_alloc);
+    if (arena_mem == nullptr) {
       snprintf(error_msg, error_msg_len, "out of memory allocating arena");
       return true;
     }
+    auto *arena = new (arena_mem) Arena(arena_ctx, arena_alloc);
     auto *ctx = arena->construct<StorageCtx<UserCtx>>(arena);
     if (ctx == nullptr || ctx->user() == nullptr) {
-      delete arena;
+      arena->~Arena();
       snprintf(error_msg, error_msg_len,
                "out of memory allocating storage context");
       return true;
@@ -293,7 +295,7 @@ struct CreateWrapper {
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
     bool err = F(ctx, space_ref, trx_ref, col_len, error_msg, error_msg_len);
     if (err) {
-      delete arena;
+      arena->~Arena();
       *storage = nullptr;
     }
     return err;
@@ -307,7 +309,7 @@ struct DropWrapper {
     auto *ctx = reinterpret_cast<StorageCtx<UserCtx> *>(storage);
     Arena *arena = &ctx->arena();
     bool err = F(ctx, trx_ref, error_msg, error_msg_len);
-    delete arena;
+    arena->~Arena();
     return err;
   }
 };
@@ -319,14 +321,15 @@ struct LoadWrapper {
                      vef_storage_arena_func_t arena_alloc,
                      vef_storage_ctx_t **storage, char *error_msg,
                      uint32_t error_msg_len) {
-    auto *arena = new (std::nothrow) Arena(arena_ctx, arena_alloc);
-    if (arena == nullptr) {
+    void *arena_mem = AllocateArenaStorage(arena_ctx, arena_alloc);
+    if (arena_mem == nullptr) {
       snprintf(error_msg, error_msg_len, "out of memory allocating arena");
       return true;
     }
+    auto *arena = new (arena_mem) Arena(arena_ctx, arena_alloc);
     auto *ctx = arena->construct<StorageCtx<UserCtx>>(arena);
     if (ctx == nullptr || ctx->user() == nullptr) {
-      delete arena;
+      arena->~Arena();
       snprintf(error_msg, error_msg_len,
                "out of memory allocating storage context");
       return true;
@@ -334,7 +337,7 @@ struct LoadWrapper {
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
     bool err = F(ctx, storage_ref, error_msg, error_msg_len);
     if (err) {
-      delete arena;
+      arena->~Arena();
       *storage = nullptr;
     }
     return err;
