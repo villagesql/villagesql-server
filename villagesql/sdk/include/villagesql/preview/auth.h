@@ -58,7 +58,7 @@ class AuthContext {
 
   // Send a packet to the client (e.g. a challenge). Returns true on failure.
   bool write_packet(Span<const unsigned char> data) {
-    return ops_->write_packet(ctx_, data.data(), data.size()) != 0;
+    return ops_->write_packet(ctx_, data.data(), data.size());
   }
 
   // The account name the client connected as. Empty before the first read.

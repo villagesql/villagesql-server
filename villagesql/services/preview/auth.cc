@@ -77,9 +77,10 @@ int64_t vef_auth_read_packet(vef_auth_ctx_t *ctx, const unsigned char **data) {
   return n;
 }
 
-int64_t vef_auth_write_packet(vef_auth_ctx_t *ctx, const unsigned char *data,
-                              uint64_t len) {
-  return ctx->mpvio->write_packet(ctx->mpvio, data, static_cast<int>(len));
+bool vef_auth_write_packet(vef_auth_ctx_t *ctx, const unsigned char *data,
+                           uint64_t len) {
+  // mpvio->write_packet returns 0 on success, non-zero on failure.
+  return ctx->mpvio->write_packet(ctx->mpvio, data, static_cast<int>(len)) != 0;
 }
 
 const char *vef_auth_user_name(vef_auth_ctx_t *ctx) {
