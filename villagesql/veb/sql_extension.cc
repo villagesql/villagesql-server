@@ -961,8 +961,10 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
 
   // State tracking for three-phase operation:
   // Phase 1 (under lock): lookups and mark operations
-  // Phase 2 (lock released): write to table and commit
-  // Phase 3 (lock still released): commit
+  // Phase 2 (lock released): write to tables
+  // Phase 3 (lock still released): commit, then unload the .so only after
+  // the commit succeeds. If the commit fails and rolls back, the extension
+  // remains installed and its .so must stay loaded.
 
   std::optional<villagesql::veb::ExtensionRegistration> to_unregister;
   // Phase 1: Do all lookups and mark operations while holding lock
@@ -978,6 +980,11 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  // Phase 3: perform the commit
+  if (end_transaction(thd, false)) {
+    return true;
+  }
+
   if (to_unregister.has_value()) {
     villagesql::veb::unload_vef_extension(
         {.reason = villagesql::services::UnloadReason::kUninstall, .thd = thd},
@@ -987,7 +994,5 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
   LogVSQL(INFORMATION_LEVEL, "Extension '%s' uninstalled successfully",
           extension_name.c_str());
   my_ok(thd);
-
-  // Phase 3: perform the commit
-  return end_transaction(thd, false);
+  return false;
 }
