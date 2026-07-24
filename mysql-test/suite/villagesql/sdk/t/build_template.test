@@ -32,8 +32,12 @@
 --exec mkdir -p $test_dir
 
 --echo # Extract SDK tarball
+# unset LD_PRELOAD so tar does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds; otherwise uninstrumented tar/gzip trip LeakSanitizer on
+# their own allocations and fail with exitcode=42 (see
+# include/villagesql/create_extension_sdk.inc for the full explanation).
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---exec tar -xzf $sdk_tarball -C $test_dir
+--exec unset LD_PRELOAD && tar -xzf $sdk_tarball -C $test_dir
 
 --echo # Build the template extension
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
