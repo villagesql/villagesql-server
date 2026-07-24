@@ -47,27 +47,94 @@ server.
 The enum in `villagesql/sdk/include/villagesql/abi/types.h` is the source of truth
 for protocol status; keep this table in sync with it.
 
+### Version numbering model
+
+Protocol version parity encodes stability:
+
+- **Odd versions are stable** (`VEF_PROTOCOL_1`, `_3`, ...). Each odd version has
+  a frozen snapshot under `villagesql/stable_sdk/v{ODD}/` and is accepted by the
+  server forever.
+- **Even versions are unstable/in-development** (`VEF_PROTOCOL_2`, `_4`, ...).
+  Only one even version — the server's current one — exists at a time. It has no
+  snapshot, and its ABI/API may still change.
+
+The server advertises a single "current" version, `vef_server_protocol_version`
+in `villagesql/veb/veb_file.cc`. At load time it negotiates
+`min(server_version, extension_version)` and then enforces the parity rule (also
+in `veb_file.cc`):
+
+- An **odd** (stable) extension version is always accepted.
+- An **even** (unstable) extension version is accepted only if it exactly matches
+  the server's current version; any older even version is rejected as obsolete.
+
+There is currently **no minimum-supported-version floor** — every odd version
+back to `VEF_PROTOCOL_1` is accepted.
+TODO(villagesql-beta): Define a minimum supported stable version and enforce it
+next to the parity check in `veb_file.cc`.
+
 ### Changing the ABI/API
 
-Any changes to the ABI/API must be done in the Unstable/Development version of the headers.
-See [API_ABI.md](API_ABI.md) for more details on the API and ABI.
+Any changes to the ABI/API must be done in the Unstable/Development version of
+the headers (`villagesql/sdk/include`), never in a frozen `stable_sdk/` snapshot.
+New fields go at the **end** of the relevant descriptor struct, guarded by a
+comment marking the minimum protocol required (e.g.,
+`// protocol >= VEF_PROTOCOL_4`). See [API_ABI.md](API_ABI.md) for the full rules.
 
-### Stabilizing a Protocol
+### Rolling the protocol version (stabilizing)
 
-When the functionality in the new protocol is ready, then it should be
-stabilized, and a new protocol should be started.
+When the current unstable version `M` (even) is ready, it is **promoted** to the
+next stable version `M+1` (odd), and a new unstable version `M+2` (even) is
+opened for future work. A roll therefore adds *two* enum values, not one.
 
-1. Copy the now "stabilized" `villagesql/sdk/` to the appropriate subdirectory
-   of `villagesql/stable_sdk/v{N}` where N is the existing protocol.
-2. Add the new `VEF_PROTOCOL_{N+1}` value to `vef_protocol_t` in
-   `villagesql/sdk/include/villagesql/abi/types.h`.
-3. Add new fields to the end of the relevant descriptor struct(s), guarded by a
-   comment marking the minimum protocol required (e.g.,
-   `// protocol >= VEF_PROTOCOL_{N+1}`).
-4. Update `VEF_GENERATE_ENTRY_POINTS` in `extension_builder.h` to advertise the
-   new protocol.
-5. Add corresponding API support in the builder headers.
-6. Update the protocol status table above.
+Worked example: PR #581 promoted the unstable `VEF_PROTOCOL_2` to stable
+`VEF_PROTOCOL_3` and opened `VEF_PROTOCOL_4` as the new unstable version. Use its
+diff as the reference for the full set of edit sites.
+
+**1. Freeze the snapshot.** Stop changing `villagesql/sdk/` and copy its current
+   contents to `villagesql/stable_sdk/v{M+1}/` (the new odd/stable snapshot).
+   Even versions are never snapshotted, which is why there is no `stable_sdk/v2`.
+
+**2. Add both enum values** to `vef_protocol_t` in
+   `villagesql/sdk/include/villagesql/abi/types.h`: `VEF_PROTOCOL_{M+1}` (now
+   stable) and `VEF_PROTOCOL_{M+2}` (new unstable). Mark the old even value `M` as
+   deprecated/rejected.
+
+**3. Bump the "current version" to `M+2`** everywhere it is hardcoded:
+   - `villagesql/veb/veb_file.cc` — `vef_server_protocol_version` (the server's
+     advertised max; also the value the parity check compares against).
+   - `villagesql/sdk/include/villagesql/detail/vef_register.h` — the
+     `reg.protocol` / `desc.protocol` the dev SDK advertises.
+   - Per-feature minimum-protocol gates in the builder headers
+     (`detail/func_builder.h`, `func_builder.h`, `type_builder.h`,
+     `vsql/type_builder.h`, `vsql/extension_builder.h`, `vsql/var_args.h`) and any
+     server-side gates (e.g. `sql/sql_udf.h`,
+     `villagesql/schema/descriptor/type_context.cc`,
+     `villagesql/services/capability_registry.cc`,
+     `villagesql/sql/func_lookup.cc`).
+   TODO(villagesql): Centralize the current-version constant so this step is a
+   single edit instead of many.
+
+**4. Update the build** — `villagesql/CMakeLists.txt` (`STABLE_SDK_DIR`) and
+   `villagesql/cmake/VsqlExtension.cmake` to point the stable include path at
+   `stable_sdk/v{M+1}`.
+
+**5. Update the tests.** This is the long tail:
+   - Clone the previous stable ABI suite into a new `mysql-test/suite/villagesql/abi_v{M+1}/`
+     (binary- and source-compat tests + the SDK-finding include).
+   - Update expectations in the `extension` / `extension_registration` suites and
+     `std_data/min_protocol_extension.cc`, plus the affected gunit tests
+     (`type_context-t.cc`, `type_descriptor-t.cc`, `validate-t.cc`).
+
+**6. Update external repos** — bundled extensions and the extension template — to
+   build against the new stable API, and remove `use_dev_unstable` from any repo
+   that no longer needs an unstable-only feature (i.e. everything it used is now
+   in the newly-stabilized `stable_sdk/v{M+1}`).
+
+**7. Update docs** — the protocol status table above and any references in
+   [API_ABI.md](API_ABI.md).
+
+TODO(villagesql): Decide how/when preview headers are published into the stable
+SDK snapshot (e.g. only at release time).
 
 The `stable_sdk/` snapshots are the source of truth for what extensions compiled
 against a given protocol version can expect. An extension built from a frozen
