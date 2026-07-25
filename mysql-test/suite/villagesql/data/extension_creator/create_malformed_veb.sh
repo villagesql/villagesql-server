@@ -24,6 +24,15 @@
 
 set -euo pipefail
 
+# Strip LD_PRELOAD for this script's tooling. On sanitizer builds MTR's
+# safe_process LD_PRELOADs the shared ASan runtime into every child process,
+# and it propagates through mysqltest into this script. The uninstrumented
+# system tar/gzip then run under LeakSanitizer, which flags their own internal
+# allocations at exit and fails with LSAN_OPTIONS=exitcode=42. Unsetting it
+# only removes the preloaded runtime; it adds no instrumentation, so the VEB
+# produced is identical while avoiding the spurious leak reports.
+unset LD_PRELOAD
+
 if [ $# -lt 2 ]; then
     echo "Usage: $0 <extension_name> [options...]" >&2
     echo "" >&2
