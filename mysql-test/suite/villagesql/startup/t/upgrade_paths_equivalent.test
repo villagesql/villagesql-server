@@ -88,7 +88,11 @@ DROP DATABASE fresh_test;
 
 --echo # Extract vanilla MySQL 8.4.6 datadir
 --copy_file $MYSQL_TEST_DIR/suite/villagesql/std_data/upgrade/mysql_8.4.6_lctn$lctn.zip $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip
---exec unzip -qo $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip -d $MYSQL_TMP_DIR
+# unset LD_PRELOAD so unzip does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds; otherwise uninstrumented unzip trips LeakSanitizer on its
+# own allocations and fails with exitcode=42 (see
+# include/villagesql/create_extension_sdk.inc for the full explanation).
+--exec unset LD_PRELOAD && unzip -qo $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip -d $MYSQL_TMP_DIR
 --file_exists $DDIR_FROM_VANILLA
 
 --echo # Restart with vanilla MySQL datadir (VillageSQL auto-installs)
