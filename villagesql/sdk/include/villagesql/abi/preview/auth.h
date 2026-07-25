@@ -96,9 +96,11 @@ typedef struct {
   // token (paired with mysql_clear_password) one read yields the token.
   int64_t (*read_packet)(vef_auth_ctx_t *ctx, const unsigned char **data);
 
-  // Send a packet to the client (e.g. a challenge). Returns 0 on success.
-  int64_t (*write_packet)(vef_auth_ctx_t *ctx, const unsigned char *data,
-                          uint64_t len);
+  // Send a packet to the client (e.g. a challenge). Returns false on success,
+  // true on failure -- the whole packet is sent or it fails, there is no
+  // partial write (so this is a status, not a byte count like read_packet).
+  bool (*write_packet)(vef_auth_ctx_t *ctx, const unsigned char *data,
+                       uint64_t len);
 
   // The account name the client connected as (from the handshake). May be
   // empty before the first read_packet.
