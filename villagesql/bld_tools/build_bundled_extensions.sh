@@ -2,13 +2,17 @@
 # Copyright (c) 2026 VillageSQL Contributors
 # Build VEB files for bundled VillageSQL extensions.
 #
-# Usage: build_bundled_extensions.sh <ext_dir> <sdk_dir> <veb_output_dir> [extension]
+# Usage: build_bundled_extensions.sh <ext_dir> <sdk_dir> <veb_output_dir>
+#            [extension] [include_unbundled]
 # <ext_dir>:        Path to a directory of extension git clones.
 # <sdk_dir>:        Path to an extracted villagesql-extension-sdk-* directory.
 #                   After 'make', this is $BUILD_DIR/villagesql-extension-sdk-<version>.
 # <veb_output_dir>: Directory where built .veb files are placed.
 # [extension]:      Optional repo name to build only one extension (e.g. vsql-ai).
 #                   Omit to build all extensions in bundled_extensions.txt.
+# [include_unbundled]: 0/no (default) to skip bundle=false extensions, 1/yes to
+#                   build them too. They ship with no dev server, but are still
+#                   built and tested (e.g. by the sanitizer workflow).
 #
 # The extension list is read from villagesql/dev_server/bundled_extensions.txt,
 # located relative to this script's source tree.
@@ -18,15 +22,23 @@
 
 set -euo pipefail
 
-EXTENSION_CLONES_DIR="${1:?Usage: $0 <ext_dir> <sdk_dir> <veb_output_dir> [extension]}"
-SDK_DIR="${2:?Usage: $0 <ext_dir> <sdk_dir> <veb_output_dir> [extension]}"
-VEB_OUTPUT_DIR="${3:?Usage: $0 <ext_dir> <sdk_dir> <veb_output_dir> [extension]}"
+USAGE="Usage: $0 <ext_dir> <sdk_dir> <veb_output_dir> [extension] [include_unbundled]"
+EXTENSION_CLONES_DIR="${1:?$USAGE}"
+SDK_DIR="${2:?$USAGE}"
+VEB_OUTPUT_DIR="${3:?$USAGE}"
 EXTENSION_FILTER="${4:-}"
+INCLUDE_UNBUNDLED="${5:-no}"
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 source "$SOURCE_DIR/scripts/vsql_script_utils.sh"
 EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+
+case "$INCLUDE_UNBUNDLED" in
+    1|yes) INCLUDE_UNBUNDLED=yes ;;
+    0|no|"") INCLUDE_UNBUNDLED=no ;;
+    *) die "Invalid include_unbundled: $INCLUDE_UNBUNDLED (expected 0/no or 1/yes)" ;;
+esac
 
 if [[ ! -d "$SDK_DIR" ]]; then
     log_error "SDK directory not found: $SDK_DIR"
@@ -78,13 +90,15 @@ while IFS= read -r line; do
         continue
     fi
 
-    BUNDLE=true
-    for FIELD in "${FIELDS[@]:2}"; do
-        [[ "$FIELD" == "bundle=false" || "$FIELD" == "bundle=no" ]] && BUNDLE=false
-    done
-    if [[ "$BUNDLE" == "false" ]]; then
-        log_info "Skipping $REPO_NAME (bundle=false)"
-        continue
+    if [[ "$INCLUDE_UNBUNDLED" == "no" ]]; then
+        BUNDLE=true
+        for FIELD in "${FIELDS[@]:2}"; do
+            [[ "$FIELD" == "bundle=false" || "$FIELD" == "bundle=no" ]] && BUNDLE=false
+        done
+        if [[ "$BUNDLE" == "false" ]]; then
+            log_info "Skipping $REPO_NAME (bundle=false)"
+            continue
+        fi
     fi
 
     log_step "Building $REPO_NAME ($SOURCE${BRANCH:+ @ $BRANCH})"
