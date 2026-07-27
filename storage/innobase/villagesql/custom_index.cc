@@ -15,9 +15,13 @@
  */
 #include "custom_index.h"
 
+#include <sql_const.h>
+
+#include <array>
 #include <memory>
 #include <new>
 
+#include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
 #include "storage/innobase/include/dict0mem.h"
@@ -25,6 +29,7 @@
 #include "storage/innobase/include/mem0mem.h"
 #include "storage/innobase/include/univ.i"
 #include "villagesql/schema/descriptor/index_context.h"
+#include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/types/util.h"
 
@@ -260,6 +265,94 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Error dropping custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
+  }
+  return DB_SUCCESS;
+}
+
+// Extracts a key column's data for the extension.
+static vef_storage_col_data_t to_col_data(const dfield_t *field) {
+  if (dfield_is_null(field)) {
+    return {nullptr, 0};
+  }
+  return {static_cast<const unsigned char *>(dfield_get_data(field)),
+          static_cast<uint32_t>(dfield_get_len(field))};
+}
+
+dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
+                             const dtuple_t *entry, bool dup_chk_only) {
+  // Custom indexes are not supported on intrinsic tables, and dup_chk_only is
+  // only used for intrinsic tables because they cannot be rolled back.
+  ut_ad(!dup_chk_only);
+
+  Custom_index *custom_index = index->custom_index;
+  const auto &intf = custom_index->interface();
+  auto *storage_ctx = custom_index->storage_ctx();
+
+  if (!storage_ctx) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index storage context is not initialized.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  vef_index_ctx_t *index_ctx = custom_index->index_ctx();
+  uint32_t num_key_columns = index_ctx->num_key_columns;
+  uint32_t num_pk_columns = index_ctx->num_primary_key_columns;
+  // Both are bounded by MAX_REF_PARTS: num_key_columns is the user-defined
+  // key part count, and num_pk_columns is the clustered index's n_uniq
+  // (either the primary key's part count, or 1 for the hidden DB_ROW_ID).
+  ut_a(num_key_columns <= MAX_REF_PARTS);
+  ut_a(num_pk_columns <= MAX_REF_PARTS);
+
+  // entry holds the num_key_columns user-defined key columns at positions
+  // [0, num_key_columns), followed by whichever PK columns dict_index_build_
+  // internal_non_clust() didn't already find there (a PK column already
+  // present among the key columns is not duplicated). So entry->n_fields is
+  // between num_key_columns (all PK columns overlap) and num_key_columns +
+  // num_pk_columns (no overlap).
+  ut_a(entry->n_fields >= num_key_columns);
+  ut_a(entry->n_fields <= num_key_columns + num_pk_columns);
+
+  const dict_index_t *clust_index = index->table->first_index();
+  ut_a(clust_index != nullptr);
+
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
+
+  if (intf.storage_props & VEF_INDEX_STORAGE_HAS_ROW_REF) {
+    // A PK column may already be one of the key columns above; find its actual
+    // position in entry the same way row_build_row_ref() does for ordinary
+    // secondary indexes.
+    for (uint32_t i = 0; i < num_pk_columns; i++) {
+      ulint pos = dict_index_get_nth_field_pos(index, clust_index, i);
+      ut_a(pos != ULINT_UNDEFINED);
+      pkey_columns[i] = to_col_data(dtuple_get_nth_field(entry, pos));
+    }
+  } else
+    ut_ad(intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF);
+
+  for (uint32_t i = 0; i < num_key_columns; i++) {
+    key_columns[i] = to_col_data(dtuple_get_nth_field(entry, i));
+  }
+
+  KeyRef key_ref{};
+  char error_msg[ERROR_MSG_SIZE] = {};
+
+  bool failed = intf.insert(index_ctx, storage_ctx,
+                            static_cast<vef_storage_trx_ref_t>(trx_id),
+                            key_columns.data(), pkey_columns.data(), &key_ref,
+                            error_msg, sizeof(error_msg));
+
+  error_msg[sizeof(error_msg) - 1] = '\0';
+  if (failed) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: Error inserting into custom index storage: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  if (intf.storage_props & VEF_INDEX_STORAGE_REF_LOOKUP) {
+    // TODO(villagesql-indexing): Persist key_ref once mark_delete()/purge()
+    // are implemented for Custom_index and need it to relocate this entry.
   }
   return DB_SUCCESS;
 }
