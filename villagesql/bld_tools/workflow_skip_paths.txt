@@ -14,4 +14,4 @@
 
 \.md$
 ^Docs/
-^\.github/workflows/[^/]+\.yml$
+^\.github/workflows/sanitizer\.yml$
