@@ -475,6 +475,8 @@ class AggFuncBuilder {
     next.max_result_length_ = max_result_length_;
     next.clear_ = clear_;
     next.accumulate_ = accumulate_;
+    next.has_clear_ = has_clear_;
+    next.has_accumulate_ = has_accumulate_;
     next.deterministic_ = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
@@ -529,6 +531,7 @@ class AggFuncBuilder {
                   "clear: first parameter must be State& matching the "
                   "make_aggregate_func State type");
     clear_ = &detail::agg_clear_wrapper<State, Fn>;
+    has_clear_ = true;
     return *this;
   }
 
@@ -557,13 +560,17 @@ class AggFuncBuilder {
         "wrapper such as IntArg, RealArg, StringArg, CustomArg, or "
         "CustomArgWith<P>");
     accumulate_ = &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
+    has_accumulate_ = true;
     return *this;
   }
 
   constexpr detail::StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
-    if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
+    // Track set-ness with bools rather than comparing the wrapper pointers to
+    // null: under -fsanitize a function-pointer-to-null compare is not a
+    // constant expression, which breaks this constexpr builder.
+    if (has_clear_ != has_accumulate_) {
       detail::config_error__aggregate_must_set_both_clear_and_accumulate();
     }
 
@@ -603,7 +610,9 @@ class AggFuncBuilder {
         max_result_length_(0),
         deterministic_(false),
         clear_(nullptr),
-        accumulate_(nullptr) {}
+        accumulate_(nullptr),
+        has_clear_(false),
+        has_accumulate_(false) {}
 
   const char *name_;
   const char *return_type_;
@@ -613,6 +622,8 @@ class AggFuncBuilder {
   bool deterministic_;
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
+  bool has_clear_;
+  bool has_accumulate_;
 
   template <typename S, auto F, size_t M>
   friend class AggFuncBuilder;

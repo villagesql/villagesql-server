@@ -414,6 +414,7 @@ class StorageBuilder {
                   "create: expected bool(*)(StorageCtx<UserCtx>*, Space::Ref, "
                   "Segment::TrxRef, uint32_t col_len, char*, uint32_t)");
     intf_.create = detail::CreateWrapper<F, UserCtx>::invoke;
+    registered_ |= kCreate;
     return *this;
   }
 
@@ -424,6 +425,7 @@ class StorageBuilder {
         "drop: expected bool(*)(StorageCtx<UserCtx>*, Segment::TrxRef, "
         "char*, uint32_t)");
     intf_.drop = detail::DropWrapper<F, UserCtx>::invoke;
+    registered_ |= kDrop;
     return *this;
   }
 
@@ -434,6 +436,7 @@ class StorageBuilder {
         "load: expected bool(*)(StorageCtx<UserCtx>*, Column::StorageRef, "
         "char*, uint32_t)");
     intf_.load = detail::LoadWrapper<F, UserCtx>::invoke;
+    registered_ |= kLoad;
     return *this;
   }
 
@@ -444,6 +447,7 @@ class StorageBuilder {
                   "Segment::TrxRef, Column::Data, Column::Data, Column::Ref*, "
                   "char*, uint32_t)");
     intf_.insert = detail::InsertWrapper<F, UserCtx>::invoke;
+    registered_ |= kInsert;
     return *this;
   }
 
@@ -455,6 +459,7 @@ class StorageBuilder {
         "Column::Ref, Column::Data*, Column::Data*, Segment::TrxRef*, "
         "bool*, char*, uint32_t)");
     intf_.select = detail::SelectWrapper<F, UserCtx>::invoke;
+    registered_ |= kSelect;
     return *this;
   }
 
@@ -465,6 +470,7 @@ class StorageBuilder {
         "mark_delete: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
         "Segment::TrxRef, Column::Ref, bool delete_mark, char*, uint32_t)");
     intf_.mark_delete = detail::MarkDeleteWrapper<F, UserCtx>::invoke;
+    registered_ |= kMarkDelete;
     return *this;
   }
 
@@ -474,12 +480,15 @@ class StorageBuilder {
                   "purge: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
                   "Segment::TrxRef, Column::Ref, char*, uint32_t)");
     intf_.purge = detail::PurgeWrapper<F, UserCtx>::invoke;
+    registered_ |= kPurge;
     return *this;
   }
 
   constexpr TypeStorageDescriptor build() const {
-    if (!intf_.create || !intf_.drop || !intf_.load || !intf_.insert ||
-        !intf_.select || !intf_.mark_delete || !intf_.purge) {
+    // Track registration with a bitmask rather than testing the wrapper
+    // pointers for null: under -fsanitize a function-pointer-to-null compare
+    // is not a constant expression, which breaks this constexpr builder.
+    if (registered_ != kAllRegistered) {
       // Calling a non-constexpr function here causes a compile-time error
       // when build() is evaluated in a constant expression. The function name
       // appears verbatim in the compiler diagnostic.
@@ -492,8 +501,19 @@ class StorageBuilder {
   }
 
  private:
+  static constexpr unsigned kCreate = 1u << 0;
+  static constexpr unsigned kDrop = 1u << 1;
+  static constexpr unsigned kLoad = 1u << 2;
+  static constexpr unsigned kInsert = 1u << 3;
+  static constexpr unsigned kSelect = 1u << 4;
+  static constexpr unsigned kMarkDelete = 1u << 5;
+  static constexpr unsigned kPurge = 1u << 6;
+  static constexpr unsigned kAllRegistered =
+      kCreate | kDrop | kLoad | kInsert | kSelect | kMarkDelete | kPurge;
+
   const char *type_name_;
   vef_type_storage_intf_t intf_;
+  unsigned registered_ = 0;
 };
 
 // Entry point for creating a StorageBuilder.
