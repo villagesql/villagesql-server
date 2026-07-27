@@ -5,14 +5,11 @@ name: Sanitizer Tests (ASan+UBSan)
 #   - the VillageSQL unit tests (instrumented at compile time),
 #   - the VillageSQL mysql-test suite (via --sanitize), and
 #   - every bundled extension: each VEB is rebuilt with the same sanitizers and
-#     its MTR suite is run under --sanitize (see
-#     villagesql/bld_tools/sanitize_bundled_extensions.sh). The extensions ship no
-#     C++ unit tests, only MTR suites.
+#     its MTR suite is run under --sanitize. The extensions ship no C++ unit
+#     tests, only MTR suites.
 #
-# The extension phase lives here rather than threading a "sanitize" flag through
-# the shared reusable workflows (build-server-branch / extension-compat-suite),
-# so the choice of sanitizers stays local to this workflow — adding tsan/msan
-# later is a change to this file and the one helper script, nothing shared.
+# Unlike the shipping build, the extension steps pass include_unbundled=yes so
+# all known extensions (vsql-vector and friends) get sanitized too.
 #
 # <github.workspace>
 # - source: clone of villagesql-server
@@ -27,6 +24,8 @@ name: Sanitizer Tests (ASan+UBSan)
 #   - Add a daily `schedule:` trigger.
 #   - Add a Slack #eng-health notification job (needs a SLACK_WEBHOOK_ENG_HEALTH
 #     secret bound to that channel).
+#   - Adding tsan/msan later is a change to SERVER_SAN_FLAGS /
+#     SAN_CFLAGS / SAN_LDFLAGS below, nothing shared.
 # Trigger via: Actions tab -> Run workflow, or `gh workflow run sanitizer.yml`.
 
 on:
@@ -120,8 +119,7 @@ jobs:
 
     - name: Build VillageSQL with ASan+UBSan
       # build_ci.sh also builds the villagesql-unit-tests target, so the unit
-      # tests are compiled with the sanitizers too. The extension SDK staging dir
-      # is produced by the same build and is likewise instrumented.
+      # tests are compiled with the sanitizers too.
       env:
         BUILD_TYPE: debug
         CMAKE_EXTRA_FLAGS: ${{ env.SERVER_SAN_FLAGS }}
@@ -145,7 +143,9 @@ jobs:
         mysql-test-extra-flags: --sanitize
         artifact-name: sanitizer-mtr-logs-${{ github.run_number }}
 
-    - name: Run sanitizers on extensions
+    # Each VEB is built with the same sanitizers against the sanitized SDK from
+    # the build above.
+    - name: Build bundled extensions (sanitizers)
       id: ext_build
       continue-on-error: true
       env:
@@ -164,10 +164,14 @@ jobs:
     - name: Test bundled extensions (sanitizers)
       id: ext_test
       continue-on-error: true
-      working-directory: ./source
-      # Rebuilds each bundled extension's VEB with ASan+UBSan against the
-      # sanitized SDK from the build above, then runs its MTR suite --sanitize.
-      run: ./villagesql/bld_tools/sanitize_bundled_extensions.sh "$BUILD_DIR" "${{ inputs.extension }}"
+      # Runs even if some extension failed to build, so the ones that did build
+      # still get exercised; the build failure fails the job on its own.
+      if: always()
+      env:
+        MTR_EXTRA_FLAGS: --sanitize
+      run: |
+        source/villagesql/bld_tools/test_extension_vebs.sh \
+          "$BUILD_DIR" "$EXTS_ROOT/sources"
 
     - name: Upload extension MTR logs on failure
       if: always() && steps.ext_test.outcome != 'success'
