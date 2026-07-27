@@ -6,7 +6,7 @@ name: Sanitizer Tests (ASan+UBSan)
 #   - the VillageSQL mysql-test suite (via --sanitize), and
 #   - every bundled extension: each VEB is rebuilt with the same sanitizers and
 #     its MTR suite is run under --sanitize (see
-#     scripts/ci_helpers/sanitize_bundled_extensions.sh). The extensions ship no
+#     villagesql/bld_tools/sanitize_bundled_extensions.sh). The extensions ship no
 #     C++ unit tests, only MTR suites.
 #
 # The extension phase lives here rather than threading a "sanitize" flag through
@@ -117,7 +117,7 @@ jobs:
       working-directory: ./source
       # Rebuilds each bundled extension's VEB with ASan+UBSan against the
       # sanitized SDK from the build above, then runs its MTR suite --sanitize.
-      run: ./scripts/ci_helpers/sanitize_bundled_extensions.sh "$BUILD_DIR" "${{ inputs.extension }}"
+      run: ./villagesql/bld_tools/sanitize_bundled_extensions.sh "$BUILD_DIR" "${{ inputs.extension }}"
 
     - name: Upload extension MTR logs on failure
       if: always() && steps.extensions.outcome != 'success'
