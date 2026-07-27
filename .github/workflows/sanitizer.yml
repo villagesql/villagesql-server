@@ -86,7 +86,6 @@ jobs:
       run: ./villagesql/bld_tools/build_ci.sh
       env:
         BUILD_TYPE: debug
-        PARALLEL_JOBS: 16
         CMAKE_EXTRA_FLAGS: -DWITH_ASAN=1 -DWITH_UBSAN=1
 
     # Run each test suite separately so they all run (versus stop at first failure).
