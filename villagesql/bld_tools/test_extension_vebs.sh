@@ -4,9 +4,9 @@
 #
 # Usage: test_extension_vebs.sh <build_dir> <extension_clones_dir>
 #
-# <build_dir>:   The VillageSQL build directory (output of build_server.sh or
-#                make_villagesql_dev_server.sh). mysqld must be present at
-#                runtime_output_directory/mysqld within this directory.
+# <build_dir>:   The VillageSQL build directory (output of build_ci.sh). mysqld
+#                must be present at runtime_output_directory/mysqld within this
+#                directory.
 # <extension_clones_dir>: Directory of cloned extension repos (one subdir per extension),
 #                produced by build_bundled_extensions.sh with EXTENSION_CLONES_DIR
 #                set. Extensions that contain a mysql-test/ directory have their
@@ -16,10 +16,6 @@
 # at its root, structured as a single MTR suite (t/ and r/ subdirectories). This
 # directory is temporarily mounted as mysql-test/suite/<extension-name>/ in the
 # source tree while tests run, then removed on exit.
-#
-# TODO(villagesql): If build_server.sh is extracted as a separate script, update
-# this script's callers to use it directly rather than going through
-# make_villagesql_dev_server.sh.
 
 set -e
 
