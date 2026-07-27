@@ -282,11 +282,18 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
                              const dtuple_t *entry, bool dup_chk_only) {
   // Custom indexes are not supported on intrinsic tables, and dup_chk_only is
   // only used for intrinsic tables because they cannot be rolled back.
-  ut_a(!dup_chk_only);
+  ut_ad(!dup_chk_only);
 
   Custom_index *custom_index = index->custom_index;
   const auto &intf = custom_index->interface();
-  ut_a(custom_index->storage_ctx() != nullptr);
+  auto *storage_ctx = custom_index->storage_ctx();
+
+  if (!storage_ctx) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index storage context is not initialized.";
+    return DB_VILLAGESQL_ERROR;
+  }
 
   vef_index_ctx_t *index_ctx = custom_index->index_ctx();
   uint32_t num_key_columns = index_ctx->num_key_columns;
@@ -322,7 +329,7 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
       pkey_columns[i] = to_col_data(dtuple_get_nth_field(entry, pos));
     }
   } else
-    ut_a(intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF);
+    ut_ad(intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF);
 
   for (uint32_t i = 0; i < num_key_columns; i++) {
     key_columns[i] = to_col_data(dtuple_get_nth_field(entry, i));
@@ -331,7 +338,7 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
   KeyRef key_ref{};
   char error_msg[ERROR_MSG_SIZE] = {};
 
-  bool failed = intf.insert(index_ctx, custom_index->storage_ctx(),
+  bool failed = intf.insert(index_ctx, storage_ctx,
                             static_cast<vef_storage_trx_ref_t>(trx_id),
                             key_columns.data(), pkey_columns.data(), &key_ref,
                             error_msg, sizeof(error_msg));
