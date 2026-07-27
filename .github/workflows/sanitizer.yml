@@ -1,12 +1,23 @@
 name: Sanitizer Tests (ASan+UBSan)
 
 # Manual build + test run with AddressSanitizer and UndefinedBehaviorSanitizer
-# enabled, on Linux. Runs the VillageSQL unit tests (instrumented at compile
-# time) and the VillageSQL mysql-test suite (via --sanitize).
+# enabled, on Linux. In a single job, off one sanitized server build, it runs:
+#   - the VillageSQL unit tests (instrumented at compile time),
+#   - the VillageSQL mysql-test suite (via --sanitize), and
+#   - every bundled extension: each VEB is rebuilt with the same sanitizers and
+#     its MTR suite is run under --sanitize (see
+#     villagesql/bld_tools/sanitize_bundled_extensions.sh). The extensions ship no
+#     C++ unit tests, only MTR suites.
+#
+# The extension phase lives here rather than threading a "sanitize" flag through
+# the shared reusable workflows (build-server-branch / extension-compat-suite),
+# so the choice of sanitizers stays local to this workflow — adding tsan/msan
+# later is a change to this file and the one helper script, nothing shared.
 #
 # Manual-only for now. Follow-ups before this runs daily:
-#   - Annotate deliberate leaks (lsan.supp / LSAN suppressions) so LeakSanitizer
-#     doesn't fail the run on known-intentional allocations.
+#   - Triage/annotate deliberate leaks in the extensions (they have not been
+#     through the lsan.supp exercise the server has) — expect LSan/UBSan hits on
+#     the first sanitized extension runs.
 #   - Add a daily `schedule:` trigger.
 #   - Add a Slack #eng-health notification job (needs a SLACK_WEBHOOK_ENG_HEALTH
 #     secret bound to that channel).
@@ -17,6 +28,10 @@ on:
     inputs:
       ref:
         description: 'Branch, tag, or SHA to test'
+        required: false
+        default: ''
+      extension:
+        description: 'Limit the extension phase to one extension (e.g. vsql-vector); empty for all'
         required: false
         default: ''
 
@@ -66,7 +81,8 @@ jobs:
     - name: Build VillageSQL with ASan+UBSan
       working-directory: ./source
       # build_ci.sh also builds the villagesql-unit-tests target, so the unit
-      # tests are compiled with the sanitizers too.
+      # tests are compiled with the sanitizers too. The extension SDK staging dir
+      # is produced by the same build and is likewise instrumented.
       run: ./villagesql/bld_tools/build_ci.sh
       env:
         BUILD_TYPE: debug
@@ -91,13 +107,38 @@ jobs:
         mysql-test-extra-flags: --sanitize
         artifact-name: sanitizer-mtr-logs-${{ github.run_number }}
 
+    - name: Install bundled-extension dependencies
+      run: sudo ./scripts/setup_linux_ext_deps.sh
+      working-directory: ./source
+
+    - name: Build + test bundled extensions (sanitizers)
+      id: extensions
+      continue-on-error: true
+      working-directory: ./source
+      # Rebuilds each bundled extension's VEB with ASan+UBSan against the
+      # sanitized SDK from the build above, then runs its MTR suite --sanitize.
+      run: ./villagesql/bld_tools/sanitize_bundled_extensions.sh "$BUILD_DIR" "${{ inputs.extension }}"
+
+    - name: Upload extension MTR logs on failure
+      if: always() && steps.extensions.outcome != 'success'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: sanitizer-ext-mtr-logs-${{ github.run_number }}
+        # Under --parallel each worker writes its mysqld.N.err to var/<N>/log/.
+        path: |
+          ${{ env.SOURCE_DIR }}/mysql-test/var/log/
+          ${{ env.SOURCE_DIR }}/mysql-test/var/*/log/
+        if-no-files-found: ignore
+
     - name: Fail if any sanitizer phase failed
       if: always()
       run: |
         echo "Unit tests: ${{ steps.unit.outcome }}"
         echo "MTR suite:  ${{ steps.mtr.outcome }}"
+        echo "Extensions: ${{ steps.extensions.outcome }}"
         if [ "${{ steps.unit.outcome }}" != "success" ] || \
-           [ "${{ steps.mtr.outcome }}" != "success" ]; then
+           [ "${{ steps.mtr.outcome }}" != "success" ] || \
+           [ "${{ steps.extensions.outcome }}" != "success" ]; then
           echo "::error::One or more sanitizer test phases failed; see the step logs and uploaded artifacts."
           exit 1
         fi
