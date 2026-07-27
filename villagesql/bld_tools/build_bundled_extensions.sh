@@ -12,6 +12,9 @@
 #
 # The extension list is read from villagesql/dev_server/bundled_extensions.txt,
 # located relative to this script's source tree.
+#
+# Env vars:
+#   CMAKE_EXTRA_FLAGS  - additional per-extension cmake flags appended verbatim
 
 set -euo pipefail
 
@@ -40,6 +43,17 @@ if [[ ! -d "$EXTENSION_CLONES_DIR" ]]; then
 fi
 
 mkdir -p "$VEB_OUTPUT_DIR"
+
+CMAKE_FLAGS=(
+    "-DCMAKE_PREFIX_PATH=$SDK_DIR"
+    "-DCMAKE_BUILD_TYPE=Release"
+)
+
+if [[ -n "${CMAKE_EXTRA_FLAGS:-}" ]]; then
+    CMAKE_FLAGS+=($CMAKE_EXTRA_FLAGS)
+fi
+
+log_info "CMake flags: ${CMAKE_FLAGS[*]}"
 
 # Build directories are always temporary — they must not land in CLONE_BASE or
 # test_extension_vebs.sh will iterate over them as if they were extension repos.
@@ -79,8 +93,7 @@ while IFS= read -r line; do
     EXT_BUILD_DIR="$BUILD_BASE/$REPO_NAME"
 
     if ! cmake -S "$CLONE_DIR" -B "$EXT_BUILD_DIR" \
-            -DCMAKE_PREFIX_PATH="$SDK_DIR" \
-            -DCMAKE_BUILD_TYPE=Release 2>&1; then
+            "${CMAKE_FLAGS[@]}" 2>&1; then
         log_error "CMake configure failed for $REPO_NAME"
         FAILED=$((FAILED + 1))
         continue
