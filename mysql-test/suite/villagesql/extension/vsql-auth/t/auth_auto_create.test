@@ -1,0 +1,64 @@
+# Auto-create-on-first-login for the vsql::preview::auth capability: a login for
+# an account that does not exist, using a VEF method that opts in to unknown
+# accounts, creates the account on the fly and completes as it.
+#
+# The vsql_auth_test extension opts in and, for an unknown account, provisions
+# the connecting user with role vsql_role_granted. The token arrives via
+# mysql_clear_password, so each login uses the CLEARTEXT connect option.
+
+# The opt-in relaxes anti-enumeration (unknown vs. existing becomes observable
+# to a holder of a valid token). That is by design for the token model.
+call mtr.add_suppression("routing unknown accounts");
+
+INSTALL EXTENSION vsql_auth_test;
+
+# The DBA owns roles; the token only causes an existing role to be granted (the
+# same no-escalation stance as set_active_roles), so pre-create it.
+CREATE ROLE vsql_role_granted;
+GRANT SELECT ON *.* TO vsql_role_granted;
+
+# Unknown account + VALID token: the account is created and the login completes
+# AS it.
+--connect(new_con, localhost, auto_created_user, vsql-auth-test-token, , , , CLEARTEXT)
+SELECT CURRENT_USER() AS who, @@external_user AS ext;
+--connection default
+--disconnect new_con
+
+# The account now exists, IDENTIFIED WITH the VEF method, with the granted role.
+SELECT user, host, plugin FROM mysql.user WHERE user = 'auto_created_user';
+SHOW GRANTS FOR 'auto_created_user'@'%';
+
+# Second login as the now-existing account: authenticates normally, no
+# re-provisioning.
+--connect(again_con, localhost, auto_created_user, vsql-auth-test-token, , , , CLEARTEXT)
+SELECT CURRENT_USER() AS who;
+--connection default
+--disconnect again_con
+
+# Unknown account + WRONG token: fails closed, nothing provisioned. The failed
+# connect echoes the socket/port, which vary per run -- normalize them.
+--replace_result $MASTER_MYSOCK SOURCE_SOCKET $MASTER_MYPORT SOURCE_PORT
+--error ER_ACCESS_DENIED_ERROR
+--connect(bad_con, localhost, never_created, wrong-token, , , , CLEARTEXT)
+SELECT COUNT(*) AS never_created_rows FROM mysql.user WHERE user = 'never_created';
+
+# Injection resistance: the connecting username is client-supplied and must be
+# treated as ONE opaque identifier, not SQL. This payload, if interpolated
+# unescaped, would stack a second account named 'injected'; the assertion below
+# is that no such account exists. Built via --let so the embedded quote/comma
+# reach the handshake verbatim (not re-split by --connect).
+--let $evil = injected'@'%',x'@'%
+--connect(evil_con, localhost, $evil, vsql-auth-test-token, , , , CLEARTEXT)
+--connection default
+--disconnect evil_con
+
+# No separate 'injected' account: the whole payload became one account, which
+# the DROP USER below removes.
+SELECT COUNT(*) AS injected_rows FROM mysql.user WHERE user = 'injected';
+
+# Drop the accounts BEFORE uninstalling, so no account still references the VEF
+# method's plugin at the post-uninstall ACL reload ("plugin not loaded") .
+DROP USER `injected'@'%',x'@'%`@`%`;
+DROP USER 'auto_created_user'@'%';
+DROP ROLE vsql_role_granted;
+UNINSTALL EXTENSION vsql_auth_test;

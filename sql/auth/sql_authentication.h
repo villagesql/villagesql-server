@@ -64,6 +64,12 @@ class Thd_charset_adapter {
 struct MPVIO_EXT : public MYSQL_PLUGIN_VIO {
   MYSQL_SERVER_AUTH_INFO auth_info;
   const ACL_USER *acl_user;
+  // VillageSQL: true when acl_user is a decoy for a non-existent account that
+  // was routed to a VEF auth method opting in to unknown-account handling (see
+  // find_mpvio_user). The method's handler reads this via the account_unknown
+  // op to know the login needs provisioning; the post-auth re-resolve reads it
+  // to swap the decoy for the account the handler created.
+  bool acl_user_vef_provision_candidate;
   Restrictions *restrictions;
   plugin_ref plugin;  ///< what plugin we're under
   LEX_STRING db;      ///< db name from the handshake packet
