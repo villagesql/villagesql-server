@@ -5,14 +5,17 @@ name: Sanitizer Tests (ASan+UBSan)
 #   - the VillageSQL unit tests (instrumented at compile time),
 #   - the VillageSQL mysql-test suite (via --sanitize), and
 #   - every bundled extension: each VEB is rebuilt with the same sanitizers and
-#     its MTR suite is run under --sanitize (see
-#     villagesql/bld_tools/sanitize_bundled_extensions.sh). The extensions ship no
-#     C++ unit tests, only MTR suites.
+#     its MTR suite is run under --sanitize. The extensions ship no C++ unit
+#     tests, only MTR suites.
 #
-# The extension phase lives here rather than threading a "sanitize" flag through
-# the shared reusable workflows (build-server-branch / extension-compat-suite),
-# so the choice of sanitizers stays local to this workflow — adding tsan/msan
-# later is a change to this file and the one helper script, nothing shared.
+# Unlike the shipping build, the extension steps pass include_unbundled=yes so
+# all known extensions (vsql-vector and friends) get sanitized too.
+#
+# <github.workspace>
+# - source: clone of villagesql-server
+# - build:  cmake compilation sandbox (also holds veb_output_directory)
+# - exts:
+#   - sources: clones of each bundled extension
 #
 # Manual-only for now. Follow-ups before this runs daily:
 #   - Triage/annotate deliberate leaks in the extensions (they have not been
@@ -21,6 +24,8 @@ name: Sanitizer Tests (ASan+UBSan)
 #   - Add a daily `schedule:` trigger.
 #   - Add a Slack #eng-health notification job (needs a SLACK_WEBHOOK_ENG_HEALTH
 #     secret bound to that channel).
+#   - Adding tsan/msan later is a change to SERVER_SAN_FLAGS /
+#     SAN_CFLAGS / SAN_LDFLAGS below, nothing shared.
 # Trigger via: Actions tab -> Run workflow, or `gh workflow run sanitizer.yml`.
 
 on:
@@ -42,32 +47,63 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and Run Sanitizer Tests
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x86_64]
     permissions:
       contents: read
 
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
+      EXTS_ROOT: ${{ github.workspace }}/exts
+      REQUEST_REF: ${{ inputs.ref || github.ref }}
+      EXTENSION_FILTER: ${{ inputs.extension }}
       # MTR overwrites *SAN_OPTIONS for the server processes it spawns, so these
       # values govern the ctest unit tests (which inherit the job environment)
       # and make any sanitizer violation there fail the job rather than warn.
       ASAN_OPTIONS: abort_on_error=1
       UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1
+      # Server-side sanitizer selection. The extension builds below mirror it via
+      # SAN_CFLAGS/SAN_LDFLAGS; repoint both to move to a different sanitizer.
+      SERVER_SAN_FLAGS: -DWITH_ASAN=1 -DWITH_UBSAN=1
+      # The extension links the sanitizer runtime already loaded by the
+      # instrumented server, so no -shared-libasan.
+      SAN_CFLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer
+      SAN_LDFLAGS: -fsanitize=address,undefined
 
     steps:
+    - name: Report Parameters
+      run: |
+        echo "Requested ref: $REQUEST_REF"
+        echo "Extension filter: ${EXTENSION_FILTER:-<all>}"
+        echo "Source Directory: $SOURCE_DIR"
+        echo "Build Directory:  $BUILD_DIR"
+        echo "Extensions Root:  $EXTS_ROOT"
+        echo "Server sanitizer flags: $SERVER_SAN_FLAGS"
+        echo "Extension CFLAGS:  $SAN_CFLAGS"
+        echo "Extension LDFLAGS: $SAN_LDFLAGS"
+        echo "ASAN_OPTIONS:  $ASAN_OPTIONS"
+        echo "UBSAN_OPTIONS: $UBSAN_OPTIONS"
+
     - name: Checkout code
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
-        ref: ${{ inputs.ref || github.ref }}
+        ref: ${{ env.REQUEST_REF }}
         fetch-depth: 50
         path: source
 
     - name: Report Checkout
       run: |
-        echo "Requested ref: ${{ inputs.ref || github.ref }}"
         echo "Git SHA1: $(git -C source rev-parse HEAD)"
         echo "Git Commit: $(git -C source log -n1 --oneline)"
+
+    - name: Checkout bundled extensions
+      run: |
+        # Self-hosted runners reuse the workspace; wipe stale extension clones
+        rm -rf "$EXTS_ROOT"
+        mkdir -p "$EXTS_ROOT/sources"
+
+        source/villagesql/bld_tools/checkout_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$EXTENSION_FILTER" yes
 
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
@@ -78,16 +114,16 @@ jobs:
         # valgrind.yml / full-test-suite.yml.
         setup-ccache: 'false'
 
+    - name: Install bundled-extension dependencies
+      run: sudo source/scripts/setup_linux_ext_deps.sh
+
     - name: Build VillageSQL with ASan+UBSan
-      working-directory: ./source
       # build_ci.sh also builds the villagesql-unit-tests target, so the unit
-      # tests are compiled with the sanitizers too. The extension SDK staging dir
-      # is produced by the same build and is likewise instrumented.
-      run: ./villagesql/bld_tools/build_ci.sh
+      # tests are compiled with the sanitizers too.
       env:
         BUILD_TYPE: debug
-        PARALLEL_JOBS: 16
-        CMAKE_EXTRA_FLAGS: -DWITH_ASAN=1 -DWITH_UBSAN=1
+        CMAKE_EXTRA_FLAGS: ${{ env.SERVER_SAN_FLAGS }}
+      run: source/villagesql/bld_tools/build_ci.sh
 
     # Run each test suite separately so they all run (versus stop at first failure).
     - name: Run VillageSQL unit tests (sanitizers)
@@ -107,20 +143,38 @@ jobs:
         mysql-test-extra-flags: --sanitize
         artifact-name: sanitizer-mtr-logs-${{ github.run_number }}
 
-    - name: Install bundled-extension dependencies
-      run: sudo ./scripts/setup_linux_ext_deps.sh
-      working-directory: ./source
-
-    - name: Build + test bundled extensions (sanitizers)
-      id: extensions
+    # Each VEB is built with the same sanitizers against the sanitized SDK from
+    # the build above.
+    - name: Build bundled extensions (sanitizers)
+      id: ext_build
       continue-on-error: true
-      working-directory: ./source
-      # Rebuilds each bundled extension's VEB with ASan+UBSan against the
-      # sanitized SDK from the build above, then runs its MTR suite --sanitize.
-      run: ./villagesql/bld_tools/sanitize_bundled_extensions.sh "$BUILD_DIR" "${{ inputs.extension }}"
+      env:
+        CMAKE_EXTRA_FLAGS: -DCMAKE_BUILD_TYPE=Debug
+        CFLAGS: ${{ env.SAN_CFLAGS }}
+        CXXFLAGS: ${{ env.SAN_CFLAGS }}
+        LDFLAGS: ${{ env.SAN_LDFLAGS }}
+      run: |
+        SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
+        source/villagesql/bld_tools/build_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$SDK_STAGING_DIR" \
+          "$BUILD_DIR/veb_output_directory" "$EXTENSION_FILTER" yes
+
+    # MTR auto-copies *.veb from <bindir>/veb_output_directory into each test
+    # server, so the VEBs built above are picked up with no extra plumbing.
+    - name: Test bundled extensions (sanitizers)
+      id: ext_test
+      continue-on-error: true
+      # Runs even if some extension failed to build, so the ones that did build
+      # still get exercised; the build failure fails the job on its own.
+      if: always()
+      env:
+        MTR_EXTRA_FLAGS: --sanitize
+      run: |
+        source/villagesql/bld_tools/test_extension_vebs.sh \
+          "$BUILD_DIR" "$EXTS_ROOT/sources"
 
     - name: Upload extension MTR logs on failure
-      if: always() && steps.extensions.outcome != 'success'
+      if: always() && steps.ext_test.outcome != 'success'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-ext-mtr-logs-${{ github.run_number }}
@@ -133,12 +187,14 @@ jobs:
     - name: Fail if any sanitizer phase failed
       if: always()
       run: |
-        echo "Unit tests: ${{ steps.unit.outcome }}"
-        echo "MTR suite:  ${{ steps.mtr.outcome }}"
-        echo "Extensions: ${{ steps.extensions.outcome }}"
+        echo "Unit tests:      ${{ steps.unit.outcome }}"
+        echo "MTR suite:       ${{ steps.mtr.outcome }}"
+        echo "Extension build: ${{ steps.ext_build.outcome }}"
+        echo "Extension tests: ${{ steps.ext_test.outcome }}"
         if [ "${{ steps.unit.outcome }}" != "success" ] || \
            [ "${{ steps.mtr.outcome }}" != "success" ] || \
-           [ "${{ steps.extensions.outcome }}" != "success" ]; then
+           [ "${{ steps.ext_build.outcome }}" != "success" ] || \
+           [ "${{ steps.ext_test.outcome }}" != "success" ]; then
           echo "::error::One or more sanitizer test phases failed; see the step logs and uploaded artifacts."
           exit 1
         fi
