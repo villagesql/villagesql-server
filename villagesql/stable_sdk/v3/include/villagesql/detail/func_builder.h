@@ -52,10 +52,6 @@ constexpr vef_type_t to_vef_type(const char *name) {
   return vef_type_t{VEF_TYPE_CUSTOM, name};
 }
 
-// Deliberately unimplemented — produces a compile error with a descriptive
-// name when build() detects an invalid aggregate configuration.
-void config_error__aggregate_must_set_both_clear_and_accumulate();
-
 // Auto-generated prerun/postrun for aggregate state management.
 template <typename State>
 void auto_prerun(vef_context_t *, vef_prerun_args_t *,
