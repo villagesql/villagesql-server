@@ -458,17 +458,19 @@ class FuncBuilder {
 // The State type is explicit, and clear/accumulate signatures are validated
 // against State at compile time.
 
-template <typename State, auto Func, size_t NumParams>
+template <typename State, auto Func, size_t NumParams, bool HasClear = false,
+          bool HasAccumulate = false>
 class AggFuncBuilder {
  public:
-  constexpr AggFuncBuilder<State, Func, NumParams> &returns(const char *t) {
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
+  returns(const char *t) {
     return_type_ = t;
     return *this;
   }
 
-  constexpr AggFuncBuilder<State, Func, NumParams + 1> param(
-      const char *t) const {
-    AggFuncBuilder<State, Func, NumParams + 1> next;
+  constexpr AggFuncBuilder<State, Func, NumParams + 1, HasClear, HasAccumulate>
+  param(const char *t) const {
+    AggFuncBuilder<State, Func, NumParams + 1, HasClear, HasAccumulate> next;
     next.name_ = name_;
     next.return_type_ = return_type_;
     next.buffer_size_ = buffer_size_;
@@ -483,7 +485,8 @@ class AggFuncBuilder {
     return next;
   }
 
-  constexpr AggFuncBuilder<State, Func, NumParams> &buffer_size(size_t s) {
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
+  buffer_size(size_t s) {
     buffer_size_ = s;
     return *this;
   }
@@ -498,8 +501,8 @@ class AggFuncBuilder {
   // Only valid for a STRING return type. Call .returns(STRING) before this so
   // the return type is known here: a non-STRING return (or an undeclared one)
   // is rejected at build time rather than silently ignored.
-  constexpr AggFuncBuilder<State, Func, NumParams> &max_result_length(
-      size_t n) {
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
+  max_result_length(size_t n) {
     if (return_type_ == nullptr) {
       detail::call_returns_before_max_result_length();
     } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
@@ -509,16 +512,18 @@ class AggFuncBuilder {
     return *this;
   }
 
-  constexpr AggFuncBuilder<State, Func, NumParams> &deterministic(
-      bool d = true) {
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
+  deterministic(bool d = true) {
     deterministic_ = d;
     return *this;
   }
 
   // void(State&) — first parameter must match the State type declared in
-  // make_aggregate_func<State, ...>.
+  // make_aggregate_func<State, ...>. Sets HasClear on the returned builder so
+  // build() can static_assert that both clear and accumulate were configured.
   template <auto Fn>
-  constexpr AggFuncBuilder<State, Func, NumParams> &clear() {
+  constexpr AggFuncBuilder<State, Func, NumParams, true, HasAccumulate> clear()
+      const {
     using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
     using ReturnType = typename detail::FuncReturnType<decltype(Fn)>::type;
     using DeducedState =
@@ -528,15 +533,27 @@ class AggFuncBuilder {
     static_assert(std::is_same_v<DeducedState, State>,
                   "clear: first parameter must be State& matching the "
                   "make_aggregate_func State type");
-    clear_ = &detail::agg_clear_wrapper<State, Fn>;
-    return *this;
+    AggFuncBuilder<State, Func, NumParams, true, HasAccumulate> next;
+    next.name_ = name_;
+    next.return_type_ = return_type_;
+    next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
+    next.clear_ = &detail::agg_clear_wrapper<State, Fn>;
+    next.accumulate_ = accumulate_;
+    next.deterministic_ = deterministic_;
+    for (size_t i = 0; i < NumParams; ++i) {
+      next.param_types_[i] = param_types_[i];
+    }
+    return next;
   }
 
   // void(State&, TypedArgs...) — first parameter must match State; remaining
   // parameters must match the SQL param count declared via .param(TYPE)
-  // calls. Call .accumulate() after all .param(TYPE) calls.
+  // calls. Call .accumulate() after all .param(TYPE) calls. Sets HasAccumulate
+  // on the returned builder (see clear()).
   template <auto Fn>
-  constexpr AggFuncBuilder<State, Func, NumParams> &accumulate() {
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, true> accumulate()
+      const {
     using Params = typename detail::FuncParamTypes<decltype(Fn)>::type;
     using ReturnType = typename detail::FuncReturnType<decltype(Fn)>::type;
     using DeducedState =
@@ -556,16 +573,26 @@ class AggFuncBuilder {
         "accumulate: every C++ parameter after State& must be a typed argument "
         "wrapper such as IntArg, RealArg, StringArg, CustomArg, or "
         "CustomArgWith<P>");
-    accumulate_ = &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
-    return *this;
+    AggFuncBuilder<State, Func, NumParams, HasClear, true> next;
+    next.name_ = name_;
+    next.return_type_ = return_type_;
+    next.buffer_size_ = buffer_size_;
+    next.max_result_length_ = max_result_length_;
+    next.clear_ = clear_;
+    next.accumulate_ =
+        &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
+    next.deterministic_ = deterministic_;
+    for (size_t i = 0; i < NumParams; ++i) {
+      next.param_types_[i] = param_types_[i];
+    }
+    return next;
   }
 
   constexpr detail::StaticFuncDesc<NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
-    if ((clear_ == nullptr) != (accumulate_ == nullptr)) {
-      detail::config_error__aggregate_must_set_both_clear_and_accumulate();
-    }
+    static_assert(HasClear && HasAccumulate,
+                  "aggregate must set both .clear<>() and .accumulate<>()");
 
     using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
     using UniquePTuple = typename detail::unique_params_types<AllParams>::type;
@@ -614,7 +641,7 @@ class AggFuncBuilder {
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
 
-  template <typename S, auto F, size_t M>
+  template <typename S, auto F, size_t M, bool C, bool A>
   friend class AggFuncBuilder;
 
   template <typename S, auto F>
