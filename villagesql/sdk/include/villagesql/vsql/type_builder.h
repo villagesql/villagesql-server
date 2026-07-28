@@ -260,6 +260,11 @@ class TypeBuilder {
   // The second (non-const) form may rewrite the params map; the rewritten map
   // becomes the canonical parameter string persisted for the type and must
   // resolve idempotently.
+  //
+  // All parameter error checking should be done here. The parse function
+  // (registered via .params<P, &parse_fn>()) runs against the canonicalized
+  // output of resolve_params, so by the time parse sees the params they are
+  // already known to be valid.
   template <auto Func>
   constexpr auto resolve_params() const {
     using namespace detail;

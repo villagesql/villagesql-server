@@ -95,6 +95,11 @@ class MaybeParams {
 // to be registered via .params<P, &parse_fn, &to_strings_fn>() in the type
 // builder. See villagesql/vsql/type_builder.h for full usage.
 //
+// Because the cache is keyed on the C++ Params type P, if the same P is used
+// by more than one custom type, each of those types MUST register the same
+// parse function.
+// TODO(villagesql-beta): remove this restriction.
+//
 // Thread-safe: concurrent readers do not block each other. Entries are only
 // evicted when the extension is uninstalled because type parameters are
 // immutable per type instantiation. Also the ABI does not currently have
