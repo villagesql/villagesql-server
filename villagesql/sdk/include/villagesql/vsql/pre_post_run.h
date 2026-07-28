@@ -16,11 +16,10 @@
 #ifndef VILLAGESQL_VSQL_PRE_POST_RUN_H
 #define VILLAGESQL_VSQL_PRE_POST_RUN_H
 
-// Typed wrappers for the per-statement lifecycle hooks (prerun and postrun).
+// Per-statement lifecycle hooks (prerun and postrun).
 //
 // Extension authors register hooks via .prerun<&fn>() / .postrun<&fn>() on
-// the func builder. Only the typed signatures are accepted; the SDK
-// installs wrappers that adapt to the raw ABI:
+// the func builder.
 //
 //   prerun:  void(PrerunArgs, PrerunResult)
 //   postrun: void(PostrunArgs)
@@ -32,11 +31,6 @@
 // State lifetime is explicit: if prerun stores a pointer via set_user_data,
 // postrun is responsible for freeing it. PostrunArgs::delete_state<T>() is
 // the typed convenience for the common case of `new T{}` + `delete`.
-//
-// vef_postrun_result_t is currently empty in the ABI, so there is no
-// PostrunResult wrapper. If/when the result struct gains fields, a typed
-// wrapper class will be added and the postrun signature will become
-// `void(PostrunArgs, PostrunResult)`.
 //
 // TODO(villagesql-beta): add a typed-state mechanism (working name
 // `.state<T>()` on FuncBuilder) so extensions can declare a per-statement
