@@ -82,3 +82,13 @@ leak:ndb_sign_keys
 # Originally reported in "Bug#37977799 Memory leak issue with
 #   router.app_specific_metadata_v_latest test on asan build"
 leak:Source*buildSource
+
+# VillageSQL: benign one-time leaks in third-party helper binaries that the
+# extension MTR suites spawn under --sanitize. safe_process LD_PRELOADs libasan
+# into every child, so uninstrumented helpers get leak-checked at exit; these
+# are not server or extension code. Suppress by helper-binary path only (never
+# by libcurl/libcrypto, which the server and http/ai extensions also use).
+# python3: vsql-http echo_server.py — CPython module init (e.g. PyInit__datetime)
+leak:/usr/bin/python3
+# curl: vsql-rest tests pipe curl output — libcurl/OpenSSL one-time init
+leak:/usr/bin/curl
