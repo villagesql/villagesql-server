@@ -504,9 +504,7 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
     return end_transaction(thd, true);
   }
 
-  if (end_transaction(thd, false)) {
-    return true;
-  }
+  if (end_transaction(thd, false)) return true;
 
   LogVSQL(INFORMATION_LEVEL,
           "Extension '%s' (version %s) installed successfully",
