@@ -184,8 +184,9 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
                           ER_VILLAGESQL_GENERIC_ERROR,
                           "Extension '%s' is already at version '%s'",
                           extension_name.c_str(), target_version.c_str());
+      if (end_transaction(thd, false)) return true;
       my_ok(thd);
-      return end_transaction(thd, false);
+      return false;
     }
 
     // Implicit reset: target matches current and a pending action exists.
@@ -235,8 +236,9 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
             "Cleared pending action for extension '%s' (implicit reset via "
             "ALTER EXTENSION ... VERSION '%s' AT RESTART)",
             extension_name.c_str(), target_version.c_str());
+    if (end_transaction(thd, false)) return true;
     my_ok(thd);
-    return end_transaction(thd, false);
+    return false;
   }
 
   // Target differs from current and a pending action already exists -- the
@@ -332,6 +334,8 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  if (end_transaction(thd, false)) return true;
+
   LogVSQL(INFORMATION_LEVEL,
           "Recorded pending update for extension '%s' from version '%s' to "
           "'%s'; applied on next server restart",
@@ -339,7 +343,7 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
           target_version.c_str());
 
   my_ok(thd);
-  return end_transaction(thd, false);
+  return false;
 }
 
 bool Sql_cmd_install_extension::execute_install(THD *thd) {
@@ -500,12 +504,14 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  if (end_transaction(thd, false)) return true;
+
   LogVSQL(INFORMATION_LEVEL,
           "Extension '%s' (version %s) installed successfully",
           extension_name.c_str(), version.c_str());
 
   my_ok(thd);
-  return end_transaction(thd, false);
+  return false;
 }
 
 namespace {
