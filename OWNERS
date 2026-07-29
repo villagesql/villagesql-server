@@ -1,0 +1,11 @@
+# GitHub usernames of people who may apply /lgtm
+reviewers:
+  - malone-at-work
+  - tomas-villagesql
+  - leeca-vsql
+  - robgolebiowski-vsql
+  - villagestevers
+
+# GitHub usernames of people who may apply /approve
+approvers:
+  - villagestevers
