@@ -446,6 +446,45 @@ std::string auth_method_for_unknown_accounts() {
              : std::string();
 }
 
+bool method_wants_auto_grant(std::string_view method_name) {
+  std::lock_guard<std::mutex> lock(g_mu);
+  // Queried live so it reflects the extension's runtime sysvar.
+  const std::string normalized =
+      canonical_extension_name(std::string(method_name));
+  for (const auto &m : g_methods) {
+    if (m.method_name == normalized) {
+      return m.cc != nullptr && m.cc->auto_grant_roles != nullptr &&
+             m.cc->auto_grant_roles();
+    }
+  }
+  return false;
+}
+
+void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
+                                 const char *acl_user_host) {
+  const VefAuthState *state = mpvio->vef_auth_info.vef_auth_state;
+  if (state == nullptr || state->roles.empty()) return;  // nothing staged
+
+  // Gate on this login's method opting into auto-grant; off by default, so the
+  // token stays activate-only. The method name is the account's plugin.
+  const char *const method = mpvio->acl_user_plugin.str;
+  if (method == nullptr || !method_wants_auto_grant(method)) return;
+
+  if (acl_user_authid == nullptr || acl_user_authid[0] == '\0') return;
+  const std::string account_id =
+      Auth_id(acl_user_authid, strlen(acl_user_authid),
+              acl_user_host != nullptr ? acl_user_host : "%",
+              acl_user_host != nullptr ? strlen(acl_user_host) : 1)
+          .auth_str();
+
+  // GRANT each staged role additively -- never revoke. Roles must pre-exist as
+  // DB roles; an ungrantable one is skipped.
+  //
+  // TODO(villagesql-beta): authoritative reconcile (revoke roles no longer
+  // claimed) is a separate, deferred task.
+  for (const char *staged : state->roles) grant_staged_role(staged, account_id);
+}
+
 std::optional<bool> handle_vef_user_bind(std::string_view method_name,
                                          bool uses_identified_by_clause) {
   // Existence check only -- the returned pointer is compared, not dereferenced,
