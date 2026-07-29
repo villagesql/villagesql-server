@@ -37,31 +37,30 @@ jobs:
         fetch-depth: 50
         path: source
 
+      # The build/skip decision lives in villagesql/bld_tools/workflow_skips_build.sh.
+      # It makes its own git calls against this checkout and returns 'build' or
+      # 'skip' (never blank).
+      # The list of exempt paths is kept in workflow_skip_paths.txt.
+      #
+      # The `push:` trigger's paths-ignore above is a coarse subset shortcut;
+      # The workflow_skip_paths.txt is the authoritative exemption policy for the PR gate.
     - name: Check if build is needed
-      id: check-paths
+      id: check-commit
       working-directory: ./source
       run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          git fetch origin ${{ github.base_ref }} --depth=50
-          CHANGED=$(git diff --name-only FETCH_HEAD...HEAD)
-          if echo "$CHANGED" | grep -qvE '\.(md)$|^Docs/'; then
-            echo "needed=true" >> $GITHUB_OUTPUT
-          else
-            echo "All changed files are documentation — skipping build"
-            echo "needed=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          echo "needed=true" >> $GITHUB_OUTPUT
-        fi
+        DECISION="$(./villagesql/bld_tools/workflow_skips_build.sh \
+          "${{ github.event_name }}" "${{ github.base_ref }}")"
+        echo "Workflow decision: $DECISION"
+        echo "validate=$DECISION" >> $GITHUB_OUTPUT
 
     - name: Setup VillageSQL build environment
-      if: steps.check-paths.outputs.needed == 'true'
+      if: steps.check-commit.outputs.validate == 'build'
       uses: ./source/.github/actions/setup-villagesql-build
       with:
         cache-key-prefix: build
 
     - name: Build VillageSQL
-      if: steps.check-paths.outputs.needed == 'true'
+      if: steps.check-commit.outputs.validate == 'build'
       working-directory: ./source
       run: ./villagesql/bld_tools/build_ci.sh
       env:
@@ -70,15 +69,15 @@ jobs:
         CMAKE_EXTRA_FLAGS: -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Evict stale ccache entries
-      if: steps.check-paths.outputs.needed == 'true'
+      if: steps.check-commit.outputs.validate == 'build'
       run: ccache --evict-older-than 3600s
 
     - name: Show ccache statistics
-      if: steps.check-paths.outputs.needed == 'true'
+      if: steps.check-commit.outputs.validate == 'build'
       run: ccache -s
 
     - name: Run tests
-      if: steps.check-paths.outputs.needed == 'true'
+      if: steps.check-commit.outputs.validate == 'build'
       uses: ./source/.github/actions/run-tests
       with:
         artifact-name: test-logs

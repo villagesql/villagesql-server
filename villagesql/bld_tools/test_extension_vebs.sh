@@ -16,6 +16,10 @@
 # at its root, structured as a single MTR suite (t/ and r/ subdirectories). This
 # directory is temporarily mounted as mysql-test/suite/<extension-name>/ in the
 # source tree while tests run, then removed on exit.
+#
+# Env vars:
+#   MTR_EXTRA_FLAGS - additional mysql-test-run.pl flags appended verbatim
+#                     (e.g. --sanitize for a sanitized build).
 
 set -e
 
@@ -68,6 +72,20 @@ fi
 log_step "Running extension MTR suites: $SUITES"
 NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
 
+MTR_FLAGS=(
+    "--suite=$SUITES"
+    "--nounit-tests"
+    "--parallel=$NCORES"
+    "--force"
+    "--retry=0"
+)
+
+if [[ -n "${MTR_EXTRA_FLAGS:-}" ]]; then
+    MTR_FLAGS+=($MTR_EXTRA_FLAGS)
+fi
+
+log_info "MTR flags: ${MTR_FLAGS[*]}"
+
 # MTR must be invoked from its own directory; MTR_BINDIR tells it where to
 # find the built mysqld and client binaries.
 #
@@ -75,13 +93,7 @@ NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
 # and all failures are visible in one run.
 cd "$SOURCE_DIR/mysql-test"
 MTR_EXIT=0
-MTR_BINDIR="$BUILD_DIR" perl mysql-test-run.pl \
-    --suite="$SUITES" \
-    --nounit-tests \
-    --parallel="$NCORES" \
-    --force \
-    --retry=0 \
-    || MTR_EXIT=$?
+MTR_BINDIR="$BUILD_DIR" perl mysql-test-run.pl "${MTR_FLAGS[@]}" || MTR_EXIT=$?
 
 if [[ $MTR_EXIT -ne 0 ]]; then
     log_error "Extension tests failed (see above for details)"

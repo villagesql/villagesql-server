@@ -8,6 +8,10 @@ BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIR="$BASEDIR/instances/default"
 DIR_FLAG=""  # tracks which flag was used: "", "--here", or "--dir"
 
+# Absolute socket path. Defaults to $DIR/mysql.sock. Override with
+# --socket <path>, e.g. to keep it short.
+SOCKET=""
+
 # Parse global flags before the sub-command
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -25,6 +29,15 @@ while [[ $# -gt 0 ]]; do
         --here)
             DIR="$(pwd)/.vsql_here"
             DIR_FLAG="--here"
+            shift
+            ;;
+        --socket)
+            [[ -z "$2" ]] && { echo "Error: --socket requires a path"; exit 1; }
+            SOCKET="$2"
+            shift 2
+            ;;
+        --socket=*)
+            SOCKET="${1#--socket=}"
             shift
             ;;
         *)
@@ -144,7 +157,7 @@ cmd_start() {
 
     local datadir="$DIR/data"
     local vebdir="$DIR/veb"
-    local socket="$DIR/mysql.sock"
+    local socket="${SOCKET:-$DIR/mysql.sock}"
     local port="${MYSQL_PORT:-3307}"
     local pidfile="$DIR/mysql.pid"
     local logfile="$datadir/error.log"
@@ -177,6 +190,8 @@ cmd_start() {
     if [[ -f "$DIR/init_password.sql" ]]; then
         init_file_args=("--init-file=$DIR/init_password.sql")
     fi
+
+    mkdir -p "$(dirname "$socket")"
 
     "$BASEDIR/bin/mysqld" \
         --no-defaults \
@@ -223,7 +238,7 @@ cmd_connect() {
 
     DIR="$(cd "$DIR" && pwd)"
 
-    local socket="$DIR/mysql.sock"
+    local socket="${SOCKET:-$DIR/mysql.sock}"
 
     if [[ ! -S "$socket" ]]; then
         echo "Error: Server doesn't appear to be running (socket not found: $socket)"
@@ -246,7 +261,7 @@ cmd_status() {
     DIR="$(cd "$DIR" && pwd)"
 
     local pidfile="$DIR/mysql.pid"
-    local socket="$DIR/mysql.sock"
+    local socket="${SOCKET:-$DIR/mysql.sock}"
 
     if [[ ! -f "$pidfile" ]]; then
         echo "VillageSQL server: not running (no PID file)"
@@ -278,7 +293,7 @@ cmd_stop() {
 
     DIR="$(cd "$DIR" && pwd)"
 
-    local socket="$DIR/mysql.sock"
+    local socket="${SOCKET:-$DIR/mysql.sock}"
     local pidfile="$DIR/mysql.pid"
 
     if [[ ! -f "$pidfile" ]]; then
@@ -422,6 +437,10 @@ cmd_help() {
     echo "                Use different paths to run multiple independent instances."
     echo "  --here        Create/use a VillageSQL instance in the current directory"
     echo "                (shorthand for --dir \$(pwd)/.vsql_here)"
+    echo "  --socket <path>"
+    echo "                Absolute socket file path (default: \$DIR/mysql.sock)."
+    echo "                Useful to keep it short when --dir is a long or deeply"
+    echo "                nested path."
     echo ""
     echo "Environment variables:"
     echo "  MYSQL_PORT  Port to use for start (default: 3307)"
@@ -433,6 +452,7 @@ cmd_help() {
     echo "  ./villagesql --dir /tmp/test-instance start"
     echo "  MYSQL_PORT=3308 ./villagesql --dir ./second start"
     echo "  ./villagesql start -- --skip-name-resolve --general-log"
+    echo "  ./villagesql --dir /tmp/deep/nested/instance --socket /tmp/vsql.sock start"
 }
 
 # Build a DIR_ARG string for use in user-facing messages so they can copy-paste
