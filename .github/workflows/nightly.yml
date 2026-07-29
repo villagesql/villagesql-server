@@ -35,7 +35,6 @@ jobs:
       run: ./villagesql/bld_tools/build_ci.sh
       env:
         BUILD_TYPE: debug
-        PARALLEL_JOBS: 16
         CMAKE_EXTRA_FLAGS: -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Show ccache statistics

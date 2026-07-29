@@ -76,7 +76,6 @@ jobs:
     - name: Build VillageSQL
       working-directory: ./source
       env:
-        PARALLEL_JOBS: 16
         BUILD_TYPE: ${{ inputs.build-type }}
       run: |
         ./villagesql/bld_tools/build_ci.sh
