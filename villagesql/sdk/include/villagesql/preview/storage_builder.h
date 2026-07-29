@@ -344,6 +344,21 @@ struct LoadWrapper {
   }
 };
 
+// TODO(villagesql-indexing): Expose unload as a builder-configurable hook
+// (e.g. .unload<F>()) so extensions can run their own cleanup.
+template <typename UserCtx>
+struct UnloadWrapper {
+  static bool invoke(vef_storage_ctx_t *storage, char *error_msg,
+                     uint32_t error_msg_len) {
+    (void)error_msg;
+    (void)error_msg_len;
+    auto *ctx = reinterpret_cast<StorageCtx<UserCtx> *>(storage);
+    Arena *arena = &ctx->arena();
+    arena->~Arena();
+    return false;
+  }
+};
+
 template <auto F, typename UserCtx>
 struct InsertWrapper {
   static bool invoke(vef_storage_ctx_t *storage, vef_storage_mtr_ref_t mctx,
@@ -509,6 +524,7 @@ class StorageBuilder {
     vef_type_storage_intf_t result = intf_;
     result.version = VEF_STORAGE_TYPE_INTF_VERSION;
     result.type_name = type_name_;
+    result.unload = detail::UnloadWrapper<UserCtx>::invoke;
     return TypeStorageDescriptor{result};
   }
 

@@ -162,6 +162,19 @@ typedef bool (*vef_type_storage_load_func_t)(
     vef_storage_arena_func_t arena_alloc, vef_storage_ctx_t **storage,
     char *error_msg, uint32_t error_msg_len);
 
+// Unloads a storage context.
+// Called before a storage context is destroyed, such as during cache eviction,
+// table close, or server shutdown. This callback should release any resources
+// associated with the storage context.
+// Parameters:
+//   storage   - Storage context being unloaded
+//   error_msg - Output: error description on failure
+//   error_msg_len - length of error message buffer
+// Returns false on success, true on error (writes to error_msg).
+typedef bool (*vef_type_storage_unload_func_t)(vef_storage_ctx_t *storage,
+                                               char *error_msg,
+                                               uint32_t error_msg_len);
+
 // Insert column data into column storage along with transaction reference.
 // Parameters:
 //   storage      - Storage context to insert into
@@ -255,6 +268,11 @@ typedef struct {
   vef_type_storage_create_func_t create;
   vef_type_storage_drop_func_t drop;
   vef_type_storage_load_func_t load;
+
+  // Automatically populated by the SDK's StorageBuilder.
+  // Extensions cannot currently override this callback.
+  vef_type_storage_unload_func_t unload;
+
   vef_type_storage_insert_func_t insert;
   vef_type_storage_select_func_t select;
   vef_type_storage_mark_delete_func_t mark_delete;
