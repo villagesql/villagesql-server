@@ -328,8 +328,9 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
       ut_a(pos != ULINT_UNDEFINED);
       pkey_columns[i] = to_col_data(dtuple_get_nth_field(entry, pos));
     }
-  } else
+  } else {
     ut_ad(intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF);
+  }
 
   for (uint32_t i = 0; i < num_key_columns; i++) {
     key_columns[i] = to_col_data(dtuple_get_nth_field(entry, i));
