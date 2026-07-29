@@ -1,0 +1,38 @@
+# Scenario: the mutating resolve_params overload can rewrite its parameter map,
+# and the server adopts the rewritten set as the canonical parameters. A rewrite
+# may add parameters and change values, but erasing one would silently discard
+# what the user wrote, so the server rejects the DDL instead.
+#
+# Fixture: vsql_test_only exposes ADD_PARAM_TYPE, whose resolve_params fills in
+# a missing 'mode' default, and DROP_PARAM_TYPE, whose resolve_params keeps
+# 'length' and erases every other key.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # resolve_params fills in the missing 'mode' default and the server
+--echo # adopts the enlarged set.
+CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t;
+DROP TABLE t;
+
+--echo # An explicit 'mode' is left as written. These params are not what
+--echo # int_to_params(4) produces, so the long form is printed instead.
+CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4,mode=slow'));
+SHOW CREATE TABLE t;
+DROP TABLE t;
+
+--echo # Erasing a parameter the user wrote is rejected.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v DROP_PARAM_TYPE('length=4,bogus=9'));
+SHOW WARNINGS;
+
+--echo # With nothing to erase, the same type works in both syntaxes.
+CREATE TABLE t (id INT PRIMARY KEY, v DROP_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t;
+DROP TABLE t;
+
+CREATE TABLE t2 (id INT PRIMARY KEY, v DROP_PARAM_TYPE(4));
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_test_only;

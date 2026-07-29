@@ -80,8 +80,8 @@
 //     DEFAULT_STR_TYPE, DEFAULT_VDF_TYPE, DEFAULT_PARAM_TYPE(N),
 //     BAD_DEFAULT_LEN_TYPE.
 //
-//   Parameter-bound test types (see block comment further down):
-//     OVERSIZED_PARAM_TYPE(N).
+//   Parameter-bound and rewrite test types (see block comment further down):
+//     OVERSIZED_PARAM_TYPE(N), ADD_PARAM_TYPE(N), DROP_PARAM_TYPE(N).
 //
 //   Storage-size boundary test type (see block comment further down):
 //     MAX_WIDTH_FIELD.
@@ -1058,11 +1058,19 @@ constexpr auto BAD_DEFAULT_LEN_TYPE =
         .intrinsic_default_str("SHORT")
         .build();
 
-// ---- Parameter-bound test types ------------------------------------------
+// ---- Parameter-bound and rewrite test types -----------------------------
 //
 //   OVERSIZED_PARAM_TYPE(N) - resolve_params resolves a persisted_length larger
 //                             than max_persisted_length; exercises the DDL-time
 //                             upper-bound check.
+//   ADD_PARAM_TYPE(N)       - uses the MUTATING resolve_params overload to fill
+//                             in a missing 'mode' default, so the server adopts
+//                             the enlarged set as canonical. The legal shape of
+//                             a rewrite.
+//   DROP_PARAM_TYPE(N)      - uses the MUTATING overload to erase every key
+//                             other than 'length'. Removing a parameter is
+//                             rejected at DDL time, so this type only works
+//                             when there is nothing to erase.
 
 // OVERSIZED_PARAM_TYPE: resolves to twice its max_persisted_length.
 constexpr int64_t kOversizedResolved = kParamTestSize * 2;
@@ -1088,7 +1096,55 @@ bool oversized_resolve_params(const std::map<std::string, std::string> &params,
   return false;
 }
 
+// ADD_PARAM_TYPE: mutating resolve_params that fills in a 'mode' default when
+// the user did not supply one. The enlarged map is what the server adopts as
+// canonical.
+bool add_int_to_params(int64_t value,
+                       std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool add_resolve_params(std::map<std::string, std::string> &params,
+                        vsql::ResolvedTypeParams *result, char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "ADD_PARAM_TYPE requires length");
+    return true;
+  }
+  if (params.find("mode") == params.end()) params["mode"] = "fast";
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// DROP_PARAM_TYPE: mutating resolve_params that erases any key other than
+// 'length'. Erasing one the user wrote is rejected by the server.
+bool drop_int_to_params(int64_t value,
+                        std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool drop_resolve_params(std::map<std::string, std::string> &params,
+                         vsql::ResolvedTypeParams *result, char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "DROP_PARAM_TYPE requires length");
+    return true;
+  }
+  for (auto it = params.begin(); it != params.end();) {
+    if (it->first != "length")
+      it = params.erase(it);
+    else
+      ++it;
+  }
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
 static constexpr const char kOversizedParamTypeName[] = "OVERSIZED_PARAM_TYPE";
+static constexpr const char kAddParamTypeName[] = "ADD_PARAM_TYPE";
+static constexpr const char kDropParamTypeName[] = "DROP_PARAM_TYPE";
 
 constexpr auto OVERSIZED_PARAM_TYPE =
     vsql::make_type<kOversizedParamTypeName>()
@@ -1098,6 +1154,32 @@ constexpr auto OVERSIZED_PARAM_TYPE =
         .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
         .int_to_params<&oversized_int_to_params>()
         .resolve_params<&oversized_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto ADD_PARAM_TYPE =
+    vsql::make_type<kAddParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&add_int_to_params>()
+        .resolve_params<&add_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto DROP_PARAM_TYPE =
+    vsql::make_type<kDropParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&drop_int_to_params>()
+        .resolve_params<&drop_resolve_params>()
         .from_string<&param_test_encode>()
         .to_string<&param_test_decode>()
         .compare<&param_test_compare>()
@@ -1232,8 +1314,10 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(DEFAULT_VDF_TYPE)
         .type(DEFAULT_PARAM_TYPE)
         .type(BAD_DEFAULT_LEN_TYPE)
-        // Parameter-bound test types
+        // Parameter-bound and rewrite test types
         .type(OVERSIZED_PARAM_TYPE)
+        .type(ADD_PARAM_TYPE)
+        .type(DROP_PARAM_TYPE)
         // Storage-size boundary test type
         .type(MAX_WIDTH_FIELD)
         .type(VAR_SETS_PERSISTED)

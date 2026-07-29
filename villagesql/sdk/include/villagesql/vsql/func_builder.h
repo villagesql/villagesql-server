@@ -62,6 +62,9 @@ using IntToTypeParamsFunc = bool (*)(int64_t value,
                                      char *error_msg);
 
 // resolve_params: validates type parameters and computes storage sizes.
+// The server pre-validates the map, so every key is non-empty, appears exactly
+// once, and has a non-empty value. What the keys mean, and which are required,
+// is entirely up to the type.
 using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
              vsql::ResolvedTypeParams *result, char *error_msg);
@@ -72,6 +75,9 @@ using ResolveTypeParamsFunc =
 // becomes the canonical parameter string persisted for the type. The rewrite
 // must be idempotent: resolving the rewritten params again must yield the same
 // params and storage sizes.
+// The rewrite may add keys and change values, but it must not erase a key or
+// blank out a value: the server rejects the DDL rather than silently dropping
+// a parameter the user wrote. To reject an unwanted key, return an error.
 using ResolveTypeParamsMutableFunc =
     bool (*)(std::map<std::string, std::string> &params,
              vsql::ResolvedTypeParams *result, char *error_msg);

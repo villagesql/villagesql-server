@@ -114,6 +114,8 @@ DROP TABLE t_float;
 --error ER_PARSE_ERROR
 CREATE TABLE t_err (v TVECTOR('dimension=3,type=int'));
 
+# An empty value never reaches TVECTOR's resolve_params: the server rejects a
+# valueless parameter first, so the error is the generic one.
 --error ER_PARSE_ERROR
 CREATE TABLE t_err (v TVECTOR('dimension=3,type='));
 

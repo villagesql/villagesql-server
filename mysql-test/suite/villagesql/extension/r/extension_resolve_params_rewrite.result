@@ -1,0 +1,49 @@
+INSTALL EXTENSION vsql_test_only;
+# resolve_params fills in the missing 'mode' default and the server
+# adopts the enlarged set.
+CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.ADD_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+# An explicit 'mode' is left as written. These params are not what
+# int_to_params(4) produces, so the long form is printed instead.
+CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4,mode=slow'));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.ADD_PARAM_TYPE('length=4,mode=slow') DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+# Erasing a parameter the user wrote is rejected.
+CREATE TABLE t (id INT PRIMARY KEY, v DROP_PARAM_TYPE('length=4,bogus=9'));
+ERROR 42000: Type 'vsql_test_only.DROP_PARAM_TYPE': resolve_params removed parameter 'bogus'; parameters may be added or changed but not removed near 'DROP_PARAM_TYPE('length=4,bogus=9'))' at line 1
+SHOW WARNINGS;
+Level	Code	Message
+Error	1064	Type 'vsql_test_only.DROP_PARAM_TYPE': resolve_params removed parameter 'bogus'; parameters may be added or changed but not removed near 'DROP_PARAM_TYPE('length=4,bogus=9'))' at line 1
+# With nothing to erase, the same type works in both syntaxes.
+CREATE TABLE t (id INT PRIMARY KEY, v DROP_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.DROP_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+CREATE TABLE t2 (id INT PRIMARY KEY, v DROP_PARAM_TYPE(4));
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.DROP_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;
