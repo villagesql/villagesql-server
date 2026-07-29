@@ -13,6 +13,9 @@ jobs:
       contents: write  # Required to push tags
       actions: write   # Required to read/write caches
 
+    outputs:
+      tag: ${{ steps.tags.outputs.date_tag }}
+
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
@@ -53,6 +56,7 @@ jobs:
         artifact-name: nightly-big-test-logs-${{ github.run_number }}
 
     - name: Create nightly tags
+      id: tags
       if: success()
       working-directory: ./source
       run: |
@@ -63,7 +67,19 @@ jobs:
         DATE_TAG="nightly.$(date +'%Y-%m-%d')"
         git tag -a "$DATE_TAG" -m "Nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"
         git push origin "$DATE_TAG"
+        echo "date_tag=$DATE_TAG" >> "$GITHUB_OUTPUT"
 
         # Update/create nightly.latest tag (force update if exists)
         git tag -fa "nightly.latest" -m "Latest nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"
         git push origin "nightly.latest" --force
+
+  post-tag-full-test:
+    name: Post Nightly Tag Build and Test
+    needs: test-and-tag
+    permissions:
+      contents: read
+    uses: ./.github/workflows/full-test-suite.yml
+    with:
+      ref: ${{ needs.test-and-tag.outputs.tag }}
+      build-type: release
+      artifact-prefix: nightly-tag-${{ needs.test-and-tag.outputs.tag }}
