@@ -412,6 +412,15 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
                       sha256_hash))
     return end_transaction(thd, true);
 
+  // Unload the .so on any failure below; released after a successful commit.
+  const villagesql::veb::ExtensionRegistration loaded_registration =
+      registration;
+  auto unload_guard = create_scope_guard([thd, &loaded_registration]() {
+    villagesql::veb::unload_vef_extension(
+        {.reason = villagesql::services::UnloadReason::kUninstall, .thd = thd},
+        loaded_registration);
+  });
+
   std::string reg_error;
   std::optional<villagesql::veb::ValidatedRegistration> validated =
       villagesql::veb::parse_extension_registration(
@@ -505,6 +514,8 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
   }
 
   if (end_transaction(thd, false)) return true;
+
+  unload_guard.release();
 
   LogVSQL(INFORMATION_LEVEL,
           "Extension '%s' (version %s) installed successfully",
