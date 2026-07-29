@@ -505,6 +505,7 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
     dberr_t error = insert_impl(index, i, field, trx_id, &pcur, offsets, heap);
     if (error != DB_SUCCESS) {
       log_extended_error("Insert", nullptr, index, i);
+      pcur.close();
       return error;
     }
   }
@@ -516,6 +517,7 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
     row_log_table_insert(pcur.get_rec(), index_entry, index, offsets);
   }
   mtr_commit(&mtr);
+  pcur.close();
 
   return DB_SUCCESS;
 }
