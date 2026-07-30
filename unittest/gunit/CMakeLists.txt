@@ -65,6 +65,7 @@ ENDIF()
 ADD_LIBRARY(gunit_small STATIC
   benchmark.cc
   fake_costmodel.cc
+  fake_custom_type_compare.cc
   gunit_test_main.cc
   skip_trailing.cc
   strnxfrm.cc
