@@ -34,6 +34,7 @@ class StorageInterface {
   using CreateFunc = vef_type_storage_create_func_t;
   using DropFunc = vef_type_storage_drop_func_t;
   using LoadFunc = vef_type_storage_load_func_t;
+  using UnloadFunc = vef_type_storage_unload_func_t;
   using InsertFunc = vef_type_storage_insert_func_t;
   using SelectFunc = vef_type_storage_select_func_t;
   using MarkDeleteFunc = vef_type_storage_mark_delete_func_t;
@@ -46,6 +47,7 @@ class StorageInterface {
       : create_(intf.create),
         drop_(intf.drop),
         load_(intf.load),
+        unload_(intf.unload),
         insert_(intf.insert),
         select_(intf.select),
         mark_delete_(intf.mark_delete),
@@ -69,6 +71,12 @@ class StorageInterface {
             char *error_msg, uint32_t error_msg_len) const {
     return load_(storage_ref, arena_ctx, arena_alloc, storage, error_msg,
                  error_msg_len);
+  }
+
+  bool unload(vef_storage_ctx_t *storage, char *error_msg,
+              uint32_t error_msg_len) const {
+    if (unload_ == nullptr) return false;
+    return unload_(storage, error_msg, error_msg_len);
   }
 
   bool insert(vef_storage_ctx_t *storage, vef_storage_mtr_ref_t mctx,
@@ -107,6 +115,7 @@ class StorageInterface {
   CreateFunc create_;
   DropFunc drop_;
   LoadFunc load_;
+  UnloadFunc unload_;
   InsertFunc insert_;
   SelectFunc select_;
   MarkDeleteFunc mark_delete_;

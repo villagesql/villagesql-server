@@ -315,6 +315,21 @@ typedef bool (*vef_type_index_load_func_t)(
     vef_storage_arena_t *arena_ctx, vef_storage_arena_func_t arena_alloc,
     vef_storage_ctx_t **storage, char *error_msg, uint32_t error_msg_len);
 
+// Unloads an index storage context.
+// Called before a storage context is destroyed, such as during cache eviction,
+// table close, or server shutdown. This callback should release any resources
+// associated with the storage context.
+// Parameters:
+//   index_ctx - Index context
+//   storage   - Storage context being unloaded
+//   error_msg - Output: error description on failure
+//   error_msg_len - length of error message buffer
+// Returns false on success, true on error (writes to error_msg).
+typedef bool (*vef_type_index_unload_func_t)(const vef_index_ctx_t *index_ctx,
+                                             vef_storage_ctx_t *storage,
+                                             char *error_msg,
+                                             uint32_t error_msg_len);
+
 // Insert an index entry for the given key and primary key data.
 // Parameters:
 //   index_ctx   - Index context
@@ -527,6 +542,10 @@ typedef struct {
   vef_type_index_create_func_t create;
   vef_type_index_drop_func_t drop;
   vef_type_index_load_func_t load;
+
+  // Automatically populated by the SDK's IndexBuilder.
+  // Extensions cannot currently override this callback.
+  vef_type_index_unload_func_t unload;
 
   // DML functions
   vef_type_index_insert_func_t insert;
