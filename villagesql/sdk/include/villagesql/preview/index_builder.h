@@ -571,6 +571,23 @@ struct LoadWrapper {
   }
 };
 
+// TODO(villagesql-indexing): Expose unload as a builder-configurable hook
+// (e.g. .unload<F>()) so extensions can run their own cleanup.
+template <typename Context>
+struct UnloadWrapper {
+  static bool invoke(const vef_index_ctx_t *index_ctx,
+                     vef_storage_ctx_t *storage, char *error_msg,
+                     uint32_t error_msg_len) {
+    (void)index_ctx;
+    (void)error_msg;
+    (void)error_msg_len;
+    auto *ctx = reinterpret_cast<Index::StorageCtx<Context> *>(storage);
+    Arena *arena = &ctx->arena();
+    arena->~Arena();
+    return false;
+  }
+};
+
 template <auto F, typename Context>
 struct InsertWrapper {
   static bool invoke(const vef_index_ctx_t *index_ctx,
@@ -1021,6 +1038,7 @@ class GlobalBuilder {
     }
     vef_type_index_intf_t intf = intf_;
     intf.version = VEF_INDEX_TYPE_INTF_VERSION;
+    intf.unload = detail::UnloadWrapper<Context>::invoke;
     return {name_, intf};
   }
 

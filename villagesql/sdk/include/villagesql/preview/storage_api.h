@@ -828,10 +828,6 @@ namespace detail {
 // Allocates storage for the Arena object itself out of the extension memory
 // arena, rather than the process heap. The object's storage is reclaimed
 // together with the rest of the extension arena.
-//
-// TODO(villagesql-indexing): Add an unload hook so ~Arena() is invoked even
-// when the extension arena is reclaimed without explicitly destroying the
-// Arena object (e.g. dict cache eviction, table close, or server shutdown).
 inline void *AllocateArenaStorage(vef_storage_arena_t *arena_ctx,
                                   vef_storage_arena_func_t arena_alloc) {
   // Arena's alignment is already covered by the allocator's minimum guarantee.
