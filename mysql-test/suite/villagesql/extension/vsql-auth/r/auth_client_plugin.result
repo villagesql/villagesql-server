@@ -1,0 +1,69 @@
+INSTALL EXTENSION vsql_auth_test;
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+#
+# Default policy (accept_client_plugin empty): the method accepts only its
+# pin. A stock client offers caching_sha2_password, which the callback
+# rejects, so the server switches to mysql_clear_password.
+#
+# With --enable_cleartext_plugin the client complies with the switch and
+# resends the token verbatim -> accepted.
+#
+CURRENT_USER()	@@external_user
+vsql_auth_test_user@%	auth_user
+#
+# Without --enable_cleartext_plugin the client refuses the switch to
+# cleartext -> ER 2059 (the switch WAS attempted).
+#
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 2059 (HY000): Authentication plugin 'mysql_clear_password' cannot be loaded: plugin not enabled
+#
+# Now have the method ALSO accept the offered plugin as-is (no switch).
+# The offer is the scrambler the stock client sends, so its first reply is
+# a hash rather than the token: the handler rejects it (ER 1045) -- and
+# there is NO 2059, proving the server accepted the offer and did not
+# force a switch.
+#
+SET GLOBAL vsql_auth_test.accept_client_plugin = 'caching_sha2_password';
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'auth_user'@'localhost' (using password: NO)
+#
+# A method that accepts the offer is authoritative: even with the client
+# willing to use cleartext, no switch happens, so the scrambled first
+# reply still fails (ER 1045, not 2059).
+#
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'auth_user'@'localhost' (using password: NO)
+#
+# Back to strict pin: clearing the sysvar restores switch-to-pin, so the
+# cleartext client authenticates again.
+#
+SET GLOBAL vsql_auth_test.accept_client_plugin = '';
+CURRENT_USER()
+vsql_auth_test_user@%
+#
+# Decoy path: the accept decision is consulted for the single auto-create
+# method too. Opt the method into unknown accounts, then a strict pin
+# still switches a stock cleartext client to the pin and provisions.
+#
+call mtr.add_suppression("routing unknown accounts");
+SET GLOBAL vsql_auth_test.auto_create = ON;
+CREATE ROLE vsql_role_granted;
+GRANT SELECT ON *.* TO vsql_role_granted;
+SELECT CURRENT_USER() AS who;
+who
+decoy_user@%
+SELECT user, host, plugin FROM mysql.user WHERE user = 'decoy_user';
+user	host	plugin
+decoy_user	%	vsql_auth_test
+#
+# Cleanup.
+#
+SET GLOBAL vsql_auth_test.auto_create = OFF;
+DROP USER 'decoy_user'@'%';
+DROP ROLE vsql_role_granted;
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;
+UNINSTALL EXTENSION vsql_auth_test;
