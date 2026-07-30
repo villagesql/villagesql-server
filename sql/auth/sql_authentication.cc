@@ -1209,7 +1209,7 @@ inline const char *mpvio_client_plugin_name(MPVIO_EXT *mpvio) {
   if (mpvio->plugin != nullptr) return client_plugin_name(mpvio->plugin);
   // A VEF auth method is required to pin a non-null client_auth_plugin at
   // INSTALL EXTENSION, so this is non-null on the VEF path.
-  return mpvio->vef_client_auth_plugin;
+  return mpvio->vef_auth_info.vef_client_auth_plugin;
 }
 
 LEX_CSTRING validate_password_plugin_name = {
@@ -4316,7 +4316,14 @@ int acl_authenticate(THD *thd, enum_server_command command) {
         List_of_auth_id_refs default_roles;
         if (!acl_cache_lock.lock()) return 1;
         Auth_id_ref authid = create_authid_from(acl_user);
-        if (opt_always_activate_granted_roles) {
+        // VillageSQL: a VEF auth handler may have staged a token-driven role
+        // set via set_active_roles(); if so it replaces default-role activation
+        // for this login (grant-checked inside, so it cannot escalate). Falls
+        // through to the normal default-role path when nothing was staged.
+        if (villagesql::services::maybe_apply_vef_auth_state(
+                &mpvio, sctx, acl_user->user, acl_user->host.get_host())) {
+          // staged roles applied
+        } else if (opt_always_activate_granted_roles) {
           activate_all_granted_and_mandatory_roles(acl_user, sctx);
         } else {
           if (opt_activate_mandatory_roles) {

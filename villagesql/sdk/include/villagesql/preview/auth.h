@@ -82,6 +82,15 @@ class AuthContext {
     ops_->set_external_user(ctx_, identity);
   }
 
+  // Stage the session's active roles, replacing the account's default-role
+  // activation. The server activates them grant-checked after account
+  // resolution: only roles actually granted to the account take effect, so a
+  // token can never grant or escalate. n_roles == 0 activates no roles
+  // (SET ROLE NONE).
+  void set_active_roles(const char *const *roles, uint32_t n_roles) {
+    ops_->set_active_roles(ctx_, roles, n_roles);
+  }
+
  private:
   vef_auth_ctx_t *ctx_;
   const vef_auth_ops_t *ops_;
