@@ -132,6 +132,8 @@ struct VefAuthState;
 // the role graph under it). Does nothing (returns false = "not handled, use
 // default roles") when `mpvio` has no staged state. Returns true when it
 // applied staged state, so the caller skips its own default-role activation.
+// The bool is a handled/not-handled discriminator, NOT the usual MySQL
+// true==error convention -- true here is the success path.
 //
 // `sctx` is the session's Security_context (the same one the default-role path
 // activates onto); `acl_user_authid`/`acl_user_host` identify the resolved

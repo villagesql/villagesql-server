@@ -189,6 +189,14 @@ bool maybe_apply_vef_auth_state(MPVIO_EXT *mpvio, Security_context *sctx,
               acl_user_host != nullptr ? acl_user_host : "");
     }
   }
+  // A non-null staged set replaces the account's default roles, even if it
+  // resolves to no active roles -- because it was empty (n_roles == 0, i.e. SET
+  // ROLE NONE) or because every requested role was ungranted and skipped above.
+  // Only a null state (handler staged nothing) keeps the defaults.
+  //
+  // TODO(villagesql-beta): make the all-skipped/empty outcome configurable --
+  // some deployments may prefer falling back to the account's default roles
+  // when a staged set activates nothing, rather than ending with no roles.
   return true;  // staged state applied; caller must NOT also activate defaults
 }
 
