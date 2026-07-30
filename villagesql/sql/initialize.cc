@@ -333,7 +333,14 @@ void depopulate_extension_capabilities() {
     for (const ExtensionDescriptor *desc :
          vclient.extension_descriptors().get_all_committed()) {
       const veb::ExtensionRegistration &reg = desc->registration();
-      if (reg.registration == nullptr) continue;
+      // A committed descriptor is only inserted after a successful
+      // load_vef_extension(), so both registration and dlhandle are always
+      // populated. Assert the full invariant here (phase 2 relies on dlhandle)
+      // so the "registration set but dlhandle null" state cannot slip through;
+      // skip defensively in release if it is ever broken.
+      if (should_assert_if_null(reg.registration) ||
+          should_assert_if_null(reg.dlhandle))
+        continue;
       targets.push_back({reg.registration, desc->extension_name(),
                          desc->extension_version()});
     }
@@ -361,7 +368,9 @@ void destroy_extension_state() {
     for (const ExtensionDescriptor *desc :
          vclient.extension_descriptors().get_all_committed()) {
       const veb::ExtensionRegistration &reg = desc->registration();
-      if (reg.dlhandle == nullptr) continue;
+      // As in phase 1, a committed descriptor always has an open dlhandle;
+      // skip defensively in release if that invariant is ever broken.
+      if (should_assert_if_null(reg.dlhandle)) continue;
       LogVSQL(INFORMATION_LEVEL, "Unloading extension '%s' version '%s'",
               desc->extension_name().c_str(),
               desc->extension_version().c_str());

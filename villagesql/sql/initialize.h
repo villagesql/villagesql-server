@@ -41,22 +41,32 @@ bool init_extension_infrastructure();
 //     plugin_shutdown() tears down, so it must precede plugin_shutdown().
 //
 // Why phase 2 must be late:
-//   - InnoDB's dict cache holds Custom_column objects whose destructors call
-//     extension-provided storage functions during innodb_shutdown(). The .so
-//     files and the VictionaryClient type metadata must outlive InnoDB, so
-//     they can only be unloaded/destroyed after plugin_shutdown().
+//   - InnoDB may keep invoking extension-provided storage/type callbacks right
+//     up until it has fully shut down, so the .so files and the
+//     VictionaryClient type metadata must remain available until
+//     innodb_shutdown() completes.
+//     This is broader than object teardown: e.g. Custom_column destructors call
+//     storage functions during dict_close(), and the background purge thread
+//     may call an extension's compare function while purging a secondary index
+//     over a custom type. Hence unload/destroy can only run after
+//     plugin_shutdown().
 //
-// Extending this: two phases suffice only because every current capability
-// tears down either "before threads are gone" or "before InnoDB is down", and
-// the single phase-1 point happens to satisfy both. If a future capability
-// needs a teardown step with a third ordering constraint - for example a
-// deinitialization that can only run AFTER wait_till_no_thd(), once every
-// connection thread has exited - two fixed phases will not be enough. At that
-// point, replace these functions with an explicit per-capability teardown-phase
-// mechanism: tag each capability with the phase it must be torn down in (e.g.
-// kBeforeThreadsGone, kBeforeInnoDBDown, kAfterInnoDBDown) and drive each phase
-// from the corresponding point in the shutdown sequence, rather than
-// re-deriving these constraints by hand.
+// TODO(villagesql): make capability teardown ordering explicit. Two phases
+// suffice today only because every current capability tears down either
+// "before threads are gone" or "before InnoDB is down", and the single phase-1
+// point happens to satisfy both. This is fragile: all of phase 1 runs before
+// innodb_shutdown(), so a storage- or type-related capability that grows an
+// on_depopulate() hook would be torn down while InnoDB can still call into it
+// (e.g. the purge thread comparing a custom type) - a latent ordering bug. It
+// is safe now only because such capabilities have no on_depopulate() and there
+// is not yet a capability tied to custom data types. The model also cannot
+// express a third ordering constraint - e.g. a teardown that must run AFTER
+// wait_till_no_thd(), once every connection thread has exited. The fix is an
+// explicit per-capability teardown-phase mechanism: tag each capability with
+// the phase it must be torn down in (e.g. kBeforeThreadsGone,
+// kBeforeInnoDBDown, kAfterInnoDBDown) and drive each phase from the
+// corresponding point in the shutdown sequence, rather than re-deriving these
+// constraints by hand.
 
 // Phase 1: depopulate the capabilities of all loaded extensions (deregister
 // sys/status variables, join capability background threads, drain in-flight
