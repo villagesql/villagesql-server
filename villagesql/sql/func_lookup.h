@@ -51,6 +51,12 @@ const FuncDescriptor *find_func(std::string_view ext_name,
 // Returns: true if the function exists, false otherwise.
 bool func_exists(std::string_view ext_name, std::string_view func_name);
 
+// Same as func_exists(), but assumes the caller already holds the
+// VictionaryClient read (or write) lock and does NOT acquire it.
+//
+// Returns: true if the function exists, false otherwise.
+bool func_exists_locked(std::string_view ext_name, std::string_view func_name);
+
 // Find VDF by function name only (unqualified lookup).
 // Returns the FuncDescriptor if exactly one extension provides the function.
 // Sets *ambiguous_extensions to a comma-separated list if multiple found.
