@@ -26,4 +26,4 @@ jobs:
             /hold
             /cc
             /uncc
-          github-token: '${{ secrets.PROW_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
