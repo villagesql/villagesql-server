@@ -87,7 +87,9 @@ fi
 log_info "MTR flags: ${MTR_FLAGS[*]}"
 
 # MTR must be invoked from its own directory; MTR_BINDIR tells it where to
-# find the built mysqld and client binaries.
+# find the built mysqld and client binaries. Setting MTR_BINDIR also relocates
+# MTR's default vardir to $BUILD_DIR/mysql-test/var instead of the source tree,
+# so the CI steps that upload logs on failure glob that path.
 #
 # --force: continue past individual test failures so all suites are exercised
 # and all failures are visible in one run.
