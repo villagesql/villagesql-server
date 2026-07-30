@@ -20,6 +20,9 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <string>
+#include <vector>
+
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/sd_notify.h"
@@ -282,7 +285,7 @@ bool init_extension_infrastructure() {
   return false;
 }
 
-void deinit_extension_infrastructure() {
+void depopulate_extension_capabilities() {
   VictionaryClient &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) {
     LogVSQL(INFORMATION_LEVEL,
@@ -291,24 +294,91 @@ void deinit_extension_infrastructure() {
   }
 
   LogVSQL(INFORMATION_LEVEL,
-          "Deinitializing VillageSQL extension infrastructure");
+          "Depopulating capabilities for VillageSQL extensions");
 
+  // See initialize.h for why this is phase 1 and must run before
+  // wait_till_no_thd()/plugin_shutdown() while leaving the .so files loaded.
+  //
+  // depopulate_capabilities() BLOCKS: on_depopulate_thread_worker joins the
+  // extension's background thread, and statement_event/auth spin until their
+  // in-flight extension calls drain. Those extension callbacks may themselves
+  // take the VictionaryClient lock (e.g. a worker or statement-event handler
+  // touching a custom type). We therefore snapshot the registrations under a
+  // read lock and RELEASE it before depopulating: holding the VictionaryClient
+  // lock across depopulate would invert lock order against a connection thread
+  // that is mid-callback and about to take the lock (or in rollback_all_tables,
+  // which takes the write lock) -> deadlock, since wait_till_no_thd() has not
+  // yet run and those threads are still draining. The committed descriptor set
+  // is stable without the lock here: listeners are closed and connections have
+  // been killed, so no INSTALL/UNINSTALL EXTENSION can mutate it.
+  //
+  // TODO(villagesql): the only reason this must run before wait_till_no_thd()
+  // is that thread_worker registers THDs that nothing but depopulation reaps
+  // (poll-based workers don't wake on set_kill_conn, only on their stop pipe).
+  // If we make those workers respond to the global shutdown signal so they
+  // self-exit and remove their THDs during the normal kill window, this call
+  // could move to after wait_till_no_thd() (still before plugin_shutdown()).
+  // At that point no connection or worker threads are alive, so the lock-order
+  // inversion above cannot occur and the snapshot-and-release dance becomes
+  // unnecessary - a plain locked iteration would do. It stays two phases
+  // regardless: phase 2 must remain after innodb_shutdown().
+  struct DepopulateTarget {
+    const vef_registration_t *registration;
+    std::string name;
+    std::string version;
+  };
+  std::vector<DepopulateTarget> targets;
   {
-    auto guard = vclient.get_write_lock();
-    auto descriptors = vclient.extension_descriptors().get_all_committed();
-
-    for (const ExtensionDescriptor *desc : descriptors) {
-      LogVSQL(INFORMATION_LEVEL, "Unloading extension '%s' version '%s'",
-              desc->extension_name().c_str(),
-              desc->extension_version().c_str());
-      veb::unload_vef_extension({.reason = services::UnloadReason::kShutdown},
-                                desc->registration());
+    auto guard = vclient.get_read_lock();
+    for (const ExtensionDescriptor *desc :
+         vclient.extension_descriptors().get_all_committed()) {
+      const veb::ExtensionRegistration &reg = desc->registration();
+      // A committed descriptor is only inserted after a successful
+      // load_vef_extension(), so both registration and dlhandle are always
+      // populated. Assert the full invariant here (phase 2 relies on dlhandle)
+      // so the "registration set but dlhandle null" state cannot slip through;
+      // skip defensively in release if it is ever broken.
+      if (should_assert_if_null(reg.registration) ||
+          should_assert_if_null(reg.dlhandle))
+        continue;
+      targets.push_back({reg.registration, desc->extension_name(),
+                         desc->extension_version()});
     }
+  }
+
+  for (const DepopulateTarget &target : targets) {
+    LogVSQL(INFORMATION_LEVEL,
+            "Depopulating capabilities for extension '%s' version '%s'",
+            target.name.c_str(), target.version.c_str());
+    services::depopulate_capabilities(
+        {.reason = services::UnloadReason::kShutdown}, target.registration);
   }
 }
 
 void destroy_extension_state() {
-  VictionaryClient::instance().destroy();
+  VictionaryClient &vclient = VictionaryClient::instance();
+
+  // Phase 2: now that InnoDB has finished shutting down and no longer
+  // references extension-provided storage interfaces, unload the .so files and
+  // destroy the extension state. Capabilities were already depopulated in
+  // depopulate_extension_capabilities().
+  if (vclient.is_initialized()) {
+    // Release the write lock before destroy() below tears the lock down.
+    auto guard = vclient.get_write_lock();
+    for (const ExtensionDescriptor *desc :
+         vclient.extension_descriptors().get_all_committed()) {
+      const veb::ExtensionRegistration &reg = desc->registration();
+      // As in phase 1, a committed descriptor always has an open dlhandle;
+      // skip defensively in release if that invariant is ever broken.
+      if (should_assert_if_null(reg.dlhandle)) continue;
+      LogVSQL(INFORMATION_LEVEL, "Unloading extension '%s' version '%s'",
+              desc->extension_name().c_str(),
+              desc->extension_version().c_str());
+      veb::close_vef_extension(reg);
+    }
+  }
+
+  vclient.destroy();
   SchemaManager::deinit();
   LogVSQL(INFORMATION_LEVEL,
           "VillageSQL extension infrastructure deinitialized");
