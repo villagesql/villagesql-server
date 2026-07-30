@@ -73,7 +73,7 @@ docker volume rm villagesql-build villagesql-ccache
 ```bash
 # Use the CI build script (recommended - automatically includes CMAKE_EXTRA_FLAGS)
 cd /source
-PARALLEL_JOBS=4 ./scripts/build-ci.sh
+PARALLEL_JOBS=4 ./villagesql/bld_tools/build_ci.sh
 
 # Or manual build (standard release)
 cd /build
