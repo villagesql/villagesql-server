@@ -35,6 +35,11 @@ SET(VILLAGESQL_UNIT_TESTS
 # duplicate symbol issues with system_charset_info on macOS. The macOS dynamic
 # linker uses two-level namespace, which causes the test and server_unittest_library
 # to have separate copies of the symbol when both define it.
+#
+# ADD_TEST registers the ctest test in all builds (so villagesql-unit-tests and
+# "ctest -L villagesql" work). ADD_GCOV_TEST additionally clears EXCLUDE_FROM_ALL
+# under ENABLE_GCOV so these tests are built by "make all" and folded into the
+# standard gcov coverage sweep, matching the gunit small/server tests.
 MACRO(ADD_VILLAGESQL_TEST test_name)
   MYSQL_ADD_EXECUTABLE(${test_name}
     ${test_name}.cc
@@ -44,6 +49,7 @@ MACRO(ADD_VILLAGESQL_TEST test_name)
     SKIP_INSTALL
     DEPENDENCIES ${GTEST_LIBRARIES}
     ADD_TEST ${test_name}
+    ADD_GCOV_TEST ${test_name}
   )
 
   TARGET_INCLUDE_DIRECTORIES(${test_name} PRIVATE

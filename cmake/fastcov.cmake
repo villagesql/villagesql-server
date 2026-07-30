@@ -132,6 +132,14 @@ FOREACH(FASTCOV_EXCLUDE
     ${GMOCK_INCLUDE_DIRS}
     "${CMAKE_SOURCE_DIR}/extra/rapidjson"
     "${CMAKE_SOURCE_DIR}/extra/xxhash"
+    # libarchive is vendored by VillageSQL (for .veb bundle handling); it is
+    # third-party code, so exclude it from coverage like the other extra/ libs.
+    "${CMAKE_SOURCE_DIR}/extra/libarchive"
+    # Test code is not product code.
+    "${CMAKE_SOURCE_DIR}/unittest/gunit/villagesql"
+    "${CMAKE_SOURCE_DIR}/villagesql/test-extensions"
+    # stable_sdk is the frozen stable ABI
+    "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk"
     )
   LIST(APPEND FASTCOV_EXCLUDE_LIST "${FASTCOV_EXCLUDE}")
 ENDFOREACH()
@@ -154,3 +162,75 @@ ADD_CUSTOM_TARGET(fastcov-html
   COMMENT "Running genhtml -o code_coverage report.info"
   VERBATIM
   )
+
+# VillageSQL differential ("diff") coverage.
+#
+# Restricts coverage to lines added or changed since VillageSQL forked from
+# upstream MySQL. scripts/villagesql_delta_coverage.py filters the report.info
+# produced by fastcov-report down to those lines (upstream code excluded; new
+# files in full, modified files by changed line), then genhtml renders the
+# familiar navigable report scoped to the VillageSQL delta.
+#
+# make fastcov-clean
+# <run some tests>
+# make fastcov-report
+# make fastcov-diff
+# open in browser:  ${CMAKE_BINARY_DIR}/coverage-delta/index.html
+
+FIND_PROGRAM(PYTHON3_EXECUTABLE NAMES python3)
+
+# The base is the upstream MySQL release that HEAD is built on -- the tree
+# VillageSQL layered its changes onto. HEAD tracks a specific MySQL version
+# (VillageSQL periodically merges the matching "mysql-X.Y.Z" upstream tag), so
+# diffing against that tag isolates the VillageSQL delta: upstream code is
+# byte-identical in both trees and drops out. Do NOT use the fork point: the
+# tree has since absorbed several upstream patch releases (8.4.8 -> 8.4.10),
+# and diffing that far back would misattribute all that upstream drift to
+# VillageSQL. Computed once and cached; override with
+# -DVILLAGESQL_COVERAGE_BASE=<ref> if needed.
+IF(NOT VILLAGESQL_COVERAGE_BASE AND GIT_EXECUTABLE)
+  SET(UPSTREAM_MYSQL_TAG
+    "mysql-${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}")
+  EXECUTE_PROCESS(
+    COMMAND ${GIT_EXECUTABLE} -C ${CMAKE_SOURCE_DIR}
+            rev-parse --verify --quiet "${UPSTREAM_MYSQL_TAG}^{commit}"
+    OUTPUT_VARIABLE UPSTREAM_MYSQL_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE GIT_REVPARSE_RESULT
+    ERROR_QUIET
+    )
+  IF(GIT_REVPARSE_RESULT EQUAL 0 AND UPSTREAM_MYSQL_COMMIT)
+    SET(VILLAGESQL_COVERAGE_BASE "${UPSTREAM_MYSQL_COMMIT}"
+      CACHE STRING "Base commit for VillageSQL differential coverage")
+  ELSE()
+    MESSAGE(STATUS "Upstream tag ${UPSTREAM_MYSQL_TAG} not found; "
+      "set -DVILLAGESQL_COVERAGE_BASE=<ref> for 'make fastcov-diff'")
+  ENDIF()
+ENDIF()
+
+IF(NOT PYTHON3_EXECUTABLE)
+  MESSAGE(STATUS "python3 not found; 'make fastcov-diff' unavailable")
+ELSEIF(NOT VILLAGESQL_COVERAGE_BASE)
+  MESSAGE(STATUS "Could not determine upstream MySQL base; "
+    "'make fastcov-diff' unavailable (set -DVILLAGESQL_COVERAGE_BASE=<ref>)")
+ELSE()
+  # Filter report.info to the VillageSQL delta, then render with genhtml. The
+  # filter script resolves git paths against the source tree (--repo).
+  ADD_CUSTOM_TARGET(fastcov-diff
+    COMMAND ${PYTHON3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/scripts/villagesql_delta_coverage.py
+            ${CMAKE_BINARY_DIR}/report.info ${VILLAGESQL_COVERAGE_BASE}
+            ${CMAKE_BINARY_DIR}/delta.info --repo ${CMAKE_SOURCE_DIR}
+    # --prefix strips the common source root so directories show relative
+    # (villagesql/schema, sql/dd/impl, ...). The delta report contains only
+    # in-source paths, so a single --prefix cleanly applies to all of them.
+    COMMAND genhtml ${CMAKE_BINARY_DIR}/delta.info
+            --output-directory ${CMAKE_BINARY_DIR}/coverage-delta
+            --prefix ${CMAKE_SOURCE_DIR} --legend
+            --title "VillageSQL delta coverage"
+    COMMENT
+      "VillageSQL delta coverage since ${VILLAGESQL_COVERAGE_BASE} "
+      "-> coverage-delta/index.html"
+    VERBATIM
+    )
+ENDIF()
