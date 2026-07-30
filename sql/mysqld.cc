@@ -2512,18 +2512,11 @@ static void close_connections(void) {
   */
   Events::deinit();
 
-  // Unload VEF extensions. Must run before plugin_shutdown() (in clean_up(),
-  // much later) so component services like component_sys_variable_unregister
-  // are still available for on_depopulate to unregister sys/status variables.
-  // depopulate_capabilities() also joins background threads and removes their
-  // THDs from Global_THD_manager so wait_till_no_thd() can complete.
-  //
-  // destroy_extension_state() below is intentionally split out to run after
-  // wait_till_no_thd(): connection threads in THD::cleanup() ->
-  // trans_rollback()
-  // -> rollback_all_tables() can hold VictionaryClient locks, so destroying
-  // VictionaryClient here (before threads exit) causes crashes.
-  villagesql::deinit_extension_infrastructure();
+  // VillageSQL extension shutdown, phase 1 of 2: depopulate capabilities. Must
+  // run here, before wait_till_no_thd() and plugin_shutdown(). The two-phase
+  // ordering contract is documented at the declarations in
+  // villagesql/sql/initialize.h.
+  villagesql::depopulate_extension_capabilities();
 
   DBUG_PRINT("quit", ("Waiting for threads to die (count=%u)",
                       thd_manager->get_thd_count()));
@@ -2534,12 +2527,6 @@ static void close_connections(void) {
   */
   log_alive_threads_info(thd_manager, 100);
   thd_manager->wait_till_no_thd();
-  // Destroy VictionaryClient and SchemaManager only after wait_till_no_thd():
-  // connection threads in THD::cleanup() -> trans_rollback() ->
-  // rollback_all_tables() hold VictionaryClient locks, so we must wait for all
-  // THDs to exit. wait_till_no_connection() below is socket cleanup and is not
-  // sufficient.
-  villagesql::destroy_extension_state();
   /*
     Connection threads might take a little while to go down after removing from
     global thread list. Give it some time.
@@ -2854,6 +2841,10 @@ static void clean_up(bool print_message) {
   table_def_start_shutdown();
   delegates_shutdown();
   plugin_shutdown();
+  // VillageSQL extension shutdown, phase 2 of 2: unload the .so files and
+  // destroy extension state. Must run after plugin_shutdown() (InnoDB is now
+  // down). See villagesql/sql/initialize.h for the two-phase ordering contract.
+  villagesql::destroy_extension_state();
   // needs to be done after plugin shutdown, since plugins can still
   // hold references to the service
   deinit_container_aware();
