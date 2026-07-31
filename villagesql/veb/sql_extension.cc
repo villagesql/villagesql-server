@@ -88,6 +88,7 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
 // error if the current user has neither.
 static bool check_extension_admin(THD *thd) {
   Security_context *sctx = thd->security_context();
+  assert(sctx != nullptr);
   if (sctx->check_access(SUPER_ACL) ||
       sctx->has_global_grant(STRING_WITH_LEN("EXTENSION_ADMIN")).first)
     return false;

@@ -20,15 +20,19 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <mysql/components/my_service.h>
+#include <mysql/components/services/dynamic_privilege.h>
 #include <string>
 #include <vector>
 
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
+#include "sql/mysqld.h"
 #include "sql/sd_notify.h"
 #include "sql/sys_vars.h"
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"
+#include "string_with_len.h"
 #include "villagesql/include/build_info.h"
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
@@ -266,6 +270,19 @@ static bool do_init_extension_infrastructure(THD *thd) {
 */
 bool init_extension_infrastructure() {
   sysd::notify("STATUS=VillageSQL initialization in progress\n");
+
+  // Register the EXTENSION_ADMIN dynamic privilege that guards the extension
+  // DDL (INSTALL/UNINSTALL/ALTER EXTENSION).
+  {
+    my_service<SERVICE_TYPE(dynamic_privilege_register)> priv_service(
+        "dynamic_privilege_register.mysql_server", srv_registry);
+    if (!priv_service.is_valid() ||
+        priv_service->register_privilege(STRING_WITH_LEN("EXTENSION_ADMIN"))) {
+      LogVSQL(ERROR_LEVEL, "Failed to register EXTENSION_ADMIN privilege");
+      sysd::notify("STATUS=VillageSQL initialization unsuccessful\n");
+      return true;
+    }
+  }
 
   villagesql::services::register_builtin_capabilities();
 

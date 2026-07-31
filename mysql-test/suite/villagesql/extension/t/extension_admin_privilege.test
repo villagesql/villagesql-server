@@ -42,6 +42,20 @@ connection default;
 disconnect con1;
 
 --echo #
+--echo # Revoking EXTENSION_ADMIN removes access again (a fresh connection picks
+--echo # up the revoked grant).
+--echo #
+REVOKE EXTENSION_ADMIN ON *.* FROM ext_admin@localhost;
+
+connect(con1, localhost, ext_admin,,);
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+INSTALL EXTENSION vsql_complex;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+UNINSTALL EXTENSION vsql_complex;
+connection default;
+disconnect con1;
+
+--echo #
 --echo # A user with SUPER (but not EXTENSION_ADMIN) can also run them (fallback).
 --echo #
 CREATE USER ext_super@localhost;
@@ -49,6 +63,19 @@ GRANT SUPER ON *.* TO ext_super@localhost;
 
 connect(con1, localhost, ext_super,,);
 INSTALL EXTENSION vsql_complex;
+UNINSTALL EXTENSION vsql_complex;
+connection default;
+disconnect con1;
+
+--echo #
+--echo # Revoking SUPER removes the fallback access too.
+--echo #
+REVOKE SUPER ON *.* FROM ext_super@localhost;
+
+connect(con1, localhost, ext_super,,);
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+INSTALL EXTENSION vsql_complex;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 UNINSTALL EXTENSION vsql_complex;
 connection default;
 disconnect con1;

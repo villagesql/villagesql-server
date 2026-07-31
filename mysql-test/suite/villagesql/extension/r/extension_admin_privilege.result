@@ -23,6 +23,15 @@ EXTENSION_NAME
 vsql_complex
 UNINSTALL EXTENSION vsql_complex;
 #
+# Revoking EXTENSION_ADMIN removes access again (a fresh connection picks
+# up the revoked grant).
+#
+REVOKE EXTENSION_ADMIN ON *.* FROM ext_admin@localhost;
+INSTALL EXTENSION vsql_complex;
+ERROR 42000: Access denied; you need (at least one of) the EXTENSION_ADMIN or SUPER privilege(s) for this operation
+UNINSTALL EXTENSION vsql_complex;
+ERROR 42000: Access denied; you need (at least one of) the EXTENSION_ADMIN or SUPER privilege(s) for this operation
+#
 # A user with SUPER (but not EXTENSION_ADMIN) can also run them (fallback).
 #
 CREATE USER ext_super@localhost;
@@ -31,6 +40,16 @@ Warnings:
 Warning	1287	The SUPER privilege identifier is deprecated
 INSTALL EXTENSION vsql_complex;
 UNINSTALL EXTENSION vsql_complex;
+#
+# Revoking SUPER removes the fallback access too.
+#
+REVOKE SUPER ON *.* FROM ext_super@localhost;
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+INSTALL EXTENSION vsql_complex;
+ERROR 42000: Access denied; you need (at least one of) the EXTENSION_ADMIN or SUPER privilege(s) for this operation
+UNINSTALL EXTENSION vsql_complex;
+ERROR 42000: Access denied; you need (at least one of) the EXTENSION_ADMIN or SUPER privilege(s) for this operation
 #
 # Cleanup.
 #
