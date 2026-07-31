@@ -178,11 +178,14 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-ext-mtr-logs-${{ github.run_number }}
-        # Under --parallel each worker writes its mysqld.N.err to var/<N>/log/.
+        # test_extension_vebs.sh with MTR_BINDIR=$BUILD_DIR puts output into
+        # $BUILD_DIR/mysql-test/var (not the source # tree). Under --parallel
+        # each worker writes its mysqld.N.err to var/<N>/log/.
         path: |
-          ${{ env.SOURCE_DIR }}/mysql-test/var/log/
-          ${{ env.SOURCE_DIR }}/mysql-test/var/*/log/
-        if-no-files-found: ignore
+          ${{ env.BUILD_DIR }}/mysql-test/var/log/
+          ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
+        if-no-files-found: warn
+        retention-days: 7
 
     - name: Fail if any sanitizer phase failed
       if: always()
