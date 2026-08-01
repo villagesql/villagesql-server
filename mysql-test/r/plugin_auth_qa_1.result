@@ -96,7 +96,7 @@ user	plugin
 new_user	new_plugin_server
 plug_dest	caching_sha2_password
 connect(plug_user,localhost,new_user,new_dest);
-ERROR HY000: Plugin 'new_plugin_server' is not loaded
+ERROR HY000: authentication method 'new_plugin_server' is not available (no such plugin or extension auth method)
 UPDATE mysql.user SET plugin='test_plugin_server' WHERE user='new_user';
 UPDATE mysql.user SET USER='new_dest' WHERE user='plug_dest';
 FLUSH PRIVILEGES;
