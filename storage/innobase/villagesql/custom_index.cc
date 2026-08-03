@@ -291,6 +291,7 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
   bool failed = intf.drop(
       custom_index->index_ctx(), custom_index->storage_ctx(),
       static_cast<vef_storage_trx_ref_t>(trx_id), error_msg, sizeof(error_msg));
+  custom_index->set_storage_ctx(nullptr);
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
@@ -360,8 +361,9 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
       ut_a(pos != ULINT_UNDEFINED);
       pkey_columns[i] = to_col_data(dtuple_get_nth_field(entry, pos));
     }
-  } else
+  } else {
     ut_ad(intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF);
+  }
 
   for (uint32_t i = 0; i < num_key_columns; i++) {
     key_columns[i] = to_col_data(dtuple_get_nth_field(entry, i));
@@ -391,7 +393,19 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
 
 void Custom_index::free_all(dict_index_t *index) {
   if (index->custom_index != nullptr) {
-    index->custom_index->~Custom_index();
+    Custom_index *custom_index = index->custom_index;
+    if (custom_index->storage_ctx()) {
+      const auto &intf = custom_index->interface();
+      char error_msg[ERROR_MSG_SIZE] = {};
+      if (intf.unload != nullptr &&
+          intf.unload(custom_index->index_ctx(), custom_index->storage_ctx(),
+                      error_msg, sizeof(error_msg))) {
+        error_msg[sizeof(error_msg) - 1] = '\0';
+        ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+            << "InnoDB: Error unloading custom index storage: " << error_msg;
+      }
+    }
+    custom_index->~Custom_index();
     index->custom_index = nullptr;
   }
 }

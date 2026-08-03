@@ -108,6 +108,24 @@ macro(vsql_add_test_extension DIR_NAME VEB_NAME)
   set(_ext_copy_target copy_${VEB_NAME}${_ext_target_suffix}_veb)
   set(_ext_veb_target ${VEB_NAME}${_ext_target_suffix}_veb)
 
+  # Under gcov, instrument the extension .so so that installing it during mtr
+  # produces coverage of the SDK headers it compiles in. The .gcno/.gcda live
+  # in this ExternalProject's BINARY_DIR (under the main build tree), so
+  # fastcov-report collects them; villagesql_delta_coverage.py then remaps the
+  # packaged include-dev path back onto villagesql/sdk and folds it into the
+  # delta. The .so writes .gcda to this baked-in build path at runtime, so the
+  # build dir must remain writable by whoever runs mtr.
+  set(_ext_cov_args "")
+  if(ENABLE_GCOV)
+    # EXE_LINKER_FLAGS is needed too: CMake's compiler check links a test
+    # executable, which must resolve the gcov symbols pulled in by --coverage.
+    set(_ext_cov_args
+      "-DCMAKE_CXX_FLAGS=--coverage"
+      "-DCMAKE_C_FLAGS=--coverage"
+      "-DCMAKE_SHARED_LINKER_FLAGS=--coverage"
+      "-DCMAKE_EXE_LINKER_FLAGS=--coverage")
+  endif()
+
   ExternalProject_Add(${_ext_proj_target}
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/shared
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/${DIR_NAME}-shared-build
@@ -119,6 +137,7 @@ macro(vsql_add_test_extension DIR_NAME VEB_NAME)
       "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
       "-DEXTENSION_NAME=${VEB_NAME}"
       "-DEXTENSION_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/${DIR_NAME}"
+      ${_ext_cov_args}
     DEPENDS sdk
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""

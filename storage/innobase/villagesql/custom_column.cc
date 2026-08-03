@@ -150,7 +150,18 @@ void Custom_column::free_all(dict_table_t *table) {
   for (ulint i = 0; i < table->n_def; i++) {
     dict_col_t *col = &table->cols[i];
     if (col->custom_column) {
-      col->custom_column->~Custom_column();
+      Custom_column *custom_column = col->custom_column;
+      if (custom_column->storage_ctx()) {
+        const auto &intf = custom_column->storage_interface();
+        char error_msg[ERROR_MSG_SIZE] = {};
+        if (intf && intf->unload(custom_column->storage_ctx(), error_msg,
+                                 sizeof(error_msg))) {
+          error_msg[sizeof(error_msg) - 1] = '\0';
+          ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+              << "InnoDB: Error unloading extended column store: " << error_msg;
+        }
+      }
+      custom_column->~Custom_column();
       col->custom_column = nullptr;
     }
   }
@@ -350,6 +361,7 @@ static dberr_t drop_column_storage(const dict_col_t *col, trx_id_t trx_id) {
   ut_ad(intf);
   bool failed = !intf || intf->drop(custom_column->storage_ctx(), trx_id,
                                     error_msg, sizeof(error_msg));
+  custom_column->set_storage_ctx(nullptr);
 
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
@@ -505,6 +517,7 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
     dberr_t error = insert_impl(index, i, field, trx_id, &pcur, offsets, heap);
     if (error != DB_SUCCESS) {
       log_extended_error("Insert", nullptr, index, i);
+      pcur.close();
       return error;
     }
   }
@@ -516,6 +529,7 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
     row_log_table_insert(pcur.get_rec(), index_entry, index, offsets);
   }
   mtr_commit(&mtr);
+  pcur.close();
 
   return DB_SUCCESS;
 }

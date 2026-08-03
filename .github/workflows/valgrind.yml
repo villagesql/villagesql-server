@@ -49,7 +49,6 @@ jobs:
       working-directory: ./source
       run: ./villagesql/bld_tools/build_ci.sh
       env:
-        PARALLEL_JOBS: 16
         BUILD_TYPE: debug
         CMAKE_EXTRA_FLAGS: -DWITH_VALGRIND=1
 

@@ -13,6 +13,9 @@ jobs:
       contents: write  # Required to push tags
       actions: write   # Required to read/write caches
 
+    outputs:
+      tag: ${{ steps.tags.outputs.date_tag }}
+
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
@@ -35,7 +38,6 @@ jobs:
       run: ./villagesql/bld_tools/build_ci.sh
       env:
         BUILD_TYPE: debug
-        PARALLEL_JOBS: 16
         CMAKE_EXTRA_FLAGS: -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Show ccache statistics
@@ -54,6 +56,7 @@ jobs:
         artifact-name: nightly-big-test-logs-${{ github.run_number }}
 
     - name: Create nightly tags
+      id: tags
       if: success()
       working-directory: ./source
       run: |
@@ -64,6 +67,7 @@ jobs:
         DATE_TAG="nightly.$(date +'%Y-%m-%d')"
         git tag -a "$DATE_TAG" -m "Nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"
         git push origin "$DATE_TAG"
+        echo "date_tag=$DATE_TAG" >> "$GITHUB_OUTPUT"
 
         # Update/create nightly.latest tag (force update if exists)
         git tag -fa "nightly.latest" -m "Latest nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"

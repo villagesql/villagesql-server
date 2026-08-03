@@ -52,12 +52,19 @@ jobs:
         head_sha=$(git rev-parse ${{ github.sha }}^2)
         merge_base=$(git merge-base "$base_sha" "$head_sha")
         echo "VILLINT_COMMIT=$merge_base" >> $GITHUB_ENV
+        # When the PR is a single commit, GitHub overwrites the PR title with
+        # that commit's title on merge, so it must pass title validation too.
+        commit_count=$(git rev-list --count "$merge_base..$head_sha")
+        if [ "$commit_count" -eq 1 ]; then
+          echo "SINGLE_COMMIT_TITLE=$(git log -1 --format=%s "$head_sha")" >> $GITHUB_ENV
+        fi
         # Checkout PR head so villint diffs against the actual PR changes
         git checkout "$head_sha"
 
     - name: Validate PR title
       env:
         PR_TITLE: ${{ github.event.pull_request.title }}
+        SINGLE_COMMIT_TITLE: ${{ env.SINGLE_COMMIT_TITLE }}
       run: ./scripts/validate-pr-title.sh "$PR_TITLE"
 
     - name: Install clang-format

@@ -121,6 +121,17 @@ typedef struct {
 
   // Set the original external identity for the audit trail (@@external_user).
   void (*set_external_user)(vef_auth_ctx_t *ctx, const char *identity);
+
+  // Stage the set of roles the token says should be active on this session,
+  // replacing default-role activation for this login. `roles` is an array of
+  // `n_roles` NUL-terminated role names. The server applies them AFTER account
+  // resolution, using the same grant-checked activation as SET ROLE: only roles
+  // actually granted to the authenticated_as account are activated -- names not
+  // granted are ignored, so the token can never grant or escalate beyond what
+  // the DBA provisioned. The strings are copied; the caller need not keep them.
+  // Passing n_roles == 0 activates no roles (equivalent to SET ROLE NONE).
+  void (*set_active_roles)(vef_auth_ctx_t *ctx, const char *const *roles,
+                           uint32_t n_roles);
 } vef_auth_ops_t;
 
 // The handler the extension implements. Invoked synchronously on the connecting

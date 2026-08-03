@@ -19,12 +19,15 @@ if [[ ! -f "$VSQL" ]]; then
 fi
 
 INSTANCE_DIR="$(mktemp -d)"
+SOCKET_INSTANCE_DIR=""  # set once second instance with custom socket is created below
+SOCKET_DIR=""           # set once custom socket dir is created below
 PASS=0
 FAIL=0
 
 cleanup() {
     "$VSQL" --dir "$INSTANCE_DIR" stop 2>/dev/null || true
-    rm -rf "$INSTANCE_DIR"
+    [[ -n "$SOCKET_INSTANCE_DIR" ]] && "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$SOCKET_DIR/mysql.sock" stop 2>/dev/null || true
+    rm -rf "$INSTANCE_DIR" "$SOCKET_INSTANCE_DIR" "$SOCKET_DIR"
 }
 trap cleanup EXIT
 
@@ -118,6 +121,22 @@ rm -f "$TMPVEB"
 run_test "stop succeeds"          success "$VSQL" --dir "$INSTANCE_DIR" stop
 run_test "status after stop fails" failure "$VSQL" --dir "$INSTANCE_DIR" status
 run_test "double stop fails"       failure "$VSQL" --dir "$INSTANCE_DIR" stop
+
+# Custom --socket
+SOCKET_INSTANCE_DIR="$(mktemp -d)"
+SOCKET_DIR="$(mktemp -d)"
+CUSTOM_SOCKET="$SOCKET_DIR/mysql.sock"
+
+run_test        "init succeeds with --socket"            success "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$CUSTOM_SOCKET" init
+run_test        "start succeeds with --socket"           success "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$CUSTOM_SOCKET" start
+run_test        "socket file created at custom path"     success test -S "$CUSTOM_SOCKET"
+run_test        "no socket file under --dir"             failure test -e "$SOCKET_INSTANCE_DIR/mysql.sock"
+run_test_output "status reports custom socket path" "$CUSTOM_SOCKET" \
+                "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$CUSTOM_SOCKET" status
+run_test_output "connect over --socket can run SELECT 1" "1" \
+                "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$CUSTOM_SOCKET" connect -e "SELECT 1"
+run_test        "stop succeeds with --socket"            success "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$CUSTOM_SOCKET" stop
+run_test        "socket file removed after stop"         failure test -e "$CUSTOM_SOCKET"
 
 # ---------------------------------------------------------------------------
 # Summary

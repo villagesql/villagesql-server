@@ -8,12 +8,10 @@ From the repository root:
 docker build -f docker/server/Dockerfile -t villagesql/server:latest .
 ```
 
-The build compiles VillageSQL from source and bundles four extensions as `.veb` files:
+The build compiles VillageSQL from source and bundles several extensions:
 - `vsql_complex` (in-tree example)
-- `vsql_uuid`
-- `vsql_network_address`
-- `vsql_ai`
-- `vsql_crypto`
+Plus the bundled extensions defined by
+`villagesql/dev_server/bundled_extensions.txt`
 
 The first build takes ~25 minutes (server compilation). Subsequent builds are fast
 (~35 seconds) as long as source files outside `docker/` haven't changed.
@@ -80,6 +78,31 @@ docker/server/test-image.sh villagesql/server:latest
 
 This starts a container, installs each extension, runs a basic CRUD test with the
 COMPLEX type, and cleans up.
+
+## Publishing Releases
+
+Various scripts publish multi-arch images to a registry (Docker Hub by default).
+The option `--dry-run` prints the docker commands without running them.
+
+| Script | Does |
+| --- | --- |
+| `publish_image.sh` | Builds one platform into one arch-specific tag. Local only unless given `--push`. |
+| `publish_manifest.sh` | Stitches the arch images already in the registry into the shared multi-arch tags. |
+
+Images are tagged `REPO:TAG-ARCH` per platform (e.g. `villagesql/server:0.0.5-arm64`),
+and the manifest list is published under `TAG` plus each shared tag (`latest` and
+`stable` by default).
+
+## Release Build Args
+
+Both build args are read from the environment and forwarded to `docker build`:
+
+```bash
+VSQL_PRE_RELEASE_VERSION="" VSQL_DEV_ABI=OFF \
+    docker/server/publish_image.sh --tag 0.0.5 --platform linux/arm64 --push
+```
+
+Defaults are an empty `VSQL_PRE_RELEASE_VERSION` (a release build) and `VSQL_DEV_ABI=ON`.
 
 ## Building Additional Extensions
 
