@@ -28,6 +28,25 @@ For VEF improvements and bug fixes, please follow this process:
 2. All requests will be reviewed weekly by VillageSQL
 3. Once a Github [issue](./issues) and solution has been agreed to, submit a pull request including signing the CLA
 
+### Submitting a Pull Request
+
+External contributors do not have write access to this repository, so changes
+are shared through a fork:
+
+1. **Fork** `villagesql/villagesql-server` to your own GitHub account (use the **Fork** button on the repository page).
+2. **Clone your fork** and create a branch for your change:
+   ```bash
+   git clone https://github.com/<your-username>/villagesql-server.git
+   cd villagesql-server
+   git checkout -b my-change
+   ```
+3. Commit your work, then **push the branch to your fork**:
+   ```bash
+   git push origin my-change
+   ```
+4. **Open a pull request** from your fork's branch against `villagesql/villagesql-server`'s `main` branch. Reference the agreed-upon issue in the PR description (e.g. `Closes #NNN`).
+5. **Sign the CLA.** On your first pull request, the CLA Assistant bot comments with a link to the CLA and the instructions to sign; follow them to unblock the PR.
+
 We look forward to hearing from you.
 
 ## Issue Tracking

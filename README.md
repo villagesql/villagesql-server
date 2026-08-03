@@ -71,8 +71,10 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 > **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths.
 
-1. **Clone the repository:**
+1. **Clone the repository** into your home directory, so the CMake paths in the
+   steps below work as written:
    ```bash
+   cd $HOME
    git clone --depth 1 https://github.com/villagesql/villagesql-server.git
    cd villagesql-server
    ```
@@ -111,7 +113,8 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    cmake ~/villagesql-server -DWITH_DEBUG=1 -DWITH_SSL=system
    ```
 
-4. **Build:**
+4. **Build** the server and the `mysql` client (Step 5 uses the client to
+   connect):
    ```bash
    make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
    ```
