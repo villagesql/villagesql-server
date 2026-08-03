@@ -43,6 +43,7 @@ class Alter_stage;
 
 namespace villagesql {
 class IndexContext;
+class IndexProfileDescriptor;
 }  // namespace villagesql
 
 namespace ddl {
@@ -98,6 +99,10 @@ struct Index_field {
 
   /** true=ASC, false=DESC */
   bool m_is_ascending{};
+
+  /** Extension-registered profile for this key column of a custom index, or
+  nullptr if this is not a custom index. */
+  const villagesql::IndexProfileDescriptor *m_custom_index_profile{};
 };
 
 /** Definition of an index being created */

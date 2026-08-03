@@ -52,8 +52,7 @@ static uint32_t primary_key_columns(const dict_index_t *index) {
 static void vef_index_profile_stub(vef_index_ref_t, uint32_t fn_id,
                                    const void *const *, uint32_t, void *) {
   ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-      << "InnoDB: custom index profile_fn invoked before implemented, fn_id="
-      << fn_id;
+      << "Custom index profile_fn invoked before implemented, fn_id=" << fn_id;
 }
 
 static uint32_t vef_index_max_key_len_stub(vef_index_ref_t, uint32_t, bool) {
@@ -90,8 +89,8 @@ static dberr_t parse_index_options(dict_index_t *index,
                  sizeof(error_msg))) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error parsing custom index options for index "
-        << index->name << ": " << error_msg;
+        << "Error parsing custom index options for index " << index->name
+        << ": " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -129,8 +128,7 @@ dberr_t Custom_index::attach(dict_index_t *index, const IndexContext *meta,
   auto ic = AcquireIndexContextClientManaged(meta);
   if (ic == nullptr) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Failed to acquire custom index context for index "
-        << index->name;
+        << "Failed to acquire custom index context for index " << index->name;
     ut_ad(false);
     return DB_VILLAGESQL_ERROR;
   }
@@ -159,6 +157,34 @@ dberr_t Custom_index::attach(dict_index_t *index, const IndexContext *meta,
   return DB_SUCCESS;
 }
 
+dberr_t Custom_index::add_profile(dict_index_t *index,
+                                  const IndexProfileDescriptor *profile,
+                                  uint32_t key_pos) {
+  if (profile == nullptr || !is_custom(index)) return DB_SUCCESS;
+
+  auto ipd = AcquireIndexProfileDescriptorClientManaged(profile);
+  if (ipd == nullptr) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Failed to acquire custom index profile for index " << index->name
+        << ", key position " << key_pos;
+    ut_ad(false);
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  Custom_index *custom_index = index->custom_index;
+  ut_ad(key_pos == custom_index->key_profiles_.size());
+  if (key_pos != custom_index->key_profiles_.size()) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Out-of-order custom index profile for index " << index->name
+        << ", key position " << key_pos << ", expected "
+        << custom_index->key_profiles_.size();
+    return DB_VILLAGESQL_ERROR;
+  }
+  custom_index->key_profiles_.push_back(std::move(ipd));
+
+  return DB_SUCCESS;
+}
+
 dberr_t Custom_index::load(dict_index_t *new_index,
                            const dict_index_t *old_index) {
   if (!is_custom(old_index)) return DB_SUCCESS;
@@ -167,6 +193,12 @@ dberr_t Custom_index::load(dict_index_t *new_index,
   dberr_t err =
       attach(new_index, old_custom_index->index_meta().get(), nullptr);
   if (err != DB_SUCCESS) return err;
+
+  const auto &key_profiles = old_index->custom_index->key_profiles_;
+  for (uint32_t i = 0; i < key_profiles.size(); i++) {
+    dberr_t perr = add_profile(new_index, key_profiles[i].get(), i);
+    if (perr != DB_SUCCESS) return perr;
+  }
 
   dberr_t init_err = init_index_ctx(new_index);
   if (init_err != DB_SUCCESS) return init_err;
@@ -196,7 +228,7 @@ dberr_t Custom_index::load(dict_index_t *new_index,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error loading custom index storage: " << error_msg;
+        << "Error loading custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -241,7 +273,7 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error creating custom index storage: " << error_msg;
+        << "Error creating custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -264,7 +296,7 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error dropping custom index storage: " << error_msg;
+        << "Error dropping custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
@@ -348,7 +380,7 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error inserting into custom index storage: " << error_msg;
+        << "Error inserting into custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
 

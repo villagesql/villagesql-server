@@ -55,6 +55,7 @@ class String;
 namespace villagesql {
 
 class IndexContext;
+class IndexProfileDescriptor;
 
 // Check if Field should be marked as a custom type by checking the
 // VictionaryClient. If the Field is supposed to be a custom type, then fill the
@@ -411,6 +412,13 @@ extern std::shared_ptr<const TypeContext> AcquireTypeContextClientManaged(
 // If source_ic is null, returns an empty shared_ptr.
 extern std::shared_ptr<const IndexContext> AcquireIndexContextClientManaged(
     const IndexContext *source_ic);
+
+// Acquire a client-managed reference to an IndexProfileDescriptor.
+// Returns a shared_ptr that the caller is responsible for releasing.
+// If source_ipd is null, returns an empty shared_ptr.
+extern std::shared_ptr<const IndexProfileDescriptor>
+AcquireIndexProfileDescriptorClientManaged(
+    const IndexProfileDescriptor *source_ipd);
 
 }  // namespace villagesql
 
