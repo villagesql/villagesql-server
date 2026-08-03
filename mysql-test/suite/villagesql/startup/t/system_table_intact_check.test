@@ -1,0 +1,35 @@
+# Test that a corrupted VillageSQL system table definition is reported.
+#
+# Village_system_table_intact::report_error() is only reached from
+# validate_villagesql_tables(), which runs during server startup, so the test
+# corrupts a system table, restarts, and looks for the report in the error log.
+#
+# A column *name* mismatch is reported but is not fatal, so the server still
+# comes up and the table can be repaired afterwards. A type or column count
+# mismatch aborts startup instead.
+
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("Incorrect definition of table villagesql");
+
+--echo # Rename a column of a VillageSQL system table. The check compares only
+--echo # the first strlen(expected_name) characters, so the new name has to
+--echo # differ at the start, not just at the end.
+--source include/villagesql/internal_schema_test.inc
+ALTER TABLE villagesql.custom_index_columns RENAME COLUMN profile_name TO wrong_column;
+
+--echo # Restart: the system table check runs during startup
+--source include/restart_mysqld.inc
+
+--let SEARCH_FILE= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let SEARCH_PATTERN= Incorrect definition of table villagesql.custom_index_columns: expected column 'profile_name' at position 5, found 'wrong_column'
+--source include/search_pattern.inc
+
+--echo # Repair the system table and restart again
+--source include/villagesql/internal_schema_test.inc
+ALTER TABLE villagesql.custom_index_columns RENAME COLUMN wrong_column TO profile_name;
+--source include/restart_mysqld.inc
+
+--echo # The repaired table is usable again
+--source include/villagesql/internal_schema_test.inc
+SELECT COUNT(*) FROM villagesql.custom_index_columns;

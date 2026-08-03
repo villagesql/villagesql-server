@@ -1,0 +1,18 @@
+CALL mtr.add_suppression("Incorrect definition of table villagesql");
+# Rename a column of a VillageSQL system table. The check compares only
+# the first strlen(expected_name) characters, so the new name has to
+# differ at the start, not just at the end.
+SET SESSION debug='+d,skip_dd_table_access_check';
+ALTER TABLE villagesql.custom_index_columns RENAME COLUMN profile_name TO wrong_column;
+# Restart: the system table check runs during startup
+# restart
+Pattern "Incorrect definition of table villagesql.custom_index_columns: expected column 'profile_name' at position 5, found 'wrong_column'" found
+# Repair the system table and restart again
+SET SESSION debug='+d,skip_dd_table_access_check';
+ALTER TABLE villagesql.custom_index_columns RENAME COLUMN wrong_column TO profile_name;
+# restart
+# The repaired table is usable again
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT COUNT(*) FROM villagesql.custom_index_columns;
+COUNT(*)
+0
