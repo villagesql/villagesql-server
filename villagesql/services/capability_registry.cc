@@ -199,7 +199,7 @@ void register_builtin_capabilities() {
   // on_depopulate removes the handler on extension unload.
   register_capability(VEF_PREVIEW_STATEMENT_EVENT_NAME,
                       {.vtable = preview_statement_event_vtable(),
-                       .vtable_hash = "ver-1",
+                       .vtable_hash = "ver-2",
                        .capability_config_hash = "ver-1",
                        .on_populate = on_populate_statement_event,
                        .on_depopulate = on_depopulate_statement_event});
