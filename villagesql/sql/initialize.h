@@ -20,6 +20,11 @@
 
 namespace villagesql {
 
+// Register the VillageSQL dynamic privileges (EXTENSION_ADMIN). Must be called
+// on every startup path, --initialize included, so that the bootstrap
+// GRANT ALL PRIVILEGES for root covers them. See the comment on the definition.
+bool register_extension_privileges();
+
 // Initialize the villagesql extension framework.
 bool init_extension_infrastructure();
 

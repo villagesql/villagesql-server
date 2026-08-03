@@ -8560,6 +8560,14 @@ static int init_server_components() {
              "default_tmp_storage_engine", default_tmp_storage_engine);
   }
 
+  // Register the VillageSQL dynamic privileges. Unlike the infrastructure
+  // initialization below, this must also happen under --initialize, before the
+  // bootstrap SQL runs, so that the GRANT ALL PRIVILEGES it issues for root
+  // covers them.
+  if (villagesql::register_extension_privileges()) {
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
   // Initialize the VillageSQL extension infrastructure. Custom data types
   // provided by extensions must be available before rolling back uncommitted
   // recovered transactions in ha_post_recover().

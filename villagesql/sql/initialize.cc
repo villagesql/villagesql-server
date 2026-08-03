@@ -262,6 +262,32 @@ static bool do_init_extension_infrastructure(THD *thd) {
 }  // namespace
 
 /**
+  Registers the VillageSQL dynamic privileges.
+
+  Runs unconditionally, including under --initialize: the bootstrap SQL grants
+  root all privileges. If a privilege is missing from the register during
+  bootstrap, root never gets it leaving root without a privilege that every
+  runtime GRANT ALL confers.
+
+  @return Status of performed operation
+  @retval false success
+  @retval true failure
+*/
+bool register_extension_privileges() {
+  // The EXTENSION_ADMIN dynamic privilege guards the extension DDL
+  // (INSTALL/UNINSTALL/ALTER EXTENSION).
+  my_service<SERVICE_TYPE(dynamic_privilege_register)> priv_service(
+      "dynamic_privilege_register.mysql_server", srv_registry);
+  if (!priv_service.is_valid() ||
+      priv_service->register_privilege(STRING_WITH_LEN("EXTENSION_ADMIN"))) {
+    LogVSQL(ERROR_LEVEL, "Failed to register EXTENSION_ADMIN privilege");
+    return true;
+  }
+
+  return false;
+}
+
+/**
   For now, this just initializes villagesql system tables.
 
   @return Status of performed operation
@@ -270,19 +296,6 @@ static bool do_init_extension_infrastructure(THD *thd) {
 */
 bool init_extension_infrastructure() {
   sysd::notify("STATUS=VillageSQL initialization in progress\n");
-
-  // Register the EXTENSION_ADMIN dynamic privilege that guards the extension
-  // DDL (INSTALL/UNINSTALL/ALTER EXTENSION).
-  {
-    my_service<SERVICE_TYPE(dynamic_privilege_register)> priv_service(
-        "dynamic_privilege_register.mysql_server", srv_registry);
-    if (!priv_service.is_valid() ||
-        priv_service->register_privilege(STRING_WITH_LEN("EXTENSION_ADMIN"))) {
-      LogVSQL(ERROR_LEVEL, "Failed to register EXTENSION_ADMIN privilege");
-      sysd::notify("STATUS=VillageSQL initialization unsuccessful\n");
-      return true;
-    }
-  }
 
   villagesql::services::register_builtin_capabilities();
 
