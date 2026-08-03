@@ -1,4 +1,5 @@
 # Copyright (c) 2013, 2026, Oracle and/or its affiliates.
+#    Copyright (c) 2026 VillageSQL Contributors
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -55,6 +56,7 @@ SET(TESTS
   ut0new
   ut0rbt
   ut0rnd
+  vsql_storage_abi
 )
 
 # Treat warnings as errors on MSVC for InnoDB's unittests
