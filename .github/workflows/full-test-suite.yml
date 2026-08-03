@@ -80,6 +80,29 @@ jobs:
         echo "Git SHA1: $(git -C source rev-parse ${{ env.REF }})"
         echo "Git Commit: $(git -C source log -n1 --oneline)"
 
+    - name: Record run parameters
+      run: |
+        jq -n \
+          --arg capturedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --arg trigger "$GITHUB_EVENT_NAME" \
+          --arg gitRev "$REF" \
+          --arg buildType "$BUILD_TYPE" \
+          --arg artifactPrefix "$ARTIFACT_PREFIX" \
+          --arg sha "$(git -C source rev-parse HEAD)" \
+          --arg commitSubject "$(git -C source log -n1 --format=%s)" \
+          '$ARGS.named' > run-parameters.json
+        # Pretty print as output
+        jq . run-parameters.json
+
+    - name: Upload run parameters
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: run-parameters
+        path: run-parameters.json
+        if-no-files-found: warn
+        retention-days: 7
+
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
       with:
