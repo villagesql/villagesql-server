@@ -70,6 +70,7 @@ class StatementEventArgs {
 
   uint64_t warning_count() const { return a_->warning_count; }
   const char *digest_text() const { return a_->digest_text; }
+  const char *digest_hash() const { return a_->digest_hash; }
 
   uint64_t select_full_join() const { return a_->select_full_join; }
   uint64_t select_full_range_join() const { return a_->select_full_range_join; }
@@ -89,6 +90,14 @@ class StatementEventArgs {
 
   bool no_index_used() const { return a_->no_index_used != 0; }
   bool no_good_index_used() const { return a_->no_good_index_used != 0; }
+
+  uint64_t read_first() const { return a_->read_first; }
+  uint64_t read_last() const { return a_->read_last; }
+  uint64_t read_key() const { return a_->read_key; }
+  uint64_t read_next() const { return a_->read_next; }
+  uint64_t read_prev() const { return a_->read_prev; }
+  uint64_t read_rnd() const { return a_->read_rnd; }
+  uint64_t read_rnd_next() const { return a_->read_rnd_next; }
 
  private:
   const vef_statement_event_args_t *a_;

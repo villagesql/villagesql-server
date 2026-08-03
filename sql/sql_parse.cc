@@ -188,6 +188,7 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "villagesql/include/error.h"
+#include "villagesql/services/preview/statement_event.h"
 #include "violite.h"
 
 #ifdef WITH_LOCK_ORDER
@@ -1291,7 +1292,9 @@ void execute_init_command(THD *thd, LEX_STRING *init_command,
   /* For per-query performance counters with log_slow_statement */
   struct System_status_var query_start_status;
   thd->clear_copy_status_var();
-  if (opt_log_slow_extra) {
+  // VillageSQL: also snapshot when a statement_event hook needs deltas.
+  if (opt_log_slow_extra ||
+      villagesql::services::statement_event_wants_status_snapshot()) {
     thd->copy_status_var(&query_start_status);
   }
 
@@ -1422,7 +1425,9 @@ bool do_command(THD *thd) {
   /* For per-query performance counters with log_slow_statement */
   struct System_status_var query_start_status;
   thd->clear_copy_status_var();
-  if (opt_log_slow_extra) {
+  // VillageSQL: also snapshot when a statement_event hook needs deltas.
+  if (opt_log_slow_extra ||
+      villagesql::services::statement_event_wants_status_snapshot()) {
     thd->copy_status_var(&query_start_status);
   }
 
