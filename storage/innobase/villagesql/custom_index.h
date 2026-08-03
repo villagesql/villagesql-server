@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "db0err.h"
 #include "trx0types.h"
@@ -36,6 +37,7 @@ class Index;
 namespace villagesql {
 
 class IndexContext;
+class IndexProfileDescriptor;
 
 namespace innodb {
 
@@ -64,6 +66,12 @@ class Custom_index {
 
   // Custom index extension interface.
   const vef_type_index_intf_t &interface() const;
+
+  // Get the index profile for key column type.
+  const IndexProfileDescriptor *profile_for_key(uint32_t key_pos) const {
+    ut_a(key_pos < key_profiles_.size());
+    return key_profiles_[key_pos].get();
+  }
 
   // ABI index context handed to every extension index function. The pointer
   // remains valid for the lifetime of this Custom_index (the index heap).
@@ -101,6 +109,12 @@ class Custom_index {
   static dberr_t attach(dict_index_t *index, const IndexContext *meta,
                         const dd::Index *dd_index);
 
+  // Records the extension-registered profile for the key_pos'th user-defined
+  // key column of a custom index.
+  static dberr_t add_profile(dict_index_t *index,
+                             const IndexProfileDescriptor *profile,
+                             uint32_t key_pos);
+
   // Loads index from custom index storage. Carries the Custom_index runtime
   // state from old_index onto new_index's heap.
   static dberr_t load(dict_index_t *new_index, const dict_index_t *old_index);
@@ -130,6 +144,8 @@ class Custom_index {
 
  private:
   std::shared_ptr<const IndexContext> index_metadata_;
+  std::vector<std::shared_ptr<const IndexProfileDescriptor>> key_profiles_;
+
   vef_index_ctx_t index_ctx_{};
   StorageCtx *storage_ctx_ = nullptr;
   StorageRef storage_ref_{};

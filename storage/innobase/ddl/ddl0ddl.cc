@@ -208,26 +208,29 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
 
   index->set_committed(index_def->m_rebuild);
 
+  // Reports a custom-index DDL error: records it on trx, frees the
+  // not-yet-cached index prototype, and returns nullptr to the caller.
+  auto fail = [](dict_index_t *index, trx_t *trx,
+                 const char *msg) -> dict_index_t * {
+    trx->error_state = DB_VILLAGESQL_ERROR;
+    trx_set_detailed_error(trx, msg);
+    dict_mem_index_free(index);
+    return nullptr;
+  };
+
   using villagesql::innodb::Custom_index;
   {
     dberr_t cerr =
         Custom_index::attach(index, index_def->m_custom_index_context, nullptr);
     if (cerr != DB_SUCCESS) {
-      trx->error_state = cerr;
-      trx_set_detailed_error(trx,
-                             "InnoDB: Custom index invalid metadata state");
-      dict_mem_index_free(index);
-      return nullptr;
+      return fail(index, trx, "InnoDB: Custom index invalid metadata state");
     }
   }
 
   // TODO(villagesql-indexing): Support custom indexes on partitioned tables.
   if (Custom_index::is_custom(index) && dict_table_is_partition(table)) {
-    trx->error_state = DB_VILLAGESQL_ERROR;
-    trx_set_detailed_error(
-        trx, "InnoDB: Custom index is not supported on partitioned tables");
-    dict_mem_index_free(index);
-    return nullptr;
+    return fail(index, trx,
+                "InnoDB: Custom index is not supported on partitioned tables");
   }
 
   bool has_new_v_col{};
@@ -250,16 +253,20 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
       name = table->get_col_name(ifield->m_col_no);
       dict_col_t *col = table->get_col(ifield->m_col_no);
       if (col->stored_by_extn() && !Custom_index::is_custom(index)) {
-        trx->error_state = DB_VILLAGESQL_ERROR;
-        trx_set_detailed_error(
-            trx,
-            "InnoDB: Indexing for types with column storage is supported only "
-            "with custom index.");
-        return nullptr;
+        return fail(index, trx,
+                    "InnoDB: Indexing for types with column storage is "
+                    "supported only with custom index.");
       }
     }
 
     index->add_field(name, ifield->m_prefix_len, ifield->m_is_ascending);
+
+    dberr_t perr =
+        Custom_index::add_profile(index, ifield->m_custom_index_profile, i);
+    if (perr != DB_SUCCESS) {
+      return fail(index, trx,
+                  "InnoDB: Custom index invalid profile metadata state");
+    }
   }
 
   /* Create B-tree */
