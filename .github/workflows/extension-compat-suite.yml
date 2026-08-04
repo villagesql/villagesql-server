@@ -175,10 +175,12 @@ jobs:
           else
             echo "EXT_ROOT=extension" >> "$GITHUB_ENV"
           fi
+
       - name: Set up Rust toolchain
         if: matrix.build == 'cargo'
         uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
 
+      # TODO(villagesql-rust): build the HEAD version of the SDK from the repo.
       - name: Install cargo-vsql
         if: matrix.build == 'cargo'
         run: cargo install --path extension/cargo-vsql --locked
