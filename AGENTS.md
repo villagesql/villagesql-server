@@ -220,6 +220,7 @@ When adding VillageSQL features:
     - `TODO(villagesql-windows):` - Known problems with supporting Windows
     - `TODO(villagesql-indexing):` - Related to indexing work
     - `TODO(villagesql-back-to-mysql):` - Required for downgrade safety / vanilla MySQL compatibility
+    - `TODO(villagesql-rust):` - Related to the Rust SDK / Rust extension support
 - Avoid `/* */` style comments except for copyright headers
 - Do NOT use section separator comments (e.g., `// ===== Serialization =====`) - they're hard to maintain and add little value
 - Do NOT add explanatory comments on #include lines (e.g., `#include "my_sys.h" // my_ok, my_printf_error`) - they're hard to maintain
