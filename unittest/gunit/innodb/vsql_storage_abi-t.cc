@@ -23,6 +23,10 @@
 // retries with a big enough buffer. These tests pin that negotiation contract
 // and the start/commit lifecycle.
 //
+// The vef_storage_page_latch() tests below cover the parts of that function
+// which need no buffer pool: argument validation and the modes it does not
+// act on.
+//
 
 #include <gtest/gtest.h>
 
@@ -213,6 +217,72 @@ TEST_F(StorageAbiMtrTest, SupportsTwoConcurrentMtrs) {
 // can unconditionally commit on the way out.
 TEST_F(StorageAbiMtrTest, CommitOfNullRefIsNoOp) {
   vef_storage_mtr_commit(nullptr);
+}
+
+// vef_storage_page_latch() upgrades a page that is only buffer-fixed (loaded
+// with VEF_STORAGE_PAGE_LATCH_NONE) to SX or X. These tests cover the two
+class StorageAbiPageLatchTest : public StorageAbiMtrTest {
+ protected:
+  // A non-null address that is never dereferenced on the paths under test.
+  // vef_storage_page_latch() only casts 'block' and hands it to InnoDB when
+  // the mode is SX or X, which these tests never request.
+  vef_storage_block_ref_t opaque_block() {
+    return static_cast<vef_storage_block_ref_t>(&m_block_placeholder);
+  }
+
+  unsigned char m_block_placeholder = 0;
+};
+
+// A null block is rejected before anything is cast or dereferenced.
+TEST_F(StorageAbiPageLatchTest, RejectsNullBlock) {
+  AlignedBuffer buf(m_required_size, m_required_alignment);
+  vef_storage_mtr_ref_t mtr = vef_storage_mtr_start(
+      buf.get(), buf.size(), nullptr, nullptr, m_error, sizeof(m_error));
+  ASSERT_NE(nullptr, mtr) << "error_msg was: " << m_error;
+
+  char err[512] = {};
+  EXPECT_EQ(VEF_STORAGE_ERROR_INVALID_ARGUMENT,
+            vef_storage_page_latch(nullptr, 0, VEF_STORAGE_PAGE_LATCH_EXCLUSIVE,
+                                   mtr, err, sizeof(err)));
+  EXPECT_STREQ("Invalid argument: block is null", err);
+
+  vef_storage_mtr_commit(mtr);
+}
+
+// A null mtr is rejected for the same reason: there is nothing to latch in.
+TEST_F(StorageAbiPageLatchTest, RejectsNullMtr) {
+  char err[512] = {};
+  EXPECT_EQ(VEF_STORAGE_ERROR_INVALID_ARGUMENT,
+            vef_storage_page_latch(opaque_block(), 0,
+                                   VEF_STORAGE_PAGE_LATCH_EXCLUSIVE, nullptr,
+                                   err, sizeof(err)));
+  EXPECT_STREQ("Invalid argument: mtr_ref is null", err);
+}
+
+// When both are null the message names the block, not the mtr. Pinned because
+// an extension author reading only the message would otherwise assume the mtr
+// was fine.
+TEST_F(StorageAbiPageLatchTest, BothNullReportsBlock) {
+  char err[512] = {};
+  EXPECT_EQ(VEF_STORAGE_ERROR_INVALID_ARGUMENT,
+            vef_storage_page_latch(nullptr, 0, VEF_STORAGE_PAGE_LATCH_EXCLUSIVE,
+                                   nullptr, err, sizeof(err)));
+  EXPECT_STREQ("Invalid argument: block is null", err);
+}
+
+// The error buffer is optional: a caller that does not want the message can
+// pass nullptr, or a zero length, and still gets the status code.
+TEST_F(StorageAbiPageLatchTest, ToleratesNullErrorBuffer) {
+  EXPECT_EQ(VEF_STORAGE_ERROR_INVALID_ARGUMENT,
+            vef_storage_page_latch(nullptr, 0, VEF_STORAGE_PAGE_LATCH_EXCLUSIVE,
+                                   nullptr, nullptr, 0));
+
+  // A non-null buffer with zero length must not be written to either.
+  char err[8] = "untouch";
+  EXPECT_EQ(VEF_STORAGE_ERROR_INVALID_ARGUMENT,
+            vef_storage_page_latch(nullptr, 0, VEF_STORAGE_PAGE_LATCH_EXCLUSIVE,
+                                   nullptr, err, 0));
+  EXPECT_STREQ("untouch", err);
 }
 
 }  // namespace vsql_storage_abi_unittest

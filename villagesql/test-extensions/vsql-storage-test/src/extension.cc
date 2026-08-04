@@ -278,10 +278,45 @@ bool stored_int_mark_delete(Ctx *ctx, storage::MtrCtx::Ref mctx,
                             storage::Column::Ref col_ref, bool delete_mark,
                             char *err, uint32_t err_len) {
   auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
+
+  // The data page is loaded unlatched and upgraded, rather than loaded
+  // EXCLUSIVE outright, to cover the latch upgrade path. The SHARED_EXCLUSIVE
+  // step and the release before it are here only to cover those calls: a latch
+  // can be upgraded once, so acquiring X afterwards requires dropping the SX
+  // and re-loading the page unlatched. release() clears the mini-transaction's
+  // memo slot for the block, which is what makes the second upgrade legal.
+  // Nothing about mark_delete needs the SX pass; only the final X latch, which
+  // the writes below require.
   storage::Page page;
-  if (page.load(ctx->user()->space, page_num, storage::Page::Latch::EXCLUSIVE,
+  if (page.load(ctx->user()->space, page_num, storage::Page::Latch::NO_LATCH,
                 mctx) != storage::Error::SUCCESS) {
     snprintf(err, err_len, "stored_int mark_delete: page load failed: %s",
+             storage::last_error().data());
+    return true;
+  }
+  storage::Page::Latch sx_latch = storage::Page::Latch::SHARED_EXCLUSIVE;
+  if (page.latch(sx_latch, mctx) != storage::Error::SUCCESS) {
+    snprintf(err, err_len, "stored_int mark_delete: page sx latch failed: %s",
+             storage::last_error().data());
+    return true;
+  }
+  if (page.release(mctx) != storage::Error::SUCCESS) {
+    snprintf(err, err_len, "stored_int mark_delete: page release failed: %s",
+             storage::last_error().data());
+    return true;
+  }
+
+  // release() reset the Page, so load it again to get a fresh, unlatched
+  // handle that can be upgraded to EXCLUSIVE for the writes.
+  if (page.load(ctx->user()->space, page_num, storage::Page::Latch::NO_LATCH,
+                mctx) != storage::Error::SUCCESS) {
+    snprintf(err, err_len, "stored_int mark_delete: page reload failed: %s",
+             storage::last_error().data());
+    return true;
+  }
+  storage::Page::Latch x_latch = storage::Page::Latch::EXCLUSIVE;
+  if (page.latch(x_latch, mctx) != storage::Error::SUCCESS) {
+    snprintf(err, err_len, "stored_int mark_delete: page x latch failed: %s",
              storage::last_error().data());
     return true;
   }
