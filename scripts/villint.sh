@@ -195,6 +195,7 @@ ALLOWED_TODO_TAGS=(
   "villagesql-blob"
   "villagesql-indexing"
   "villagesql-back-to-mysql"
+  "villagesql-rust"
 )
 
 INVALID_TODO_TAGS_FOUND=0
@@ -715,6 +716,8 @@ for file in $OTHER_FILES; do
   fi
 
   apply_if_changed "$file" "$temp" "Fixed whitespace/newline in $file" || true
+
+  check_todo_tags "$file"
 done
 
 # --- Check for Accidental Laptop Strings ---
