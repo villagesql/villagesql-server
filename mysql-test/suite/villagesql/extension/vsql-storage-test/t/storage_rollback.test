@@ -1,0 +1,68 @@
+# Undo of extended-storage (column store) values.
+#
+#   ROLLBACK of INSERT  -> frees the inserted value.
+#   ROLLBACK of UPDATE  -> frees the post-update value and then
+#                          un-delete-marks the pre-update one.
+#   ROLLBACK of DELETE  -> the delete mark is removed.
+#
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Install the column-store test extension (provides STORED_INT)
+INSTALL EXTENSION vsql_storage_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '111');
+INSERT INTO t1 VALUES (2, '222');
+INSERT INTO t1 VALUES (3, '333');
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo #
+--echo # ROLLBACK of INSERT: rollback_inserted() frees the new value
+--echo #
+START TRANSACTION;
+INSERT INTO t1 VALUES (4, '444');
+SELECT id, n FROM t1 ORDER BY id;
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo #
+--echo # ROLLBACK of UPDATE: rollback_updated() frees the post-update value and
+--echo # restores the pre-update one
+--echo #
+START TRANSACTION;
+UPDATE t1 SET n = '999' WHERE id = 1;
+SELECT id, n FROM t1 ORDER BY id;
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo #
+--echo # ROLLBACK of DELETE: rollback_updated() only removes the delete mark
+--echo #
+START TRANSACTION;
+DELETE FROM t1 WHERE id = 2;
+SELECT id, n FROM t1 ORDER BY id;
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo #
+--echo # All three kinds of undo rolled back together
+--echo #
+START TRANSACTION;
+INSERT INTO t1 VALUES (5, '555');
+UPDATE t1 SET n = '888' WHERE id = 3;
+DELETE FROM t1 WHERE id = 1;
+SELECT id, n FROM t1 ORDER BY id;
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+
+--echo # The rows and the table are intact
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+--echo # Cleanup
+UNINSTALL EXTENSION vsql_storage_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

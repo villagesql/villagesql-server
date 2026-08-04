@@ -1,0 +1,88 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+# Install the column-store test extension (provides STORED_INT)
+INSTALL EXTENSION vsql_storage_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '111');
+INSERT INTO t1 VALUES (2, '222');
+INSERT INTO t1 VALUES (3, '333');
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+#
+# ROLLBACK of INSERT: rollback_inserted() frees the new value
+#
+START TRANSACTION;
+INSERT INTO t1 VALUES (4, '444');
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+4	444
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+#
+# ROLLBACK of UPDATE: rollback_updated() frees the post-update value and
+# restores the pre-update one
+#
+START TRANSACTION;
+UPDATE t1 SET n = '999' WHERE id = 1;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	999
+2	222
+3	333
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+#
+# ROLLBACK of DELETE: rollback_updated() only removes the delete mark
+#
+START TRANSACTION;
+DELETE FROM t1 WHERE id = 2;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+3	333
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+#
+# All three kinds of undo rolled back together
+#
+START TRANSACTION;
+INSERT INTO t1 VALUES (5, '555');
+UPDATE t1 SET n = '888' WHERE id = 3;
+DELETE FROM t1 WHERE id = 1;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+2	222
+3	888
+5	555
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	111
+2	222
+3	333
+# The rows and the table are intact
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+# Cleanup
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
