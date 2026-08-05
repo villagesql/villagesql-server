@@ -283,14 +283,16 @@ UNINSTALL EXTENSION vsql_complex;
 
 ## Developing Extensions
 
-VillageSQL provides a C++ SDK for building high-performance extensions.
+VillageSQL provides a C++ SDK and a Rust SDK for building high-performance extensions.
 
 - **Example Code:**
   - `villagesql/examples/vsql-complex`: Reference implementation with arithmetic, custom hash handlers, and platform-independent serialization.
   - `villagesql/examples/vsql-simple`: A minimal "Hello World" implementation of a custom type and functions.
 - **Templates:**
-  - [`villagesql/vsql-extension-template`](https://github.com/villagesql/vsql-extension-template)
+  - [`villagesql/vsql-extension-template`](https://github.com/villagesql/vsql-extension-template) (C++)
+  - [`villagesql/vsql-extension-template-rust`](https://github.com/villagesql/vsql-extension-template-rust) (Rust)
 - **Header API:** Detailed extension API definitions can be found in `villagesql/include/villagesql/vsql.h`.
+- **Rust SDK:** [`villagesql/vsql-rust-sdk`](https://github.com/villagesql/vsql-rust-sdk) provides the `villagesql` crate and the `cargo-vsql` build tool, with runnable examples under `examples/`.
 
 ## Known Limitations
 
