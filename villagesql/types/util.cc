@@ -448,41 +448,6 @@ bool HasCustomTypeColumns(const List<Create_field> &create_list) {
   return false;
 }
 
-bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
-                                       const char *old_table,
-                                       const char *new_db,
-                                       const char *new_table) {
-  auto &vclient = VictionaryClient::instance();
-  if (!vclient.is_initialized()) {
-    return false;  // VictionaryClient not initialized, skip
-  }
-
-  vclient.assert_write_lock_held();
-
-  // Get all custom columns for the old table
-  auto custom_columns = vclient.GetCustomColumnsForTable(old_db, old_table);
-
-  if (custom_columns.empty()) {
-    return false;  // No custom columns to rename
-  }
-
-  // Mark each column for update with new db/table names
-  for (const ColumnEntry *old_col : custom_columns) {
-    ColumnEntry new_entry(ColumnKey(new_db, new_table, old_col->column_name()),
-                          old_col->extension_name, old_col->extension_version,
-                          old_col->type_name, old_col->type_parameters);
-
-    if (should_assert_if_true(vclient.columns().MarkForUpdate(
-            thd, std::move(new_entry), old_col->key()))) {
-      LogVSQL(ERROR_LEVEL, "Failed to mark custom column for rename: %s.%s.%s",
-              old_db, old_table, old_col->column_name().c_str());
-      return true;
-    }
-  }
-
-  return false;
-}
-
 // Lazily allocate a TypeEncoder for field, reused for all subsequent encodes
 // within the table's lifetime.
 //

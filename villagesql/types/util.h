@@ -151,16 +151,6 @@ extern void ClearAlterCustomFields(THD *thd);
 // for binlogging (to ensure fully qualified type names are used).
 extern bool HasCustomTypeColumns(const List<Create_field> &create_list);
 
-// Handle custom column metadata updates when renaming a table
-// Marks all custom columns for the table for UPDATE with new db/table names
-// Queries VictionaryClient cache and marks MarkForUpdate operations
-// Requires write lock to be held for the VictionaryClient before calling
-// Returns false on success, true on error
-extern bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
-                                              const char *old_table,
-                                              const char *new_db,
-                                              const char *new_table);
-
 // Encodes a string for storage in a custom type field, with error reporting.
 // The TypeContext and field name are taken from the field itself. On error,
 // returns nullptr; if is_valid is false the value was invalid (warning

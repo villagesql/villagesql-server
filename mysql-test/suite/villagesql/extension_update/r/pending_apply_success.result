@@ -1,11 +1,24 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
 INSTALL EXTENSION update_test VERSION '1.0.0';
 CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
 INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
+CREATE PROCEDURE p_counter(IN c update_test.COUNTER)
+BEGIN
+SELECT c AS param_value, update_test.counter_double(c) AS doubled;
+END//
 SELECT id, val FROM t ORDER BY id;
 id	val
 1	v1:10
 2	v1:20
 3	v1:5
+CALL p_counter('10');
+param_value	doubled
+v1:10	20
+SELECT db_name, sp_name, param_name, extension_name, extension_version,
+type_name
+FROM villagesql.custom_sp_params ORDER BY db_name, sp_name, param_name;
+db_name	sp_name	param_name	extension_name	extension_version	type_name
+test	p_counter	c	update_test	1.0.0	COUNTER
 ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
 SELECT extension_name, extension_version, pending_version, pending_last_error
 FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
@@ -21,5 +34,15 @@ id	val
 1	v2:10
 2	v2:20
 3	v2:5
+CALL p_counter('10');
+param_value	doubled
+v2:10	30
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT db_name, sp_name, param_name, extension_name, extension_version,
+type_name
+FROM villagesql.custom_sp_params ORDER BY db_name, sp_name, param_name;
+db_name	sp_name	param_name	extension_name	extension_version	type_name
+test	p_counter	c	update_test	2.0.0	COUNTER
+DROP PROCEDURE p_counter;
 DROP TABLE t;
 UNINSTALL EXTENSION update_test;
