@@ -23,15 +23,6 @@
 
 namespace villagesql {
 
-std::string make_udf_key(const LEX_STRING &extension_name,
-                         const LEX_STRING &function_name) {
-  if (extension_name.str && extension_name.length > 0) {
-    return std::string(extension_name.str, extension_name.length) + "." +
-           std::string(function_name.str, function_name.length);
-  }
-  return std::string(function_name.str, function_name.length);
-}
-
 std::string make_udf_key(const char *extension, size_t ext_len,
                          const char *function, size_t func_len) {
   std::string func_str =
