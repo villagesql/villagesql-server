@@ -1,0 +1,23 @@
+# Table-identifier case behavior for builtin and custom types with
+# lower_case_table_names=0.
+
+--source include/have_lowercase0.inc
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE test_case;
+USE test_case;
+
+# Builtin-type tables: names differing only in case are distinct
+CREATE TABLE t1 (id INT);
+CREATE TABLE T1 (id INT);
+
+SHOW TABLES;
+DROP TABLE t1, T1;
+
+# TODO(villagesql-crash): CREATE TABLE pairs whose names are treated as
+# duplicates 
+#CREATE TABLE t1 (value COMPLEX); #CREATE TABLE T1 (value COMPLEX);
+
+DROP DATABASE test_case;
+
+--source include/villagesql/uninstall_complex_extension.inc
