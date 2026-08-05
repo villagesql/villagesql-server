@@ -507,7 +507,7 @@ TEST_F(VictionaryClientTest, NormalizationFunctionsAllSettings) {
 }
 
 // Normalization must byte-match the data dictionary's lowercasing, or lookups
-// against DD-stored names miss. 
+// against DD-stored names miss.
 // TODO(villagesql-crash): Enable once normalization matches the DD's case table
 // instead of utf8mb4_0900_ai_ci.
 TEST_F(VictionaryClientTest, DISABLED_NormalizationMatchesDdLowercasing) {

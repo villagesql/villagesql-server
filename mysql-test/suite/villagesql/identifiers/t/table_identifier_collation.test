@@ -16,7 +16,7 @@ SHOW TABLES;
 DROP TABLE cafe, café, gross, groß;
 
 # TODO(villagesql-crash): CREATE TABLE pairs whose names are treated as
-# duplicates under custom_columns utf8mb4_0900_ai_ci collation  
+# duplicates under custom_columns utf8mb4_0900_ai_ci collation
 #CREATE TABLE cafe (value COMPLEX);
 #CREATE TABLE café (value COMPLEX);
 #

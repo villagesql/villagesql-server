@@ -15,7 +15,7 @@ SHOW TABLES;
 DROP TABLE t1, T1;
 
 # TODO(villagesql-crash): CREATE TABLE pairs whose names are treated as
-# duplicates 
+# duplicates
 #CREATE TABLE t1 (value COMPLEX); #CREATE TABLE T1 (value COMPLEX);
 
 DROP DATABASE test_case;
