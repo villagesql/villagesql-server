@@ -1627,6 +1627,14 @@ FROM mysql.user WHERE Reload_priv = 'Y' AND @hadFlushPrivilegesPriv = 0;
 -- SET_USER_ID is removed dynamic privilege, revoke all grants of it.
 DELETE FROM global_grants WHERE PRIV = 'SET_USER_ID';
 
+-- Add the VillageSQL privilege EXTENSION_ADMIN for every user who has the
+-- privilege SUPER, provided that there is not a user who already has
+-- privilege EXTENSION_ADMIN.
+SET @hadExtensionAdminPriv = (SELECT COUNT(*) FROM global_grants WHERE priv = 'EXTENSION_ADMIN');
+INSERT INTO global_grants SELECT user, host, 'EXTENSION_ADMIN', IF(grant_priv = 'Y', 'Y', 'N')
+FROM mysql.user WHERE Super_priv = 'Y' AND @hadExtensionAdminPriv = 0
+AND user NOT IN ('mysql.infoschema','mysql.session','mysql.sys');
+
 -- Bug#36808636 System accounts are not converted to non legacy auth plugin during upgrade
 -- Convert authentication of 'mysql.sys' and 'mysql.sessioon' users
 -- from mysql_native_password into caching_sha2_password.

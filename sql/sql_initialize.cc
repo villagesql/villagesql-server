@@ -64,14 +64,19 @@ bool opt_initialize_insecure = false;
 bool mysql_initialize_directory_freshly_created = false;
 
 static const char *initialization_data[] = {
-    "FLUSH PRIVILEGES",
-    insert_user_buffer,
+    "FLUSH PRIVILEGES", insert_user_buffer,
     "GRANT ALL PRIVILEGES ON *.* TO root@localhost WITH GRANT OPTION;\n",
     "GRANT PROXY ON ''@'' TO 'root'@'localhost' WITH GRANT OPTION;\n",
     "INSERT IGNORE INTO mysql.global_grants VALUES ('root', 'localhost', "
     "'AUDIT_ABORT_EXEMPT', 'Y');\n",
     "INSERT IGNORE INTO mysql.global_grants VALUES ('root', 'localhost', "
     "'FIREWALL_EXEMPT', 'Y')",
+    // EXTENSION_ADMIN is registered by init_extension_infrastructure(), which
+    // is skipped under --initialize, so the GRANT ALL above cannot pick it up.
+    // Grant it explicitly, the same way AUDIT_ABORT_EXEMPT and FIREWALL_EXEMPT
+    // are handled for privileges their components register later.
+    "INSERT IGNORE INTO mysql.global_grants VALUES ('root', 'localhost', "
+    "'EXTENSION_ADMIN', 'Y')",
     nullptr};
 
 static const char **cmds[] = {initialization_cmds, mysql_system_tables,
