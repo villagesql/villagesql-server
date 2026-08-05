@@ -54,10 +54,9 @@ jobs:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
       # workflow_run supplies no inputs, so fall back to the commit the nightly
-      # run built. Its tags only exist when it succeeded, but head_sha is always
-      # there, so a failed nightly still gets its code tested.
+      # run built.
       REF: ${{ inputs.ref || github.event.workflow_run.head_sha || 'main' }}
-      BUILD_TYPE: ${{ inputs.build-type || 'release' }}
+      BUILD_TYPE: ${{ inputs.build-type || 'debug' }}
       ARTIFACT_PREFIX: ${{ inputs.artifact-prefix || 'nightly-full' }}
 
     steps:
