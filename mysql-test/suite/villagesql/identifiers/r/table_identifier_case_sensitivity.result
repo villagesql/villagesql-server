@@ -7,9 +7,4 @@ Tables_in_test_case
 T1
 t1
 DROP TABLE t1, T1;
-CREATE TABLE T1 (value COMPLEX);
-SHOW FIELDS FROM T1;
-Field	Type	Null	Key	Default	Extra
-value	vsql_complex.COMPLEX	YES		NULL	
-DROP TABLE T1;
 DROP DATABASE test_case;

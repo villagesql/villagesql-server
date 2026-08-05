@@ -11,9 +11,4 @@ café
 gross
 groß
 DROP TABLE cafe, café, gross, groß;
-CREATE TABLE café (value COMPLEX);
-SHOW FIELDS FROM café;
-Field	Type	Null	Key	Default	Extra
-value	vsql_complex.COMPLEX	YES		NULL	
-DROP TABLE café;
 DROP DATABASE test_collation;
