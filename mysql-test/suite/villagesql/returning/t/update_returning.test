@@ -1,0 +1,37 @@
+--echo #
+--echo # UPDATE ... RETURNING
+--echo #
+
+CREATE TABLE t1(id INT PRIMARY KEY, a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES(1, 10, 'aa'), (2, 20, 'bb'), (3, 30, 'cc');
+
+UPDATE t1 SET a=a+10 WHERE id <= 2 ORDER BY id
+RETURNING id, a, OLD_VALUE(a) AS old_a, b;
+
+CREATE TRIGGER t1_bu BEFORE UPDATE ON t1
+FOR EACH ROW SET NEW.b=UPPER(NEW.b);
+UPDATE t1 SET b='z' WHERE id=3
+RETURNING id, b, OLD_VALUE(b) AS old_b;
+DROP TRIGGER t1_bu;
+
+PREPARE stmt FROM
+"UPDATE t1 SET a=a+1 WHERE id=2 RETURNING id, a, OLD_VALUE(a) AS old_a";
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE t1 SET a=NULL WHERE id=1
+RETURNING OLD_VALUE(a) AS old, a AS new;
+
+--echo # Interleaving OLD_VALUE(a) with the new value of the same column, and
+--echo # reading the old value more than once, must not leave the field pointing
+--echo # at the old-row image: each item reads its own image independently.
+UPDATE t1 SET a=100 WHERE id=2
+RETURNING a AS new1, OLD_VALUE(a) AS old1, a AS new2, OLD_VALUE(a) AS old2;
+
+--error ER_WRONG_USAGE
+SELECT OLD_VALUE(a) FROM t1;
+
+--error ER_BAD_FIELD_ERROR
+UPDATE t1 SET a=1 RETURNING OLD_VALUE(nope);
+
+DROP TABLE t1;

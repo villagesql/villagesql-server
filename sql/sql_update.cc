@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -104,6 +105,7 @@
 #include "sql/sql_optimizer.h"  // substitute_gc
 #include "sql/sql_partition.h"  // partition_key_modified
 #include "sql/sql_resolver.h"   // setup_order
+#include "sql/sql_returning.h"
 #include "sql/sql_select.h"
 #include "sql/sql_tmp_table.h"  // create_tmp_table
 #include "sql/sql_view.h"       // check_key_in_view
@@ -129,7 +131,9 @@ bool Sql_cmd_update::precheck(THD *thd) {
   DBUG_TRACE;
 
   if (!multitable) {
-    if (check_one_table_access(thd, UPDATE_ACL, lex->query_tables)) return true;
+    ulong privilege = UPDATE_ACL;
+    if (returning_fields != nullptr) privilege |= SELECT_ACL;
+    if (check_one_table_access(thd, privilege, lex->query_tables)) return true;
   } else {
     /*
       Ensure that we have UPDATE or SELECT privilege for each table
@@ -215,6 +219,9 @@ bool Sql_cmd_update::check_privileges(THD *thd) {
   if (check_privileges_for_list(thd, original_fields, UPDATE_ACL)) return true;
 
   if (check_privileges_for_list(thd, *update_value_list, SELECT_ACL))
+    return true;
+  if (returning_fields != nullptr &&
+      check_privileges_for_list(thd, *returning_fields, SELECT_ACL))
     return true;
 
   for (ORDER *order = select->order_list.first; order; order = order->next) {
@@ -400,6 +407,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
 
   ha_rows limit = unit->select_limit_cnt;
   const bool using_limit = limit != HA_POS_ERROR;
+  Query_result_returning *returning = this->returning();
 
   if (limit == 0 && thd->lex->is_explain()) {
     Modification_plan plan(thd, MT_UPDATE, table, "LIMIT is zero", true, 0);
@@ -488,6 +496,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
             explain_single_table_modification(thd, thd, &plan, query_block);
         return err;
       }
+      if (returning != nullptr) return returning->send_empty(thd);
       my_ok(thd);
       return false;
     }
@@ -544,6 +553,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       char buff[MYSQL_ERRMSG_SIZE];
       snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), 0L, 0L,
                (long)thd->get_stmt_da()->current_statement_cond_count());
+      if (returning != nullptr) return returning->send_empty(thd);
       my_ok(thd, 0, 0, buff);
 
       DBUG_PRINT("info", ("0 records updated"));
@@ -644,6 +654,8 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           explain_single_table_modification(thd, thd, &plan, query_block);
       return err;
     }
+
+    if (returning != nullptr && returning->send_metadata(thd)) return true;
 
     if (thd->lex->is_ignore()) table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
 
@@ -852,7 +864,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     /// read_removal is only used by NDB storage engine
     bool read_removal = false;
 
-    if (has_after_triggers) {
+    if (has_after_triggers || returning_fields != nullptr) {
       /*
         The table has AFTER UPDATE triggers that might access to subject
         table and therefore might need update to be done immediately.
@@ -865,8 +877,9 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       will_batch = !table->file->start_bulk_update();
     }
     if ((table->file->ha_table_flags() & HA_READ_BEFORE_WRITE_REMOVAL) &&
-        !thd->lex->is_ignore() && !using_limit && !has_update_triggers &&
-        range_scan && ::used_index(range_scan) != MAX_KEY &&
+        returning_fields == nullptr && !thd->lex->is_ignore() && !using_limit &&
+        !has_update_triggers && range_scan &&
+        ::used_index(range_scan) != MAX_KEY &&
         check_constant_expressions(*update_value_list))
       read_removal = table->check_read_removal(::used_index(range_scan));
 
@@ -1011,6 +1024,13 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           // The error can have been downgraded to warning by IGNORE.
           if (thd->is_error()) break;
         }
+      }
+
+      // RETURNING: emit the updated row (this UPDATE path applies the change
+      // in place before this point).
+      if (!error && returning != nullptr && returning->send_row(thd)) {
+        error = 1;
+        break;
       }
 
       if (!error && has_after_triggers &&
@@ -1167,11 +1187,15 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+    if (returning != nullptr) {
+      if (returning->send_count_eof(thd, updated_rows)) return true;
+    } else {
+      my_ok(thd,
+            thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                ? found_rows
+                : updated_rows,
+            id, buff);
+    }
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -1554,15 +1578,32 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
   // enables it to perform optimizations like sort avoidance and semi-join
   // flattening even if features specific to single-table UPDATE (that is, ORDER
   // BY and LIMIT) are used.
-  if (lex->using_hypergraph_optimizer()) {
+  // TODO(villagesql): RETURNING is only wired into the single-table executor
+  // (update_single_table), so we pin RETURNING statements to it by suppressing
+  // this promotion. As a result UPDATE ... RETURNING silently runs on the
+  // legacy optimizer instead of hypergraph, with no warning. Wire RETURNING
+  // into Query_result_update so the hypergraph path can emit it, then drop the
+  // returning_fields guard here.
+  if (returning_fields == nullptr && lex->using_hypergraph_optimizer()) {
     multitable = true;
   }
 
-  if (!multitable && select->first_inner_query_expression() != nullptr &&
+  // TODO(villagesql): same as above, but for subquery-driven promotion: pinning
+  // RETURNING to the single-table path silently skips semi-join flattening for
+  // UPDATE ... RETURNING whose WHERE has an eligible IN/EXISTS subquery. Lift
+  // once RETURNING rides the multi-table path.
+  if (returning_fields == nullptr && !multitable &&
+      select->first_inner_query_expression() != nullptr &&
       should_switch_to_multi_table_if_subqueries(thd, select, table_list))
     multitable = true;
 
   if (multitable) select->set_sj_candidates(&sj_candidates_local);
+
+  if (returning_fields != nullptr && multitable) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "UPDATE ... RETURNING with multiple tables");
+    return true;
+  }
 
   if (select->leaf_table_count >= 2 &&
       setup_natural_join_row_types(thd, select->m_current_table_nest,
@@ -1780,11 +1821,22 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
 
   assert(select->having_cond() == nullptr && select->group_list.elements == 0);
 
+  if (returning_fields != nullptr) {
+    Query_result_returning *returning_result = nullptr;
+    if (prepare_returning_fields(thd, select, returning_fields,
+                                 &returning_result))
+      return true;
+    result = returning_result;
+  }
+
   if (select->has_ft_funcs() && setup_ftfuncs(thd, select))
     return true; /* purecov: inspected */
 
-  if (select->query_result() &&
+  if (returning_fields == nullptr && select->query_result() &&
       select->query_result()->prepare(thd, select->fields, lex->unit))
+    return true; /* purecov: inspected */
+  if (returning_fields != nullptr &&
+      result->prepare(thd, *returning_fields, lex->unit))
     return true; /* purecov: inspected */
 
   Opt_trace_array trace_steps(trace, "steps");
@@ -1820,6 +1872,7 @@ bool Sql_cmd_update::execute_inner(THD *thd) {
       return explain_single_table_modification(thd, thd, &plan,
                                                lex->query_block);
     }
+    if (Query_result_returning *ret = returning()) return ret->send_empty(thd);
     my_ok(thd);
     return false;
   }
