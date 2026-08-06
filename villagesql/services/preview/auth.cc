@@ -26,8 +26,11 @@
 #include "my_sys.h"
 #include "mysql/plugin_auth_common.h"
 #include "mysqld_error.h"
+#include "sql/auth/auth_common.h"
 #include "sql/auth/sql_authentication.h"
+#include "sql/auth/sql_security_ctx.h"
 #include "sql/hostname_cache.h"
+#include "sql/mem_root_array.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/systable/helpers.h"
@@ -41,6 +44,21 @@ struct vef_auth_ctx_t {
 };
 
 namespace villagesql::services {
+
+// The roles a VEF handler staged via set_active_roles(), as the raw name
+// strings the handler passed. The array and its strings are allocated on the
+// connection MEM_ROOT (freed with the connection). The element type is
+// trivially destructible, so the array needs no destructor run -- it is safe to
+// leave on the MEM_ROOT and never destruct (only the constructor, which takes
+// the root, must run). Parsing of each "role"/"role@host" name is deferred to
+// apply time so it can reuse the server's own quote-aware splitter (see
+// maybe_apply_vef_auth_state). An empty `roles` (with a non-null VefAuthState)
+// means "activate no roles" (SET ROLE NONE), distinct from a null VefAuthState
+// pointer ("handler staged nothing; use the account's default roles").
+struct VefAuthState {
+  explicit VefAuthState(MEM_ROOT *mem_root) : roles(mem_root) {}
+  Mem_root_array<const char *> roles;
+};
 
 namespace {
 
@@ -77,9 +95,10 @@ int64_t vef_auth_read_packet(vef_auth_ctx_t *ctx, const unsigned char **data) {
   return n;
 }
 
-int64_t vef_auth_write_packet(vef_auth_ctx_t *ctx, const unsigned char *data,
-                              uint64_t len) {
-  return ctx->mpvio->write_packet(ctx->mpvio, data, static_cast<int>(len));
+bool vef_auth_write_packet(vef_auth_ctx_t *ctx, const unsigned char *data,
+                           uint64_t len) {
+  // mpvio->write_packet returns 0 on success, non-zero on failure.
+  return ctx->mpvio->write_packet(ctx->mpvio, data, static_cast<int>(len)) != 0;
 }
 
 const char *vef_auth_user_name(vef_auth_ctx_t *ctx) {
@@ -109,15 +128,77 @@ void vef_auth_set_external_user(vef_auth_ctx_t *ctx, const char *identity) {
           sizeof(ctx->mpvio->auth_info.external_user) - 1);
 }
 
+void vef_auth_set_active_roles(vef_auth_ctx_t *ctx, const char *const *roles,
+                               uint32_t n_roles) {
+  MPVIO_EXT *mpvio = ctx->mpvio;
+  MEM_ROOT *mem_root = mpvio->mem_root;
+
+  // Allocate/replace the state on the connection MEM_ROOT (freed with the
+  // connection; no manual cleanup). Re-staging replaces the prior set. Copy
+  // each name so nothing points into the extension's transient buffer; the
+  // "role"/"role@host" parse is deferred to apply time.
+  auto *state = new (mem_root) VefAuthState(mem_root);
+  state->roles.reserve(n_roles);
+
+  for (uint32_t i = 0; i < n_roles; ++i) {
+    const char *r = roles[i];
+    if (r == nullptr || r[0] == '\0') continue;  // skip empties defensively
+    state->roles.push_back(strdup_root(mem_root, r));
+  }
+
+  mpvio->vef_auth_info.vef_auth_state = state;
+}
+
 const vef_auth_ops_t g_vef_auth_ops = {
     VEF_PREVIEW_AUTH_ABI_VERSION,  vef_auth_read_packet,
     vef_auth_write_packet,         vef_auth_user_name,
     vef_auth_auth_string,          vef_auth_host_or_ip,
-    vef_auth_set_authenticated_as, vef_auth_set_external_user};
+    vef_auth_set_authenticated_as, vef_auth_set_external_user,
+    vef_auth_set_active_roles};
 
 }  // namespace
 
 vef_preview_auth_t *preview_auth_vtable() { return &g_auth_vtable; }
+
+bool maybe_apply_vef_auth_state(MPVIO_EXT *mpvio, Security_context *sctx,
+                                const char *acl_user_authid,
+                                const char *acl_user_host) {
+  const VefAuthState *state = mpvio->vef_auth_info.vef_auth_state;
+  if (state == nullptr) return false;  // handler staged nothing; use defaults
+
+  // The caller holds the ACL cache lock (this replaces the account's
+  // default-role activation, which runs under the same lock) and calls
+  // checkout_access_maps() afterward. Activate each staged role grant-checked:
+  // activate_role(..., validate_access=true) refuses a role not granted to the
+  // authenticated account, so a token can only activate what the DBA granted --
+  // never grant or escalate. An empty set activates nothing (SET ROLE NONE).
+  for (const char *staged : state->roles) {
+    // Parse "role"/"role@host" the same way SET ROLE does: split on an unquoted
+    // '@' and default the host to '%', so a role name containing a quoted '@'
+    // is not mis-split. activate_role() copies the strings, so the temporaries
+    // outlive the call.
+    const auto [name, host] = get_authid_from_quoted_string(staged);
+    const LEX_CSTRING role{name.c_str(), name.length()};
+    const LEX_CSTRING role_host{host.c_str(), host.length()};
+    if (sctx->activate_role(role, role_host, /*validate_access=*/true)) {
+      LogVSQL(WARNING_LEVEL,
+              "VEF auth: role '%s'@'%s' requested for account '%s'@'%s' is not "
+              "granted; skipping",
+              role.str, role_host.str,
+              acl_user_authid != nullptr ? acl_user_authid : "",
+              acl_user_host != nullptr ? acl_user_host : "");
+    }
+  }
+  // A non-null staged set replaces the account's default roles, even if it
+  // resolves to no active roles -- because it was empty (n_roles == 0, i.e. SET
+  // ROLE NONE) or because every requested role was ungranted and skipped above.
+  // Only a null state (handler staged nothing) keeps the defaults.
+  //
+  // TODO(villagesql-beta): make the all-skipped/empty outcome configurable --
+  // some deployments may prefer falling back to the account's default roles
+  // when a staged set activates nothing, rather than ending with no roles.
+  return true;  // staged state applied; caller must NOT also activate defaults
+}
 
 AuthMethodRef::AuthMethodRef() {
   g_inflight.fetch_add(1, std::memory_order_seq_cst);
@@ -252,7 +333,7 @@ static bool try_vef_authenticate(const vef_auth_cc_t *cc, MPVIO_EXT *mpvio) {
   // Stash the method's pinned client-plugin name on the connection before
   // driving the handler: the handler's first read_packet triggers the handshake
   // change-plugin request that reads it back via mpvio_client_plugin_name().
-  mpvio->vef_client_auth_plugin = cc->client_auth_plugin;
+  mpvio->vef_auth_info.vef_client_auth_plugin = cc->client_auth_plugin;
 
   // Run the extension's authenticator over an ops table on this MPVIO_EXT.
   vef_auth_ctx_t ctx{mpvio};

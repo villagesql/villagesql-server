@@ -1,0 +1,10 @@
+CREATE DATABASE test_case;
+USE test_case;
+CREATE TABLE t1 (id INT);
+CREATE TABLE T1 (id INT);
+SHOW TABLES;
+Tables_in_test_case
+T1
+t1
+DROP TABLE t1, T1;
+DROP DATABASE test_case;

@@ -49,7 +49,12 @@ const FuncDescriptor *find_func(std::string_view ext_name,
   return victionary.funcs().acquire(key, cleanup_scope);
 }
 
-bool func_exists(std::string_view ext_name, std::string_view func_name) {
+// When acquire_read_lock is true, acquires the victionary read lock for the
+// lookup; otherwise the caller must already hold the read (or write) lock and
+// we only assert that.
+static bool func_exists_impl(std::string_view ext_name,
+                             std::string_view func_name,
+                             bool acquire_read_lock) {
   if (ext_name.empty() || func_name.empty()) {
     return false;
   }
@@ -65,9 +70,22 @@ bool func_exists(std::string_view ext_name, std::string_view func_name) {
 
   FuncKey key{std::string{func_name}, std::string{ext_name}};
 
-  auto lock = victionary.get_read_lock();
+  if (acquire_read_lock) {
+    auto lock = victionary.get_read_lock();
+    return victionary.funcs().get_committed(key) != nullptr;
+  }
 
+  // Caller must already hold the read (or write) lock; do not acquire it here.
+  victionary.assert_read_or_write_lock_held();
   return victionary.funcs().get_committed(key) != nullptr;
+}
+
+bool func_exists_locked(std::string_view ext_name, std::string_view func_name) {
+  return func_exists_impl(ext_name, func_name, /*acquire_read_lock=*/false);
+}
+
+bool func_exists(std::string_view ext_name, std::string_view func_name) {
+  return func_exists_impl(ext_name, func_name, /*acquire_read_lock=*/true);
 }
 
 const FuncDescriptor *find_func_unqualified(std::string_view func_name,

@@ -904,8 +904,9 @@ bool Metadata_modifier::validate_entries() {
       return true;
     }
 
-    // Verify that the function exists in VictionaryClient
-    if (!func_exists(routine.extension_name, routine.function_name)) {
+    // Verify that the function exists in VictionaryClient. Use the _locked
+    // variant: validate_entries already holds the read lock.
+    if (!func_exists_locked(routine.extension_name, routine.function_name)) {
       villagesql_error("Custom function '%s' not found in extension '%s'",
                        MYF(0), routine.function_name.c_str(),
                        routine.extension_name.c_str());

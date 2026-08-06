@@ -36,6 +36,7 @@
 #include "mysql/plugin_auth_common.h"
 #include "mysql/strings/m_ctype.h"
 #include "sql/sql_plugin_ref.h"  // plugin_ref
+#include "villagesql/services/preview/auth_info.h"
 
 class ACL_USER;
 class Protocol_classic;
@@ -93,12 +94,8 @@ struct MPVIO_EXT : public MYSQL_PLUGIN_VIO {
   Thd_charset_adapter *charset_adapter;
   LEX_CSTRING acl_user_plugin;
   int vio_is_encrypted;
-  // VillageSQL: for a VEF extension-provided auth method there is no MySQL
-  // plugin (`plugin` is null), so the client-side auth plugin the handshake
-  // should advertise/expect comes from the method's config instead of from
-  // client_plugin_name(plugin). Set by the VEF auth seam before invoking the
-  // handler; nullptr for normal plugin-based auth.
-  const char *vef_client_auth_plugin;
+  // VillageSQL: populated by the VEF auth seam.
+  villagesql::services::VefAuthInfo vef_auth_info;
   bool can_authenticate();
 };
 

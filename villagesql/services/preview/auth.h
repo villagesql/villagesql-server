@@ -28,6 +28,7 @@
 // would create distinct villagesql::services::* types and break linkage against
 // the caller in sql/auth/, which uses the global ones.
 class THD;
+class Security_context;
 struct MPVIO_EXT;
 struct MYSQL_LEX_CSTRING;
 
@@ -110,6 +111,34 @@ std::optional<bool> handle_vef_user_bind(std::string_view method_name,
 // MySQL plugin -- keeping do_auth_once() itself vanilla.
 int vsql_do_auth_once(THD *thd, const MYSQL_LEX_CSTRING &auth_plugin_name,
                       MPVIO_EXT *mpvio);
+
+// Opaque per-login state a VEF auth handler stages during the handshake, to be
+// applied after account resolution. Its definition and all its fields live in
+// auth.cc; core auth (sql/auth/) only holds a pointer to it on MPVIO_EXT and
+// forwards it to maybe_apply_vef_auth_state() below. Today it carries the roles
+// set via set_active_roles(); anything else a handler needs to stage post-auth
+// goes here too, with no further change to MPVIO_EXT.
+struct VefAuthState;
+
+// Apply whatever a VEF handler staged for this login, AFTER the account has
+// been resolved. Currently: activate the staged role set on `sctx`, replacing
+// default-role activation, using the server's grant-checked activation (a role
+// not granted to the account is skipped) so a token can never escalate. The
+// caller must already hold the ACL cache lock (grant-checked activation reads
+// the role graph under it). Does nothing (returns false = "not handled, use
+// default roles") when `mpvio` has no staged state. Returns true when it
+// applied staged state, so the caller skips its own default-role activation.
+// The bool is a handled/not-handled discriminator, NOT the usual MySQL
+// true==error convention -- true here is the success path.
+//
+// `sctx` is the session's Security_context (the same one the default-role path
+// activates onto); `acl_user_authid`/`acl_user_host` identify the resolved
+// account for warning messages. Roles are activated but access maps are NOT
+// checked out here -- the caller does checkout_access_maps() once afterward, as
+// it already does for the default-role path.
+bool maybe_apply_vef_auth_state(MPVIO_EXT *mpvio, Security_context *sctx,
+                                const char *acl_user_authid,
+                                const char *acl_user_host);
 
 }  // namespace villagesql::services
 

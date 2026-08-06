@@ -43,6 +43,14 @@ vef_preview_statement_event_t *preview_statement_event_vtable();
 // hooks. No-op if no hooks are registered.
 void on_statement_postexecute(THD *thd);
 
+// True when a statement_event hook is registered. The server takes the
+// start-of-statement status_var snapshot (copy_status_var) on this even when
+// opt_log_slow_extra is off; without it the per-statement counter deltas
+// degrade to cumulative session totals.
+// TODO(villagesql): evaluate introducing instumentation levels to minimize
+// overhead
+bool statement_event_wants_status_snapshot();
+
 }  // namespace villagesql::services
 
 #endif  // VILLAGESQL_SERVICES_PREVIEW_STATEMENT_EVENT_H

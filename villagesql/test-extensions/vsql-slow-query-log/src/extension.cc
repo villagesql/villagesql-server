@@ -28,6 +28,7 @@
 //   SET GLOBAL vsql_slow_query_log.enabled = ON;
 
 #include <cerrno>
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -47,6 +48,16 @@ static long long g_threshold_ms;
 static char *g_log_filename;
 
 static std::mutex g_log_mutex;
+
+// Remembers the previous logged statement's digest_hash and read_rnd_next so a
+// repeated identical query can be checked: a per-statement delta counter
+// reports the same value each run, a cumulative session total keeps growing.
+// This is how the test verifies the start-of-statement status_var snapshot is
+// taken (without it, stat_delta falls back to cumulative totals). Guarded by
+// g_log_mutex.
+static char g_prev_digest_hash[65];
+static uint64_t g_prev_read_rnd_next;
+static bool g_have_prev;
 
 static void slow_query_hook(const se::StatementEventArgs &args,
                             se::StatementEventResult &result) {
@@ -74,10 +85,28 @@ static void slow_query_hook(const se::StatementEventArgs &args,
           args.client_ip() ? args.client_ip() : "", args.connection_id());
   fprintf(f,
           "# Schema: %s  Query_time: %.6f  Lock_time: %.6f"
-          "  Rows_sent: %llu  Rows_examined: %llu\n",
+          "  Rows_sent: %" PRIu64 "  Rows_examined: %" PRIu64 "\n",
           args.schema() ? args.schema() : "", args.query_time_secs(),
-          args.lock_time_secs(), (unsigned long long)args.rows_sent(),
-          (unsigned long long)args.rows_examined());
+          args.lock_time_secs(), args.rows_sent(), args.rows_examined());
+  const char *digest_hash = args.digest_hash();
+  fprintf(f, "# Digest_hash: %s  Read_rnd_next: %" PRIu64 "\n",
+          digest_hash ? digest_hash : "", args.read_rnd_next());
+
+  // When the same statement (same digest_hash) runs again, compare its
+  // read_rnd_next against the previous run. Equal => per-statement delta;
+  // greater => the counter is leaking the cumulative session total. Emitting a
+  // fixed token keeps the .result stable across plans and machines.
+  if (digest_hash != nullptr) {
+    if (g_have_prev && strncmp(g_prev_digest_hash, digest_hash,
+                               sizeof(g_prev_digest_hash)) == 0) {
+      const bool stable = args.read_rnd_next() == g_prev_read_rnd_next;
+      fprintf(f, "# Read_rnd_next_delta_stable: %s\n", stable ? "YES" : "NO");
+    }
+    snprintf(g_prev_digest_hash, sizeof(g_prev_digest_hash), "%s", digest_hash);
+    g_prev_read_rnd_next = args.read_rnd_next();
+    g_have_prev = true;
+  }
+
   fprintf(f, "SET timestamp=%llu;\n", (unsigned long long)now);
   auto q = args.query();
   fprintf(f, "%.*s;\n", (int)q.size(), q.data());

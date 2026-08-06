@@ -28,6 +28,7 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "scope_guard.h"
+#include "sql/auth/auth_acls.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/debug_sync.h"
 #include "sql/iterators/row_iterator.h"
@@ -79,6 +80,24 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
                          villagesql::services::LoadReason::kInstall);
 }  // namespace
 
+// Guards the extension DDL (INSTALL / UNINSTALL / ALTER EXTENSION). These
+// statements dlopen unsandboxed native code, so they sit at the same trust
+// level as INSTALL PLUGIN and must not be runnable by an unprivileged account.
+// Requires the EXTENSION_ADMIN dynamic privilege, with SUPER as a fallback
+// (the standard MySQL dynamic-privilege pattern). Returns true and sets an
+// error if the current user has neither.
+static bool check_extension_admin(THD *thd) {
+  Security_context *sctx = thd->security_context();
+  assert(sctx != nullptr);
+  if (sctx->check_access(SUPER_ACL) ||
+      sctx->has_global_grant(STRING_WITH_LEN("EXTENSION_ADMIN")).first)
+    return false;
+  // Both are accepted; name both so the "(at least one of)" wording in the
+  // error template reads correctly (cf. "RELOAD or FLUSH_TABLES").
+  my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "EXTENSION_ADMIN or SUPER");
+  return true;
+}
+
 // EXTENSION MDL locks (defined in sql/mdl.h):
 // - An X (exclusive) lock is acquired when installing or uninstalling
 //   an extension. This is the lock taken in the install/uninstall path
@@ -92,6 +111,9 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
 // - This locking order is deadlock-safe, provided the uninstall command does
 //   not itself execute any DDL on dependent objects.
 bool Sql_cmd_install_extension::execute(THD *thd) {
+  // INSTALL EXTENSION and ALTER EXTENSION ... UPDATE VERSION both route
+  // through here; a single privilege gate covers both.
+  if (check_extension_admin(thd)) return true;
   if (m_update_version) return execute_update_version(thd);
   return execute_install(thd);
 }
@@ -184,8 +206,9 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
                           ER_VILLAGESQL_GENERIC_ERROR,
                           "Extension '%s' is already at version '%s'",
                           extension_name.c_str(), target_version.c_str());
+      if (end_transaction(thd, false)) return true;
       my_ok(thd);
-      return end_transaction(thd, false);
+      return false;
     }
 
     // Implicit reset: target matches current and a pending action exists.
@@ -235,8 +258,9 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
             "Cleared pending action for extension '%s' (implicit reset via "
             "ALTER EXTENSION ... VERSION '%s' AT RESTART)",
             extension_name.c_str(), target_version.c_str());
+    if (end_transaction(thd, false)) return true;
     my_ok(thd);
-    return end_transaction(thd, false);
+    return false;
   }
 
   // Target differs from current and a pending action already exists -- the
@@ -332,6 +356,8 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  if (end_transaction(thd, false)) return true;
+
   LogVSQL(INFORMATION_LEVEL,
           "Recorded pending update for extension '%s' from version '%s' to "
           "'%s'; applied on next server restart",
@@ -339,7 +365,7 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
           target_version.c_str());
 
   my_ok(thd);
-  return end_transaction(thd, false);
+  return false;
 }
 
 bool Sql_cmd_install_extension::execute_install(THD *thd) {
@@ -407,6 +433,15 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
   if (load_veb_and_so(thd, extension_name, veb_version, registration,
                       sha256_hash))
     return end_transaction(thd, true);
+
+  // Unload the .so on any failure below; released after a successful commit.
+  const villagesql::veb::ExtensionRegistration loaded_registration =
+      registration;
+  auto unload_guard = create_scope_guard([thd, &loaded_registration]() {
+    villagesql::veb::unload_vef_extension(
+        {.reason = villagesql::services::UnloadReason::kUninstall, .thd = thd},
+        loaded_registration);
+  });
 
   std::string reg_error;
   std::optional<villagesql::veb::ValidatedRegistration> validated =
@@ -500,12 +535,16 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  if (end_transaction(thd, false)) return true;
+
+  unload_guard.release();
+
   LogVSQL(INFORMATION_LEVEL,
           "Extension '%s' (version %s) installed successfully",
           extension_name.c_str(), version.c_str());
 
   my_ok(thd);
-  return end_transaction(thd, false);
+  return false;
 }
 
 namespace {
@@ -909,6 +948,9 @@ bool remove_extension_from_victionary(
 }  // namespace villagesql
 
 bool Sql_cmd_uninstall_extension::execute(THD *thd) {
+  // Privilege gate before taking any locks: fail fast on an unprivileged user.
+  if (check_extension_admin(thd)) return true;
+
   // We do not replicate the UNINSTALL EXTENSION statement
   const Disable_binlog_guard binlog_guard(thd);
 

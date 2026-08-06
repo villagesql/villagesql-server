@@ -12453,6 +12453,16 @@ inline int create_index(
 
     index->add_field(field_name, prefix_len,
                      !(key_part->key_part_flag & HA_REVERSE_SORT));
+
+    {
+      dberr_t perr =
+          Custom_index::add_profile(index, key_part->custom_index_profile, i);
+      if (perr != DB_SUCCESS) {
+        dict_mem_index_free(index);
+        error = convert_error_code_to_mysql(perr, flags, nullptr);
+        goto do_cleanup;
+      }
+    }
   }
 
   ut_ad(key->flags & HA_FULLTEXT || !(index->type & DICT_FTS));

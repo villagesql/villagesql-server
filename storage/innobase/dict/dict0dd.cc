@@ -2986,7 +2986,10 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
   {
     dberr_t cerr = villagesql::innodb::Custom_index::attach(
         index, key.custom_index_context, dd_index);
-    if (cerr != DB_SUCCESS) return cerr;
+    if (cerr != DB_SUCCESS) {
+      dict_mem_index_free(index);
+      return convert_error_code_to_mysql(cerr, table->flags, nullptr);
+    }
   }
 
   for (unsigned i = 0; i < key.user_defined_key_parts; i++) {
@@ -3033,6 +3036,13 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
 
     col->is_visible = !field->is_hidden_by_system();
     dict_index_add_col(index, table, col, prefix_len, is_asc);
+
+    dberr_t perr = villagesql::innodb::Custom_index::add_profile(
+        index, key_part->custom_index_profile, i);
+    if (perr != DB_SUCCESS) {
+      dict_mem_index_free(index);
+      return convert_error_code_to_mysql(perr, table->flags, nullptr);
+    }
   }
 
   ut_ad(((key.flags & HA_FULLTEXT) == HA_FULLTEXT) ==

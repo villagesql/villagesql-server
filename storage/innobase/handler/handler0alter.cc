@@ -2621,6 +2621,7 @@ static void innobase_create_index_field_def(const TABLE *altered_table,
     index_field->m_col_no = key_part->fieldnr - num_v;
   }
   index_field->m_is_ascending = !(key_part->key_part_flag & HA_REVERSE_SORT);
+  index_field->m_custom_index_profile = key_part->custom_index_profile;
 
   /* No prefix index on multi-value field */
   if (!index_field->m_is_multi_value &&

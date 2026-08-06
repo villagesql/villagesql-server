@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Builds the JSON matrices used by extension-compat-suite.yml.
 #
-# TODO(villagesql-beta): this and the other Actions-only scripts (e.g.
-# should_run_all_tests.sh) should move into scripts/ci_helpers/ alongside the
-# slash-command/extension-compat helpers; left here for now to keep this PR's
-# diff focused. Update the workflow reference when moved.
+# TODO(villagesql-beta): this and the other Actions-only scripts should move into
+# scripts/ci_helpers/ alongside the slash-command/extension-compat helpers; left
+# here for now to keep this PR's diff focused. Update the workflow reference when
+# moved.
 #
 # Outputs two JSON values to stdout (one per line):
 #   1. build-matrix  — platforms for the build-server job (no abi dimension;
 #                      the server binary is ABI-agnostic)
 #   2. test-matrix   — full (platform, extension, abi) triples for test-extension
+#                      it also carries the extension's build tool and path.
 #
 # Inputs (environment variables, all optional):
 #   PLATFORM_FILTER   — limit to a single platform  (e.g. linux-x86_64)
@@ -34,10 +35,17 @@ EXTS_JSON=$(grep -v '^[[:space:]]*#\|^[[:space:]]*$' "$EXTENSIONS_FILE" \
   | jq -R '
       split(" ") |
       . as $f |
+      ($f[2:] | map(select(startswith("build=")) | ltrimstr("build=")) | .[0] //
+      "cmake") as $build |
+      ($f[2:] | map(select(startswith("path=")) | ltrimstr("path=")) | .[0] // "")
+          as $path |
       {
         url:       ($f[0] | rtrimstr("/")),
         branch:    ($f[1] // ""),
-        extension: ($f[0] | rtrimstr("/") | split("/") | last),
+        build:     $build,
+        path:      $path,
+        extension: (if $path != "" then ($path | split("/") | last)
+                    else ($f[0] | rtrimstr("/") | split("/") | last) end),
         abis:      (($f[2:] | map(select(startswith("abi=")) | ltrimstr("abi=")) | .[0]) as $a |
                    if $a then [$a] else ["stable","dev"] end)
       }' \
@@ -96,7 +104,7 @@ TEST_MATRIX=$(jq -cn \
     $platforms[] as $p |
     $extensions[] as $e |
     ($e.abis | if $abi_filter != "" then map(select(. == $abi_filter)) else . end)[] as $a |
-    ($p + {url: $e.url, branch: $e.branch, extension: $e.extension} + {abi: $a})
+    ($p + {url: $e.url, branch: $e.branch, extension: $e.extension, build: $e.build, path: $e.path} + {abi: $a})
   ]}')
 
 echo "$BUILD_MATRIX"

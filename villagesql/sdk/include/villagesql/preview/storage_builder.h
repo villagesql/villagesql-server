@@ -344,6 +344,21 @@ struct LoadWrapper {
   }
 };
 
+// TODO(villagesql-indexing): Expose unload as a builder-configurable hook
+// (e.g. .unload<F>()) so extensions can run their own cleanup.
+template <typename UserCtx>
+struct UnloadWrapper {
+  static bool invoke(vef_storage_ctx_t *storage, char *error_msg,
+                     uint32_t error_msg_len) {
+    (void)error_msg;
+    (void)error_msg_len;
+    auto *ctx = reinterpret_cast<StorageCtx<UserCtx> *>(storage);
+    Arena *arena = &ctx->arena();
+    arena->~Arena();
+    return false;
+  }
+};
+
 template <auto F, typename UserCtx>
 struct InsertWrapper {
   static bool invoke(vef_storage_ctx_t *storage, vef_storage_mtr_ref_t mctx,
@@ -395,103 +410,128 @@ struct PurgeWrapper {
 
 }  // namespace detail
 
-// Non-constexpr: its name appears verbatim in the compiler error when
-// build() is evaluated at compile time with missing interface registrations.
-void StorageBuilder_all_column_storage_interfaces_must_be_registered();
-
-template <typename UserCtx>
+template <typename UserCtx, unsigned Registered = 0>
 class StorageBuilder {
+  // Interface registration bits, accumulated in the Registered template
+  // argument so build() can static_assert that every interface was set.
+  static constexpr unsigned kCreate = 1u << 0;
+  static constexpr unsigned kDrop = 1u << 1;
+  static constexpr unsigned kLoad = 1u << 2;
+  static constexpr unsigned kInsert = 1u << 3;
+  static constexpr unsigned kSelect = 1u << 4;
+  static constexpr unsigned kMarkDelete = 1u << 5;
+  static constexpr unsigned kPurge = 1u << 6;
+  static constexpr unsigned kAllRegistered =
+      kCreate | kDrop | kLoad | kInsert | kSelect | kMarkDelete | kPurge;
+
  public:
   constexpr explicit StorageBuilder(const char *type_name)
       : type_name_(type_name), intf_{} {}
 
   // Each setter static_asserts that F exactly matches the expected function
   // pointer type (detail::CreateFn<UserCtx>, etc.), rejecting wrong signatures,
-  // lambdas, and member function pointers at compile time.
+  // lambdas, and member function pointers at compile time. Each returns a
+  // builder whose Registered mask records the interface, so build() can
+  // static_assert that all interfaces were registered.
   template <auto F>
-  constexpr StorageBuilder &create() {
+  constexpr StorageBuilder<UserCtx, Registered | kCreate> create() const {
     static_assert(std::is_same_v<decltype(F), detail::CreateFn<UserCtx>>,
                   "create: expected bool(*)(StorageCtx<UserCtx>*, Space::Ref, "
                   "Segment::TrxRef, uint32_t col_len, char*, uint32_t)");
-    intf_.create = detail::CreateWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kCreate> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.create = detail::CreateWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   template <auto F>
-  constexpr StorageBuilder &drop() {
+  constexpr StorageBuilder<UserCtx, Registered | kDrop> drop() const {
     static_assert(
         std::is_same_v<decltype(F), detail::DropFn<UserCtx>>,
         "drop: expected bool(*)(StorageCtx<UserCtx>*, Segment::TrxRef, "
         "char*, uint32_t)");
-    intf_.drop = detail::DropWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kDrop> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.drop = detail::DropWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   template <auto F>
-  constexpr StorageBuilder &load() {
+  constexpr StorageBuilder<UserCtx, Registered | kLoad> load() const {
     static_assert(
         std::is_same_v<decltype(F), detail::LoadFn<UserCtx>>,
         "load: expected bool(*)(StorageCtx<UserCtx>*, Column::StorageRef, "
         "char*, uint32_t)");
-    intf_.load = detail::LoadWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kLoad> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.load = detail::LoadWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   template <auto F>
-  constexpr StorageBuilder &insert() {
+  constexpr StorageBuilder<UserCtx, Registered | kInsert> insert() const {
     static_assert(std::is_same_v<decltype(F), detail::InsertFn<UserCtx>>,
                   "insert: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
                   "Segment::TrxRef, Column::Data, Column::Data, Column::Ref*, "
                   "char*, uint32_t)");
-    intf_.insert = detail::InsertWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kInsert> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.insert = detail::InsertWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   template <auto F>
-  constexpr StorageBuilder &select() {
+  constexpr StorageBuilder<UserCtx, Registered | kSelect> select() const {
     static_assert(
         std::is_same_v<decltype(F), detail::SelectFn<UserCtx>>,
         "select: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
         "Column::Ref, Column::Data*, Column::Data*, Segment::TrxRef*, "
         "bool*, char*, uint32_t)");
-    intf_.select = detail::SelectWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kSelect> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.select = detail::SelectWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   template <auto F>
-  constexpr StorageBuilder &mark_delete() {
+  constexpr StorageBuilder<UserCtx, Registered | kMarkDelete> mark_delete()
+      const {
     static_assert(
         std::is_same_v<decltype(F), detail::MarkDeleteFn<UserCtx>>,
         "mark_delete: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
         "Segment::TrxRef, Column::Ref, bool delete_mark, char*, uint32_t)");
-    intf_.mark_delete = detail::MarkDeleteWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kMarkDelete> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.mark_delete = detail::MarkDeleteWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   template <auto F>
-  constexpr StorageBuilder &purge() {
+  constexpr StorageBuilder<UserCtx, Registered | kPurge> purge() const {
     static_assert(std::is_same_v<decltype(F), detail::PurgeFn<UserCtx>>,
                   "purge: expected bool(*)(StorageCtx<UserCtx>*, MtrCtx::Ref, "
                   "Segment::TrxRef, Column::Ref, char*, uint32_t)");
-    intf_.purge = detail::PurgeWrapper<F, UserCtx>::invoke;
-    return *this;
+    StorageBuilder<UserCtx, Registered | kPurge> next{type_name_};
+    next.intf_ = intf_;
+    next.intf_.purge = detail::PurgeWrapper<F, UserCtx>::invoke;
+    return next;
   }
 
   constexpr TypeStorageDescriptor build() const {
-    if (!intf_.create || !intf_.drop || !intf_.load || !intf_.insert ||
-        !intf_.select || !intf_.mark_delete || !intf_.purge) {
-      // Calling a non-constexpr function here causes a compile-time error
-      // when build() is evaluated in a constant expression. The function name
-      // appears verbatim in the compiler diagnostic.
-      StorageBuilder_all_column_storage_interfaces_must_be_registered();
-    }
+    static_assert(Registered == kAllRegistered,
+                  "all column storage interfaces must be registered: create, "
+                  "drop, load, insert, select, mark_delete, and purge");
     vef_type_storage_intf_t result = intf_;
     result.version = VEF_STORAGE_TYPE_INTF_VERSION;
     result.type_name = type_name_;
+    result.unload = detail::UnloadWrapper<UserCtx>::invoke;
     return TypeStorageDescriptor{result};
   }
 
  private:
+  template <typename U, unsigned R>
+  friend class StorageBuilder;
+
   const char *type_name_;
   vef_type_storage_intf_t intf_;
 };

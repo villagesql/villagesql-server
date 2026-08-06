@@ -59,7 +59,9 @@ let SEARCH_FILE = $MYSQLTEST_VARDIR/log/my_fail_start.err;
 # Otherwise update_test refuses to load and the server exits before
 # reaching the pending-persist step.
 --echo # Attempt startup with persist-failure DBUG hook -- expect exit 1
---error 1
+# 42: under ASan this abort exits before sys-var teardown, so LSAN reports the
+# harmless leak and forces exitcode=42.
+--error 1,42
 --exec $MYSQLD_CMD --vsql_allow_preview_extensions=ON --log-error=$SEARCH_FILE --debug=+d,villagesql_fail_pending_persist
 
 --echo # Server correctly refused to start; verify the failure was

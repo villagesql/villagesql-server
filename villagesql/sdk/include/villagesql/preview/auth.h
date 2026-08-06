@@ -58,7 +58,7 @@ class AuthContext {
 
   // Send a packet to the client (e.g. a challenge). Returns true on failure.
   bool write_packet(Span<const unsigned char> data) {
-    return ops_->write_packet(ctx_, data.data(), data.size()) != 0;
+    return ops_->write_packet(ctx_, data.data(), data.size());
   }
 
   // The account name the client connected as. Empty before the first read.
@@ -80,6 +80,15 @@ class AuthContext {
   // Set the original external identity for the audit trail (@@external_user).
   void set_external_user(const char *identity) {
     ops_->set_external_user(ctx_, identity);
+  }
+
+  // Stage the session's active roles, replacing the account's default-role
+  // activation. The server activates them grant-checked after account
+  // resolution: only roles actually granted to the account take effect, so a
+  // token can never grant or escalate. n_roles == 0 activates no roles
+  // (SET ROLE NONE).
+  void set_active_roles(const char *const *roles, uint32_t n_roles) {
+    ops_->set_active_roles(ctx_, roles, n_roles);
   }
 
  private:

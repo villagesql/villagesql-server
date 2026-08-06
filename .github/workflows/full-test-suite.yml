@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: 'full-test'
+  # Runs after every Nightly run, as an independent workflow.
+  # Runs even if Nightly failed, as a source of nightly test results.
+  workflow_run:
+    workflows: ['Nightly Build and Test']
+    types: [completed]
 
 jobs:
   build-and-test:
@@ -48,25 +53,54 @@ jobs:
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
+      # workflow_run supplies no inputs, so fall back to the commit the nightly
+      # run built.
+      REF: ${{ inputs.ref || github.event.workflow_run.head_sha || 'main' }}
+      BUILD_TYPE: ${{ inputs.build-type || 'debug' }}
+      ARTIFACT_PREFIX: ${{ inputs.artifact-prefix || 'nightly-full' }}
 
     steps:
     - name: Report Parameters
       run: |
-        echo "Git Rev: ${{ inputs.ref }}"
-        echo "Build type: ${{ inputs.build-type }}"
-        echo "Artifact prefix: ${{ inputs.artifact-prefix }}"
+        echo "Trigger: $GITHUB_EVENT_NAME"
+        echo "Git Rev: $REF"
+        echo "Build type: $BUILD_TYPE"
+        echo "Artifact prefix: $ARTIFACT_PREFIX"
 
     - name: Checkout code
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
-        ref: ${{ inputs.ref }}
+        ref: ${{ env.REF }}
         fetch-depth: 50
         path: source
 
     - name: Report Checkout
       run: |
-        echo "Git SHA1: $(git -C source rev-parse ${{ inputs.ref }})"
+        echo "Git SHA1: $(git -C source rev-parse ${{ env.REF }})"
         echo "Git Commit: $(git -C source log -n1 --oneline)"
+
+    - name: Record run parameters
+      run: |
+        jq -n \
+          --arg capturedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --arg trigger "$GITHUB_EVENT_NAME" \
+          --arg gitRev "$REF" \
+          --arg buildType "$BUILD_TYPE" \
+          --arg artifactPrefix "$ARTIFACT_PREFIX" \
+          --arg sha "$(git -C source rev-parse HEAD)" \
+          --arg commitSubject "$(git -C source log -n1 --format=%s)" \
+          '$ARGS.named' > run-parameters.json
+        # Pretty print as output
+        jq . run-parameters.json
+
+    - name: Upload run parameters
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: run-parameters
+        path: run-parameters.json
+        if-no-files-found: warn
+        retention-days: 7
 
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
@@ -75,23 +109,20 @@ jobs:
 
     - name: Build VillageSQL
       working-directory: ./source
-      env:
-        PARALLEL_JOBS: 16
-        BUILD_TYPE: ${{ inputs.build-type }}
       run: |
         ./villagesql/bld_tools/build_ci.sh
 
     - name: Run standard tests (unit, integration with only suite village)
       uses: ./source/.github/actions/run-tests
       with:
-        artifact-name: ${{ inputs.artifact-prefix }}-logs-${{ github.run_number }}
+        artifact-name: ${{ env.ARTIFACT_PREFIX }}-logs-${{ github.run_number }}
 
     - name: Run big tests
       uses: ./source/.github/actions/run-tests
       with:
         run-unit-tests: false
         run-big-tests: true
-        artifact-name: ${{ inputs.artifact-prefix }}-big-test-logs-${{ github.run_number }}
+        artifact-name: ${{ env.ARTIFACT_PREFIX }}-big-test-logs-${{ github.run_number }}
 
     - name: Run all test suites (excluding VillageSQL)
       uses: ./source/.github/actions/run-tests
@@ -99,4 +130,4 @@ jobs:
         run-unit-tests: false
         run-all-suites: true
         skip-suite: village
-        artifact-name: ${{ inputs.artifact-prefix }}-all-suites-logs-${{ github.run_number }}
+        artifact-name: ${{ env.ARTIFACT_PREFIX }}-all-suites-logs-${{ github.run_number }}

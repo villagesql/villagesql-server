@@ -1670,6 +1670,19 @@ std::shared_ptr<const IndexContext> AcquireIndexContextClientManaged(
   return vclient.index_contexts().acquire_client_managed(source_ic->key());
 }
 
+std::shared_ptr<const IndexProfileDescriptor>
+AcquireIndexProfileDescriptorClientManaged(
+    const IndexProfileDescriptor *source_ipd) {
+  if (source_ipd == nullptr) {
+    return std::shared_ptr<const IndexProfileDescriptor>();
+  }
+
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  return vclient.index_profile_descriptors().acquire_client_managed(
+      source_ipd->key());
+}
+
 bool InjectCustomSpParams(
     const char *db_name, const char *sp_name, const sp_pcontext *pctx,
     Field **fields, Bounds_checked_array<Item *> var_items,

@@ -63,6 +63,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "usr0sess.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 #include <debug_sync.h>
 #include "my_dbug.h"
@@ -3246,6 +3247,12 @@ and return. don't execute actual insert. */
     if (err != DB_SUCCESS) {
       return (err);
     }
+  }
+
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::is_custom(index)) {
+    return Custom_index::insert(index, thr_get_trx(thr)->id, entry,
+                                dup_chk_only);
   }
 
   offsets_heap = mem_heap_create(1024, UT_LOCATION_HERE);
