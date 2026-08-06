@@ -126,6 +126,27 @@ void vef_fill_func_ptrs(vef_func_desc_t **arr, const Ext &e,
    ...);
 }
 
+template <typename T, typename = void>
+struct has_sql_callable : std::false_type {};
+template <typename T>
+struct has_sql_callable<
+    T, std::void_t<decltype(std::declval<const T &>().sql_callable())>>
+    : std::true_type {};
+
+template <typename Func>
+constexpr bool get_sql_callable(const Func &func) {
+  if constexpr (has_sql_callable<Func>::value) {
+    return func.sql_callable();
+  }
+  return true;
+}
+
+template <typename Ext, size_t... Is>
+void vef_fill_func_sql_callable(bool *arr, const Ext &e,
+                                std::index_sequence<Is...>) {
+  ((arr[Is] = get_sql_callable(e.template func_at<Is>())), ...);
+}
+
 // Fills arr[I] with the vef_type_desc_t* for each type.
 template <typename Ext, size_t... Is>
 void vef_fill_type_ptrs(vef_type_desc_t **arr, const Ext &e,
@@ -320,7 +341,7 @@ template <typename Ext, size_t FuncCount, size_t TypeCount,
           size_t RequiredCapabilityCount>
 vef_registration_t *vef_register_impl(
     vef_registration_t &reg, bool &initialized, vef_func_desc_t **func_ptrs,
-    vef_type_desc_t **type_ptrs,
+    vef_type_desc_t **type_ptrs, bool *func_sql_callable_ptrs,
     vef_required_capability_t *required_capability_reqs,
     vef_register_arg_t *arg, const Ext &ext) {
   if (initialized) return &reg;
@@ -339,6 +360,8 @@ vef_registration_t *vef_register_impl(
   if constexpr (FuncCount > 0) {
     vef_init_auto_names(ext, std::make_index_sequence<FuncCount>{});
     vef_fill_func_ptrs(func_ptrs, ext, std::make_index_sequence<FuncCount>{});
+    vef_fill_func_sql_callable(func_sql_callable_ptrs, ext,
+                               std::make_index_sequence<FuncCount>{});
   }
   if constexpr (TypeCount > 0) {
     vef_fill_type_ptrs(type_ptrs, ext, std::make_index_sequence<TypeCount>{});

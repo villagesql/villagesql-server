@@ -35,11 +35,13 @@ SELECT COMPLEX::nonexistent('(1,2)') AS result;
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT NOSUCHTYPE::encode('(1,2)') AS result;
 
---echo # Test 8: COMPLEX::compare — qualified and unqualified forms
-# compare('(1,2)', '(3,4)'): real 1 < 3, returns -1
+--echo # Test 8: Hidden type helpers are not SQL-callable
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT vsql_complex.COMPLEX::compare('(1,2)', '(3,4)') AS result;
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT COMPLEX::compare('(3,4)', '(1,2)') AS result;
-SELECT COMPLEX::compare('(1,2)', '(1,2)') AS result;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.COMPLEX2::hash('(1,2)') AS result;
 
 --echo # Test 9: :: decode with FROM clause — verifies column-arg form works
 CREATE TABLE t2 (id INT, val COMPLEX);

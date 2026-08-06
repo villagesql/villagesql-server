@@ -128,6 +128,7 @@ constexpr auto make_extension(std::string_view /*name*/,
   namespace {                                                            \
   vef_registration_t _vef_reg;                                           \
   bool _vef_reg_initialized = false;                                     \
+  const bool *_vef_func_sql_callable = nullptr;                          \
   }                                                                      \
                                                                          \
   static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) { \
@@ -136,17 +137,25 @@ constexpr auto make_extension(std::string_view /*name*/,
     using ExtType = decltype(kExt);                                      \
     static vef_func_desc_t                                               \
         *func_ptrs[ExtType::kFuncCount > 0 ? ExtType::kFuncCount : 1];   \
+    static bool func_sql_callable_ptrs[ExtType::kFuncCount > 0           \
+                                           ? ExtType::kFuncCount         \
+                                           : 1];                         \
     static vef_type_desc_t                                               \
         *type_ptrs[ExtType::kTypeCount > 0 ? ExtType::kTypeCount : 1];   \
     static vef_required_capability_t                                     \
         required_capability_reqs[ExtType::kRequiredCapabilityCount > 0   \
                                      ? ExtType::kRequiredCapabilityCount \
                                      : 1];                               \
+    _vef_func_sql_callable = func_sql_callable_ptrs;                     \
     return villagesql::detail::vef_register_impl<                        \
         decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,        \
         ExtType::kRequiredCapabilityCount>(                              \
         _vef_reg, _vef_reg_initialized, func_ptrs, type_ptrs,            \
-        required_capability_reqs, arg, kExt);                            \
+        func_sql_callable_ptrs, required_capability_reqs, arg, kExt);    \
+  }                                                                      \
+                                                                         \
+  extern "C" const bool *vef_get_func_sql_callable() {                   \
+    return _vef_func_sql_callable;                                       \
   }
 
 // VEF_GENERATE_ENTRY_POINTS
@@ -158,6 +167,7 @@ constexpr auto make_extension(std::string_view /*name*/,
   namespace {                                                            \
   vef_registration_t vef_reg_;                                           \
   bool vef_reg_initialized_ = false;                                     \
+  const bool *vef_func_sql_callable_ = nullptr;                          \
   }                                                                      \
                                                                          \
   extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) { \
@@ -166,23 +176,31 @@ constexpr auto make_extension(std::string_view /*name*/,
     using ExtType = decltype(kExt);                                      \
     static vef_func_desc_t                                               \
         *func_ptrs[ExtType::kFuncCount > 0 ? ExtType::kFuncCount : 1];   \
+    static bool func_sql_callable_ptrs[ExtType::kFuncCount > 0           \
+                                           ? ExtType::kFuncCount         \
+                                           : 1];                         \
     static vef_type_desc_t                                               \
         *type_ptrs[ExtType::kTypeCount > 0 ? ExtType::kTypeCount : 1];   \
     static vef_required_capability_t                                     \
         required_capability_reqs[ExtType::kRequiredCapabilityCount > 0   \
                                      ? ExtType::kRequiredCapabilityCount \
                                      : 1];                               \
+    vef_func_sql_callable_ = func_sql_callable_ptrs;                     \
     return villagesql::detail::vef_register_impl<                        \
         decltype(kExt), ExtType::kFuncCount, ExtType::kTypeCount,        \
         ExtType::kRequiredCapabilityCount>(                              \
         vef_reg_, vef_reg_initialized_, func_ptrs, type_ptrs,            \
-        required_capability_reqs, arg, kExt);                            \
+        func_sql_callable_ptrs, required_capability_reqs, arg, kExt);    \
   }                                                                      \
                                                                          \
   extern "C" void vef_unregister(vef_unregister_arg_t *arg,              \
                                  vef_registration_t *reg) {              \
     (void)arg;                                                           \
     (void)reg;                                                           \
+  }                                                                      \
+                                                                         \
+  extern "C" const bool *vef_get_func_sql_callable() {                   \
+    return vef_func_sql_callable_;                                       \
   }
 
 #endif  // VILLAGESQL_SDK_EXTENSION_BUILDER_H

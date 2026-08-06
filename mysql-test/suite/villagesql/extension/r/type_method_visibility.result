@@ -1,0 +1,14 @@
+INSTALL EXTENSION vsql_tarray_test;
+# Visible helpers stay callable from SQL.
+CREATE TABLE t1 (val vsql_tarray_test.TARRAY(3));
+INSERT INTO t1 VALUES ('[1,2,3]');
+SELECT vsql_tarray_test.TARRAY::to_string(val) AS roundtrip FROM t1;
+roundtrip
+[1,2,3]
+DROP TABLE t1;
+# Hidden parameterized helpers are not SQL-callable.
+SELECT vsql_tarray_test.TARRAY::int_to_params(3) AS params_str;
+ERROR HY000: Type 'TARRAY' method 'int_to_params' is not SQL-callable
+SELECT vsql_tarray_test.TARRAY::resolve_params('max_size=3,type=float') AS resolved;
+ERROR HY000: Type 'TARRAY' method 'resolve_params' is not SQL-callable
+UNINSTALL EXTENSION vsql_tarray_test;

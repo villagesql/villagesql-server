@@ -1370,6 +1370,7 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
   registration.dlhandle = nullptr;
   registration.registration = nullptr;
   registration.unregister_func = nullptr;
+  registration.func_sql_callable = nullptr;
 
   // RTLD_LOCAL ensures each extension's symbols are isolated. Without it,
   // macOS defaults to RTLD_GLOBAL, allowing the dynamic linker to coalesce
@@ -1446,6 +1447,11 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
   registration.so_path = so_path;
   registration.dlhandle = handle;
   registration.unregister_func = vef_unregister;
+  if (void *sym = dlsym(handle, VEF_GET_FUNC_SQL_CALLABLE_SYMBOL)) {
+    auto get_func_sql_callable =
+        reinterpret_cast<vef_get_func_sql_callable_t>(sym);
+    registration.func_sql_callable = get_func_sql_callable();
+  }
   return false;
 }
 
@@ -1489,6 +1495,7 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
     registration.dlhandle = nullptr;
     registration.registration = nullptr;
     registration.unregister_func = nullptr;
+    registration.func_sql_callable = nullptr;
     return true;
   }
   return false;

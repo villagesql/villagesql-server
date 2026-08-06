@@ -53,6 +53,12 @@ static Item_result vef_type_to_item_result(const vef_type_t &type) {
   }
 }
 
+static bool is_sql_callable(const ExtensionRegistration &ext_reg,
+                            unsigned int func_index) {
+  return ext_reg.func_sql_callable == nullptr ||
+         ext_reg.func_sql_callable[func_index];
+}
+
 std::optional<ValidatedRegistration> parse_extension_registration(
     const ExtensionRegistration &ext_reg, const std::string &extension_name,
     const std::string &extension_version, std::string &error_out) {
@@ -113,6 +119,10 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                 error_out.c_str());
         return std::nullopt;
+      }
+
+      if (!is_sql_callable(ext_reg, i)) {
+        continue;
       }
 
       std::string func_name(func_desc->name);

@@ -119,6 +119,7 @@ struct ExtensionRegistration {
   std::string so_path;
   void *dlhandle;
   vef_unregister_func_t unregister_func;
+  const bool *func_sql_callable{nullptr};
 };
 
 // Load a VEF extension from a .so file and get the registration.

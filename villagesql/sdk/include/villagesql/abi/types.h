@@ -910,8 +910,13 @@ typedef vef_registration_t *(*vef_register_func_t)(
 typedef void (*vef_unregister_func_t)(vef_unregister_arg_t *const arg,
                                       vef_registration_t *registration);
 
+// Optional export: which registered VDFs are SQL-callable (hidden ones still
+// serve internal type wiring). The array aligns with reg->funcs.
+typedef const bool *(*vef_get_func_sql_callable_t)();
+
 // Expected export names for extension entry points
 #define VEF_REGISTER_FUNC_NAME "vef_register"
 #define VEF_UNREGISTER_FUNC_NAME "vef_unregister"
+#define VEF_GET_FUNC_SQL_CALLABLE_SYMBOL "vef_get_func_sql_callable"
 
 #endif  // VILLAGESQL_ABI_TYPES_H_

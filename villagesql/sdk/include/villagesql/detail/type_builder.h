@@ -117,6 +117,44 @@ struct TypeBuilderState {
   void (*params_to_strings_init_fn)() = nullptr;
 };
 
+template <typename Func>
+struct EmbeddedFunc {
+  Func func;
+  bool sql_callable_;
+
+  constexpr const char *name() const { return func.name(); }
+  constexpr size_t num_params() const { return func.num_params(); }
+  constexpr vef_protocol_t required_protocol() const {
+    return func.required_protocol();
+  }
+  constexpr size_t buffer_size() const { return func.buffer_size(); }
+  constexpr bool deterministic() const { return func.deterministic(); }
+  constexpr bool sql_callable() const { return sql_callable_; }
+  constexpr auto check_params_cache_bound() const -> bool (*)() {
+    return func.check_params_cache_bound();
+  }
+  constexpr auto check_signature() const -> const
+      char *(*)(const vef_type_t *, size_t, const vef_type_t &) {
+    return func.check_signature();
+  }
+  constexpr void init_name() const { func.init_name(); }
+  constexpr const vef_type_t *params() const { return func.params(); }
+  constexpr vef_type_t return_type() const { return func.return_type(); }
+  constexpr vef_vdf_func_t vdf() const { return func.vdf(); }
+  constexpr vef_prerun_func_t prerun() const { return func.prerun(); }
+  constexpr vef_postrun_func_t postrun() const { return func.postrun(); }
+  constexpr vef_vdf_clear_func_t clear() const { return func.clear(); }
+  constexpr vef_vdf_accumulate_func_t accumulate() const {
+    return func.accumulate();
+  }
+};
+
+template <typename Func>
+constexpr EmbeddedFunc<Func> make_embedded_func(const Func &func,
+                                                bool sql_callable) {
+  return EmbeddedFunc<Func>{func, sql_callable};
+}
+
 }  // namespace detail
 }  // namespace vsql
 
