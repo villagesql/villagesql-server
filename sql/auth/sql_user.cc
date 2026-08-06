@@ -1695,17 +1695,17 @@ bool set_and_validate_user_attributes(
   plugin = my_plugin_lock_by_name(nullptr, Str->first_factor_auth_info.plugin,
                                   MYSQL_AUTHENTICATION_PLUGIN);
 
-  // VillageSQL: an unknown plugin name may be a VEF extension auth method;
-  // accept it the same way an installed plugin name is accepted.
-  if (!plugin && villagesql::services::auth_method_exists(
-                     {Str->first_factor_auth_info.plugin.str,
-                      Str->first_factor_auth_info.plugin.length})) {
-    what_to_set.m_what = NONE_ATTR;
-    return false;
-  }
-
   /* check if plugin is loaded */
   if (!plugin) {
+    // VillageSQL: an unknown plugin name may be a VEF extension auth method;
+    // let the VEF layer decide whether to accept the account.
+    if (auto handled = villagesql::services::handle_vef_user_bind(
+            {Str->first_factor_auth_info.plugin.str,
+             Str->first_factor_auth_info.plugin.length},
+            Str->first_factor_auth_info.uses_identified_by_clause)) {
+      what_to_set.m_what = NONE_ATTR;
+      return *handled;
+    }
     what_to_set.m_what = NONE_ATTR;
     my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0),
              Str->first_factor_auth_info.plugin.str);
