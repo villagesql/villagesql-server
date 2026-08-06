@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +28,8 @@
 #include "my_sqlcommand.h"
 #include "my_table_map.h"
 #include "sql/sql_cmd_dml.h"  // Sql_cmd_dml
+#include "sql/sql_returning.h"
+#include "template_utils.h"
 
 class JOIN;
 class Select_lex_visitor;
@@ -37,8 +40,11 @@ class SQL_I_List;
 
 class Sql_cmd_delete final : public Sql_cmd_dml {
  public:
-  Sql_cmd_delete(bool multitable_arg, SQL_I_List<Table_ref> *delete_tables_arg)
-      : multitable(multitable_arg), delete_tables(delete_tables_arg) {}
+  Sql_cmd_delete(bool multitable_arg, SQL_I_List<Table_ref> *delete_tables_arg,
+                 bool has_returning_arg = false)
+      : multitable(multitable_arg),
+        has_returning(has_returning_arg),
+        delete_tables(delete_tables_arg) {}
 
   enum_sql_command sql_command_code() const override {
     return multitable ? SQLCOM_DELETE_MULTI : SQLCOM_DELETE;
@@ -59,7 +65,15 @@ class Sql_cmd_delete final : public Sql_cmd_dml {
  private:
   bool delete_from_single_table(THD *thd);
 
+  /// The RETURNING result once prepared, or nullptr if there is no RETURNING
+  /// clause. Downcast of the inherited Sql_cmd_dml::result.
+  Query_result_returning *returning() const {
+    return has_returning ? down_cast<Query_result_returning *>(result)
+                         : nullptr;
+  }
+
   bool multitable;
+  bool has_returning;
   /**
     References to tables that are deleted from in a multitable delete statement.
     Only used to track such tables from the parser. In preparation and

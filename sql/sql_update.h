@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +34,9 @@
 #include "sql/query_result.h"  // Query_result_interceptor
 #include "sql/sql_cmd_dml.h"   // Sql_cmd_dml
 #include "sql/sql_list.h"
+#include "sql/sql_returning.h"
 #include "sql/thr_malloc.h"
+#include "template_utils.h"
 
 class COPY_INFO;
 class Copy_field;
@@ -125,10 +128,12 @@ class Query_result_update final : public Query_result_interceptor {
 
 class Sql_cmd_update final : public Sql_cmd_dml {
  public:
-  Sql_cmd_update(bool multitable_arg, mem_root_deque<Item *> *update_values)
+  Sql_cmd_update(bool multitable_arg, mem_root_deque<Item *> *update_values,
+                 mem_root_deque<Item *> *returning_fields_arg = nullptr)
       : multitable(multitable_arg),
         original_fields(*THR_MALLOC),
-        update_value_list(update_values) {}
+        update_value_list(update_values),
+        returning_fields(returning_fields_arg) {}
 
   enum_sql_command sql_command_code() const override {
     return multitable ? SQLCOM_UPDATE_MULTI : SQLCOM_UPDATE;
@@ -147,6 +152,14 @@ class Sql_cmd_update final : public Sql_cmd_dml {
  private:
   bool update_single_table(THD *thd);
 
+  /// The RETURNING result once prepared, or nullptr if there is no RETURNING
+  /// clause. Downcast of the inherited Sql_cmd_dml::result.
+  Query_result_returning *returning() const {
+    return returning_fields != nullptr
+               ? down_cast<Query_result_returning *>(result)
+               : nullptr;
+  }
+
   bool multitable;
 
   /// Bitmap of all tables which are to be updated
@@ -162,6 +175,7 @@ class Sql_cmd_update final : public Sql_cmd_dml {
   mem_root_deque<Item *> original_fields;
   /// The values used to update fields
   mem_root_deque<Item *> *update_value_list;
+  mem_root_deque<Item *> *returning_fields;
 };
 
 /// Find out which of the target tables can be updated immediately while

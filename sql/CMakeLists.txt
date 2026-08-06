@@ -400,6 +400,7 @@ SET(SQL_SHARED_SOURCES
   item_gtid_func.cc
   item_pfs_func.cc
   item_json_func.cc
+  item_old_value.cc
   item_regexp_func.cc
   item_row.cc
   item_strfunc.cc
@@ -582,6 +583,7 @@ SET(SQL_SHARED_SOURCES
   sql_reload.cc
   sql_rename.cc
   sql_resolver.cc
+  sql_returning.cc
   sql_restart_server.cc
   sql_rewrite.cc
   sql_select.cc

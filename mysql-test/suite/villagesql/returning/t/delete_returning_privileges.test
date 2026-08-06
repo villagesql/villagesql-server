@@ -1,0 +1,84 @@
+#
+# Privilege tests for DELETE FROM <table> ... RETURNING <expr>,...
+# Ported from MariaDB main.delete_returning_grant.
+#
+--disable_warnings
+DROP DATABASE IF EXISTS mysqltest;
+DROP USER IF EXISTS mysqltest_1@localhost;
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+SET @global_sql_mode_save= @@global.sql_mode;
+SET @session_sql_mode_save= @@session.sql_mode;
+SET GLOBAL sql_mode='';
+SET SESSION sql_mode='';
+
+CREATE TABLE t1 (a INT, b VARCHAR(32));
+INSERT INTO t1 VALUES
+  (7,'ggggggg'), (1,'a'), (3,'ccc'), (4,'dddd'), (1,'A'),
+  (2,'BB'), (4,'DDDD'), (5,'EEEEE'), (7,'GGGGGGG'), (2,'bb');
+
+CREATE USER mysqltest_1@localhost;
+CREATE DATABASE mysqltest;
+CREATE TABLE mysqltest.t1 SELECT * FROM t1;
+
+GRANT DELETE ON mysqltest.* TO mysqltest_1@localhost;
+GRANT SELECT(b) ON mysqltest.t1 TO mysqltest_1@localhost;
+GRANT SELECT ON test.* TO mysqltest_1@localhost;
+
+connect (user1,localhost,mysqltest_1,,test);
+connection user1;
+
+--error ER_COLUMNACCESS_DENIED_ERROR
+DELETE FROM mysqltest.t1 WHERE a=2 RETURNING b;
+
+--sorted_result
+DELETE FROM mysqltest.t1 RETURNING b;
+
+connection default;
+SELECT * FROM mysqltest.t1;
+INSERT INTO mysqltest.t1 SELECT * FROM t1;
+
+GRANT SELECT(a) ON mysqltest.t1 TO mysqltest_1@localhost;
+
+connection user1;
+--sorted_result
+DELETE FROM mysqltest.t1 WHERE a=2 RETURNING b;
+
+connection default;
+--sorted_result
+SELECT * FROM mysqltest.t1;
+INSERT INTO mysqltest.t1 SELECT * FROM t1;
+
+CREATE VIEW mysqltest.v1(a) AS SELECT a FROM mysqltest.t1;
+GRANT SELECT, INSERT ON mysqltest.t1 TO mysqltest_1@localhost;
+
+connection user1;
+DELETE FROM mysqltest.v1;
+
+connection default;
+SELECT * FROM mysqltest.t1;
+INSERT INTO mysqltest.t1 SELECT * FROM t1;
+
+connection user1;
+--error ER_TABLEACCESS_DENIED_ERROR
+DELETE FROM mysqltest.v1 RETURNING a;
+
+connection default;
+GRANT SELECT ON mysqltest.* TO mysqltest_1@localhost;
+
+connection user1;
+--sorted_result
+DELETE FROM mysqltest.v1 RETURNING a;
+
+connection default;
+SELECT * FROM mysqltest.t1;
+
+disconnect user1;
+
+DROP DATABASE mysqltest;
+DROP USER mysqltest_1@localhost;
+DROP TABLE t1;
+
+SET GLOBAL sql_mode=@global_sql_mode_save;
+SET SESSION sql_mode=@session_sql_mode_save;

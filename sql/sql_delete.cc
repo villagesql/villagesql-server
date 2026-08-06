@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -78,6 +79,7 @@
 #include "sql/sql_opt_exec_shared.h"
 #include "sql/sql_optimizer.h"  // optimize_cond, substitute_gc
 #include "sql/sql_resolver.h"   // setup_order
+#include "sql/sql_returning.h"
 #include "sql/sql_select.h"
 #include "sql/sql_update.h"  // switch_to_multi_table_if_subqueries
 #include "sql/sql_view.h"    // check_key_in_view
@@ -109,10 +111,10 @@ class Query_result_delete final : public Query_result_interceptor {
   }
 };
 
-bool DeleteCurrentRowAndProcessTriggers(THD *thd, TABLE *table,
-                                        bool invoke_before_triggers,
-                                        bool invoke_after_triggers,
-                                        ha_rows *deleted_rows) {
+bool DeleteCurrentRowAndProcessTriggers(
+    THD *thd, TABLE *table, bool invoke_before_triggers,
+    bool invoke_after_triggers, ha_rows *deleted_rows,
+    Query_result_returning *returning = nullptr) {
   if (invoke_before_triggers) {
     if (table->triggers->process_triggers(thd, TRG_EVENT_DELETE,
                                           TRG_ACTION_BEFORE,
@@ -120,6 +122,8 @@ bool DeleteCurrentRowAndProcessTriggers(THD *thd, TABLE *table,
       return true;
     }
   }
+
+  if (returning != nullptr && returning->send_row(thd)) return true;
 
   if (const int delete_error = table->file->ha_delete_row(table->record[0]);
       delete_error != 0) {
@@ -155,7 +159,9 @@ bool Sql_cmd_delete::precheck(THD *thd) {
   Table_ref *tables = lex->query_tables;
 
   if (!multitable) {
-    if (check_one_table_access(thd, DELETE_ACL, tables)) return true;
+    if (check_one_table_access(
+            thd, DELETE_ACL | (has_returning ? SELECT_ACL : 0), tables))
+      return true;
   } else {
     Table_ref *aux_tables = delete_tables->first;
     Table_ref **save_query_tables_own_last = lex->query_tables_own_last;
@@ -258,6 +264,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
 
   ha_rows limit = unit->select_limit_cnt;
   const bool using_limit = limit != HA_POS_ERROR;
+  Query_result_returning *returning = this->returning();
 
   if (limit == 0 && thd->lex->is_explain()) {
     const Modification_plan plan(thd, MT_DELETE, table, "LIMIT is zero", true,
@@ -320,7 +327,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
       - We will not be binlogging this statement in row-based, and
       - there should be no delete triggers associated with the table.
   */
-  if (!using_limit && const_cond_result && !no_rows &&
+  if (!has_returning && !using_limit && const_cond_result && !no_rows &&
       !(specialflag & SPECIAL_NO_NEW_FUNC) &&
       ((!thd->is_current_stmt_binlog_format_row() ||  // not ROW binlog-format
         thd->is_current_stmt_binlog_disabled()) &&    // no binlog for this
@@ -405,6 +412,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
             explain_single_table_modification(thd, thd, &plan, query_block);
         return err;
       }
+      if (returning != nullptr) return returning->send_empty(thd);
       my_ok(thd, 0);
       return false;
     }
@@ -450,6 +458,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
         return err;
       }
 
+      if (returning != nullptr) return returning->send_empty(thd);
       my_ok(thd, 0);
       return false;  // Nothing to delete
     }
@@ -585,13 +594,14 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
     if (thd->is_error()) return true;
 
     if ((table->file->ha_table_flags() & HA_READ_BEFORE_WRITE_REMOVAL) &&
-        !using_limit && !has_delete_triggers && range_scan &&
-        used_index(range_scan) != MAX_KEY)
+        returning == nullptr && !using_limit && !has_delete_triggers &&
+        range_scan && used_index(range_scan) != MAX_KEY)
       read_removal = table->check_read_removal(used_index(range_scan));
 
     assert(limit > 0);
 
     // The loop that reads rows and delete those that qualify
+    if (returning != nullptr && returning->send_metadata(thd)) return true;
 
     while (!(error = iterator->Read()) && !thd->killed) {
       assert(!thd->is_error());
@@ -613,8 +623,8 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
       assert(!thd->is_error());
 
       if (DeleteCurrentRowAndProcessTriggers(thd, table, has_before_triggers,
-                                             has_after_triggers,
-                                             &deleted_rows)) {
+                                             has_after_triggers, &deleted_rows,
+                                             returning)) {
         error = 1;
         break;
       }
@@ -683,7 +693,7 @@ cleanup:
   assert(transactional_table || deleted_rows == 0 ||
          thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT));
   if (error < 0) {
-    my_ok(thd, deleted_rows);
+    if (finish_returning_or_ok(thd, returning, deleted_rows)) return true;
     DBUG_PRINT("info", ("%ld records deleted", (long)deleted_rows));
   }
   return error > 0;
@@ -828,6 +838,19 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
 
   if (select->resolve_limits(thd)) return true; /* purecov: inspected */
 
+  if (has_returning) {
+    // TODO(villagesql): DELETE resolves its RETURNING items into select->fields
+    // and passes &select->fields here, which aliases query_block->fields inside
+    // prepare_returning_fields (INSERT/UPDATE instead own a separate deque).
+    // The helper special-cases this alias; give DELETE its own returning deque
+    // like INSERT/UPDATE so the alias and its special-case can be removed.
+    Query_result_returning *returning_result = nullptr;
+    if (prepare_returning_fields(thd, select, &select->fields,
+                                 &returning_result))
+      return true;
+    result = returning_result;
+  }
+
   // check ORDER BY even if it can be ignored
   if (select->order_list.first) {
     Table_ref tables;
@@ -836,7 +859,8 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
     tables.alias = table_list->alias;
 
     assert(!select->group_list.elements);
-    if (select->setup_base_ref_items(thd)) return true; /* purecov: inspected */
+    if (!has_returning && select->setup_base_ref_items(thd))
+      return true; /* purecov: inspected */
     if (setup_order(thd, select->base_ref_items, &tables, &select->fields,
                     select->order_list.first))
       return true;
@@ -871,8 +895,11 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
 
   select->exclude_from_table_unique_test = false;
 
-  if (select->query_result() &&
+  if (!has_returning && select->query_result() &&
       select->query_result()->prepare(thd, select->fields, lex->unit))
+    return true; /* purecov: inspected */
+
+  if (has_returning && returning()->prepare(thd, select->fields, lex->unit))
     return true; /* purecov: inspected */
 
   opt_trace_print_expanded_query(thd, select, &trace_wrapper);
@@ -905,6 +932,7 @@ bool Sql_cmd_delete::execute_inner(THD *thd) {
       return explain_single_table_modification(thd, thd, &plan,
                                                lex->query_block);
     }
+    if (Query_result_returning *ret = returning()) return ret->send_empty(thd);
     my_ok(thd);
     return false;
   }
