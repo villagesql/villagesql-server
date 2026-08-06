@@ -99,6 +99,7 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "sql/item_func.h"
 #include "sql/item_geofunc.h"
 #include "sql/item_json_func.h"
+#include "sql/item_old_value.h"
 #include "sql/item_regexp_func.h"
 #include "sql/item_row.h"
 #include "sql/item_strfunc.h"
@@ -1358,7 +1359,7 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> OJ_SYM 986                        /* ODBC */
 %token<lexer.keyword> NETWORK_NAMESPACE_SYM 987         /* MYSQL */
 %token<lexer.keyword> RANDOM_SYM 988                    /* MYSQL */
-%token<lexer.keyword> OBSOLETE_TOKEN_989 989 /* was: MASTER_COMPRESSION_ALGORITHM_SYM */
+%token<lexer.keyword> OLD_VALUE_SYM 989                 /* MYSQL */
 %token<lexer.keyword> OBSOLETE_TOKEN_990 990  /* was: MASTER_ZSTD_COMPRESSION_LEVEL_SYM */
 %token<lexer.keyword> PRIVILEGE_CHECKS_USER_SYM 991     /* MYSQL */
 %token<lexer.keyword> OBSOLETE_TOKEN_992 992   /* was: MASTER_TLS_CIPHERSUITES_SYM */
@@ -1676,6 +1677,7 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <item_list2>
         expr_list udf_expr_list opt_udf_expr_list opt_expr_list select_item_list
+        returning_clause opt_returning_clause
         opt_paren_expr_list ident_list_arg ident_list values opt_values row_value
         insert_columns
         fields_or_vars
@@ -10466,6 +10468,12 @@ all_or_any:
 
 simple_expr:
           simple_ident
+        | OLD_VALUE_SYM '(' ident ')'
+          {
+            $$= NEW_PTN Item_old_field(YYTHD,
+                                       &YYTHD->lex->current_query_block()->context,
+                                       $3);
+          }
         | function_call_keyword
         | function_call_nonkeyword
         | function_call_generic
@@ -13204,6 +13212,7 @@ insert_stmt:
           insert_from_constructor      /* #7 */
           opt_values_reference         /* #8 */
           opt_insert_update_list       /* #9 */
+          opt_returning_clause         /* #10 */
           {
             DBUG_EXECUTE_IF("bug29614521_simulate_oom",
                              DBUG_SET("+d,simulate_out_of_memory"););
@@ -13211,7 +13220,7 @@ insert_stmt:
                                   $7.column_list, $7.row_value_list,
                                   nullptr,
                                   $8.table_alias, $8.column_list,
-                                  $9.column_list, $9.value_list);
+                                  $9.column_list, $9.value_list, $10);
             DBUG_EXECUTE_IF("bug29614521_simulate_oom",
                             DBUG_SET("-d,bug29614521_simulate_oom"););
           }
@@ -13225,6 +13234,7 @@ insert_stmt:
           update_list                  /* #8 */
           opt_values_reference         /* #9 */
           opt_insert_update_list       /* #10 */
+          opt_returning_clause         /* #11 */
           {
             PT_insert_values_list *one_row= NEW_PTN PT_insert_values_list(@$, YYMEM_ROOT);
             if (one_row == nullptr || one_row->push_back(&$8.value_list->value))
@@ -13233,7 +13243,7 @@ insert_stmt:
                                   $8.column_list, one_row,
                                   nullptr,
                                   $9.table_alias, $9.column_list,
-                                  $10.column_list, $10.value_list);
+                                  $10.column_list, $10.value_list, $11);
           }
         | INSERT_SYM                   /* #1 */
           insert_lock_option           /* #2 */
@@ -13243,12 +13253,13 @@ insert_stmt:
           opt_use_partition            /* #6 */
           insert_query_expression      /* #7 */
           opt_insert_update_list       /* #8 */
+          opt_returning_clause         /* #9 */
           {
             $$= NEW_PTN PT_insert(@$, false, $1, $2, $3, $5, $6,
                                   $7.column_list, nullptr,
                                   $7.insert_query_expression,
                                   NULL_CSTR, nullptr,
-                                  $8.column_list, $8.value_list);
+                                  $8.column_list, $8.value_list, $9);
           }
         ;
 
@@ -13259,12 +13270,13 @@ replace_stmt:
           table_ident                   /* #4 */
           opt_use_partition             /* #5 */
           insert_from_constructor       /* #6 */
+          opt_returning_clause          /* #7 */
           {
             $$= NEW_PTN PT_insert(@$, true, $1, $2, false, $4, $5,
                                   $6.column_list, $6.row_value_list,
                                   nullptr,
                                   NULL_CSTR, nullptr,
-                                  nullptr, nullptr);
+                                  nullptr, nullptr, $7);
           }
         | REPLACE_SYM                   /* #1 */
           replace_lock_option           /* #2 */
@@ -13273,6 +13285,7 @@ replace_stmt:
           opt_use_partition             /* #5 */
           SET_SYM                       /* #6 */
           update_list                   /* #7 */
+          opt_returning_clause          /* #8 */
           {
             PT_insert_values_list *one_row= NEW_PTN PT_insert_values_list(@$, YYMEM_ROOT);
             if (one_row == nullptr || one_row->push_back(&$7.value_list->value))
@@ -13281,7 +13294,7 @@ replace_stmt:
                                   $7.column_list, one_row,
                                   nullptr,
                                   NULL_CSTR, nullptr,
-                                  nullptr, nullptr);
+                                  nullptr, nullptr, $8);
           }
         | REPLACE_SYM                   /* #1 */
           replace_lock_option           /* #2 */
@@ -13289,12 +13302,13 @@ replace_stmt:
           table_ident                   /* #4 */
           opt_use_partition             /* #5 */
           insert_query_expression       /* #6 */
+          opt_returning_clause          /* #7 */
           {
             $$= NEW_PTN PT_insert(@$, true, $1, $2, false, $4, $5,
                                   $6.column_list, nullptr,
                                   $6.insert_query_expression,
                                   NULL_CSTR, nullptr,
-                                  nullptr, nullptr);
+                                  nullptr, nullptr, $7);
           }
         ;
 
@@ -13530,9 +13544,10 @@ update_stmt:
           opt_where_clause      /* #7 */
           opt_order_clause      /* #8 */
           opt_simple_limit      /* #9 */
+          opt_returning_clause  /* #10 */
           {
             $$= NEW_PTN PT_update(@$, $1, $2, $3, $4, $5, $7.column_list, $7.value_list,
-                                  $8, $9, $10);
+                                  $8, $9, $10, $11);
           }
         ;
 
@@ -13587,7 +13602,23 @@ delete_stmt:
           opt_order_clause
           opt_simple_limit
           {
-            $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $6, $7, $8, $9, $10);
+            $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $6, $7, $8, $9, $10,
+                                   nullptr);
+          }
+        | opt_with_clause
+          DELETE_SYM
+          opt_delete_options
+          FROM
+          table_ident
+          opt_table_alias
+          opt_use_partition
+          opt_where_clause
+          opt_order_clause
+          opt_simple_limit
+          returning_clause
+          {
+            $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $6, $7, $8, $9, $10,
+                                   $11);
           }
         | opt_with_clause
           DELETE_SYM
@@ -13610,6 +13641,15 @@ delete_stmt:
           {
             $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $7, $8);
           }
+        ;
+
+returning_clause:
+          RETURNING_SYM select_item_list { $$= $2; }
+        ;
+
+opt_returning_clause:
+          %empty { $$= nullptr; }
+        | returning_clause
         ;
 
 opt_wild:
@@ -15651,6 +15691,7 @@ ident_keywords_unambiguous:
         | NVARCHAR_SYM
         | OFF_SYM
         | OFFSET_SYM
+        | OLD_VALUE_SYM
         | OJ_SYM
         | OLD_SYM
         | ONE_SYM
@@ -15725,7 +15766,6 @@ ident_keywords_unambiguous:
         | RESUME_SYM
         | RETAIN_SYM
         | RETURNED_SQLSTATE_SYM
-        | RETURNING_SYM
         | RETURNS_SYM
         | REUSE_SYM
         | REVERSE_SYM
