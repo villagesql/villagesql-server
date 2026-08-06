@@ -46,8 +46,9 @@ For quick installation, visit [villagesql.com/install](https://villagesql.com/in
 
 ### Prerequisites
 
-- **CMake** (3.14.3 or higher)
-- **C++17 Compiler** (GCC 11+, Clang 13+, or MSVC 2019+)
+- **CMake** (3.14.6 or higher)
+- **C++17 Compiler** (GCC 10+, Clang 14+, Xcode 10+ on macOS, or MSVC 2019
+  Update 11 (16.11)+)
 - **OpenSSL 3.0+**
 - **Bison** (3.0 or higher)
 - **pkg-config**

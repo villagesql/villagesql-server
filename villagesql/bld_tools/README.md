@@ -13,7 +13,8 @@ without producing a package.
 
 - **Environment.** `setup_build_env.sh` installs the toolchain, dispatching to
   the per-OS script for the host it detects.
-- **Build.** `build_ci.sh` configures with CMake and builds `mysqld` plus the
+- **Build.** `build_ci.sh` configures with CMake, builds the default target set
+  (`mysqld`, the `mysql` client, and the rest), then builds the
   `villagesql-unit-tests` target.
 - **Extensions.** `checkout_bundled_extensions.sh` clones the extension repos,
   `build_bundled_extensions.sh` builds each into a `.veb`, and
