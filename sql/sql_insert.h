@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,6 +41,7 @@ class Alter_info;
 class Field;
 class Item;
 class Query_expression;
+class Query_result_returning;
 class Select_lex_visitor;
 class THD;
 struct HA_CREATE_INFO;
@@ -79,6 +81,8 @@ class Query_result_insert : public Query_result_interceptor {
   COPY_INFO info;
   COPY_INFO update;  ///< the UPDATE part of "info"
   bool insert_into_view;
+  Query_result_returning *returning_result{nullptr};
+  mem_root_deque<Item *> *returning_fields{nullptr};
 
   /**
      Creates a Query_result_insert for routing a result set to an existing
@@ -130,7 +134,8 @@ are found inside the COPY_INFO.
                       mem_root_deque<Item *> *target_or_source_columns,
                       mem_root_deque<Item *> *update_fields,
                       mem_root_deque<Item *> *update_values,
-                      enum_duplicates duplic)
+                      enum_duplicates duplic,
+                      mem_root_deque<Item *> *returning_fields_arg = nullptr)
       : Query_result_interceptor(),
         table_list(table_list_par),
         fields(target_or_source_columns),
@@ -138,7 +143,8 @@ are found inside the COPY_INFO.
              // manage_defaults
              (target_columns == nullptr || !target_columns->empty()), duplic),
         update(COPY_INFO::UPDATE_OPERATION, update_fields, update_values),
-        insert_into_view(table_list_par && table_list_par->is_view()) {
+        insert_into_view(table_list_par && table_list_par->is_view()),
+        returning_fields(returning_fields_arg) {
     assert(target_or_source_columns != nullptr);
     assert(target_columns == target_or_source_columns ||
            target_columns == nullptr);
@@ -295,6 +301,8 @@ class Sql_cmd_insert_base : public Sql_cmd_dml {
     statements.
   */
   mem_root_deque<Item *> values_field_list;
+  mem_root_deque<Item *> *returning_fields{nullptr};
+  Query_result_returning *returning_result{nullptr};
 
   const enum_duplicates duplicates;
 

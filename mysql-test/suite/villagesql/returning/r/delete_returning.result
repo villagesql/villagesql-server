@@ -1,0 +1,232 @@
+DROP TABLE IF EXISTS t1, t1c, t2, t2c;
+DROP VIEW IF EXISTS v1, v11;
+DROP PROCEDURE IF EXISTS p1;
+DROP FUNCTION IF EXISTS f;
+CREATE TABLE t1 (a INT, b VARCHAR(32));
+INSERT INTO t1 VALUES
+(7,'ggggggg'), (1,'a'), (3,'ccc'),
+(4,'dddd'), (1,'A'), (2,'BB'), (4,'DDDD'),
+(5,'EEEEE'), (7,'GGGGGGG'), (2,'bb');
+CREATE TABLE t1c SELECT * FROM t1;
+CREATE TABLE t2 (c INT);
+INSERT INTO t2 VALUES (4), (5), (7), (1);
+CREATE TABLE t2c SELECT * FROM t2;
+CREATE VIEW v1 AS SELECT a, UPPER(b) AS b_upper FROM t1;
+# DELETE FROM <table> ... RETURNING *
+DELETE FROM t1 WHERE a=2 RETURNING *;
+a	b
+2	BB
+2	bb
+SELECT * FROM t1;
+a	b
+1	A
+1	a
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+INSERT INTO t1 VALUES (2,'BB'), (2,'bb');
+# DELETE FROM <table> ... RETURNING <col>
+DELETE FROM t1 WHERE a=2 RETURNING b;
+b
+BB
+bb
+SELECT * FROM t1;
+a	b
+1	A
+1	a
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+INSERT INTO t1 VALUES (2,'BB'), (2,'bb');
+# DELETE FROM <table> ... RETURNING <col>, <expr>
+DELETE FROM t1 WHERE a=2 RETURNING a, UPPER(b);
+a	UPPER(b)
+2	BB
+2	BB
+SELECT * FROM t1;
+a	b
+1	A
+1	a
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+INSERT INTO t1 VALUES (2,'BB'), (2,'bb');
+# DELETE FROM <table> ... RETURNING <col> with no rows to be deleted
+DELETE FROM t1 WHERE a=6 RETURNING b;
+b
+SELECT * FROM t1;
+a	b
+1	A
+1	a
+2	BB
+2	bb
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+# DELETE FROM <table> ... RETURNING <expr with subquery>
+DELETE FROM t1 WHERE a < 5
+RETURNING a, (SELECT MIN(c) FROM t2 WHERE c=a+1);
+a	(SELECT MIN(c) FROM t2 WHERE c=a+1)
+1	NULL
+1	NULL
+2	NULL
+2	NULL
+3	4
+4	5
+4	5
+SELECT * FROM t1;
+a	b
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+DELETE FROM t1;
+INSERT INTO t1 SELECT * FROM t1c;
+DELETE FROM t2 WHERE c < 5
+RETURNING (SELECT GROUP_CONCAT(b ORDER BY CAST(b AS BINARY))
+FROM t1 GROUP BY a HAVING a=c);
+(SELECT GROUP_CONCAT(b ORDER BY CAST(b AS BINARY))
+A,a
+DDDD,dddd
+FROM t1 GROUP BY a HAVING a=c)
+SELECT * FROM t2;
+c
+5
+7
+DELETE FROM t2;
+INSERT INTO t2 SELECT * FROM t2c;
+# DELETE FROM <table> ... RETURNING <expr with function invocation>
+CREATE FUNCTION f(arg INT) RETURNS TEXT
+BEGIN
+RETURN (SELECT GROUP_CONCAT(b ORDER BY CAST(b AS BINARY)) FROM t1 WHERE a=arg);
+END|
+DELETE FROM t2 WHERE c < 5 RETURNING f(c);
+f(c)
+A,a
+DDDD,dddd
+SELECT * FROM t2;
+c
+5
+7
+DELETE FROM t2;
+INSERT INTO t2 SELECT * FROM t2c;
+DROP FUNCTION f;
+# DELETE FROM <view> ... RETURNING <col>, <col>
+DELETE FROM v1 WHERE a < 5 RETURNING *;
+a	b_upper
+1	A
+1	A
+2	BB
+2	BB
+3	CCC
+4	DDDD
+4	DDDD
+SELECT * FROM t1;
+a	b
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+DELETE FROM t1;
+INSERT INTO t1 SELECT * FROM t1c;
+# prepared DELETE FROM <table> ... RETURNING <expr>
+PREPARE stmt FROM
+'DELETE FROM t1 WHERE a=2 ORDER BY b LIMIT 1 RETURNING a, UPPER(b)';
+EXECUTE stmt;
+a	UPPER(b)
+2	BB
+SELECT * FROM t1;
+a	b
+1	A
+1	a
+2	bb
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+EXECUTE stmt;
+a	UPPER(b)
+2	BB
+SELECT * FROM t1;
+a	b
+1	A
+1	a
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+DEALLOCATE PREPARE stmt;
+DROP VIEW v1;
+DROP TABLE t1, t2;
+DROP TABLE t1c, t2c;
+#
+# DELETE ... RETURNING subquery with more than 1 row
+#
+CREATE TABLE t1 (i1 INT);
+INSERT INTO t1 VALUES (1), (2);
+CREATE TABLE t2 (i2 INT);
+INSERT INTO t2 VALUES (1), (2);
+DELETE FROM t1 ORDER BY i1 RETURNING (SELECT i2 FROM t2);
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t1, t2;
+#
+# SELECT after calling a procedure with DELETE ... RETURNING
+#
+CREATE TABLE t1 (i INT);
+INSERT INTO t1 VALUES (1), (2);
+CREATE PROCEDURE p1(a INT)
+BEGIN
+DELETE FROM t1 WHERE i = a RETURNING *;
+INSERT INTO t1 VALUES (a);
+END|
+CALL p1(1);
+i
+1
+SELECT * FROM t1;
+i
+1
+2
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# DELETE ... RETURNING with sql_mode='ONLY_FULL_GROUP_BY'
+#
+SET @sql_mode_save= @@sql_mode;
+SET sql_mode='ONLY_FULL_GROUP_BY';
+CREATE TABLE t1 (id INT);
+INSERT INTO t1 VALUES (1), (2), (3);
+DELETE FROM t1 WHERE id > 2 RETURNING *;
+id
+3
+SET sql_mode=@sql_mode_save;
+DROP TABLE t1;
+#
+# DELETE ... ORDER BY ... LIMIT ... RETURNING
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, KEY xid(id));
+INSERT INTO t1 VALUES (1), (10), (2), (9), (3), (8);
+DELETE FROM t1 ORDER BY id LIMIT 2 RETURNING id;
+id
+1
+2
+SELECT * FROM t1 ORDER BY id;
+id
+3
+8
+9
+10
+DROP TABLE t1;
