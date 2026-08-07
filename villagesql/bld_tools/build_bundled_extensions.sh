@@ -91,8 +91,8 @@ while IFS= read -r line; do
     fi
 
     # This script builds with cmake. Skip entries that use another build tool
-    # such as cargo. Rust extensions build stable-toolchain and are memory-safe
-    # by nature, so we don't instrument the .so.
+    # such as cargo. The real issue is that we try to clone the rust-sdk
+    # multiple times, leading to an error.
     # TODO(villagesql-rust): Let's consider doing a bigger rework of the 
     # extension build system to support multiple build tools, but for now we just
     # skip non-cmake extensions.
