@@ -1,0 +1,22 @@
+# Install the on_init test extension
+INSTALL EXTENSION vsql_on_init_test;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_on_init_test	0.0.1
+# on_init() ran once during load, so the count is 1
+SELECT vsql_on_init_test.init_count();
+vsql_on_init_test.init_count()
+1
+# Calling the VDF again does not re-run on_init(); count stays 1
+SELECT vsql_on_init_test.init_count();
+vsql_on_init_test.init_count()
+1
+SELECT vsql_on_init_test.init_count();
+vsql_on_init_test.init_count()
+1
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_on_init_test;
+# Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT

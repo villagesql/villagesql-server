@@ -1,0 +1,26 @@
+# Test the extension-side on_init / on_deinit builder hooks.
+#
+# vsql_on_init_test registers an on_init() callback that increments a
+# process-local counter, and an init_count() VDF that returns it. This
+# verifies:
+# - on_init() runs when the extension is installed (count becomes 1)
+# - on_init() runs exactly once per load (not per statement / per call)
+
+--echo # Install the on_init test extension
+INSTALL EXTENSION vsql_on_init_test;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # on_init() ran once during load, so the count is 1
+SELECT vsql_on_init_test.init_count();
+
+--echo # Calling the VDF again does not re-run on_init(); count stays 1
+SELECT vsql_on_init_test.init_count();
+SELECT vsql_on_init_test.init_count();
+
+--echo # Uninstall the extension
+UNINSTALL EXTENSION vsql_on_init_test;
+
+--echo # Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
