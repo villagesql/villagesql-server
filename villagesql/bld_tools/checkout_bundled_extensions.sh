@@ -39,6 +39,8 @@ if [[ ! -d "$EXTENSION_CLONES_DIR" ]]; then
     die "Extension directory not found: $EXTENSION_CLONES_DIR (mkdir first)"
 fi
 
+FAILED=0
+
 while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${line// }" ]] && continue
@@ -50,6 +52,20 @@ while IFS= read -r line; do
     REPO_NAME="${SOURCE##*/}"
 
     if [[ -n "$EXTENSION_FILTER" && "$REPO_NAME" != "$EXTENSION_FILTER" ]]; then
+        continue
+    fi
+
+    # This script builds with cmake. Skip entries that use another build tool
+    # such as cargo. Rust extensions build stable-toolchain and are memory-safe
+    # by nature, so we don't instrument the .so.
+    # TODO(villagesql-rust): consider running MTR suites against the sanitized
+    # server to exercise the FFI/ABI boundary.
+    BUILD_TOOL=cmake
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
+    done
+    if [[ "$BUILD_TOOL" != "cmake" ]]; then
+        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
         continue
     fi
 

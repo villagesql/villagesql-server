@@ -90,6 +90,20 @@ while IFS= read -r line; do
         continue
     fi
 
+    # This script builds with cmake. Skip entries that use another build tool
+    # such as cargo. Rust extensions build stable-toolchain and are memory-safe
+    # by nature, so we don't instrument the .so.
+    # TODO(villagesql-rust): consider running MTR suites against the sanitized
+    # server to exercise the FFI/ABI boundary.
+    BUILD_TOOL=cmake
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
+    done
+    if [[ "$BUILD_TOOL" != "cmake" ]]; then
+        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
+        continue
+    fi
+
     if [[ "$INCLUDE_UNBUNDLED" == "no" ]]; then
         BUNDLE=true
         for FIELD in "${FIELDS[@]:2}"; do
