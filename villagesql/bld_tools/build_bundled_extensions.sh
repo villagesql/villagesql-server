@@ -90,6 +90,21 @@ while IFS= read -r line; do
         continue
     fi
 
+    # This script builds with cmake. Skip entries that use another build tool
+    # such as cargo. The real issue is that we try to clone the rust-sdk
+    # multiple times, leading to an error.
+    # TODO(villagesql-rust): Let's consider doing a bigger rework of the
+    # extension build system to support multiple build tools, but for now we just
+    # skip non-cmake extensions.
+    BUILD_TOOL=cmake
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
+    done
+    if [[ "$BUILD_TOOL" != "cmake" ]]; then
+        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
+        continue
+    fi
+
     if [[ "$INCLUDE_UNBUNDLED" == "no" ]]; then
         BUNDLE=true
         for FIELD in "${FIELDS[@]:2}"; do
