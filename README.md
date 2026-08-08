@@ -10,7 +10,7 @@
 [![Discord](https://img.shields.io/discord/1445037832707113043?logo=discord&label=discord)](https://discord.com/invite/KSr6whd3Fr)
 [![GitHub Release](https://img.shields.io/github/v/release/villagesql/villagesql-server?include_prereleases)](https://github.com/villagesql/villagesql-server/releases)
 
-VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL 8.4.9 LTS** that introduces the **VillageSQL Extension Framework (VEF)**.
+VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL 8.4.10 LTS** that introduces the **VillageSQL Extension Framework (VEF)**.
 
 VEF enables custom data types and functions while maintaining MySQL 8.4 compatibility.
 
@@ -47,10 +47,10 @@ For quick installation, visit [villagesql.com/install](https://villagesql.com/in
 ### Prerequisites
 
 - **CMake** (3.14.6 or higher)
-- **C++17 Compiler** (GCC 10+, Clang 14+, Xcode 10+ on macOS, or MSVC 2019
+- **C++20 Compiler** (GCC 10+, Clang 14+, Xcode 10+ on macOS, or MSVC 2019
   Update 11 (16.11)+)
 - **OpenSSL 3.0+**
-- **Bison** (3.0 or higher)
+- **Bison** (3.0.4 or higher)
 - **pkg-config**
 - **ncurses development libraries**
 - **libtirpc and rpcsvc-proto**
@@ -70,10 +70,11 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 ### Build Steps (Linux & macOS)
 
-> **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths.
+> **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths, except in `mysqld` option values such as `--datadir=` and `--basedir=`, which need `$HOME`: the shell does not expand a tilde that follows `=`, and `mysqld` then treats the literal `~` as a directory name and aborts.
 
-1. **Clone the repository:**
+1. **Clone the repository into your home directory**, which is where Step 3 expects it:
    ```bash
+   cd $HOME
    git clone --depth 1 https://github.com/villagesql/villagesql-server.git
    cd villagesql-server
    ```
@@ -117,6 +118,9 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
    ```
 
+   This builds every target, including the `mysql` client that Step 5 uses to
+   connect. A build limited to the `mysqld` target leaves Step 5 with no client.
+
 5. **Initialize and Start the Server:**
 
    **Linux:**
@@ -154,10 +158,10 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    mkdir -p ~/mysql-data/data
 
    # Initialize the data directory (insecure mode for development)
-   bin/mysqld --initialize-insecure --datadir=~/mysql-data/data --basedir=~/build/villagesql
+   bin/mysqld --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
 
    # Start the server (runs in foreground, use Ctrl-C to stop)
-   bin/mysqld --gdb --datadir=~/mysql-data/data --basedir=~/build/villagesql
+   bin/mysqld --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
 
    # In a new terminal, connect using the client
    ~/build/villagesql/bin/mysql -u root
@@ -350,7 +354,7 @@ sudo apt-get install bison
 **Port already in use:**
 If you see "Bind on TCP/IP port: Address already in use", either stop the existing MySQL instance or specify a different port:
 ```bash
-bin/mysqld --gdb --datadir=~/mysql-data/data --basedir=~/build/villagesql --port=3307
+bin/mysqld --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql --port=3307
 ```
 
 For more help, visit our [Discord community](https://discord.gg/KSr6whd3Fr) or [file an issue](https://github.com/villagesql/villagesql-server/issues).
