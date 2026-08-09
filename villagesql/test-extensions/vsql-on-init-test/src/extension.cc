@@ -14,28 +14,49 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 // VillageSQL test extension exercising the extension-side on_init / on_deinit
-// builder hooks. on_init() runs once when the extension is loaded and accepted;
-// it records the count in a process-local static. The init_count() VDF returns
-// that count so a test can assert the hook ran exactly once per load.
+// builder hooks. Each hook appends a line to a marker file so a test can
+// observe that BOTH ran, including on_deinit.
+//
+// A file (not an in-memory counter) is used because on_deinit runs as the
+// extension is unloaded: the .so is dlclose'd at UNINSTALL, so any process-
+// local state is gone before SQL could read it back. A file survives the
+// unload, so the test can INSTALL, UNINSTALL, then read the file and assert
+// both "on_init" and "on_deinit" are present.
+//
+// The marker path lives under MYSQL_TMP_DIR (set by mysql-test-run and
+// inherited by the server process) so it is per-run and cleaned up with the
+// test vardir; it falls back to /tmp when that env var is absent. on_init /
+// on_deinit run at extension load/unload -- before/after any SQL -- so a sys
+// var cannot supply the path, and getenv() is the natural channel for
+// load-time code.
 
-#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 
 #include <villagesql/vsql.h>
 
 using namespace vsql;
 
-static std::atomic<long long> g_init_count{0};
-static std::atomic<long long> g_deinit_count{0};
+static std::string marker_path() {
+  const char *dir = getenv("MYSQL_TMP_DIR");
+  std::string base = (dir != nullptr) ? dir : "/tmp";
+  return base + "/vsql_on_init_test.marker";
+}
+
+static void append_marker(const char *line) {
+  FILE *f = fopen(marker_path().c_str(), "a");
+  if (f != nullptr) {
+    fprintf(f, "%s\n", line);
+    fclose(f);
+  }
+}
 
 // Runs extension-side, once, after the extension is validated and accepted.
-static void on_init_hook() { g_init_count.fetch_add(1); }
+static void on_init_hook() { append_marker("on_init"); }
 
-// Runs extension-side at unload. Recorded for symmetry; the count is not
-// observable across an unload but the hook must compile and link.
-static void on_deinit_hook() { g_deinit_count.fetch_add(1); }
-
-void init_count(IntResult out) { out.set(g_init_count.load()); }
+// Runs extension-side at unload (UNINSTALL / shutdown).
+static void on_deinit_hook() { append_marker("on_deinit"); }
 
 VEF_GENERATE_ENTRY_POINTS(
-    make_extension().on_init<&on_init_hook>().on_deinit<&on_deinit_hook>().func(
-        make_func<&init_count>("init_count").returns(INT).no_params().build()))
+    make_extension().on_init<&on_init_hook>().on_deinit<&on_deinit_hook>())
