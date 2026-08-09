@@ -1,0 +1,7 @@
+{
+  "name": "vsql_mysql_services_missing_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension that requests a nonexistent MySQL service to exercise the capability's acquire-failure path",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

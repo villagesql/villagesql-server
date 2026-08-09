@@ -87,8 +87,14 @@ endfunction()
 #                   keeps the plain name. CMake target names are suffixed
 #                   with -<VERSION> so multiple versions of the same
 #                   VEB_NAME can coexist.
+#   MYSQL_HEADERS - flag; when present, MySQL's source include (service
+#                   definitions, e.g. <mysql/components/services/*.h>) and its
+#                   build-tree generated include (e.g. mysqld_error.h) are
+#                   added to the fixture's include path, and the build is
+#                   ordered after GenError. The mysql_services capability test
+#                   extensions need this; ordinary VEF-only extensions don't.
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
-  cmake_parse_arguments(_ext "" "ABI;VERSION" "" ${ARGN})
+  cmake_parse_arguments(_ext "MYSQL_HEADERS" "ABI;VERSION" "" ${ARGN})
 
   if(_ext_ABI STREQUAL "v3")
     set(_vsql_test_ext_include "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk/v3/include")
@@ -126,22 +132,43 @@ macro(vsql_add_test_extension DIR_NAME VEB_NAME)
       "-DCMAKE_EXE_LINKER_FLAGS=--coverage")
   endif()
 
+  set(_ext_cmake_args
+    "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+    "-DVillageSQLExtensionFramework_INCLUDE_DIR=${_vsql_test_ext_include}"
+    "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+    "-DEXTENSION_NAME=${VEB_NAME}"
+    "-DEXTENSION_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/${DIR_NAME}"
+    ${_ext_cov_args}
+  )
+  # Extensions that consume/provide MySQL component services need MySQL's
+  # headers. Two locations: the source tree ({src}/include) for the service
+  # definitions, and the build tree ({build}/include) for generated headers
+  # such as mysqld_error.h (error-code constants), produced by GenError.
+  if(_ext_MYSQL_HEADERS)
+    list(APPEND _ext_cmake_args
+      "-DMYSQL_INCLUDE_DIR=${CMAKE_SOURCE_DIR}/include"
+      "-DMYSQL_GENERATED_INCLUDE_DIR=${CMAKE_BINARY_DIR}/include")
+  endif()
+
   ExternalProject_Add(${_ext_proj_target}
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/shared
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/${DIR_NAME}-shared-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${_vsql_test_ext_include}"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-      "-DEXTENSION_NAME=${VEB_NAME}"
-      "-DEXTENSION_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/${DIR_NAME}"
-      ${_ext_cov_args}
+    CMAKE_ARGS ${_ext_cmake_args}
     DEPENDS sdk
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""
   )
+
+  # Order the build after GenError so the generated MySQL headers exist before
+  # this extension compiles. Use add_dependencies (not ExternalProject_Add's
+  # DEPENDS) because GenError, defined in utilities/, is created after this
+  # subdirectory is configured — add_dependencies resolves the target lazily,
+  # ExternalProject_Add's DEPENDS requires it to already exist.
+  if(_ext_MYSQL_HEADERS)
+    add_dependencies(${_ext_proj_target} GenError)
+  endif()
 
   add_custom_target(${_ext_copy_target}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory

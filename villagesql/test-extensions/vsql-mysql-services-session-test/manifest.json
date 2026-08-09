@@ -1,0 +1,7 @@
+{
+  "name": "vsql_mysql_services_session_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension reading a session attribute via consumed MySQL core services (a mini session capability)",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}
