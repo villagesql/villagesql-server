@@ -9,9 +9,9 @@
 --source include/have_component_keyring_file.inc
 --source suite/component_keyring_file/inc/setup_component.inc
 
---echo # Install extension — this exercises the airlock channel: bridge
---echo # opens "vsql::mysql_service_registry/v1", server-side handler hands
---echo # back the registry vtable, bridge acquires three services.
+--echo # Install extension — this exercises the airlock channel: the
+--echo # extension's three RequiredServices issue "vsql::mysql_service_required/v1"
+--echo # requests and the server acquires each service and writes the pointer back.
 INSTALL EXTENSION vsql_mysql_services_test;
 
 --echo # Round-trip a key through SERVICE_TYPE(keyring_writer) -> SERVICE_TYPE(keyring_reader_with_status)

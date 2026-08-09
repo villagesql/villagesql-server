@@ -18,10 +18,10 @@
 
 // Airlock — narrow extension point for vsql-provided bridge layers.
 //
-// The airlock is deliberately specifically-shaped, not a general extension
-// surface. It exists so that bridge layers (e.g. villagesql/mysql_services)
-// can plug into the extension lifecycle without the SDK or its ABI gaining
-// any awareness of what the bridge does.
+// The airlock is deliberately narrow, not a general extension surface. It
+// exists so that bridge layers (e.g. villagesql/mysql_services) can plug into
+// the extension lifecycle without the SDK or its ABI gaining any awareness of
+// what the bridge does.
 //
 // A "participant" is anything with a `void airlock(villagesql::airlock&)`
 // method. Participants are passed to the extension builder via

@@ -1515,9 +1515,8 @@ void close_vef_extension(const ExtensionRegistration &registration) {
     return;
   }
 
-  // Need mutable access to the airlock state for teardown bookkeeping; the
-  // outer registration is passed by const& for convention reasons but the
-  // teardown is the registration's last legitimate user.
+  // Teardown mutates the airlock state (it empties the tracking vectors) but
+  // is the registration's last user, so cast away the const& the API uses.
   auto &mut = const_cast<ExtensionRegistration &>(registration);
 
   if (registration.registration != nullptr) {
@@ -1540,9 +1539,9 @@ void close_vef_extension(const ExtensionRegistration &registration) {
   dlclose(registration.dlhandle);
 
   // Phase 4: release any handles not already released in phase 1. These
-  // refer to services implemented by other components, not us; releasing
-  // after dlclose ensures no thread can still be calling through a pointer
-  // stored inside our now-unmapped .so.
+  // refer to services we don't provide; releasing after dlclose ensures no
+  // thread can still be calling through a pointer stored inside our
+  // now-unmapped .so.
   villagesql::services::release_remaining_handles(mut.airlock_state);
 }
 

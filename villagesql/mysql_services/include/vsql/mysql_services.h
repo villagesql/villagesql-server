@@ -18,9 +18,10 @@
 
 // VillageSQL Extension SDK: MySQL Services bridge.
 //
-// Lets a VEF extension consume and provide MySQL component services. Plugs
-// into the VEF SDK through the airlock — a deliberately narrow extension
-// point — without the SDK having any awareness of MySQL.
+// Lets a VEF extension consume and provide MySQL registry services (provided
+// by either a component or the server core). Plugs into the VEF SDK through
+// the airlock — a deliberately narrow extension point — without the SDK
+// having any awareness of MySQL.
 //
 // Each RequiredService / ProvidedService emits one airlock request whose
 // payload includes the destination pointer (consumer) or the implementation

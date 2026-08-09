@@ -15,6 +15,8 @@
 
 #include "villagesql/services/mysql_service_registry.h"
 
+#include <string_view>
+
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/registry.h"
 #include "mysql/service_plugin_registry.h"
@@ -131,10 +133,10 @@ bool handle_provided_v1(const unsigned char *in_bytes, size_t in_size,
 }
 
 // Extract the service-name prefix from a full name "service_name.impl".
-std::string service_prefix(const std::string &full_name) {
+std::string service_prefix(std::string_view full_name) {
   const auto dot = full_name.find('.');
-  if (dot == std::string::npos) return full_name;
-  return full_name.substr(0, dot);
+  if (dot == std::string_view::npos) return std::string(full_name);
+  return std::string(full_name.substr(0, dot));
 }
 
 }  // namespace
@@ -153,9 +155,7 @@ void register_mysql_service_airlock_handlers() {
                            &handle_provided_v1);
 }
 
-// =============================================================================
-// Teardown phases (see header)
-// =============================================================================
+// Teardown phases (see header for the required call order).
 
 void release_self_consumed_handles(ExtensionAirlockState &state) {
   if (state.acquired_handles.empty() || state.registered_impls.empty()) return;

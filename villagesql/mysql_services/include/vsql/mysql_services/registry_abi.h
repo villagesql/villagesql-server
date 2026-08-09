@@ -25,9 +25,9 @@
 //                                       and write the pointer to *destination
 //   vsql::mysql_service_provided/v1   — request the server register an impl
 //
-// "Push" model: the server does all the work synchronously inside the
-// airlock dispatch. No callback into the extension. Server tracks acquired
-// handles and registered impls per-extension for cleanup at unload.
+// The server does all the work synchronously inside airlock dispatch (no
+// callback into the extension) and tracks acquired handles and registered
+// impls per-extension for cleanup at unload.
 
 #include <stddef.h>
 

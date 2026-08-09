@@ -877,16 +877,14 @@ typedef struct {
 // =============================================================================
 //
 // Deliberately narrow extension point that lets vsql-provided "bridge" layers
-// participate in extension load without polluting the SDK or its ABI with
+// participate in extension load without the SDK or its ABI gaining any
 // knowledge of what's on the other side. The server side has a registry of
-// airlock handlers indexed by name; each handler produces an opaque blob of
-// bytes which the server delivers to the extension's `receive` callback.
+// airlock handlers indexed by name; the handler interprets each request's
+// bytes and does the work directly (no callback into the extension).
 //
 // The SDK never inspects the bytes. Bridge code on both sides agrees on a
-// channel name (e.g. "vsql::mysql_service_registry/v1") and a struct layout
-// for the bytes. Versioning is encoded in the channel name; when the bridge
-// evolves the payload struct, it bumps the version suffix and old extensions
-// keep asking for the old name.
+// channel name (e.g. "vsql::mysql_service_required/v1") and a struct layout.
+// Versioning is encoded in the channel name.
 //
 // See villagesql/airlock.h for the C++ API used by bridges.
 typedef struct {

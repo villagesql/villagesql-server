@@ -4,9 +4,9 @@
 # Creating manifest file for current MySQL server instance
 # Re-starting mysql server with manifest file
 # ----------------------------------------------------------------------
-# Install extension — this exercises the airlock channel: bridge
-# opens "vsql::mysql_service_registry/v1", server-side handler hands
-# back the registry vtable, bridge acquires three services.
+# Install extension — this exercises the airlock channel: the
+# extension's three RequiredServices issue "vsql::mysql_service_required/v1"
+# requests and the server acquires each service and writes the pointer back.
 INSTALL EXTENSION vsql_mysql_services_test;
 # Round-trip a key through SERVICE_TYPE(keyring_writer) -> SERVICE_TYPE(keyring_reader_with_status)
 SELECT vsql_mysql_services_test.keyring_store('vsql_airlock_key', NULL, 'airlock_round_trip') AS store_status;
