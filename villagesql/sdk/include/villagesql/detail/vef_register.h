@@ -313,6 +313,14 @@ const char *vef_check_func_signatures(const Ext &e,
   return invalid;
 }
 
+// Detection idiom: true when the builder exposes on-init/on-deinit callbacks
+// (the vsql ExtensionBuilder does; older stable builders do not). Lets
+// vef_register_impl stay generic over builders that predate these hooks.
+template <typename T, typename = void>
+struct has_init_fn : std::false_type {};
+template <typename T>
+struct has_init_fn<T, std::void_t<decltype(T::kInitFn)>> : std::true_type {};
+
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
 // The counts are explicit template parameters so that array sizes are
 // compile-time constants without relying on VLAs.
@@ -415,6 +423,17 @@ vef_registration_t *vef_register_impl(
   reg.required_capability_count = RequiredCapabilityCount;
   reg.required_capabilities =
       RequiredCapabilityCount > 0 ? required_capability_reqs : nullptr;
+
+  // Run the extension-side init callback now that the extension has passed all
+  // validation and is being accepted. Placed here (not at function entry) so it
+  // never runs for a rejected extension. It runs in the extension process with
+  // no server access — see ExtensionBuilder::on_init(). Guarded by has_init_fn
+  // so builders that predate these hooks still compile.
+  if constexpr (has_init_fn<Ext>::value) {
+    if constexpr (Ext::kInitFn != nullptr) {
+      Ext::kInitFn();
+    }
+  }
 
   initialized = true;
   return &reg;

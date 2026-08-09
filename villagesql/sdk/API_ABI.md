@@ -130,6 +130,46 @@ extension can support old versions of the ABI for working with older servers,
 and equivalently, newer servers should continue to support the ABI from older
 extensions. If either fails to work it is a breaking change.
 
+### Adding a builder member: feature-detect it in shared registration code
+
+The registration core `villagesql::detail::vef_register_impl()` (in
+`detail/vef_register.h`) is shared: it is instantiated for **both** the modern
+vsql builder (`vsql/extension_builder.h`, `vsql::ExtensionBuilder`) and the
+legacy builder (`extension_builder.h`,
+`villagesql::extension_builder::ExtensionBuilder`). It is also compiled against
+by the frozen SDK snapshots' test extensions in the ABI source-compatibility
+tests (`mysql-test/suite/villagesql/abi_v1`, `.../abi_v3`), which build an older
+extension's source against the current dev SDK to catch source-level
+regressions.
+
+When you add a new member to one builder and reference it from `vef_register_impl`
+(or any other shared registration helper), you must **feature-detect** it rather
+than name it unconditionally. An `if constexpr` still has to compile its
+condition, so a bare `Ext::kNewMember` fails to compile for any builder that
+lacks the member — including the legacy builder and older frozen snapshots —
+which breaks the source-compat tests.
+
+Use the `std::void_t` detection idiom already used in that file, then gate the
+use:
+
+```cpp
+template <typename T, typename = void>
+struct has_new_member : std::false_type {};
+template <typename T>
+struct has_new_member<T, std::void_t<decltype(T::kNewMember)>>
+    : std::true_type {};
+
+// ... inside vef_register_impl:
+if constexpr (has_new_member<Ext>::value) {
+  // safe: only instantiated for builders that actually have kNewMember
+}
+```
+
+This is how the extension-side `on_init` / `on_deinit` hooks are wired: only the
+vsql builder carries `kInitFn` / `kDeinitFn`, and `vef_register_impl` guards the
+call with `has_init_fn<Ext>` so the legacy builder and frozen snapshots still
+compile.
+
 ## TODOs
 
 ### 1. Drop support for protocol v1

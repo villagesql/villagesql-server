@@ -1,0 +1,16 @@
+# Install the on_init test extension (fires on_init)
+INSTALL EXTENSION vsql_on_init_test;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_on_init_test	0.0.1
+# After install, the marker file records on_init (and not yet on_deinit)
+on_init
+# Uninstall the extension (fires on_deinit)
+UNINSTALL EXTENSION vsql_on_init_test;
+# Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# After uninstall, the marker file records both on_init and on_deinit
+on_init
+on_deinit
