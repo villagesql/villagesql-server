@@ -1,0 +1,36 @@
+# Test the extension-side on_init / on_deinit builder hooks.
+#
+# vsql_on_init_test appends a line to a marker file from on_init() (at load)
+# and from on_deinit() (at unload). A file is used rather than an in-memory
+# counter because the .so is dlclose'd at UNINSTALL, so on_deinit's effect
+# cannot be observed from SQL. This verifies:
+# - on_init() runs when the extension is installed
+# - on_deinit() runs when the extension is uninstalled
+#
+# The extension writes the marker under MYSQL_TMP_DIR (inherited from
+# mysql-test-run), so the path below must match marker_path() in the extension.
+--let $marker = $MYSQL_TMP_DIR/vsql_on_init_test.marker
+
+# Remove any marker left by a previous run.
+--error 0,1
+--remove_file $marker
+
+--echo # Install the on_init test extension (fires on_init)
+INSTALL EXTENSION vsql_on_init_test;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # After install, the marker file records on_init (and not yet on_deinit)
+--cat_file $marker
+
+--echo # Uninstall the extension (fires on_deinit)
+UNINSTALL EXTENSION vsql_on_init_test;
+
+--echo # Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # After uninstall, the marker file records both on_init and on_deinit
+--cat_file $marker
+
+--remove_file $marker
