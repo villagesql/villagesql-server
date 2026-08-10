@@ -118,9 +118,11 @@ typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
 // An index profile is declared by the extension when registering an index type.
 // It enumerates helper functions (e.g. distance, compare) each identified by a
 // uint32_t fn_id. This callback is the server's generic dispatcher for those
-// functions. The layouts of args (input array of nargs elements) and result
-// (output buffer) are defined by the specific function registered at fn_id;
-// the extension determines these conventions when it registers the profile.
+// functions. key_pos is the 0-based index key column whose bound profile this
+// call dispatches fn_id through. The layouts of args (input array of nargs
+// elements) and result (output buffer) are defined by the specific function
+// registered at fn_id; the extension determines these conventions when it
+// registers the profile.
 // Profile functions are infallible.
 typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref,
                                      uint32_t key_pos, uint32_t fn_id,
@@ -636,9 +638,10 @@ typedef struct {
 // calls vef_index_profile_fn in the index context. The remaining fields carry
 // the VDF metadata the server uses to register the function as a SQL function.
 typedef struct {
+  // Minimum VEF protocol version required to call vdf.
+  vef_protocol_t protocol;
   uint32_t fn_id;
   const char *name;
-  vef_protocol_t protocol;
   vef_vdf_func_t vdf;
   vef_signature_t signature;
   uint8_t is_deterministic;
