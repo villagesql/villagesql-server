@@ -164,18 +164,16 @@ static bool any_preview_extensions_installed() {
 static bool check_allow_preview_extensions(sys_var *, THD *, set_var *var) {
   const bool new_value = var->save_result.ulonglong_value != 0;
 
-  if (new_value) {
-    // SET GLOBAL = ON is rejected; only SET PERSIST is allowed so that
-    // the value survives restart (extensions with preview capabilities
-    // require it to be ON at startup).
-    if (var->type == OPT_GLOBAL) {
-      villagesql_error(
-          "vsql_allow_preview_extensions must be set with SET PERSIST, "
-          "not SET GLOBAL, to ensure the setting survives server restart",
-          MYF(0));
-      return true;
-    }
-  } else {
+  // Both directions are rejected via SET GLOBAL; only SET PERSIST is allowed.
+  if (var->type == OPT_GLOBAL) {
+    villagesql_error(
+        "vsql_allow_preview_extensions must be set with SET PERSIST, "
+        "not SET GLOBAL, to ensure the setting survives server restart",
+        MYF(0));
+    return true;
+  }
+
+  if (!new_value) {
     // TODO(villagesql-preview): There is a TOCTOU race between this check and
     // the actual variable write: another thread could INSTALL a preview
     // extension after we check but before the variable is set to OFF. Fixing
