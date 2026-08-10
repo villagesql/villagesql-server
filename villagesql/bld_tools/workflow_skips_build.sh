@@ -36,8 +36,9 @@
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "$TOOLS_DIR/../scripts" && pwd)"
-source "$SCRIPTS_DIR/vsql_script_utils.sh"
+
+SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
+source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
 
 EXEMPT_FILE="${EXEMPT_FILE:-$TOOLS_DIR/workflow_skip_paths.txt}"
 EVENT_NAME="${1:-}"

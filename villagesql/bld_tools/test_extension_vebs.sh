@@ -25,7 +25,7 @@ set -e
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
-source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
+source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
 
 BUILD_DIR="${1:?Usage: $0 <build_dir> <extension_clones_dir>}"
 EXTENSION_CLONES_DIR="${2:?Usage: $0 <build_dir> <extension_clones_dir>}"

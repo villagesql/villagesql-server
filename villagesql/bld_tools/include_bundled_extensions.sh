@@ -15,8 +15,10 @@ VEB_SRC_DIR="${2:?Usage: $0 <dst_dir> <veb_src_dir>}"
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
-source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
+
 EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+
+source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
 
 if [[ ! -f "$EXTENSIONS_LIST" ]]; then
     log_error "Extensions list not found: $EXTENSIONS_LIST"

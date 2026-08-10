@@ -16,12 +16,13 @@
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "$TOOLS_DIR/../scripts" && pwd)"
-source "$SCRIPTS_DIR/vsql_script_utils.sh"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
 
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPTS_DIR/../.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 BUILD_TYPE="${BUILD_TYPE:-release}"
+
+source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
+
 PARALLEL_JOBS="${PARALLEL_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")}"
 
 log_step "VillageSQL CI Build"

@@ -31,8 +31,10 @@ INCLUDE_UNBUNDLED="${5:-no}"
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
-source "$SOURCE_DIR/scripts/vsql_script_utils.sh"
+
 EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+
+source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
 
 case "$INCLUDE_UNBUNDLED" in
     1|yes) INCLUDE_UNBUNDLED=yes ;;
