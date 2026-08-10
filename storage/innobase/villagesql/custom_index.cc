@@ -46,8 +46,10 @@ static uint32_t primary_key_columns(const dict_index_t *index) {
   return clust->n_uniq;
 }
 
-// Upper bound on number of arguments for profile/helper function.
-constexpr uint32_t MAX_PROFILE_FN_ARGS = 8;
+// Upper bound on number of arguments for profile/helper function. Matches
+// VEF_INDEX_PROFILE_FN_MAX_ARGS, which villagesql/veb/validate.cc enforces at
+// extension registration time.
+constexpr uint32_t MAX_PROFILE_FN_ARGS = VEF_INDEX_PROFILE_FN_MAX_ARGS;
 
 static const vef_index_profile_fn_binding_t *find_fn_binding(
     const std::vector<vef_index_profile_fn_binding_t> &bindings,
@@ -110,6 +112,9 @@ static void call_profile_binding(const dict_index_t *index, uint32_t key_pos,
   ut_a(binding.vdf != nullptr);
   ut_a(nargs == binding.signature.param_count);
   ut_a(nargs <= MAX_PROFILE_FN_ARGS);
+  // Only REAL is supported below; villagesql/veb/validate.cc rejects
+  // extension registrations with any other return type, so this holds for
+  // any binding that reached the dictionary cache.
   ut_a(binding.signature.return_type.id == VEF_TYPE_REAL);
 
   const dict_col_t *col = index->get_field(key_pos)->col;
