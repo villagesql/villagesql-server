@@ -1,3 +1,4 @@
+# restart
 #
 # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
 #

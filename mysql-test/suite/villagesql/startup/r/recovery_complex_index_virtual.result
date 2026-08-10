@@ -2,6 +2,7 @@
 # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
 # with VIRTUAL columns (tests column index mapping)
 #
+# restart
 #
 # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
 #

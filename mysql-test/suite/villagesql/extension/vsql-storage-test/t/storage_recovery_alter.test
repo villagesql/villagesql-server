@@ -11,6 +11,11 @@
 # recovery. If the durability hole is real, the values are lost/garbage after
 # recovery (RED). A correct implementation preserves them (GREEN).
 
+# Start from a freshly (gracefully) restarted server so this test's crash does
+# not discard information (like gcov test coverage) accumulated by preceding
+# tests sharing this mysqld.
+--source include/restart_mysqld.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 
 --echo # Install the column-store test extension (provides STORED_INT)
