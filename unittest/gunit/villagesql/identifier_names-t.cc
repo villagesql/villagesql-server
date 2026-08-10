@@ -78,9 +78,8 @@ TEST_F(IdentifierNamesTest, TypeIndexExtensionNamesAlwaysLowercased) {
 }
 
 // Canonical forms must byte-match the data dictionary's lowercasing, or
-// lookups against DD-stored names miss. 
+// lookups against DD-stored names miss.
 TEST_F(IdentifierNamesTest, LoweringMatchesDataDictionary) {
-
   // U+1E9E (capital sharp S) is a case where utf8mb3 lowering (unchanged)
   // differs from utf8mb4_0900 case folding (maps to U+00DF).
   const std::string capital_sharp_s = "STRA\xE1\xBA\x9E\x45";  // STRAẞE
