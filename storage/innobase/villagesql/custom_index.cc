@@ -49,7 +49,7 @@ static uint32_t primary_key_columns(const dict_index_t *index) {
 // route profile/helper calls to the registered VDFs and report key lengths
 // from the index field metadata. They are wired here so the ABI contract
 // (these callbacks are non-NULL) holds for the create() call.
-static void vef_index_profile_stub(vef_index_ref_t, uint32_t fn_id,
+static void vef_index_profile_stub(vef_index_ref_t, uint32_t, uint32_t fn_id,
                                    const void *const *, uint32_t, void *) {
   ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
       << "Custom index profile_fn invoked before implemented, fn_id=" << fn_id;
