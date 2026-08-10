@@ -78,10 +78,6 @@ class AuthMethodRef {
 // than reaching into the registry internals above -- mirroring how
 // sql/sql_audit.cc calls on_statement_postexecute() directly.
 
-// Existence check, used by CREATE USER validation to accept a VEF auth-method
-// name the same way an installed plugin name is accepted.
-bool auth_method_exists(std::string_view method_name);
-
 // Handle a CREATE USER ... IDENTIFIED WITH <method_name> [BY '...'] whose name
 // is not a loaded MySQL auth plugin, deciding whether it names a VEF extension
 // auth method.

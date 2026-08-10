@@ -1,0 +1,33 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_slow_counters.log';
+CREATE TABLE vsql_counter_scan (id INT, val INT);
+INSERT INTO vsql_counter_scan VALUES (1, 10), (2, 20), (3, 30), (4, 40),
+(5, 50), (6, 60), (7, 70), (8, 80);
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+# Run the identical full-scan query twice.
+SELECT COUNT(*) FROM vsql_counter_scan WHERE val > 25;
+COUNT(*)
+6
+SELECT COUNT(*) FROM vsql_counter_scan WHERE val > 25;
+COUNT(*)
+6
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# read_rnd_next is a per-statement delta: the second identical run
+# reports the same value as the first (a cumulative total would grow).
+# Expect exactly one YES and zero NO.
+stable=YES count: 1
+stable=NO  count: 0
+# The scan's counter is actually non-zero, so the stability check above
+# has teeth. Expect 0 scan lines reporting a zero counter.
+zero-counter scan lines: 0
+# digest_hash the hook saw matches the digest MySQL computes for the
+# same statement text. STATEMENT_DIGEST() gives the reference hash with
+# no dependency on a performance_schema consumer being enabled.
+# Expect 2 (both runs logged the same, reference-matching digest_hash)
+matching digest_hash lines: 2
+DROP TABLE vsql_counter_scan;
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

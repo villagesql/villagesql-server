@@ -80,6 +80,10 @@ vef_preview_statement_event_t *preview_statement_event_vtable() {
   return &g_statement_event_vtable;
 }
 
+bool statement_event_wants_status_snapshot() {
+  return g_hook_count.load(std::memory_order_acquire) != 0;
+}
+
 bool on_populate_statement_event(const PopulateContext &ctx,
                                  std::string &error_message) {
   if (ctx.capability_config == nullptr) return false;
@@ -210,13 +214,23 @@ void on_statement_postexecute(THD *thd) {
   // Warning count from the diagnostics area.
   args.warning_count = da != nullptr ? da->last_statement_cond_count() : 0;
 
-  // Digest text — computed into a stack buffer; pointer is valid for the
-  // duration of on_statement_postexecute.
+  // Digest text and hash — into stack buffers valid for this call. The hash is
+  // the value performance_schema exposes as DIGEST.
   String digest_str;
+  char digest_hash_str[DIGEST_HASH_TO_STRING_LENGTH + 1];
   if (thd->m_digest != nullptr) {
-    compute_digest_text(&thd->m_digest->m_digest_storage, &digest_str);
+    const sql_digest_storage *digest_storage = &thd->m_digest->m_digest_storage;
+    compute_digest_text(digest_storage, &digest_str);
     args.digest_text =
         digest_str.length() > 0 ? digest_str.c_ptr_safe() : nullptr;
+
+    // A non-null digest_text means the storage is non-empty, so it's hashable.
+    if (args.digest_text != nullptr) {
+      unsigned char hash[DIGEST_HASH_SIZE];
+      compute_digest_hash(digest_storage, hash);
+      DIGEST_HASH_TO_STRING(hash, digest_hash_str);
+      args.digest_hash = digest_hash_str;
+    }
   }
 
   args.select_full_join =
@@ -235,6 +249,16 @@ void on_statement_postexecute(THD *thd) {
   args.created_tmp_tables = stat_delta(&System_status_var::created_tmp_tables);
   args.created_tmp_disk_tables =
       stat_delta(&System_status_var::created_tmp_disk_tables);
+
+  // Handler row-access counters (the slow log's Read_* fields), same
+  // status-var-delta source as the counters above.
+  args.read_first = stat_delta(&System_status_var::ha_read_first_count);
+  args.read_last = stat_delta(&System_status_var::ha_read_last_count);
+  args.read_key = stat_delta(&System_status_var::ha_read_key_count);
+  args.read_next = stat_delta(&System_status_var::ha_read_next_count);
+  args.read_prev = stat_delta(&System_status_var::ha_read_prev_count);
+  args.read_rnd = stat_delta(&System_status_var::ha_read_rnd_count);
+  args.read_rnd_next = stat_delta(&System_status_var::ha_read_rnd_next_count);
 
   args.no_index_used =
       (thd->server_status & SERVER_QUERY_NO_INDEX_USED) ? 1 : 0;

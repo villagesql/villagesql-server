@@ -1650,17 +1650,24 @@ bool set_and_validate_user_attributes(
   plugin = my_plugin_lock_by_name(nullptr, Str->first_factor_auth_info.plugin,
                                   MYSQL_AUTHENTICATION_PLUGIN);
 
-  // VillageSQL: an unknown plugin name may be a VEF extension auth method;
-  // accept it the same way an installed plugin name is accepted.
-  if (!plugin && villagesql::services::auth_method_exists(
-                     {Str->first_factor_auth_info.plugin.str,
-                      Str->first_factor_auth_info.plugin.length})) {
-    what_to_set.m_what = NONE_ATTR;
-    return false;
-  }
-
   /* check if plugin is loaded */
   if (!plugin) {
+    // VillageSQL: an unknown plugin name may be a VEF extension auth method;
+    // let the VEF layer decide whether to accept the account.
+    if (auto handled = villagesql::services::handle_vef_user_bind(
+            {Str->first_factor_auth_info.plugin.str,
+             Str->first_factor_auth_info.plugin.length},
+            Str->first_factor_auth_info.uses_identified_by_clause)) {
+      // A VEF method has no st_mysql_auth to run the credential-hashing code
+      // below, so return early. Do NOT clear what_to_set on accept: PLUGIN_ATTR
+      // was set above from uses_identified_with_clause and must survive so the
+      // row writer persists the account's plugin column as the VEF method name.
+      // Clearing it (NONE_ATTR) makes the writer skip the plugin column,
+      // leaving the table default (caching_sha2_password), which breaks the
+      // account's next login. (On reject *handled is true and the statement
+      // errors out, so what_to_set is moot.)
+      return *handled;
+    }
     what_to_set.m_what = NONE_ATTR;
     my_error(ER_PLUGIN_IS_NOT_LOADED, MYF(0),
              Str->first_factor_auth_info.plugin.str);

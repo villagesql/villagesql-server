@@ -1,0 +1,14 @@
+CREATE DATABASE test_collation;
+USE test_collation;
+CREATE TABLE cafe (id INT);
+CREATE TABLE café (id INT);
+CREATE TABLE gross (id INT);
+CREATE TABLE groß (id INT);
+SHOW TABLES;
+Tables_in_test_collation
+cafe
+café
+gross
+groß
+DROP TABLE cafe, café, gross, groß;
+DROP DATABASE test_collation;

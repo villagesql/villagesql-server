@@ -39,6 +39,8 @@ if [[ ! -d "$EXTENSION_CLONES_DIR" ]]; then
     die "Extension directory not found: $EXTENSION_CLONES_DIR (mkdir first)"
 fi
 
+FAILED=0
+
 while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${line// }" ]] && continue
@@ -50,6 +52,21 @@ while IFS= read -r line; do
     REPO_NAME="${SOURCE##*/}"
 
     if [[ -n "$EXTENSION_FILTER" && "$REPO_NAME" != "$EXTENSION_FILTER" ]]; then
+        continue
+    fi
+
+    # This script builds with cmake. Skip entries that use another build tool
+    # such as cargo. The real issue is that we try to clone the rust-sdk
+    # multiple times, leading to an error.
+    # TODO(villagesql-rust): Let's consider doing a bigger rework of the
+    # extension build system to support multiple build tools, but for now we just
+    # skip non-cmake extensions.
+    BUILD_TOOL=cmake
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
+    done
+    if [[ "$BUILD_TOOL" != "cmake" ]]; then
+        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
         continue
     fi
 

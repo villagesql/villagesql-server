@@ -290,16 +290,27 @@ const vef_auth_cc_t *find_auth_method(std::string_view method_name) {
   return nullptr;
 }
 
-bool auth_method_exists(std::string_view method_name) {
-  return find_auth_method(method_name) != nullptr;
-}
-
 std::optional<bool> handle_vef_user_bind(std::string_view method_name,
                                          bool uses_identified_by_clause) {
-  if (!auth_method_exists(method_name)) return std::nullopt;
+  // Existence check only -- the returned pointer is compared, not dereferenced,
+  // so no AuthMethodRef is needed (g_mu inside find_auth_method makes the
+  // search race-free; nothing here uses the method after the lock is dropped).
+  if (find_auth_method(method_name) == nullptr) return std::nullopt;
   if (uses_identified_by_clause) {
-    // IDENTIFIED BY '...' asks the (non-existent) plugin to hash a password;
-    // meaningless for a VEF method. Reject rather than silently ignore.
+    // IDENTIFIED BY '...' supplies a password for the method to turn into a
+    // stored credential -- the job a MySQL plugin does via
+    // generate_authentication_string(). No VEF method today declares such
+    // credential handling, so reject rather than silently store the string as
+    // the auth string.
+    //
+    // TODO(villagesql-beta): make this a per-method capability, not a blanket
+    // reject. Whether BY is valid depends on the method's own content (does it
+    // declare a credential hook, mirroring st_mysql_auth's
+    // AUTH_FLAG_USES_INTERNAL_STORAGE + generate_authentication_string?), so
+    // the decision belongs where the method's cc is actually inspected --
+    // which, unlike this existence check, must hold an AuthMethodRef across the
+    // inspection (the extension may be uninstalled mid-statement). An API-key
+    // method that provides the hook would then accept BY and hash the key.
     my_error(ER_PASSWORD_FORMAT, MYF(0));
     return true;
   }

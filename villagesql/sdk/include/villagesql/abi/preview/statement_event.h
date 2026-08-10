@@ -181,6 +181,24 @@ typedef struct {
   // Index usage flags. Non-zero means the query ran without a usable index.
   uint8_t no_index_used;       // 1 if no index was used
   uint8_t no_good_index_used;  // 1 if no good index was found
+
+  // --- Added in vtable_hash "ver-2" ---
+
+  // Statement identity hash: the value performance_schema exposes as DIGEST
+  // (SHA-256 over the token stream, 64 lowercase hex chars). A compact GROUP BY
+  // key, stable across servers. NULL when digest_text is. Copy before return.
+  const char *digest_hash;
+
+  // Handler row-access counters (per-statement deltas): the ha_read_* call
+  // counts, i.e. the slow log's Read_* fields. Quantifies the access method the
+  // no_index_used / select_scan flags only flag.
+  uint64_t read_first;     // index-first reads (MIN / index start)
+  uint64_t read_last;      // index-last reads (MAX / index end)
+  uint64_t read_key;       // reads via an index lookup
+  uint64_t read_next;      // forward index-order walks (range scan)
+  uint64_t read_prev;      // backward index-order walks (reverse scan)
+  uint64_t read_rnd;       // reads by position (post-filesort row fetch)
+  uint64_t read_rnd_next;  // next-row in a full scan (high = table scan)
 } vef_statement_event_args_t;
 
 // Writable result. For POSTEXECUTE error_msg is advisory: the server logs it

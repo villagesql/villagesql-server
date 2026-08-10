@@ -34,7 +34,7 @@ struct CapabilityTraits<
   static constexpr const char *kCppTypeName =
       "vsql::preview_statement_event::StatementEventCapability";
   using CapabilityConfigType = vef_statement_event_cc_t;
-  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kVtableHash = "ver-2";
   static constexpr const char *kCapabilityConfigHash = "ver-1";
 
   static constexpr void *vtable_destination(Cap *p) noexcept {
