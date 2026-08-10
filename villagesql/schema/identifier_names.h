@@ -28,8 +28,9 @@ namespace villagesql {
 // Identifiers never contain characters outside utf8mb3 (the parser converts
 // them to the system charset), so utf8mb3 case folding always applies.
 
-// Collation for database/table names, from the DD's fs_name_collation().
-const CHARSET_INFO *get_identifier_charset();
+// Collation for database/table names; delegates to the DD's
+// Object_table_definition_impl::fs_name_collation().
+const CHARSET_INFO *fs_name_collation();
 
 // Database names: follow lower_case_table_names like MySQL DD
 std::string canonical_database_name(const std::string &name);
