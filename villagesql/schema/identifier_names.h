@@ -28,26 +28,25 @@ namespace villagesql {
 // Identifiers never contain characters outside utf8mb3 (the parser converts
 // them to the system charset), so utf8mb3 case folding always applies.
 
-// Collation for database/table names; delegates to the DD's
-// Object_table_definition_impl::fs_name_collation().
-const CHARSET_INFO *fs_name_collation();
+// Collation for database/table names, from the DD's fs_name_collation().
+const CHARSET_INFO *get_identifier_charset();
 
-// Database names: follow lower_case_table_names (like MySQL DD)
+// Database names: follow lower_case_table_names like MySQL DD
 std::string canonical_database_name(const std::string &name);
 
-// Table names: follow lower_case_table_names (like MySQL DD)
+// Table names: follow lower_case_table_names like MySQL DD
 std::string canonical_table_name(const std::string &name);
 
-// Column names: always case-insensitive (like MySQL DD)
+// Column names: always case-insensitive like MySQL DD
 std::string canonical_column_name(const std::string &name);
 
-// Extension names: always case-insensitive (like plugin names)
+// Extension names: always case-insensitive like plugin names
 std::string canonical_extension_name(const std::string &name);
 
-// Type names: always case-insensitive (like SQL type names)
+// Type names: always case-insensitive like SQL type names
 std::string canonical_type_name(const std::string &name);
 
-// Index names: always case-insensitive (like MySQL DD)
+// Index names: always case-insensitive like MySQL DD
 std::string canonical_index_name(const std::string &name);
 
 // Equality per MySQL identifier rules. Use these instead of ad-hoc
