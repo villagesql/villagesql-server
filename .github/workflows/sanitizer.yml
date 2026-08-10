@@ -1,12 +1,14 @@
 name: Sanitizer Tests (ASan+UBSan)
 
-# Manual build + test run with AddressSanitizer and UndefinedBehaviorSanitizer
+# Build + test run with AddressSanitizer and UndefinedBehaviorSanitizer
 # enabled, on Linux. In a single job, off one sanitized server build, it runs:
 #   - the VillageSQL unit tests (instrumented at compile time),
 #   - the VillageSQL mysql-test suite (via --sanitize), and
 #   - every bundled extension: each VEB is rebuilt with the same sanitizers and
 #     its MTR suite is run under --sanitize. The extensions ship no C++ unit
 #     tests, only MTR suites.
+#
+# Note: on Linux, LSAN (LeakSanitizer) also runs.defaults:
 #
 # Unlike the shipping build, the extension steps pass include_unbundled=yes so
 # all known extensions (vsql-vector and friends) get sanitized too.
@@ -17,18 +19,22 @@ name: Sanitizer Tests (ASan+UBSan)
 # - exts:
 #   - sources: clones of each bundled extension
 #
-# Manual-only for now. Follow-ups before this runs daily:
-#   - Triage/annotate deliberate leaks in the extensions (they have not been
-#     through the lsan.supp exercise the server has) — expect LSan/UBSan hits on
-#     the first sanitized extension runs.
-#   - Add a daily `schedule:` trigger.
+# Follow-ups:
 #   - Add a Slack #eng-health notification job (needs a SLACK_WEBHOOK_ENG_HEALTH
-#     secret bound to that channel).
-#   - Adding tsan/msan later is a change to SERVER_SAN_FLAGS /
-#     SAN_CFLAGS / SAN_LDFLAGS below, nothing shared.
+#     secret bound to that channel). Until then a nightly failure here is only
+#     visible in the Actions tab.
 # Trigger via: Actions tab -> Run workflow, or `gh workflow run sanitizer.yml`.
 
 on:
+  # Runs after every Nightly run, as an independent workflow, alongside the
+  # other nightly listeners (full-test-suite.yml, extension-compat.yml).
+  # Deliberately ungated on the nightly's conclusion: the nightly runs the same
+  # village suite this job runs under the sanitizers, so a red nightly still
+  # results in having sanitizer output that could be used to explain the failure.
+  workflow_run:
+    workflows: ['Nightly Build and Test']
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -55,7 +61,9 @@ jobs:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
       EXTS_ROOT: ${{ github.workspace }}/exts
-      REQUEST_REF: ${{ inputs.ref || github.ref }}
+      # workflow_run supplies no inputs, so fall back to the commit the nightly
+      # run built rather than whatever main has moved to since.
+      REQUEST_REF: ${{ inputs.ref || github.event.workflow_run.head_sha || github.ref }}
       EXTENSION_FILTER: ${{ inputs.extension }}
       # MTR overwrites *SAN_OPTIONS for the server processes it spawns, so these
       # values govern the ctest unit tests (which inherit the job environment)
@@ -73,6 +81,7 @@ jobs:
     steps:
     - name: Report Parameters
       run: |
+        echo "Trigger: $GITHUB_EVENT_NAME"
         echo "Requested ref: $REQUEST_REF"
         echo "Extension filter: ${EXTENSION_FILTER:-<all>}"
         echo "Source Directory: $SOURCE_DIR"
