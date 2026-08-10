@@ -34,7 +34,7 @@ SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 
 EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
 
-source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 case "$INCLUDE_UNBUNDLED" in
     1|yes) INCLUDE_UNBUNDLED=yes ;;

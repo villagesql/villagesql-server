@@ -35,19 +35,19 @@
 
 set -euo pipefail
 
-TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
-source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
-
-EXEMPT_FILE="${EXEMPT_FILE:-$TOOLS_DIR/workflow_skip_paths.txt}"
-EVENT_NAME="${1:-}"
-BASE_REF="${2:-}"
-
 # stdout is reserved for the verdict token so the caller can capture it cleanly.
 # The log_* helpers write to stdout, so redirect fd 1 to stderr for the whole
 # script and keep the original stdout on fd 3 for emit() alone.
 exec 3>&1 1>&2
+
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
+
+EXEMPT_FILE="${EXEMPT_FILE:-$TOOLS_DIR/workflow_skip_paths.txt}"
+EVENT_NAME="${1:-}"
+BASE_REF="${2:-}"
 
 # Print the verdict token on the reserved stdout and exit.
 emit() {

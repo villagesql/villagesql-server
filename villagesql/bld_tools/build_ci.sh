@@ -21,7 +21,7 @@ SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 BUILD_TYPE="${BUILD_TYPE:-release}"
 
-source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 PARALLEL_JOBS="${PARALLEL_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")}"
 

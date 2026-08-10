@@ -31,7 +31,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-source "$SOURCE_DIR/villagesql/bld_tools/vsql_script_utils.sh"
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 BUILD_DIR="${1:?Usage: $0 <build_dir> [server_mtr_args...]}"
 shift || true
