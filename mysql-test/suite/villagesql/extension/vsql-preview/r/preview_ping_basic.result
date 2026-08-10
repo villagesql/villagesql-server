@@ -1,5 +1,7 @@
-# SET GLOBAL is rejected; must use SET PERSIST
+# SET GLOBAL is rejected in both directions; must use SET PERSIST
 SET GLOBAL vsql_allow_preview_extensions = ON;
+ERROR HY000: vsql_allow_preview_extensions must be set with SET PERSIST, not SET GLOBAL, to ensure the setting survives server restart
+SET GLOBAL vsql_allow_preview_extensions = OFF;
 ERROR HY000: vsql_allow_preview_extensions must be set with SET PERSIST, not SET GLOBAL, to ensure the setting survives server restart
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_preview_ping_test;
