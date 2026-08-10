@@ -124,16 +124,16 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    mkdir -p $HOME/mysql-data/data
 
    # Initialize the data directory (insecure mode for development)
-   bin/mysqld --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
+   bin/mysqld --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
 
    # Start the server (runs in foreground, use Ctrl-C to stop)
-   bin/mysqld --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
+   bin/mysqld --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
 
    # In a new terminal, connect using the client
-   $HOME/build/villagesql/bin/mysql -u root
+   "$HOME/build/villagesql/bin/mysql" -u root
 
    # Verify the installation
-   $HOME/build/villagesql/bin/mysql -u root -e "SELECT VERSION()"
+   "$HOME/build/villagesql/bin/mysql" -u root -e "SELECT VERSION()"
    ```
 
    **Running as root (Docker or sudo):**
@@ -141,10 +141,10 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    If running as root (e.g., in Docker), MySQL requires the `--user=root` flag:
    ```bash
    # Initialize as root
-   bin/mysqld --user=root --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
+   bin/mysqld --user=root --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
 
    # Start as root
-   bin/mysqld --user=root --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
+   bin/mysqld --user=root --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
    ```
 
    **macOS:**
@@ -180,7 +180,7 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
    **Linux:**
    ```bash
-   $HOME/build/villagesql/bin/mysql -u myuser -p -e "SELECT USER()"
+   "$HOME/build/villagesql/bin/mysql" -u myuser -p -e "SELECT USER()"
    ```
 
    **macOS:**
