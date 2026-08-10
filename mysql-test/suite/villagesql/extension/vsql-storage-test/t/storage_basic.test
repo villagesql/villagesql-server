@@ -30,8 +30,49 @@ SELECT id, n FROM t1 ORDER BY id;
 DELETE FROM t1 WHERE id = 2;
 SELECT id, n FROM t1 ORDER BY id;
 
---echo # Cleanup
 DROP TABLE t1;
+
+--echo #
+--echo # Two column-store columns in one table. The extension registers
+--echo # STORED_INT and STORED_INT_2 as separate entries of one
+--echo # ColumnStoreCapability, so each column owns its own segment and every
+--echo # storage callback runs once per column.
+--echo #
+CREATE TABLE t2 (id INT PRIMARY KEY, a STORED_INT, b STORED_INT_2);
+INSERT INTO t2 VALUES (1, '10', '20');
+INSERT INTO t2 VALUES (2, '-3', '0');
+--echo # A NULL custom column stores no value at all
+INSERT INTO t2 VALUES (3, NULL, '7');
+SELECT id, a, b FROM t2 ORDER BY id;
+
+--echo # Update both columns of a row
+UPDATE t2 SET a = '111', b = '222' WHERE id = 1;
+SELECT id, a, b FROM t2 ORDER BY id;
+
+--echo # Update only one of the two columns
+UPDATE t2 SET b = '999' WHERE id = 2;
+SELECT id, a, b FROM t2 ORDER BY id;
+
+--echo # Update a NULL column to a value, and a value back to NULL
+UPDATE t2 SET a = '55' WHERE id = 3;
+UPDATE t2 SET b = NULL WHERE id = 2;
+SELECT id, a, b FROM t2 ORDER BY id;
+
+--echo # Delete a row: both columns are delete-marked
+DELETE FROM t2 WHERE id = 1;
+SELECT id, a, b FROM t2 ORDER BY id;
+
+--echo # Rebuild the table: both columns are fetched and re-inserted
+ALTER TABLE t2 FORCE, ALGORITHM=INPLACE;
+SELECT id, a, b FROM t2 ORDER BY id;
+CHECK TABLE t2;
+
+--echo # Drop one of the two columns: its segment goes, the other survives
+ALTER TABLE t2 DROP COLUMN a;
+SELECT id, b FROM t2 ORDER BY id;
+
+--echo # Cleanup
+DROP TABLE t2;
 
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_storage_test;

@@ -1,0 +1,106 @@
+# FULLTEXT indexes on tables that also have a custom-type column.
+#
+# Both flavours of custom type are covered, because they reach the table
+# rebuild differently:
+#   COMPLEX     - stored inline in the clustered index.
+#   STORED_INT  - stored out of line through the preview column storage API,
+#                 so its fields are flagged as extended storage and the
+#                 rebuild has to fetch them separately.
+#
+# FTS build paths exercised for each: ALTER TABLE ADD FULLTEXT (rebuilds the
+# table to add FTS_DOC_ID), OPTIMIZE TABLE (recreate), and FULLTEXT declared at
+# CREATE TABLE.
+#
+# Each part also asserts that the custom-type column itself cannot be part of a
+# FULLTEXT index.
+
+--echo #
+--echo # Part 1: COMPLEX, a custom type stored inline
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, txt TEXT);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', 'hello fulltext world');
+INSERT INTO t1 VALUES (2, '(3.0,4.0)', 'innodb custom column store');
+INSERT INTO t1 VALUES (3, '(0.0,0.0)', 'another fulltext row here');
+
+--echo # ALTER ADD FULLTEXT: rebuilds the table to add FTS_DOC_ID
+ALTER TABLE t1 ADD FULLTEXT(txt);
+SELECT id, val FROM t1 ORDER BY id;
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY id;
+
+--echo # OPTIMIZE: recreate with both the FTS index and the custom column
+OPTIMIZE TABLE t1;
+SELECT id, val FROM t1 ORDER BY id;
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY id;
+
+--echo # FULLTEXT declared at CREATE TABLE
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, txt TEXT, FULLTEXT(txt));
+INSERT INTO t2 VALUES (1, '(5.0,6.0)', 'inline fulltext definition');
+SELECT id, val FROM t2 WHERE MATCH(txt) AGAINST ('inline');
+
+--echo # The custom-type column itself cannot be FULLTEXT-indexed
+--error ER_BAD_FT_COLUMN
+ALTER TABLE t1 ADD FULLTEXT(val);
+--error ER_BAD_FT_COLUMN
+CREATE TABLE t3 (id INT PRIMARY KEY, val COMPLEX, FULLTEXT(val));
+
+--echo # Rejected even when a valid TEXT column is indexed alongside it
+--error ER_BAD_FT_COLUMN
+CREATE TABLE t3 (id INT PRIMARY KEY, val COMPLEX, txt TEXT, FULLTEXT(txt, val));
+
+--echo # Not custom-type specific: a plain BLOB is rejected the same way
+CREATE TABLE t4 (id INT PRIMARY KEY, b BLOB);
+--error ER_BAD_FT_COLUMN
+ALTER TABLE t4 ADD FULLTEXT(b);
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t4;
+
+--source include/villagesql/uninstall_complex_extension.inc
+
+--echo #
+--echo # Part 2: STORED_INT, a custom type stored out of line
+--echo #
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT, txt TEXT);
+INSERT INTO t1 VALUES (1, '42', 'hello fulltext world');
+INSERT INTO t1 VALUES (2, '-7', 'innodb custom column store');
+INSERT INTO t1 VALUES (3, '0', 'another fulltext row here');
+
+--echo # ALTER ADD FULLTEXT: rebuilds the table to add FTS_DOC_ID
+ALTER TABLE t1 ADD FULLTEXT(txt);
+SELECT id, n FROM t1 ORDER BY id;
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY id;
+
+--echo # OPTIMIZE: recreate with both the FTS index and the custom column
+OPTIMIZE TABLE t1;
+SELECT id, n FROM t1 ORDER BY id;
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY id;
+
+--echo # FULLTEXT declared at CREATE TABLE
+CREATE TABLE t2 (id INT PRIMARY KEY, n STORED_INT, txt TEXT, FULLTEXT(txt));
+INSERT INTO t2 VALUES (1, '5', 'inline fulltext definition');
+SELECT id, n FROM t2 WHERE MATCH(txt) AGAINST ('inline');
+
+--echo # An out of line custom-type column is rejected the same way as an
+--echo # inline one: the tokenizer never sees an extended storage field
+--error ER_BAD_FT_COLUMN
+ALTER TABLE t1 ADD FULLTEXT(n);
+--error ER_BAD_FT_COLUMN
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, FULLTEXT(n));
+--error ER_BAD_FT_COLUMN
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, txt TEXT, FULLTEXT(txt, n));
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_storage_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

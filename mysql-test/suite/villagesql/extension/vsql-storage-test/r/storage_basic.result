@@ -26,8 +26,68 @@ SELECT id, n FROM t1 ORDER BY id;
 id	n
 1	999
 3	0
-# Cleanup
 DROP TABLE t1;
+#
+# Two column-store columns in one table. The extension registers
+# STORED_INT and STORED_INT_2 as separate entries of one
+# ColumnStoreCapability, so each column owns its own segment and every
+# storage callback runs once per column.
+#
+CREATE TABLE t2 (id INT PRIMARY KEY, a STORED_INT, b STORED_INT_2);
+INSERT INTO t2 VALUES (1, '10', '20');
+INSERT INTO t2 VALUES (2, '-3', '0');
+# A NULL custom column stores no value at all
+INSERT INTO t2 VALUES (3, NULL, '7');
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+1	10	20
+2	-3	0
+3	NULL	7
+# Update both columns of a row
+UPDATE t2 SET a = '111', b = '222' WHERE id = 1;
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+1	111	222
+2	-3	0
+3	NULL	7
+# Update only one of the two columns
+UPDATE t2 SET b = '999' WHERE id = 2;
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+1	111	222
+2	-3	999
+3	NULL	7
+# Update a NULL column to a value, and a value back to NULL
+UPDATE t2 SET a = '55' WHERE id = 3;
+UPDATE t2 SET b = NULL WHERE id = 2;
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+1	111	222
+2	-3	NULL
+3	55	7
+# Delete a row: both columns are delete-marked
+DELETE FROM t2 WHERE id = 1;
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+2	-3	NULL
+3	55	7
+# Rebuild the table: both columns are fetched and re-inserted
+ALTER TABLE t2 FORCE, ALGORITHM=INPLACE;
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+2	-3	NULL
+3	55	7
+CHECK TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	check	status	OK
+# Drop one of the two columns: its segment goes, the other survives
+ALTER TABLE t2 DROP COLUMN a;
+SELECT id, b FROM t2 ORDER BY id;
+id	b
+2	NULL
+3	7
+# Cleanup
+DROP TABLE t2;
 # Uninstall extension
 UNINSTALL EXTENSION vsql_storage_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
