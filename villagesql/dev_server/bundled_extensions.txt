@@ -4,9 +4,9 @@
 # TODO(villagesql-ga): In the future, move this per-extension configuration into the
 # extension repos themselves (each declaring its own build/abi/path).
 #
-# Format: <url> [branch-or-tag] [key=value ...]
+# Format: <url> <branch-or-tag> [key=value ...]
 #   url:           Full URL or local filesystem path. git clone accepts both.
-#   branch-or-tag: Optional. Omit to clone the default branch.
+#   branch-or-tag: Branch to clone.
 #   abi=<abi>:     Optional. ABI to test against: "stable" or "dev".
 #                  Omit to test against both.
 #   bundle=false:  Optional. Omit (or bundle=true) to include in dev server.
@@ -17,7 +17,6 @@
 #                  (last path segment) so multiple entries can share one URL.
 #
 # Examples:
-#   https://github.com/villagesql/vsql-ai
 #   https://github.com/villagesql/vsql-ai v1.2.0
 #   /Users/me/src/vsql-ai my-feature-branch
 #
