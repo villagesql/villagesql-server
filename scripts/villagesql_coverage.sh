@@ -90,8 +90,10 @@ fi
 # --- 3. In-tree villagesql suite + unit tests ---------------------------------
 # The villagesql suite installs the in-tree (instrumented) test extensions, so
 # this is what produces the villagesql/sdk (dev) coverage folded into the delta.
+# --big-test includes the longer tests (e.g. villagesql/startup upgrade
+# scenarios) that are otherwise skipped, so their code paths are covered too.
 soft "In-tree villagesql suite" run_mtr \
-    --do-suite=villagesql --nounit-tests --parallel=auto --force
+    --do-suite=villagesql --nounit-tests --parallel=auto --force --big-test
 soft "villagesql unit tests" ctest --test-dir "$BUILD_DIR" -L villagesql
 
 # --- 4. Delta report ----------------------------------------------------------
