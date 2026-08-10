@@ -20,6 +20,8 @@
 #include <array>
 #include <memory>
 #include <new>
+#include <type_traits>
+#include <vector>
 
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
@@ -44,19 +46,147 @@ static uint32_t primary_key_columns(const dict_index_t *index) {
   return clust->n_uniq;
 }
 
-// TODO(villagesql-indexing): Replace these stubs with the real server-side
-// dispatchers (a dedicated index_abi.cc, analogous to storage_abi.cc) that
-// route profile/helper calls to the registered VDFs and report key lengths
-// from the index field metadata. They are wired here so the ABI contract
-// (these callbacks are non-NULL) holds for the create() call.
-static void vef_index_profile_stub(vef_index_ref_t, uint32_t, uint32_t fn_id,
-                                   const void *const *, uint32_t, void *) {
-  ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-      << "Custom index profile_fn invoked before implemented, fn_id=" << fn_id;
+// Upper bound on number of arguments for profile/helper function. Matches
+// VEF_INDEX_PROFILE_FN_MAX_ARGS, which villagesql/veb/validate.cc enforces at
+// extension registration time.
+constexpr uint32_t MAX_PROFILE_FN_ARGS = VEF_INDEX_PROFILE_FN_MAX_ARGS;
+
+static const vef_index_profile_fn_binding_t *find_fn_binding(
+    const std::vector<vef_index_profile_fn_binding_t> &bindings,
+    uint32_t fn_id) {
+  for (const auto &binding : bindings) {
+    if (binding.fn_id == fn_id) return &binding;
+  }
+  return nullptr;
 }
 
-static uint32_t vef_index_max_key_len_stub(vef_index_ref_t, uint32_t, bool) {
-  return 0;
+template <typename InvalueType>
+static void fill_custom_invalue(const vef_storage_col_data_t &col_data,
+                                const TypeContext *tc, InvalueType &v) {
+  v.type = VEF_TYPE_CUSTOM;
+  v.is_null = col_data.data == nullptr;
+  v.bin_value = col_data.data;
+  v.bin_len = col_data.length;
+  if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
+    if (tc != nullptr) {
+      const TypeParameters &params = tc->parameters();
+      v.type_params = {params.count(), params.key_data(), params.value_data()};
+    } else {
+      v.type_params = {0, nullptr, nullptr};
+    }
+  }
+}
+
+template <typename InvalueType>
+static bool call_vdf(const vef_index_profile_fn_binding_t &binding,
+                     const TypeContext *tc, const void *const *args,
+                     uint32_t nargs, vef_vdf_result_t *vdf_result) {
+  std::array<InvalueType, MAX_PROFILE_FN_ARGS> invalues{};
+  for (uint32_t i = 0; i < nargs; i++) {
+    const auto *col_data = static_cast<const vef_storage_col_data_t *>(args[i]);
+    fill_custom_invalue(*col_data, tc, invalues[i]);
+  }
+
+  vef_context_t ctx{};
+  ctx.protocol = binding.protocol;
+
+  vef_vdf_args_t vdf_args{};
+  vdf_args.value_count = nargs;
+
+  if constexpr (std::is_same_v<InvalueType, vef_invalue_v1_t>) {
+    vdf_args.values_v1 = invalues.data();
+    binding.vdf(&ctx, &vdf_args, vdf_result);
+  } else {
+    std::array<vef_invalue_t *, MAX_PROFILE_FN_ARGS> invalue_ptrs{};
+    for (uint32_t i = 0; i < nargs; i++) invalue_ptrs[i] = &invalues[i];
+    vdf_args.values = invalue_ptrs.data();
+    binding.vdf(&ctx, &vdf_args, vdf_result);
+  }
+  return vdf_result->type == VEF_RESULT_VALUE;
+}
+
+static void call_profile_binding(const dict_index_t *index, uint32_t key_pos,
+                                 const vef_index_profile_fn_binding_t &binding,
+                                 const void *const *args, uint32_t nargs,
+                                 void *result) {
+  ut_a(binding.vdf != nullptr);
+  ut_a(nargs == binding.signature.param_count);
+  ut_a(nargs <= MAX_PROFILE_FN_ARGS);
+  // Only REAL is supported below; villagesql/veb/validate.cc rejects
+  // extension registrations with any other return type, so this holds for
+  // any binding that reached the dictionary cache.
+  ut_a(binding.signature.return_type.id == VEF_TYPE_REAL);
+
+  const dict_col_t *col = index->get_field(key_pos)->col;
+  ut_a(col->custom_column != nullptr);
+
+  const TypeContext *tc = col->custom_column->type_context();
+
+  char error_msg[Custom_index::ERROR_MSG_SIZE] = {};
+  vef_vdf_result_t vdf_result{};
+  vdf_result.error_msg = error_msg;
+
+  ut_a(binding.protocol >= VEF_PROTOCOL_3);
+  bool ok = call_vdf<vef_invalue_t>(binding, tc, args, nargs, &vdf_result);
+  if (!ok) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: custom index function '" << binding.name
+        << "' failed: " << error_msg;
+  }
+  *static_cast<double *>(result) = vdf_result.real_value;
+}
+
+static void dispatch_profile_call(
+    vef_index_ref_t index_ref, uint32_t key_pos, uint32_t fn_id,
+    const std::vector<vef_index_profile_fn_binding_t> &(
+        IndexProfileDescriptor::*bindings)() const,
+    const void *const *args, uint32_t nargs, void *result) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  const IndexProfileDescriptor *profile =
+      index->custom_index->profile_for_key(key_pos);
+
+  const vef_index_profile_fn_binding_t *binding =
+      find_fn_binding((profile->*bindings)(), fn_id);
+
+  call_profile_binding(index, key_pos, *binding, args, nargs, result);
+}
+
+static void vef_index_profile_fn_impl(vef_index_ref_t index_ref,
+                                      uint32_t key_pos, uint32_t fn_id,
+                                      const void *const *args, uint32_t nargs,
+                                      void *result) {
+  dispatch_profile_call(index_ref, key_pos, fn_id,
+                        &IndexProfileDescriptor::functions, args, nargs,
+                        result);
+}
+
+static void vef_index_helper_fn_impl(vef_index_ref_t index_ref,
+                                     uint32_t key_pos, uint32_t fn_id,
+                                     const void *const *args, uint32_t nargs,
+                                     void *result) {
+  dispatch_profile_call(index_ref, key_pos, fn_id,
+                        &IndexProfileDescriptor::helpers, args, nargs, result);
+}
+
+// Maximum storage length in bytes for the key_pos'th column.
+static uint32_t vef_index_max_key_len_impl(vef_index_ref_t index_ref,
+                                           uint32_t key_pos, bool is_primary) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  const dict_index_t *field_index =
+      is_primary ? index->table->first_index() : index;
+  ut_a(field_index != nullptr);
+  ut_a(is_primary || key_pos < field_index->n_user_defined_cols);
+  ut_a(!is_primary || key_pos < field_index->n_uniq);
+
+  const dict_field_t *field = field_index->get_field(key_pos);
+  const dict_col_t *col = field->col;
+
+  uint32_t max_size = col->len;
+  if (field->prefix_len != 0 && field->prefix_len < max_size) {
+    max_size = field->prefix_len;
+  }
+  return max_size;
 }
 
 // Calls intf.parse to validate the WITH (...) parameters. Allocates the
@@ -104,9 +234,9 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->index_ref = static_cast<vef_index_ref_t>(index);
   ctx->num_key_columns = index->n_user_defined_cols;
   ctx->num_primary_key_columns = primary_key_columns(index);
-  ctx->profile_fn = vef_index_profile_stub;
-  ctx->helper_fn = vef_index_profile_stub;
-  ctx->key_len_fn = vef_index_max_key_len_stub;
+  ctx->profile_fn = vef_index_profile_fn_impl;
+  ctx->helper_fn = vef_index_helper_fn_impl;
+  ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->options = nullptr;
 
   const auto &intf = index->custom_index->interface();
