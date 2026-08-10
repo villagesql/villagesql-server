@@ -32,6 +32,17 @@ function(vsql_add_extension)
     ${ARGN}
   )
 
+  # Under gcov, instrument the extension .so so running its tests produces
+  # coverage.
+  set(_ext_cov_args "")
+  if(ENABLE_GCOV)
+    set(_ext_cov_args
+      "-DCMAKE_CXX_FLAGS=--coverage"
+      "-DCMAKE_C_FLAGS=--coverage"
+      "-DCMAKE_SHARED_LINKER_FLAGS=--coverage"
+      "-DCMAKE_EXE_LINKER_FLAGS=--coverage")
+  endif()
+
   ExternalProject_Add(${ARG_EXT_TARGET}
     SOURCE_DIR ${ARG_SOURCE_BASE}/${ARG_DIR_NAME}
     BINARY_DIR ${ARG_BINARY_BASE}/${ARG_DIR_NAME}-build
@@ -41,6 +52,7 @@ function(vsql_add_extension)
       "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
       "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
       "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+      ${_ext_cov_args}
     DEPENDS sdk
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""
