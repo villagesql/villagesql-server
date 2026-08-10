@@ -633,6 +633,11 @@ typedef struct {
 #define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION \
   VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1
 
+// Maximum number of parameters a single index profile/helper function may
+// declare in its signature. The server rejects registration of any binding
+// whose signature.param_count exceeds this at load time.
+#define VEF_INDEX_PROFILE_FN_MAX_ARGS 8
+
 // One function binding within an index profile.
 // fn_id is the identifier used by the index storage implementation when it
 // calls vef_index_profile_fn in the index context. The remaining fields carry

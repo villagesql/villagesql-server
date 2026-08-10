@@ -352,6 +352,28 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                     error_out.c_str());
             return true;
           }
+          if (fn.signature.param_count > VEF_INDEX_PROFILE_FN_MAX_ARGS) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name + "' declares " +
+                        std::to_string(fn.signature.param_count) +
+                        " parameters, exceeding the maximum of " +
+                        std::to_string(VEF_INDEX_PROFILE_FN_MAX_ARGS);
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          // TODO(villagesql-indexing): Lift this restriction once
+          // call_profile_binding() in custom_index.cc supports STRING/INT/
+          // CUSTOM results, not just REAL.
+          if (fn.signature.return_type.id != VEF_TYPE_REAL) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has return type other than REAL, which is not yet "
+                        "supported for index profile/helper functions";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
           out.push_back(fn);
         }
         return false;
