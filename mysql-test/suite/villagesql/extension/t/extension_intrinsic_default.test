@@ -1,0 +1,32 @@
+# Scenario: intrinsic default values work end-to-end. A NOT NULL custom-type
+# column receiving NULL under INSERT IGNORE is filled with the type's intrinsic
+# default.
+#
+# Fixture: vsql_test_only exposes DEFAULT_STR_TYPE (intrinsic_default_str "(7)"),
+# DEFAULT_VDF_TYPE (intrinsic_default VDF returning "(9)"), and
+# DEFAULT_PARAM_TYPE (parameterized, intrinsic_default_str "(5)").
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # intrinsic_default_str: NULL under IGNORE becomes the literal default.
+CREATE TABLE t_str (id INT PRIMARY KEY, v DEFAULT_STR_TYPE NOT NULL);
+INSERT IGNORE INTO t_str VALUES (1, NULL);
+INSERT INTO t_str VALUES (2, '(42)');
+SELECT id, v FROM t_str ORDER BY id;
+DROP TABLE t_str;
+
+--echo # intrinsic_default VDF: NULL under IGNORE becomes the VDF-computed default.
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_vdf VALUES (1, NULL);
+INSERT INTO t_vdf VALUES (2, '(42)');
+SELECT id, v FROM t_vdf ORDER BY id;
+DROP TABLE t_vdf;
+
+--echo # Parameterized type
+CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
+INSERT IGNORE INTO t_param VALUES (1, NULL);
+INSERT INTO t_param VALUES (2, '(42)');
+SELECT id, v FROM t_param ORDER BY id;
+DROP TABLE t_param;
+
+UNINSTALL EXTENSION vsql_test_only;

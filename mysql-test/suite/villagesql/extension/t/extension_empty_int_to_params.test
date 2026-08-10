@@ -1,0 +1,22 @@
+# Scenario: a parameterized type whose int_to_params reports success but leaves
+# the parameter map empty. The TYPE(N) shorthand then canonicalizes to an empty
+# parameter string, which PT_custom_type::create_with_length rejects ("Invalid
+# parameter string") before resolve_params is ever consulted. The explicit
+# TYPE('key=value') form still works because it supplies the parameter directly.
+#
+# Fixture: vsql_test_only exposes EMPTY_PARAMS_TYPE, whose int_to_params adds no
+# parameters.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # TYPE(N): int_to_params leaves the map empty -> empty parameter string
+--echo # -> rejected at parse time.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v EMPTY_PARAMS_TYPE(4));
+
+--echo # The explicit parameter string supplies 'length' directly and succeeds.
+CREATE TABLE t (id INT PRIMARY KEY, v EMPTY_PARAMS_TYPE('length=4'));
+SHOW CREATE TABLE t;
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_test_only;

@@ -210,11 +210,18 @@ typedef enum : unsigned int {
 // resolve_params "k=v,..." strings. On overflow the required length is reported
 // via actual_len and the caller retries with a larger buffer.
 //
-// Two bounds are not single numeric constants: function arity is limited to 8
+// A custom-type column's storage footprint is capped at 65532 bytes. A custom
+// column is backed by a VARBINARY field, and the server's 65535-byte row budget
+// also pays for that field's 2 length bytes and the row's null byte.
+// persisted_length and max_persisted_length are both checked against the cap
+// when the extension is installed: declaring more is rejected with an error
+// naming the type, rather than failing later at CREATE TABLE. Staying under it
+// does not guarantee a column fits -- the other columns draw on the same row
+// budget, which only CREATE TABLE can weigh (ER_TOO_BIG_ROWSIZE).
+//
+// One bound is not a single numeric constant: function arity is limited to 8
 // fixed parameters by the typed C++ builder (kMaxParams) unless varargs
-// (VEF_PARAM_VARARGS) is used; and persisted_length / max_persisted_length are
-// bounded by the backing storage field width (also VEF_MAX_RESULT_LENGTH) and
-// by the type's own declared maximum.
+// (VEF_PARAM_VARARGS) is used.
 // =============================================================================
 
 // TODO(villagesql-windows): consider making the ABI use fixed-width types. For

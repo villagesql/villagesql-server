@@ -71,6 +71,25 @@
 //                sizing for SQL-callable decode VDFs (e.g. T::to_string),
 //                where the output size scales with the input column's
 //                max_decode_buffer_length.
+//
+//   Parameter-validation edge-case types (see block comment further down):
+//     BAD_LEN_PARAM_TYPE(N), EMPTY_PARAMS_TYPE(N), LENIENT_PARAM_TYPE(N),
+//     STRICT_PARAM_TYPE(N), EXTRA_KEY_PARAM_TYPE(N).
+//
+//   Intrinsic-default test types (see block comment further down):
+//     DEFAULT_STR_TYPE, DEFAULT_VDF_TYPE, DEFAULT_PARAM_TYPE(N),
+//     BAD_DEFAULT_LEN_TYPE.
+//
+//   Parameter-bound test types (see block comment further down):
+//     OVERSIZED_PARAM_TYPE(N).
+//
+//   Storage-size boundary test type (see block comment further down):
+//     MAX_WIDTH_FIELD.
+//
+//   VAR_SETS_PERSISTED(N) - variable-length type whose resolve_params wrongly
+//     reports a positive persisted_length (rejected at DDL time).
+//   BAD_DECODE_BUF(N) - resolve_params resolves a non-positive
+//     max_decode_buffer_length (rejected at DDL time).
 
 #include <villagesql/vsql.h>
 
@@ -685,21 +704,23 @@ constexpr auto PVEC =
         .compare<&pvec_compare>()
         .build();
 
-// ---- resolve_params size-validation test types --------------------------
+// ---- Parameter-validation edge-case types -------------------------------
 //
-// Parameterized types that exercise the DDL-time checks on the sizes
-// resolve_params reports. They share a working 4-byte codec (param_test_*)
-// keyed on a LenParam.
+// The following fixed-length parameterized types exist solely to drive the
+// error/edge branches of PT_custom_type's parameter-resolution gates. They
+// share a 4-byte storage layout and a single 'length' parameter; each varies
+// only in how its int_to_params/resolve_params callbacks (mis)behave.
 //
-//   OVERSIZED_PARAM_TYPE(N) - resolve_params resolves a persisted_length larger
-//                             than max_persisted_length (upper-bound check).
-//   BAD_LEN_PARAM_TYPE(N)   - fixed-length; resolve_params returns
-//                             persisted_length = -1 (must be > 0).
-//   VAR_SETS_PERSISTED(N)   - variable-length; resolve_params returns a
-//   positive
-//                             persisted_length (must stay <= 0).
-//   BAD_DECODE_BUF(N)       - resolve_params resolves a non-positive
-//                             max_decode_buffer_length (must be > 0).
+//   BAD_LEN_PARAM_TYPE(N)   - resolve_params returns persisted_length = -1 for
+//                             a fixed-length type; every DDL use is rejected.
+//   EMPTY_PARAMS_TYPE(N)    - int_to_params reports success but adds no params;
+//                             the (N) form resolves to an empty parameter
+//                             string.
+//   LENIENT_PARAM_TYPE(N)   - resolve_params ignores unrecognized keys, so an
+//                             extra key in the parameter string is accepted.
+//   STRICT_PARAM_TYPE(N)    - resolve_params rejects any unrecognized key.
+//   EXTRA_KEY_PARAM_TYPE(N) - int_to_params emits an extra key alongside the
+//                             real one; used to check the (N) round-trip.
 
 constexpr int64_t kParamTestSize = 4;
 
@@ -717,7 +738,7 @@ struct LenParam {
   }
 };
 
-// Working 4-byte codec shared by the size-validation types. Text form is
+// Working 4-byte codec shared by the parameter-validation types. Text form is
 // "(N)"; the empty string encodes to all-zeros so the types have a usable
 // intrinsic default and their columns can be created.
 void param_test_encode(vsql::MaybeParams<LenParam> &params,
@@ -768,6 +789,281 @@ bool bad_len_resolve_params(const std::map<std::string, std::string> &,
   return false;
 }
 
+// EMPTY_PARAMS_TYPE: int_to_params succeeds but adds nothing to the map.
+bool empty_int_to_params(int64_t, std::map<std::string, std::string> &,
+                         char *) {
+  return false;  // success, but params stays empty
+}
+
+bool empty_resolve_params(const std::map<std::string, std::string> &params,
+                          vsql::ResolvedTypeParams *result, char *error_msg) {
+  auto it = params.find("length");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "EMPTY_PARAMS_TYPE requires length");
+    return true;
+  }
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// LENIENT_PARAM_TYPE: resolve_params reads only 'length' and silently ignores
+// any other key.
+bool lenient_int_to_params(int64_t value,
+                           std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool lenient_resolve_params(const std::map<std::string, std::string> &params,
+                            vsql::ResolvedTypeParams *result, char *error_msg) {
+  auto it = params.find("length");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "LENIENT_PARAM_TYPE requires length");
+    return true;
+  }
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// STRICT_PARAM_TYPE: resolve_params rejects any key other than 'length'.
+bool strict_int_to_params(int64_t value,
+                          std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool strict_resolve_params(const std::map<std::string, std::string> &params,
+                           vsql::ResolvedTypeParams *result, char *error_msg) {
+  for (const auto &kv : params) {
+    if (kv.first != "length") {
+      snprintf(error_msg, VEF_MAX_ERROR_LEN,
+               "STRICT_PARAM_TYPE: unknown parameter '%s'", kv.first.c_str());
+      return true;
+    }
+  }
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "STRICT_PARAM_TYPE requires length");
+    return true;
+  }
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// EXTRA_KEY_PARAM_TYPE: int_to_params emits an extra 'bogus' key alongside the
+// real 'length' key.
+bool extra_key_int_to_params(int64_t value,
+                             std::map<std::string, std::string> &params,
+                             char *) {
+  params["length"] = std::to_string(value);
+  params["bogus"] = "1";
+  return false;
+}
+
+bool extra_key_resolve_params(const std::map<std::string, std::string> &params,
+                              vsql::ResolvedTypeParams *result,
+                              char *error_msg) {
+  auto it = params.find("length");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "EXTRA_KEY_PARAM_TYPE requires length");
+    return true;
+  }
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+static constexpr const char kBadLenParamTypeName[] = "BAD_LEN_PARAM_TYPE";
+static constexpr const char kEmptyParamsTypeName[] = "EMPTY_PARAMS_TYPE";
+static constexpr const char kLenientParamTypeName[] = "LENIENT_PARAM_TYPE";
+static constexpr const char kStrictParamTypeName[] = "STRICT_PARAM_TYPE";
+static constexpr const char kExtraKeyParamTypeName[] = "EXTRA_KEY_PARAM_TYPE";
+
+constexpr auto BAD_LEN_PARAM_TYPE =
+    vsql::make_type<kBadLenParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&bad_len_int_to_params>()
+        .resolve_params<&bad_len_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto EMPTY_PARAMS_TYPE =
+    vsql::make_type<kEmptyParamsTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&empty_int_to_params>()
+        .resolve_params<&empty_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto LENIENT_PARAM_TYPE =
+    vsql::make_type<kLenientParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&lenient_int_to_params>()
+        .resolve_params<&lenient_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto STRICT_PARAM_TYPE =
+    vsql::make_type<kStrictParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&strict_int_to_params>()
+        .resolve_params<&strict_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto EXTRA_KEY_PARAM_TYPE =
+    vsql::make_type<kExtraKeyParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&extra_key_int_to_params>()
+        .resolve_params<&extra_key_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+// ---- Intrinsic-default test types ---------------------------------------
+//
+//   DEFAULT_STR_TYPE     - fixed non-parameterized type with a valid
+//                          intrinsic_default_str.
+//   DEFAULT_VDF_TYPE     - fixed non-parameterized type whose default is
+//                          computed by an intrinsic_default VDF.
+//   DEFAULT_PARAM_TYPE(N)- parameterized type with an intrinsic_default_str,
+//                          exercising per-TypeContext default pre-encoding.
+//   BAD_DEFAULT_LEN_TYPE - intrinsic_default_str that encodes to the wrong
+//                          length, hitting the length-mismatch error.
+
+constexpr int64_t kDefaultTestSize = 4;
+
+// Non-parameterized 4-byte codec: "(N)" text form; empty string -> zero.
+void default_test_encode(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kDefaultTestSize)) return;
+  memset(buf.data(), 0, kDefaultTestSize);
+  unsigned int nn = 0;
+  if (!from.empty()) {
+    char tmp[64];
+    size_t copy = from.size() < sizeof(tmp) - 1 ? from.size() : sizeof(tmp) - 1;
+    memcpy(tmp, from.data(), copy);
+    tmp[copy] = '\0';
+    if (sscanf(tmp, "(%u)", &nn) != 1) return;
+  }
+  buf[0] = static_cast<unsigned char>(nn);
+  out.set_length(static_cast<size_t>(kDefaultTestSize));
+}
+
+void default_test_decode(vsql::CustomArg in, vsql::StringResult out) {
+  auto data = in.value();
+  if (data.size() < static_cast<size_t>(kDefaultTestSize)) return;
+  auto buf = out.buffer();
+  int written = snprintf(buf.data(), buf.size(), "(%u)", data[0]);
+  if (written < 0) return;
+  out.set_length(static_cast<size_t>(written));
+}
+
+int default_test_compare(vsql::CustomArg a, vsql::CustomArg b) {
+  auto va = a.value();
+  auto vb = b.value();
+  size_t n = va.size() < vb.size() ? va.size() : vb.size();
+  return memcmp(va.data(), vb.data(), n);
+}
+
+// BAD_DEFAULT_LEN_TYPE encode: the magic default string "SHORT" encodes to
+// only 2 bytes, which does not match persisted_length (4).
+void bad_default_len_encode(std::string_view from, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  if (from == "SHORT") {
+    if (buf.size() < 2) return;
+    buf[0] = buf[1] = 0;
+    out.set_length(2);  // wrong: expected persisted_length (4)
+    return;
+  }
+  default_test_encode(from, out);
+}
+
+// intrinsic_default VDF for DEFAULT_VDF_TYPE: computes the text form "(9)".
+std::string default_vdf_default(char * /*error_msg*/) { return "(9)"; }
+
+static constexpr const char kDefaultStrTypeName[] = "DEFAULT_STR_TYPE";
+static constexpr const char kDefaultVdfTypeName[] = "DEFAULT_VDF_TYPE";
+static constexpr const char kDefaultParamTypeName[] = "DEFAULT_PARAM_TYPE";
+static constexpr const char kBadDefaultLenTypeName[] = "BAD_DEFAULT_LEN_TYPE";
+
+constexpr auto DEFAULT_STR_TYPE = vsql::make_type<kDefaultStrTypeName>()
+                                      .persisted_length(kDefaultTestSize)
+                                      .max_decode_buffer_length(16)
+                                      .from_string<&default_test_encode>()
+                                      .to_string<&default_test_decode>()
+                                      .compare<&default_test_compare>()
+                                      .intrinsic_default_str("(7)")
+                                      .build();
+
+constexpr auto DEFAULT_VDF_TYPE =
+    vsql::make_type<kDefaultVdfTypeName>()
+        .persisted_length(kDefaultTestSize)
+        .max_decode_buffer_length(16)
+        .from_string<&default_test_encode>()
+        .to_string<&default_test_decode>()
+        .compare<&default_test_compare>()
+        .intrinsic_default_vdf("default_vdf_type_default")
+        .build();
+
+constexpr auto DEFAULT_PARAM_TYPE =
+    vsql::make_type<kDefaultParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&lenient_int_to_params>()
+        .resolve_params<&lenient_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .intrinsic_default_str("(5)")
+        .build();
+
+constexpr auto BAD_DEFAULT_LEN_TYPE =
+    vsql::make_type<kBadDefaultLenTypeName>()
+        .persisted_length(kDefaultTestSize)
+        .max_decode_buffer_length(16)
+        .from_string<&bad_default_len_encode>()
+        .to_string<&default_test_decode>()
+        .compare<&default_test_compare>()
+        .intrinsic_default_str("SHORT")
+        .build();
+
+// ---- Parameter-bound test types ------------------------------------------
+//
+//   OVERSIZED_PARAM_TYPE(N) - resolve_params resolves a persisted_length larger
+//                             than max_persisted_length; exercises the DDL-time
+//                             upper-bound check.
+
 // OVERSIZED_PARAM_TYPE: resolves to twice its max_persisted_length.
 constexpr int64_t kOversizedResolved = kParamTestSize * 2;
 
@@ -791,6 +1087,54 @@ bool oversized_resolve_params(const std::map<std::string, std::string> &params,
   result->max_decode_buffer_length = 16;
   return false;
 }
+
+static constexpr const char kOversizedParamTypeName[] = "OVERSIZED_PARAM_TYPE";
+
+constexpr auto OVERSIZED_PARAM_TYPE =
+    vsql::make_type<kOversizedParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&oversized_int_to_params>()
+        .resolve_params<&oversized_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+// ---- Storage-size boundary test type -------------------------------------
+//
+// A custom column is backed by a VARBINARY field, so a type may declare at most
+// 65532 bytes of storage per value.
+//
+// MAX_WIDTH_FIELD sits exactly on that boundary, pinning the check as "greater
+// than" rather than "greater or equal": if the cap ever became exclusive, this
+// extension would stop installing and every test using vsql_test_only would
+// fail.
+//
+// None of this is custom-type specific -- a plain VARBINARY behaves identically
+// at every width. 65532 is the widest that works whether or not the column is
+// nullable, which is why the cap sits here rather than at 65533 (NOT NULL only)
+// or 65535 (never usable).
+
+constexpr int64_t kMaxWidthFieldLen = 65532;  // exactly the supported maximum
+
+void max_width_encode(std::string_view /*from*/, vsql::CustomResult out) {
+  auto buf = out.buffer();
+  memset(buf.data(), 0, buf.size());
+  out.set_length(buf.size());
+}
+
+static constexpr const char kMaxWidthFieldTypeName[] = "MAX_WIDTH_FIELD";
+
+constexpr auto MAX_WIDTH_FIELD = vsql::make_type<kMaxWidthFieldTypeName>()
+                                     .persisted_length(kMaxWidthFieldLen)
+                                     .max_decode_buffer_length(16)
+                                     .from_string<&max_width_encode>()
+                                     .to_string<&default_test_decode>()
+                                     .compare<&default_test_compare>()
+                                     .build();
 
 // VAR_SETS_PERSISTED: a variable-length type whose resolve_params wrongly
 // reports a positive persisted_length.
@@ -836,36 +1180,8 @@ bool bad_decode_buf_resolve_params(
   return false;
 }
 
-static constexpr const char kBadLenParamTypeName[] = "BAD_LEN_PARAM_TYPE";
-static constexpr const char kOversizedParamTypeName[] = "OVERSIZED_PARAM_TYPE";
 static constexpr const char kVarSetsPersistedTypeName[] = "VAR_SETS_PERSISTED";
 static constexpr const char kBadDecodeBufTypeName[] = "BAD_DECODE_BUF";
-
-constexpr auto BAD_LEN_PARAM_TYPE =
-    vsql::make_type<kBadLenParamTypeName>()
-        .persisted_length(-1)
-        .max_decode_buffer_length(16)
-        .max_persisted_length(kParamTestSize)
-        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
-        .int_to_params<&bad_len_int_to_params>()
-        .resolve_params<&bad_len_resolve_params>()
-        .from_string<&param_test_encode>()
-        .to_string<&param_test_decode>()
-        .compare<&param_test_compare>()
-        .build();
-
-constexpr auto OVERSIZED_PARAM_TYPE =
-    vsql::make_type<kOversizedParamTypeName>()
-        .persisted_length(-1)
-        .max_decode_buffer_length(16)
-        .max_persisted_length(kParamTestSize)
-        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
-        .int_to_params<&oversized_int_to_params>()
-        .resolve_params<&oversized_resolve_params>()
-        .from_string<&param_test_encode>()
-        .to_string<&param_test_decode>()
-        .compare<&param_test_compare>()
-        .build();
 
 constexpr auto VAR_SETS_PERSISTED =
     vsql::make_type<kVarSetsPersistedTypeName>()
@@ -905,11 +1221,25 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(NO_DEFAULT_VAR_PARAM_TYPE)
         .type(LARGE_DECODE_TYPE)
         .type(PVEC)
-        // resolve_params size-validation test types
+        // Parameter-validation edge-case types
         .type(BAD_LEN_PARAM_TYPE)
+        .type(EMPTY_PARAMS_TYPE)
+        .type(LENIENT_PARAM_TYPE)
+        .type(STRICT_PARAM_TYPE)
+        .type(EXTRA_KEY_PARAM_TYPE)
+        // Intrinsic-default test types
+        .type(DEFAULT_STR_TYPE)
+        .type(DEFAULT_VDF_TYPE)
+        .type(DEFAULT_PARAM_TYPE)
+        .type(BAD_DEFAULT_LEN_TYPE)
+        // Parameter-bound test types
         .type(OVERSIZED_PARAM_TYPE)
+        // Storage-size boundary test type
+        .type(MAX_WIDTH_FIELD)
         .type(VAR_SETS_PERSISTED)
         .type(BAD_DECODE_BUF)
+        .func(make_intrinsic_default<&default_vdf_default>(
+            "default_vdf_type_default"))
         // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
         .func(make_func<&test_result_kind>("test_result_kind")
                   .returns(INT)
