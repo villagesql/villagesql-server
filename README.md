@@ -10,7 +10,7 @@
 [![Discord](https://img.shields.io/discord/1445037832707113043?logo=discord&label=discord)](https://discord.com/invite/KSr6whd3Fr)
 [![GitHub Release](https://img.shields.io/github/v/release/villagesql/villagesql-server?include_prereleases)](https://github.com/villagesql/villagesql-server/releases)
 
-VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL 8.4.10 LTS** that introduces the **VillageSQL Extension Framework (VEF)**.
+VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL** that introduces the **VillageSQL Extension Framework (VEF)**.
 
 VEF enables custom data types and functions while maintaining MySQL 8.4 compatibility.
 
