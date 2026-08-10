@@ -24,6 +24,7 @@
 #include <optional>
 #include <string>
 
+#include "sql/sql_const.h"
 #include "unittest/gunit/test_utils.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
@@ -194,6 +195,83 @@ TEST_F(ValidateExtensionRegistrationTest, ZeroMaxDecodeBufferLength) {
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("max_decode_buffer_length"), std::string::npos);
   EXPECT_NE(error.find("MYTYPE"), std::string::npos);
+}
+
+// The widest storage footprint a custom type may declare. A custom column is
+// backed by a VARBINARY field, and MySQL's 65535-byte row budget also pays for
+// the field's 2 length bytes and the row's null byte. Spelled as a literal
+// rather than recomputed from MAX_FIELD_VARCHARLENGTH.
+static constexpr int64_t kExpectedMaxDeclaredLength = 65532;
+
+// A declared footprint above the cap is rejected, naming the type and the
+// supported maximum.
+TEST_F(ValidateExtensionRegistrationTest,
+       PersistedLengthAboveDeclaredLengthCap) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  td.persisted_length = kExpectedMaxDeclaredLength + 1;
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_1;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("MYTYPE"), std::string::npos);
+  EXPECT_NE(error.find(std::to_string(kExpectedMaxDeclaredLength)),
+            std::string::npos);
+}
+
+// A variable-length type sizes its backing field from max_persisted_length
+// rather than persisted_length.
+TEST_F(ValidateExtensionRegistrationTest,
+       MaxPersistedLengthAboveDeclaredLengthCap) {
+  vef_type_desc_t td = make_v1_type("MYVARTYPE");
+  td.protocol = VEF_PROTOCOL_4;
+  td.variable_length = true;
+  td.persisted_length = 0;  // variable-length types must not fix a footprint
+  td.max_persisted_length = kExpectedMaxDeclaredLength + 1;
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_4;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("MYVARTYPE"), std::string::npos);
+  EXPECT_NE(error.find(std::to_string(kExpectedMaxDeclaredLength)),
+            std::string::npos);
+}
+
+// The cap is inclusive: a type sitting exactly on it registers.
+TEST_F(ValidateExtensionRegistrationTest, PersistedLengthAtDeclaredLengthCap) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  td.persisted_length = kExpectedMaxDeclaredLength;
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_1;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  EXPECT_EQ(result->types.size(), 1U);
 }
 
 // A null pointer in the funcs array fails with a descriptive error.

@@ -40,6 +40,13 @@ vsql_add_test_extension(vsql-on-init-test              vsql_on_init_test)
 # at VEF_PROTOCOL_3 and is rejected by build_type_descriptor_v3 (missing
 # resolve_params) -- a path the current dev SDK can no longer produce.
 vsql_add_test_extension(vsql-bad-var-no-resolve-test   vsql_bad_var_no_resolve_test  ABI v3)
+# Each declares one custom type wider than a custom column can be backed by;
+# INSTALL EXTENSION must reject both (extension_length_too_big). They are separate
+# VEBs because registration stops at the first invalid type, so a shared VEB would
+# leave one of the two arms -- persisted_length via v3, max_persisted_length via
+# v4 -- unvalidated.
+vsql_add_test_extension(vsql-huge-fixed-test           vsql_huge_fixed_test)
+vsql_add_test_extension(vsql-huge-var-test             vsql_huge_var_test)
 vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
 vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)
 vsql_add_test_extension(vsql-resolve-only-test         vsql_resolve_only_test)

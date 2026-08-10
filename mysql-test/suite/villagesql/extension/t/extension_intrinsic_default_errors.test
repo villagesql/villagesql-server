@@ -1,0 +1,20 @@
+# Scenario: intrinsic-default runtime error path.
+#
+# A type whose intrinsic default encodes to the wrong number of bytes is
+# rejected . Fixture: vsql_test_only exposes BAD_DEFAULT_LEN_TYPE,
+# whose intrinsic_default_str "SHORT" encodes to 2 bytes instead of
+# the declared persisted_length (4).
+#
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # A type whose intrinsic default encodes to the wrong length is rejected
+--echo # when the column's TypeContext is created.
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_DEFAULT_LEN_TYPE);
+
+--echo # No table was created.
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't';
+
+UNINSTALL EXTENSION vsql_test_only;

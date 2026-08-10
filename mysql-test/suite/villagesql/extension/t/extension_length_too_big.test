@@ -1,0 +1,79 @@
+# Scenario: a custom column is backed by a VARBINARY field, so a type may declare at
+# most 65532 bytes of storage per value -- MySQL's 65535-byte row budget also pays for
+# the field's 2 length bytes and the row's null byte. Declaring more is rejected when
+# the extension is installed, with an error naming the offending type.
+#
+# Fixtures: the two over-large types live in separate VEBs.
+#   vsql_huge_fixed_test  HUGE_FIELD, persisted_length 70000
+#   vsql_huge_var_test    HUGE_VAR, max_persisted_length 70000
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("bytes of storage per value");
+
+--echo # A fixed-length type over the cap: INSTALL is rejected, naming the type and
+--echo # the supported maximum.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_huge_fixed_test;
+
+--echo # A variable-length type over the cap is rejected the same way. This declares
+--echo # max_persisted_length rather than persisted_length.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_huge_var_test;
+
+--echo # Neither extension was installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('vsql_huge_fixed_test', 'vsql_huge_var_test')
+ORDER BY extension_name;
+
+--echo # Neither type is available, so neither can be used in a column.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v HUGE_FIELD);
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v HUGE_VAR);
+
+--echo # The error log names the specific reason for each.
+--perl
+use strict;
+my $error_log = $ENV{'MYSQLTEST_VARDIR'} . "/log/mysqld.1.err";
+open(FILE, "$error_log") or die("Unable to open error log: $error_log");
+my %found;
+while (<FILE>) {
+  if (/type 'HUGE_FIELD' declares 70000 bytes of storage per value/) {
+    $found{'HUGE_FIELD'} = 1;
+  }
+  if (/type 'HUGE_VAR' declares 70000 bytes of storage per value/) {
+    $found{'HUGE_VAR'} = 1;
+  }
+}
+close(FILE);
+for my $type ('HUGE_FIELD', 'HUGE_VAR') {
+  die "Expected storage-size rejection for $type in error log"
+      unless $found{$type};
+  print "Found storage-size rejection message for $type in error log\n";
+}
+EOF
+
+--echo #
+--echo # A type sitting exactly on the cap installs and is usable.
+--echo #
+INSTALL EXTENSION vsql_test_only;
+
+--echo # As the only column it fits the row, nullable, and round-trips a value.
+CREATE TABLE t_max (v MAX_WIDTH_FIELD);
+SHOW CREATE TABLE t_max;
+INSERT INTO t_max VALUES ('');
+SELECT v FROM t_max;
+DROP TABLE t_max;
+
+--echo # Adding a second column pushes the row over MySQL's budget. This is the
+--echo # below-the-cap case install-time validation deliberately does not predict.
+--error ER_TOO_BIG_ROWSIZE
+CREATE TABLE t_max (id INT PRIMARY KEY, v MAX_WIDTH_FIELD);
+
+--echo # A plain VARBINARY of the same width behaves identically, both ways round.
+CREATE TABLE t_vb (v VARBINARY(65532));
+DROP TABLE t_vb;
+--error ER_TOO_BIG_ROWSIZE
+CREATE TABLE t_vb (id INT PRIMARY KEY, v VARBINARY(65532));
+
+UNINSTALL EXTENSION vsql_test_only;

@@ -1,0 +1,11 @@
+INSTALL EXTENSION vsql_test_only;
+# A type whose intrinsic default encodes to the wrong length is rejected
+# when the column's TypeContext is created.
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_DEFAULT_LEN_TYPE);
+ERROR HY000: Type 'vsql_test_only.BAD_DEFAULT_LEN_TYPE' failed to initialize: from_string VDF encoded intrinsic default input 'SHORT' to 2 bytes, expected persisted_length=4
+# No table was created.
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't';
+COUNT(*)
+0
+UNINSTALL EXTENSION vsql_test_only;
