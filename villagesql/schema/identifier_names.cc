@@ -89,4 +89,10 @@ const CHARSET_INFO *type_parameter_collation() {
   return &my_charset_utf8mb4_0900_ai_ci;
 }
 
+void test_set_lower_case_table_names(int value) {
+  ::lower_case_table_names = value;
+}
+
+int test_get_lower_case_table_names() { return ::lower_case_table_names; }
+
 }  // namespace villagesql

@@ -38,7 +38,7 @@
 #include "sql_string.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/auth.h"
 
 // The VEF auth ctx is just the connection's MPVIO_EXT. The extension handler
@@ -369,7 +369,7 @@ bool on_populate_auth(const PopulateContext &ctx, std::string &error_message) {
     return true;
   }
 
-  const std::string normalized = normalize_extension_name(cc->name);
+  const std::string normalized = canonical_extension_name(cc->name);
   const std::string ext(ctx.extension_name);
 
   std::lock_guard<std::mutex> lock(g_mu);
@@ -414,7 +414,7 @@ void on_depopulate_auth(const DepopulateContext &ctx) {
 const vef_auth_cc_t *find_auth_method(std::string_view method_name) {
   if (method_name.empty()) return nullptr;
   const std::string normalized =
-      normalize_extension_name(std::string(method_name));
+      canonical_extension_name(std::string(method_name));
   std::lock_guard<std::mutex> lock(g_mu);
   for (const auto &m : g_methods) {
     if (m.method_name == normalized) return m.cc;

@@ -21,6 +21,7 @@
 #include "sql/strfunc.h"
 #include "unittest/gunit/temptable/mock_field_varstring.h"
 #include "unittest/gunit/test_utils.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/victionary_client.h"
 
@@ -44,7 +45,7 @@ class VictionaryClientTest : public ::testing::Test {
     client_->clear_all_tables();
 
     // Set system character set
-    system_charset_info = &my_charset_utf8mb4_0900_ai_ci;
+    system_charset_info = &my_charset_utf8mb3_general_ci;
   }
 
   void TearDown() override {
@@ -610,6 +611,127 @@ TEST_F(VictionaryClientTest, UpdateOperationWithRename) {
     EXPECT_EQ(client_->columns().get_committed(old_key), nullptr);
     EXPECT_NE(client_->columns().get_committed(new_key), nullptr);
   }
+}
+
+// Mixed-case names round-trip through insert, update, and delete at
+// lower_case_table_names=2: lookups are case-insensitive, components keep
+// their as-entered case.
+TEST_F(VictionaryClientTest, MixedCaseRoundTripCasePreserving) {
+  int original_setting = test_get_lower_case_table_names();
+  test_set_lower_case_table_names(2);
+
+  THD *fake_thd = reinterpret_cast<THD *>(0x1230);
+
+  ColumnEntry entry(ColumnKey("MyDB", "MyTable", "MyColumn"));
+  entry.extension_name = "test_ext";
+  entry.extension_version = "1.0";
+  entry.type_name = "COMPLEX";
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    const ColumnEntry *found = client_->columns().get_committed(
+        ColumnKey("MYDB", "mytable", "MyCoLuMn"));
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->db_name(), "MyDB");
+    EXPECT_EQ(found->table_name(), "MyTable");
+    EXPECT_EQ(found->column_name(), "MyColumn");
+  }
+
+  // Rename via an old key spelled with different case.
+  ColumnEntry renamed(ColumnKey("MyDB", "MyTable", "NewColumn"));
+  renamed.extension_name = "test_ext";
+  renamed.extension_version = "1.0";
+  renamed.type_name = "COMPLEX";
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->columns().MarkForUpdate(
+        *fake_thd, std::move(renamed),
+        ColumnKey("mydb", "MYTABLE", "mycolumn")));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->columns().get_committed(
+                  ColumnKey("MyDB", "MyTable", "MyColumn")),
+              nullptr);
+    const ColumnEntry *found = client_->columns().get_committed(
+        ColumnKey("mydb", "mytable", "newcolumn"));
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->column_name(), "NewColumn");
+  }
+
+  // Delete via a key spelled with different case.
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->columns().MarkForDeletion(
+        *fake_thd, ColumnKey("MYDB", "MYTABLE", "NEWCOLUMN")));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->columns().get_committed(
+                  ColumnKey("MyDB", "MyTable", "NewColumn")),
+              nullptr);
+  }
+
+  test_set_lower_case_table_names(original_setting);
+}
+
+// At lower_case_table_names=0, database and table names are case-sensitive;
+// column names stay case-insensitive.
+TEST_F(VictionaryClientTest, MixedCaseRoundTripCaseSensitive) {
+  int original_setting = test_get_lower_case_table_names();
+  test_set_lower_case_table_names(0);
+
+  THD *fake_thd = reinterpret_cast<THD *>(0x4560);
+
+  ColumnEntry entry(ColumnKey("MyDB", "MyTable", "MyColumn"));
+  entry.extension_name = "test_ext";
+  entry.extension_version = "1.0";
+  entry.type_name = "COMPLEX";
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    // Differently-cased db/table names do not match.
+    EXPECT_EQ(client_->columns().get_committed(
+                  ColumnKey("mydb", "mytable", "MyColumn")),
+              nullptr);
+    // Column lookup stays case-insensitive.
+    const ColumnEntry *found = client_->columns().get_committed(
+        ColumnKey("MyDB", "MyTable", "MYCOLUMN"));
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->column_name(), "MyColumn");
+  }
+
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->columns().MarkForDeletion(
+        *fake_thd, ColumnKey("MyDB", "MyTable", "mycolumn")));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->columns().get_committed(
+                  ColumnKey("MyDB", "MyTable", "MyColumn")),
+              nullptr);
+  }
+
+  test_set_lower_case_table_names(original_setting);
 }
 
 // Test multiple operations on same key (DELETE then INSERT)

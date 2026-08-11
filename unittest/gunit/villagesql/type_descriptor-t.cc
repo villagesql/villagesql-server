@@ -23,6 +23,7 @@
 
 #include "unittest/gunit/test_utils.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 

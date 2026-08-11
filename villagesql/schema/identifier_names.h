@@ -64,6 +64,10 @@ bool extension_names_equal(const std::string &a, const std::string &b);
 // type_parameters JSON, so this must stay stable.
 const CHARSET_INFO *type_parameter_collation();
 
+// Test-only access to the lower_case_table_names global.
+void test_set_lower_case_table_names(int value);
+int test_get_lower_case_table_names();
+
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_SCHEMA_IDENTIFIER_NAMES_H_

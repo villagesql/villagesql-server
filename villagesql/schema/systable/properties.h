@@ -19,6 +19,7 @@
 
 #include <cassert>
 #include <string>
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/systable/helpers.h"
 
 // Forward declarations
@@ -40,7 +41,7 @@ struct PropertyKey {
 
   explicit PropertyKey(std::string name)
       : name_(std::move(name)),
-        normalized_key_(normalize_extension_name(name_)) {}
+        normalized_key_(canonical_extension_name(name_)) {}
 
   const std::string &str() const { return normalized_key_; }
 
@@ -108,7 +109,7 @@ struct TableTraits<PropertyEntry> {
   // properties)
   static bool update_in_table(TABLE & /*table*/,
                               const PropertyEntry & /*entry*/,
-                              const std::string & /*old_key*/) {
+                              const PropertyKey & /*old_key*/) {
     assert(VILLAGESQL_NOT_IMPLEMENTED);
     return true;  // Not implemented - return error
   }

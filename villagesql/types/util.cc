@@ -51,6 +51,7 @@
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_columns.h"
 #include "villagesql/schema/systable/custom_index_columns.h"
@@ -1766,8 +1767,7 @@ bool InjectCustomSpParams(
       // are plain SQL types with no entry — only custom-typed ones match.
       const SpParamEntry *param_entry = nullptr;
       for (const SpParamEntry *entry : sp_params) {
-        if (my_strcasecmp(system_charset_info, cdef->field_name,
-                          entry->param_name().c_str()) == 0) {
+        if (column_names_equal(cdef->field_name, entry->param_name())) {
           param_entry = entry;
           break;
         }

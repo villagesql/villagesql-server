@@ -112,13 +112,6 @@ bool query_has_rows(THD *thd, const char *query);
 bool execute_and_extract_single_value(THD *thd, const char *query,
                                       std::string *value);
 
-// ===== Test utilities =====
-// Direct access to lower_case_table_names for testing
-// This allows unit tests to modify the same variable the normalization
-// functions use
-void test_set_lower_case_table_names(int value);
-int test_get_lower_case_table_names();
-
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_SCHEMA_SYSTABLE_HELPERS_H_

@@ -25,6 +25,11 @@ This is because there's a limit on key size that affects system tables.
 
 Create the Key/KeyPrefix struct and Entry struct following the pattern from properties.h or extensions.h:
 
+Store identifier components as entered; build the normalized key with the
+`canonical_*` functions from `villagesql/schema/identifier_names.h`, which is
+the single home for identifier collation rules. Never pick a collation in the
+key struct itself.
+
 ```cpp
 // Key struct with normalization
 struct YourTableKey {
@@ -33,7 +38,7 @@ struct YourTableKey {
 
   explicit YourTableKey(std::string name)
       : name_(std::move(name)),
-        normalized_key_(normalize_your_field_name(name_)) {}
+        normalized_key_(canonical_your_field_name(name_)) {}
 
   const std::string &str() const { return normalized_key_; }
 

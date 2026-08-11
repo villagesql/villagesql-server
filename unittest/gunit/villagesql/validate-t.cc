@@ -26,6 +26,7 @@
 
 #include "sql/sql_const.h"
 #include "unittest/gunit/test_utils.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"

@@ -98,33 +98,19 @@ bool TableTraits<ColumnEntry>::write_to_table(TABLE &table,
 
 bool TableTraits<ColumnEntry>::update_in_table(TABLE &table,
                                                const ColumnEntry &entry,
-                                               const std::string &old_key) {
-  // Determine which key to use for lookup
-  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
-
-  // Parse the lookup key to get db, table, column names
-  // Key format: "db.table.column"
-  size_t first_dot = lookup_key.find('.');
-  size_t second_dot = lookup_key.find('.', first_dot + 1);
-  if (should_assert_if_true(first_dot == std::string::npos ||
-                            second_dot == std::string::npos)) {
-    LogVSQL(ERROR_LEVEL, "Invalid key format for update: %s",
-            lookup_key.c_str());
-    return true;
-  }
-
-  std::string old_db = lookup_key.substr(0, first_dot);
-  std::string old_table =
-      lookup_key.substr(first_dot + 1, second_dot - first_dot - 1);
-  std::string old_column = lookup_key.substr(second_dot + 1);
+                                               const ColumnKey &old_key) {
+  // Probe with the as-entered components: the stored row holds the original
+  // bytes, not the normalized form.
+  const ColumnKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   // Set up the key fields for index lookup
   Field **field = table.field;
 
-  field[0]->store(old_db.c_str(), old_db.length(), &my_charset_utf8mb4_bin);
-  field[1]->store(old_table.c_str(), old_table.length(),
+  field[0]->store(lookup_key.db().c_str(), lookup_key.db().length(),
                   &my_charset_utf8mb4_bin);
-  field[2]->store(old_column.c_str(), old_column.length(),
+  field[1]->store(lookup_key.table().c_str(), lookup_key.table().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(lookup_key.column().c_str(), lookup_key.column().length(),
                   &my_charset_utf8mb4_bin);
 
   // Build the index key from the populated fields

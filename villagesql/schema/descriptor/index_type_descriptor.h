@@ -22,7 +22,7 @@
 
 #include <string>
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 
 namespace villagesql {
@@ -37,7 +37,7 @@ struct IndexTypeDescriptorKeyPrefix {
   // Query by index type name only (for unqualified lookups).
   explicit IndexTypeDescriptorKeyPrefix(std::string index_type_name)
       : index_type_name_(std::move(index_type_name)),
-        normalized_prefix_(normalize_type_name(index_type_name_) + ".") {}
+        normalized_prefix_(canonical_type_name(index_type_name_) + ".") {}
 
   // Query by index type name + extension name.
   IndexTypeDescriptorKeyPrefix(std::string index_type_name,
@@ -45,10 +45,10 @@ struct IndexTypeDescriptorKeyPrefix {
       : index_type_name_(std::move(index_type_name)),
         extension_name_(std::move(extension_name)),
         normalized_prefix_(
-            normalize_type_name(index_type_name_) + "." +
+            canonical_type_name(index_type_name_) + "." +
             (extension_name_.empty()
                  ? ""
-                 : normalize_extension_name(extension_name_) + ".")) {}
+                 : canonical_extension_name(extension_name_) + ".")) {}
 
   const std::string &str() const { return normalized_prefix_; }
 
