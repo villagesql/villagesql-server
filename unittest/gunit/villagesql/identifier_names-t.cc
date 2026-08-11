@@ -20,6 +20,7 @@
 #include "sql/mysqld.h"
 #include "sql/mysqld_cs.h"
 #include "villagesql/schema/identifier_names.h"
+#include "villagesql/schema/systable/helpers.h"
 
 namespace villagesql_unittest {
 
