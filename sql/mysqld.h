@@ -177,6 +177,7 @@ extern MYSQL_PLUGIN_IMPORT std::atomic<int32>
 extern long opt_upgrade_mode;
 extern bool opt_villagesql_allow_unsafe_dev_upgrade;
 extern bool opt_villagesql_skip_extension_updates;
+extern bool opt_villagesql_allow_custom_index_create;
 extern long opt_check_table_funs;
 extern bool opt_initialize;
 extern bool opt_safe_user_create;
