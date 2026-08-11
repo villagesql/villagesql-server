@@ -29,10 +29,6 @@ A `_matrix` suffix means the output is a GitHub Actions strategy matrix —
 `{"include": [...]}`, ready for `matrix: ${{ fromJson(...) }}`. Everything
 else prints a bare array, which a caller can wrap with `jq '{include: .}'`.
 
-Today [../../scripts/villagesql_build-compat-matrix.sh](../../scripts/villagesql_build-compat-matrix.sh)
-is the caller, and [extension-compat-suite.yml](../../.github/workflows/extension-compat-suite.yml)
-uses it to build its `build-matrix` and `test-matrix`.
-
 ## Examples
 
 ```bash
