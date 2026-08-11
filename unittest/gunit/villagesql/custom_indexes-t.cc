@@ -19,7 +19,6 @@
 #include <string>
 
 #include "unittest/gunit/test_utils.h"
-#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/systable/custom_index_columns.h"
 #include "villagesql/schema/systable/custom_indexes.h"
 #include "villagesql/schema/systable/helpers.h"

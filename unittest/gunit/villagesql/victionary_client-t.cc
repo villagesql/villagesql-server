@@ -21,7 +21,6 @@
 #include "sql/strfunc.h"
 #include "unittest/gunit/temptable/mock_field_varstring.h"
 #include "unittest/gunit/test_utils.h"
-#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/victionary_client.h"
 
