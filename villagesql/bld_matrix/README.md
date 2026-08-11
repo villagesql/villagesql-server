@@ -11,18 +11,27 @@ span lines. Pipe through `jq .` to read it.
 | -------------------- | ------------------------------------------------------------ |
 | `json_extensions.sh` | The bundled-extension manifest, parsed into an array of objects. |
 | `json_platforms.sh`  | The platforms built and tested on, as an array of objects.     |
+| `json_build_matrix.sh` | The build-server matrix, one row per platform.                |
+| `json_test_extensions.sh` | The extension tests, one row per (platform, extension, abi). |
 
 Each script's header comment documents its arguments and environment
 variables, and is the source of truth for them.
 
 ## Scope
 
-These scripts parse and shape; they do not select. Each prints its whole set.
-Filtering by platform, extension, or ABI belongs to the caller assembling a
-particular matrix —
-today [../../scripts/villagesql_build-compat-matrix.sh](../../scripts/villagesql_build-compat-matrix.sh),
-which [extension-compat-suite.yml](../../.github/workflows/extension-compat-suite.yml)
-calls to build its `build-matrix` and `test-matrix`.
+`json_extensions.sh` and `json_platforms.sh` are the data tables. They parse
+and shape but never select, and each prints its whole set.
+
+The rest select and combine. They call the tables they need and take filters
+as positional arguments; pass "" for a filter to keep everything.
+
+A `_matrix` suffix means the output is a GitHub Actions strategy matrix —
+`{"include": [...]}`, ready for `matrix: ${{ fromJson(...) }}`. Everything
+else prints a bare array, which a caller can wrap with `jq '{include: .}'`.
+
+Today [../../scripts/villagesql_build-compat-matrix.sh](../../scripts/villagesql_build-compat-matrix.sh)
+is the caller, and [extension-compat-suite.yml](../../.github/workflows/extension-compat-suite.yml)
+uses it to build its `build-matrix` and `test-matrix`.
 
 ## Examples
 
@@ -37,8 +46,16 @@ MATRIX="$PWD/villagesql/bld_matrix"
 # A manifest from somewhere else.
 EXTENSIONS_FILE=/tmp/exts.txt "$MATRIX/json_extensions.sh"
 
-# One platform, selected by the caller.
-"$MATRIX/json_platforms.sh" | jq -c '[.[] | select(.platform == "macos-arm64")]'
+# The build-server matrix, every platform and then just one.
+"$MATRIX/json_build_matrix.sh"
+"$MATRIX/json_build_matrix.sh" macos-arm64
+
+# Every extension test, then one extension on one platform against one ABI.
+"$MATRIX/json_test_extensions.sh" | jq length
+"$MATRIX/json_test_extensions.sh" macos-arm64 vsql-ai stable
+
+# Wrapped as an Actions matrix, which json_test_extensions.sh leaves to the caller.
+"$MATRIX/json_test_extensions.sh" | jq -c '{include: .}'
 ```
 
 ## Engineering Notes
