@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -949,6 +950,13 @@ struct AccessPath {
       TABLE *table;
       int idx;
       QUICK_RANGE *range;
+      // A distance scan is either the spatial variant (driven by `range`
+      // above) or a VillageSQL custom-index variant. For the custom variant
+      // this holds an opaque scan spec (owned by thd->mem_root) and `range`
+      // is null; for the spatial variant this is null. A non-null value both
+      // selects the custom iterator and carries its parameters. The concrete
+      // spec type lives in villagesql/sql/custom_index_knn_optimizer.cc.
+      void *custom_scan_spec;
       bool reverse;
     } index_distance_scan;
     struct {
