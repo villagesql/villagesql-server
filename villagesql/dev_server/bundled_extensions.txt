@@ -1,5 +1,9 @@
-# Bundled extensions included in the dev server release tarball.
+# C++/cmake bundled extensions included in the dev server release tarball.
 # Also tested against the HEAD SDK in extension-compat-suite.yml.
+#
+# Rust/cargo extensions live in the bundled_extensions_rust.txt. Pipeline steps
+# select which list(s) to read via EXTENSION_RUNTIME (default: cpp). See
+# villagesql/bld_tools/extension_lists.sh
 #
 # TODO(villagesql-ga): In the future, move this per-extension configuration into the
 # extension repos themselves (each declaring its own build/abi/path).
@@ -11,7 +15,7 @@
 #                  Omit to test against both.
 #   bundle=false:  Optional. Omit (or bundle=true) to include in dev server.
 #                  Set bundle=false to run compat tests only — not shipped.
-#   build=<tool>:  Optional. Build system: "cmake" or "cargo". Default "cmake".
+#   build=<tool>:  Optional. Build system: in this repo build=cmake by default.
 #   path=<subdir>: Optional. Extension lives in this subdir of the repo.
 #                  Default: repo root. Also used to derive the extension name
 #                  (last path segment) so multiple entries can share one URL.
@@ -34,11 +38,3 @@ https://github.com/villagesql/vsql-oauth2 main abi=dev
 https://github.com/villagesql/vsql-rest main abi=dev
 https://github.com/villagesql/vsql-uuid main
 https://github.com/villagesql/vsql-vector main bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_keyring abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_ping abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rational abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_status_var abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_sys_var abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_thread_worker abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=tests/sdk_coverage abi=stable bundle=false

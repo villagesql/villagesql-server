@@ -19,6 +19,8 @@
 #
 # Env vars:
 #   CMAKE_EXTRA_FLAGS  - additional per-extension cmake flags appended verbatim
+#   EXTENSION_RUNTIME  - cpp (default), rust, or all - which extension list(s)
+#                        to read. See extension_lists.sh.
 
 set -euo pipefail
 
@@ -32,7 +34,13 @@ INCLUDE_UNBUNDLED="${5:-no}"
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 source "$SOURCE_DIR/scripts/vsql_script_utils.sh"
-EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+source "$TOOLS_DIR/extension_lists.sh"
+
+# Which runtime(s) to build: cpp (default), rust, or all.
+EXTENSION_RUNTIME="${EXTENSION_RUNTIME: -cpp}"
+EXTENSION_LISTS=()
+while IFS= read -r _list; do EXTENSION_LISTS+=("$_list"); done \
+    < <(resolve_extension_lists "$EXTENSION_RUNTIME")
 
 case "$INCLUDE_UNBUNDLED" in
     1|yes) INCLUDE_UNBUNDLED=yes ;;
@@ -45,10 +53,9 @@ if [[ ! -d "$SDK_DIR" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$EXTENSIONS_LIST" ]]; then
-    log_error "Extensions list not found: $EXTENSIONS_LIST"
-    exit 1
-fi
+for _list in "${EXTENSION_LISTS[@]}"; do
+    [[ -f "$_list" ]] || die "Extensions list not found: $_list"
+done
 
 if [[ ! -d "$EXTENSION_CLONES_DIR" ]]; then
     die "Extension directory not found: $EXTENSION_CLONES_DIR (mkdir first)"
@@ -90,20 +97,20 @@ while IFS= read -r line; do
         continue
     fi
 
-    # This script builds with cmake. Skip entries that use another build tool
-    # such as cargo. The real issue is that we try to clone the rust-sdk
-    # multiple times, leading to an error.
-    # TODO(villagesql-rust): Let's consider doing a bigger rework of the
-    # extension build system to support multiple build tools, but for now we just
-    # skip non-cmake extensions.
+    # Dispatch on build tool. Only cmake extensions are built here. cargo (rust)
+    # extensions are built by rust-extension-compat-suite.yml. A new build tool
+    # in the future will get its own case arm.
     BUILD_TOOL=cmake
     for FIELD in "${FIELDS[@]:2}"; do
         [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
     done
-    if [[ "$BUILD_TOOL" != "cmake" ]]; then
-        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
-        continue
-    fi
+    case "$BUILD_TOOL" in
+        cmake) ;;
+        *)
+            log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not built here)"
+            continue
+            ;;
+        esac
 
     if [[ "$INCLUDE_UNBUNDLED" == "no" ]]; then
         BUNDLE=true
@@ -148,11 +155,11 @@ while IFS= read -r line; do
     fi
 
     BUILT=$((BUILT + 1))
-done < "$EXTENSIONS_LIST"
+done < <(cat "${EXTENSION_LISTS[@]}")
 
 echo ""
 if [[ -n "$EXTENSION_FILTER" && $BUILT -eq 0 && $FAILED -eq 0 ]]; then
-    log_error "'$EXTENSION_FILTER' not found in $EXTENSIONS_LIST"
+    log_error "'$EXTENSION_FILTER' not found in ${EXTENSION_LISTS[*]}"
     exit 1
 fi
 echo "Extensions built: $BUILT, failed: $FAILED"

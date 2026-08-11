@@ -6,8 +6,9 @@
 #
 # <veb_src_dir>: Directory where built .veb files were placed.
 #
-# The extension list is read from villagesql/dev_server/bundled_extensions.txt,
-# located relative to this script's source tree.
+# Env vars:
+#   EXTENSION_RUNTIME   cpp (default), rust, or all - selects which extension
+#                       lists to read. See extension_lists.sh.
 
 set -euo pipefail
 DST_DIR="${1:?Usage: $0 <dst_dir> <veb_src_dir>}"
@@ -16,12 +17,17 @@ VEB_SRC_DIR="${2:?Usage: $0 <dst_dir> <veb_src_dir>}"
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
-EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+source "$TOOLS_DIR/extension_lists.sh"
 
-if [[ ! -f "$EXTENSIONS_LIST" ]]; then
-    log_error "Extensions list not found: $EXTENSIONS_LIST"
-    exit 1
-fi
+# Which runtime(s) to include: cpp (default), rust, or all.
+EXTENSION_RUNTIME="${EXTENSION_RUNTIME:-cpp}"
+EXTENSION_LISTS=()
+while IFS= read -r _list; do EXTENSION_LISTS+=("$_list"); done \
+    < <(resolve_extension_lists "$EXTENSION_RUNTIME")
+
+for _list in "${EXTENSION_LISTS[@]}"; do
+    [[ -f "$_list" ]] || die "Extensions list not found: $_list"
+done
 
 if [[ ! -d "$VEB_SRC_DIR" ]]; then
     log_error "Missing extension source directory: $VEB_SRC_DIR"
@@ -58,4 +64,4 @@ while IFS= read -r line; do
     fi
 
     cp "$EXT_SRC_VEB" "$DST_DIR/$EXT_FILE" || log_info "Duplicate $REPO_NAME already installed"
-done < "$EXTENSIONS_LIST"
+done < <(cat "${EXTENSION_LISTS[@]}")

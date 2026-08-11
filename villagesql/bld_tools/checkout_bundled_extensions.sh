@@ -10,9 +10,9 @@
 # [include_unbundled]: 0/no (default) to skip bundle=false extensions, 1/yes to
 #                   clone them too. They ship with no dev server, but are still
 #                   built and tested (e.g. by the sanitizer workflow).
-#
-# The extension list is read from villagesql/dev_server/bundled_extensions.txt,
-# located relative to this script's source tree.
+# Env vars:
+#   EXTENSION_RUNTIME   cpp (default), rust, or all selects which extension list(s)
+#                       to read. See extension_lists.sh.
 
 set -euo pipefail
 
@@ -23,7 +23,13 @@ INCLUDE_UNBUNDLED="${3:-no}"
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
-EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+source "$TOOLS_DIR/extension_lists.sh"
+
+# Which runtime(s) to check out: cpp (default), rust, or all.
+EXTENSION_RUNTIME="${EXTENSION_RUNTIME:-cpp}"
+EXTENSION_LISTS=()
+while IFS= read -r _list; do EXTENSION_LISTS+=("$_list"); done \
+    < <(resolve_extension_lists "$EXTENSION_RUNTIME")
 
 case "$INCLUDE_UNBUNDLED" in
     1|yes) INCLUDE_UNBUNDLED=yes ;;
@@ -31,9 +37,9 @@ case "$INCLUDE_UNBUNDLED" in
     *) die "Invalid include_unbundled: $INCLUDE_UNBUNDLED (expected 0/no or 1/yes)" ;;
 esac
 
-if [[ ! -f "$EXTENSIONS_LIST" ]]; then
-    die "Extensions list not found: $EXTENSIONS_LIST"
-fi
+for _list in "${EXTENSION_LISTS[@]}"; do
+    [[ -f "$_list" ]] || die "Extensions list not found: $_list"
+done
 
 if [[ ! -d "$EXTENSION_CLONES_DIR" ]]; then
     die "Extension directory not found: $EXTENSION_CLONES_DIR (mkdir first)"
@@ -55,21 +61,6 @@ while IFS= read -r line; do
         continue
     fi
 
-    # This script builds with cmake. Skip entries that use another build tool
-    # such as cargo. The real issue is that we try to clone the rust-sdk
-    # multiple times, leading to an error.
-    # TODO(villagesql-rust): Let's consider doing a bigger rework of the
-    # extension build system to support multiple build tools, but for now we just
-    # skip non-cmake extensions.
-    BUILD_TOOL=cmake
-    for FIELD in "${FIELDS[@]:2}"; do
-        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
-    done
-    if [[ "$BUILD_TOOL" != "cmake" ]]; then
-        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
-        continue
-    fi
-
     if [[ "$INCLUDE_UNBUNDLED" == "no" ]]; then
         BUNDLE=true
         for FIELD in "${FIELDS[@]:2}"; do
@@ -81,9 +72,16 @@ while IFS= read -r line; do
         fi
     fi
 
+    CLONE_DIR="$EXTENSION_CLONES_DIR/$REPO_NAME"
+
+    # A single repo can back multiple extensions (via path=). Clone it once.
+    if [[ -d "$CLONE_DIR" ]]; then
+        log_info "Already cloned $REPO_NAME"
+        continue
+    fi
+
     log_step "Cloning $REPO_NAME ($SOURCE${BRANCH:+ @ $BRANCH})"
 
-    CLONE_DIR="$EXTENSION_CLONES_DIR/$REPO_NAME"
 
     CLONE_ARGS=(--depth=1)
     [[ -n "$BRANCH" ]] && CLONE_ARGS+=(--branch "$BRANCH")
@@ -94,4 +92,4 @@ while IFS= read -r line; do
         FAILED=$((FAILED + 1))
         continue
     fi
-done < "$EXTENSIONS_LIST"
+done < <(cat "${EXTENSION_LISTS[@]}")

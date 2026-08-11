@@ -1,0 +1,19 @@
+# Rust/cargo VillageSQL extensions.
+#
+# Not shipped in the dev server tarball (all bundle=false). Exercised only by
+# rust-extension-compat-suite.yml, which builds them with cargo. Selected using
+# EXTENSION_RUNTIME=rust or EXTENSION_RUNTIME=all. See
+# villagesql/bld_tools/extension_lists.sh.
+#
+# Same format as bundled_extensions.txt:
+# Format: <url> [branch-or-tag] [key=value ...]
+# All entries below share one repo (vsql-rust-sdk) and differ by path=, so the
+# checkout step must clone that repo only once.
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_keyring abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_ping abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rational abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_status_var abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_sys_var abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_thread_worker abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=tests/sdk_coverage abi=stable bundle=false

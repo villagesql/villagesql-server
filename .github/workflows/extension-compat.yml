@@ -64,3 +64,37 @@ jobs:
       # 'slack_notify: false' is preserved; workflow_run has no inputs => 'true'.
       slack_notify: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.slack_notify) || 'true' }}
     secrets: inherit
+
+  run-rust:
+    name: Rust extension compatibility
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/rust-extension-compat-suite.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      platform_filter: ${{ inputs.platform }}
+      extension_filter: ${{ inputs.extension }}
+      abi_filter: ${{ inputs.abi }}
+      slack_notify: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.slack_notify) || 'true' }}
+    secrets: inherit
+
+  check-matched:
+    name: Verify something matched
+    needs: [run, run-rust]
+    # Each suite tolerates zero matches on its own. Here we fail only if NEITHER
+    # suite matched anything (e.g. a mistyped extension filter). Gated to skip a
+    # suite that actually failed, since that already reds the run on its own.
+    if: |
+      always() &&
+      needs.run.result != 'failure' && needs.run.result != 'cancelled' &&
+      needs.run-rust.result != 'failure' && needs.run-rust.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if no extensions matched in any suite
+        run: |
+          CPP='${{ needs.run.outputs.test-count }}'
+          RUST='${{ needs.run-rust.outputs.test-count }}'
+          echo "Matched — C++: ${CPP:-0}, Rust: ${RUST:-0}"
+          if [ "${CPP:-0}" -eq 0 ] && [ "${RUST:-0}" -eq 0 ]; then
+            echo "::error::No extensions matched the filters in either suite (platform='${{ inputs.platform }}' extension='${{ inputs.extension }}' abi='${{ inputs.abi }}'). Check the filter values."
+            exit 1
+          fi
