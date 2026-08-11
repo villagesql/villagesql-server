@@ -123,6 +123,18 @@ typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
                                              char *error_msg,
                                              uint32_t error_msg_len);
 
+// Report the registered name of the function bound to a profile helper, so the
+// extension can resolve a native fast-path ONCE (at index open) instead of
+// dispatching through helper_fn per call. Writes the name the extension gave to
+// make_index_function (for the profile bound to key column key_pos, at helper
+// fn_id) into name_buf, NUL-terminated and truncated to name_buf_len. This lets
+// a hot inner loop (e.g. HNSW distance) map the metric to a native function
+// pointer and skip the per-call VDF marshalling. Returns false on success, true
+// on error / no such binding (writes to error_msg).
+typedef bool (*vef_index_helper_fn_name_fn)(
+    vef_index_ref_t index_ref, uint32_t key_pos, uint32_t fn_id, char *name_buf,
+    uint32_t name_buf_len, char *error_msg, uint32_t error_msg_len);
+
 // Call a helper function from the index profile by its registered ID.
 // An index profile is declared by the extension when registering an index type.
 // It enumerates helper functions (e.g. distance, compare) each identified by a
@@ -175,6 +187,12 @@ typedef struct {
   // Valid only during the create() call; NULL for all other calls and when
   // the index type declared no options.
   const void *options;
+
+  // Report the registered name of a profile helper's bound function, so the
+  // extension can bind a native fast-path once instead of dispatching per call.
+  // Always non-NULL when version >= VEF_INDEX_TYPE_INTF_VERSION_2. Appended at
+  // the end so a v1 reader sees an unchanged prefix.
+  vef_index_helper_fn_name_fn helper_fn_name_fn;
 
 } vef_index_ctx_t;
 
