@@ -21,6 +21,7 @@ SET(VILLAGESQL_UNIT_TESTS
   abi_v1_check-t
   abi_v2_check-t
   custom_indexes-t
+  identifier_names-t
   semver-t
   system_views_columns-t
   type_builder-t
