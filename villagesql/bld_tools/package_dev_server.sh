@@ -18,13 +18,13 @@
 set -e
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "$TOOLS_DIR/../scripts" && pwd)"
-source "$SCRIPTS_DIR/vsql_script_utils.sh"
-
 SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
+
 BUILD_DIR="${BUILD_DIR:-$(cd "$SOURCE_DIR/.." && pwd)/build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PWD}"
 STAGING_DIR="${TMPDIR:-/tmp}/villagesql_dev_staging_$$"
+
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 cleanup() {
     if [[ -d "$STAGING_DIR" ]]; then
@@ -36,6 +36,7 @@ cleanup() {
 
 trap cleanup EXIT
 
+source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
 vsql_parse_version "$SOURCE_DIR"
 vsql_platform_info
 
