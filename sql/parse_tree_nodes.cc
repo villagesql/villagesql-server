@@ -1837,17 +1837,21 @@ bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_type = m_name;
   pc->key_create_info->custom_index_extension = m_extension;
   // TODO(villagesql-indexing): Execute extended index type.
-  DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
-  villagesql_error("Extended Index feature not yet implemented", MYF(0));
-  return true;
+  // BENCHMARK PATCH (temporary): allow the custom-index path in NON-debug
+  // (RelWithDebInfo) builds so build-time can be measured without the debug
+  // assert/-O0 factor. Original gate was:
+  //   DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
+  //   villagesql_error("Extended Index feature not yet implemented", MYF(0));
+  //   return true;
+  // Revert before merge — the feature is still "not yet implemented" for release.
+  return false;
 }
 
 bool PT_index_with_options::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_params = m_params;
   // TODO(villagesql-indexing): Execute extended index WITH parameters.
-  DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
-  villagesql_error("Extended Index feature not yet implemented", MYF(0));
-  return true;
+  // BENCHMARK PATCH (temporary) — see PT_custom_index_type above. Revert before merge.
+  return false;
 }
 
 static bool setup_index(keytype key_type, const LEX_STRING name,
