@@ -53,6 +53,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -413,7 +414,12 @@ static dberr_t row_undo_ins_remove_multi_sec(dict_index_t *index,
   while (index != nullptr) {
     dtuple_t *entry;
 
-    if (index->type & DICT_FTS) {
+    // VillageSQL: a custom index has no B-tree, so undo of an insert must not
+    // go through InnoDB's secondary-index remove path. The extension reverses
+    // the maintenance through the VillageSQL custom-index runtime. Skip it the
+    // same way FTS indexes are skipped.
+    if ((index->type & DICT_FTS) ||
+        villagesql::innodb::Custom_index::is_custom(index)) {
       dict_table_next_uncorrupted_index(index);
       continue;
     }

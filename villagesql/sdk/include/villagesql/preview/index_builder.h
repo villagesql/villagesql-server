@@ -429,6 +429,17 @@ class Index {
                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
+  // Report the registered name of the function bound to helper fn_id for the
+  // profile of key column key_pos. Lets a hot inner loop resolve a native
+  // fast-path once (matching this name against its own registered functions)
+  // instead of dispatching through helper() per call. Writes into name_buf;
+  // returns false on success, true on error (get_error() for details).
+  bool helper_fn_name(uint32_t key_pos, uint32_t fn_id, char *name_buf,
+                      uint32_t name_buf_len) const {
+    return ctx_.helper_fn_name_fn(ctx_.index_ref, key_pos, fn_id, name_buf,
+                                  name_buf_len, tl_error_msg, ERROR_MSG_SIZE);
+  }
+
   const char *get_error() const { return tl_error_msg; }
 
  private:
@@ -1248,7 +1259,14 @@ class IndexFuncBuilder {
     auto d = inner_.build();
     IndexFunctionDesc result{};
     result.name = d.name();
-    result.protocol = d.required_protocol();
+    // Index profile/helper functions are always invoked through the server's
+    // protocol-3 profile dispatcher (vef_index_ctx_t::profile_fn/helper_fn),
+    // which marshals args via the v3 vef_invalue_t channel (needed to convey
+    // custom-type parameters). So an index function is at least PROTOCOL_3,
+    // regardless of whether the underlying VDF would otherwise qualify as v1.
+    result.protocol = d.required_protocol() > VEF_PROTOCOL_3
+                          ? d.required_protocol()
+                          : VEF_PROTOCOL_3;
     result.vdf = d.vdf();
     result.return_type = d.return_type();
     result.num_params = d.num_params();

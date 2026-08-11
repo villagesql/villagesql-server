@@ -31,7 +31,9 @@
 #include "storage/innobase/include/ha_prototypes.h"
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
+#include "storage/innobase/include/mtr0mtr.h"
 #include "storage/innobase/include/univ.i"
+#include "storage/innobase/villagesql/custom_column.h"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
@@ -165,6 +167,34 @@ static void vef_index_helper_fn_impl(vef_index_ref_t index_ref,
                                      void *result) {
   dispatch_profile_call(index_ref, key_pos, fn_id,
                         &IndexProfileDescriptor::helpers, args, nargs, result);
+}
+
+// Report the registered name of the helper bound at (key_pos, fn_id), so the
+// extension can resolve a native fast-path once at index open. Reuses the same
+// profile/binding lookup as dispatch_profile_call.
+static bool vef_index_helper_fn_name_impl(vef_index_ref_t index_ref,
+                                          uint32_t key_pos, uint32_t fn_id,
+                                          char *name_buf, uint32_t name_buf_len,
+                                          char *error_msg,
+                                          uint32_t error_msg_len) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  const IndexProfileDescriptor *profile =
+      index->custom_index->profile_for_key(key_pos);
+  if (profile == nullptr) {
+    snprintf(error_msg, error_msg_len,
+             "helper_fn_name: no profile bound for key column %u", key_pos);
+    return true;
+  }
+  const vef_index_profile_fn_binding_t *binding =
+      find_fn_binding(profile->helpers(), fn_id);
+  if (binding == nullptr || binding->name == nullptr) {
+    snprintf(error_msg, error_msg_len,
+             "helper_fn_name: no helper bound at fn_id %u for key column %u",
+             fn_id, key_pos);
+    return true;
+  }
+  snprintf(name_buf, name_buf_len, "%s", binding->name);
+  return false;
 }
 
 // Maximum storage length in bytes for the key_pos'th column.
@@ -347,6 +377,68 @@ static dberr_t parse_index_options(dict_index_t *index,
   return DB_SUCCESS;
 }
 
+bool Custom_index::col_ref_to_rowid(const dict_index_t *index,
+                                    vef_storage_col_ref_t key_ref,
+                                    unsigned char *out, uint32_t out_cap,
+                                    uint32_t *out_len, char *error_msg,
+                                    uint32_t error_msg_len) {
+  // The indexed vector is the single key column at position 0; its column
+  // store holds, per value, the owning row's clustered field-0 bytes as
+  // rowid_prefix (see Custom_column insert_impl).
+  const dict_col_t *col = index->get_field(0)->col;
+  if (col->custom_column == nullptr || !col->stored_by_extn()) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: indexed column is not externally stored");
+    return true;
+  }
+
+  auto &custom_column = col->custom_column;
+  if (custom_column->storage_ctx() == nullptr) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: uninitialized custom column store");
+    return true;
+  }
+
+  const auto &intf = custom_column->storage_interface();
+  if (!intf) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: custom column store has no interface");
+    return true;
+  }
+
+  Custom_column::Data data{};
+  Custom_column::Data rowid_prefix{};
+  Custom_column::TrxRef trx_ref = 0;
+  bool deleted = false;
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+  bool failed = intf->select(custom_column->storage_ctx(), &mtr, key_ref, &data,
+                             &rowid_prefix, &trx_ref, &deleted, error_msg,
+                             error_msg_len);
+  if (failed || rowid_prefix.data == nullptr || rowid_prefix.length == 0) {
+    mtr_commit(&mtr);
+    if (!failed) {
+      snprintf(error_msg, error_msg_len,
+               "col_ref_to_rowid: column store returned no rowid_prefix");
+    }
+    return true;
+  }
+  if (rowid_prefix.length > out_cap) {
+    mtr_commit(&mtr);
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: rowid_prefix (%u) exceeds buffer (%u)",
+             rowid_prefix.length, out_cap);
+    return true;
+  }
+
+  // Copy out of the page before the latch is released on commit.
+  memcpy(out, rowid_prefix.data, rowid_prefix.length);
+  *out_len = rowid_prefix.length;
+  mtr_commit(&mtr);
+  return false;
+}
+
 static dberr_t init_index_ctx(dict_index_t *index) {
   vef_index_ctx_t *ctx = index->custom_index->index_ctx();
   ctx->version = VEF_INDEX_TYPE_INTF_VERSION;
@@ -356,6 +448,7 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->profile_fn = vef_index_profile_fn_impl;
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
+  ctx->helper_fn_name_fn = vef_index_helper_fn_name_impl;
   ctx->options = nullptr;
 
   const auto &intf = index->custom_index->interface();
