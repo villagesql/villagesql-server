@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -108,6 +109,12 @@ struct ActiveIndexInfo {
 struct SpatialDistanceScanInfo {
   TABLE *table;
   int key_idx;
+  // Non-null for a VillageSQL custom-index distance scan: an opaque scan spec
+  // (owned by thd->mem_root) that both marks this as the custom variant and
+  // carries its parameters. Null for the spatial variant. Threaded from
+  // CollectCustomKnnOrderingsForHypergraph to ProposeDistanceIndexScan and
+  // parked on AccessPath::index_distance_scan().custom_scan_spec.
+  void *custom_scan_spec = nullptr;
   LogicalOrderings::StateIndex forward_order = 0;
   // MBR coordinates to be passed to QUICK_RANGE.
   // QUICK_RANGE needs at least one extra byte at the end (TODO:fix that).
