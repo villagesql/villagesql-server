@@ -16,6 +16,10 @@
 #     When set, copies to {name}-{version}.veb instead of {name}.veb.
 #     Use this when the test needs versioned VEB files on disk (e.g. for
 #     INSTALL EXTENSION foo VERSION 'x.y.z').
+#   --let $extension_common_header = /path/to/common.h
+#     Companion header(s) copied next to extension.cc so the source can
+#     #include them. May name several headers separated by spaces, e.g.
+#     --let $extension_common_header = /path/a.h /path/b.h
 #
 # The VEB file will be created and moved to the VEB directory.
 #
@@ -61,9 +65,9 @@ if (!$extension_version)
 # Copy source file
 --exec cp $extension_source $ext_build_dir/src/extension.cc
 
-# Optionally place a shared companion header next to extension.cc so the source
-# can #include it. Gated on $extension_common_header, so other consumers of this
-# include (which never set it) are unaffected.
+# Optionally place shared companion header(s) next to extension.cc so the source
+# can #include them. Gated on $extension_common_header, so other consumers of
+# this include (which never set it) are unaffected.
 if ($extension_common_header)
 {
   --exec cp $extension_common_header $ext_build_dir/src/
