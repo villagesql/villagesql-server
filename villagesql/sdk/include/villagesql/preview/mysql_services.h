@@ -69,6 +69,8 @@
 //   #include <villagesql/preview/mysql_services.h>
 //   #include <mysql/components/services/keyring_metadata_query.h>
 //
+//   using namespace vsql;
+//
 //   static vsql::preview_mysql_services::MysqlServices services;
 //   VSQL_REQUIRE_SERVICE(services, keyring_component_status, status);
 //
