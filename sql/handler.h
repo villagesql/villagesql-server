@@ -5493,6 +5493,46 @@ class handler {
 
  public:
   /**
+    VillageSQL: handle to a custom index instance the storage engine has
+    already loaded (via the VEF extension's intf.load) and keeps for the
+    lifetime of the open index. Returned by get_custom_index_handle() so the
+    SQL layer can drive the extension's scan callbacks against the engine's
+    live, correctly-loaded storage context.
+
+    The pointers are opaque here to keep this header free of VEF ABI types;
+    the custom-index scan code casts them back to vef_index_ctx_t* /
+    vef_storage_ctx_t* / const vef_type_index_intf_t*.
+  */
+  struct CustomIndexHandle {
+    void *index_ctx{nullptr};
+    void *storage_ctx{nullptr};
+    const void *intf{nullptr};
+  };
+
+  /**
+    VillageSQL: fetch the loaded custom-index handle for key number @p keynr.
+
+    Custom indexes have no B-tree; the storage engine loads the extension's
+    index instance (its vef_index_ctx_t + storage context) at table-open time
+    and owns its lifetime. The SQL-layer custom-index scan uses this to reach
+    that live instance instead of re-loading it, so it scans the engine's
+    actual storage.
+
+    @param keynr  key number, indexing table->key_info[] (same numbering the
+                  engine uses).
+    @param[out] out  filled with the loaded handle on success.
+
+    @retval false  @p keynr is a custom index and @p out was filled.
+    @retval true   not a custom index, or the engine does not support custom
+                   indexes — the caller must fall back (no custom scan).
+  */
+  virtual bool get_custom_index_handle(uint keynr [[maybe_unused]],
+                                       CustomIndexHandle *out
+                                       [[maybe_unused]]) {
+    return true;
+  }
+
+  /**
     Wrapper function to call records() in storage engine.
 
       @param num_rows [out]  Number of rows in table.

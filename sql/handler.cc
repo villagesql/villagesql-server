@@ -133,6 +133,7 @@
 #include "string_with_len.h"
 #include "template_utils.h"
 #include "uniques.h"  // Unique_on_insert
+#include "villagesql/sql/custom_index_runtime.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -6149,6 +6150,15 @@ Cost_estimate handler::read_cost(uint index, double ranges, double rows) {
   assert(ranges >= 0.0);
   assert(rows >= 0.0);
 
+  // TODO(villagesql-indexing): let a custom index declare its own read cost.
+  // A custom index has no B-tree and no InnoDB cost statistics, so costing it
+  // directly is meaningless. Until an extension can supply a cost estimate,
+  // bill a custom-index read as if it were a primary-key read.
+  if (index < table->s->keys &&
+      table->key_info[index].custom_index_context != nullptr) {
+    index = table->s->primary_key;
+  }
+
   const double io_cost =
       read_time(index, static_cast<uint>(ranges), static_cast<ha_rows>(rows)) *
       table->cost_model()->page_read_cost(1.0);
@@ -8110,6 +8120,9 @@ int handler::ha_write_row(uchar *buf) {
                       { error = write_row(buf); })
 
   if (unlikely(error)) return error;
+  if (unlikely((error = villagesql::custom_index_after_write_row(ha_thd(),
+                                                                 table, buf))))
+    return error;
 
   if (unlikely((error = binlog_log_row(table, nullptr, buf, log_func))))
     return error; /* purecov: inspected */

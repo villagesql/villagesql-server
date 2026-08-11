@@ -10720,6 +10720,19 @@ dict_index_t *ha_innobase::innobase_get_index(
   return index;
 }
 
+bool ha_innobase::get_custom_index_handle(uint keynr, CustomIndexHandle *out) {
+  dict_index_t *index = innobase_get_index(keynr);
+  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index) ||
+      index->custom_index == nullptr) {
+    return true;
+  }
+  villagesql::innodb::Custom_index *ci = index->custom_index;
+  out->index_ctx = ci->index_ctx();
+  out->storage_ctx = ci->storage_ctx();
+  out->intf = &ci->interface();
+  return false;
+}
+
 /** Changes the active index of a handle.
  @return 0 or error code */
 int ha_innobase::change_active_index(
