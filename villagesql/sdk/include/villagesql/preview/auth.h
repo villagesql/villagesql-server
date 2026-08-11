@@ -91,6 +91,24 @@ class AuthContext {
     ops_->set_active_roles(ctx_, roles, n_roles);
   }
 
+  // True if the account being authenticated does not exist -- the login was
+  // routed here by the method's auto_create opt-in. Check before provisioning;
+  // false for a normal login against an existing account.
+  bool account_unknown() const { return ops_->account_unknown(ctx_); }
+
+  // Ask the server to provision `account` for this validated login: create it
+  // IDENTIFIED WITH this method and grant `roles`. The server runs the DDL, not
+  // the extension. Call after validating the token, when account_unknown() is
+  // true. The creation is deferred until the handler returns kOk and runs ONLY
+  // for an account that was routed here as unknown -- a request for an
+  // already-existing account is ignored, so a denied or already-known login
+  // creates nothing. It fails the login if the creation can't be done, so
+  // there's no result to return -- just describe the intent and return kOk.
+  void request_provision(const char *account, const char *const *roles,
+                         uint32_t n_roles) {
+    ops_->request_provision(ctx_, account, roles, n_roles);
+  }
+
  private:
   vef_auth_ctx_t *ctx_;
   const vef_auth_ops_t *ops_;
@@ -134,6 +152,17 @@ class AuthDescriptor {
   // connects.
   constexpr AuthDescriptor &client_plugin(const char *name) {
     cc_.client_auth_plugin = name;
+    return *this;
+  }
+
+  // `auto_create`: opt in to handling logins for UNKNOWN accounts. The callback
+  // is queried live per unknown-account login (so it can reflect a runtime
+  // sysvar); returning true routes unknown accounts to this method's handler,
+  // which can then provision them (see AuthContext::request_provision).
+  // Optional -- unset (or a callback returning false) keeps the standard
+  // "unknown account -> access denied" behavior.
+  constexpr AuthDescriptor &auto_create(bool (*callback)()) {
+    cc_.auto_create_unknown_accounts = callback;
     return *this;
   }
 

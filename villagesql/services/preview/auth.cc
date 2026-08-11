@@ -29,8 +29,13 @@
 #include "sql/auth/auth_common.h"
 #include "sql/auth/sql_authentication.h"
 #include "sql/auth/sql_security_ctx.h"
+#include "sql/auto_thd.h"
+#include "sql/current_thd.h"
 #include "sql/hostname_cache.h"
 #include "sql/mem_root_array.h"
+#include "sql/statement/ed_connection.h"
+#include "sql/strfunc.h"
+#include "sql_string.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/systable/helpers.h"
@@ -57,6 +62,20 @@ namespace villagesql::services {
 // pointer ("handler staged nothing; use the account's default roles").
 struct VefAuthState {
   explicit VefAuthState(MEM_ROOT *mem_root) : roles(mem_root) {}
+  Mem_root_array<const char *> roles;
+};
+
+// A provisioning request staged by request_provision(), to be CREATEd by
+// run_vef_provision() only after the handler returns OK -- so a login the
+// handler ultimately denies creates nothing. Strings/array live on the
+// connection MEM_ROOT (trivially-destructible, no destructor needed). `account`
+// is the handler-chosen name to create (kept verbatim -- it need not be the
+// connecting user); `method` is the VEF auth method to bind it to
+// (IDENTIFIED WITH); `roles` are granted after create.
+struct VefProvisionRequest {
+  explicit VefProvisionRequest(MEM_ROOT *mem_root) : roles(mem_root) {}
+  const char *account;
+  const char *method;
   Mem_root_array<const char *> roles;
 };
 
@@ -149,12 +168,90 @@ void vef_auth_set_active_roles(vef_auth_ctx_t *ctx, const char *const *roles,
   mpvio->vef_auth_info.vef_auth_state = state;
 }
 
+bool vef_auth_account_unknown(vef_auth_ctx_t *ctx) {
+  // True when the account being authenticated does not exist -- i.e. this login
+  // was routed here as a decoy by the unknown-account opt-in (see
+  // find_mpvio_user).
+  return ctx->mpvio->acl_user_vef_provision_candidate;
+}
+
+// Run `sql` as one privileged statement on its own fresh internal THD. Returns
+// true on failure (logged). One Auto_THD per statement: reusing one trips a
+// binlog-XID assert on the 2nd DDL. Auto_THD's ctor repoints current_thd at its
+// THD via store_globals(), so capture the connection's THD first and restore it
+// after -- otherwise, once ~Auto_THD frees its THD, the rest of
+// acl_authenticate runs with current_thd still pointing at that freed THD.
+static bool provision_run(const std::string &sql) {
+  THD *const conn_thd = current_thd;
+  bool failed = false;
+  {
+    Auto_THD provisioner;
+    provisioner.thd->security_context()->skip_grants();
+    Ed_connection conn(provisioner.thd);
+    MYSQL_LEX_STRING s;
+    lex_string_strmake(provisioner.thd->mem_root, &s, sql.c_str(),
+                       sql.length());
+    if (conn.execute_direct(s)) {
+      failed = true;
+      LogVSQL(WARNING_LEVEL, "auto-create: statement failed (errno=%u): %s",
+              conn.get_last_errno(),
+              conn.get_last_error() ? conn.get_last_error() : "");
+    }
+  }  // ~Auto_THD frees its THD; current_thd now points at freed memory
+  conn_thd->store_globals();  // restore the connection thread's globals
+  return failed;
+}
+
+// GRANT one staged "role"/"role@host" to `account_id` (a quoted `user`@`host`).
+// The role name is quoted as an identifier so a crafted name cannot break out
+// of the DDL; an ungrantable role (e.g. no such DB role) is logged and skipped,
+// not fatal.
+static void grant_staged_role(const char *staged,
+                              const std::string &account_id) {
+  if (staged == nullptr || staged[0] == '\0') return;
+  const auto [role_name, role_host] = get_authid_from_quoted_string(staged);
+  const std::string role_id = Auth_id(role_name.c_str(), role_name.length(),
+                                      role_host.c_str(), role_host.length())
+                                  .auth_str();
+  std::string grant = "GRANT ";
+  grant.append(role_id);
+  grant.append(" TO ");
+  grant.append(account_id);
+  (void)provision_run(grant);
+}
+
+void vef_auth_request_provision(vef_auth_ctx_t *ctx, const char *account,
+                                const char *const *roles, uint32_t n_roles) {
+  if (account == nullptr || account[0] == '\0') return;
+  MPVIO_EXT *mpvio = ctx->mpvio;
+  MEM_ROOT *mem_root = mpvio->mem_root;
+
+  // Record the intent; the DDL runs later, in run_vef_provision(), only
+  // if the handler returns OK -- so a login the handler then denies creates
+  // nothing (no orphan). Copy every string onto the connection MEM_ROOT so
+  // nothing points into the extension's transient buffers. `method` is the VEF
+  // method this login authenticated against (its account binds to it,
+  // IDENTIFIED WITH).
+  auto *req = new (mem_root) VefProvisionRequest(mem_root);
+  req->account = strdup_root(mem_root, account);
+  const char *const method = mpvio->acl_user_plugin.str;
+  req->method = (method != nullptr) ? strdup_root(mem_root, method) : nullptr;
+  req->roles.reserve(n_roles);
+  for (uint32_t i = 0; i < n_roles; ++i) {
+    const char *r = roles[i];
+    if (r == nullptr || r[0] == '\0') continue;  // skip empties defensively
+    req->roles.push_back(strdup_root(mem_root, r));
+  }
+  mpvio->vef_auth_info.vef_provision_request = req;
+}
+
 const vef_auth_ops_t g_vef_auth_ops = {
     VEF_PREVIEW_AUTH_ABI_VERSION,  vef_auth_read_packet,
     vef_auth_write_packet,         vef_auth_user_name,
     vef_auth_auth_string,          vef_auth_host_or_ip,
     vef_auth_set_authenticated_as, vef_auth_set_external_user,
-    vef_auth_set_active_roles};
+    vef_auth_set_active_roles,     vef_auth_account_unknown,
+    vef_auth_request_provision};
 
 }  // namespace
 
@@ -198,6 +295,41 @@ bool maybe_apply_vef_auth_state(MPVIO_EXT *mpvio, Security_context *sctx,
   // some deployments may prefer falling back to the account's default roles
   // when a staged set activates nothing, rather than ending with no roles.
   return true;  // staged state applied; caller must NOT also activate defaults
+}
+
+bool run_vef_provision(MPVIO_EXT *mpvio) {
+  const VefProvisionRequest *req = mpvio->vef_auth_info.vef_provision_request;
+  if (req == nullptr)
+    return false;  // handler staged no provision; nothing to do
+  if (req->method == nullptr || req->method[0] == '\0') return true;
+
+  // Provisioning runs under skip_grants (SUPER), which the DBA opted into. So
+  // it follows the same read_only policy as any superuser CREATE USER:
+  // super_read_only forbids it, plain read_only permits it (SUPER exempt, by
+  // design) -- as does a correctly super_read_only replica.
+  //
+  // TODO(villagesql-beta): concurrent logins for the same unknown account race
+  // with no single-flight guard -- CREATE USER IF NOT EXISTS is idempotent, but
+  // the GRANTs are not coordinated. A server-internal provisioning queue with
+  // single-flight dedup would close this before high-concurrency use.
+
+  // `account` is handler-supplied (ultimately client-influenced, pre-auth) and
+  // this DDL runs under skip_grants (SUPER), so quote it and the method/role
+  // names as identifiers -- never concatenate. auth_str / append_identifier
+  // backtick-escape, so a crafted name cannot break out.
+  const std::string account_id =
+      Auth_id(req->account, strlen(req->account), "%", 1).auth_str();
+  String method_id;
+  append_identifier_with_backtick(&method_id, req->method, strlen(req->method));
+
+  std::string create = "CREATE USER IF NOT EXISTS ";
+  create.append(account_id);
+  create.append(" IDENTIFIED WITH ");
+  create.append(method_id.ptr(), method_id.length());
+  if (provision_run(create)) return true;  // create failed -> fail the login
+
+  for (const char *staged : req->roles) grant_staged_role(staged, account_id);
+  return false;
 }
 
 AuthMethodRef::AuthMethodRef() {
@@ -288,6 +420,30 @@ const vef_auth_cc_t *find_auth_method(std::string_view method_name) {
     if (m.method_name == normalized) return m.cc;
   }
   return nullptr;
+}
+
+std::string auth_method_for_unknown_accounts() {
+  std::lock_guard<std::mutex> lock(g_mu);
+  const vef_auth_cc_t *chosen = nullptr;
+  for (const auto &m : g_methods) {
+    // Query the opt-in LIVE (so it reflects the extension's runtime sysvar),
+    // not a static registration flag. NULL callback == never opts in.
+    if (m.cc != nullptr && m.cc->auto_create_unknown_accounts != nullptr &&
+        m.cc->auto_create_unknown_accounts()) {
+      if (chosen != nullptr) {
+        // More than one method opted in: ambiguous. Decline to guess and fall
+        // back to normal unknown-account handling.
+        LogVSQL(WARNING_LEVEL,
+                "Multiple auth methods opted in to handle unknown accounts; "
+                "routing unknown accounts is disabled until only one does");
+        return std::string();
+      }
+      chosen = m.cc;
+    }
+  }
+  return (chosen != nullptr && chosen->name != nullptr)
+             ? std::string(chosen->name)
+             : std::string();
 }
 
 std::optional<bool> handle_vef_user_bind(std::string_view method_name,

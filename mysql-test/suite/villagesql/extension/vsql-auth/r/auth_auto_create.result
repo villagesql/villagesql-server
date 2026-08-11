@@ -1,0 +1,29 @@
+call mtr.add_suppression("routing unknown accounts");
+INSTALL EXTENSION vsql_auth_test;
+CREATE ROLE vsql_role_granted;
+GRANT SELECT ON *.* TO vsql_role_granted;
+SELECT CURRENT_USER() AS who, @@external_user AS ext;
+who	ext
+auto_created_user@%	auto_created_user
+SELECT user, host, plugin FROM mysql.user WHERE user = 'auto_created_user';
+user	host	plugin
+auto_created_user	%	vsql_auth_test
+SHOW GRANTS FOR 'auto_created_user'@'%';
+Grants for auto_created_user@%
+GRANT USAGE ON *.* TO `auto_created_user`@`%`
+GRANT `vsql_role_granted`@`%` TO `auto_created_user`@`%`
+SELECT CURRENT_USER() AS who, @@external_user AS ext;
+who	ext
+auto_created_user@%	auto_created_user
+connect(localhost,never_created,wrong-token,test,SOURCE_PORT,SOURCE_SOCKET);
+ERROR 28000: Access denied for user 'never_created'@'localhost' (using password: NO)
+SELECT COUNT(*) AS never_created_rows FROM mysql.user WHERE user = 'never_created';
+never_created_rows
+0
+SELECT COUNT(*) AS injected_rows FROM mysql.user WHERE user = 'injected';
+injected_rows
+0
+DROP USER `injected'@'%',x'@'%`@`%`;
+DROP USER 'auto_created_user'@'%';
+DROP ROLE vsql_role_granted;
+UNINSTALL EXTENSION vsql_auth_test;

@@ -1212,6 +1212,60 @@ inline const char *mpvio_client_plugin_name(MPVIO_EXT *mpvio) {
   return mpvio->vef_auth_info.vef_client_auth_plugin;
 }
 
+// VillageSQL: if a VEF auth method opted in to unknown accounts, repurpose this
+// decoy -- point it at the method's plugin, make it authenticatable, and flag
+// it a provisioning candidate -- so an unknown-account login routes to the
+// method instead of being rejected. Mutates the non-const `decoy` before it
+// becomes the const mpvio->acl_user.
+static void maybe_route_decoy_to_vef_auth(MPVIO_EXT *mpvio, ACL_USER *decoy) {
+  const std::string vef_method =
+      villagesql::services::auth_method_for_unknown_accounts();
+  if (vef_method.empty()) return;
+  char *m =
+      strmake_root(mpvio->mem_root, vef_method.c_str(), vef_method.length());
+  decoy->plugin = {m, vef_method.length()};
+  decoy->can_authenticate = true;
+  mpvio->acl_user_vef_provision_candidate = true;
+}
+
+// VillageSQL: for a provisioning login (an unknown-account decoy),
+// create the account the handler staged (request_provision) and then swap the
+// decoy for it. The single gate is the provisioning-candidate flag; a normal
+// login is not one and returns immediately. Called only after the handler
+// returned OK, so a denied login provisions nothing. Returns true on failure
+// (the caller must fail the login closed): a creation error, or -- the case
+// that would otherwise slip an unresolved decoy through -- the account still
+// being absent after the run (handler OK'd an unknown account without staging a
+// provision). Re-resolution mirrors find_mpvio_user (same wildcard match +
+// three mpvio updates).
+static bool maybe_provision(THD *thd, MPVIO_EXT *mpvio) {
+  if (!mpvio->acl_user_vef_provision_candidate) return false;
+  if (villagesql::services::run_vef_provision(mpvio)) return true;
+
+  Acl_cache_lock_guard acl_cache_lock(thd, Acl_cache_lock_mode::READ_MODE);
+  if (!acl_cache_lock.lock()) return true;
+  // exact=false so a wildcard host in the freshly-created grant (e.g.
+  // '<acct>'@'%') matches the connecting host, mirroring find_mpvio_user's
+  // wildcard-aware resolution. An exact match would require the stored host to
+  // equal the client host literally and would miss the common '%' case.
+  ACL_USER *real = find_acl_user(
+      mpvio->host ? mpvio->host : mpvio->ip,
+      mpvio->auth_info.user_name ? mpvio->auth_info.user_name : "",
+      /*exact=*/false);
+  if (real == nullptr) return true;  // no account -> deny (no unresolved decoy)
+  mpvio->acl_user = real->copy(mpvio->mem_root);
+  mpvio->acl_user_vef_provision_candidate = false;
+  *(mpvio->restrictions) = acl_restrictions->find_restrictions(mpvio->acl_user);
+  // Same three mpvio updates find_mpvio_user does on a match: acl_user,
+  // restrictions, and acl_user_plugin (built-in plugins need no allocation).
+  if (auth_plugin_is_built_in(real->plugin.str))
+    mpvio->acl_user_plugin = mpvio->acl_user->plugin;
+  else
+    lex_string_strmake(mpvio->mem_root, &mpvio->acl_user_plugin,
+                       real->plugin.str, real->plugin.length);
+  return false;
+}
+
 LEX_CSTRING validate_password_plugin_name = {
     STRING_WITH_LEN("validate_password")};
 
@@ -2362,8 +2416,11 @@ static bool find_mpvio_user(THD *thd, MPVIO_EXT *mpvio) {
     const LEX_CSTRING hst = {
         mpvio->host ? mpvio->host : mpvio->ip,
         mpvio->host ? strlen(mpvio->host) : strlen(mpvio->ip)};
-    mpvio->acl_user =
+    ACL_USER *decoy =
         decoy_user(usr, hst, mpvio->mem_root, mpvio->rand, initialized);
+    // VillageSQL: route an unknown account to an opted-in VEF auth method.
+    maybe_route_decoy_to_vef_auth(mpvio, decoy);
+    mpvio->acl_user = decoy;
     mpvio->acl_user_plugin = mpvio->acl_user->plugin;
   }
 
@@ -4154,6 +4211,12 @@ int acl_authenticate(THD *thd, enum_server_command command) {
   if (res == CR_OK) {
     res = do_multi_factor_auth(thd, &mpvio);
   }
+
+  // VillageSQL: now that the handler accepted the login, provision
+  // any account it staged and adopt it (a no-op for a normal login). Deferring
+  // to here -- after OK -- means a denied login provisions nothing; failure to
+  // end up with a real account fails the login.
+  if (res == CR_OK && maybe_provision(thd, &mpvio)) res = CR_ERROR;
 
   server_mpvio_update_thd(thd, &mpvio);
 

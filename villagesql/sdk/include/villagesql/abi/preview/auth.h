@@ -132,6 +132,30 @@ typedef struct {
   // Passing n_roles == 0 activates no roles (equivalent to SET ROLE NONE).
   void (*set_active_roles)(vef_auth_ctx_t *ctx, const char *const *roles,
                            uint32_t n_roles);
+
+  // Return true if the account being authenticated does NOT exist -- i.e. this
+  // login was routed here by the unknown-account opt-in
+  // (auto_create_unknown_accounts). Lets an auto-creating handler tell a normal
+  // login (real account) from one that needs provisioning. False for a
+  // pre-existing account.
+  bool (*account_unknown)(vef_auth_ctx_t *ctx);
+
+  // Request that the server provision `account` for this (validated) login:
+  // create it IDENTIFIED WITH this auth method and grant `roles` (each a
+  // NUL-terminated role name, "role" or "role@host"). The server -- not the
+  // extension -- runs the DDL, with its own privileges, bounded by policy; the
+  // extension only describes intent (mirrors set_active_roles). Call after
+  // validating the token, when account_unknown() is true.
+  //
+  // The intent is only recorded here; the server runs it AFTER the handler
+  // returns OK, and ONLY for an account that was routed here as unknown -- a
+  // request for an already-existing account is ignored. So a login the handler
+  // then denies, or one against an account that already exists, creates
+  // nothing. A creation failure (e.g. read_only) is surfaced by the server as a
+  // failed login, not to the handler -- hence no return value. The strings are
+  // copied.
+  void (*request_provision)(vef_auth_ctx_t *ctx, const char *account,
+                            const char *const *roles, uint32_t n_roles);
 } vef_auth_ops_t;
 
 // The handler the extension implements. Invoked synchronously on the connecting
@@ -154,6 +178,16 @@ typedef struct {
   // non-null and non-empty -- a method that leaves it unset is rejected at
   // INSTALL EXTENSION.
   const char *client_auth_plugin;
+  // Optional callback: return true if this method currently wants logins
+  // for UNKNOWN accounts routed to it (so it can validate the token and, with
+  // server support, provision the account on the fly) instead of the login
+  // being rejected outright. It is QUERIED LIVE per unknown-account login, so
+  // the extension can back it with a runtime sysvar (e.g. SET GLOBAL
+  // vsql_oauth2.auto_create) rather than freezing the choice at registration.
+  // nullptr, or a callback returning false, preserves standard "unknown account
+  // -> access denied". At most one registered method may return true at a time;
+  // the server routes normally (as if none opted in) if more than one does.
+  bool (*auto_create_unknown_accounts)(void);
 } vef_auth_cc_t;
 
 // Server-side vtable. Version first, matching the other preview capabilities.
