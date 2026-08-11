@@ -184,8 +184,8 @@ typedef struct {
   // being rejected outright. It is QUERIED LIVE per unknown-account login, so
   // the extension can back it with a runtime sysvar (e.g. SET GLOBAL
   // vsql_oauth2.auto_create) rather than freezing the choice at registration.
-  // NULL, or a callback returning false, preserves standard "unknown account ->
-  // access denied". At most one registered method may return true at a time;
+  // nullptr, or a callback returning false, preserves standard "unknown account
+  // -> access denied". At most one registered method may return true at a time;
   // the server routes normally (as if none opted in) if more than one does.
   bool (*auto_create_unknown_accounts)(void);
 } vef_auth_cc_t;

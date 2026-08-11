@@ -12,9 +12,9 @@ SHOW GRANTS FOR 'auto_created_user'@'%';
 Grants for auto_created_user@%
 GRANT USAGE ON *.* TO `auto_created_user`@`%`
 GRANT `vsql_role_granted`@`%` TO `auto_created_user`@`%`
-SELECT CURRENT_USER() AS who;
-who
-auto_created_user@%
+SELECT CURRENT_USER() AS who, @@external_user AS ext;
+who	ext
+auto_created_user@%	auto_created_user
 connect(localhost,never_created,wrong-token,test,SOURCE_PORT,SOURCE_SOCKET);
 ERROR 28000: Access denied for user 'never_created'@'localhost' (using password: NO)
 SELECT COUNT(*) AS never_created_rows FROM mysql.user WHERE user = 'never_created';

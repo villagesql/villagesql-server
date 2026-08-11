@@ -31,7 +31,7 @@ SHOW GRANTS FOR 'auto_created_user'@'%';
 # Second login as the now-existing account: authenticates normally, no
 # re-provisioning.
 --connect(again_con, localhost, auto_created_user, vsql-auth-test-token, , , , CLEARTEXT)
-SELECT CURRENT_USER() AS who;
+SELECT CURRENT_USER() AS who, @@external_user AS ext;
 --connection default
 --disconnect again_con
 
