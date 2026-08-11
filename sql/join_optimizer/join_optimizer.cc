@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3149,23 +3150,32 @@ bool CostingReceiver::ProposeDistanceIndexScan(
     const SpatialDistanceScanInfo &order_info, int ordering_idx) {
   AccessPath path;
   unsigned int key_idx = order_info.key_idx;
+  // A non-null custom scan spec marks the VillageSQL custom-index variant of
+  // the distance scan; the spatial variant leaves it null.
+  const bool is_custom_distance_index = order_info.custom_scan_spec != nullptr;
 
   path.type = AccessPath::INDEX_DISTANCE_SCAN;
   path.index_distance_scan().table = table;
   path.index_distance_scan().idx = key_idx;
+  path.index_distance_scan().custom_scan_spec = order_info.custom_scan_spec;
 
-  // TODO: Examine using a different structure with less elements
-  // since max_key parameters are unused.
-  // TODO (Farthest Neighbor): if Overlaps(key_part.key_part_flag,
-  // HA_REVERSE_SORT) is true then create and pass a new flag e.g.
-  // HA_READ_FARTHEST_NEIGHBOR.
-  QUICK_RANGE *range = new (m_thd->mem_root) QUICK_RANGE(
-      m_thd->mem_root, reinterpret_cast<const uchar *>(order_info.coordinates),
-      sizeof(double) * 4, make_keypart_map(0),
-      reinterpret_cast<const uchar *>(order_info.coordinates), 0,
-      0,  // max_key unused
-      0 /*flag*/, HA_READ_NEAREST_NEIGHBOR);
-  path.index_distance_scan().range = range;
+  if (is_custom_distance_index) {
+    path.index_distance_scan().range = nullptr;
+  } else {
+    // TODO: Examine using a different structure with less elements
+    // since max_key parameters are unused.
+    // TODO (Farthest Neighbor): if Overlaps(key_part.key_part_flag,
+    // HA_REVERSE_SORT) is true then create and pass a new flag e.g.
+    // HA_READ_FARTHEST_NEIGHBOR.
+    QUICK_RANGE *range = new (m_thd->mem_root)
+        QUICK_RANGE(m_thd->mem_root,
+                    reinterpret_cast<const uchar *>(order_info.coordinates),
+                    sizeof(double) * 4, make_keypart_map(0),
+                    reinterpret_cast<const uchar *>(order_info.coordinates), 0,
+                    0,  // max_key unused
+                    0 /*flag*/, HA_READ_NEAREST_NEIGHBOR);
+    path.index_distance_scan().range = range;
+  }
 
   path.count_examined_rows = true;
   path.ordering_state = m_orderings->SetOrder(ordering_idx);
@@ -3173,7 +3183,12 @@ bool CostingReceiver::ProposeDistanceIndexScan(
   double num_output_rows = table->file->stats.records;
   double cost;
 
-  assert(!table->covering_keys.is_set(key_idx));
+  // TODO(villagesql-indexing): let a custom index declare its own index
+  // capabilities. InnoDB's ha_innobase::index_flags returns HA_KEYREAD_ONLY
+  // for custom indexes, which marks them as covering (covering_keys.is_set()).
+  // A custom index is not actually covering, so exempt it from this assert
+  // until an extension can report accurate index flags.
+  assert(is_custom_distance_index || !table->covering_keys.is_set(key_idx));
   // Same cost estimation for index scan and distance index scan.
   cost = table->file->read_cost(key_idx, /*ranges=*/1.0, num_output_rows)
              .total_cost();
