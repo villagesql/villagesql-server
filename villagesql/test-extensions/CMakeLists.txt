@@ -36,6 +36,13 @@ vsql_add_test_extension(vsql-sys-var-rollback-test     vsql_sys_var_rollback_tes
 vsql_add_test_extension(vsql-noop-test                 vsql_noop_test)
 vsql_add_test_extension(vsql-on-init-test              vsql_on_init_test)
 
+# mysql_services capability test extensions consume raw MySQL component
+# services, so they need MySQL headers (MYSQL_HEADERS flag).
+vsql_add_test_extension(vsql-mysql-services-test         vsql_mysql_services_test         MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-missing-test vsql_mysql_services_missing_test MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-session-test vsql_mysql_services_session_test MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-errlog-test  vsql_mysql_services_errlog_test  MYSQL_HEADERS)
+
 # Built against the frozen stable v3 SDK so the variable-length type registers
 # at VEF_PROTOCOL_3 and is rejected by build_type_descriptor_v3 (missing
 # resolve_params) -- a path the current dev SDK can no longer produce.

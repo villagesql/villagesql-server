@@ -1,0 +1,4 @@
+call mtr.add_suppression("failed to acquire MySQL service");
+# INSTALL must fail before the extension becomes usable
+INSTALL EXTENSION vsql_mysql_services_missing_test;
+ERROR HY000: Failed to load VEF extension 'vsql_mysql_services_missing_test': failed to acquire MySQL service 'vsql_intentionally_missing'

@@ -1,0 +1,29 @@
+# Test consuming a server-core service through the MySQL Services capability by
+# writing to the server error log. Consumes mysql_simple_error_log, an
+# always-registered core service, so NO component / server restart / setup is
+# needed. The emitted line is observable via performance_schema.error_log
+# (its log_sink_perfschema sink is active by default), so the test can assert
+# the write landed with plain SQL.
+
+# The VDF writes these markers to the error log on purpose; whitelist them so
+# MTR's error-log check does not fail the test on the expected warnings.
+call mtr.add_suppression("Component reported: 'vsql-errlog-marker");
+
+INSTALL EXTENSION vsql_mysql_services_errlog_test;
+
+# Emit a distinctive marker; VDF returns 0 on success.
+SELECT vsql_mysql_services_errlog_test.log_warning('vsql-errlog-marker-8f3a') AS emit_status;
+
+# The marker must now appear in the error log. Select only the boolean so the
+# result is portable (no timestamps / host-specific columns).
+SELECT COUNT(*) > 0 AS marker_logged
+FROM performance_schema.error_log
+WHERE DATA LIKE '%vsql-errlog-marker-8f3a%';
+
+UNINSTALL EXTENSION vsql_mysql_services_errlog_test;
+
+# Reinstall to prove teardown released the service cleanly and the capability
+# re-populates across load cycles.
+INSTALL EXTENSION vsql_mysql_services_errlog_test;
+SELECT vsql_mysql_services_errlog_test.log_warning('vsql-errlog-marker-reinstall') AS emit_status_again;
+UNINSTALL EXTENSION vsql_mysql_services_errlog_test;
