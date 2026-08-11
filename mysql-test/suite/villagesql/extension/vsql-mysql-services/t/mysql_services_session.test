@@ -1,0 +1,19 @@
+# Test consuming server-core services through the MySQL Services capability —
+# a mini "session attribute" reader (stand-in for vsql::preview::session, but
+# service-backed). Consumes mysql_current_thread_reader + mysql_thd_attributes,
+# both always-registered core services, so NO keyring component / server
+# restart / setup is needed.
+
+INSTALL EXTENSION vsql_mysql_services_session_test;
+
+# The VDF reads the running statement's "sql_command" attribute via the
+# consumed services. Called from a SELECT, so it reports "Select".
+SELECT vsql_mysql_services_session_test.session_sql_command() AS sql_command;
+
+UNINSTALL EXTENSION vsql_mysql_services_session_test;
+
+# Reinstall to prove teardown released the services cleanly and the capability
+# re-populates across load cycles.
+INSTALL EXTENSION vsql_mysql_services_session_test;
+SELECT vsql_mysql_services_session_test.session_sql_command() AS sql_command_again;
+UNINSTALL EXTENSION vsql_mysql_services_session_test;
