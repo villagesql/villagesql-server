@@ -108,6 +108,9 @@ The following options may be given as the first argument:
  Type of BINLOG_CHECKSUM_ALG. Include checksum for log
  events in the binary log. Possible values are NONE and
  CRC32; default is CRC32.
+ --binlog-ddl-skip-rewrite 
+ Without server rewrite, DDL queries will be logged with
+ comments.
  --binlog-direct-non-transactional-updates 
  Causes updates to non-transactional engines using
  statement format to be written directly to binary log,
@@ -218,6 +221,12 @@ The following options may be given as the first argument:
  of big documents may need significantly less space.
  --binlog-rows-query-log-events 
  Allow writing of Rows_query_log events into binary log.
+ --binlog-skip-flush-commands 
+ If set to TRUE, FLUSH <XXX> commands will not be be
+ written to the binary log
+ --binlog-space-limit=# 
+ Maximum space to use for all binary logs. Default is 0,
+ this feature is disabled.
  --binlog-stmt-cache-size=# 
  The size of the statement cache for updates to
  non-transactional engines for the binary log. If you
@@ -233,6 +242,10 @@ The following options may be given as the first argument:
  Maximum number of rows to keep in the writeset history.
  --block-encryption-mode=name 
  mode for AES_ENCRYPT/AES_DECRYPT
+ --buffered-error-log-filename=name 
+ Filename of the buffered error log
+ --buffered-error-log-size=# 
+ Size of the buffered error log (kB)
  --bulk-insert-buffer-size=# 
  Size of tree cache used in bulk insert optimisation. Note
  that this is a limit per thread!
@@ -282,6 +295,9 @@ The following options may be given as the first argument:
  --console           Write error output on screen; don't remove the console
  window on windows.
  --core-file         Write core on errors.
+ --coredumper[=name] Use coredumper library to generate coredumps. Specify a
+ path for coredump otherwise it will be generated on
+ datadir
  --create-admin-listener-thread 
  Use a dedicated thread for listening incoming connections
  on admin interface
@@ -294,7 +310,7 @@ The following options may be given as the first argument:
  The number of days after which the password will expire.
  --default-storage-engine=name 
  The default storage engine for new tables
- --default-table-encryption 
+ --default-table-encryption[=name] 
  Database and tablespace are created with this default
  encryption property unless the user specifies an explicit
  encryption property.
@@ -338,6 +354,8 @@ The following options may be given as the first argument:
  before storage engine initialization, where each plugin
  is identified as name=library, where name is the plugin
  name and library is the plugin library in plugin_dir.
+ --encrypt-tmp-files Encrypt temporary files (created for filesort, Group
+ Replication, etc)
  --end-markers-in-json 
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
@@ -348,6 +366,8 @@ The following options may be given as the first argument:
  disallowed statements include CREATE TEMPORARY TABLE
  inside transactions, all updates to non-transactional
  tables, and CREATE TABLE ... SELECT.
+ --enforce-storage-engine=name 
+ Force the use of a storage engine for new tables
  --eq-range-index-dive-limit=# 
  The optimizer will use existing index statistics instead
  of doing index dives for equality ranges if the number of
@@ -358,6 +378,10 @@ The following options may be given as the first argument:
  and DISABLED (keep the event scheduler completely
  deactivated, it cannot be activated run-time)
  -T, --exit-info[=#] Used for debugging. Use at your own risk.
+ --expand-fast-index-creation 
+ Enable/disable improvements to the InnoDB fast index
+ creation functionality. Has no effect when fast index
+ creation is disabled with the fast-index-creation option
  --explain-format[=name] 
  The default format in which the EXPLAIN statement
  displays information. Valid values are TRADITIONAL
@@ -394,6 +418,9 @@ The following options may be given as the first argument:
  after changing this variable
  --ft-query-expansion-limit=# 
  Number of best matches to use for query expansion
+ --ft-query-extra-word-chars 
+ If enabled, all non-whitespace characters are considered
+ word symbols for full text search queries
  --ft-stopword-file=name 
  Use stopwords from this file instead of built-in list
  --gdb               Set up signals usable for debugging.
@@ -476,6 +503,10 @@ The following options may be given as the first argument:
  --internal-tmp-mem-storage-engine=name 
  The default storage engine for in-memory internal
  temporary tables.
+ --jemalloc-profiling 
+ Enable jemalloc profilingStart MySQL with MALLOC_CONF set
+ to 'prof:true' for this feature to workAlso Jemalloc
+ should be compiled with profiling enabled
  --join-buffer-size=# 
  The size of the buffer that is used for full joins
  --keep-files-on-create 
@@ -516,6 +547,9 @@ The following options may be given as the first argument:
  Migrate from keyring plugin to keyring component.
  --keyring-migration-user=name 
  User to login to server.
+ --kill-idle-transaction=# 
+ If non-zero, number of seconds to wait before killing
+ idle connections that have open transactions
  --large-pages       Enable support for large pages
  --lc-messages=name  Set the language used for the error messages.
  --lc-messages-dir=name 
@@ -570,6 +604,11 @@ The following options may be given as the first argument:
  --log-queries-not-using-indexes 
  Log queries that are executed without benefit of any
  index to the slow log if it is open
+ --log-query-errors=# 
+ Log queries which failed with the specified error code.
+ Multiple error codes are allowed in comma-separated
+ string. Can be set to ALL to match all possible error
+ codes.
  --log-raw           Log to general log before any rewriting of the query. For
  use in debugging, not production as sensitive information
  may be logged.
@@ -587,12 +626,39 @@ The following options may be given as the first argument:
  administrative statements to the slow log if it is open.
  --log-slow-extra    Print more attributes to the slow query log file. Has no
  effect on logging to table.
+ --log-slow-filter=name 
+ Log only the queries that followed certain execution
+ plan. Multiple flags allowed in a comma-separated string.
+ [full_scan, full_join, tmp_table, tmp_table_on_disk,
+ filesort, filesort_on_disk]
+ --log-slow-rate-limit=# 
+ Rate limit statement writes to slow log to only those
+ from every (1/log_slow_rate_limit) session.
+ --log-slow-rate-type=name 
+ Choose the log_slow_rate_limit behavior: session or
+ query. When you choose 'session' - every
+ %log_slow_rate_limit connection will be processed to slow
+ query log. When you choose 'query' - every
+ %log_slow_rate_limit query will be processed to slow
+ query log. [session, query]
  --log-slow-replica-statements 
  Log slow statements executed by the replication applier
  threads to the slow log if it is open.
  --log-slow-slave-statements 
  This option is deprecated. Use
  log_slow_replica_statements instead.
+ --log-slow-sp-statements[=name] 
+ Choice between logging slow CALL statements, logging
+ individual slow statements inside stored procedures or
+ skipping the logging of stored procedures into the slow
+ log entirely. Values are OFF, ON and OFF_NO_CALLS
+ respectively.
+ --log-slow-verbosity=name 
+ Choose how verbose the messages to your slow log will be.
+ Multiple flags allowed in a comma-separated string.
+ [microtime, query_plan, innodb, profiling,
+ profiling_use_getrusage, query_info, minimal, standard,
+ full]
  --log-statements-unsafe-for-binlog 
  Log statements considered unsafe when using statement
  based binary logging. This variable is deprecated and
@@ -685,6 +751,15 @@ The following options may be given as the first argument:
  --max-seeks-for-key=# 
  Limit assumed max number of seeks when looking up rows
  based on a key
+ --max-slowlog-files=# 
+ Maximum number of slow query log files. Used with
+ --max-slowlog-size this can be used to limit the total
+ amount of disk space used for the slow query log. Default
+ is 0, don't limit.
+ --max-slowlog-size=# 
+ Slow query log will be rotated automatically when the
+ size exceeds this value. The default is 0, don't limit
+ the size.
  --max-sort-length=# The number of bytes to use when sorting long values with
  PAD SPACE collations (only the first max_sort_length
  bytes of each value are used; the rest are ignored)
@@ -736,6 +811,12 @@ The following options may be given as the first argument:
  the server option check_proxy_users is enabled.
  --net-buffer-length=# 
  Buffer length for TCP/IP and socket communication
+ --net-buffer-shrink-interval=# 
+ Check and maybe shrink network buffer with given
+ frequency(seconds). It shrinks network buffer to the
+ maximum packet size seen in previous
+ net_buffer_shrink_interval seconds. Set to 0 to disable
+ checks and shrinks
  --net-read-timeout=# 
  Number of seconds to wait for more data from a connection
  before aborting the read
@@ -787,7 +868,8 @@ The following options may be given as the first argument:
  use_index_extensions, condition_fanout_filter,
  derived_merge, hash_join, subquery_to_derived,
  prefer_ordering_index, derived_condition_pushdown,
- hash_set_operations} and val is one of {on, off, default}
+ hash_set_operations, favor_range_scan} and val is one of
+ {on, off, default}
  --optimizer-trace=name 
  Controls tracing of the Optimizer:
  optimizer_trace=option=val[,option=val...], where option
@@ -1062,6 +1144,12 @@ The following options may be given as the first argument:
  both client and server support it; otherwise it picks
  zstd if both support it; otherwise it picks uncompressed
  if both support it; otherwise it fails.
+ --proxy-protocol-networks=name 
+ Enable proxy protocol for these source networks. The
+ syntax is a comma separated list of IPv4 and IPv6
+ networks. If the network doesn't contain mask, it is
+ considered to be a single host. "*" represents all
+ networks and must the only directive on the line.
  --query-alloc-block-size=# 
  Allocation block size for query parsing and execution
  --query-prealloc-size=# 
@@ -1125,6 +1213,17 @@ The following options may be given as the first argument:
  maximum number of milliseconds between updates.
  --replica-compressed-protocol 
  Use compression in the source/replica protocol.
+ --replica-enable-event=name 
+ Tells the replication applier thread to enable the events
+ that match the specified wildcard pattern without setting
+ it as REPLICA_SIDE_DISABLED. To specify more than one
+ event, use the directive multiple times, once for each
+ event. This will work for cross-database events. Example:
+ replica-enable-event=foo%.bar% will enable the events in
+ all databases on replica server that start with 'foo' and
+ whose event names start with 'bar'. It is recommended to
+ use this feature only for read-only events to avoid data
+ inconsistency.
  --replica-exec-mode=name 
  Modes for how replication events should be executed.
  Legal values are STRICT (default) and IDEMPOTENT. In
@@ -1311,6 +1410,9 @@ The following options may be given as the first argument:
  --secure-file-priv=name 
  Limit LOAD DATA, SELECT ... OUTFILE, and LOAD_FILE() to
  files within specified directory
+ --secure-log-path=name 
+ Limit location of general log, slow log and buffered
+ error logwithin specified directory
  --select-into-buffer-size[=#] 
  Buffer size for SELECT INTO OUTFILE/DUMPFILE.
  --select-into-disk-sync 
@@ -1438,10 +1540,19 @@ The following options may be given as the first argument:
  to a file hostname-slow.log or a table mysql.slow_log if
  --log-output=TABLE is used. Must be enabled to activate
  other slow log options
+ --slow-query-log-always-write-time=# 
+ Log queries which run longer than specified by this value
+ regardless of the log_slow_rate_limit valiue.
  --slow-query-log-file=name 
  Log slow queries to given log file. Defaults logging to
  hostname-slow.log. Must be enabled to activate other slow
  log options
+ --slow-query-log-use-global-control=name 
+ Choose flags, wich always use the global variables.
+ Multiple flags allowed in a comma-separated string.
+ [none, log_slow_filter, log_slow_rate_limit,
+ log_slow_verbosity, long_query_time,
+ min_examined_row_limit, log_query_errors, all]
  --socket=name       Socket file to use for connection
  --sort-buffer-size=# 
  Each thread that needs to do a sort allocates a buffer of
@@ -1507,6 +1618,9 @@ The following options may be given as the first argument:
  cache instances)
  --table-open-cache-instances=# 
  The number of table cache instances
+ --table-open-cache-triggers=# 
+ The number of cached open tables with fully loaded
+ triggers
  --tablespace-definition-cache=# 
  The number of cached tablespace definitions
  --tc-heuristic-recover=name 
@@ -1543,12 +1657,17 @@ The following options may be given as the first argument:
  a version lower than 8.2.0. SHOW EVENTS and queries into
  information_schema.events will also output the old
  terminology for the event status field.
+ --tf-sequence-table-max-upper-bound=# 
+ Maximum number of records PERCONA_SEQUENCE_TABLE() table
+ function is allowed to generate.
  --thread-cache-size=# 
  How many threads we should keep in a cache for reuse
  --thread-handling=name 
  Define threads usage for handling queries, one of
- one-thread-per-connection, no-threads, loaded-dynamically
+ one-thread-per-connection, no-threads, pool-of-threads
  --thread-stack=#    The stack size for each thread
+ --thread-statistics Control TABLE_STATISTICS running, when userstat is
+ enabled
  --tls-certificates-enforced-validation 
  If set to TRUE, server stops execution at the start up in
  case of invalid certificates When ALTER INSTANCE RELOAD
@@ -1586,6 +1705,24 @@ The following options may be given as the first argument:
  absolutely necessary; AUTO (default) to upgrade the
  server if required; FORCE to force upgrade server.
  -u, --user=name     Run mysqld daemon as user.
+ --userstat          Control USER_STATISTICS, CLIENT_STATISTICS,
+ THREAD_STATISTICS, INDEX_STATISTICS and TABLE_STATISTICS
+ running
+ --utility-user=name Specifies a MySQL user that will be added to the internal
+ list of users and recognized as the utility user.
+ --utility-user-dynamic-privileges=name 
+ Specifies the dynamic privileges that the utility user
+ will have in a comma delimited list. See the manual for a
+ complete list of privileges.
+ --utility-user-password=name 
+ Specifies the password required for the utility user.
+ --utility-user-privileges=name 
+ Specifies the privileges that the utility user will have
+ in a comma delimited list. See the manual for a complete
+ list of privileges.
+ --utility-user-schema-access=name 
+ Specifies the schemas that the utility user has access to
+ in a comma delimited list.
  --validate-config   Validate the server configuration specified by the user.
  --validate-user-plugins 
  Turns on additional validation of authentication plugins
@@ -1651,6 +1788,7 @@ big-tables FALSE
 bind-address *
 binlog-cache-size 32768
 binlog-checksum CRC32
+binlog-ddl-skip-rewrite FALSE
 binlog-direct-non-transactional-updates FALSE
 binlog-encryption FALSE
 binlog-error-action ABORT_SERVER
@@ -1668,11 +1806,15 @@ binlog-row-image FULL
 binlog-row-metadata MINIMAL
 binlog-row-value-options 
 binlog-rows-query-log-events FALSE
+binlog-skip-flush-commands FALSE
+binlog-space-limit 0
 binlog-stmt-cache-size 32768
 binlog-transaction-compression FALSE
 binlog-transaction-compression-level-zstd 3
 binlog-transaction-dependency-history-size 25000
 block-encryption-mode aes-128-ecb
+buffered-error-log-filename 
+buffered-error-log-size 0
 bulk-insert-buffer-size 8388608
 caching-sha2-password-digest-rounds 5000
 caching-sha2-password-private-key-path private_key.pem
@@ -1690,12 +1832,13 @@ connect-timeout 10
 connection-memory-chunk-size 8192
 connection-memory-limit 18446744073709551615
 console FALSE
+coredumper (No default value)
 create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000
 daemonize FALSE
 default-password-lifetime 0
 default-storage-engine InnoDB
-default-table-encryption FALSE
+default-table-encryption OFF
 default-time-zone (No default value)
 default-tmp-storage-engine InnoDB
 default-week-format 0
@@ -1706,10 +1849,13 @@ delayed-queue-size 1000
 disabled-storage-engines 
 disconnect-on-expired-password TRUE
 div-precision-increment 4
+encrypt-tmp-files FALSE
 end-markers-in-json FALSE
 enforce-gtid-consistency FALSE
+enforce-storage-engine (No default value)
 eq-range-index-dive-limit 200
 event-scheduler ON
+expand-fast-index-creation FALSE
 explain-format TRADITIONAL
 explain-json-format-version 1
 explicit-defaults-for-timestamp TRUE
@@ -1720,6 +1866,7 @@ ft-boolean-syntax + -><()~*:""&|
 ft-max-word-len 84
 ft-min-word-len 4
 ft-query-expansion-limit 20
+ft-query-extra-word-chars FALSE
 ft-stopword-file (No default value)
 gdb FALSE
 general-log FALSE
@@ -1742,6 +1889,7 @@ initialize TRUE
 initialize-insecure TRUE
 interactive-timeout 28800
 internal-tmp-mem-storage-engine TempTable
+jemalloc-profiling FALSE
 join-buffer-size 262144
 keep-files-on-create FALSE
 key-buffer-size 8388608
@@ -1755,6 +1903,7 @@ keyring-migration-port 0
 keyring-migration-source (No default value)
 keyring-migration-to-component FALSE
 keyring-migration-user (No default value)
+kill-idle-transaction 0
 large-pages FALSE
 lc-messages en_US
 lc-time-names en_US
@@ -1770,14 +1919,20 @@ log-error-verbosity 2
 log-isam myisam.log
 log-output FILE
 log-queries-not-using-indexes FALSE
+log-query-errors (Disabled)
 log-raw FALSE
 log-replica-updates FALSE
 log-short-format FALSE
 log-slave-updates FALSE
 log-slow-admin-statements FALSE
 log-slow-extra FALSE
+log-slow-filter 
+log-slow-rate-limit 1
+log-slow-rate-type session
 log-slow-replica-statements FALSE
 log-slow-slave-statements FALSE
+log-slow-sp-statements ON
+log-slow-verbosity 
 log-statements-unsafe-for-binlog TRUE
 log-tc tc.log
 log-tc-size #####
@@ -1807,6 +1962,8 @@ max-points-in-geometry 65536
 max-prepared-stmt-count 16382
 max-relay-log-size 0
 max-seeks-for-key 18446744073709551615
+max-slowlog-files 0
+max-slowlog-size 0
 max-sort-length 1024
 max-sp-recursion-depth 0
 max-user-connections 0
@@ -1824,6 +1981,7 @@ myisam-use-mmap FALSE
 mysql-native-password OFF
 mysql-native-password-proxy-users FALSE
 net-buffer-length 16384
+net-buffer-shrink-interval 0
 net-read-timeout 30
 net-retry-count 10
 net-write-timeout 60
@@ -1883,7 +2041,7 @@ performance-schema-max-file-handles 32768
 performance-schema-max-file-instances -1
 performance-schema-max-index-stat -1
 performance-schema-max-logger-classes 80
-performance-schema-max-memory-classes 470
+performance-schema-max-memory-classes 530
 performance-schema-max-metadata-locks -1
 performance-schema-max-meter-classes 30
 performance-schema-max-metric-classes 600
@@ -1919,6 +2077,7 @@ preload-buffer-size 32768
 print-identified-with-as-hex FALSE
 profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
+proxy-protocol-networks 
 query-alloc-block-size 8192
 query-prealloc-size 8192
 range-alloc-block-size 4096
@@ -1963,6 +2122,7 @@ rpl-stop-slave-timeout 31536000
 safe-user-create FALSE
 schema-definition-cache 256
 secondary-engine-cost-threshold 100000
+secure-log-path 
 select-into-buffer-size 131072
 select-into-disk-sync FALSE
 select-into-disk-sync-delay 0
@@ -2002,6 +2162,8 @@ slave-transaction-retries 10
 slave-type-conversions 
 slow-launch-time 2
 slow-query-log FALSE
+slow-query-log-always-write-time 10
+slow-query-log-use-global-control 
 sort-buffer-size 262144
 source-verify-checksum FALSE
 sporadic-binlog-dump-fail FALSE
@@ -2020,14 +2182,17 @@ sync-source-info 10000
 sysdate-is-now FALSE
 table-encryption-privilege-check FALSE
 table-open-cache-instances 16
+table-open-cache-triggers 524288
 tablespace-definition-cache 256
 tc-heuristic-recover OFF
 temptable-max-mmap 0
 temptable-use-mmap FALSE
 terminology-use-previous NONE
+tf-sequence-table-max-upper-bound 1048576
 thread-cache-size 9
 thread-handling one-thread-per-connection
 thread-stack 1048576
+thread-statistics FALSE
 tls-certificates-enforced-validation FALSE
 tls-ciphersuites (No default value)
 tmp-table-size 16777216
@@ -2037,6 +2202,12 @@ transaction-prealloc-size 4096
 transaction-read-only FALSE
 updatable-views-with-limit YES
 upgrade AUTO
+userstat FALSE
+utility-user (No default value)
+utility-user-dynamic-privileges (No default value)
+utility-user-password (No default value)
+utility-user-privileges 
+utility-user-schema-access (No default value)
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
