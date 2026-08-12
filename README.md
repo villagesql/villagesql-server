@@ -75,10 +75,14 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 > `~`, and the server aborts. Quoting `"$HOME/..."` keeps the path in one piece
 > if your home directory name contains a space.
 
-1. **Clone the repository:**
+1. **Clone the repository into `$HOME`:**
+
+   The steps below assume the clone is at `$HOME/villagesql-server`. If you put
+   it elsewhere, use that path in step 3.
+
    ```bash
+   cd "$HOME"
    git clone --depth 1 https://github.com/villagesql/villagesql-server.git
-   cd villagesql-server
    ```
 
 2. **Create a build directory (outside the repository):**
@@ -287,7 +291,7 @@ sudo apt-get install bison
 **Can't connect to server:**
 - Check that `mysqld` is running: `pgrep -a mysqld` or `ps aux | grep mysqld`
 - Verify socket path matches between server and client
-- Check error log in your data directory (e.g., `~/mysql-data/data/*.err`)
+- Check error log in your data directory (e.g., `$HOME/mysql-data/data/*.err`)
 
 **Port already in use:**
 If you see "Bind on TCP/IP port: Address already in use", either stop the existing MySQL instance or specify a different port:
