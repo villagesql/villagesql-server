@@ -8472,6 +8472,25 @@ bool mysql_prepare_create_table(
     /*
       Check if the column is compressible.
       VIRTUAL generated columns cannot have COMPRESSED attribute.
+
+      Custom-typed columns are not compressible either. The persisted bytes of
+      a custom column are the extension's encoded form, and for a type with
+      extension-managed storage the row holds only an opaque storage reference
+      (the payload lives in the extension's arena). Percona's compression
+      rewrites that same value in the same branch of
+      row_sel_field_store_in_mysql_format_func, so combining the two would
+      compress -- or decompress -- something other than the column data.
+
+      TODO(villagesql): this is a blanket restriction. Compression over an
+      extension's encoded form may be safe for types without extension-managed
+      storage; that has never been tested and needs deliberate design before
+      being allowed.
+
+      A custom type presents its extension-declared implementation_type() as
+      sql_type, so a VARCHAR/BLOB/JSON-backed custom type would otherwise pass
+      the check below. Excluding custom columns here also prevents the
+      enforce_all_compressed_columns debug hook from silently creating the
+      combination.
     */
     if ((sql_field->sql_type == MYSQL_TYPE_TINY_BLOB ||
          sql_field->sql_type == MYSQL_TYPE_MEDIUM_BLOB ||
@@ -8479,6 +8498,7 @@ bool mysql_prepare_create_table(
          sql_field->sql_type == MYSQL_TYPE_LONG_BLOB ||
          sql_field->sql_type == MYSQL_TYPE_VARCHAR ||
          sql_field->sql_type == MYSQL_TYPE_JSON) &&
+        sql_field->custom_type_context == nullptr &&
         (sql_field->gcol_info == nullptr ||
          sql_field->gcol_info->get_field_stored())) {
       DBUG_EXECUTE_IF(
