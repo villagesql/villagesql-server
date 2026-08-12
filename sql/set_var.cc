@@ -207,8 +207,10 @@ void sys_var_end() {
 bool check_priv(THD *thd, bool static_variable) {
   Security_context *sctx = thd->security_context();
   /* for dynamic variables user needs SUPER_ACL or SYSTEM_VARIABLES_ADMIN */
+  const bool is_utility_user = acl_is_utility_user(
+      sctx->priv_user().str, sctx->host().str, sctx->ip().str);
   if (!static_variable) {
-    if (!sctx->check_access(SUPER_ACL) &&
+    if (!is_utility_user && !sctx->check_access(SUPER_ACL) &&
         !(sctx->has_global_grant(STRING_WITH_LEN("SYSTEM_VARIABLES_ADMIN"))
               .first)) {
       my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
@@ -408,7 +410,7 @@ uchar *sys_var::global_var_ptr() {
 
 bool sys_var::check(THD *thd, set_var *var) {
   if ((var->value && do_check(thd, var)) ||
-      (on_check && on_check(this, thd, var))) {
+      (var->type != OPT_PERSIST_ONLY && on_check && on_check(this, thd, var))) {
     if (!thd->is_error()) {
       char buff[STRING_BUFFER_USUAL_SIZE];
       String str(buff, sizeof(buff), system_charset_info), *res;
@@ -1755,7 +1757,7 @@ int set_var::check(THD *thd) {
       my_error(ER_WRONG_TYPE_FOR_VAR, MYF(0), var->name.str);
       return -1;
     }
-    return (type != OPT_PERSIST_ONLY && var->check(thd, this)) ? -1 : 0;
+    return var->check(thd, this) ? -1 : 0;
   };
 
   int ret =
@@ -1860,10 +1862,13 @@ int set_var::update(THD *thd) {
     bool ret = false;
     /* for persist only syntax do not update the value */
     if (type != OPT_PERSIST_ONLY) {
+      auto saved_var_source = var->get_source();
+      var->set_source(enum_variable_source::DYNAMIC);
       if (value)
         ret = var->update(thd, this);
       else
         ret = var->set_default(thd, this);
+      var->set_source(saved_var_source);
       /*
        For PERSIST_ONLY syntax we dont change the value of the variable
        for the current session, thus we should not change variables

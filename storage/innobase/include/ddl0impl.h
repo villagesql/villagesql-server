@@ -63,6 +63,8 @@ using Builders = std::vector<Builder *, ut::allocator<Builder *>>;
 /** Start offsets in the file, from where to merge records. */
 using Merge_offsets = std::deque<os_offset_t, ut::allocator<os_offset_t>>;
 
+using Write_offsets = std::vector<os_offset_t, ut::allocator<os_offset_t>>;
+
 /** Information about temporary files used in merge sort */
 struct file_t {
   /** File. */
@@ -73,6 +75,9 @@ struct file_t {
 
   /** Number of records in the file */
   uint64_t m_n_recs{};
+
+  /** Offset after every write op, not including initial 0 */
+  Write_offsets m_write_offsets;
 };
 
 /** Fetch the document ID from the table. */
@@ -166,7 +171,8 @@ struct Row {
 @param[in] size                 Number of bytes to write.
 @param[in] offset               Byte offset where to write.
 @return DB_SUCCESS or error code */
-dberr_t pwrite(os_fd_t fd, void *ptr, size_t size, os_offset_t offset) noexcept;
+dberr_t pwrite(os_fd_t fd, void *ptr, size_t size, os_offset_t offset,
+               void *crypt_buf, space_id_t space_id) noexcept;
 
 /** Read a merge block from the file system.
 @param[in] fd                   file descriptor.
@@ -175,7 +181,8 @@ dberr_t pwrite(os_fd_t fd, void *ptr, size_t size, os_offset_t offset) noexcept;
 @param[in] offset               Byte offset to start reading from.
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t pread(os_fd_t fd, void *ptr, size_t len,
-                            os_offset_t offset) noexcept;
+                            os_offset_t offset, void *crypt_buf,
+                            space_id_t space_id) noexcept;
 
 }  // namespace ddl
 

@@ -88,6 +88,10 @@
 #include "string_with_len.h"
 #include "villagesql/schema/schema_manager.h"
 
+#ifdef HAVE_PERCONA_TELEMETRY
+#include "sql/dd/dd_utility.h"  // check_if_server_ddse_readonly
+#endif
+
 using sql_mode_t = uint64_t;
 extern const char *mysql_sys_schema[];
 extern const char *fill_help_tables[];
@@ -258,7 +262,7 @@ namespace {
 
 static std::vector<uint> ignored_errors{
     ER_DUP_FIELDNAME, ER_DUP_KEYNAME, ER_BAD_FIELD_ERROR,
-    ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE_V2, ER_DUP_ENTRY};
+    ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE_V2, ER_DUP_ENTRY, ER_NO_SUCH_TABLE};
 
 template <typename T>
 class Server_option_guard {
@@ -877,6 +881,14 @@ static bool check_tables(THD *thd, std::unique_ptr<Schema> &schema,
   auto process_table = [&](std::unique_ptr<dd::Table> &table) {
     invalid_triggers(thd, schema->name().c_str(), *table);
 
+    // The TokuDB engine was removed in 8.0.28 Don't upgrade if it is used.
+    if (my_strcasecmp(system_charset_info, table->engine().c_str(), "TokuDB") ==
+        0) {
+      (*error_count)++;
+      LogErr(ERROR_LEVEL, ER_PERCONA_UNSUPPORTED_ENGINE, schema->name().c_str(),
+             table->name().c_str(), table->engine().c_str());
+    }
+
     // Check for usage of prefix key index in PARTITION BY KEY() function.
     if (dd::prefix_key_partition_exists(
             schema->name().c_str(), table->name().c_str(), table.get(), true))
@@ -915,6 +927,8 @@ static bool check_tables(THD *thd, std::unique_ptr<Schema> &schema,
                col->name().c_str());
       }
     }
+
+    DBUG_EXECUTE_IF("upgrade_failed_during_init", (*error_count)++;);
 
     return error_count->has_too_many_errors();
   };
@@ -1391,6 +1405,116 @@ bool upgrade_system_schemas(THD *thd) {
 
   return dd::end_transaction(thd, err);
 }
+
+#ifdef HAVE_PERCONA_TELEMETRY
+/* 1. We INSERT INTO, because prepared statements do not support
+      INSTALL COMPONENT
+   2. We use stored procedure to be able to do conditional action.
+   3. Percona Telemetry Component creates and uses internal user
+      (locked account) percona.telemetry with the following privileges:
+        1. SELECT
+        2. REPLICATION SLAVE
+        3. REPLICATION CLIENT
+      CREATE USER and GRANT do not work yet as ACL is not initialized yet.
+      Use INSERT and UPDATES.
+      This is the same approach as for creation of mysql.user in
+      mysql_system_tables_fix.sql. First we create the user, then update grants.
+      The reasons for this approach are:
+      1. When the user is created, it is granted SHUTDOWN, SUPER, CREATE ROLE,
+         DROP ROLE privileges. percona.telemetry user do not need them, so we
+         drop
+      2. We grant SELECT, REPLICATION SLAVE, REPLICATION CLIENT explicitly.
+         It is for clarity, but also automatically fixes privileges in case
+         someone manually drops them.
+*/
+static const char *percona_telemetry_install[] = {
+    "USE mysql;\n",
+    "SET @have_percona_telemetry= (SELECT COUNT(*) FROM mysql.component WHERE "
+    "component_urn='file://component_percona_telemetry');\n",
+    "SET @cmd= 'INSERT INTO mysql.component(component_group_id, component_urn) "
+    "VALUES (1, \"file://component_percona_telemetry\");';\n",
+    "SET @str = IF(@have_percona_telemetry = 0, @cmd, 'SET @dummy = 0');\n",
+    "PREPARE stmt FROM @str;\n",
+    "EXECUTE stmt;\n",
+    "DROP PREPARE stmt;\n",
+    "SET @group_id= (SELECT LAST_INSERT_ID());\n",
+    "SET @cmd= 'UPDATE mysql.component SET component_group_id=@group_id WHERE "
+    "component_id=@group_id;';\n",
+    "SET @str = IF(@have_percona_telemetry = 0, @cmd, 'SET @dummy = 0');\n",
+    "PREPARE stmt FROM @str;\n",
+    "EXECUTE stmt;\n",
+    "DROP PREPARE stmt;\n",
+    "INSERT IGNORE INTO mysql.user VALUES "
+    "('localhost','percona.telemetry','N','N','N','N','N','N','"
+    "N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N'"
+    ",'N','N','N','N','','','','',0,0,0,0,'caching_sha2_password','$A$005$"
+    "THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED','N',"
+    "CURRENT_TIMESTAMP,NULL,'Y', 'N', 'N', NULL, NULL, NULL, NULL);\n",
+    "UPDATE mysql.user SET Select_priv = 'Y', Repl_slave_priv = 'Y', "
+    "Repl_client_priv = 'Y' WHERE User = 'percona.telemetry' AND Host = 'localhost';\n",
+    "UPDATE mysql.user SET Shutdown_priv = 'N', Super_priv = 'N', "
+    "Create_role_priv = 'N', Drop_role_priv = 'N' WHERE User = "
+    "'percona.telemetry' AND Host = 'localhost';\n",
+    NULL};
+
+static const char *percona_telemetry_uninstall[] = {
+    "USE mysql;\n",
+    "DELETE FROM mysql.component WHERE "
+    "component_urn=\"file://component_percona_telemetry\"\n;",
+    "DELETE FROM mysql.user WHERE user='percona.telemetry' AND Host = 'localhost';\n",
+    NULL};
+
+/**
+  Always return success, regardless of Percona Telemetry Component setup
+  status.
+*/
+bool setup_percona_telemetry(THD *thd [[maybe_unused]]) {
+  /* Do not call dd::check_if_server_ddse_readonly()
+   * to avoid issuing the warning */
+  handlerton *ddse = ha_resolve_by_legacy_type(thd, DB_TYPE_INNODB);
+  if (ddse->is_dict_readonly && ddse->is_dict_readonly()) {
+    LogErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+           "Percona Telemetry Component not configured due to InnoDB "
+           "in read only mode.");
+    return false;
+  }
+
+  Disable_autocommit_guard autocommit_guard(thd);
+  Bootstrap_error_handler bootstrap_error_handler;
+
+  Server_option_guard<bool> acl_guard(&opt_noacl, true);
+  Server_option_guard<bool> general_log_guard(&opt_general_log, false);
+  Server_option_guard<bool> slow_log_guard(&opt_slow_log, false);
+  Disable_binlog_guard disable_binlog(thd);
+  Disable_sql_log_bin_guard disable_sql_log_bin(thd);
+
+  bool err = false;
+
+  bootstrap_error_handler.set_log_error(false);
+
+  const char **query_ptr = opt_percona_telemetry_disable
+                               ? &percona_telemetry_uninstall[0]
+                               : &percona_telemetry_install[0];
+  for (; *query_ptr != nullptr; query_ptr++)
+    if (ignore_error_and_execute(thd, *query_ptr)) {
+      LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+             "Failed during setup Percona Telemetry component. Ignoring.");
+      break;
+    };
+
+  bootstrap_error_handler.set_log_error(true);
+
+  close_thread_tables(thd);
+  close_cached_tables(nullptr, nullptr, false, LONG_TIMEOUT);
+
+  if (dd::end_transaction(thd, err)) {
+    LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+           "Failed to setup Percona Telemetry component. Ignoring.");
+  }
+
+  return false;
+}
+#endif /* HAVE_PERCONA_TELEMETRY */
 
 bool no_server_upgrade_required() {
   return !(

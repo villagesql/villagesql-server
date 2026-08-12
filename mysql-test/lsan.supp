@@ -35,7 +35,24 @@ leak:/usr/bin/sort
 leak:/usr/bin/tail
 leak:/lib64/libperl.so.*
 leak:/bin/bash
+leak:/usr/bin/sed
+leak:/usr/bin/awk
+leak:/usr/bin/python2.7
 leak:/usr/bin/zip
+leak:/usr/bin/python3.8
+leak:/usr/bin/python3.9
+leak:/usr/bin/python3.10
+leak:/usr/bin/python3.11
+leak:/usr/bin/python3.12
+leak:/usr/bin/dd
+leak:/usr/bin/grep
+leak:/usr/bin/ps
+leak:/usr/bin/*g++-*
+leak:/usr/*/cc1plus
+leak:/lib/*libbfd-*-system.so
+leak:/usr/bin/*ld.bfd
+leak:/usr/lib/*collect2
+
 # OpenLDAP bug 9081
 # Fixed in 2.4.49, we build with 2.4.48
 leak:ldap_initialize
@@ -88,3 +105,7 @@ leak:/usr/bin/curl
 # pipeline sets its exit status, so a benign one-time leak surfaces as exit 42
 leak:/usr/bin/tr
 leak:/usr/bin/grep
+
+# The following line is needed to suppress memory leaks coming from standard /usr/bin/grep
+# utility on Ubuntu 22.04 Jammy
+leak:re_compile_internal

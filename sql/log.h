@@ -95,6 +95,10 @@ class Table_ref;
     Values: ON, OFF
     Control slow query logging of queries that do not use indexes.
 
+  --log-query-errors
+    Values: ALL, comma separated list of code errors
+    Control slow query logging of queries failed with the specified error code.
+
   --log-raw
     Values: ON, OFF
     Control query rewrite of passwords to the general log.
@@ -461,7 +465,7 @@ bool is_valid_log_name(const char *name, size_t len);
   @retval
     false             statement does not need to be logged
 */
-bool log_slow_applicable(THD *thd);
+bool log_slow_applicable(THD *thd, int sp_sql_command = -1);
 
 /**
   Unconditionally writes the current statement (or its rewritten version if it

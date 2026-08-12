@@ -1328,7 +1328,6 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_hashicorp.so
 %endif # ssl_default
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_telemetry.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/data_masking.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_okv.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/thread_pool.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/firewall.so
@@ -1414,7 +1413,6 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/keyring_hashicorp.so
 %endif # ssl_default
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_telemetry.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/data_masking.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/keyring_okv.so
 
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/thread_pool.so

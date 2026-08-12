@@ -2580,6 +2580,8 @@ struct st_sp_chistics {
 };
 
 extern const LEX_STRING null_lex_str;
+extern const LEX_CSTRING null_lex_cstr;
+extern const LEX_CSTRING empty_lex_cstr;
 
 struct st_trg_chistics {
   enum enum_trigger_action_time_type action_time;
@@ -2918,6 +2920,18 @@ class Query_tables_list {
     Maps elements of enum_binlog_stmt_unsafe to error codes.
   */
   static const int binlog_stmt_unsafe_errcode[BINLOG_STMT_UNSAFE_COUNT];
+
+  /**
+    Determine if this statement is marked as unsafe with
+    specific type
+
+    @retval false if the statement is not marked as unsafe.
+    @retval true if it is.
+  */
+  inline bool is_stmt_unsafe(
+      enum_binlog_stmt_unsafe unsafe_type) const noexcept {
+    return ((binlog_stmt_flags & (1U << unsafe_type)) != 0);
+  }
 
   /**
     Determine if this statement is marked as unsafe.
@@ -4409,6 +4423,9 @@ struct LEX : public Query_tables_list {
   // Maximum execution time for a statement.
   ulong max_execution_time;
 
+  /// Value of RESOURCE_GROUP hint for a statement (nullptr if no hint).
+  const char *switch_resource_group;
+
   /*
     To flag the current statement as dependent for binary logging
     on explicit_defaults_for_timestamp
@@ -4611,6 +4628,7 @@ struct LEX : public Query_tables_list {
 
   bool set_wild(LEX_STRING);
   void clear_privileges();
+  Item *donor_transaction_id;
 
   bool make_sql_cmd(Parse_tree_root *parse_tree);
 

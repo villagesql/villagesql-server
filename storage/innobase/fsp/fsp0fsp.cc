@@ -203,6 +203,9 @@ fsp_header_t *fsp_get_space_header_block(space_id_t id,
 
   blk = buf_page_get(page_id_t(id, 0), page_size, RW_SX_LATCH, UT_LOCATION_HERE,
                      mtr);
+
+  SRV_CORRUPT_TABLE_CHECK(block, return (0););
+
   header = FSP_HEADER_OFFSET + buf_block_get_frame(blk);
   buf_block_dbg_add_level(blk, SYNC_FSP_PAGE);
 
@@ -587,9 +590,13 @@ exist in the space or if the offset exceeds free limit */
   ut_ad(size == fspace->size_in_header);
 #ifdef UNIV_DEBUG
   /* Exclude Encryption flag as it might have been changed In Memory flags but
-  not on disk. */
-  ut_ad(!((flags ^ fspace->flags) & ~(FSP_FLAGS_MASK_ENCRYPTION)));
-#endif /* UNIV_DEBUG */
+  not on disk, and for non-temporary tables, exclude data directory since
+  it may differ for exported/imported tablespaces. */
+  const auto fsp_flags_exclude =
+      FSP_FLAGS_MASK_ENCRYPTION |
+      (fspace->purpose != FIL_TYPE_TEMPORARY ? FSP_FLAGS_MASK_DATA_DIR : 0);
+  ut_ad((flags & ~fsp_flags_exclude) == (fspace->flags & ~fsp_flags_exclude));
+#endif
 
   if ((offset >= size) || (offset >= limit)) {
     return (nullptr);
@@ -645,6 +652,8 @@ exist in the space or if the offset exceeds the free limit */
 
   block = buf_page_get(page_id_t(space_id, 0), page_size, RW_SX_LATCH,
                        UT_LOCATION_HERE, mtr);
+
+  SRV_CORRUPT_TABLE_CHECK(block, return (nullptr););
 
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -981,6 +990,46 @@ bool fsp_header_rotate_encryption(fil_space_t *space, byte *encrypt_info,
   /* Write encryption info into space header. */
   return (fsp_header_write_encryption(space->id, space->flags, encrypt_info,
                                       false, true, mtr));
+}
+
+/** Enable encryption for already existing tablespace.
+@param[in]	space	tablespace id
+@return true if success */
+bool fsp_enable_encryption(fil_space_t *space) {
+  byte encrypt_info[Encryption::INFO_SIZE];
+
+  memset(encrypt_info, 0, Encryption::INFO_SIZE);
+  if (!Encryption::fill_encryption_info(space->m_encryption_metadata,
+                                        true,
+                                        encrypt_info)) {
+    return (false);
+  }
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+  mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
+
+  mtr_x_lock_space(space, &mtr);
+
+  const page_size_t page_size(space->flags);
+  buf_block_t *block = buf_page_get(page_id_t(space->id, 0), page_size,
+                                    RW_SX_LATCH, UT_LOCATION_HERE, &mtr);
+  buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
+  ut_ad(space->id == page_get_space_id(buf_block_get_frame(block)));
+
+  page_t *page = buf_block_get_frame(block);
+  mlog_write_ulint(FSP_HEADER_OFFSET + FSP_SPACE_FLAGS + page, space->flags,
+                   MLOG_4BYTES, &mtr);
+
+  const auto offset = fsp_header_get_encryption_offset(page_size);
+  ut_ad(offset != 0);
+  ut_ad(offset < UNIV_PAGE_SIZE);
+
+  mlog_write_string(page + offset, encrypt_info, Encryption::INFO_SIZE, &mtr);
+
+  mtr_commit(&mtr);
+
+  return (true);
 }
 
 /** Read the server version number from the DD tablespace header.
@@ -1992,6 +2041,8 @@ static page_no_t fsp_seg_inode_page_find_used(page_t *page,
 static page_no_t fsp_seg_inode_page_find_free(page_t *page, page_no_t i,
                                               const page_size_t &page_size,
                                               mtr_t *mtr) {
+  SRV_CORRUPT_TABLE_CHECK(page, return (FIL_NULL););
+
   for (; i < FSP_SEG_INODES_PER_PAGE(page_size); i++) {
     fseg_inode_t *inode;
 
@@ -2081,6 +2132,8 @@ static fseg_inode_t *fsp_alloc_seg_inode(
 
   page = buf_block_get_frame(block);
 
+  SRV_CORRUPT_TABLE_CHECK(page, return (nullptr););
+
   n = fsp_seg_inode_page_find_free(page, 0, page_size, mtr);
 
   ut_a(n != FIL_NULL);
@@ -2164,6 +2217,8 @@ static fseg_inode_t *fseg_inode_try_get(const fseg_header_t *header,
 
   inode = fut_get_ptr(space, page_size, inode_addr, RW_SX_LATCH, mtr, block);
 
+  SRV_CORRUPT_TABLE_CHECK(inode, return (nullptr););
+
   if (UNIV_UNLIKELY(!mach_read_from_8(inode + FSEG_ID))) {
     inode = nullptr;
   } else {
@@ -2178,7 +2233,7 @@ fseg_inode_t *fseg_inode_get(const fseg_header_t *header, space_id_t space,
                              buf_block_t **block) {
   fseg_inode_t *inode =
       fseg_inode_try_get(header, space, page_size, mtr, block);
-  ut_a(inode);
+  SRV_CORRUPT_TABLE_CHECK(inode, ; /* do nothing */);
   return (inode);
 }
 
@@ -3008,7 +3063,7 @@ buf_block_t *fseg_alloc_free_page_general(fseg_header_t *seg_header,
                                           mtr_t *init_mtr) {
   fseg_inode_t *inode;
   space_id_t space_id;
-  buf_block_t *iblock;
+  buf_block_t *iblock = nullptr;
   buf_block_t *block;
   ulint n_reserved = 0;
 
@@ -3419,6 +3474,11 @@ static void fseg_free_page_low(fseg_inode_t *seg_inode,
   descr =
       xdes_get_descriptor(page_id.space(), page_id.page_no(), page_size, mtr);
 
+  SRV_CORRUPT_TABLE_CHECK(descr, {
+    /* The page may be corrupt. pass it. */
+    return;
+  });
+
   if (xdes_mtr_get_bit(descr, XDES_FREE_BIT,
                        page_id.page_no() % FSP_EXTENT_SIZE, mtr)) {
     fputs("InnoDB: Dump of the tablespace extent descriptor: ", stderr);
@@ -3531,7 +3591,7 @@ static void fseg_free_page_low(fseg_inode_t *seg_inode,
 void fseg_free_page(fseg_header_t *seg_header, space_id_t space_id,
                     page_no_t page, bool ahi, mtr_t *mtr) {
   fseg_inode_t *seg_inode;
-  buf_block_t *iblock;
+  buf_block_t *iblock = nullptr;
 
   fil_space_t *space = fil_space_get(space_id);
 
@@ -3687,6 +3747,11 @@ bool fseg_free_step(
 
   descr = xdes_get_descriptor(space_id, header_page, page_size, mtr);
 
+  SRV_CORRUPT_TABLE_CHECK(descr, {
+    /* The page may be corrupt. pass it. */
+    return (true);
+  });
+
   /* Check that the header resides on a page which has not been
   freed yet */
 
@@ -3763,9 +3828,14 @@ bool fseg_free_step_not_header(
   mtr_x_lock_space(space, mtr);
 
   const page_size_t page_size(space->flags);
-  buf_block_t *iblock;
+  buf_block_t *iblock = nullptr;
 
   inode = fseg_inode_get(header, space_id, page_size, mtr, &iblock);
+  SRV_CORRUPT_TABLE_CHECK(inode, {
+    /* ignore the corruption */
+    return (true);
+  });
+
   buf_block_reset_page_type_on_mismatch(*iblock, FIL_PAGE_INODE, *mtr);
 
   descr = fseg_get_first_extent(inode, space_id, page_size, mtr);
@@ -4182,6 +4252,20 @@ static void mark_all_page_dirty_in_tablespace(THD *thd, space_id_t space_id,
                                        current_page - 1);
     }
     mtr_commit(&mtr);
+
+    /* Flush the just-processed pages to disk before advancing the progress
+    persisted on page 0. buf_LRU_flush_or_remove_pages() drains the space's
+    flush list and fsyncs the file via fil_flush(), so once it returns the
+    pages are durably in their target encryption state. Advancing the progress
+    only after that keeps the persisted progress from ever running ahead of the
+    on-disk state. Otherwise a crash could leave pages below the progress still
+    in the old state on disk (a page's on-disk encryption state is decided at
+    write time in fil_io_set_encryption(), not by the redo-logged rewrite
+    above); the resumed operation would skip them and decrypt_end() would erase
+    the key, leaving unreadable pages that abort the next read with
+    DB_IO_DECRYPT_FAIL (PS-8670). */
+    buf_LRU_flush_or_remove_pages(space_id, BUF_REMOVE_FLUSH_WRITE, nullptr,
+                                  false);
 
     mtr_start(&mtr);
     /* Write (Un)Encryption progress on page 0 */
@@ -4782,18 +4866,26 @@ static bool load_encryption_from_header(fil_space_t *space) {
   ut_ad(space->id == page_get_space_id(buf_block_get_frame(block)));
   page_t *header_page = buf_block_get_frame(block);
 
+  /* If page 0 does not indicate an encrypted tablespace there is no encryption
+  info to load. This is an expected state when a crash interrupted an
+  ALTER ... ENCRYPTION just after writing its DDL log entry but before the new
+  encryption info was persisted on page 0 (or after a decryption finished).
+  Skip decoding in that case: attempting it would only decode the still-default
+  info and log a misleading "found unexpected version" error (the decode is
+  silenced during recovery, but this runs from the post-recovery resume
+  thread). */
+  if (!FSP_FLAGS_GET_ENCRYPTION(fsp_header_get_flags(header_page))) {
+    mtr_commit(&mtr);
+    return false;
+  }
+
   Encryption_key e_key{encryption_key, encryption_iv};
   bool ret = fsp_header_get_encryption_key(space->flags, e_key, header_page);
   mtr_commit(&mtr);
 
   if (!ret) {
-    /* NOTE : In case when crash happened just after DDL Log entry,
-    encryption info won't be loaded even now. Which is fine. In that case
-    flags on page 0 should not indicate tablespace encrypted. */
-    ut_ad(!FSP_FLAGS_GET_ENCRYPTION(fsp_header_get_flags(header_page)));
-    if (FSP_FLAGS_GET_ENCRYPTION(fsp_header_get_flags(header_page))) {
-      return true;
-    }
+    /* Page 0 indicated encryption but the info could not be decoded. */
+    return true;
   } else {
     dberr_t err [[maybe_unused]] = fil_set_encryption(
         space->id, Encryption::AES, encryption_key, encryption_iv);
@@ -4845,14 +4937,17 @@ static void resume_alter_encrypt_tablespace(THD *thd) {
       continue;
     }
 
-    /* If encryption was going on, make sure encryption information is
-    read/loaded from disk. */
-    if (it->get_encryption_type() == Encryption::Progress::ENCRYPTION &&
-        !space->can_encrypt()) {
+    /*
+      Make sure encryption information needed to read pages is loaded. This is
+      required for both encryption and decryption resume: pages after the
+      persisted progress watermark can still be encrypted on disk, and reading
+      them needs the in-memory key.
+    */
+    if (!space->can_encrypt()) {
       if (load_encryption_from_header(space)) {
-        ib::error() << "Encryption information can't be read for tablesapce "
+        ib::error() << "Encryption information can't be read for tablespace "
                     << space->name
-                    << ". Skipping resume encryption operation for it.";
+                    << ". Skipping resume (un)encryption operation for it.";
         continue;
       }
     }
@@ -4948,6 +5043,8 @@ static void resume_alter_encrypt_tablespace(THD *thd) {
 /* Initiate roll-forward of alter encrypt in background thread */
 void fsp_init_resume_alter_encrypt_tablespace() {
   THD *thd = create_internal_thd();
+
+  thd->set_new_thread_id();
 
   resume_alter_encrypt_tablespace(thd);
 

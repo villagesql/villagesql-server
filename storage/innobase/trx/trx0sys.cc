@@ -328,6 +328,40 @@ void trx_sys_update_mysql_binlog_offset(trx_t *trx, mtr_t *mtr) {
   write_binlog_position(file_name, offset, binlog_pos, mtr);
 }
 
+#ifdef UNIV_DEBUG
+void trx_sys_print_mysql_binlog_offset(void) {
+  trx_sysf_t *sys_header;
+  mtr_t mtr;
+  ulint trx_sys_mysql_bin_log_pos_high;
+  ulint trx_sys_mysql_bin_log_pos_low;
+
+  mtr_start(&mtr);
+
+  sys_header = trx_sysf_get(&mtr);
+
+  if (mach_read_from_4(sys_header + TRX_SYS_MYSQL_LOG_INFO +
+                       TRX_SYS_MYSQL_LOG_MAGIC_N_FLD) !=
+      TRX_SYS_MYSQL_LOG_MAGIC_N) {
+    mtr_commit(&mtr);
+
+    return;
+  }
+
+  trx_sys_mysql_bin_log_pos_high = mach_read_from_4(
+      sys_header + TRX_SYS_MYSQL_LOG_INFO + TRX_SYS_MYSQL_LOG_OFFSET_HIGH);
+  trx_sys_mysql_bin_log_pos_low = mach_read_from_4(
+      sys_header + TRX_SYS_MYSQL_LOG_INFO + TRX_SYS_MYSQL_LOG_OFFSET_LOW);
+
+  ib::info(ER_IB_MSG_1197) << "Last MySQL binlog file position "
+                           << trx_sys_mysql_bin_log_pos_high << " "
+                           << trx_sys_mysql_bin_log_pos_low << ", file name "
+                           << sys_header + TRX_SYS_MYSQL_LOG_INFO +
+                                  TRX_SYS_MYSQL_LOG_NAME;
+
+  mtr_commit(&mtr);
+}
+#endif
+
 /** Find the page number in the TRX_SYS page for a given slot/rseg_id
 @param[in]      rseg_id         slot number in the TRX_SYS page rseg array
 @return page number from the TRX_SYS page rseg array */
@@ -618,8 +652,10 @@ void trx_sys_close(void) {
                               << size << " read views open";
   }
 
-  sess_close(trx_dummy_sess);
-  trx_dummy_sess = nullptr;
+  if (trx_dummy_sess) {
+    sess_close(trx_dummy_sess);
+    trx_dummy_sess = nullptr;
+  }
 
   trx_purge_sys_close();
 
@@ -683,6 +719,8 @@ void trx_sys_before_pre_dd_shutdown_validate() {
 }
 
 void trx_sys_after_pre_dd_shutdown_validate() {
+  if (!trx_sys) return;
+
   trx_sys_mutex_enter();
   /** At this point we check the mysql_trx_list again, now we don't expect purge
   thread transactions in the list */
@@ -715,6 +753,7 @@ void trx_sys_after_pre_dd_shutdown_validate() {
 }
 
 void trx_sys_after_background_threads_shutdown_validate() {
+  if (!trx_sys) return;
   trx_sys_after_pre_dd_shutdown_validate();
 
   ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);

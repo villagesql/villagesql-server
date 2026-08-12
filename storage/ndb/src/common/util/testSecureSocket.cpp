@@ -31,12 +31,14 @@
 #include "openssl/x509.h"
 
 #include "debugger/EventLogger.hpp"
+#include "my_compiler.h"
 #include "portlib/NdbGetRUsage.h"
 #include "portlib/NdbMutex.h"
 #include "portlib/NdbSleep.h"
 #include "portlib/NdbTCP.h"
 #include "portlib/NdbTick.h"
 #include "portlib/ndb_sockaddr.h"
+#include "scope_guard.h"
 #include "unittest/mytap/tap.h"
 #include "util/NdbSocket.h"
 #include "util/SocketClient.hpp"
@@ -165,11 +167,17 @@ static struct my_option options[] = {
 
 class EchoSession : public SocketServer::Session {
  public:
+  // GCC 16 emits a false-positive -Wmaybe-uninitialized warning here when
+  // the base SocketServer::Session is initialized with a reference to the
+  // not-yet-initialized m_secure_socket member.
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wmaybe-uninitialized")
   EchoSession(NdbSocket &&s, bool sink, SSL_CTX *ctx)
       : SocketServer::Session(m_secure_socket),
         m_sink(sink),
         m_ssl_ctx(ctx),
         m_secure_socket(std::move(s)) {}
+  MY_COMPILER_DIAGNOSTIC_POP()
   void runSession() override;
 
  private:
@@ -747,6 +755,7 @@ int ReadLineTest::testRecv() {
                         nullptr);
     if (elapsed_time >= m_timeout) break;
     if (r == -1) continue;  // buffer full, no line found
+    if (r == 0) continue;   // timeout
     assert(r > 0);
     assert(m_recv_buffer[r] == '\0');
     assert(m_recv_buffer[r - 1] == '\n');
@@ -956,6 +965,11 @@ int run_client(const char *server_host) {
       new BigWritevTest(plain_socket, "plain big writev"),
       new BigWritevTest(tls_socket, " TLS  big writev")};
 
+  auto tests_guard = create_scope_guard([&tests, &client]() {
+    for (auto *t : tests) delete t;
+    client.disconnect();
+  });
+
   /* Print list of tests and exit */
   if (opt_list) {
     for (int t = 1; t <= (int)tests.size(); t++) {
@@ -980,9 +994,6 @@ int run_client(const char *server_host) {
     if (t >= opt_start_test_number && t <= opt_end_test_number)
       rft = tests[t - 1]->run(t);
 
-  for (ClientTest *t : tests) delete t;
-
-  client.disconnect();
   return rft;
 }
 

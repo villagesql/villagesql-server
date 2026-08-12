@@ -40,6 +40,7 @@
 #include <utility>
 #include <vector> /* std::vector */
 
+#include "boost/algorithm/string.hpp"
 #include "crypt_genhash_impl.h"  // generate_user_salt
 #include "include/compression.h"
 #include "m_string.h"
@@ -1294,6 +1295,7 @@ int security_level(void) {
   return current_sec_level;
 }
 
+external_roles_t g_external_roles;
 Cached_authentication_plugins *g_cached_authentication_plugins = nullptr;
 
 bool disconnect_on_expired_password = true;
@@ -1603,15 +1605,18 @@ static void cannot_proxy_error(THD *thd, const MPVIO_EXT &mpvio,
   a helper function to report an access denied error in all the proper places
 */
 static void login_failed_error(THD *thd, MPVIO_EXT *mpvio, int passwd_used) {
+  thd->diff_denied_connections++;
+  update_global_user_stats(thd, false, time(nullptr),
+                           mpvio->auth_info.user_name,
+                           mpvio->auth_info.host_or_ip);
+
   if (thd->is_error()) {
     LogEvent()
         .prio(INFORMATION_LEVEL)
         .errcode(ER_ABORTING_USER_CONNECTION)
         .subsys(LOG_SUBSYSTEM_TAG)
         .verbatim(thd->get_stmt_da()->message_text());
-  }
-
-  else if (passwd_used == 2) {
+  } else if (passwd_used == 2) {
     my_error(ER_ACCESS_DENIED_NO_PASSWORD_ERROR, MYF(0),
              mpvio->auth_info.user_name, mpvio->auth_info.host_or_ip);
     query_logger.general_log_print(
@@ -3076,6 +3081,8 @@ skip_to_ssl:
       return packet_error;
     }
 
+    context.reset();
+
     DBUG_PRINT("info", ("Reading user information over SSL layer"));
     const int rc = protocol->read_packet();
     pkt_len = protocol->get_packet_length();
@@ -3930,6 +3937,7 @@ static inline bool check_restrictions_for_com_connect_command(THD *thd) {
             .first)) {
     if (!Connection_handler_manager::get_instance()
              ->valid_connection_count()) {  // too many connections
+      sql_print_warning("%s", ER_DEFAULT(ER_CON_COUNT_ERROR));
       my_error(ER_CON_COUNT_ERROR, MYF(0));
       return true;
     }
@@ -4235,6 +4243,13 @@ int acl_authenticate(THD *thd, enum_server_command command) {
                              ER_ACCESS_DENIED_NO_PROXY);
           goto end;
         }
+        if (acl_is_utility_user(acl_proxy_user->user,
+                                acl_proxy_user->host.get_host(), nullptr)) {
+          if (!thd->is_error())
+            login_failed_error(thd, &mpvio, mpvio.auth_info.password_used);
+          goto end;
+        }
+
         acl_user = acl_proxy_user->copy(thd->mem_root);
         *(mpvio.restrictions) = acl_restrictions->find_restrictions(acl_user);
 
@@ -4246,6 +4261,31 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       assert(mpvio.restrictions);
       sctx->set_master_access(acl_user->access, *(mpvio.restrictions));
       assign_priv_user_host(sctx, const_cast<ACL_USER *>(acl_user));
+
+      std::vector<std::string> external_roles;
+      if (strlen(mpvio.auth_info.external_roles) > 0) {
+        boost::algorithm::split(external_roles, mpvio.auth_info.external_roles,
+                                boost::is_any_of(","));
+      }
+
+      if (acl_user->user != nullptr && !external_roles.empty()) {
+        // Adding external roles
+        Acl_cache_lock_guard acl_cache_lock2(thd,
+                                             Acl_cache_lock_mode::WRITE_MODE);
+        acl_cache_lock2.lock();
+        const name_and_host_t u(std::string(acl_user->user),
+                                std::string(acl_user->host.get_host()));
+        if (g_external_roles.find(u) != g_external_roles.end())
+          g_external_roles[u].clear();
+        for (const auto &role : external_roles) {
+          ACL_USER *acl_role = find_acl_user("", role.c_str(), false);
+          if (acl_role != nullptr && acl_role->user != nullptr) {
+            grant_role(acl_role, acl_user, false);
+            const name_and_host_t r(std::string(acl_role->user), "");
+            g_external_roles[u].push_back(r);
+          }
+        }
+      }
       /* Assign default role */
       {
         List_of_auth_id_refs default_roles;
@@ -4280,8 +4320,9 @@ int acl_authenticate(THD *thd, enum_server_command command) {
 
       if (!thd->is_error() &&
           !(sctx->check_access(SUPER_ACL) ||
-            sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN"))
-                .first)) {
+            sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first ||
+            acl_is_utility_user(sctx->user().str, sctx->host().str,
+                                sctx->ip().str))) {
         if (mysqld_offline_mode()) {
           my_error(ER_SERVER_OFFLINE_MODE, MYF(0));
           goto end;
@@ -4724,7 +4765,7 @@ static int sha256_password_authenticate(MYSQL_PLUGIN_VIO *vio,
   uchar *pkt;
   int pkt_len;
   int cipher_length = 0;
-  unsigned char plain_text[MAX_CIPHER_LENGTH + 1];
+  unsigned char plain_text[MAX_CIPHER_LENGTH + 1] = "";
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
   EVP_PKEY *private_key = nullptr;
   EVP_PKEY *public_key = nullptr;

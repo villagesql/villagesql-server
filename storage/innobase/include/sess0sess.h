@@ -69,10 +69,18 @@ typedef std::map<
     table_cache_t;
 
 class innodb_session_t {
+  friend class innodb_session_dict_mutex_guard_t;
+
  public:
   /** Constructor */
   innodb_session_t()
-      : m_trx(), m_open_tables(), m_usr_temp_tblsp(), m_intrinsic_temp_tblsp() {
+      : m_trx(),
+        m_open_tables(),
+        m_dict_mutex_locked(0),
+        m_usr_temp_tblsp(),
+        m_enc_usr_temp_tblsp(),
+        m_intrinsic_temp_tblsp(),
+        m_enc_intrinsic_temp_tblsp() {
     /* Do nothing. */
   }
 
@@ -91,8 +99,16 @@ class innodb_session_t {
       ibt::free_tmp(m_usr_temp_tblsp);
     }
 
+    if (m_enc_usr_temp_tblsp != nullptr) {
+      ibt::free_tmp(m_enc_usr_temp_tblsp);
+    }
+
     if (m_intrinsic_temp_tblsp != nullptr) {
       ibt::free_tmp(m_intrinsic_temp_tblsp);
+    }
+
+    if (m_enc_intrinsic_temp_tblsp != nullptr) {
+      ibt::free_tmp(m_enc_intrinsic_temp_tblsp);
     }
   }
 
@@ -130,6 +146,13 @@ class innodb_session_t {
     return (static_cast<uint>(m_open_tables.size()));
   }
 
+  /** Checks the state of the dict_sys mutex.
+  @return true, if dict_sys mutex is locked */
+  bool is_dict_mutex_locked() const noexcept {
+    return m_dict_mutex_locked != 0;
+  }
+
+  /** @return un-encrypted tablespace of user created temp tables */
   ibt::Tablespace *get_usr_temp_tblsp() {
     if (m_usr_temp_tblsp == nullptr) {
       my_thread_id id = thd_thread_id(m_trx->mysql_thd);
@@ -139,6 +162,17 @@ class innodb_session_t {
     return (m_usr_temp_tblsp);
   }
 
+  /** @return encrypted tablespace of user created temp tables */
+  ibt::Tablespace *get_enc_usr_temp_tblsp() {
+    if (m_enc_usr_temp_tblsp == nullptr) {
+      my_thread_id id = thd_thread_id(m_trx->mysql_thd);
+      m_enc_usr_temp_tblsp = ibt::tbsp_pool->get(id, ibt::TBSP_ENC_USER);
+    }
+
+    return (m_enc_usr_temp_tblsp);
+  }
+
+  /** @return un-encrypted tablespace of optimizer created temp tables */
   ibt::Tablespace *get_instrinsic_temp_tblsp() {
     if (m_intrinsic_temp_tblsp == nullptr) {
       my_thread_id id = thd_thread_id(m_trx->mysql_thd);
@@ -146,6 +180,17 @@ class innodb_session_t {
     }
 
     return (m_intrinsic_temp_tblsp);
+  }
+
+  /** @return encrypted tablespace of optimizer created temp tables */
+  ibt::Tablespace *get_enc_instrinsic_temp_tblsp() {
+    if (m_enc_intrinsic_temp_tblsp == nullptr) {
+      my_thread_id id = thd_thread_id(m_trx->mysql_thd);
+      m_enc_intrinsic_temp_tblsp =
+          ibt::tbsp_pool->get(id, ibt::TBSP_ENC_INTRINSIC);
+    }
+
+    return (m_enc_intrinsic_temp_tblsp);
   }
 
  public:
@@ -158,11 +203,47 @@ class innodb_session_t {
   table_cache_t m_open_tables;
 
  private:
+  /** This counter is used by
+  ha_innobase::upgrade_update_field_with_zip_dict_info() to determine
+  whether it needs to acquire dict_sys mutex or not. Non-zero value
+  means that this mutex has already been locked by one of the purge
+  threads just before calling handler::my_prepare_gcolumn_template() /
+  handler::my_eval_gcolumn_expr_with_open() and therefore it must not
+  be touched to avoid recursive locking. */
+  uint m_dict_mutex_locked;
+
   /** Current session's user temp tablespace */
   ibt::Tablespace *m_usr_temp_tblsp;
-
+  /** Current session's encrypted user temp tablespace */
+  ibt::Tablespace *m_enc_usr_temp_tblsp;
   /** Current session's optimizer temp tablespace */
   ibt::Tablespace *m_intrinsic_temp_tblsp;
+  /** Current session's encrypted optimizer temp tablespace */
+  ibt::Tablespace *m_enc_intrinsic_temp_tblsp;
+};
+
+/** A guard class which sets dict_mutex locked flag for the provided innodb
+    session object in constructor and unset it in destructor. */
+class innodb_session_dict_mutex_guard_t {
+ public:
+  /** Constructor
+      @param[in,out]	session	innodb session object. */
+  innodb_session_dict_mutex_guard_t(innodb_session_t &session)
+      : m_session(session) {
+    ++m_session.m_dict_mutex_locked;
+  }
+
+  /** Destructor */
+  ~innodb_session_dict_mutex_guard_t() { --m_session.m_dict_mutex_locked; }
+
+ private:
+  /* noncopyable */
+  innodb_session_dict_mutex_guard_t(const innodb_session_dict_mutex_guard_t &);
+  innodb_session_dict_mutex_guard_t &operator=(
+      const innodb_session_dict_mutex_guard_t &);
+
+  /** Reference to the innodb session object */
+  innodb_session_t &m_session;
 };
 
 #endif /* sess0sess_h */

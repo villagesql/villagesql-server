@@ -268,6 +268,13 @@ bool dd_table_match(const dict_table_t *table, const Table *dd_table) {
   }
 
   for (const auto dd_index : dd_table->indexes()) {
+    if (table->skip_alter_undo && dd_index->is_disabled()) {
+      /* Only secondary indexes can be disabled with expanded fast index
+      creation */
+      ut_ad(dd_index->type() == dd::Index::IT_MULTIPLE);
+      continue;
+    }
+
     if (dd_table->tablespace_id() == dict_sys_t::s_dd_sys_space_id &&
         dd_index->tablespace_id() != dd_table->tablespace_id()) {
       ib::warn(ER_IB_MSG_167)
@@ -1837,7 +1844,6 @@ dberr_t dd_clear_instant_table(dd::Table &dd_table, bool clear_version) {
   dberr_t err = DB_SUCCESS;
   dd_table.se_private_data().remove(
       dd_table_key_strings[DD_TABLE_INSTANT_COLS]);
-
   std::vector<std::string> cols_to_drop;
 
   for (auto col : *dd_table.columns()) {
@@ -2279,7 +2285,7 @@ bool dd_add_instant_columns(const dd::Table *old_dd_table,
 
     row_mysql_store_col_in_innobase_format(
         &dfield, reinterpret_cast<byte *>(&buf), true, mysql_data, size,
-        dict_table_is_comp(new_dict_table));
+        dict_table_is_comp(new_dict_table), false, nullptr, 0, nullptr);
 
     DD_instant_col_val_coder coder;
     size_t length = 0;
@@ -2636,6 +2642,11 @@ void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
   }
 
   for (auto dd_index : *dd_table->indexes()) {
+    if (table->skip_alter_undo && dd_index->is_disabled()) {
+      ut_ad(dd_index->type() == dd::Index::IT_MULTIPLE);
+      continue;
+    }
+
     /* Don't assume the index orders are the same, even on
     CREATE TABLE. This could be called from TRUNCATE path,
     which would do some adjustment on FULLTEXT index, thus
@@ -3584,15 +3595,19 @@ void get_field_types(const dd::Table *dd_tab, const dict_table_t *m_table,
     col_len = field->key_length();
   }
 
+  const ulint is_compressed =
+      field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED ? DATA_COMPRESSED
+                                                              : 0;
+
   if (!is_virtual) {
     prtype =
         dtype_form_prtype((ulint)field->type() | nulls_allowed | unsigned_type |
-                              binary_type | long_true_varchar,
+                              binary_type | long_true_varchar | is_compressed,
                           charset_no);
   } else {
     prtype = dtype_form_prtype(
         (ulint)field->type() | nulls_allowed | unsigned_type | binary_type |
-            long_true_varchar | is_virtual | is_multi_val,
+            long_true_varchar | is_virtual | is_multi_val | is_compressed,
         charset_no);
   }
 }

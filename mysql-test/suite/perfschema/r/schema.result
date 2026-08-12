@@ -7,6 +7,7 @@ performance_schema	CREATE DATABASE `performance_schema` /*!40100 DEFAULT CHARACT
 use performance_schema;
 show tables;
 Tables_in_performance_schema
+account_failed_login_lock_status
 accounts
 binary_log_transaction_compression_stats
 cond_instances
@@ -66,6 +67,8 @@ innodb_redo_log_files
 keyring_component_status
 keyring_keys
 log_status
+malloc_stats
+malloc_stats_totals
 memory_summary_by_account_by_event_name
 memory_summary_by_host_by_event_name
 memory_summary_by_thread_by_event_name
@@ -130,6 +133,19 @@ accounts	CREATE TABLE `accounts` (
   `TOTAL_CONNECTIONS` bigint NOT NULL,
   `MAX_SESSION_CONTROLLED_MEMORY` bigint unsigned NOT NULL,
   `MAX_SESSION_TOTAL_MEMORY` bigint unsigned NOT NULL,
+  UNIQUE KEY `ACCOUNT` (`USER`,`HOST`)
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table account_failed_login_lock_status;
+Table	Create Table
+account_failed_login_lock_status	CREATE TABLE `account_failed_login_lock_status` (
+  `USER` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `HOST` char(255) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL,
+  `IS_TRACKING_ACTIVE` enum('YES','NO') NOT NULL,
+  `MAX_ATTEMPTS` int unsigned NOT NULL,
+  `PASSWORD_LOCK_DAYS` int NOT NULL,
+  `IS_LOCKED` enum('YES','NO') DEFAULT NULL,
+  `REMAINING_ATTEMPTS` int unsigned DEFAULT NULL,
+  `REMAINING_DAYS_LOCKED` int DEFAULT NULL,
   UNIQUE KEY `ACCOUNT` (`USER`,`HOST`)
 ) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table cond_instances;
@@ -1177,6 +1193,25 @@ hosts	CREATE TABLE `hosts` (
   `MAX_SESSION_CONTROLLED_MEMORY` bigint unsigned NOT NULL,
   `MAX_SESSION_TOTAL_MEMORY` bigint unsigned NOT NULL,
   UNIQUE KEY `HOST` (`HOST`)
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table malloc_stats;
+Table	Create Table
+malloc_stats	CREATE TABLE `malloc_stats` (
+  `TYPE` char(8) NOT NULL,
+  `ALLOCATED` bigint unsigned NOT NULL,
+  `NMALLOC` bigint unsigned NOT NULL,
+  `NDALLOC` bigint unsigned NOT NULL,
+  `NREQUESTS` bigint unsigned NOT NULL
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table malloc_stats_totals;
+Table	Create Table
+malloc_stats_totals	CREATE TABLE `malloc_stats_totals` (
+  `ALLOCATED` bigint unsigned NOT NULL,
+  `ACTIVE` bigint unsigned NOT NULL,
+  `MAPPED` bigint unsigned NOT NULL,
+  `RESIDENT` bigint unsigned NOT NULL,
+  `RETAINED` bigint unsigned NOT NULL,
+  `METADATA` bigint unsigned NOT NULL
 ) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table mutex_instances;
 Table	Create Table

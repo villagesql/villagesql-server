@@ -388,6 +388,13 @@ class ha_innopart : public ha_innobase,
 
   int discard_or_import_tablespace(bool discard, dd::Table *table_def) override;
 
+  /** This function reads zip dict-related info from the base class.
+  @param    thd          Thread handler
+  @param    part_name    Must be always NULL.
+  */
+  virtual void upgrade_update_field_with_zip_dict_info(
+      THD *thd, const char *part_name) override;
+
   /** Compare key and rowid.
   Helper function for sorting records in the priority queue.
   a/b points to table->record[0] rows which must have the
@@ -534,6 +541,8 @@ class ha_innopart : public ha_innobase,
     return (Partition_helper::ph_read_range_next());
   }
 
+  bool has_gap_locks() const noexcept override { return true; }
+
   uint32_t calculate_key_hash_value(Field **field_array) override {
     return (Partition_helper::ph_calculate_key_hash_value(field_array));
   }
@@ -630,6 +639,9 @@ class ha_innopart : public ha_innobase,
     /** saved m_prebuilt->blob_heap */
     mem_heap_t *m_blob_heap;
 
+    /** saved prebuilt->compress_heap  */
+    mem_heap_t *m_compress_heap;
+
     /** saved m_prebuilt->trx_id (which in turn reflects table->def_trx_id) */
     trx_id_t m_trx_id;
 
@@ -681,6 +693,9 @@ class ha_innopart : public ha_innobase,
 
   /** Clear the blob heaps for all partitions */
   void clear_blob_heaps();
+
+  /** Clear the compress heaps for all partitions */
+  void clear_compress_heaps();
 
   /** Reset state of file to after 'open'. This function is called
   after every statement for all tables used by that statement. */

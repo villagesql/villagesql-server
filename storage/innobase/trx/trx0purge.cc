@@ -35,6 +35,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <new>
 #include <unordered_map>
 
+#include <current_thd.h>
+#include <sql_class.h>
 #include "clone0api.h"
 #include "clone0clone.h"
 #include "dict0dd.h"
@@ -54,6 +56,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0thread.h"
 #include "que0que.h"
 #include "read0read.h"
+#include "row0mysql.h"
 #include "row0purge.h"
 #include "row0upd.h"
 #include "srv0mon.h"
@@ -203,8 +206,10 @@ static que_t *trx_purge_graph_build(trx_t *trx, ulint n_purge_threads) {
 
   for (i = 0; i < n_purge_threads; ++i) {
     que_thr_t *thr;
+    row_prebuilt_t *const prebuilt =
+        static_cast<row_prebuilt_t *>(mem_heap_zalloc(heap, sizeof(*prebuilt)));
 
-    thr = que_thr_create(fork, heap, nullptr);
+    thr = que_thr_create(fork, heap, prebuilt);
 
     thr->child = row_purge_node_create(thr, heap);
   }
@@ -267,7 +272,23 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
       UT_NEW_THIS_FILE_PSI_KEY, purge_sys);
 }
 
+/************************************************************************
+Frees the global purge system control structure. */
 void trx_purge_sys_close() {
+  if (!purge_sys) return;
+
+  /* Most probably this is not needed at all, because purge for virtual columns
+   is disabled in 8.0 (see #ifdef INNODB_DD_VC_SUPPORT) */
+  for (que_thr_t *thr = UT_LIST_GET_FIRST(purge_sys->query->thrs);
+       thr != nullptr; thr = UT_LIST_GET_NEXT(thrs, thr)) {
+    if (thr->prebuilt != nullptr && thr->prebuilt->blob_heap != nullptr) {
+      row_mysql_prebuilt_free_blob_heap(thr->prebuilt);
+    }
+
+    /* compress_heap was not used */
+    ut_ad(thr->prebuilt == 0 || thr->prebuilt->compress_heap == 0);
+  }
+
   que_graph_free(purge_sys->query);
 
   ut_a(purge_sys->trx->id == 0);
@@ -1546,6 +1567,19 @@ static bool trx_purge_truncate_marked_undo() {
     return (false);
   }
   ut_ad(mdl_ticket != nullptr);
+
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (current_thd->backup_tables_lock.is_acquired()) {
+    dd_release_mdl(mdl_ticket);
+    ib::info(ER_IB_MSG_UNDO_TRUNCATE_DELAY_BY_LTFB, space_name.c_str());
+    return (false);
+  }
+  if (current_thd->backup_tables_lock.acquire_protection(current_thd,
+                                                         MDL_TRANSACTION, 0)) {
+    dd_release_mdl(mdl_ticket);
+    ib::info(ER_IB_MSG_UNDO_TRUNCATE_DELAY_BY_LTFB, space_name.c_str());
+    return (false);
+  }
 
   /* Re-check for clone after acquiring MDL. The Backup MDL from clone is
   released by clone during shutdown while provisioning. We should not allow

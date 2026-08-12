@@ -158,6 +158,17 @@ class Table_function {
 
   virtual bool walk(Item_processor processor, enum_walk walk, uchar *arg) = 0;
 
+  /**
+    Fix after tables have been moved from one query_block level to the parent
+    level, e.g by semijoin conversion.
+
+    @param parent_query_block  query_block that tables are moved to.
+    @param removed_query_block query_block that tables are moved away from,
+                          child of parent_query_block.
+  */
+  void fix_after_pullout(Query_block *parent_query_block,
+                         Query_block *removed_query_block);
+
  private:
   /**
     Get the list of fields to create the result table
@@ -173,6 +184,8 @@ class Table_function {
   virtual bool do_init_args() = 0;
   friend bool Table_ref::setup_table_function(THD *thd);
   virtual void do_cleanup() {}
+  virtual void do_fix_after_pullout(Query_block *parent_query_block,
+                                    Query_block *removed_query_block) = 0;
 };
 
 /****************************************************************************
@@ -431,6 +444,82 @@ class Table_function_json final : public Table_function {
   List<Create_field> *get_field_list() override;
   bool do_init_args() override;
   void do_cleanup() override;
+  void do_fix_after_pullout(Query_block *parent_query_block,
+                            Query_block *removed_query_block) override;
+};
+
+class Table_function_sequence final : public Table_function {
+  static constexpr const char *value_field_name = "value";
+
+ public:
+  Table_function_sequence(const char *alias, Item *a);
+
+  /**
+    Returns function's name
+  */
+  const char *func_name() const override { return "percona_sequence_table"; }
+  /**
+    Initialize the table function before creation of result table
+
+    @returns
+      true  on error
+      false on success
+  */
+  virtual bool init() override;
+
+  /**
+    Execute table function
+
+    @returns
+      true  on error
+      false on success
+  */
+  virtual bool fill_result_table() override;
+
+  /**
+    Return table_map of tables used by function's data source
+  */
+  virtual table_map used_tables() const override;
+
+  /**
+    PERCONA_SEQUENCE_TABLE printout
+
+    @param str        string to print to
+    @param query_type type of query
+
+    @returns
+      true  on error
+      false on success
+  */
+  virtual bool print(const THD *thd, String *str,
+                     enum_query_type query_type) const override;
+
+  virtual bool walk(Item_processor processor, enum_walk walk,
+                    uchar *arg) override;
+
+ private:
+  /// PERCONA_SEQUENCE_TABLE's alias, for error reporting
+  const char *m_table_alias;
+
+  /// PERCONA_SEQUENCE_TABLE's data source expression
+  Item *m_source;
+
+  Create_field m_value_field;
+  List<Create_field> m_vt_list;
+
+  bool m_upper_bound_precalculated;
+  ulonglong m_precalculated_upper_bound;
+
+  /**
+    Return list of fields to create result table from
+  */
+  virtual List<Create_field> *get_field_list() override;
+  virtual bool do_init_args() override;
+  virtual void do_cleanup() override;
+  void do_fix_after_pullout(Query_block *parent_query_block,
+                            Query_block *removed_query_block) override;
+
+  ulonglong calculate_upper_bound() const;
 };
 
 /**

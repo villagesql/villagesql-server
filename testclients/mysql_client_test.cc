@@ -461,7 +461,6 @@ static void test_prepare_simple() {
 
 #define FILE_PATH_SIZE 4096
 
-char mct_log_file_path[FILE_PATH_SIZE];
 FILE *mct_log_file = nullptr;
 
 static void mct_start_logging(const char *test_case_name) {
@@ -490,15 +489,15 @@ static void mct_start_logging(const char *test_case_name) {
     return;
   }
 
-  snprintf(mct_log_file_path, FILE_PATH_SIZE, "%s/%s.out.log",
-           (const char *)tmp_dir, (const char *)test_case_name);
+  std::stringstream mct_log_file_path;
+  mct_log_file_path << tmp_dir << "/" << test_case_name << ".out.log";
 
-  mct_log_file =
-      my_fopen(mct_log_file_path, O_WRONLY | MY_FOPEN_BINARY, MYF(MY_WME));
+  mct_log_file = my_fopen(mct_log_file_path.str().c_str(),
+                          O_WRONLY | MY_FOPEN_BINARY, MYF(MY_WME));
 
   if (!mct_log_file) {
     printf("Warning: can not open log file (%s): %s. Logging is disabled.\n",
-           (const char *)mct_log_file_path, (const char *)strerror(errno));
+           mct_log_file_path.str().c_str(), (const char *)strerror(errno));
     return;
   }
 }
@@ -4409,6 +4408,8 @@ static void test_field_flags() {
         fprintf(stdout, "\n  MULTIPLE_KEY_FLAG");
       if (field->flags & AUTO_INCREMENT_FLAG)
         fprintf(stdout, "\n  AUTO_INCREMENT_FLAG");
+      if (field->flags & CLUSTERING_FLAG)
+        fprintf(stdout, "\n  CLUSTERING_FLAG");
     }
   }
   mysql_free_result(result);

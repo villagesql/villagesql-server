@@ -62,9 +62,10 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/debug_sync.h"  // debug_sync_update
 #include "sql/handler.h"
-#include "sql/item.h"       // Item
-#include "sql/keycaches.h"  // default_key_cache_base
-#include "sql/mysqld.h"     // max_system_variables
+#include "sql/item.h"           // Item
+#include "sql/keycaches.h"      // default_key_cache_base
+#include "sql/mysqld.h"         // max_system_variables
+#include "sql/rpl_event_ctx.h"  // Rpl_event_ctx
 #include "sql/rpl_gtid.h"
 #include "sql/set_var.h"    // sys_var_chain
 #include "sql/sql_class.h"  // THD
@@ -324,6 +325,10 @@ class Sys_var_integer : public sys_var {
       longlong10_to_str((longlong)var->save_result.ulonglong_value,
                         def_val, 10);
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->set_int(static_cast<longlong>(var->save_result.ulonglong_value),
+                  !SIGNED, system_charset_info);
+  }
 
  private:
   T *max_var_ptr() {
@@ -419,6 +424,10 @@ class Sys_var_alias : public sys_var {
   bool is_non_persistent() override { return m_base_var.is_non_persistent(); }
   void saved_value_to_string(THD *thd, set_var *var, char *def_val) override {
     return m_base_var.saved_value_to_string(thd, var, def_val);
+  }
+  void persist_only_to_string(THD *thd, set_var *var,
+                              String *dest) override {
+    return m_base_var.persist_only_to_string(thd, var, dest);
   }
   bool check_update_type(Item_result type) override {
     return m_base_var.check_update_type(type);
@@ -676,6 +685,13 @@ class Sys_var_enum : public Sys_var_typelib {
   const uchar *global_value_ptr(THD *, std::string_view) override {
     return pointer_cast<const uchar *>(typelib.type_names[global_var(ulong)]);
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const auto *str =
+        typelib.type_names[(longlong)var->save_result.ulonglong_value];
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
+  }
 };
 
 /**
@@ -720,6 +736,13 @@ class Sys_var_bool : public Sys_var_typelib {
   }
   void saved_value_to_string(THD *, set_var *var, char *def_val) override {
     longlong10_to_str((longlong)var->save_result.ulonglong_value, def_val, 10);
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (static_cast<longlong>(var->save_result.ulonglong_value)) {
+      dest->copy("ON", 2, system_charset_info);
+    } else {
+      dest->copy("OFF", 3, system_charset_info);
+    }
   }
 };
 
@@ -837,6 +860,16 @@ class Sys_var_multi_enum : public sys_var {
       if (my_strcasecmp(system_charset_info, aliases[i].alias, text) == 0)
         return aliases[i].number;
     return -1;
+  }
+
+  /**
+    Return the string alias for a given value, or nullptr if the
+    alias isn't found.
+  */
+  const char *find_alias(const uint number) const {
+    for (uint i = 0; aliases[i].alias != nullptr; ++i)
+      if (aliases[i].number == number) return aliases[i].alias;
+    return nullptr;
   }
 
   /**
@@ -979,6 +1012,13 @@ class Sys_var_multi_enum : public sys_var {
     return pointer_cast<const uchar *>(aliases[global_var(ulong)].alias);
   }
 
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const auto *str = find_alias((longlong)var->save_result.ulonglong_value);
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
+  }
+
  private:
   /// The number of allowed numeric values.
   const uint value_count;
@@ -1029,7 +1069,8 @@ class Sys_var_charptr : public sys_var {
   }
 
   void cleanup() override {
-    if (flags & ALLOCATED) my_free(global_var(char *));
+    if ((flags & ALLOCATED) || option.var_type == GET_STR_ALLOC)
+      my_free(global_var(char *));
     flags &= ~ALLOCATED;
   }
 
@@ -1068,6 +1109,10 @@ class Sys_var_charptr : public sys_var {
 
   bool global_update(THD *thd, set_var *var) override;
 
+  // Mark the current global pointer as my_malloc-managed when an ON_UPDATE
+  // hook assigns it directly instead of going through global_update().
+  void mark_global_value_allocated() { flags |= ALLOCATED; }
+
   void session_save_default(THD *, set_var *var) override {
     char *ptr = (char *)(intptr)option.def_value;
     var->save_result.string_value.str = ptr;
@@ -1097,29 +1142,56 @@ class Sys_var_charptr : public sys_var {
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->save_result.string_value.str != nullptr) {
+      dest->copy(var->save_result.string_value.str,
+                 var->save_result.string_value.length, system_charset_info);
+    }
+  }
 };
 
 class Sys_var_version : public Sys_var_charptr {
+ private:
+  char withsuffix[SERVER_VERSION_LENGTH];
+  char *withsuffix_ptr;
+
  public:
   Sys_var_version(const char *name_arg, const char *comment, int flag_args,
                   ptrdiff_t off, size_t size, CMD_LINE getopt,
                   enum charset_enum is_os_charset_arg, const char *def_val)
       : Sys_var_charptr(name_arg, comment, flag_args, off, size, getopt,
-                        is_os_charset_arg, def_val) {}
+                        is_os_charset_arg, def_val),
+        withsuffix_ptr(withsuffix) {}
 
   ~Sys_var_version() override = default;
 
   const uchar *global_value_ptr(THD *thd,
                                 std::string_view keycache_name) override {
-    const uchar *value = Sys_var_charptr::global_value_ptr(thd, keycache_name);
+    const char *const *version_ptr = reinterpret_cast<const char *const *>(
+        Sys_var_charptr::global_value_ptr(thd, keycache_name));
+    if (version_ptr == nullptr || *version_ptr == nullptr) return nullptr;
 
-    DBUG_EXECUTE_IF("alter_server_version_str", {
-      static const char *altered_value = "some-other-version";
-      const uchar *altered_value_ptr = pointer_cast<uchar *>(&altered_value);
-      value = altered_value_ptr;
-    });
+    sys_var *suffix_var = find_static_system_variable("version_suffix");
+    if (suffix_var == nullptr)
+      return reinterpret_cast<const uchar *>(version_ptr);
 
-    return value;
+    const char *const *suffix_ptr = reinterpret_cast<const char *const *>(
+        suffix_var->value_ptr(thd, OPT_GLOBAL, {}));
+    if (suffix_ptr == nullptr || *suffix_ptr == nullptr)
+      return reinterpret_cast<const uchar *>(version_ptr);
+
+    size_t suffix_ptr_len = strlen(*suffix_ptr);
+    size_t version_ptr_len = strlen(*version_ptr);
+
+    /* prepare concatenated @@version variable */
+    if (suffix_ptr_len + version_ptr_len + 1 > SERVER_VERSION_LENGTH)
+      suffix_ptr_len = SERVER_VERSION_LENGTH - version_ptr_len - 1;
+
+    memcpy(withsuffix, *version_ptr, version_ptr_len);
+    memcpy(withsuffix + version_ptr_len, *suffix_ptr, suffix_ptr_len);
+    withsuffix[suffix_ptr_len + version_ptr_len] = 0;
+
+    return reinterpret_cast<uchar *>(&withsuffix_ptr);
   }
 };
 
@@ -1152,6 +1224,9 @@ class Sys_var_proxy_user : public sys_var {
     assert(false);
   }
   bool check_update_type(Item_result) override { return true; }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
+  }
 
  protected:
   const uchar *session_value_ptr(THD *, THD *target_thd,
@@ -1216,6 +1291,38 @@ class Sys_var_lexstring : public Sys_var_charptr {
 };
 
 #ifndef NDEBUG
+
+static inline void trigger_buffer_overrun() {
+  int *mem = static_cast<int *>(my_malloc(127, 0, MYF(0)));
+  // Allocations are usually aligned, so even if 127 bytes were requested,
+  // it's mostly safe to assume there are 128 bytes. Writing into the last
+  // byte is safe for the rest of the code, but still enough to trigger
+  // AddressSanitizer (ASAN) or Valgrind.
+  *static_cast<volatile int *>(mem + (128 / sizeof(*mem)) - 1) = 1;
+  free(mem);
+}
+
+class Debug_shutdown_actions {
+ public:
+  static Debug_shutdown_actions instance;
+
+  bool crash;
+  bool hang;
+  bool buffer_overrun;
+
+ public:
+  Debug_shutdown_actions() : crash(false), hang(false), buffer_overrun(false) {}
+
+  ~Debug_shutdown_actions() {
+    if (crash) DBUG_SUICIDE();
+
+    if (hang)
+      while (1) my_sleep(1000000);
+
+    if (buffer_overrun) trigger_buffer_overrun();
+  }
+};
+
 /**
   @@session.dbug and @@global.dbug variables.
 
@@ -1259,6 +1366,21 @@ class Sys_var_dbug : public sys_var {
       DBUG_POP();
     else
       DBUG_SET(val);
+
+    DBUG_EXECUTE_IF("shutdown_crash",
+                    { Debug_shutdown_actions::instance.crash = true; });
+    DBUG_EXECUTE_IF("shutdown_hang",
+                    { Debug_shutdown_actions::instance.hang = true; });
+    DBUG_EXECUTE_IF("shutdown_buffer_overrun", {
+      Debug_shutdown_actions::instance.buffer_overrun = true;
+    });
+    DBUG_EXECUTE_IF("leak_memory", {
+      my_malloc(127, 0, MYF(0));  // Intentional memory leak.
+    });
+    DBUG_EXECUTE_IF("wait_forever", {
+      while (1) my_sleep(1000000);
+    });
+    DBUG_EXECUTE_IF("buffer_overrun", { trigger_buffer_overrun(); });
     return false;
   }
   bool global_update(THD *, set_var *var) override {
@@ -1288,6 +1410,12 @@ class Sys_var_dbug : public sys_var {
   }
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->save_result.string_value.str != nullptr) {
+      dest->copy(var->save_result.string_value.str,
+                 var->save_result.string_value.length, system_charset_info);
+    }
   }
 };
 #endif
@@ -1441,6 +1569,9 @@ class Sys_var_double : public sys_var {
   }
   void saved_value_to_string(THD *, set_var *var, char *def_val) override {
     my_fcvt(var->save_result.double_value, 6, def_val, nullptr);
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->set_real(var->save_result.double_value, 6, system_charset_info);
   }
 };
 
@@ -1610,6 +1741,13 @@ class Sys_var_flagset : public Sys_var_typelib {
     return (uchar *)flagset_to_string(thd, nullptr, global_var(ulonglong),
                                       typelib.type_names);
   }
+  void persist_only_to_string(THD *thd, set_var *var, String *dest) override {
+    const char *str = flagset_to_string(
+        thd, nullptr, var->save_result.ulonglong_value, typelib.type_names);
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
+  }
 };
 
 /**
@@ -1706,6 +1844,13 @@ class Sys_var_set : public Sys_var_typelib {
   const uchar *global_value_ptr(THD *thd, std::string_view) override {
     return (uchar *)set_to_string(thd, nullptr, global_var(ulonglong),
                                   typelib.type_names);
+  }
+  void persist_only_to_string(THD *thd, set_var *var, String *dest) override {
+    const auto *str = set_to_string(
+        thd, nullptr, var->save_result.ulonglong_value, typelib.type_names);
+    if (str != nullptr) {
+      dest->copy(str, strlen(str), system_charset_info);
+    }
   }
 };
 
@@ -1826,6 +1971,11 @@ class Sys_var_plugin : public sys_var {
                                            plugin_name(plugin)->length)
                             : nullptr);
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->copy(plugin_name(var->save_result.plugin)->str,
+               plugin_name(var->save_result.plugin)->length,
+               system_charset_info);
+  }
 };
 
 #if defined(ENABLED_DEBUG_SYNC)
@@ -1884,6 +2034,9 @@ class Sys_var_debug_sync : public sys_var {
   }
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
+  }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
   }
 };
 #endif /* defined(ENABLED_DEBUG_SYNC) */
@@ -1966,6 +2119,10 @@ class Sys_var_bit : public Sys_var_typelib {
     thd->sys_var_tmp.bool_value = static_cast<bool>(
         reverse_semantics ^ ((global_var(ulonglong) & bitmask) != 0));
     return (uchar *)&thd->sys_var_tmp.bool_value;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    dest->set_int(static_cast<longlong>(var->save_result.ulonglong_value), true,
+                  system_charset_info);
   }
 };
 
@@ -2140,6 +2297,7 @@ class Sys_var_have : public sys_var {
         show_comp_option_name[global_var(enum SHOW_COMP_OPTION)]);
   }
   bool check_update_type(Item_result) override { return false; }
+  void persist_only_to_string(THD *, set_var *, String *) override {}
 };
 
 /**
@@ -2255,6 +2413,15 @@ class Sys_var_struct : public sys_var {
     const Struct_type *ptr = global_var(const Struct_type *);
     return ptr ? Name_getter(ptr).get_name() : nullptr;
   }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const Struct_type *ptr =
+        static_cast<const Struct_type *>(var->save_result.ptr);
+    if (ptr != nullptr) {
+      const char *res_str =
+          pointer_cast<const char *>(Name_getter(ptr).get_name());
+      dest->copy(res_str, strlen(res_str), system_charset_info);
+    }
+  }
 };
 
 /**
@@ -2335,6 +2502,10 @@ class Sys_var_tz : public sys_var {
   }
   bool check_update_type(Item_result type) override {
     return type != STRING_RESULT;
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    const String *str = var->save_result.time_zone->get_name();
+    dest->copy(str->ptr(), str->length(), system_charset_info);
   }
 };
 
@@ -2450,6 +2621,9 @@ class Sys_var_gtid_next : public sys_var {
   const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
+  }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
   }
 };
 
@@ -2583,6 +2757,9 @@ class Sys_var_charptr_func : public sys_var {
   const uchar *global_value_ptr(THD *, std::string_view) override {
     assert(false);
     return nullptr;
+  }
+  void persist_only_to_string(THD *, set_var *, String *) override {
+    assert(false);
   }
 };
 
@@ -2721,6 +2898,13 @@ class Sys_var_gtid_purged : public sys_var {
     assert(false);
     return nullptr;
   }
+
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->save_result.string_value.str != nullptr) {
+      dest->copy(var->save_result.string_value.str,
+                 var->save_result.string_value.length, system_charset_info);
+    }
+  }
 };
 
 class Sys_var_gtid_owned : Sys_var_charptr_func {
@@ -2823,7 +3007,115 @@ class Sys_var_binlog_encryption : public Sys_var_bool {
   bool global_update(THD *thd, set_var *var) override;
 };
 
+class Sys_var_errors_set : public sys_var {
+ public:
+  Sys_var_errors_set(
+      const char *name_arg, const char *comment, int flag_args, ptrdiff_t off,
+      size_t size MY_ATTRIBUTE((unused)), CMD_LINE getopt,
+      enum charset_enum is_os_charset_arg, PolyLock *lock = nullptr,
+      enum binlog_status_enum binlog_status_arg = VARIABLE_NOT_IN_BINLOG,
+      on_check_function on_check_func = nullptr,
+      on_update_function on_update_func = nullptr,
+      const char *substitute = nullptr, int parse_flag = PARSE_NORMAL)
+      : sys_var(&all_sys_vars, name_arg, comment, flag_args, off, getopt.id,
+                getopt.arg_type, SHOW_CHAR, 0, lock, binlog_status_arg,
+                on_check_func, on_update_func, substitute, parse_flag) {
+    is_os_charset = is_os_charset_arg == IN_FS_CHARSET;
+    assert(size == sizeof(Query_errors_set));
+    static_cast<Query_errors_set *>(option.value)->clear_all();
+  }
+
+  void saved_value_to_string(THD *, set_var *var, char *dest) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val_str = var->value->val_str(&str);
+      strncpy(dest, val_str->ptr(), val_str->length());
+    }
+  }
+  void persist_only_to_string(THD *, set_var *var, String *dest) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val_str = var->value->val_str(&str);
+      dest->copy(val_str->ptr(), val_str->length(), system_charset_info);
+    }
+  }
+  bool check_update_type(Item_result type) override {
+    return type != STRING_RESULT;
+  }
+  bool do_check(THD *, set_var *var) override {
+    String str;
+    String *val = var->value->val_str(&str);
+    return !Query_errors_set::check(val);
+  }
+  void session_save_default(THD *thd, set_var *) override {
+    ((Query_errors_set *)session_var_ptr(thd))->clear_all();
+  }
+  void global_save_default(THD *, set_var *) override {
+    ((Query_errors_set *)global_var_ptr())->clear_all();
+  }
+  bool session_update(THD *thd, set_var *var) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val = var->value->val_str(&str);
+      return !((Query_errors_set *)session_var_ptr(thd))->set_codes(val);
+    }
+    return false;
+  }
+  bool global_update(THD *, set_var *var) override {
+    if (var->value != nullptr) {
+      String str;
+      String *val = var->value->val_str(&str);
+      return !((Query_errors_set *)global_var_ptr())->set_codes(val);
+    }
+    return false;
+  }
+  const uchar *session_value_ptr(THD *running_thd, THD *target_thd,
+                                 std::string_view) override {
+    char buf[Query_errors_set::MAX_TEXT_LENGTH + 1];
+    ((Query_errors_set *)session_var_ptr(target_thd))->to_string(buf);
+    char *ret = running_thd->mem_strdup(buf);
+    return (uchar *)ret;
+  }
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
+    char buf[Query_errors_set::MAX_TEXT_LENGTH + 1];
+    ((Query_errors_set *)global_var_ptr())->to_string(buf);
+    char *ret = thd->mem_strdup(buf);
+    return (uchar *)ret;
+  }
+};
+
 void update_parser_max_mem_size();
 void update_optimizer_switch();
+
+extern std::size_t buffered_error_log_size;
+
+/**
+  Class for @@global.replica_enable_event.
+*/
+class Sys_var_replica_enable_event : Sys_var_charptr_func {
+ public:
+  Sys_var_replica_enable_event(const char *name_arg, const char *comment_arg)
+      : Sys_var_charptr_func(name_arg, comment_arg, GLOBAL) {}
+
+  const uchar *global_value_ptr(THD *thd, std::string_view) override {
+    std::string value;
+    Rpl_event_ctx::get_instance().get_events_wild_list(value);
+    return reinterpret_cast<uchar *>(
+        thd->strmake(value.c_str(), value.length()));
+  }
+};
+
+class Sys_var_enum_default_table_encryption : public Sys_var_enum {
+ public:
+  Sys_var_enum_default_table_encryption(
+      const char *name_arg, const char *comment, int flag_args, ptrdiff_t off,
+      size_t size, CMD_LINE getopt, const char *values[], uint def_val,
+      PolyLock *lock, enum binlog_status_enum binlog_status_arg,
+      on_check_function on_check_func = 0)
+      : Sys_var_enum(name_arg, comment, flag_args, off, size, getopt, values,
+                     def_val, lock, binlog_status_arg, on_check_func, nullptr) {
+  }
+  bool global_update(THD *thd, set_var *var) override;
+};
 
 #endif /* SYS_VARS_H_INCLUDED */

@@ -527,6 +527,20 @@ class PT_table_factor_function : public PT_table_reference {
   const LEX_STRING m_table_alias;
 };
 
+class PT_table_sequence_function : public PT_table_reference {
+  typedef PT_table_reference super;
+
+ public:
+  PT_table_sequence_function(const POS &pos, Item *expr, const LEX_CSTRING &table_alias)
+      : super(pos), m_expr(expr), m_table_alias(table_alias) {}
+
+  bool do_contextualize(Parse_context *pc) override;
+
+ private:
+  Item *m_expr;
+  LEX_CSTRING m_table_alias;
+};
+
 class PT_table_reference_list_parens : public PT_table_reference {
   typedef PT_table_reference super;
 
@@ -2132,13 +2146,15 @@ class PT_insert final : public Parse_tree_root {
 class PT_call final : public Parse_tree_root {
   sp_name *proc_name;
   PT_item_list *opt_expr_list;
+  PT_hint_list *m_opt_hints;
 
  public:
-  PT_call(const POS &pos, sp_name *proc_name_arg,
+  PT_call(const POS &pos, PT_hint_list *opt_hints, sp_name *proc_name_arg,
           PT_item_list *opt_expr_list_arg)
       : Parse_tree_root(pos),
         proc_name(proc_name_arg),
-        opt_expr_list(opt_expr_list_arg) {}
+        opt_expr_list(opt_expr_list_arg),
+        m_opt_hints(opt_hints) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 };
@@ -3107,6 +3123,7 @@ class PT_column_def : public PT_table_element {
   @ingroup ptn_create_table
 */
 class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
+  PT_hint_list *m_opt_hints;
   bool is_temporary;
   bool only_if_not_exists;
   Table_ident *table_name;
@@ -3124,6 +3141,7 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
     @param pos                        Position of this clause in the SQL
                                       statement.
     @param mem_root                   MEM_ROOT to use for allocation
+    @param opt_hints                  SET_VAR hints
     @param is_temporary               True if @SQL{CREATE @B{TEMPORARY} %TABLE}
     @param only_if_not_exists  True if @SQL{CREATE %TABLE ... @B{IF NOT EXISTS}}
     @param table_name                 @SQL{CREATE %TABLE ... @B{@<table name@>}}
@@ -3140,13 +3158,14 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
     @param opt_query_expression       NULL or the @SQL{@B{SELECT}} clause.
   */
   PT_create_table_stmt(
-      const POS &pos, MEM_ROOT *mem_root, bool is_temporary,
+      const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints, bool is_temporary,
       bool only_if_not_exists, Table_ident *table_name,
       const Mem_root_array<PT_table_element *> *opt_table_element_list,
       const Mem_root_array<PT_create_table_option *> *opt_create_table_options,
       PT_partition *opt_partitioning, On_duplicate on_duplicate,
       PT_query_expression_body *opt_query_expression)
       : PT_table_ddl_stmt_base(pos, mem_root),
+        m_opt_hints(opt_hints),
         is_temporary(is_temporary),
         only_if_not_exists(only_if_not_exists),
         table_name(table_name),
@@ -3159,15 +3178,17 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
   /**
     @param pos                Position of this clause in the SQL statement.
     @param mem_root           MEM_ROOT to use for allocation
+    @param opt_hints          SET_VAR hints
     @param is_temporary       True if @SQL{CREATE @B{TEMPORARY} %TABLE}.
     @param only_if_not_exists True if @SQL{CREATE %TABLE ... @B{IF NOT EXISTS}}.
     @param table_name         @SQL{CREATE %TABLE ... @B{@<table name@>}}.
     @param opt_like_clause    NULL or the @SQL{@B{LIKE @<table name@>}} clause.
   */
-  PT_create_table_stmt(const POS &pos, MEM_ROOT *mem_root, bool is_temporary,
-                       bool only_if_not_exists, Table_ident *table_name,
-                       Table_ident *opt_like_clause)
+  PT_create_table_stmt(const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints,
+                       bool is_temporary, bool only_if_not_exists,
+                       Table_ident *table_name, Table_ident *opt_like_clause)
       : PT_table_ddl_stmt_base(pos, mem_root),
+        m_opt_hints(opt_hints),
         is_temporary(is_temporary),
         only_if_not_exists(only_if_not_exists),
         table_name(table_name),
@@ -3646,6 +3667,71 @@ class PT_show_databases final : public PT_show_filter_base {
   Sql_cmd_show_databases m_sql_cmd;
 };
 
+/// Parse tree node for SHOW CLIENT_STATISTICS
+
+class PT_show_client_stats final : public PT_show_filter_base {
+ public:
+  PT_show_client_stats(const POS &pos, const LEX_STRING &wild, Item *where)
+      : PT_show_filter_base(pos, SQLCOM_SHOW_CLIENT_STATS, wild, where) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_client_stats m_sql_cmd;
+};
+
+/// Parse tree node for SHOW INDEX_STATISTICS
+
+class PT_show_index_stats final : public PT_show_filter_base {
+ public:
+  PT_show_index_stats(const POS &pos, const LEX_STRING &wild, Item *where)
+      : PT_show_filter_base(pos, SQLCOM_SHOW_INDEX_STATS, wild, where) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_index_stats m_sql_cmd;
+};
+
+/// Parse tree node for SHOW TABLE_STATISTICS
+
+class PT_show_table_stats final : public PT_show_filter_base {
+ public:
+  PT_show_table_stats(const POS &pos, const LEX_STRING &wild, Item *where)
+      : PT_show_filter_base(pos, SQLCOM_SHOW_TABLE_STATS, wild, where) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_table_stats m_sql_cmd;
+};
+
+/// Parse tree node for SHOW THREAD_STATISTICS
+
+class PT_show_thread_stats final : public PT_show_filter_base {
+ public:
+  PT_show_thread_stats(const POS &pos, const LEX_STRING &wild, Item *where)
+      : PT_show_filter_base(pos, SQLCOM_SHOW_THREAD_STATS, wild, where) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_thread_stats m_sql_cmd;
+};
+
+/// Parse tree node for SHOW THREAD_STATISTICS
+
+class PT_show_user_stats final : public PT_show_filter_base {
+ public:
+  PT_show_user_stats(const POS &pos, const LEX_STRING &wild, Item *where)
+      : PT_show_filter_base(pos, SQLCOM_SHOW_USER_STATS, wild, where) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_user_stats m_sql_cmd;
+};
+
 /// Parse tree node for SHOW ENGINE statements
 
 class PT_show_engine_base : public PT_show_base {
@@ -3774,9 +3860,9 @@ class PT_show_function_code final : public PT_show_routine_code {
 class PT_show_grants final : public PT_show_base {
  public:
   PT_show_grants(const POS &pos, const LEX_USER *opt_for_user,
-                 const List<LEX_USER> *opt_using_users)
+                 const List<LEX_USER> *opt_using_users, bool effective_grants)
       : PT_show_base(pos, SQLCOM_SHOW_GRANTS),
-        sql_cmd(opt_for_user, opt_using_users) {
+        sql_cmd(opt_for_user, opt_using_users, effective_grants) {
     assert(opt_using_users == nullptr || opt_for_user != nullptr);
   }
 
@@ -4943,7 +5029,7 @@ class PT_alter_table_import_tablespace final
 class PT_alter_table_stmt final : public PT_table_ddl_stmt_base {
  public:
   explicit PT_alter_table_stmt(
-      const POS &pos, MEM_ROOT *mem_root, Table_ident *table_name,
+      const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints, Table_ident *table_name,
       Mem_root_array<PT_ddl_table_option *> *opt_actions,
       Alter_info::enum_alter_table_algorithm algo,
       Alter_info::enum_alter_table_lock lock,
@@ -4953,7 +5039,8 @@ class PT_alter_table_stmt final : public PT_table_ddl_stmt_base {
         m_opt_actions(opt_actions),
         m_algo(algo),
         m_lock(lock),
-        m_validation(validation) {}
+        m_validation(validation),
+        m_opt_hints(opt_hints) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 
@@ -4965,12 +5052,13 @@ class PT_alter_table_stmt final : public PT_table_ddl_stmt_base {
   const Alter_info::enum_with_validation m_validation;
 
   HA_CREATE_INFO m_create_info;
+  PT_hint_list *m_opt_hints;
 };
 
 class PT_alter_table_standalone_stmt final : public PT_table_ddl_stmt_base {
  public:
   explicit PT_alter_table_standalone_stmt(
-      const POS &pos, MEM_ROOT *mem_root, Table_ident *table_name,
+      const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints, Table_ident *table_name,
       PT_alter_table_standalone_action *action,
       Alter_info::enum_alter_table_algorithm algo,
       Alter_info::enum_alter_table_lock lock,
@@ -4980,7 +5068,8 @@ class PT_alter_table_standalone_stmt final : public PT_table_ddl_stmt_base {
         m_action(action),
         m_algo(algo),
         m_lock(lock),
-        m_validation(validation) {}
+        m_validation(validation),
+        m_opt_hints(opt_hints) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 
@@ -4992,6 +5081,7 @@ class PT_alter_table_standalone_stmt final : public PT_table_ddl_stmt_base {
   const Alter_info::enum_with_validation m_validation;
 
   HA_CREATE_INFO m_create_info;
+  PT_hint_list *m_opt_hints;
 };
 
 class PT_repair_table_stmt final : public PT_table_ddl_stmt_base {
@@ -5018,13 +5108,14 @@ class PT_repair_table_stmt final : public PT_table_ddl_stmt_base {
 
 class PT_analyze_table_stmt final : public PT_table_ddl_stmt_base {
  public:
-  PT_analyze_table_stmt(const POS &pos, MEM_ROOT *mem_root,
+  PT_analyze_table_stmt(const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints,
                         bool no_write_to_binlog,
                         Mem_root_array<Table_ident *> *table_list,
                         Sql_cmd_analyze_table::Histogram_command command,
                         int num_buckets, List<String> *columns, LEX_STRING data,
                         bool auto_update)
       : PT_table_ddl_stmt_base(pos, mem_root),
+        m_opt_hints(opt_hints),
         m_no_write_to_binlog(no_write_to_binlog),
         m_table_list(table_list),
         m_command(command),
@@ -5036,6 +5127,7 @@ class PT_analyze_table_stmt final : public PT_table_ddl_stmt_base {
   Sql_cmd *make_cmd(THD *thd) override;
 
  private:
+  PT_hint_list *m_opt_hints;
   const bool m_no_write_to_binlog;
   const Mem_root_array<Table_ident *> *m_table_list;
   const Sql_cmd_analyze_table::Histogram_command m_command;
@@ -5047,11 +5139,12 @@ class PT_analyze_table_stmt final : public PT_table_ddl_stmt_base {
 
 class PT_check_table_stmt final : public PT_table_ddl_stmt_base {
  public:
-  PT_check_table_stmt(const POS &pos, MEM_ROOT *mem_root,
+  PT_check_table_stmt(const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints,
                       Mem_root_array<Table_ident *> *table_list,
                       decltype(HA_CHECK_OPT::flags) flags,
                       decltype(HA_CHECK_OPT::sql_flags) sql_flags)
       : PT_table_ddl_stmt_base(pos, mem_root),
+        m_opt_hints(opt_hints),
         m_table_list(table_list),
         m_flags(flags),
         m_sql_flags(sql_flags) {}
@@ -5059,6 +5152,7 @@ class PT_check_table_stmt final : public PT_table_ddl_stmt_base {
   Sql_cmd *make_cmd(THD *thd) override;
 
  private:
+  PT_hint_list *m_opt_hints;
   Mem_root_array<Table_ident *> *m_table_list;
   decltype(HA_CHECK_OPT::flags) m_flags;
   decltype(HA_CHECK_OPT::sql_flags) m_sql_flags;
@@ -5066,15 +5160,17 @@ class PT_check_table_stmt final : public PT_table_ddl_stmt_base {
 
 class PT_optimize_table_stmt final : public PT_table_ddl_stmt_base {
  public:
-  PT_optimize_table_stmt(const POS &pos, MEM_ROOT *mem_root,
+  PT_optimize_table_stmt(const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints,
                          bool no_write_to_binlog,
                          Mem_root_array<Table_ident *> *table_list)
       : PT_table_ddl_stmt_base(pos, mem_root),
+        m_opt_hints(opt_hints),
         m_no_write_to_binlog(no_write_to_binlog),
         m_table_list(table_list) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 
+  PT_hint_list *m_opt_hints;
   bool m_no_write_to_binlog;
   Mem_root_array<Table_ident *> *m_table_list;
 };
@@ -5225,13 +5321,16 @@ class PT_load_index_partitions_stmt final : public PT_table_ddl_stmt_base {
 
 class PT_load_index_stmt final : public PT_table_ddl_stmt_base {
  public:
-  PT_load_index_stmt(const POS &pos, MEM_ROOT *mem_root,
+  PT_load_index_stmt(const POS &pos, MEM_ROOT *mem_root, PT_hint_list *opt_hints,
                      Mem_root_array<PT_preload_keys *> *preload_list)
-      : PT_table_ddl_stmt_base(pos, mem_root), m_preload_list(preload_list) {}
+      : PT_table_ddl_stmt_base(pos, mem_root),
+        m_opt_hints(opt_hints),
+        m_preload_list(preload_list) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 
  private:
+  PT_hint_list *m_opt_hints;
   Mem_root_array<PT_preload_keys *> *m_preload_list;
 };
 

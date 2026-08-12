@@ -307,7 +307,7 @@ ER_VERBOSE_REQUIRES_HELP
   eng "--verbose is for use with --help; did you mean --log-error-verbosity?"
 
 ER_POINTLESS_WITHOUT_SLOWLOG
-  eng "options --log-slow-admin-statements, --log-queries-not-using-indexes and --log-slow-replica-statements have no effect if --slow-query-log is not set"
+  eng "options --log-slow-admin-statements, --log-queries-not-using-indexes, --log-slow-replica-statements and --log-query-errors have no effect if --slow-query-log is not set"
 
 ER_WASTEFUL_NET_BUFFER_SIZE
   eng "net_buffer_length (%lu) is set to be larger than max_allowed_packet (%lu). Please rectify."
@@ -340,28 +340,28 @@ ER_CANT_CREATE_SHUTDOWN_THREAD
   eng "Can't create thread to handle shutdown requests (errno= %d)"
 
 ER_SEC_FILE_PRIV_CANT_ACCESS_DIR
-  eng "Failed to access directory for --secure-file-priv. Please make sure that directory exists and is accessible by MySQL Server. Supplied value : %s"
+  eng "Failed to access directory for --%s. Please make sure that directory exists and is accessible by MySQL Server. Supplied value : %s"
 
 ER_SEC_FILE_PRIV_IGNORED
-  eng "Ignoring --secure-file-priv value as server is running with --initialize(-insecure)."
+  eng "Ignoring --%s value as server is running with --initialize(-insecure)."
 
 ER_SEC_FILE_PRIV_EMPTY
-  eng "Insecure configuration for --secure-file-priv: Current value does not restrict location of generated files. Consider setting it to a valid, non-empty path."
+  eng "Insecure configuration for --%s: Current value does not restrict location of generated files. Consider setting it to a valid, non-empty path."
 
 ER_SEC_FILE_PRIV_NULL
-  eng "--secure-file-priv is set to NULL. Operations related to importing and exporting data are disabled"
+  eng "--%s is set to NULL. Operations related to importing and exporting data are disabled"
 
 ER_SEC_FILE_PRIV_DIRECTORY_INSECURE
-  eng "Insecure configuration for --secure-file-priv: %s is accessible through --secure-file-priv. Consider choosing a different directory."
+  eng "Insecure configuration for --%s: %s is accessible through --%s. Consider choosing a different directory."
 
 ER_SEC_FILE_PRIV_CANT_STAT
-  eng "Failed to get stat for directory pointed out by --secure-file-priv"
+  eng "Failed to get stat for directory pointed out by --%s"
 
 ER_SEC_FILE_PRIV_DIRECTORY_PERMISSIONS
-  eng "Insecure configuration for --secure-file-priv: Location is accessible to all OS users. Consider choosing a different directory."
+  eng "Insecure configuration for --%s: Location is accessible to all OS users. Consider choosing a different directory."
 
 ER_SEC_FILE_PRIV_ARGUMENT_TOO_LONG
-  eng "Value for --secure-file-priv is longer than maximum limit of %d"
+  eng "Value for --%s is longer than maximum limit of %d"
 
 ER_CANT_CREATE_NAMED_PIPES_THREAD
   eng "Can't create thread to handle named pipes (errno= %d)"
@@ -2762,7 +2762,7 @@ ER_FAILED_TO_FIND_DL_ENTRY
   eng "Can't find symbol '%-.128s' in library."
 
 ER_FAILED_TO_OPEN_SHARED_LIBRARY
-  eng "Can't open shared library '%-.192s' (errno: %d %-.128s)."
+  eng "Can't open shared library '%-.192s' (errno: %d %-.192s)."
 
 ER_THREAD_PRIORITY_IGNORED
   eng "Thread priority attribute setting in Resource Group SQL shall be ignored due to unsupported platform or insufficient privilege."
@@ -12850,6 +12850,604 @@ ER_AUTH_INITIAL_PLUGIN_OVERRIDE
 #
 # End of 8.1, 8.2, 8.3, 8.4 error messages intended to be written to the server error log.
 #
+
+
+#
+# Start of Percona Server 8.0 server error log messages
+#
+start-error-number 48000
+
+ER_RPL_FAILED_TO_RECREATE_CACHE_FOR_INFO_FILE
+  eng "Failed to recreate a cache on info file (file '%s')"
+
+ER_XB_MSG_0
+  eng "%s"
+
+ER_XB_MSG_1
+  eng "%s"
+
+ER_COMPRESSION_DICTIONARY_NO_CREATE
+  eng "Cannot create compression dictionary tables in %s%sread-only mode."
+
+ER_UNUSED_48004
+  eng "%s"
+
+ER_UNUSED_48005
+  eng "%s"
+
+ER_XB_MSG_4
+  eng "Table %s is encrypted but decryption failed. Seems that the encryption key fetched from keyring is not the correct one. Are you using the correct keyring?"
+
+ER_XB_MSG_5
+  eng "Tablespace id %u in file %s is encrypted but keyring or used key_id %u is not available. Can't continue reading table. Please provide the correct keyring."
+
+ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD
+  eng "Waiting for keyring encryption threads to exit"
+
+ER_UNUSED_48009
+  eng "%s"
+
+# 48010
+ER_XB_MSG_6
+  eng "Key rotation of encrypted session temporary tablespace %s failed"
+
+ER_UNUSED_48011
+  eng "%s"
+
+ER_UPGRADE_KEYRING_UNSUPPORTED_VERSION_ENCRYPTION
+  eng "Upgrade is not possible as there are tables that are KERYING encrypted. KEYRING encryption is still experimental feature in the version you are upgrading from. To upgrade please decrypt the tables encrypted with KEYRING encryption."
+
+ER_REDO_ENCRYPTION_CANT_BE_CHANGED
+  eng "Redo log encryption mode can't be switched without stopping the server and recreating the redo logs. Current mode is %s, requested %s."
+
+ER_REDO_ENCRYPTION_CANT_GENERATE_KEY
+  eng "Redo log key generation failed."
+
+ER_REDO_ENCRYPTION_FAILED
+  eng "Failed to encrypt redo log tablespace."
+
+ER_REDO_ENCRYPTION_CANT_LOAD_KEY_VERSION
+  eng "Failed to load redo key version %u"
+
+ER_REDO_ENCRYPTION_CANT_FETCH_KEY
+  eng "Couldn't fetch newly generated redo key."
+
+ER_REDO_ENCRYPTION_CANT_PARSE_KEY
+  eng "Couldn't parse system key: %s"
+
+ER_REDO_ENCRYPTION_KEYRING
+  eng "Redo log cannot be encrypted if the keyring is not loaded."
+
+# 48020
+ER_UNDO_NO_KEYRING
+  eng "Undo log can't be encrypted if the keyring is not loaded."
+
+ER_REDO_ENCRYPTION_CANT_FETCH_DEFAULT_KEY
+  eng "Couldn't fetch default percona_redo key. Please check if keyring is operational."
+
+ER_REDO_ENCRYPTION_CANT_UPGRADE_OLD_VERSION
+  eng "Upgrade cannot continue as redo is encrypted with old, experimental version of KEYRING encryption. Please perform slow shutdown and remove old redo log files before upgrading."
+
+ER_TABLESPACE_ENCRYPTION_MISSING_KEY_VERSIONS
+  eng "Tablespace id %u in file %s is encrypted. Although server managed to find key_id=%u in keyring to decrypt it, some versions of this key, that are needed to decrypt this space, are missing. Maybe you are using an old keyring? Can't continue reading table. Please provide the correct keyring."
+
+ER_TABLESPACE_ENCRYPTION_CORRUPTED_KEYS
+  eng "Tablespace id %u in file %s is encrypted. Although server managed to find all needed versions of key_id=%u in keyring to decrypt it, the provided versions are either incorrect or corrupted. Can't continue reading table. Please provide the correct keyring."
+
+ER_REDO_TABLESPACE_ENCRYPTION_MISSING_KEY
+  eng "Tablespace id %u is encrypted but keyring or used key_id %u is not available. Can't continue reading table. Please provide the correct keyring."
+
+ER_REDO_TABLESPACE_ENCRYPTION_MISSING_KEY_VERSIONS
+  eng "Tablespace id %u is encrypted. Although server managed to find key_id=%u in keyring to decrypt it, some versions of this key, that are needed to decrypt this space, are missing. Maybe you are using an old keyring? Can't continue reading table. Please provide the correct keyring."
+
+ER_REDO_TABLESPACE_ENCRYPTION_CORRUPTED_KEYS
+  eng "Tablespace id %u is encrypted. Although server managed to find all needed versions of key_id=%u in keyring to decrypt it, the provided versions are either incorrect or corrupted. Can't continue reading table. Please provide the correct keyring."
+
+ER_IB_MSG_UNDO_TRUNCATE_DELAY_BY_LTFB
+  eng "Delaying truncate of undo tablespace %s due to lock tables for backup."
+
+ER_XPLUGIN_SSL_RELOAD_REGISTER_FAILED
+  eng "X plugin failed to register SSL reload callback. ALTER INSTANCE RELOAD TLS will have no effect on the plugin."
+
+# 48030
+ER_UNUSED_48030
+  eng "deprecated ER_IB_MSG_INNODB_PARALLEL_DOUBLEWRITE_PATH"
+
+ER_UNUSED_48031
+  eng "deprecated ER_IB_MSG_INNODB_PARALLEL_DBLWR_ENCRYPT"
+
+ER_KEYRING_COMPONENT_NO_CONFIG
+  eng "Keyring configuration doesn't exists: %s"
+
+ER_KEYRING_COMPONENT_CONFIG_PARSE_FAILED
+  eng "Keyring configuration JSON parse error: %s (%lu)"
+
+ER_PERCONA_UNSUPPORTED_ENGINE 
+  eng "Table '%s.%s' requires the '%s' storage engine, which was removed in Percona Server 8.0.28"
+
+ER_SEC_LOG_PATH_NULL
+  eng "--%s is set to NULL. Dynamic log files can be saved anywhere, possibly overwriting other files."
+
+ER_KEYRING_COMPONENT_KMS_ERROR
+  eng "KMS communication error: %s"
+
+ER_XB_MSG_DOWNGRADING_LOG_FILE
+  eng "Upgrade failed, recreating redo logs with previous version"
+
+ER_RPL_ENABLE_EVENT_ADD_WILD_PATTERN_FAILED
+  eng "Could not add event rule '%s' to --replica-enable-event. %s"
+
+ER_GRP_RPL_FLOW_CONTROL_TIMEOUT
+  eng "Flow control auto evict timeout reached. The server will now leave the group."
+
+# 48040
+ER_PERCONA_IGNORE_TMP_TABLE_SIZE
+  eng "Tmp_table_size is set below 1MiB. The TEMPTABLE engine requires at least 1MiB table size, and will use that value instead. Please increase the limit to silence this warning."
+
+ER_CONN_CONTROL_FAILED_CONN_THRESHOLD_REACHED
+  eng "Failing connection attempts threshold reached for %s"
+
+ER_CONN_CONTROL_FAILED_CONN_THRESHOLD_REACHED_WITH_WARN
+  eng "Failing connection attempts threshold reached for %s, further messages will be suppressed for next %llu seconds"
+
+ER_CONN_CONTROL_DELAYED_CONN_STATS
+  eng "Delayed %llu connection attempts during last %llu seconds"
+
+ER_LOG_NAME_NOT_MATCHING_SEC_LOG_PATH
+  eng "The --secure-file-path is configured, %s must be set accordingly."
+
+ER_SSL_FIPS_MODE_ENABLED
+  eng "A FIPS-approved version of the OpenSSL cryptographic library has been detected in the operating system with a properly configured FIPS module available for loading. Percona Server for MySQL will load this module and run in FIPS mode."
+
+#
+# End of Percona Server 8.0 server error log messages
+#
+
+
+#
+# Start of Audit Log Filter error log messages
+#
+start-error-number 48100
+
+ER_AUDIT_INIT_STARTED
+  eng "Initializing Audit Event Filter..."
+
+ER_AUDIT_DEINIT_DONE
+  eng "Uninstalled Audit Event Filter"
+
+ER_AUDIT_INIT_ENCRYPTION_PASSWORD_FAILURE
+  eng "Failed to check/generate encryption password"
+
+ER_AUDIT_INIT_PRIV_FAILURE
+  eng "Failed to init AUDIT_ABORT_EXEMPT privilege"
+
+ER_AUDIT_INIT_UDF_CREATE_FAILURE
+  eng "Failed to create UDFs handler instance"
+
+ER_AUDIT_INIT_UDF_INIT_FAILURE
+  eng "Failed to init UDFs"
+
+ER_AUDIT_INIT_FILTERS_INIT_FAILURE
+  eng "Failed to create audit rule registry instance"
+
+ER_AUDIT_INIT_FORMATTER_INIT_FAILURE
+  eng "Failed to init record formatter"
+
+ER_AUDIT_INIT_WRITER_INIT_FAILURE
+  eng "Failed to init log writer"
+
+ER_AUDIT_INIT_WRITER_OPEN_FAILURE
+  eng "Cannot open log writer, error: %s"
+
+# 48110
+ER_AUDIT_INIT_READER_INIT_FAILURE
+  eng "Failed to create log reader instance"
+
+ER_AUDIT_INIT_FAILURE
+  eng "Failed to init component"
+
+ER_AUDIT_INIT_DISABLED_WARN
+  eng "Audit Log Filter is disabled. Enable it with audit_log_filter.disable = false."
+
+ER_AUDIT_REMOVE_FILTER_UDF_NAME_CHECK_FAIL
+  eng "Failed to check filtering rule name existence"
+
+ER_AUDIT_REMOVE_FILTER_UDF_REMOVE_USER_FAIL
+  eng "Failed to remove filter '%s' from users table"
+
+ER_AUDIT_REMOVE_FILTER_UDF_REMOVE_FILTER_FAIL
+  eng "Failed to remove filter '%s'"
+
+ER_AUDIT_SET_USER_UDF_NAME_CHECK_FAIL
+  eng "Failed to check filtering rule name existence"
+
+ER_AUDIT_SET_USER_UDF_UNKNOWN_NAME
+  eng "Unknown filtering rule name '%s'"
+
+ER_AUDIT_SET_USER_UDF_FAIL
+  eng "Failed to set '%s' filtering rule for user '%s@%s'"
+
+ER_AUDIT_REMOVE_USER_UDF_FAIL
+  eng "Failed to remove filter for user '%s@%s' from users table"
+
+# 48120
+ER_AUDIT_LOG_ROTATE_UDF_FAIL
+  eng "Log rotation failed: '%s'"
+
+ER_AUDIT_STATUS_VAR_REGISTER_FAILURE
+  eng "Failed to register status variables"
+
+ER_AUDIT_STATUS_VAR_UNREGISTER_FAILURE
+  eng "Failed to unregister status variables"
+
+ER_AUDIT_SYS_VAR_REGISTER_FAILURE
+  eng "Failed to register %s.%s system variable"
+
+ER_AUDIT_SYS_VAR_UNREGISTER_FAILURE
+  eng "Failed to unregister %s.%s system variable"
+
+ER_AUDIT_SYS_VAR_SOURCE_CHECK_FAILURE
+  eng "Failed to check %s variable source"
+
+ER_AUDIT_PARSE_DEFAULT_LOG_ACTION_BAD_LOG_TYPE
+  eng "Wrong JSON filter '%s' format, the 'log' member must be of type bool"
+
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_CLASS_LIST_TYPE
+  eng "Wrong JSON filter '%s' format, 'class' array element must be of object type"
+
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_CLASS_TYPE
+  eng "Wrong JSON filter '%s' format, 'class' must be an object or an array"
+
+ER_AUDIT_PARSE_EVENT_CLASS_NO_CLASS_NAME
+  eng "Wrong JSON filter '%s' format, no name provided for event class"
+
+# 48130
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_ABORT_DEF
+  eng "Wrong JSON filter '%s' format, 'abort' condition should be set for subclass only"
+
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_LOG_TYPE
+  eng "Wrong JSON filter '%s' format, 'log' must be of bool type"
+
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_PRINT_DEF
+  eng "Wrong JSON filter '%s' format, failed to parse 'print' replacement rule"
+
+ER_AUDIT_PARSE_EVENT_CLASS_UNEXPECTED_PRINT_DEF
+  eng "Wrong JSON filter '%s' format, replacement rule not expected for event class"
+
+ER_AUDIT_PARSE_EVENT_CLASS_UNEXPECTED_EVENT_DEF
+  eng "Wrong JSON filter '%s' format, there must be no 'event' in case class names provided as an array of strings"
+
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_EVENT_NAME_FOR_LIST
+  eng "Wrong JSON filter '%s' format, event class name within an array should be of a string type"
+
+ER_AUDIT_PARSE_EVENT_CLASS_BAD_EVENT_NAME_TYPE
+  eng "Wrong JSON filter '%s' format, event class name type must be either string or an array of strings"
+
+ER_AUDIT_PARSE_EVENT_SUBCLASS_BAD_SUBCLASS_LIST_TYPE
+  eng "Wrong JSON filter '%s' format, 'event' array element must be of object type"
+
+ER_AUDIT_PARSE_EVENT_SUBCLASS_BAD_SUBCLASS_TYPE
+  eng "Wrong JSON filter '%s' format, type of 'event' must be either an object or an array of objects"
+
+ER_AUDIT_PARSE_ACTION_BAD_ABORT_TYPE
+  eng "Wrong JSON filter '%s' format, 'abort' must be of bool or object type"
+
+# 48140
+ER_AUDIT_PARSE_ACTION_BAD_REPLACE
+  eng "Event field '%s' cannot be replaced"
+
+ER_AUDIT_PARSE_CONDITION_TYPE_UNEXPECTED_COND_FORMAT
+  eng "Wrong JSON filter '%s' format, there must be only one condition specified for 'log' field"
+
+ER_AUDIT_PARSE_CONDITION_TYPE_BAD_COND_TYPE
+  eng "Wrong JSON filter '%s' format, the 'log' condition name must be of string type"
+
+ER_AUDIT_PARSE_CONDITION_TYPE_UNEXPECTED_COND_NAME
+  eng "Wrong JSON filter '%s' format, unknown 'log' condition name '%s'"
+
+ER_AUDIT_PARSE_CONDITION_BAD_FIELD_TYPE
+  eng "Wrong JSON filter '%s' format, condition definition 'field' must be of object type"
+
+ER_AUDIT_PARSE_CONDITION_BAD_FIELD_NAME_AND_VALUE
+  eng "Wrong JSON filter '%s' format, event field definition 'field' must have field 'name' provided as a string and 'value' as a string or integer"
+
+ER_AUDIT_PARSE_CONDITION_BAD_AND_COND_TYPE
+  eng "Wrong JSON filter '%s' format, condition definition 'and' must be of array type"
+
+ER_AUDIT_PARSE_CONDITION_BAD_AND_COND_FORMAT
+  eng "Wrong JSON filter '%s' format, a member of 'and' condition must be of object type"
+
+ER_AUDIT_PARSE_CONDITION_BAD_AND_COND_OPERANDS
+  eng "Wrong JSON filter '%s' format, there should be at least two fields provided for 'and' condition"
+
+ER_AUDIT_PARSE_CONDITION_BAD_OR_COND_TYPE
+  eng "Wrong JSON filter '%s' format, condition definition 'or' must be of array type"
+
+# 48150
+ER_AUDIT_PARSE_CONDITION_BAD_OR_COND_FORMAT
+  eng "Wrong JSON filter '%s' format, a member of 'or' condition must be of object type"
+
+ER_AUDIT_PARSE_CONDITION_BAD_OR_COND_OPERANDS
+  eng "Wrong JSON filter '%s' format, there should be at least two fields provided for 'or' condition"
+
+ER_AUDIT_PARSE_CONDITION_BAD_NOT_COND_TYPE
+  eng "Wrong JSON filter '%s' format, condition definition 'not' must be of object type"
+
+ER_AUDIT_PARSE_CONDITION_BAD_VARIABLE_COND_TYPE
+  eng "Wrong JSON filter '%s' format, condition definition 'variable' must be of object type"
+
+ER_AUDIT_PARSE_CONDITION_BAD_VARIABLE_NAME_AND_VALUE
+  eng "Wrong JSON filter '%s' format, event field definition 'variable' must have field 'name' and 'value' provided as strings"
+
+ER_AUDIT_PARSE_FUNCTION_NOT_OBJECT
+  eng "Wrong JSON filter '%s' format, 'function' must be of object type"
+
+ER_AUDIT_PARSE_FUNCTION_NO_FUNCTION_NAME
+  eng "Wrong JSON filter '%s' format, missing 'function' name or not a string"
+
+ER_AUDIT_PARSE_FUNCTION_UNKNOWN_FUNCTION_NAME
+  eng "Wrong JSON filter '%s' format, unknown function name '%s'"
+
+ER_AUDIT_PARSE_FUNCTION_BAD_ARGS_FORMAT
+  eng "Wrong JSON filter '%s' format, wrong function args format provided"
+
+ER_AUDIT_PARSE_FUNCTION_BAD_ARGS
+  eng "Wrong JSON filter '%s' format, invalid arguments for '%s' function"
+
+# 48160
+ER_AUDIT_PARSE_NO_SUBCLASS_NAME
+  eng "Wrong JSON filter '%s' format, no name provided for event subclass"
+
+ER_AUDIT_PARSE_BAD_SUBCLASS_NAME_TYPE
+  eng "Wrong JSON filter '%s' format, event subclass name within an array should be of a string type"
+
+ER_AUDIT_PARSE_BAD_SUBCLASS_NAME_LIST_TYPE
+  eng "Wrong JSON filter '%s' format, event subclass name type must be either string or an array of strings"
+
+ER_AUDIT_PARSE_CONDITION_DUPLICATED
+  eng "Wrong JSON filter '%s' format, there must be only one condition provided, 'log' or 'abort'"
+
+ER_AUDIT_PARSE_UNKNOWN_TAG
+  eng "Wrong JSON filter '%s' format, unknown tag '%s'"
+
+ER_AUDIT_PARSE_BAD_ACTION_FORMAT
+  eng "Wrong JSON filter '%s' format, bad format for '%s' action"
+
+ER_AUDIT_PARSE_BAD_REPLACEMENT_RULE
+  eng "Wrong JSON filter '%s' format, failed to parse 'filter' replacement rule"
+
+ER_AUDIT_UDF_INTERNAL_ERROR
+  eng "ERROR: Internal error"
+
+ER_AUDIT_UDF_SET_FILTER_BAD_DEFINITION
+  eng "Wrong argument: incorrect rule definition '%s'"
+
+ER_AUDIT_UDF_SET_FILTER_UNIQUE_CHECK_FAIL
+  eng "Failed to check filtering rule name existence"
+
+# 48170
+ER_AUDIT_UDF_SET_FILTER_NAME_EXISTS
+  eng "Filtering rule with the name '%s' already exists"
+
+ER_AUDIT_UDF_SET_FILTER_FAILURE
+  eng "Failed to insert filtering rule '%s', '%s'"
+
+ER_AUDIT_REPLACE_FIELD_UNEXPECTED_EVENT_TYPE
+  eng "Unexpected event type for replace_field action"
+
+ER_AUDIT_PARSE_CONDITION_TYPE_UNEXPECTED_COND_TYPE
+  eng "Wrong JSON filter '%s' format, the 'log' field must be of bool or object type"
+
+ER_AUDIT_SYS_VAR_INVALID_FILE_DIRECTORY
+  eng "Invalid audit log filter file directory: %s"
+
+ER_AUDIT_PARSE_CONDITION_FIELD_NAME_NOT_FOUND
+  eng "Wrong JSON filter '%s' format, field name '%s' is not valid for event class '%s'"
+
+ER_AUDIT_PARSE_INVALID_EVENT_CLASS_NAME
+  eng "Wrong JSON filter '%s' format, unknown event class name '%s'"
+
+ER_AUDIT_PARSE_INVALID_EVENT_SUBCLASS_NAME
+  eng "Wrong JSON filter '%s' format, unknown event subclass name '%s' for class '%s'"
+
+ER_AUDIT_PARSE_EMPTY_ARRAY
+  eng "Wrong JSON filter '%s' format, empty array is not allowed"
+
+ER_AUDIT_PARSE_UNEXPECTED_KEY
+  eng "Wrong JSON filter '%s' format, unexpected key '%s'"
+
+# 48180
+ER_AUDIT_INIT_EXCEPTION
+  eng "Exception in audit_log_filter_init: %s"
+
+ER_AUDIT_DEINIT_EXCEPTION
+  eng "Exception in audit_log_filter_deinit: %s"
+
+ER_AUDIT_FILTER_RULE_NOT_FOUND
+  eng "Failed to find '%s' filtering rule"
+
+ER_AUDIT_UNSUPPORTED_EVENT_CLASS
+  eng "Unsupported audit event class with ID %i received"
+
+ER_AUDIT_BLOCKED_EVENT
+  eng "Blocked audit event '%s' with class %i"
+
+ER_AUDIT_NOTIFY_EVENT_EXCEPTION
+  eng "Caught exception in notify_event: %s"
+
+ER_AUDIT_SECURITY_CONTEXT_FIELD_FAILURE
+  eng "Can not get %s from security context"
+
+ER_AUDIT_TABLE_OPEN_FAILURE
+  eng "Failed to get an opened %s table"
+
+ER_AUDIT_TABLE_CHECK_FIELDS_FAILURE
+  eng "Failed to check %s table fields"
+
+ER_AUDIT_TABLE_INDEX_SCAN_INIT_FAILURE
+  eng "Failed to init index scan of %s table"
+
+# 48190
+ER_AUDIT_TABLE_INDEX_ACCESS_INIT_FAILURE
+  eng "Failed to init index access of %s table"
+
+ER_AUDIT_TABLE_FULL_SCAN_INIT_FAILURE
+  eng "Failed to init full scan of %s table"
+
+ER_AUDIT_TABLE_FULL_SCAN_END_FAILURE
+  eng "Failed to end full scan of %s table"
+
+ER_AUDIT_TABLE_READ_FIELD_FAILURE
+  eng "Failed to read %s.%s"
+
+ER_AUDIT_TABLE_FILTER_WRONG_FORMAT
+  eng "audit_log_filter name: %s, filter: %s has wrong format, consider using audit_log_filter.event_mode=FULL"
+
+ER_AUDIT_TABLE_FILTER_INSERT_COMMIT_FAILURE
+  eng "Failed to insert filtering rule '%s', '%s', commit failed"
+
+ER_AUDIT_TABLE_FILTER_DELETE_FAILURE
+  eng "Failed to delete filter with the name '%s'"
+
+ER_AUDIT_TABLE_FILTER_DELETE_COMMIT_FAILURE
+  eng "Failed to delete filter with the name '%s', commit failed"
+
+ER_AUDIT_TABLE_USER_DELETE_FILTER_FAILURE
+  eng "Failed to delete record for filter '%s'"
+
+ER_AUDIT_TABLE_USER_DELETE_FILTER_COMMIT_FAILURE
+  eng "Failed to delete record for filter '%s', commit failed"
+
+# 48200
+ER_AUDIT_TABLE_USER_DELETE_USER_FAILURE
+  eng "Failed to delete record for user '%s@%s'"
+
+ER_AUDIT_TABLE_USER_DELETE_USER_COMMIT_FAILURE
+  eng "Failed to delete record for user '%s@%s', commit failed"
+
+ER_AUDIT_TABLE_USER_ASSIGN_FILTER_FAILURE
+  eng "Failed to assign '%s' filtering rule for user '%s@%s'"
+
+ER_AUDIT_TABLE_USER_ASSIGN_FILTER_COMMIT_FAILURE
+  eng "Failed to assign '%s' filtering rule for user '%s@%s', commit failed"
+
+ER_AUDIT_ENCRYPTION_OPTIONS_FETCH_FAILURE
+  eng "Failed to fetch options for id %s"
+
+ER_AUDIT_ENCRYPTION_EMPTY_PASSWORD
+  eng "Empty password for id %s"
+
+ER_AUDIT_ENCRYPTION_BAD_ITERATIONS
+  eng "Bad iterations count for id %s"
+
+ER_AUDIT_ENCRYPTION_EMPTY_SALT
+  eng "Empty salt for id %s"
+
+ER_AUDIT_ENCRYPTION_PBKDF2_ERROR
+  eng "PKCS5_PBKDF2_HMAC error: %s"
+
+ER_AUDIT_ENCRYPTION_CIPHER_INIT_ERROR
+  eng "EVP_CipherInit_ex error: %s"
+
+# 48210
+ER_AUDIT_ENCRYPTION_ENCRYPT_FINAL_ERROR
+  eng "EVP_EncryptFinal error: %s"
+
+ER_AUDIT_ENCRYPTION_ENCRYPT_UPDATE_ERROR
+  eng "EVP_EncryptUpdate error: %s"
+
+ER_AUDIT_ENCRYPTION_INVALID_OPTIONS
+  eng "Invalid options provided for id %s"
+
+ER_AUDIT_ENCRYPTION_DECRYPT_UPDATE_ERROR
+  eng "EVP_DecryptUpdate error: %s"
+
+ER_AUDIT_ENCRYPTION_DECRYPT_FINAL_ERROR
+  eng "EVP_DecryptFinal error: %s"
+
+ER_AUDIT_LOG_FILE_WRITER_CREATE_FAILURE
+  eng "Failed to create Audit Log Filter file writer (%s)"
+
+ER_AUDIT_LOG_DIR_LIST_FAILURE
+  eng "Failed to list audit filter log directory '%s'"
+
+ER_AUDIT_LOG_ROTATE_INTERNAL_FAILURE
+  eng "Failed to rotate audit filter log: %i, %s"
+
+ER_AUDIT_LOG_FILE_INSPECT_FAILURE
+  eng "Failed to inspect audit filter log path '%s': %s"
+
+ER_AUDIT_LOG_FILE_PREPARE_FAILURE
+  eng "Failed to prepare audit filter log '%s' for appending"
+
+# 48220
+ER_AUDIT_LOG_DIR_LISTING_FAILURE
+  eng "Failed to list audit log directory '%s': %s"
+
+ER_AUDIT_LOG_DIR_ITERATE_FAILURE
+  eng "Failed to iterate audit log directory '%s': %s"
+
+ER_AUDIT_LOG_FOOTER_REMOVE_FAILURE
+  eng "Failed to remove footer from audit log '%s': %s"
+
+ER_AUDIT_LOG_FILE_NAME_PARSE_FAILURE
+  eng "Skipping audit log file with unparseable name '%s': %s"
+
+ER_AUDIT_LOG_FILE_NAME_UNKNOWN_PARSE_FAILURE
+  eng "Skipping audit log file with unparseable name '%s'"
+
+ER_AUDIT_LOG_FILE_OPEN_READ_FAILURE
+  eng "Failed to open file for reading: %s"
+
+ER_AUDIT_LOG_FILE_READ_FAILURE
+  eng "Failed to read: %s"
+
+ER_AUDIT_COMPRESSION_INIT_FAILURE
+  eng "Failed to init compressing: %i"
+
+ER_AUDIT_DECOMPRESSION_INIT_FAILURE
+  eng "Failed to init decompressing: %i"
+
+ER_AUDIT_UDF_REGISTER_FAILURE
+  eng "Failed to register %s UDF"
+
+# 48230
+ER_AUDIT_KEYRING_KEY_NOT_FOUND
+  eng "No data found for key '%s'"
+
+ER_AUDIT_KEYRING_OPTIONS_REMOVE_FAILURE
+  eng "Failed to remove options with ID: %s"
+
+ER_AUDIT_PARSE_SKIP_DISABLED_EVENT_CLASS
+  eng "Skipping disabled event class '%s' in filter '%s'"
+
+ER_AUDIT_PARSE_SKIP_DISABLED_EVENT_SUBCLASS
+  eng "Skipping disabled event '%s/%s' in filter '%s'"
+
+#
+# End of Audit Log Filter error log messages
+#
+
+
+#
+# Start of Percona Server 8.4 error log messages
+#
+start-error-number 48300
+
+#
+# End of Percona Server 8.4 error log messages
+#
+
+
+#
+# Start of Percona Server 9.7 error log messages
+#
+start-error-number 48400
+
+#
+# End of Percona Server 9.7 error log messages
+#
+
 
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for

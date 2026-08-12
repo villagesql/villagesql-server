@@ -265,11 +265,13 @@ dict_table_t **Ha_innopart_share::open_table_parts(THD *thd, const TABLE *table,
                                                    const dd::Table *dd_table,
                                                    partition_info *part_info,
                                                    const char *table_name) {
-  /* Code below might read from data-dictionary. In the process
-  it will access SQL-layer's Table Cache and acquire lock associated
-  with it. OTOH when closing tables we lock LOCK_ha_data while holding
-  lock for Table Cache. So to avoid deadlocks we should not be holding
-  LOCK_ha_data while trying to access data-dictionary. */
+  if (dd_table == nullptr) return (nullptr);
+
+    /* Code below might read from data-dictionary. In the process
+    it will access SQL-layer's Table Cache and acquire lock associated
+    with it. OTOH when closing tables we lock LOCK_ha_data while holding
+    lock for Table Cache. So to avoid deadlocks we should not be holding
+    LOCK_ha_data while trying to access data-dictionary. */
 #ifdef UNIV_DEBUG
   if (table->s->tmp_table == NO_TMP_TABLE) {
     mysql_mutex_assert_not_owner(&table->s->LOCK_ha_data);
@@ -829,15 +831,29 @@ int ha_innopart::open(const char *name, int mode [[maybe_unused]],
     to release TABLE_SHARE::LOCK_ha_data temporarily. */
     unlock_shared_ha_data();
 
-    dict_table_t **table_parts = Ha_innopart_share::open_table_parts(
-        thd, table, table_def, m_part_info, norm_name);
+    dict_table_t **table_parts;
+    {
+      dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
-    if (table_parts == nullptr) {
-      ib::warn(ER_IB_MSG_557)
-          << "Cannot open table " << norm_name << TROUBLESHOOTING_MSG;
-      set_my_errno(ENOENT);
+      /* ha_innopart::clone calls handler::clone which calls
+         handler::ha_open(table_def=nullptr)) */
+      if (table_def == nullptr && table_share->tmp_table == NO_TMP_TABLE) {
+        if (thd->dd_client()->acquire(table_share->db.str,
+                                      table_share->table_name.str, &table_def))
+          return HA_ERR_INTERNAL_ERROR;
+        assert(table_def);
+      }
 
-      return HA_ERR_NO_SUCH_TABLE;
+      table_parts = Ha_innopart_share::open_table_parts(thd, table, table_def,
+                                                        m_part_info, norm_name);
+
+      if (table_parts == nullptr) {
+        ib::warn(ER_IB_MSG_557)
+            << "Cannot open table " << norm_name << TROUBLESHOOTING_MSG;
+        set_my_errno(ENOENT);
+
+        return HA_ERR_NO_SUCH_TABLE;
+      }
     }
 
     /* Now acquire TABLE_SHARE::LOCK_ha_data again and assign table
@@ -1125,6 +1141,7 @@ int ha_innopart::open(const char *name, int mode [[maybe_unused]],
     ut_a(part.m_row_read_type == 0);
     ut_a(part.m_trx_id == 0);
     ut_a(part.m_blob_heap == nullptr);
+    ut_a(part.m_compress_heap == nullptr);
     ut_a(0 == part.m_new_rec_lock.count());
   }
 #endif
@@ -1233,6 +1250,7 @@ int ha_innopart::close() {
   }
   clear_ins_upd_nodes();
   clear_blob_heaps();
+  clear_compress_heaps();
 
   /* Prevent double close of m_prebuilt->table. The real one was done
   done in m_part_share->close_table_parts(). */
@@ -1293,12 +1311,18 @@ void ha_innopart::set_partition(uint part_id) {
   /* For unordered scan and table scan, use blob_heap from first
   partition as we need exactly one blob. */
   m_prebuilt->blob_heap = m_parts[m_ordered ? part_id : 0].m_blob_heap;
+  m_prebuilt->compress_heap = m_parts[m_ordered ? part_id : 0].m_compress_heap;
 
 #ifdef UNIV_DEBUG
   if (m_prebuilt->blob_heap != nullptr) {
     DBUG_PRINT("ha_innopart",
                ("validating blob_heap: %p", m_prebuilt->blob_heap));
     mem_heap_validate(m_prebuilt->blob_heap);
+  }
+  if (m_prebuilt->compress_heap != nullptr) {
+    DBUG_PRINT("ha_innopart",
+               ("validating compress_heap: %p", m_prebuilt->compress_heap));
+    mem_heap_validate(m_prebuilt->compress_heap);
   }
 #endif
 
@@ -1338,11 +1362,17 @@ void ha_innopart::update_partition(uint part_id) {
                ("validating blob_heap: %p", m_prebuilt->blob_heap));
     mem_heap_validate(m_prebuilt->blob_heap);
   }
+  if (m_prebuilt->compress_heap != nullptr) {
+    DBUG_PRINT("ha_innopart",
+               ("validating compress_heap: %p", m_prebuilt->compress_heap));
+    mem_heap_validate(m_prebuilt->compress_heap);
+  }
 #endif
 
   /* For unordered scan and table scan, use blob_heap from first
   partition as we need exactly one blob anytime. */
   m_parts[m_ordered ? part_id : 0].m_blob_heap = m_prebuilt->blob_heap;
+  m_parts[m_ordered ? part_id : 0].m_compress_heap = m_prebuilt->compress_heap;
 
   part.m_trx_id = m_prebuilt->trx_id;
   part.m_row_read_type = m_prebuilt->row_read_type;
@@ -2865,6 +2895,27 @@ int ha_innopart::discard_or_import_tablespace(bool discard,
   return error;
 }
 
+/** This function reads zip dict-related info from the base class.
+@param    thd          Thread handler
+@param    part_name    Must be always NULL.
+*/
+void ha_innopart::upgrade_update_field_with_zip_dict_info(
+    THD *thd, const char *part_name) {
+  DBUG_ENTER("ha_innopart::upgrade_update_field_with_zip_dict_info");
+  char partition_name[FN_REFLEN];
+  bool res = get_first_partition_name(
+      thd, this, table_share->normalized_path.str,
+      table_share->partition_info_str, table_share->partition_info_str_len,
+      partition_name);
+  if (res) {
+    ut_ad(0);
+    DBUG_VOID_RETURN;
+  }
+
+  ha_innobase::upgrade_update_field_with_zip_dict_info(thd, partition_name);
+  DBUG_VOID_RETURN;
+}
+
 /** Compare key and rowid.
 Helper function for sorting records in the priority queue.
 a/b points to table->record[0] rows which must have the
@@ -3291,6 +3342,17 @@ ha_rows ha_innopart::records_in_range(uint keynr, key_range *min_key,
   DBUG_PRINT("info", ("keynr %u min %p max %p", keynr, min_key, max_key));
 
   ut_ad(m_prebuilt->trx == thd_to_trx(ha_thd()));
+
+  ha_rows ret = innodb_records_in_range(ha_thd());
+  if (ret) {
+    return ret;
+  }
+  if (table->force_index) {
+    const ha_rows force_rows = innodb_force_index_records_in_range(ha_thd());
+    if (force_rows) {
+      return force_rows;
+    }
+  }
 
   m_prebuilt->trx->op_info = (char *)"estimating records in index range";
 
@@ -4161,12 +4223,34 @@ void ha_innopart::clear_blob_heaps() {
   m_prebuilt->blob_heap = nullptr;
 }
 
+void ha_innopart::clear_compress_heaps() {
+  DBUG_TRACE;
+  if (m_parts == nullptr) {
+    return;
+  }
+
+  for (uint i = 0; i < m_tot_parts; i++) {
+    auto &part{m_parts[i]};
+    if (part.m_compress_heap != nullptr) {
+      DBUG_PRINT("ha_innopart",
+                 ("freeing compress_heap: %p", part.m_compress_heap));
+      mem_heap_free(part.m_compress_heap);
+      part.m_compress_heap = nullptr;
+    }
+  }
+
+  /* Reset compress_heap in m_prebuilt after freeing all heaps. It is set in
+  ha_innopart::set_partition to the compress heap of current partition. */
+  m_prebuilt->compress_heap = nullptr;
+}
+
 /** Reset state of file to after 'open'. This function is called
 after every statement for all tables used by that statement. */
 int ha_innopart::reset() {
   DBUG_TRACE;
 
   clear_blob_heaps();
+  clear_compress_heaps();
 
   return ha_innobase::reset();
 }

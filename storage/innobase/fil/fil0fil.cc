@@ -715,6 +715,9 @@ class Fil_shard {
 
     auto it = m_spaces.find(space_id);
 
+    /* The system tablespace must always be found */
+    ut_ad(it != m_spaces.end() || space_id != 0 || srv_is_being_started);
+
     if (it == m_spaces.end()) {
       return nullptr;
     }
@@ -1080,13 +1083,18 @@ class Fil_shard {
   @param[in,out]        buf             buffer where to store read data or from
   where to write; in AIO this must be appropriately aligned
   @param[in]    message         message for AIO handler if !sync, else ignored
+  @param[in]    should_buffer   whether to buffer an aio request. AIO read
+  ahead uses this. If you plan to use this parameter, make sure you remember to
+  call os_aio_dispatch_read_array_submit() when you're ready to commit all your
+  requests.
   @return error code
   @retval DB_SUCCESS on success
   @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
   [[nodiscard]] dberr_t do_io(const IORequest &type, bool sync,
                               const page_id_t &page_id,
                               const page_size_t &page_size, ulint byte_offset,
-                              ulint len, void *buf, void *message);
+                              ulint len, void *buf, void *message, trx_t *trx,
+                              bool should_buffer);
 
   /** Iterate through all persistent tablespace files (FIL_TYPE_TABLESPACE)
   returning the nodes via callback function f.
@@ -2196,7 +2204,7 @@ i/o on a tablespace which does not exist */
 static dberr_t fil_read(const page_id_t &page_id, const page_size_t &page_size,
                         ulint byte_offset, ulint len, void *buf) {
   return fil_io(IORequestRead, true, page_id, page_size, byte_offset, len, buf,
-                nullptr);
+                nullptr, nullptr, false);
 }
 
 /** Writes data to a space from a buffer. Remember that the possible incomplete
@@ -2217,7 +2225,7 @@ static dberr_t fil_write(const page_id_t &page_id, const page_size_t &page_size,
   ut_ad(!srv_read_only_mode);
 
   return fil_io(IORequestWrite, true, page_id, page_size, byte_offset, len, buf,
-                nullptr);
+                nullptr, nullptr, false);
 }
 
 /** Look up a tablespace. The caller should hold an InnoDB table lock or
@@ -2581,8 +2589,15 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
     space->flags |= flags & FSP_FLAGS_MASK_ENCRYPTION;
   }
 
+  /* Make a copy of space->flags and flags from the page header
+  so that they can be compared. */
+  /* Do not compare the data directory flag, in case this tablespace was
+  relocated. */
+  auto fil_space_flags = space->flags & ~FSP_FLAGS_MASK_DATA_DIR;
+  auto header_fsp_flags = flags & ~FSP_FLAGS_MASK_DATA_DIR;
+
   /* Make sure the space_flags are the same as the header page flags. */
-  if (space->flags != flags) {
+  if (UNIV_UNLIKELY(fil_space_flags != header_fsp_flags)) {
     ib::error(ER_IB_MSG_272, ulong{space->flags}, file->name, ulonglong{flags});
     ut_error;
   }
@@ -3253,6 +3268,7 @@ fil_space_t *Fil_shard::space_create(const char *name, space_id_t space_id,
       }
     }
 
+    ut_ad(space->id != space_id);
     ib::info(ER_IB_MSG_281)
         << "Trying to add tablespace '" << name << "'"
         << " with id " << space_id << " to the tablespace"
@@ -3292,6 +3308,8 @@ fil_space_t *Fil_shard::space_create(const char *name, space_id_t space_id,
   space->encryption_op_in_progress = Encryption::Progress::NONE;
 
   rw_lock_create(fil_space_latch_key, &space->latch, LATCH_ID_FIL_SPACE);
+
+  space->is_corrupt = false;
 
 #ifndef UNIV_HOTBACKUP
   if (space->purpose == FIL_TYPE_TEMPORARY) {
@@ -3900,7 +3918,11 @@ void Fil_system::close_all_files() {
 
 /** Closes all open files. There must not be any pending i/o's or not flushed
 modifications in the files. */
-void fil_close_all_files() { fil_system->close_all_files(); }
+void fil_close_all_files() {
+  if (!fil_system) return;
+
+  fil_system->close_all_files();
+}
 
 /** Iterate through all persistent tablespace files (FIL_TYPE_TABLESPACE)
 returning the nodes via callback function cbk.
@@ -4031,6 +4053,7 @@ for concurrency control.
 @param[in]      space_id        Tablespace ID
 @return the tablespace, or nullptr if missing or being deleted */
 fil_space_t *fil_space_acquire(space_id_t space_id) {
+  if (!fil_system) return nullptr;
   return fil_system->space_acquire(space_id, false);
 }
 
@@ -5616,7 +5639,6 @@ static dberr_t fil_create_tablespace(space_id_t space_id, const char *name,
                                      const char *path, uint32_t flags,
                                      page_no_t size, fil_type_t type) {
   ut_ad(!fsp_is_system_tablespace(space_id));
-  ut_ad(!fsp_is_global_temporary(space_id));
   ut_a(fsp_flags_is_valid(flags));
   ut_a(type == FIL_TYPE_TEMPORARY || type == FIL_TYPE_TABLESPACE);
 
@@ -7550,12 +7572,34 @@ static void fil_report_invalid_page_access_low(page_no_t block_offset,
 @param[in]      space           table space */
 void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
                            fil_space_t *space) {
+  // TODO: now that dblwr doesn't exist in sys , should we encrypt all pages?
+  // Or is there performance impact by encrypting TRX_SYS_PAGE which is
+  // modified on every trx commit (binlog position is written)
+
+  /* Don't encrypt pages of system tablespace upto TRX_SYS_PAGE(including). The
+  doublewrite buffer header is on TRX_SYS_PAGE */
+  if (fsp_is_system_tablespace(space->id) &&
+      page_id.page_no() <= FSP_TRX_SYS_PAGE_NO) {
+    req_type.clear_encrypted();
+    return;
+  }
+
   ut_a(!req_type.is_log());
   /* Don't encrypt page 0 of all tablespaces except redo log
   tablespace, all pages from the system tablespace. */
   if ((space->encryption_op_in_progress == Encryption::Progress::DECRYPTION &&
        req_type.is_write()) ||
       !space->can_encrypt() || page_id.page_no() == 0) {
+    req_type.clear_encrypted();
+    return;
+  }
+
+  /* For writing temporary tablespace, if encryption for temporary
+  tablespace is disabled, skip setting encryption.
+  Encryption of session temporary tablespaces is independent of
+  innodb_temp_tablespace_encrypt */
+  if (fsp_is_global_temporary(space->id) && !srv_tmp_tablespace_encrypt &&
+      req_type.is_write()) {
     req_type.clear_encrypted();
     return;
   }
@@ -7599,8 +7643,8 @@ dberr_t Fil_shard::get_file_for_io(fil_space_t *space, page_no_t *page_no,
 
 dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
                          const page_id_t &page_id, const page_size_t &page_size,
-                         ulint byte_offset, ulint len, void *buf,
-                         void *message) {
+                         ulint byte_offset, ulint len, void *buf, void *message,
+                         trx_t *trx, bool should_buffer) {
   IORequest req_type(type);
 
   ut_ad(req_type.validate());
@@ -7755,6 +7799,24 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
                                    req_type.is_read());
   }
 
+#ifndef UNIV_HOTBACKUP
+  if (UNIV_UNLIKELY(space->is_corrupt && srv_pass_corrupt_table)) {
+    /* should ignore i/o for the crashed space */
+    if (srv_pass_corrupt_table == 1 || req_type.is_write()) {
+      complete_io(file, type);
+      if (aio_mode == AIO_mode::NORMAL) {
+        ut_a(space->purpose == FIL_TYPE_TABLESPACE);
+        buf_page_io_complete(static_cast<buf_page_t *>(message), false);
+      }
+    }
+
+    if (srv_pass_corrupt_table == 1 && req_type.is_read())
+      return (DB_TABLESPACE_DELETED);
+    else if (req_type.is_write())
+      return (DB_SUCCESS);
+  }
+#endif
+
   if (!prepare_file_for_io(file)) {
 #ifndef UNIV_HOTBACKUP
     if (space->is_deleted()) {
@@ -7820,6 +7882,9 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
                                    req_type.is_read());
   }
 
+  /* Set encryption information. */
+  fil_io_set_encryption(req_type, page_id, space);
+
   mutex_release();
 
   DEBUG_SYNC_C("innodb_fil_do_io_prepared_io_with_no_mutex");
@@ -7853,8 +7918,9 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
     req_type.clear_compressed();
   }
 
-  /* Set encryption information. */
-  fil_io_set_encryption(req_type, page_id, space);
+  if (page_size.is_compressed()) {
+    ut_ad(page_size.physical() > 0);
+  }
 
   req_type.block_size(file->block_size);
 
@@ -7873,7 +7939,7 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
   err = os_aio(
       req_type, aio_mode, file->name, file->handle, buf, offset, len,
       fsp_is_system_temporary(page_id.space()) ? false : srv_read_only_mode,
-      file, message);
+      file, message, page_id.space(), trx, should_buffer);
 
 #endif /* UNIV_HOTBACKUP */
 
@@ -7972,9 +8038,31 @@ void fil_aio_wait(ulint segment) {
 }
 #endif /* !UNIV_HOTBACKUP */
 
+/** Read or write data from a file.
+@param[in]	type		IO context
+@param[in]	sync		If true then do synchronous IO
+@param[in]	page_id		page id
+@param[in]	page_size	page size
+@param[in]	byte_offset	remainder of offset in bytes; in aio this
+                                must be divisible by the OS block size
+@param[in]	len		how many bytes to read or write; this must
+                                not cross a file boundary; in AIO this must
+                                be a block size multiple
+@param[in,out]	buf		buffer where to store read data or from where
+                                to write; in AIO this must be appropriately
+                                aligned
+@param[in]	message		message for AIO handler if !sync, else ignored
+@param[in]	should_buffer   whether to buffer an aio request. AIO read
+                                ahead uses this. If you plan to use this
+                                parameter, make sure you remember to call
+                                os_aio_dispatch_read_array_submit() when you're
+                                ready to commit all your requests.
+@return error code
+@retval DB_SUCCESS on success
+@retval DB_TABLESPACE_DELETED if the tablespace does not exist */
 dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
                const page_size_t &page_size, ulint byte_offset, ulint len,
-               void *buf, void *message) {
+               void *buf, void *message, trx_t *trx, bool should_buffer) {
   auto shard = fil_system->shard_by_id(page_id.space());
 #ifdef UNIV_DEBUG
   if (!sync) {
@@ -7985,7 +8073,7 @@ dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
 #endif
 
   auto const err = shard->do_io(type, sync, page_id, page_size, byte_offset,
-                                len, buf, message);
+                                len, buf, message, trx, should_buffer);
 #ifdef UNIV_DEBUG
   /* If the error prevented async io, then we haven't actually transferred the
   io responsibility at all, so we revert the debug io responsibility info. */
@@ -8334,6 +8422,8 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
   ulint write_type = IORequest::WRITE;
 
   for (offset = iter.m_start; offset < iter.m_end; offset += n_bytes) {
+    IORequest read_request(read_type);
+
     byte *io_buffer = iter.m_io_buffer;
 
     block->frame = io_buffer;
@@ -8366,7 +8456,6 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
     ut_ad(!(n_bytes % iter.m_page_size));
 
     dberr_t err;
-    IORequest read_request(read_type);
     read_request.block_size(iter.block_size);
 
     /* For encrypted table, set encryption information. */
@@ -8940,12 +9029,6 @@ dberr_t fil_set_autoextend_size(space_id_t space_id, uint64_t autoextend_size) {
 @return DB_SUCCESS or error code */
 dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
                            byte *key, byte *iv) {
-  ut_ad(space_id != TRX_SYS_SPACE);
-
-  if (fsp_is_system_or_temp_tablespace(space_id)) {
-    return DB_IO_NO_ENCRYPT_TABLESPACE;
-  }
-
   auto shard = fil_system->shard_by_id(space_id);
 
   shard->mutex_acquire();
@@ -8959,6 +9042,8 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
 
   Encryption::set_or_generate(algorithm, key, iv, space->m_encryption_metadata);
 
+  fsp_flags_set_encryption(space->flags);
+
   shard->mutex_release();
 
   return DB_SUCCESS;
@@ -8969,10 +9054,6 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
 @return DB_SUCCESS or error code */
 dberr_t fil_reset_encryption(space_id_t space_id) {
   ut_ad(space_id != TRX_SYS_SPACE);
-
-  if (fsp_is_system_or_temp_tablespace(space_id)) {
-    return DB_IO_NO_ENCRYPT_TABLESPACE;
-  }
 
   auto shard = fil_system->shard_by_id(space_id);
 
@@ -8990,6 +9071,33 @@ dberr_t fil_reset_encryption(space_id_t space_id) {
   shard->mutex_release();
 
   return DB_SUCCESS;
+}
+
+/** Enable encryption of temporary tablespace
+@param[in,out]	space	tablespace object
+@return DB_SUCCESS on success, DB_ERROR on failure */
+dberr_t fil_temp_update_encryption(fil_space_t *space) {
+  /* Make sure the keyring is loaded. */
+  if (!Encryption::check_keyring()) {
+    ib::error() << "Can't set temporary tablespace"
+                << " to be encrypted because"
+                << " keyring plugin is not"
+                << " available.";
+    return (DB_ERROR);
+  }
+
+  if (!fsp_enable_encryption(space)) {
+    ib::error() << "Can't set temporary tablespace"
+                << " to be encrypted.";
+    return (DB_ERROR);
+  }
+
+  const dberr_t err =
+      fil_set_encryption(space->id, Encryption::AES, nullptr, nullptr);
+
+  ut_ad(err == DB_SUCCESS);
+
+  return (err);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -9014,7 +9122,6 @@ bool Fil_shard::needs_encryption_rotate(fil_space_t *space) {
       "ib_encryption_rotate_skip",
       ib::info(ER_IB_MSG_INJECT_FAILURE, "ib_encryption_rotate_skip");
       return false;);
-
   return true;
 }
 
@@ -9034,6 +9141,13 @@ size_t Fil_shard::encryption_rotate(size_t *rotate_count) {
     if (!needs_encryption_rotate(space)) {
       continue;
     }
+
+    /* Skip the temporary tablespace when it's in default key status,
+    since it's the first server startup after bootstrap, and the
+    server uuid is not ready yet. */
+    if (fsp_is_system_temporary(space->id) &&
+        Encryption::get_master_key_id() == Encryption::DEFAULT_MASTER_KEY_ID)
+      continue;
 
     spaces2rotate.push_back(space);
   }
@@ -9137,6 +9251,7 @@ size_t fil_encryption_rotate() { return (fil_system->encryption_rotate()); }
 void fil_encryption_reencrypt(std::vector<space_id_t> &sid_vector) {
   fil_system->encryption_reencrypt(sid_vector);
 }
+
 #endif /* !UNIV_HOTBACKUP */
 
 /** Constructor
@@ -9890,6 +10005,8 @@ static bool fil_ibd_same_as_default_path(const char *space_name,
   /* Build the implicit default path for this table name under @@datadir. */
   char *default_path = Fil_path::make("", space_name, IBD);
 
+  auto guard = create_scope_guard([&]() { ut::free(default_path); });
+
   if (default_path == nullptr || default_path[0] == '\0') {
     return false;
   }
@@ -9913,7 +10030,6 @@ static bool fil_ibd_same_as_default_path(const char *space_name,
 
   df_found.close();
   df_default.close();
-  ut::free(default_path);
 
   return same;
 }
@@ -10399,6 +10515,16 @@ const byte *fil_tablespace_redo_create(const byte *ptr, const byte *end,
 
 #else  /* !UNIV_HOTBACKUP */
 
+  /* The first condition is true during normal server operation, the
+  second one during server startup after
+  recv_recovery_from_checkpoint_start has completed. */
+  if (!recv_recovery_is_on() || recv_lsn_checks_on) {
+    /* We are being called from online log tracking, file name
+    processing is a no-op, and specifically do not cause any DD
+    changes. */
+    return (ptr);
+  }
+
   const auto result =
       fil_system->get_scanned_filename_by_space_id(page_id.space());
 
@@ -10687,6 +10813,16 @@ const byte *fil_tablespace_redo_delete(const byte *ptr, const byte *end,
   meb_tablespace_redo_delete(page_id, name.c_str());
 
 #else  /* !UNIV_HOTBACKUP */
+
+  /* The first condition is true during normal server operation, the
+  second one during server startup after
+  recv_recovery_from_checkpoint_start has completed. */
+  if (!recv_recovery_is_on() || recv_lsn_checks_on) {
+    /* We are being called from online log tracking, file name
+    processing is a no-op, and specifically do not cause any DD
+    changes. */
+    return (ptr);
+  }
 
   const auto result =
       fil_system->get_scanned_filename_by_space_id(page_id.space());
@@ -11885,6 +12021,21 @@ void fil_space_t::bump_version() {
 
   ++m_version;
 }
+
+/** Mark space as corrupt
+    @param space_id	space id */
+void fil_space_set_corrupt(space_id_t space_id) {
+  auto *const shard = fil_system->shard_by_id(space_id);
+
+  shard->mutex_acquire();
+
+  auto *const space = shard->get_space_by_id(space_id);
+
+  if (space) space->is_corrupt = true;
+
+  shard->mutex_release();
+}
+
 #endif /* !UNIV_HOTBACKUP */
 
 dberr_t fil_prepare_file_for_io(space_id_t space_id, page_no_t &page_no,

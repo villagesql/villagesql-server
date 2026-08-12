@@ -562,7 +562,7 @@ bool PT_hint_sys_var::do_contextualize(Parse_context *pc) {
     return false;
   }
 
-  if (!var_tracker.is_hint_updateable()) {
+  if (!var_tracker.is_hint_updateable(pc->thd)) {
     String str;
     str.append(STRING_WITH_LEN("'"));
     str.append(sys_var_name.str, sys_var_name.length);
@@ -599,9 +599,12 @@ bool PT_hint_resource_group::do_contextualize(Parse_context *pc) {
     return false;
   }
 
-  memcpy(pc->thd->resource_group_ctx()->m_switch_resource_group_str,
-         m_resource_group_name.str, m_resource_group_name.length);
-  pc->thd->resource_group_ctx()
-      ->m_switch_resource_group_str[m_resource_group_name.length] = '\0';
+  /*
+    In case of duplicate hints the last one takes precedence.
+    Extra safety - treat empty group name as no hint.
+  */
+  pc->thd->lex->switch_resource_group =
+      m_resource_group_name.length ? m_resource_group_name.str : nullptr;
+
   return false;
 }

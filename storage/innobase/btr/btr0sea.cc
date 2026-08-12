@@ -312,6 +312,8 @@ static void btr_search_await_no_reference(dict_table_t *table) {
 }
 
 bool btr_search_disable() {
+  if (!dict_sys) return false;
+
   mutex_enter(&btr_search_enabled_mutex);
   if (!btr_search_enabled) {
     mutex_exit(&btr_search_enabled_mutex);
@@ -652,6 +654,8 @@ void btr_search_info_update_slow(btr_cur_t *cursor) {
 
   const auto block = btr_cur_get_block(cursor);
 
+  SRV_CORRUPT_TABLE_CHECK(block, return;);
+
   /* NOTE that the following two function calls do NOT protect
   info or block->ahi with any semaphore, to save CPU time!
   We cannot assume the fields are consistent when we return from
@@ -986,10 +990,6 @@ bool btr_search_guess_on_hash(const dtuple_t *tuple, ulint mode,
   info->n_hash_succ++;
   btr_search_n_succ++;
 #endif
-  if (!has_search_latch && buf_page_peek_if_too_old(&block->page)) {
-    buf_page_make_young(&block->page);
-  }
-
   /* Increment the page get statistics though we did not really
   fix the page: for user info only */
 
@@ -1261,6 +1261,11 @@ void btr_search_drop_page_hash_when_freed(const page_id_t &page_id,
   mtr_t mtr;
 
   ut_d(export_vars.innodb_ahi_drop_lookups++);
+
+  /* Sleep 10ms */
+  DBUG_EXECUTE_IF(
+      "simulate_long_ahi",
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));;);
 
   mtr_start(&mtr);
 

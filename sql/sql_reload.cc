@@ -53,6 +53,7 @@
 #include "sql/sql_class.h"    // THD
 #include "sql/sql_connect.h"  // reset_mqh
 #include "sql/sql_const.h"
+#include "sql/sql_profile.h"
 #include "sql/sql_servers.h"  // servers_reload
 #include "sql/system_variables.h"
 #include "sql/table.h"
@@ -248,12 +249,14 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
     }
   }
 
-  assert(!thd || thd->locked_tables_mode || !thd->mdl_context.has_locks() ||
+  assert(!thd || thd->locked_tables_mode ||
+         !thd->mdl_context.has_locks() ||
          !thd->handler_tables_hash.empty() ||
          thd->mdl_context.has_locks(MDL_key::USER_LEVEL_LOCK) ||
          thd->mdl_context.has_locks(MDL_key::LOCKING_SERVICE) ||
          thd->mdl_context.has_locks(MDL_key::BACKUP_LOCK) ||
-         thd->global_read_lock.is_acquired());
+         thd->global_read_lock.is_acquired() ||
+         thd->backup_tables_lock.is_acquired());
 
   /*
     Note that if REFRESH_READ_LOCK bit is set then REFRESH_TABLES is set too
@@ -361,6 +364,12 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
     }
   }
   if (options & REFRESH_OPTIMIZER_COSTS) reload_optimizer_cost_constants();
+
+  if (options & DUMP_MEMORY_PROFILE) {
+    tmp_write_to_binlog = 0;
+    if (opt_jemalloc_profiling_enabled) jemalloc_profiling_dump();
+  }
+
   if (options & REFRESH_REPLICA) {
     tmp_write_to_binlog = 0;
     if (reset_slave_cmd(thd)) {
@@ -370,7 +379,63 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
   }
   if (options & REFRESH_USER_RESOURCES)
     reset_mqh(thd, nullptr, false); /* purecov: inspected */
-  if (*write_to_binlog != -1) *write_to_binlog = tmp_write_to_binlog;
+  if (options & REFRESH_TABLE_STATS) {
+    mysql_mutex_lock(&LOCK_global_table_stats);
+    free_global_table_stats();
+    init_global_table_stats();
+    mysql_mutex_unlock(&LOCK_global_table_stats);
+  }
+  if (options & REFRESH_INDEX_STATS) {
+    mysql_mutex_lock(&LOCK_global_index_stats);
+    free_global_index_stats();
+    init_global_index_stats();
+    mysql_mutex_unlock(&LOCK_global_index_stats);
+  }
+  if (options &
+      (REFRESH_USER_STATS | REFRESH_CLIENT_STATS | REFRESH_THREAD_STATS)) {
+    mysql_mutex_lock(&LOCK_global_user_client_stats);
+    if (options & REFRESH_USER_STATS) {
+      free_global_user_stats();
+      init_global_user_stats();
+    }
+    if (options & REFRESH_CLIENT_STATS) {
+      free_global_client_stats();
+      init_global_client_stats();
+    }
+    if (options & REFRESH_THREAD_STATS) {
+      free_global_thread_stats();
+      init_global_thread_stats();
+    }
+    mysql_mutex_unlock(&LOCK_global_user_client_stats);
+  }
+  if (*write_to_binlog != -1) {
+    if (thd == nullptr || thd->security_context() == nullptr) {
+      *write_to_binlog =
+          opt_binlog_skip_flush_commands ? 0 : tmp_write_to_binlog;
+    } else if (thd->security_context()->check_access(SUPER_ACL)) {
+      /*
+        For users with 'SUPER' privilege 'FLUSH XXX' statements must not be
+        binlogged if 'super_read_only' is set to 'ON'.
+      */
+      if (opt_super_readonly)
+        *write_to_binlog = 0;
+      else
+        *write_to_binlog =
+            opt_binlog_skip_flush_commands ? 0 : tmp_write_to_binlog;
+    } else {
+      /*
+        For users without 'SUPER' privilege 'FLUSH XXX' statements must not be
+        binlogged if 'read_only' or 'super_read_only' is set to 'ON'.
+        Checking only 'opt_readonly' here as in 'super_read_only' mode this
+        variable is implicitly set to 'true'.
+      */
+      if (opt_readonly)
+        *write_to_binlog = 0;
+      else
+        *write_to_binlog =
+            opt_binlog_skip_flush_commands ? 0 : tmp_write_to_binlog;
+    }
+  }
   /*
     If the query was killed then this function must fail.
   */

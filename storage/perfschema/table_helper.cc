@@ -737,13 +737,14 @@ int PFS_object_row::make_row(PFS_program *pfs) {
 }
 
 int PFS_column_row::make_row(const MDL_key *mdl) {
-  static_assert(MDL_key::NAMESPACE_END == 19,
+  static_assert(MDL_key::NAMESPACE_END == 20,
                 "Adjust performance schema when changing enum_mdl_namespace");
 
   bool with_schema = false;
   bool with_object = false;
   bool with_column = false;
 
+  m_object_type = NO_OBJECT_TYPE;
   m_schema_name_length = 0;
   m_object_name_length = 0;
   m_column_name_length = 0;
@@ -759,6 +760,9 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
     case MDL_key::EXTENSION:
       m_object_type = OBJECT_TYPE_EXTENSION;
       with_object = true;
+      break;
+    case MDL_key::BACKUP_TABLES:
+      m_object_type = OBJECT_TYPE_BACKUP_TABLES;
       break;
     case MDL_key::SCHEMA:
       m_object_type = OBJECT_TYPE_SCHEMA;
@@ -2115,6 +2119,11 @@ bool PFS_key_user::match(const PFS_setup_actor *pfs) {
                   pfs->m_key.m_user_name.length());
 }
 
+bool PFS_key_user::match(const PFS_user_name *pfs) {
+  const bool record_null = (pfs->length() == 0);
+  return do_match(record_null, pfs->ptr(), pfs->length());
+}
+
 bool PFS_key_host::match(const PFS_thread *pfs) {
   const bool record_null = (pfs->m_host_name.length() == 0);
   return do_match(record_null, pfs->m_host_name.ptr(),
@@ -2142,6 +2151,11 @@ bool PFS_key_host::match(const PFS_setup_actor *pfs) {
 bool PFS_key_host::match(const char *hostname, size_t hostname_length) {
   const bool record_null = (hostname_length == 0);
   return do_match(record_null, hostname, hostname_length);
+}
+
+bool PFS_key_host::match(const PFS_host_name *pfs) {
+  const bool record_null = (pfs->length() == 0);
+  return do_match(record_null, pfs->ptr(), pfs->length());
 }
 
 bool PFS_key_role::match(const PFS_setup_actor *pfs) {

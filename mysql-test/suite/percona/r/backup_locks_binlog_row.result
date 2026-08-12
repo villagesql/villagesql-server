@@ -1,0 +1,183 @@
+SET @old_binlog_format=@@binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+SET GLOBAL binlog_format='ROW';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+SET SESSION binlog_format='ROW';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+SELECT @@binlog_format;
+@@binlog_format
+ROW
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+RESET BINARY LOGS AND GTIDS;
+SHOW VARIABLES LIKE 'have_backup_locks';
+Variable_name	Value
+have_backup_locks	YES
+#-----------------------------------------------------------------------
+# Setup
+#-----------------------------------------------------------------------
+CREATE TABLE t_innodb(a INT NOT NULL, KEY (a)) ENGINE=InnoDB;
+CREATE TABLE t_myisam(a INT NOT NULL, KEY (a)) ENGINE=MyISAM;
+CREATE TABLE t_memory(a INT NOT NULL, KEY (a)) ENGINE=MEMORY;
+CREATE TABLE t_csv(a INT NOT NULL) ENGINE=CSV;
+CREATE TABLE t_blackhole(a INT NOT NULL, KEY (a)) ENGINE=BLACKHOLE;
+CREATE TABLE t_archive(a INT NOT NULL) ENGINE=ARCHIVE;
+CREATE VIEW v_innodb AS SELECT * FROM t_innodb;
+CREATE VIEW v_myisam AS SELECT * FROM t_myisam;
+CREATE VIEW v_memory AS SELECT * FROM t_memory;
+CREATE VIEW v_csv AS SELECT * FROM t_csv;
+CREATE VIEW v_blackhole AS SELECT * FROM t_blackhole;
+CREATE VIEW v_archive AS SELECT * FROM t_archive;
+#-----------------------------------------------------------------------
+# Single-threaded tests
+#-----------------------------------------------------------------------
+SELECT @@delay_key_write;
+@@delay_key_write
+ON
+SET GLOBAL delay_key_write=ALL;
+LOCK TABLES FOR BACKUP;
+ERROR HY000: The MySQL server is running with the delay_key_write=ALL option so it cannot execute this statement
+SET GLOBAL delay_key_write=default;
+SELECT @@delay_key_write;
+@@delay_key_write
+ON
+SET GLOBAL read_only=1;
+INSERT INTO t_innodb VALUES(0);
+INSERT INTO t_myisam VALUES(0);
+LOCK TABLES FOR BACKUP;
+INSERT INTO t_innodb VALUES(0);
+INSERT INTO t_myisam VALUES(0);
+ERROR HY000: Can't execute the query because you have a conflicting backup lock
+UNLOCK TABLES;
+INSERT INTO t_innodb VALUES(0);
+INSERT INTO t_myisam VALUES(0);
+SET GLOBAL read_only=0;
+LOCK TABLES FOR BACKUP;
+CREATE TEMPORARY TABLE tt_innodb(a INT NOT NULL) ENGINE=InnoDB;
+CREATE TEMPORARY TABLE tt_myisam(a INT NOT NULL) ENGINE=MyISAM;
+CREATE TEMPORARY TABLE tt_memory(a INT NOT NULL) ENGINE=MEMORY;
+CREATE TEMPORARY TABLE tt_csv(a INT NOT NULL) ENGINE=CSV;
+CREATE TEMPORARY TABLE tt_blackhole(a INT NOT NULL) ENGINE=BLACKHOLE;
+CREATE TEMPORARY TABLE tt_archive(a INT NOT NULL) ENGINE=ARCHIVE;
+INSERT INTO tt_innodb VALUES(5);
+INSERT INTO tt_myisam VALUES(5);
+INSERT INTO tt_memory VALUES(5);
+INSERT INTO tt_csv VALUES(5);
+INSERT INTO tt_blackhole VALUES(5);
+INSERT INTO tt_archive VALUES(5);
+UNLOCK TABLES;
+SET @old_general_log = @@general_log;
+SET @old_slow_query_log = @@slow_query_log;
+SET @old_log_output = @@log_output;
+SET @old_long_query_time = @@SESSION.long_query_time;
+SET SESSION long_query_time = 0;
+SET GLOBAL log_output = 'TABLE';
+SET GLOBAL general_log = ON;
+SET GLOBAL slow_query_log = ON;
+LOCK TABLES FOR BACKUP;
+SELECT 1;
+1
+1
+UNLOCK TABLES;
+SET SESSION long_query_time = @old_long_query_time;
+SET GLOBAL log_output = @old_log_output;
+SET GLOBAL slow_query_log = @old_slow_query_log;
+SET GLOBAL general_log = @old_general_log;
+TRUNCATE TABLE mysql.slow_log;
+TRUNCATE TABLE mysql.general_log;
+#-----------------------------------------------------------------------
+# Multi-threaded tests
+#-----------------------------------------------------------------------
+# connection default
+CREATE USER user@localhost;
+GRANT ALL PRIVILEGES ON test.* TO user@localhost;
+LOCK TABLES FOR BACKUP;
+# connection con1
+SET SESSION lock_wait_timeout = 1;
+SET GLOBAL delay_key_write=ALL;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET SESSION lock_wait_timeout = DEFAULT;
+# connection default
+UNLOCK TABLES;
+# connection con2
+START TRANSACTION;
+INSERT INTO t_innodb VALUES(0);
+# connection default
+SET GLOBAL read_only=1;
+# connection con2
+COMMIT;
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+INSERT INTO t_innodb VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+INSERT INTO t_myisam VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+# connection con1
+LOCK TABLES FOR BACKUP;
+# connection con2
+INSERT INTO t_innodb VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+INSERT INTO t_myisam VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+# connection default
+SET GLOBAL read_only=0;
+# connection con2
+SET SESSION lock_wait_timeout = 1;
+INSERT INTO t_innodb VALUES(0);
+INSERT INTO t_myisam VALUES(0);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET SESSION lock_wait_timeout = 0;
+Warnings:
+Warning	1292	Truncated incorrect lock_wait_timeout value: '0'
+# connection default
+SET GLOBAL read_only=1;
+# connection con2
+INSERT INTO t_innodb VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+INSERT INTO t_myisam VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+# connection con1
+UNLOCK TABLES;
+# connection con2
+INSERT INTO t_innodb VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+INSERT INTO t_myisam VALUES(0);
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+# connection default
+SET GLOBAL read_only=0;
+# connection default
+LOCK TABLES FOR BACKUP;
+# connection con1
+CREATE TEMPORARY TABLE tt_innodb(a INT NOT NULL) ENGINE=InnoDB;
+CREATE TEMPORARY TABLE tt_myisam(a INT NOT NULL) ENGINE=MyISAM;
+CREATE TEMPORARY TABLE tt_memory(a INT NOT NULL) ENGINE=MEMORY;
+CREATE TEMPORARY TABLE tt_csv(a INT NOT NULL) ENGINE=CSV;
+CREATE TEMPORARY TABLE tt_blackhole(a INT NOT NULL) ENGINE=BLACKHOLE;
+CREATE TEMPORARY TABLE tt_archive(a INT NOT NULL) ENGINE=ARCHIVE;
+INSERT INTO tt_innodb VALUES(5);
+INSERT INTO tt_myisam VALUES(5);
+INSERT INTO tt_memory VALUES(5);
+INSERT INTO tt_csv VALUES(5);
+INSERT INTO tt_blackhole VALUES(5);
+INSERT INTO tt_archive VALUES(5);
+# connection default
+UNLOCK TABLES;
+# connection con1
+DROP TEMPORARY TABLE tt_innodb;
+DROP TEMPORARY TABLE tt_myisam;
+DROP TEMPORARY TABLE tt_memory;
+DROP TEMPORARY TABLE tt_csv;
+DROP TEMPORARY TABLE tt_blackhole;
+DROP TEMPORARY TABLE tt_archive;
+# connection default
+#-----------------------------------------------------------------------
+# Cleanup
+#-----------------------------------------------------------------------
+DROP USER user@localhost;
+DROP VIEW v_innodb, v_myisam, v_memory, v_csv, v_blackhole, v_archive;
+DROP TABLE t_innodb, t_myisam, t_memory, t_csv, t_blackhole, t_archive;
+SET GLOBAL binlog_format = @old_binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.

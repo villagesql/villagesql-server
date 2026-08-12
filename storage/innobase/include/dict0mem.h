@@ -996,14 +996,20 @@ struct rec_cache_t {
   size_t nullable_cols{0};
 };
 
+/** Maximum number of records we insert or select from intrinsic table
+before committing mtr. */
+constexpr uint32_t MAX_INTRINSIC_MTR_RECORDS = 100;
+
 /** Cache position of last inserted or selected record by caching record
 and holding reference to the block where record resides.
-Note: We don't commit mtr and hold it beyond a transaction lifetime as this is
-a special case (intrinsic table) that are not shared across connection. */
+Note: We don't commit mtr (unless mtr_records reaches MAX_INTRINSIC_MTR_RECORDS
+limit) and hold it beyond a transaction lifetime as this is a  special case
+(intrinsic table) that are not shared across connection. */
 class last_ops_cur_t {
  public:
   /** Constructor */
-  last_ops_cur_t() : rec(), block(), mtr(), disable_caching(), invalid() {
+  last_ops_cur_t()
+      : rec(), block(), mtr(), disable_caching(), invalid(), mtr_records(0) {
     /* Do Nothing. */
   }
 
@@ -1015,6 +1021,7 @@ class last_ops_cur_t {
     rec = nullptr;
     block = nullptr;
     invalid = false;
+    mtr_records = 0;
   }
 
  public:
@@ -1034,6 +1041,11 @@ class last_ops_cur_t {
   split then invalidate the cached position as it would be no more
   remain valid. Will be re-cached on post-split insert. */
   bool invalid;
+
+  /** Number of records which were inserted or selected into from
+  intrinsic table within this mtr. Needed to limit number of intrinsic
+  table records inserted/selected within single mtr. */
+  uint32_t mtr_records;
 };
 
 /** "GEN_CLUST_INDEX" is the name reserved for InnoDB default
@@ -1579,10 +1591,11 @@ struct dict_index_t {
   @param[in]    n               column number
   @param[in]    inc_prefix      true=consider column prefixes too
   @param[in]    is_virtual      true==virtual column
+  @param[out]   prefix_col_pos  column number if prefix
   @return position in internal representation of the index;
   ULINT_UNDEFINED if not contained */
-  ulint get_col_pos(ulint n, bool inc_prefix = false,
-                    bool is_virtual = false) const;
+  ulint get_col_pos(ulint n, bool inc_prefix = false, bool is_virtual = false,
+                    ulint *prefix_col_pos = nullptr) const;
 
   /** Get the default value of nth field and its length if exists.
   If not exists, both the return value is nullptr and length is 0.
@@ -1924,6 +1937,8 @@ enum table_dirty_status {
 temp table */
 typedef std::vector<row_prebuilt_t *> temp_prebuilt_vec;
 #endif /* !UNIV_HOTBACKUP */
+
+using AutoIncMutex = ib_bpmutex_t;
 
 #ifdef UNIV_DEBUG
 /** Value of 'magic_n'. */
@@ -2356,7 +2371,7 @@ detect this and will eventually quit sooner. */
 #endif /* !UNIV_HOTBACKUP */
 
   /** Mutex protecting the autoincrement counter. */
-  ib_mutex_t *autoinc_mutex;
+  AutoIncMutex *autoinc_mutex;
 
   /** Autoinc counter value to give to the next inserted row. */
   uint64_t autoinc;
@@ -2459,6 +2474,8 @@ detect this and will eventually quit sooner. */
   but just need a increased counter to track consistent view while
   proceeding SELECT as part of UPDATE. */
   uint64_t sess_trx_id;
+
+  bool is_corrupt;
 
 #ifdef UNIV_DEBUG
   /** Magic number. */

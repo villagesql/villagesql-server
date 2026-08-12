@@ -57,6 +57,7 @@
 #include "sql/dd/collection.h"
 #include "sql/dd/dd_table.h"       // dd::FIELD_NAME_SEPARATOR_CHAR
 #include "sql/dd/dd_tablespace.h"  // dd::get_tablespace_name
+#include "sql/dd/dd_trigger.h"     // dd::load_triggers
 // TODO: Avoid exposing dd/impl headers in public files.
 #include "sql/dd/impl/utils.h"  // dd::eat_str
 #include "sql/dd/properties.h"  // dd::Properties
@@ -91,7 +92,8 @@
 #include "sql/sql_plugin.h"     // plugin_unlock
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_table.h"  // primary_key_name
-#include "sql/strfunc.h"    // lex_cstring_handle
+#include "sql/sql_zip_dict.h"
+#include "sql/strfunc.h"  // lex_cstring_handle
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/thd_raii.h"
@@ -303,6 +305,18 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
     uint primary_key = (uint)(find_type(primary_key_name, &share->keynames,
                                         FIND_TYPE_NO_PREFIX) -
                               1);
+
+    /*
+      The following if-else is here for MyRocks:
+      set share->primary_key as early as possible, because the return value
+      of ha_rocksdb::index_flags(key, ...) (HA_KEYREAD_ONLY bit in particular)
+      depends on whether the key is the primary key.
+    */
+    if (primary_key < MAX_KEY && share->keys_in_use.is_set(primary_key))
+      share->primary_key = primary_key;
+    else
+      share->primary_key = MAX_KEY;
+
     const longlong ha_option = handler_file->ha_table_flags();
     keyinfo = share->key_info;
     key_part = keyinfo->key_part;
@@ -746,6 +760,9 @@ static bool fill_share_from_dd(THD *thd, TABLE_SHARE *share,
   if (table_options.exists("secondary_load"))
     table_options.get("secondary_load", &share->secondary_load);
 
+  if (table_options.exists("explicit_encryption")) {
+    table_options.get("explicit_encryption", &share->explicit_encryption);
+  }
   return false;
 }
 
@@ -1084,6 +1101,33 @@ static bool fill_column_from_dd(THD *thd, TABLE_SHARE *share,
   reg_field->set_storage_type(field_storage);
   reg_field->set_column_format(field_column_format);
 
+  if (column_options->exists("zip_dict_id")) {
+    uint64 zip_dict_id;
+    column_options->get("zip_dict_id", &zip_dict_id);
+
+    DBUG_LOG("zip_dict",
+             "Table_name: " << share->table_name.str
+                            << " field_name: " << reg_field->field_name
+                            << " has zip_dict_id: " << zip_dict_id);
+
+    if (compression_dict::acquire_dict_mdl(thd, MDL_SHARED_READ)) {
+      DBUG_LOG("zip_dict",
+               "MDL acquisition failed on compression dictionary"
+               " table for query: "
+                   << thd->query().str);
+      return (true);
+    }
+
+    assert(zip_dict_id != 0);
+
+    if (compression_dict::get_name_for_id(thd, zip_dict_id, share,
+                                          &reg_field->zip_dict_name,
+                                          &reg_field->zip_dict_data)) {
+      assert(0);
+      return (true);
+    }
+  }
+
   // Comments
   const dd::String_type comment = col_obj->comment();
   reg_field->comment.length = comment.length();
@@ -1335,6 +1379,16 @@ static bool fill_index_from_dd(THD *thd, TABLE_SHARE *share,
       assert(0); /* purecov: deadcode */
       keyinfo->flags = 0;
       break;
+  }
+
+  /* Check if this index is of clustering key type. Used by TokuDB */
+  const dd::Properties &index_options = idx_obj->options();
+  bool has_clustering = false;
+  if (index_options.exists("clustering_key")) {
+    index_options.get("clustering_key", &has_clustering);
+  }
+  if (has_clustering) {
+    keyinfo->flags |= HA_CLUSTERING;
   }
 
   if (idx_obj->is_generated()) keyinfo->flags |= HA_GENERATED_KEY;
@@ -2293,6 +2347,24 @@ static bool fill_check_constraints_from_dd(TABLE_SHARE *share,
   return false;
 }
 
+/**
+  Fill information about triggers from dd::Table object to the TABLE_SHARE.
+*/
+static bool fill_triggers_from_dd(THD *thd, TABLE_SHARE *share,
+                                  const dd::Table *tab_obj) {
+  assert(share->triggers == nullptr);
+
+  if (tab_obj->has_trigger()) {
+    share->triggers = new (&share->mem_root) List<Trigger>;
+    if (share->triggers == nullptr) return true;  // OOM
+    if (dd::load_triggers(thd, &share->mem_root, share->db.str,
+                          share->table_name.str, *tab_obj, share->triggers))
+      return true;  // OOM.
+  }
+
+  return false;
+}
+
 bool open_table_def(THD *thd, TABLE_SHARE *share, const dd::Table &table_def) {
   DBUG_TRACE;
 
@@ -2306,7 +2378,8 @@ bool open_table_def(THD *thd, TABLE_SHARE *share, const dd::Table &table_def) {
                 fill_indexes_from_dd(thd, share, &table_def) ||
                 fill_partitioning_from_dd(thd, share, &table_def) ||
                 fill_foreign_keys_from_dd(share, &table_def) ||
-                fill_check_constraints_from_dd(share, &table_def));
+                fill_check_constraints_from_dd(share, &table_def) ||
+                fill_triggers_from_dd(thd, share, &table_def));
 
   thd->mem_root = old_root;
 

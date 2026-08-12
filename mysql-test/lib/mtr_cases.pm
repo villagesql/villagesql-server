@@ -47,6 +47,7 @@ use My::Test;
 
 use mtr_match;
 use mtr_report;
+use My::Constants;
 
 require "mtr_misc.pl";
 
@@ -809,7 +810,20 @@ sub combinations_from_file($) {
     foreach my $option ($group->options()) {
       push(@{ $comb->{comb_opt} }, $option->option());
     }
-    push(@combinations, $comb);
+    if ($::opt_only_combinations) {
+      for my $only_combination (split(",", $::opt_only_combinations)) {
+        if ($comb->{name} eq $only_combination) {
+          mtr_report(" - Only-combination '$only_combination' added");
+          push(@combinations, $comb);
+        }
+      }
+    } else {
+      push(@combinations, $comb);
+    }
+  }
+
+  if ($::opt_only_combinations && !@combinations) {
+    mtr_error("Couldn't find '$::opt_only_combinations' for $combination_file file.");
   }
 
   return @combinations;
@@ -1100,6 +1114,7 @@ sub optimize_cases {
           grep { $_ eq lc $binlog_format } @{ $tinfo->{'binlog_formats'} };
         if (!$supported) {
           $tinfo->{'skip'} = 1;
+          $tinfo->{'skip_reason'} = MTR_SKIP_BY_FRAMEWORK;
           $tinfo->{'comment'} =
             "Doesn't support --binlog-format='$binlog_format'";
         }
@@ -1364,8 +1379,9 @@ sub collect_one_test_case {
   my $master_sh = "$testdir/$tname-master.sh";
   if (-f $master_sh) {
     if (IS_WIN32PERL) {
-      $tinfo->{'skip'}    = 1;
-      $tinfo->{'comment'} = "No tests with sh scripts on Windows";
+      $tinfo->{'skip'}        = 1;
+      $tinfo->{'skip_reason'} = MTR_SKIP_BY_FRAMEWORK;
+      $tinfo->{'comment'}     = "No tests with sh scripts on Windows";
       return $tinfo;
     } else {
       $tinfo->{'master_sh'} = $master_sh;
@@ -1376,8 +1392,9 @@ sub collect_one_test_case {
   my $slave_sh = "$testdir/$tname-slave.sh";
   if (-f $slave_sh) {
     if (IS_WIN32PERL) {
-      $tinfo->{'skip'}    = 1;
-      $tinfo->{'comment'} = "No tests with sh scripts on Windows";
+      $tinfo->{'skip'}        = 1;
+      $tinfo->{'skip_reason'} = MTR_SKIP_BY_FRAMEWORK;
+      $tinfo->{'comment'}     = "No tests with sh scripts on Windows";
       return $tinfo;
     } else {
       $tinfo->{'slave_sh'} = $slave_sh;
@@ -1418,7 +1435,7 @@ sub collect_one_test_case {
   # only-big-test option.
   if ($::opt_only_big_test) {
     if ((!$tinfo->{'no_valgrind_without_big'} and !$tinfo->{'big_test'}) or
-        ($tinfo->{'no_valgrind_without_big'} and !$::opt_valgrind)) {
+        ($tinfo->{'no_valgrind_without_big'} and !$tinfo->{'big_test'} and !$::opt_valgrind)) {
       skip_test($tinfo, "Not a big test");
       return $tinfo;
     }

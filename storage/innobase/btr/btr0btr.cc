@@ -153,6 +153,12 @@ static bool btr_root_fseg_validate(
 {
   ulint offset = mach_read_from_2(seg_header + FSEG_HDR_OFFSET);
 
+  if (UNIV_UNLIKELY(srv_pass_corrupt_table != 0)) {
+    return (mach_read_from_4(seg_header + FSEG_HDR_SPACE) == space) &&
+           (offset >= FIL_PAGE_DATA) &&
+           (offset <= UNIV_PAGE_SIZE - FIL_PAGE_DATA_END);
+  }
+
   ut_a(mach_read_from_4(seg_header + FSEG_HDR_SPACE) == space);
   ut_a(offset >= FIL_PAGE_DATA);
   ut_a(offset <= UNIV_PAGE_SIZE - FIL_PAGE_DATA_END);
@@ -175,10 +181,22 @@ buf_block_t *btr_root_block_get(
   buf_block_t *block =
       btr_block_get(page_id, page_size, mode, UT_LOCATION_HERE, index, mtr);
 
+  SRV_CORRUPT_TABLE_CHECK(block, return (nullptr););
+
   btr_assert_not_corrupted(block, index);
 #ifdef UNIV_BTR_DEBUG
   if (!dict_index_is_ibuf(index)) {
     const page_t *root = buf_block_get_frame(block);
+
+    if (UNIV_UNLIKELY(srv_pass_corrupt_table != 0)) {
+      if (!btr_root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_LEAF + root,
+                                  space_id))
+        return nullptr;
+      if (!btr_root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_TOP + root,
+                                  space_id))
+        return nullptr;
+      return (block);
+    }
 
     ut_a(btr_root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_LEAF + root,
                                 space_id));
@@ -208,7 +226,7 @@ page_t *btr_root_get(const dict_index_t *index, /*!< in: index tree */
 ulint btr_height_get(dict_index_t *index, /*!< in: index tree */
                      mtr_t *mtr)          /*!< in/out: mini-transaction */
 {
-  ulint height;
+  ulint height = 0;
   buf_block_t *root_block;
 
   ut_ad(srv_read_only_mode ||
@@ -511,6 +529,11 @@ ulint btr_get_size(dict_index_t *index, /*!< in: index */
 
   root = btr_root_get(index, mtr);
 
+  SRV_CORRUPT_TABLE_CHECK(root, {
+    mtr_commit(mtr);
+    return (ULINT_UNDEFINED);
+  });
+
   if (flag == BTR_N_LEAF_PAGES) {
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
 
@@ -799,6 +822,8 @@ static void btr_free_root(buf_block_t *block, mtr_t *mtr) {
 
   ut_ad(mtr_memo_contains_flagged(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
+  SRV_CORRUPT_TABLE_CHECK(block, return;);
+
   btr_search_drop_page_hash_index(block);
 
   header = buf_block_get_frame(block) + PAGE_HEADER + PAGE_BTR_SEG_TOP;
@@ -979,18 +1004,33 @@ ulint btr_create(ulint type, space_id_t space, space_index_t index_id,
 
 /** Free a B-tree except the root page. The root page MUST be freed after
 this by calling btr_free_root.
-@param[in,out]  block           root page
-@param[in]      log_mode        mtr logging mode */
-static void btr_free_but_not_root(buf_block_t *block, mtr_log_t log_mode) {
+@param[in,out]	block		root page
+@param[in]	log_mode	mtr logging mode
+@param[in]	is_ahi_allowed	false for intrinsic tables because AHI
+                                is disallowed. See dict_index_t->disable_ahi,
+                                true for other tables */
+static void btr_free_but_not_root(buf_block_t *block, mtr_log_t log_mode,
+                                  bool is_ahi_allowed) {
   bool finished;
   mtr_t mtr;
 
   ut_ad(page_is_root(block->frame));
+
+  bool ahi = false;
+  if (is_ahi_allowed) {
+    ahi = btr_search_enabled.load();
+  }
+
 leaf_loop:
   mtr_start(&mtr);
   mtr_set_log_mode(&mtr, log_mode);
 
   page_t *root = block->frame;
+
+  SRV_CORRUPT_TABLE_CHECK(root, {
+    mtr_commit(&mtr);
+    return;
+  });
 
 #ifdef UNIV_BTR_DEBUG
   ut_a(btr_root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_LEAF + root,
@@ -1002,7 +1042,7 @@ leaf_loop:
   /* NOTE: page hash indexes are dropped when a page is freed inside
   fsp0fsp. */
 
-  finished = fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, true, &mtr);
+  finished = fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, ahi, &mtr);
   mtr_commit(&mtr);
 
   if (!finished) {
@@ -1014,13 +1054,18 @@ top_loop:
 
   root = block->frame;
 
+  SRV_CORRUPT_TABLE_CHECK(root, {
+    mtr_commit(&mtr);
+    return;
+  });
+
 #ifdef UNIV_BTR_DEBUG
   ut_a(btr_root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_TOP + root,
                               block->page.id.space()));
 #endif /* UNIV_BTR_DEBUG */
 
   finished = fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP,
-                                       true, &mtr);
+                                       ahi, &mtr);
   mtr_commit(&mtr);
 
   if (!finished) {
@@ -1041,15 +1086,17 @@ void btr_free_if_exists(const page_id_t &page_id, const page_size_t &page_size,
     return;
   }
 
-  btr_free_but_not_root(root, mtr->get_log_mode());
+  btr_free_but_not_root(root, mtr->get_log_mode(), true);
   btr_free_root(root, mtr);
   btr_free_root_invalidate(root, mtr);
 }
 
 /** Free an index tree in a temporary tablespace.
-@param[in]      page_id         root page id
-@param[in]      page_size       page size */
-void btr_free(const page_id_t &page_id, const page_size_t &page_size) {
+@param[in]      page_id		root page id
+@param[in]      page_size	page size
+@param[in]      is_intrinsic	true for intrinsic tables else false */
+void btr_free(const page_id_t &page_id, const page_size_t &page_size,
+              bool is_intrinsic) {
   mtr_t mtr;
   mtr.start();
   mtr.set_log_mode(MTR_LOG_NO_REDO);
@@ -1059,7 +1106,7 @@ void btr_free(const page_id_t &page_id, const page_size_t &page_size) {
 
   ut_ad(page_is_root(block->frame));
 
-  btr_free_but_not_root(block, MTR_LOG_NO_REDO);
+  btr_free_but_not_root(block, MTR_LOG_NO_REDO, !is_intrinsic);
   btr_free_root(block, &mtr);
   mtr.commit();
 }
@@ -1108,7 +1155,7 @@ void btr_truncate(const dict_index_t *index) {
   block = buf_page_get(page_id, page_size, RW_X_LATCH, UT_LOCATION_HERE, &mtr);
 
   /* Free all except the root, we don't want to change it. */
-  btr_free_but_not_root(block, MTR_LOG_ALL);
+  btr_free_but_not_root(block, MTR_LOG_ALL, false);
 
   /* Reset the mark saying that we have finished the truncate.
   The PAGE_MAX_TRX_ID would be reset here. */
@@ -3307,6 +3354,25 @@ retry:
       goto err_exit;
     }
 
+    /* When persistent cursor is used to scan over index in backwards
+    direction it stops on infimum record of its current page and releases
+    all latches it has, before switching from the cursor's current page to
+    the previous one. At this point merge from the previous page to cursor's
+    current one might happen. During this merge records from the previous
+    page will be moved over cursor position/infimum record which is used
+    used to continue iteration in optimistic case, making moved records
+    invisible to the scan.
+    We force such cursor to use pessimistic approach of restoring its
+    position/continuing iteration, which is not affected by this problem
+    (as it relies on looking up user record which was visited by cursor
+    right before the infimum) by incrementing modification clock for page
+    being merged into.
+    The forward iteration seems to be unaffected by this problem as it
+    doesn't release latch on the current page before it acquires latch on
+    the next one when cursor switches pages. So merge from the next page
+    to the current one stays blocked. */
+    buf_block_modify_clock_inc(merge_block);
+
     btr_search_drop_page_hash_index(block);
 
 #ifdef UNIV_BTR_DEBUG
@@ -4646,6 +4712,12 @@ bool btr_validate_index(
 
   bool ok = true;
   page_t *root = btr_root_get(index, &mtr);
+
+  SRV_CORRUPT_TABLE_CHECK(root, {
+    mtr_commit(&mtr);
+    return (false);
+  });
+
   ulint n = btr_page_get_level(root);
 
   for (ulint i = 0; i <= n; ++i) {

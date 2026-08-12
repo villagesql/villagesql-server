@@ -774,6 +774,8 @@ static void recv_writer_thread() {
 
 /** Frees the recovery system. */
 void recv_sys_free() {
+  if (!recv_sys) return;
+
   mutex_enter(&recv_sys->mutex);
 
   recv_sys_finish();
@@ -2819,9 +2821,9 @@ void recv_recover_page_func(
 @param[out]     page_no         page number
 @param[out]     body            start of log record body
 @return length of the record, or 0 if the record was not complete */
-static ulint recv_parse_log_rec(mlog_id_t *type, const byte *ptr,
-                                const byte *end_ptr, space_id_t *space_id,
-                                page_no_t *page_no, const byte **body) {
+ulint recv_parse_log_rec(mlog_id_t *type, const byte *ptr,
+                         const byte *end_ptr, space_id_t *space_id,
+                         page_no_t *page_no, const byte **body) {
   const byte *new_ptr;
 
   *body = nullptr;

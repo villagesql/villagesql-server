@@ -188,6 +188,8 @@ static int mecab_parse(MeCab::Lattice *mecab_lattice,
   int token_num = 0;
   int ret = 0;
   bool term_converted = false;
+  const CHARSET_INFO *cs = param->cs;
+  char *end = const_cast<char *>(doc) + len;
 
   try {
     mecab_lattice->set_sentence(doc, len);
@@ -205,6 +207,9 @@ static int mecab_parse(MeCab::Lattice *mecab_lattice,
   if (param->mode == MYSQL_FTPARSER_FULL_BOOLEAN_INFO) {
     for (const MeCab::Node *node = mecab_lattice->bos_node(); node != nullptr;
          node = node->next) {
+      if (node->stat == MECAB_BOS_NODE || node->stat == MECAB_EOS_NODE) {
+        continue;
+      }
       token_num += 1;
     }
 
@@ -224,12 +229,22 @@ static int mecab_parse(MeCab::Lattice *mecab_lattice,
 
   for (const MeCab::Node *node = mecab_lattice->bos_node(); node != nullptr;
        node = node->next) {
-    bool_info->position = position;
-    position += node->rlength;
+    int ctype = 0;
+    cs->cset->ctype(cs, &ctype, reinterpret_cast<const uchar *>(node->surface),
+                    reinterpret_cast<const uchar *>(end));
 
-    param->mysql_add_word(param, const_cast<char *>(node->surface),
-                          node->length,
-                          term_converted ? &token_info : bool_info);
+    /* Skip control characters */
+    if (!(ctype & MY_CHAR_CTR)) {
+      bool_info->position = position;
+      position += node->rlength;
+
+      ret = param->mysql_add_word(param, const_cast<char *>(node->surface),
+                            node->length,
+                            term_converted ? &token_info : bool_info);
+      if (ret != 0) {
+        break;
+      }
+    }
   }
 
   if (term_converted) {
@@ -312,8 +327,10 @@ static int mecab_parser_parse(MYSQL_FTPARSER_PARAM *param) {
       uchar *start = reinterpret_cast<uchar *>(doc);
       uchar *end = start + doc_length;
       FT_WORD word = {nullptr, 0, 0};
+      const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
-      while (fts_get_word(param->cs, &start, end, &word, &bool_info)) {
+      while (fts_get_word(param->cs, extra_word_chars, &start, end, &word,
+                          &bool_info)) {
         /* Don't convert term with wildcard. */
         if (bool_info.type == FT_TOKEN_WORD && !bool_info.trunc) {
           ret = mecab_parse(mecab_lattice, param,

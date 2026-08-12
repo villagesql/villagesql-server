@@ -33,6 +33,7 @@
 
 #include "lex_string.h"
 #include "my_inttypes.h"
+#include "mysys/buffered_error_log.h"
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -41,6 +42,7 @@
 #include "my_stacktrace.h"
 #include "my_sys.h"
 #include "my_time.h"
+#include "mysql_version.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
@@ -305,6 +307,9 @@ static void print_fatal_signal(int sig, siginfo_t *info [[maybe_unused]]) {
   my_safe_printf_stderr("BuildID[sha1]=%s\n", server_build_id);
 #endif
 
+  my_safe_printf_stderr("Server Version: %s %s\n\n", server_version,
+                        MYSQL_COMPILATION_COMMENT);
+
 #ifdef HAVE_STACKTRACE
   THD *thd = current_thd;
 
@@ -360,9 +365,12 @@ static void print_fatal_signal(int sig, siginfo_t *info [[maybe_unused]]) {
   }
   my_safe_printf_stderr(
       "%s",
-      "The manual page at "
-      "http://dev.mysql.com/doc/mysql/en/crashing.html contains\n"
-      "information that should help you find out what is causing the crash.\n");
+      "Please help us make Percona Server better by reporting any\n"
+      "bugs at https://bugs.percona.com/\n\n"
+      "You may download the Percona Server operations manual by visiting\n"
+      "http://www.percona.com/software/percona-server/. You may find "
+      "information\n"
+      "in the manual which will help you identify the cause of the crash.\n");
 
 #endif /* HAVE_STACKTRACE */
 }
@@ -404,9 +412,26 @@ void handle_fatal_signal(int sig, siginfo_t *info [[maybe_unused]],
   if (g_fatal_callback.load() != nullptr)
     (*g_fatal_callback)(sig, info, ucontext);
 
+  buffered_error_log.write_to_disk();
+
   if ((test_flags & TEST_CORE_ON_SIGNAL) != 0) {
-    my_safe_printf_stderr("%s", "Writing a core file\n");
-    my_write_core(sig);
+#if HAVE_LIBCOREDUMPER
+    if (opt_libcoredumper) {
+      if (opt_libcoredumper_path != NULL) {
+        if (!validate_libcoredumper_path(opt_libcoredumper_path)) {
+          my_safe_printf_stderr("%s", "Changing path to datadir\n");
+          opt_libcoredumper_path = NULL;
+        }
+      }
+      my_safe_printf_stderr("%s", "Writing a core file using lib coredumper\n");
+      my_write_libcoredumper(sig, opt_libcoredumper_path, time(nullptr));
+    } else {
+#endif
+      my_safe_printf_stderr("%s", "Writing a core file\n");
+      my_write_core(sig);
+#if HAVE_LIBCOREDUMPER
+    }
+#endif
   }
 
 #ifndef _WIN32
