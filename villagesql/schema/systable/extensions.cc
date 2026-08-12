@@ -354,19 +354,16 @@ bool TableTraits<ExtensionEntry>::write_to_table(TABLE &table,
 
 bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
                                                   const ExtensionEntry &entry,
-                                                  const ExtensionKey &old_key) {
-  // Probe with the as-entered name: the stored row holds the original bytes,
-  // not the normalized form.
-  const ExtensionKey &lookup_key =
-      old_key.str().empty() ? entry.key() : old_key;
+                                                  const std::string &old_key) {
+  // Determine which key to use for lookup
+  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
 
   // Build index scan on primary key (extension_name)
   uchar key_buf[MAX_KEY_LENGTH];
 
   // Set up the key for index scan
   Field **field = table.field;
-  field[0]->store(lookup_key.extension_name().c_str(),
-                  lookup_key.extension_name().length(),
+  field[0]->store(lookup_key.c_str(), lookup_key.length(),
                   &my_charset_utf8mb4_bin);
 
   // Copy the key for index read

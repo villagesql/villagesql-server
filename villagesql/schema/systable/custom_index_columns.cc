@@ -87,16 +87,27 @@ bool TableTraits<IndexColumnEntry>::write_to_table(
 }
 
 bool TableTraits<IndexColumnEntry>::update_in_table(
-    TABLE &table, const IndexColumnEntry &entry,
-    const IndexColumnKey &old_key) {
-  const IndexColumnKey &lookup_key =
-      old_key.str().empty() ? entry.key() : old_key;
+    TABLE &table, const IndexColumnEntry &entry, const std::string &old_key) {
+  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
+
+  // Parse key "index_id.key_position"
+  size_t dot = lookup_key.find('.');
+  if (should_assert_if_true(dot == std::string::npos)) {
+    LogVSQL(ERROR_LEVEL, "Invalid key format for index column update: %s",
+            lookup_key.c_str());
+    return true;
+  }
+
+  uint64_t old_index_id =
+      static_cast<uint64_t>(std::stoull(lookup_key.substr(0, dot)));
+  uint32_t old_key_position =
+      static_cast<uint32_t>(std::stoul(lookup_key.substr(dot + 1)));
 
   Field **field = table.field;
 
   // Set fields[0-1] for primary key lookup (key_info[0])
-  field[0]->store(static_cast<longlong>(lookup_key.index_id()), true);
-  field[1]->store(static_cast<longlong>(lookup_key.key_position()), true);
+  field[0]->store(static_cast<longlong>(old_index_id), true);
+  field[1]->store(static_cast<longlong>(old_key_position), true);
 
   uchar key_buf[MAX_KEY_LENGTH];
   key_copy(key_buf, table.record[0], table.key_info,

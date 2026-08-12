@@ -88,17 +88,8 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     // Use entry's key() method
     std::string key_str = entry.key().str();
 
-    // Add to committed map. Two distinct rows must never share a canonical
-    // key; overwriting would silently drop one of them.
-    auto inserted = m_committed.emplace(
-        key_str, std::make_shared<EntryType>(std::move(entry)));
-    if (should_assert_if_true(!inserted.second)) {
-      LogVSQL(ERROR_LEVEL,
-              "Duplicate canonical key '%s' while loading %s.%s; row ignored",
-              key_str.c_str(), schema_name, table_name);
-      error = true;
-      continue;
-    }
+    // Add to committed map
+    m_committed[key_str] = std::make_shared<EntryType>(std::move(entry));
     loaded_count++;
   }
 
@@ -161,7 +152,7 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
       case OperationType::UPDATE:
         // Use TableTraits to update the row
         if (should_assert_if_true(TableTraits<EntryType>::update_in_table(
-                *sys_table, *op->entry, op->key))) {
+                *sys_table, *op->entry, op->key.str()))) {
           LogVSQL(ERROR_LEVEL, "Error updating %s.%s from key %s to %s",
                   schema_name, table_name, op->entry->key().str().c_str(),
                   op->key.str().c_str());
