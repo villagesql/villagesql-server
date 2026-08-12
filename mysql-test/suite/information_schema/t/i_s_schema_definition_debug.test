@@ -323,10 +323,22 @@ INSERT INTO I_S_published_schema
         'ba0d3c4433b39df52abda9fe0285caddb4f971aaed0bd0d5b6a62ef0fa045ba1');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 0,
+# The 80400 checksums cover the merged I_S schema (base mysql-8.4.10 + 1 view
+# added by VillageSQL + 2 added by Percona), so they differ from both parents'
+# published values. Per the VillageSQL convention -- which both the MySQL and
+# Percona parents also follow -- IS_DD_VERSION is NOT bumped; the published
+# checksum for the current version is overridden in place. (Bumping the version
+# is a real DD-upgrade behavior change, a deliberate product decision, not a
+# re-record.) PART 3 of this test prints the actual checksum on failure; it
+# suggests bumping to 80410, which we intentionally do not do.
+#
+# lctn=1 (case-insensitive FS, e.g. macOS) recorded 2026-08-11 from this merge.
+# lctn=0 still holds VillageSQL's pre-merge value and MUST be recomputed on a
+# case-sensitive filesystem (Linux) -- it cannot be produced on macOS.
         '046414dff37c1d172842d5d012e1887fee3fb87600ae0554a409892b85396c2b');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 1,
-        '1250c103391fbef571d3346f8e0df779ef236a20f499e1a9a8e95ca9b2031340');
+        '9f0c73d4f8ba8890dbaceacfdb2255374bc1bfd45938fff17fd81cb82c2f5724');
 
 LET $checksum_version = `SELECT IF(ISNULL(mysqld_version), "0", i_s_version)
                   FROM I_S_published_schema i RIGHT OUTER JOIN whole_schema w
