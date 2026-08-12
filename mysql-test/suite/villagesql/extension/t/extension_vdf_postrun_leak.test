@@ -1,0 +1,36 @@
+# Regression: when VDF fix_fields fails after prerun allocated user_data,
+# postrun must still run to free it. The vdf_fail_after_prerun DBUG point
+# forces the post-prerun failure; the extension's global balance counter
+# (live_state_count) must return to zero.
+
+--source include/have_debug.inc
+
+--let $extension_name = vdf_postrun_leak
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_postrun_leak.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION vdf_postrun_leak;
+
+--echo # Baseline
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+       vdf_postrun_leak.postrun_count() AS post,
+       vdf_postrun_leak.live_state_count() AS live;
+
+SET SESSION debug='+d,vdf_fail_after_prerun';
+--error ER_OUT_OF_RESOURCES
+SELECT vdf_postrun_leak.leak_probe() AS probe;
+SET SESSION debug='-d,vdf_fail_after_prerun';
+
+--echo # After forced failure
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+       vdf_postrun_leak.postrun_count() AS post,
+       vdf_postrun_leak.live_state_count() AS live;
+
+--echo # Happy path: prerun+postrun pair normally, no leak
+SELECT vdf_postrun_leak.leak_probe() AS probe;
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+       vdf_postrun_leak.postrun_count() AS post,
+       vdf_postrun_leak.live_state_count() AS live;
+
+UNINSTALL EXTENSION vdf_postrun_leak;
