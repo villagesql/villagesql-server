@@ -114,6 +114,9 @@ struct Tokenize_ctx {
 
   /** Token list. */
   Token_list m_token_list{};
+
+  /** True if token stopwords checking should be skipped */
+  bool ignore_stopwords;
 };
 
 /** For parsing and sorting the documents. */
@@ -167,6 +170,10 @@ struct FTS::Parser {
     /** Buffer for IO to use for temporary file writes. */
     IO_buffer m_io_buffer;
 
+    /** Aligned buffer for cryptography. */
+    ut::unique_ptr_aligned<byte[]> m_aligned_buffer_crypt;
+    IO_buffer m_io_buffer_crypt;
+
     /** Record list start offsets. */
     Merge_offsets m_offsets{};
   };
@@ -185,7 +192,7 @@ struct FTS::Parser {
 
   /** Function performs parallel tokenization of the incoming doc strings.
   @param[in,out] builder        Index builder instance. */
-  void parse(Builder *builder) noexcept;
+  void parse(Builder *builder, uint32_t space_id) noexcept;
 
   /** Set the parent thread state.
   @param[in] state              The parent state. */
@@ -384,6 +391,19 @@ dberr_t FTS::Parser::init(size_t n_threads) noexcept {
     }
 
     handler->m_io_buffer = {handler->m_aligned_buffer.get(), buffer_size.first};
+
+    if (log_tmp_is_encrypted()) {
+      handler->m_aligned_buffer_crypt =
+          ut::make_unique_aligned<byte[]>(ut::make_psi_memory_key(mem_key_ddl),
+                                          UNIV_SECTOR_SIZE, buffer_size.first);
+
+      if (!handler->m_aligned_buffer_crypt) {
+        return DB_OUT_OF_MEMORY;
+      }
+
+      handler->m_io_buffer_crypt = {handler->m_aligned_buffer_crypt.get(),
+                                    buffer_size.first};
+    }
 
     if (!file_create(&handler->m_file, path)) {
       return DB_OUT_OF_MEMORY;
@@ -677,7 +697,7 @@ bool FTS::Parser::doc_tokenize(doc_id_t doc_id, fts_doc_t *doc,
     } else {
       inc = innobase_mysql_fts_get_token(
           doc->charset, doc->text.f_str + t_ctx->m_processed_len,
-          doc->text.f_str + doc->text.f_len, &str);
+          doc->text.f_str + doc->text.f_len, false, &str);
 
       ut_a(inc > 0);
     }
@@ -685,7 +705,8 @@ bool FTS::Parser::doc_tokenize(doc_id_t doc_id, fts_doc_t *doc,
 
     /* Ignore string whose character number is less than
     "fts_min_token_size" or more than "fts_max_token_size" */
-    if (!fts_check_token(&str, nullptr, is_ngram, nullptr)) {
+    if (!fts_check_token(&str, nullptr, is_ngram, nullptr,
+                         t_ctx->ignore_stopwords)) {
       if (parser != nullptr) {
         UT_LIST_REMOVE(t_ctx->m_token_list, fts_token);
         ut::free(fts_token);
@@ -702,8 +723,8 @@ bool FTS::Parser::doc_tokenize(doc_id_t doc_id, fts_doc_t *doc,
     t_str.f_str = (byte *)&str_buf;
 
     /* If "cached_stopword" is defined, ignore words in the stopword list */
-    if (!fts_check_token(&str, t_ctx->m_cached_stopword, is_ngram,
-                         doc->charset)) {
+    if (!fts_check_token(&str, t_ctx->m_cached_stopword, is_ngram, doc->charset,
+                         t_ctx->ignore_stopwords)) {
       if (parser != nullptr) {
         UT_LIST_REMOVE(t_ctx->m_token_list, fts_token);
         ut::free(fts_token);
@@ -840,7 +861,7 @@ void FTS::Parser::get_next_doc_item(FTS::Doc_item *&doc_item) noexcept {
   }
 }
 
-void FTS::Parser::parse(Builder *builder) noexcept {
+void FTS::Parser::parse(Builder *builder, uint32_t space_id) noexcept {
   fts_doc_t doc;
   size_t retried{};
   dtype_t word_dtype;
@@ -871,6 +892,7 @@ void FTS::Parser::parse(Builder *builder) noexcept {
   get_next_doc_item(doc_item);
 
   t_ctx.m_cached_stopword = table->fts->cache->stopword_info.cached_stopword;
+  t_ctx.ignore_stopwords = thd_has_ft_ignore_stopwords(m_ctx.thd());
 
   auto processed{true};
 
@@ -918,7 +940,8 @@ void FTS::Parser::parse(Builder *builder) noexcept {
         handler->m_offsets.push_back(file.m_size);
 
         auto persistor = [&](IO_buffer io_buffer) -> dberr_t {
-          return builder->append(file, io_buffer);
+          return builder->append(file, io_buffer,
+                                 handler->m_io_buffer_crypt.first, space_id);
         };
 
         err = key_buffer->serialize(io_buffer, persistor);
@@ -1046,7 +1069,8 @@ void FTS::Parser::parse(Builder *builder) noexcept {
       handler->m_offsets.push_back(file.m_size);
 
       auto persistor = [&](IO_buffer io_buffer) -> dberr_t {
-        return builder->append(file, io_buffer);
+        return builder->append(file, io_buffer,
+                               handler->m_io_buffer_crypt.first, space_id);
       };
 
       err = key_buffer->serialize(io_buffer, persistor);
@@ -1551,7 +1575,7 @@ dberr_t FTS::start_parse_threads(Builder *builder) noexcept {
       ut_ad(current_thd == thd);
 
       thd->push_diagnostics_area(&parser->da, false);
-      parser->parse(builder);
+      parser->parse(builder, m_ctx.new_table()->space);
       thd->pop_diagnostics_area();
 
       destroy_internal_thd(current_thd);

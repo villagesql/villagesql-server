@@ -1640,9 +1640,12 @@ supposedly written\n");
 
 my_off_t mysql_encryption_file_seek(IO_CACHE *cache, my_off_t pos, int whence,
                                     myf flags) {
-  if (cache->m_encryptor != nullptr) cache->m_encryptor->set_stream_offset(pos);
-  if (cache->m_decryptor != nullptr) cache->m_decryptor->set_stream_offset(pos);
-  return mysql_file_seek(cache->file, pos, whence, flags);
+  auto result = mysql_file_seek(cache->file, pos, whence, flags);
+  if (cache->m_encryptor != nullptr)
+    cache->m_encryptor->set_stream_offset(result);
+  if (cache->m_decryptor != nullptr)
+    cache->m_decryptor->set_stream_offset(result);
+  return result;
 }
 
 size_t mysql_encryption_file_read(IO_CACHE *cache, uchar *buffer, size_t count,
@@ -1691,4 +1694,18 @@ size_t mysql_encryption_file_write(IO_CACHE *cache, const uchar *buffer,
   } else
     ret = mysql_file_write(cache->file, buffer, count, flags);
   return ret;
+}
+
+size_t mysql_encryption_file_pread(IO_CACHE *cache, uchar *buffer, size_t count,
+                                   my_off_t offset, myf flags) {
+  if (cache->m_encryptor == nullptr && cache->m_decryptor == nullptr)
+    return mysql_file_pread(cache->file, buffer, count, offset, flags);
+
+  auto result = mysql_encryption_file_seek(cache, offset, SEEK_SET, flags);
+  if (result == MY_FILEPOS_ERROR) return MY_FILE_ERROR;
+
+  result = mysql_encryption_file_read(cache, buffer, count, flags);
+  if (result == MY_FILE_ERROR) return MY_FILE_ERROR;
+
+  return (flags & (MY_NABP | MY_FNABP)) ? 0 : result;
 }

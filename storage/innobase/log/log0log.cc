@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
 Copyright (c) 2009, Google Inc.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -53,6 +54,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /* time, difftime */
 #include <time.h>
+#include "srv0start.h"
 
 /* fprintf */
 #include <cstdio>
@@ -1139,6 +1141,7 @@ void log_print(const log_t &log, FILE *file) {
   lsn_t max_assigned_lsn;
   lsn_t current_lsn;
   lsn_t oldest_lsn;
+  lsn_t max_checkpoint_age;
   uint64_t file_min_id;
   uint64_t file_max_id;
 
@@ -1156,6 +1159,7 @@ void log_print(const log_t &log, FILE *file) {
 
   log_limits_mutex_enter(log);
   oldest_lsn = log.available_for_checkpoint_lsn;
+  max_checkpoint_age = log_free_check_capacity(log);
   log_limits_mutex_exit(log);
 
   log_files_mutex_exit(log);
@@ -1188,6 +1192,15 @@ void log_print(const log_t &log, FILE *file) {
           current_lsn, max_assigned_lsn, ready_for_write_lsn, write_lsn,
           flush_lsn, dirty_pages_added_up_to_lsn, oldest_lsn,
           last_checkpoint_lsn, file_min_id, file_max_id);
+
+  fprintf(file,
+          "Modified age no less than    " LSN_PF
+          "\n"
+          "Checkpoint age               " LSN_PF
+          "\n"
+          "Max checkpoint age           " LSN_PF "\n",
+          current_lsn - buf_pool_get_oldest_modification_lwm(),
+          current_lsn - log_sys->last_checkpoint_lsn, max_checkpoint_age);
 
   time_t current_time = time(nullptr);
 

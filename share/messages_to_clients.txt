@@ -2968,29 +2968,29 @@ ER_UDF_EXISTS
         swe "Funktionen '%-.192s' finns redan"
         ukr "Функція '%-.192s' вже існує"
 ER_CANT_OPEN_LIBRARY
-        cze "Nemohu otevřít sdílenou knihovnu '%-.192s' (errno: %d %-.128s)"
-        dan "Kan ikke åbne delt bibliotek '%-.192s' (errno: %d %-.128s)"
-        nla "Kan shared library '%-.192s' niet openen (Errcode: %d %-.128s)"
-        eng "Can't open shared library '%-.192s' (errno: %d %-.128s)"
-        est "Ei suuda avada jagatud teeki '%-.192s' (veakood: %d %-.128s)"
-        fre "Impossible d'ouvrir la bibliothèque partagée '%-.192s' (errno: %d %-.128s)"
-        ger "Kann Shared Library '%-.192s' nicht öffnen (Fehler: %d %-.128s)"
-        greek "Δεν είναι δυνατή η ανάγνωση της shared library '%-.192s' (κωδικός λάθους: %d %-.128s)"
-        hun "A(z) '%-.192s' megosztott konyvtar nem hasznalhato (hibakod: %d %-.128s)"
-        ita "Impossibile aprire la libreria condivisa '%-.192s' (errno: %d %-.128s)"
-        jpn "共有ライブラリ '%-.192s' を開く事ができません。(エラー番号: %d %-.128s)"
-        kor "'%-.192s' 공유 라이버러리를 열수 없습니다.(에러번호: %d %-.128s)"
-        nor "Can't open shared library '%-.192s' (errno: %d %-.128s)"
-        norwegian-ny "Can't open shared library '%-.192s' (errno: %d %-.128s)"
-        pol "Can't open shared library '%-.192s' (errno: %d %-.128s)"
-        por "Não pode abrir biblioteca compartilhada '%-.192s' (erro no. %d '%-.128s')"
-        rum "Nu pot deschide libraria shared '%-.192s' (Eroare: %d %-.128s)"
-        rus "Невозможно открыть динамическую библиотеку '%-.192s' (ошибка: %d %-.128s)"
-        serbian "Ne mogu da otvorim share-ovanu biblioteku '%-.192s' (errno: %d %-.128s)"
-        slo "Nemôžem otvoriť zdieľanú knižnicu '%-.192s' (chybový kód: %d %-.128s)"
-        spa "No puedo abrir libraria conjugada '%-.192s' (errno: %d %-.128s)"
-        swe "Kan inte öppna det dynamiska biblioteket '%-.192s' (Felkod: %d %-.128s)"
-        ukr "Не можу відкрити розділювану бібліотеку '%-.192s' (помилка: %d %-.128s)"
+        cze "Nemohu otevřít sdílenou knihovnu '%-.192s' (errno: %d %-.192s)"
+        dan "Kan ikke åbne delt bibliotek '%-.192s' (errno: %d %-.192s)"
+        nla "Kan shared library '%-.192s' niet openen (Errcode: %d %-.192s)"
+        eng "Can't open shared library '%-.192s' (errno: %d %-.192s)"
+        est "Ei suuda avada jagatud teeki '%-.192s' (veakood: %d %-.192s)"
+        fre "Impossible d'ouvrir la bibliothèque partagée '%-.192s' (errno: %d %-.192s)"
+        ger "Kann Shared Library '%-.192s' nicht öffnen (Fehler: %d %-.192s)"
+        greek "Δεν είναι δυνατή η ανάγνωση της shared library '%-.192s' (κωδικός λάθους: %d %-.192s)"
+        hun "A(z) '%-.192s' megosztott konyvtar nem hasznalhato (hibakod: %d %-.192s)"
+        ita "Impossibile aprire la libreria condivisa '%-.192s' (errno: %d %-.192s)"
+        jpn "共有ライブラリ '%-.192s' を開く事ができません。(エラー番号: %d %-.192s)"
+        kor "'%-.192s' 공유 라이버러리를 열수 없습니다.(에러번호: %d %-.192s)"
+        nor "Can't open shared library '%-.192s' (errno: %d %-.192s)"
+        norwegian-ny "Can't open shared library '%-.192s' (errno: %d %-.192s)"
+        pol "Can't open shared library '%-.192s' (errno: %d %-.192s)"
+        por "Não pode abrir biblioteca compartilhada '%-.192s' (erro no. %d '%-.192s')"
+        rum "Nu pot deschide libraria shared '%-.192s' (Eroare: %d %-.192s)"
+        rus "Невозможно открыть динамическую библиотеку '%-.192s' (ошибка: %d %-.192s)"
+        serbian "Ne mogu da otvorim share-ovanu biblioteku '%-.192s' (errno: %d %-.192s)"
+        slo "Nemôžem otvoriť zdieľanú knižnicu '%-.192s' (chybový kód: %d %-.192s)"
+        spa "No puedo abrir libraria conjugada '%-.192s' (errno: %d %-.192s)"
+        swe "Kan inte öppna det dynamiska biblioteket '%-.192s' (Felkod: %d %-.192s)"
+        ukr "Не можу відкрити розділювану бібліотеку '%-.192s' (помилка: %d %-.192s)"
 ER_CANT_FIND_DL_ENTRY
         cze "Nemohu najít funkci '%-.128s' v knihovně"
         dan "Kan ikke finde funktionen '%-.128s' i bibliotek"
@@ -7589,7 +7589,7 @@ ER_REPLICA_CHANNEL_OPERATION_NOT_ALLOWED
    eng "%-.192s cannot be performed on channel '%-.192s'."
 
 ER_INVALID_JSON_TEXT 22032
-  eng "Invalid JSON text: \"%s\" at position %u in value for column '%-.200s'."
+  eng "Invalid JSON text: \"%s\" at position %u in value for column '%-.200s' at row %ld."
 
 # The last parameter is now always empty but kept for backward compatibility
 ER_INVALID_JSON_TEXT_IN_PARAM 22032
@@ -10440,6 +10440,202 @@ ER_TP_CANNOT_DISABLE_MTL_WITH_DL
 #
 #  End of 8.1+ error messages (server-to-client).
 #  Do NOT add messages intended for the error log above!
+
+#
+# Start of Percona Server 8.0 error messages to be sent to client
+#
+
+start-error-number 7000
+
+ER_CANT_EXECUTE_WITH_BACKUP_LOCK
+  eng "Can't execute the query because you have a conflicting backup lock"
+  rus "Запрос не может быть выполнен из-за конфликтующей блокировки резервного копирования"
+
+ER_COMPRESSED_COLUMN_USED_AS_KEY
+  eng "Compressed column '%-.192s' is not allowed in the key list"
+
+ER_UNSUPPORTED_COMPRESSED_COLUMN_TYPE
+  eng "Can not define column '%-.192s' in compressed format"
+
+ER_COMPRESSION_DICTIONARY_EXISTS
+  eng "Compression dictionary '%-.192s' already exists"
+
+ER_COMPRESSION_DICTIONARY_DOES_NOT_EXIST
+  eng "Compression dictionary '%-.192s' does not exist"
+
+ER_COMPRESSION_DICTIONARY_NAME_TOO_LONG
+  eng "Compression dictionary name '%-.192s' is too long (max length = %lu)"
+
+ER_COMPRESSION_DICTIONARY_DATA_TOO_LONG
+  eng "Data for compression dictionary '%-.192s' is too long (max length = %lu)"
+
+ER_COMPRESSION_DICTIONARY_IS_REFERENCED
+  eng "Compression dictionary '%-.192s' is in use"
+
+ER_DA_REDO_ENCRYPTION_CANT_BE_CHANGED
+  eng "Redo log encryption mode can't be switched without stopping the server and recreating the redo logs. Current mode is %s, requested %s."
+
+ER_DA_REDO_ENCRYPTION_CANT_GENERATE_KEY
+  eng "Redo log key generation failed."
+
+ER_DA_REDO_ENCRYPTION_CANT_LOAD_KEY_VERSION
+  eng "Failed to load redo key version %u"
+
+ER_DA_REDO_ENCRYPTION_CANT_FETCH_KEY
+  eng "Couldn't fetch newly generated redo key."
+
+ER_DA_REDO_ENCRYPTION_CANT_PARSE_KEY
+  eng "Couldn't parse system key: %s"
+
+ER_DA_REDO_ENCRYPTION_KEYRING
+  eng "Redo log cannot be encrypted if the keyring is not loaded."
+
+ER_DA_UNDO_NO_KEYRING
+  eng "Undo log can't be encrypted if the keyring is not loaded."
+
+ER_DA_ENCRYPTION_TABLE_CHECK_FAILED
+  eng "Table %s is encrypted but decryption failed. Seems that the encryption key fetched from keyring is not the correct one. Are you using the correct keyring?"
+
+ER_EXCLUDE_ENCRYPTION_TABLE_ENCRYPTED
+  eng "Tablespace %s is fully or partially encrypted by encryption threads and thus cannot be excluded from encryption threads. Please first finish off encryption/decryption and try again."
+
+ER_EXPLICIT_DECRYPTION_OF_ONLINE_ENCRYPTED_TABLESPACE
+  eng "Tablespace %s is encrypted by encryption threads and cannot be explicitly decrypted. Please use default-table-encryption=ONLINE_FROM_KEYRING_TO_UNENCRYPTED to decypt the tablespace."
+
+ER_ONLINE_KEYRING_TO_MK_RE_ENCRYPTION
+  eng "Tablespace %s is encrypted by encryption threads and cannot be ALTERed to Master Key encryption. In order to encrypt this tablespace with Master Key encryption, first decrypt this tablespace with encryption threads."
+
+ER_DATABASE_ENCRYPTION_MK_KEYRING_MISMATCH
+  eng "Database default encryption cannot be set to Y (Master Key encryption) while default_table_encryption is set to ONLINE_TO_KEYRING. It does not make sense to create new Master Key encrypted tables if the intention is to re-encrypt them to KEYRING encryption."
+
+ER_DATABASE_ENCRYPTION_N_KEYRING_MISMATCH
+  eng "Database default encryption cannot be set to N (explicitly request for tables in database to be unencrypted) while default_table_encryption is set to ONLINE_TO_KEYRING. If you want to exclude table from being encrypted by encryption threads you can still do it while creating table. For that you need to explicitly specify ENCRYPTION='N' while creating a table."
+
+ER_EXCLUDE_ENCRYPTION_THREADS_RUNNING
+  eng "Tablespace %s cannot have its ENCRYPTION altered as it is being currently encrypted/decrypted by encryption threads. Please try again later."
+
+ER_KEYRING_ILLEGAL_ENCRYPTION_OPTION
+  eng "Encryption option is not allowed. %s"
+
+ER_SEQUENCE_TABLE_SIZE_LIMIT
+  eng "The number of records generated by PERCONA_SEQUENCE_TABLE() cannot exceed %llu (%llu requested). Try increasing @@tf_sequence_table_max_upper_bound to a larger value."
+
+ER_SYSTEM_KEY_ROTATION_KEY_DOESNT_EXIST
+  eng "InnoDB system key %lu cannot be rotated, because it does not exist."
+
+ER_SYSTEM_KEY_ROTATION_MAX_KEY_ID_EXCEEDED
+  eng "InnoDB system key cannot have value greater than 4294967294."
+
+ER_SYSTEM_KEY_ROTATION_CANT_GENERATE_NEW_VERSION
+  eng "Cannot generate new version of system key %lu. Keyring reported an error. Please check if keyring is available."
+
+ER_ENCRYPTION_KEY_ID_VALUE_OUT_OF_RANGE
+  eng "The requested value %lu for the encryption_key_id exceeds the maximum allowed %lu"
+
+ER_WRAPPED_UDF_EXCEPTION
+  eng "Wrapped UDF exception in function '%-.192s'; %-.80s"
+
+ER_DROP_MULTI_TABLE
+  eng "Multi table drop is not supported when '%s' option is enabled"
+
+ER_TOO_MANY_ERROR_CODES
+  eng "The number of provided error codes exceeds the maximum allowed %lu"
+
+ER_TOO_BIG_ERROR_CODE
+  eng "Provided error code is bigger than maximum allowed %lu"
+
+ER_DYNAMIC_ROLE
+  eng "The role %s is a dynamic role and can't be revoked or dropped. It should be managed by the external authentication plugin instead."
+
+ER_LOG_NAME_NOT_MATCHING_SEC_LOG_PATH_CLIENT
+  eng "The --secure-file-path is configured, %s must be set accordingly."
+#
+# End of Percona Server 8.0 client messages
+#
+
+
+#
+# Start of Percona Server 8.4/9.7 error messages to be sent to client
+#
+
+start-error-number 7100
+
+#
+# End of Percona Server 8.4/9.7 client messages
+#
+
+
+
+#
+# Start of MyRocks specific messages to be sent to client
+#
+
+start-error-number 8000
+
+ER_KEYS_OUT_OF_ORDER
+  eng "Keys are out order during bulk load"
+
+ER_OVERLAPPING_KEYS
+  eng "Bulk load rows overlap existing rows"
+
+ER_REQUIRE_ROW_BINLOG_FORMAT
+  eng "Can't execute updates on master with binlog_format != ROW."
+
+ER_ISOLATION_MODE_NOT_SUPPORTED
+  eng "MyRocks supports only READ COMMITTED and REPEATABLE READ isolation levels. Please change from current isolation level %s"
+
+ER_ON_DUPLICATE_DISABLED
+  eng "When unique checking is disabled in MyRocks, INSERT,UPDATE,LOAD statements with clauses that update or replace the key (i.e. INSERT ON DUPLICATE KEY UPDATE, REPLACE) are not allowed. Query: %s"
+
+ER_UPDATES_WITH_CONSISTENT_SNAPSHOT
+  eng "Can't execute updates when you started a transaction with START TRANSACTION WITH CONSISTENT [ROCKSDB] SNAPSHOT."
+
+ER_ROLLBACK_ONLY
+  eng "This transaction was rolled back and cannot be committed. Only supported operation is to roll it back, so all pending changes will be discarded. Please restart another transaction."
+
+ER_ROLLBACK_TO_SAVEPOINT
+  eng "MyRocks currently does not support ROLLBACK TO SAVEPOINT if modifying rows."
+
+ER_ISOLATION_LEVEL_WITH_CONSISTENT_SNAPSHOT
+  eng "Only REPEATABLE READ isolation level is supported for START TRANSACTION WITH CONSISTENT SNAPSHOT in RocksDB Storage Engine."
+
+ER_UNSUPPORTED_COLLATION
+  eng "Unsupported collation on string indexed column %s.%s Use binary collation (%s)."
+
+ER_METADATA_INCONSISTENCY
+  eng "Table '%s' does not exist, but metadata information exists inside MyRocks. This is a sign of data inconsistency."
+
+ER_KEY_CREATE_DURING_ALTER
+  eng "MyRocks failed creating new key definitions during alter."
+
+ER_SK_POPULATE_DURING_ALTER
+  eng "MyRocks failed populating secondary key during alter."
+
+ER_CF_DIFFERENT
+  eng "Column family ('%.*s') flag (%d) is different from an existing flag (%d). Assign a new CF flag, or do not change existing CF flag."
+
+ER_RDB_TTL_UNSUPPORTED
+  eng "TTL support is currently disabled when table has a hidden PK."
+
+ER_RDB_TTL_COL_FORMAT
+  eng "TTL column (%s) in MyRocks must be an unsigned non-null 64-bit integer or non-null timestamp, exist inside the table, and have an accompanying ttl duration."
+
+ER_RDB_TTL_DURATION_FORMAT
+  eng "TTL duration (%s) in MyRocks must be an unsigned non-null 64-bit integer."
+
+ER_PER_INDEX_CF_DEPRECATED
+  eng "The per-index column family option has been deprecated."
+
+ER_CF_DROPPED
+  eng "Column family ('%s') is being dropped."
+
+ER_CANT_DROP_CF
+  eng "Cannot drop Column family ('%s') because it is in use or does not exist."
+
+#
+# End of MyRocks specific client messages
+#
+
 
 ################################################################################
 # DO NOT add messages for the error-log to this file;

@@ -61,6 +61,7 @@ static s_object_type_map object_type_map[] = {
     {OBJECT_TYPE_FOREIGN_KEY, {STRING_WITH_LEN("FOREIGN KEY")}},
     {OBJECT_TYPE_CHECK_CONSTRAINT, {STRING_WITH_LEN("CHECK CONSTRAINT")}},
     {OBJECT_TYPE_EXTENSION, {STRING_WITH_LEN("EXTENSION")}},
+    {OBJECT_TYPE_BACKUP_TABLES, {STRING_WITH_LEN("BACKUP TABLES")}},
     {NO_OBJECT_TYPE, {STRING_WITH_LEN("")}}};
 
 void object_type_to_string(enum_object_type object_type, const char **string,

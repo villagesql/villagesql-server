@@ -2248,7 +2248,7 @@ sp_head *sp_start_parsing(THD *thd, enum_sp_type sp_type, sp_name *sp_name) {
   // 1. new sp_head()
   MEM_ROOT own_root(key_memory_sp_head_main_root, MEM_ROOT_BLOCK_SIZE);
 
-  void *rawmem = own_root.Alloc(sizeof(sp_head));
+  void *rawmem = own_root.Alloc_aligned(sizeof(sp_head), alignof(sp_head));
   if (!rawmem) return nullptr;
 
   sp_head *sp = new (rawmem) sp_head(std::move(own_root), sp_type);
@@ -2385,12 +2385,22 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_RESET:
       flags = sp_head::HAS_SQLCOM_RESET;
       break;
+    /*
+      EXECUTE statement may return a result set (in case of CHECK
+      PARTITION at least), but doesn't have to. We can't, however,
+      know it in advance, and therefore must add this statement here.
+      This is ok, as is equivalent to a result-set statement within
+      an IF condition.
+    */
+    case SQLCOM_ALTER_TABLE:
+      flags = sp_head::MULTI_RESULTS | sp_head::HAS_COMMIT_OR_ROLLBACK;
+      break;
     case SQLCOM_CREATE_INDEX:
+    case SQLCOM_CREATE_COMPRESSION_DICTIONARY:
     case SQLCOM_CREATE_DB:
     case SQLCOM_CREATE_VIEW:
     case SQLCOM_CREATE_TRIGGER:
     case SQLCOM_CREATE_USER:
-    case SQLCOM_ALTER_TABLE:
     case SQLCOM_GRANT:
     case SQLCOM_GRANT_ROLE:
     case SQLCOM_REVOKE:
@@ -2399,6 +2409,7 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_RENAME_TABLE:
     case SQLCOM_RENAME_USER:
     case SQLCOM_DROP_INDEX:
+    case SQLCOM_DROP_COMPRESSION_DICTIONARY:
     case SQLCOM_DROP_DB:
     case SQLCOM_REVOKE_ALL:
     case SQLCOM_DROP_USER:

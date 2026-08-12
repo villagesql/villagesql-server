@@ -1,0 +1,209 @@
+/* Copyright (c) 2022 Percona LLC and/or its affiliates. All rights reserved.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; version 2 of the License.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+
+#ifndef AUDIT_LOG_FILTER_LOG_WRITER_FILE_HANDLE_H_INCLUDED
+#define AUDIT_LOG_FILTER_LOG_WRITER_FILE_HANDLE_H_INCLUDED
+
+#include "my_sys.h"
+#include "mysql/plugin_audit.h"
+
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace audit_log_filter::log_writer {
+
+static constexpr size_t kDirectIOBlockSize = 4096;
+
+struct PruneFileInfo {
+  std::filesystem::path path;
+  ulonglong size;
+  std::chrono::system_clock::duration age;
+};
+
+struct FileRotationResult {
+  int error_code;
+  std::string status_string;
+};
+
+using PruneFilesList = std::vector<PruneFileInfo>;
+
+class FileHandle {
+ public:
+  ~FileHandle() noexcept;
+
+  /**
+   * @brief Open file.
+   *
+   * @param file_path File path
+   * @param direct_io Use O_DIRECT for writes when true
+   * @return true in case of success, false otherwise
+   */
+  bool open_file(const std::filesystem::path &file_path, bool direct_io = false,
+                 bool flush_on_write = false) noexcept;
+
+  /**
+   * @brief Close file.
+   *
+   * @return true in case of success, false otherwise
+   */
+  bool close_file() noexcept;
+
+  /**
+   * @brief Write record to a file.
+   *
+   * @param record Log record
+   */
+  void write_file(const std::string &record) noexcept;
+
+  /**
+   * @brief Write record to a file.
+   *
+   * @param record Log record
+   * @param size Log record size
+   */
+  void write_file(const char *record, size_t size) noexcept;
+
+  /**
+   * @brief Get current file size in bytes.
+   *
+   * @return Current file size in bytes
+   */
+  [[nodiscard]] uint64_t get_file_size() const noexcept;
+
+  /**
+   * @brief Get current file path.
+   *
+   * @return Current log file path
+   */
+  [[nodiscard]] std::filesystem::path get_file_path() const noexcept;
+
+  /**
+   * @brief Flush data to a log file.
+   */
+  void flush() noexcept;
+
+  /**
+   * @brief Flush and sync data to durable storage.
+   */
+  void sync() noexcept;
+
+  /**
+   * @brief Get total logs size in bytes.
+   *
+   * @param working_dir_name Working directory name
+   * @param file_name Log file name
+   * @param[out] total_size Total logs size in bytes
+   * @return true on success, false on directory iteration error
+   */
+  [[nodiscard]] static bool get_total_log_size(
+      const std::string &working_dir_name, const std::string &file_name,
+      uint64_t &total_size) noexcept;
+
+  /**
+   * @brief Remove log footer from the end of a file.
+   *
+   * @param file_path File path
+   * @param expected_footer Expected log footer
+   * @return true if footer was removed or was not present, false on I/O error
+   */
+  [[nodiscard]] static bool remove_file_footer(
+      const std::filesystem::path &file_path,
+      const std::string &expected_footer) noexcept;
+
+  /**
+   * @brief Rotate file.
+   *
+   * @param current_file_path Current file path
+   * @param result File rotation result
+   */
+  static void rotate(const std::filesystem::path &current_file_path,
+                     FileRotationResult *result) noexcept;
+
+  /**
+   * @brief Get list of rotated log files which may be a subject for pruning.
+   *
+   * @param working_dir_name Working directory name
+   * @param file_name File name
+   * @param[out] prune_files List of rotated log files
+   * @return true on success, false on directory iteration error
+   */
+  [[nodiscard]] static bool get_prune_files(
+      const std::string &working_dir_name, const std::string &file_name,
+      PruneFilesList &prune_files) noexcept;
+
+  /**
+   * @brief Remove a file.
+   *
+   * @param path File path
+   * @return true in case file removed successfully, false otherwise
+   */
+  static bool remove_file(const std::filesystem::path &path) noexcept;
+
+  /**
+   * @brief Find path to not rotated log file if any.
+   *
+   * @param working_dir_name Working directory name
+   * @param file_name Log file name
+   * @param[out] file_path Path to not rotated log file, empty if none exists
+   * @return true on success, false on directory iteration error
+   */
+  [[nodiscard]] static bool get_not_rotated_file_path(
+      const std::string &working_dir_name, const std::string &file_name,
+      std::filesystem::path &file_path) noexcept;
+
+  /**
+   * @brief Get list of currently existent audit log file names.
+   *
+   * @param working_dir_name Working directory name
+   * @param file_name Base file name
+   * @param[out] log_names List of audit log file names
+   * @return true on success, false on directory iteration error
+   */
+  [[nodiscard]] static bool get_log_names_list(
+      const std::string &working_dir_name, const std::string &file_name,
+      std::vector<std::string> &log_names) noexcept;
+
+ private:
+  struct DirectIOBufferDeleter {
+    void operator()(char *p) const noexcept { std::free(p); }
+  };
+
+  void write_file_no_lock(const char *record, size_t size) noexcept;
+  void write_file_direct(const char *record, size_t size) noexcept;
+  void flush_direct() noexcept;
+  bool fallback_to_buffered_io(uint64_t offset, size_t buf_used) noexcept;
+
+  File m_file{-1};
+  std::filesystem::path m_path;
+  mutable mysql_mutex_t m_lock;
+  bool m_lock_initialized{false};
+
+  bool m_direct_io{false};
+  bool m_flush_on_write{false};
+  std::unique_ptr<char, DirectIOBufferDeleter> m_dio_buf{};
+  std::atomic<size_t> m_dio_buf_used{0};
+  std::atomic<uint64_t> m_file_offset{0};
+};
+
+}  // namespace audit_log_filter::log_writer
+
+#endif  // AUDIT_LOG_FILTER_LOG_WRITER_FILE_HANDLE_H_INCLUDED

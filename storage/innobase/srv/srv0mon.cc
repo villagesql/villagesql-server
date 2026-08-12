@@ -305,6 +305,20 @@ static monitor_info_t innodb_counter_info[] = {
                                  MONITOR_DEFAULT_ON),
      MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_PAGES_FREE},
 
+    {"buffer_pool_pages_flushed", "buffer",
+     "Number of requests to flush pages from the buffer "
+     "(innodb_buffer_pool_pages_flushed)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DISPLAY_CURRENT |
+                                 MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_PAGES_FLUSHED},
+
+    {"buffer_pool_pages_lru_flushed", "buffer",
+     "Number of requests to flush pages from the LRU list "
+     "(innodb_buffer_pool_pages_LRU_flushed)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DISPLAY_CURRENT |
+                                 MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_PAGES_LRU_FLUSHED},
+
     {"buffer_pages_created", "buffer",
      "Number of pages created (innodb_pages_created)",
      static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DEFAULT_ON),
@@ -318,6 +332,11 @@ static monitor_info_t innodb_counter_info[] = {
     {"buffer_pages_read", "buffer", "Number of pages read (innodb_pages_read)",
      static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DEFAULT_ON),
      MONITOR_DEFAULT_START, MONITOR_OVLD_PAGES_READ},
+
+    {"buffer_pages0_read", "buffer",
+     "Number of page 0 read (innodb_pages0_read)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_PAGES0_READ},
 
     {"buffer_data_reads", "buffer",
      "Amount of data read in bytes (innodb_data_read)",
@@ -980,6 +999,10 @@ static monitor_info_t innodb_counter_info[] = {
     {"log_writer_on_archiver_waits", "log",
      "Waits on redo archiver in log writer", MONITOR_NONE,
      MONITOR_DEFAULT_START, MONITOR_LOG_WRITER_ON_ARCHIVER_WAITS},
+
+    {"log_writer_on_tracker_waits", "log",
+     "Waits on redo tracker in log writer", MONITOR_NONE, MONITOR_DEFAULT_START,
+     MONITOR_LOG_WRITER_ON_TRACKER_WAITS},
 
     MONITOR_WAIT_STATS("log_flusher_", "log",
                        "Waits on task in log_flusher thread",
@@ -1706,6 +1729,17 @@ void srv_mon_process_existing_counter(
       value = free_len;
       break;
 
+    /* innodb_buffer_pool_pages_flushed */
+    case MONITOR_OVLD_BUF_POOL_PAGES_FLUSHED:
+      value = srv_stats.buf_pool_flushed;
+      break;
+
+    /* innodb_buffer_pool_pages_LRU_flushed */
+    case MONITOR_OVLD_BUF_POOL_PAGES_LRU_FLUSHED:
+      buf_get_total_stat(&stat);
+      value = stat.buf_lru_flush_page_count;
+      break;
+
     /* innodb_pages_created, the number of pages created */
     case MONITOR_OVLD_PAGE_CREATED:
       buf_get_total_stat(&stat);
@@ -1722,6 +1756,11 @@ void srv_mon_process_existing_counter(
     case MONITOR_OVLD_PAGES_READ:
       buf_get_total_stat(&stat);
       value = stat.n_pages_read;
+      break;
+
+    /* innodb_pages0_read */
+    case MONITOR_OVLD_PAGES0_READ:
+      value = srv_stats.page0_read;
       break;
 
     /* innodb_data_read, the amount of data read since the server was started

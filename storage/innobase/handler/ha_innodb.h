@@ -72,6 +72,7 @@ struct INNOBASE_SHARE {
   /*!< hash table chain node */
   innodb_idx_translate_t idx_trans_tbl; /*!< index translation table between
                                         MySQL and InnoDB */
+  dict_table_t *ib_table;
 };
 
 /** Prebuilt structures in an InnoDB table handle used within MySQL */
@@ -165,6 +166,8 @@ class ha_innobase : public handler {
   int index_first(uchar *buf) override;
 
   int index_last(uchar *buf) override;
+
+  bool has_gap_locks() const noexcept override { return true; }
 
   int read_range_first(const key_range *start_key, const key_range *end_key,
                        bool eq_range_arg, bool sorted) override;
@@ -428,6 +431,21 @@ class ha_innobase : public handler {
                                   bool commit, const dd::Table *old_dd_tab,
                                   dd::Table *new_dd_tab) override;
   /** @} */
+
+  /** This function reads zip dict-related info from SYS_ZIP_DICT
+  and SYS_ZIP_DICT_COLS for all columns marked with
+  COLUMN_FORMAT_TYPE_COMPRESSED flag and updates
+  zip_dict_name / zip_dict_data for those which have associated
+  compression dictionaries.
+
+  @param	thd		Thread handle, used to determine whether it
+  is necessary to lock dict_sys mutex
+  @param	part_name	Full table name (including partition part).
+  Must be non-NULL only if called from
+  ha_partition.
+  */
+  virtual void upgrade_update_field_with_zip_dict_info(
+      THD *thd, const char *part_name) override;
 
   using Reader = Parallel_reader_adapter;
 
@@ -942,6 +960,9 @@ class create_table_info_t {
   /** Validate COMPRESSION option. */
   bool create_option_compression_is_valid();
 
+  /** Validate ENCRYPTION option. */
+  bool create_option_encryption_is_valid() const;
+
   /** Prepare to create a table. */
   int prepare_create_table(const char *name);
 
@@ -998,6 +1019,12 @@ class create_table_info_t {
   @param[in]            name            Table name string.
   @return true if successful. */
   static bool normalize_table_name(char *norm_name, const char *name);
+
+  /** If encryption is requested, check for master key availability
+  and set the encryption flag in table flags
+  @param[in,out]	table	table object
+  @return on success DB_SUCCESS else DB_UNSPPORTED on failure */
+  dberr_t enable_encryption(dict_table_t *table);
 
  private:
   /** Parses the table name into normal name and either temp path or
@@ -1366,6 +1393,32 @@ void innobase_build_v_templ_callback(const TABLE *table, void *ib_table);
 /** Callback function definition, used by MySQL server layer to initialized
 the table virtual columns' template */
 typedef void (*my_gcolumn_templatecallback_t)(const TABLE *, void *);
+
+/** This function builds a translation table in INNOBASE_SHARE
+structure for fast index location with mysql array number from its
+table->key_info structure. This also provides the necessary
+translation between the key order in mysql key_info and InnoDB
+ib_table->indexes if they are not fully matched with each other.  Note
+we do not have any mutex protecting the translation table building
+based on the assumption that there is no concurrent index
+creation/drop and DMLs that requires index lookup. All table handle
+will be closed before the index creation/drop.
+@param[in]	table           table in MySQL data dictionary
+@param[in]	ib_table	table in InnoDB data dictionary
+@param[in,out]	share		share structure where index translation table
+                                will be constructed in.
+@return true if index translation table built successfully */
+[[nodiscard]]
+bool innobase_build_index_translation(const TABLE *table,
+                                      dict_table_t *ib_table,
+                                      INNOBASE_SHARE *share);
+
+uint innodb_force_index_records_in_range(THD *thd);
+uint innodb_records_in_range(THD *thd);
+
+/** Free InnoDB session specific data.
+@param[in,out]	thd	MySQL thread handler. */
+void thd_free_innodb_session(THD *thd) noexcept;
 
 /** Drop the statistics for a specified table, and mark it as discard
 after DDL

@@ -39,6 +39,8 @@
 #include "mysql/components/services/bits/psi_bits.h"
 #include "sql/dd/types/column.h"
 #include "sql/gis/srid.h"
+#include "sql/key.h"  // KEY
+#include "sql/key_spec.h"
 #include "sql/mdl.h"                   // MDL_request
 #include "sql/mem_root_array.h"        // Mem_root_array
 #include "sql/sql_check_constraint.h"  // Sql_check_constraint_spec_list
@@ -428,6 +430,13 @@ class Alter_info {
 
   // List of columns, used by both CREATE and ALTER TABLE.
   List<Create_field> create_list;
+  // List of keys, which creation is delayed to benefit from fast index creation
+  Mem_root_array<const Key_spec *> delayed_key_list;
+  // Keys, which creation is delayed to benefit from fast index creation
+  KEY *delayed_key_info;
+  // Count of keys, which creation is delayed to benefit from fast index
+  // creation
+  uint delayed_key_count;
   std::vector<CreateFieldApplier> cf_appliers;
 
   // Type of ALTER TABLE operation.
@@ -467,6 +476,7 @@ class Alter_info {
         alter_index_visibility_list(mem_root),
         alter_constraint_enforcement_list(mem_root),
         check_constraint_spec_list(mem_root),
+        delayed_key_list(mem_root),
         flags(0),
         keys_onoff(LEAVE_AS_IS),
         num_parts(0),
@@ -499,12 +509,21 @@ class Alter_info {
                  Item *on_update_value, LEX_CSTRING *comment,
                  const char *change, List<String> *interval_list,
                  const CHARSET_INFO *cs, bool has_explicit_collation,
-                 uint uint_geom_type, Value_generator *gcol_info,
-                 Value_generator *default_val_expr, const char *opt_after,
-                 std::optional<gis::srid_t> srid,
+                 uint uint_geom_type, const LEX_CSTRING *zip_dict,
+                 Value_generator *gcol_info, Value_generator *default_val_expr,
+                 const char *opt_after, std::optional<gis::srid_t> srid,
                  Sql_check_constraint_spec_list *check_cons_list,
                  dd::Column::enum_hidden_type hidden, bool is_array = false,
                  const villagesql::TypeContext *type_context = nullptr);
+
+  /**
+     Checks if there are any columns with COLUMN_FORMAT COMRPESSED
+     attribute among field definitions in create_list.
+
+     @retval false there are no compressed columns
+     @retval true there is at least one compressed column
+  */
+  bool has_compressed_columns() const;
 
  private:
   Alter_info &operator=(const Alter_info &rhs);  // not implemented

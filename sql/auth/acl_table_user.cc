@@ -1438,7 +1438,7 @@ void Acl_table_user_reader::read_account_name(ACL_USER &user) {
   user.user =
       get_field(&m_mem_root, m_table->field[m_table_schema->user_idx()]);
   if (check_no_resolve && hostname_requires_resolving(user.host.get_host()) &&
-      strcmp(user.host.get_host(), "localhost") != 0) {
+      !is_localhost_string(user.host.get_host())) {
     LogErr(WARNING_LEVEL, ER_AUTHCACHE_USER_SKIPPED_NEEDS_RESOLVE,
            user.user ? user.user : "",
            user.host.get_host() ? user.host.get_host() : "");
@@ -2076,32 +2076,6 @@ bool Acl_table_user_reader::driver() {
 
 Password_lock::Password_lock()
     : password_lock_time_days(0), failed_login_attempts(0) {}
-
-Password_lock &Password_lock::operator=(const Password_lock &other) {
-  if (this != &other) {
-    password_lock_time_days = other.password_lock_time_days;
-    failed_login_attempts = other.failed_login_attempts;
-  }
-  return *this;
-}
-
-Password_lock &Password_lock::operator=(Password_lock &&other) {
-  if (this != &other) {
-    std::swap(password_lock_time_days, other.password_lock_time_days);
-    std::swap(failed_login_attempts, other.failed_login_attempts);
-  }
-  return *this;
-}
-
-Password_lock::Password_lock(const Password_lock &other) {
-  password_lock_time_days = other.password_lock_time_days;
-  failed_login_attempts = other.failed_login_attempts;
-}
-
-Password_lock::Password_lock(Password_lock &&other) {
-  std::swap(password_lock_time_days, other.password_lock_time_days);
-  std::swap(failed_login_attempts, other.failed_login_attempts);
-}
 
 }  // namespace acl_table
 

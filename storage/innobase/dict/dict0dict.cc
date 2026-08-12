@@ -263,6 +263,10 @@ FILE *dict_foreign_err_file = nullptr;
 /* mutex protecting the foreign and unique error buffers */
 ib_mutex_t dict_foreign_err_mutex;
 
+/** SYS_ZIP_DICT and SYS_ZIP_DICT_COLS will be missing when upgrading
+mysql-5.7 to PS-8.0 */
+bool dict_upgrade_zip_dict_missing = false;
+
 /** Checks if the database name in two table names is the same.
  @return true if same db name */
 bool dict_tables_have_same_db(const char *name1, /*!< in: table name in the
@@ -709,7 +713,8 @@ This function must not be called concurrently on the same table object.
 static void dict_table_autoinc_alloc(void *table_void) {
   dict_table_t *table = static_cast<dict_table_t *>(table_void);
 
-  table->autoinc_mutex = ut::new_withkey<ib_mutex_t>(UT_NEW_THIS_FILE_PSI_KEY);
+  table->autoinc_mutex =
+      ut::new_withkey<AutoIncMutex>(UT_NEW_THIS_FILE_PSI_KEY);
   ut_a(table->autoinc_mutex != nullptr);
   mutex_create(LATCH_ID_AUTOINC, table->autoinc_mutex);
 
@@ -2188,7 +2193,7 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
     }
   } else if (!always_inlined &&
              field_max_size > BTR_EXTERN_LOCAL_STORED_MAX_SIZE &&
-             DATA_BIG_COL(col) && index->is_clustered()) {
+             index->is_clustered()) {
     /* In dtuple_convert_big_rec(), a "big" variable-length column that is
     longer than BTR_EXTERN_LOCAL_STORED_MAX_SIZE and is not used for navigation
     may be chosen for external storage. */
@@ -3947,6 +3952,8 @@ void dict_persist_init(void) {
 
 /** Clear the structure */
 void dict_persist_close(void) {
+  if (!dict_persist) return;
+
   ut::delete_(dict_persist->persisters);
 
 #ifndef UNIV_HOTBACKUP
@@ -4391,6 +4398,38 @@ void dict_set_merge_threshold_all_debug(uint merge_threshold_all) {
   dict_sys_mutex_exit();
 }
 #endif /* UNIV_DEBUG */
+
+/** Set is_corrupt flag by space_id
+@param	space_id	space id
+@param	need_mutex	whether dict_sys->mutex needs to be locked
+*/
+void dict_table_set_corrupt_by_space(space_id_t space_id,
+                                     bool need_mutex) noexcept {
+  ut_a(space_id != 0);
+  ut_a(space_id < dict_sys_t::s_log_space_id);
+
+  if (need_mutex) mutex_enter(&(dict_sys->mutex));
+
+  dict_table_t *table = UT_LIST_GET_FIRST(dict_sys->table_LRU);
+  bool found = false;
+
+  while (table) {
+    if (table->space == space_id) {
+      table->is_corrupt = true;
+      found = true;
+    }
+
+    table = UT_LIST_GET_NEXT(table_LRU, table);
+  }
+
+  if (need_mutex) mutex_exit(&(dict_sys->mutex));
+
+  if (!found) {
+    ib::warn() << "Space to be marked as crashed was not found "
+                  "for id "
+               << space_id << ".";
+  }
+}
 
 /** Inits dict_ind_redundant. */
 void dict_ind_init(void) {
@@ -5874,42 +5913,6 @@ void dict_sdi_remove_from_cache(space_id_t space_id, dict_table_t *sdi_table,
   }
 }
 
-/** Change the table_id of SYS_* tables if they have been created after
-an earlier upgrade. This will update the table_id by adding DICT_MAX_DD_TABLES
-TODO - This function is to be removed by WL#16210.
-*/
-void dict_table_change_id_sys_tables() {
-  ut_ad(dict_sys_mutex_own());
-
-  /* On upgrading from 5.6 to 5.7, new system table SYS_VIRTUAL is given table
-   id after the last created user table. So, if last user table was created
-   with table_id as 1027, SYS_VIRTUAL would get id 1028. On upgrade to 8.0,
-   all these tables are shifted by 1024. On 5.7, the SYS_FIELDS has table id
-   4, which gets updated to 1028 on upgrade. This would later assert when we
-   try to open the SYS_VIRTUAL table (having id 1028) for upgrade. Hence, we
-   need to upgrade system tables in reverse order to avoid that.
-   These tables are created on boot. And hence this issue can only be caused by
-   a new table being added at a later stage - the SYS_VIRTUAL table being added
-   on upgrading to 5.7. */
-
-  for (int i = SYS_NUM_SYSTEM_TABLES - 1; i >= 0; i--) {
-    dict_table_t *system_table = dict_table_get_low(SYSTEM_TABLE_NAME[i]);
-
-    ut_a(system_table != nullptr);
-    ut_ad(dict_sys_table_id[i] == system_table->id);
-
-    /* During upgrade, table_id of user tables is also
-    moved by DICT_MAX_DD_TABLES. See dict_load_table_one()*/
-    table_id_t new_table_id = system_table->id + DICT_MAX_DD_TABLES;
-
-    dict_table_change_id_in_cache(system_table, new_table_id);
-
-    dict_sys_table_id[i] = system_table->id;
-
-    dict_table_prevent_eviction(system_table);
-  }
-}
-
 /** @return true if table is InnoDB SYS_* table
 @param[in]      table_id        table id  */
 bool dict_table_is_system(table_id_t table_id) {
@@ -6063,3 +6066,173 @@ void dict_validate_no_purge_rollback_threads() {
 }
 #endif /* UNIV_DEBUG */
 #endif /* !UNIV_HOTBACKUP */
+/** Get single compression dictionary id for the given
+(table id, column pos) pair.
+@param[in]	table_id	table id
+@param[in]	column_pos	column position
+@param[out]	dict_id		zip_dict id
+@retval	DB_SUCCESS		if OK
+@retval	DB_RECORD_NOT_FOUND	if not found */
+dberr_t dict_get_dictionary_id_by_key(table_id_t table_id, ulint column_pos,
+                                      ulint *dict_id) {
+  ut_ad(srv_is_upgrade_mode);
+  ut_ad(!mutex_own(&dict_sys->mutex));
+
+  trx_t *const trx = trx_allocate_for_background();
+  trx->op_info = "get zip dict id by composite key";
+  trx->dict_operation_lock_mode = RW_S_LATCH;
+  trx_start_if_not_started(trx, false, UT_LOCATION_HERE);
+
+  const dberr_t err = dict_create_get_zip_dict_id_by_reference(
+      table_id, column_pos, dict_id, trx);
+
+  trx_commit_for_mysql(trx);
+  trx->dict_operation_lock_mode = 0;
+  trx_free_for_background(trx);
+
+  return err;
+}
+
+/** Get compression dictionary info (name and data) for the given id.
+Allocates memory in name->str and data->str on success.
+Must be freed with mem_free().
+@param[in]	dict_id		dictionary id
+@param[out]	name		dictionary name
+@param[out]	name_len	dictionary name length
+@param[out]	data		dictionary data
+@param[out]	data_len	dictionary data lenght
+@retval	DB_SUCCESS		if OK
+@retval	DB_RECORD_NOT_FOUND	if not found */
+dberr_t dict_get_dictionary_info_by_id(ulint dict_id, char **name,
+                                       ulint *name_len, char **data,
+                                       ulint *data_len) {
+  ut_ad(srv_is_upgrade_mode);
+  ut_ad(!mutex_own(&dict_sys->mutex));
+
+  trx_t *const trx = trx_allocate_for_background();
+  trx->op_info = "get zip dict name and data by id";
+  trx->dict_operation_lock_mode = RW_S_LATCH;
+  trx_start_if_not_started(trx, false, UT_LOCATION_HERE);
+
+  const dberr_t err = dict_create_get_zip_dict_info_by_id(
+      dict_id, name, name_len, data, data_len, trx);
+
+  trx_commit_for_mysql(trx);
+  trx->dict_operation_lock_mode = 0;
+  trx_free_for_background(trx);
+
+  return err;
+}
+
+/** Reads mysql.ibd's page0 from buffer if the tablespace is already loaded
+into Fil_system cache
+@return tuple <0> success - true if no error
+              <1> true if encryption flag is set, false otherwise */
+static std::tuple<bool, bool> get_mysql_ibd_page_0_from_buffer() {
+  auto result = std::make_tuple(false, false);
+
+  fil_space_t *space = fil_space_acquire_silent(dict_sys_t::s_dict_space_id);
+  if (space == nullptr) {
+    return (result);
+  }
+
+  const page_size_t page_size(space->flags);
+  mtr_t mtr;
+  mtr_start(&mtr);
+  buf_block_t *block =
+      buf_page_get(page_id_t(dict_sys_t::s_dict_space_id, 0), univ_page_size,
+                   RW_X_LATCH, UT_LOCATION_HERE, &mtr);
+
+  if (block == nullptr) {
+    mtr_commit(&mtr);
+    fil_space_release(space);
+    return (result);
+  }
+
+  const ulint flags = fsp_header_get_flags(buf_block_get_frame(block));
+  std::get<0>(result) = true;
+  std::get<1>(result) = FSP_FLAGS_GET_ENCRYPTION(flags);
+
+  mtr_commit(&mtr);
+  fil_space_release(space);
+  return (result);
+}
+
+/** Reads mysql.ibd's page0 directly from disk
+@return tuple <0> success - true if no error
+              <1> true if encryption flag is set, false otherwise */
+static std::tuple<bool, bool> get_mysql_ibd_page_0_io() {
+  auto result = std::make_tuple(false, false);
+
+  /* page0 of mysql.ibd is not in the buffer, try direct io */
+  auto buf = ut::ut_make_unique_ptr_nokey(2 * UNIV_PAGE_SIZE);
+
+  bool successfully_opened = false;
+
+  pfs_os_file_t file = os_file_create_simple_no_error_handling(
+      innodb_data_file_key, dict_sys_t::s_dd_space_file_name, OS_FILE_OPEN,
+      OS_FILE_READ_ONLY, srv_read_only_mode, &successfully_opened);
+
+  if (!successfully_opened) {
+    return (result);
+  }
+
+  buf_frame_t *page =
+      static_cast<buf_frame_t *>(ut_align(buf.get(), UNIV_PAGE_SIZE));
+
+  ut_ad(page == page_align(page));
+
+  IORequest request(IORequest::READ);
+  dberr_t err = os_file_read_first_page_noexit(
+      request, dict_sys_t::s_dd_space_file_name, file, page, UNIV_PAGE_SIZE);
+
+  os_file_close(file);
+
+  if (err != DB_SUCCESS) {
+    return (result);
+  }
+
+  const ulint flags = fsp_header_get_flags(page);
+  std::get<0>(result) = true;
+  std::get<1>(result) = FSP_FLAGS_GET_ENCRYPTION(flags);
+
+  return (result);
+}
+
+/** Detect if mysql.ibd's page0 has encryption flag set.
+The page 0 either read from buffer (if available) or
+directly from disk.
+@return tuple 0 success - true if no error
+              1 true if encryption flag is set, false otherwise */
+static std::tuple<bool, bool> dict_mysql_ibd_page_0_has_encryption_flag_set() {
+  // 0 element - success, 1 element - encryption flag
+  auto result = std::make_tuple(false, false);
+
+  /* read from buffer */
+  result = get_mysql_ibd_page_0_from_buffer();
+  if (!std::get<0>(result)) {
+    result = get_mysql_ibd_page_0_io();
+  }
+  return (result);
+}
+
+bool dict_detect_encryption_of_mysql_ibd(dict_init_mode_t dict_init_mode,
+                                         bool &encrypt_mysql) {
+  enum_default_table_encryption default_enc =
+      static_cast<enum_default_table_encryption>(
+          global_system_variables.default_table_encryption);
+
+  bool success = false;
+  switch (dict_init_mode) {
+    case DICT_INIT_CREATE_FILES:
+      encrypt_mysql = (default_enc == DEFAULT_TABLE_ENC_ON);
+      return true;
+    case DICT_INIT_CHECK_FILES:
+      std::tie(success, encrypt_mysql) =
+          dict_mysql_ibd_page_0_has_encryption_flag_set();
+      return success;
+    default:
+      ut_ad(0);
+      return false;
+  }
+}

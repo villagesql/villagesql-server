@@ -756,6 +756,7 @@ int wild_case_compare(CHARSET_INFO *cs, const char *str, const char *wildstr);
 int wild_case_compare(CHARSET_INFO *cs, const char *str, size_t str_len,
                       const char *wildstr, size_t wildstr_len);
 bool hostname_requires_resolving(const char *hostname);
+bool is_localhost_string(const char *hostname);
 bool acl_init(bool dont_read_acl_tables);
 bool is_acl_inited();
 void acl_free(bool end = false);
@@ -817,7 +818,7 @@ Access_bitmask get_column_grant(THD *thd, GRANT_INFO *grant,
                                 const char *db_name, const char *table_name,
                                 const char *field_name);
 bool mysql_show_grants(THD *, LEX_USER *, const List_of_auth_id_refs &, bool,
-                       bool);
+                       bool, bool);
 bool mysql_show_create_user(THD *thd, LEX_USER *user, bool are_both_users_same);
 bool mysql_revoke_all(THD *thd, List<LEX_USER> &list);
 bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
@@ -832,6 +833,8 @@ int fill_schema_table_privileges(THD *thd, Table_ref *tables, Item *cond);
 int fill_schema_column_privileges(THD *thd, Table_ref *tables, Item *cond);
 const ACL_internal_schema_access *get_cached_schema_access(
     GRANT_INTERNAL_INFO *grant_internal_info, const char *schema_name);
+bool acl_is_utility_user(const char *user, const char *host, const char *ip);
+bool acl_utility_user_has_global_grant(const std::string &privilege);
 
 bool lock_tables_precheck(THD *thd, Table_ref *tables);
 bool create_table_precheck(THD *thd, Table_ref *tables,

@@ -105,6 +105,7 @@ class Table_histograms_collection;
 class Table_ref;
 class Table_trigger_dispatcher;
 class Temp_table_param;
+class Trigger;
 class handler;
 class partition_info;
 enum enum_stats_auto_recalc : int;
@@ -774,6 +775,8 @@ struct TABLE_SHARE {
   /** Secondary engine load status */
   bool secondary_load{false};
 
+  bool explicit_encryption{false};
+
   const CHARSET_INFO *table_charset{
       nullptr}; /* Default charset of string fields */
 
@@ -859,6 +862,7 @@ struct TABLE_SHARE {
   uint fields{0};            /* Number of fields */
   uint rec_buff_length{0};   /* Size of table->record[] buffer */
   uint keys{0};              /* Number of keys defined for the table*/
+  uint temp_table_key_id{0}; /* Serves the unique number for <auto_keyN> */
   uint key_parts{0};         /* Number of key parts of all keys
                              defined for the table
                           */
@@ -928,7 +932,11 @@ struct TABLE_SHARE {
   uint db_options_in_use{0};
   uint rowid_field_offset{0}; /* Field_nr +1 to rowid field */
   /* Primary key index number, used in TABLE::key_info[] */
-  uint primary_key{0};
+  /*
+    By default, when a new object is created, there should be no PK
+    configured.
+  */
+  uint primary_key{MAX_KEY};
   uint next_number_index{0};      /* autoincrement key number */
   uint next_number_key_offset{0}; /* autoinc keypart offset in a key */
   uint next_number_keypart{0};    /* autoinc keypart number in a key */
@@ -1036,6 +1044,13 @@ struct TABLE_SHARE {
   */
   dd::Table *tmp_table_def{nullptr};
 
+  /**
+    True in the case if tokudb read-free-replication is used for the table
+    without explicit pk and corresponding warning was issued to disable
+    repeated warning.
+  */
+  bool rfr_lookup_warning{false};
+
   /// For materialized derived tables; @see add_derived_key().
   Query_block *owner_of_possible_tmp_keys{nullptr};
 
@@ -1052,6 +1067,16 @@ struct TABLE_SHARE {
 
   // List of check constraint share instances.
   Sql_check_constraint_share_list *check_constraint_share_list{nullptr};
+
+  /**
+    List of trigger descriptions for the table loaded from the data-dictionary.
+    Nullptr - if table doesn't have triggers.
+
+    @note The purpose of Trigger objects in this list is to serve as template
+          for per-TABLE-object Trigger objects (and store static metadata).
+          They can't be used directly for execution of triggers.
+  */
+  List<Trigger> *triggers{nullptr};
 
   /**
     Schema's read only mode - ON (true) or OFF (false). This is filled in
@@ -1271,6 +1296,12 @@ struct TABLE_SHARE {
   /** Returns whether this table is referenced by a foreign key. */
   bool is_referenced_by_foreign_key() const { return foreign_key_parents != 0; }
 
+  /**
+     Checks if TABLE_SHARE has at least one field with
+     COLUMN_FORMAT_TYPE_COMPRESSED flag.
+  */
+  bool has_compressed_columns() const;
+
  private:
   /// How many TABLE objects use this TABLE_SHARE.
   unsigned int m_ref_count{0};
@@ -1436,6 +1467,18 @@ struct TABLE {
     using them for linking TABLE objects in a list.
   */
   friend class Table_cache_element;
+
+  /**
+    Links for the LRU list of unused TABLE objects with fully loaded triggers
+    in the specific instance of Table_cache.
+  */
+  TABLE *triggers_lru_next{nullptr}, **triggers_lru_prev{nullptr};
+
+  /*
+    Give Table_cache access to the above two members to allow using them
+    for linking TABLE objects in a list.
+  */
+  friend class Table_cache;
 
  public:
   // Pointer to the histograms available on the table.
@@ -2224,6 +2267,25 @@ struct TABLE {
   void set_tmp_table_seq_id(uint arg) { tmp_table_seq_id = arg; }
 #endif
   /**
+    Checks if TABLE has at least one field with
+    COLUMN_FORMAT_TYPE_COMPRESSED flag.
+  */
+  bool has_compressed_columns() const;
+
+  /**
+    Checks if TABLE has at least one field with
+    COLUMN_FORMAT_TYPE_COMPRESSED flag and non-empty
+    zip_dict.
+  */
+  bool has_compressed_columns_with_dictionaries() const;
+
+  /**
+    Updates zip_dict_name in the TABLE's field definitions based on the
+    values from the supplied list of Create_field objects.
+  */
+  void update_compressed_columns_info(const List<Create_field> &fields);
+
+  /**
     Update covering keys depending on max read key length.
 
     Update available covering keys for the table, based on a constrained field
@@ -2496,6 +2558,24 @@ struct TABLE {
     @retval Pointer to a histogram if one is found.
   */
   const histograms::Histogram *find_histogram(uint field_index) const;
+
+  void set_tmp_dd_table_ptr(const dd::Table *tmp_dd_table_ptr_) noexcept {
+    assert(tmp_dd_table_ptr_ != nullptr);
+    tmp_dd_table_ptr = tmp_dd_table_ptr_;
+  }
+
+  const dd::Table *get_tmp_dd_table_ptr() const noexcept {
+    return tmp_dd_table_ptr;
+  }
+
+ private:
+  /**
+     A DD object reference for temporary tables, which is otherwise present in
+     the owner thread callstack only and nowhere in the global DD data
+     structures. It is used to support
+     INFORMATION_SCHEMA.GLOBAL_TEMPORARY_TABLES queries.
+  */
+  const dd::Table *tmp_dd_table_ptr{nullptr};
 };
 
 static inline void empty_record(TABLE *table) {
@@ -4330,6 +4410,7 @@ void free_blob_buffers_and_reset(TABLE *table, uint32 size);
 int set_zone(int nr, int min_zone, int max_zone);
 void append_unescaped(String *res, const char *pos, size_t length);
 char *fn_rext(char *name);
+const char *fn_rext(const char *name);
 TABLE_CATEGORY get_table_category(const LEX_CSTRING &db,
                                   const LEX_CSTRING &name);
 

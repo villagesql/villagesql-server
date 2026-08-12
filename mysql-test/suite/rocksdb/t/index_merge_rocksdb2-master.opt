@@ -1,0 +1,1 @@
+--transaction-isolation='READ-COMMITTED' --loose-rocksdb_records_in_range=2

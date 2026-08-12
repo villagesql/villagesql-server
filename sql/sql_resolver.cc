@@ -108,6 +108,7 @@
 #include "sql/sql_union.h"  // Query_result_union
 #include "sql/system_variables.h"
 #include "sql/table.h"
+#include "sql/table_function.h"
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
 #include "sql/visible_fields.h"
@@ -2179,6 +2180,11 @@ static void fix_tables_after_pullout(Query_block *parent_query_block,
       Note that 'tr' might be a common table expression: it means we now have a
       "lateral CTE".
     */
+  }
+
+  if (tr->is_table_function()) {
+    tr->table_function->fix_after_pullout(parent_query_block,
+                                          removed_query_block);
   }
 }
 
@@ -5537,8 +5543,7 @@ bool Query_block::transform_table_subquery_to_join_with_derived(
     // list. Correct context info of outer expressions.
     auto it_outer = sj_outer_exprs.begin() + initial_sj_inner_exprs_count;
     auto it_inner = sj_inner_exprs.begin() + initial_sj_inner_exprs_count;
-    for (int i = 0; it_outer != sj_outer_exprs.end();
-         ++it_outer, ++it_inner, ++i) {
+    for (; it_outer != sj_outer_exprs.end(); ++it_outer, ++it_inner) {
       Item *inner = *it_inner;
       Item *outer = *it_outer;
       // In setup_base_ref_items() we allocated space for appending this

@@ -9,6 +9,7 @@ use performance_schema;
 show tables;
 
 show create table accounts;
+show create table account_failed_login_lock_status;
 show create table cond_instances;
 show create table events_stages_current;
 show create table events_stages_history;
@@ -55,6 +56,8 @@ show create table file_summary_by_event_name;
 show create table file_summary_by_instance;
 show create table host_cache;
 show create table hosts;
+show create table malloc_stats;
+show create table malloc_stats_totals;
 show create table mutex_instances;
 show create table objects_summary_global_by_type;
 show create table performance_timers;

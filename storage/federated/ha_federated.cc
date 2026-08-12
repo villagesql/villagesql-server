@@ -504,7 +504,8 @@ static int federated_db_init(void *p) {
   federated_hton->commit = federated_commit;
   federated_hton->rollback = federated_rollback;
   federated_hton->create = federated_create_handler;
-  federated_hton->flags = HTON_ALTER_NOT_SUPPORTED | HTON_NO_PARTITION;
+  federated_hton->flags = HTON_ALTER_NOT_SUPPORTED | HTON_NO_PARTITION |
+                          HTON_SUPPORTS_ONLINE_BACKUPS;
 
   /*
     Support for transactions disabled until WL#2952 fixes it.
@@ -1269,7 +1270,11 @@ bool ha_federated::create_where_from_key(String *to, KEY *key_info,
   const bool both_not_null =
       (start_key != nullptr && end_key != nullptr) ? true : false;
   uchar *ptr;
-  uint remainder, length;
+  // 'remainder' is only consumed by DBUG_PRINT and assert, both compiled out
+  // in release builds; mark as [[maybe_unused]] so GCC 16 doesn't warn under
+  // -Werror=unused-but-set-variable.
+  [[maybe_unused]] uint remainder;
+  uint length;
   char tmpbuff[FEDERATED_QUERY_BUFFER_SIZE];
   String tmp(tmpbuff, sizeof(tmpbuff), system_charset_info);
   const key_range *ranges[2] = {start_key, end_key};
@@ -1961,6 +1966,74 @@ int ha_federated::repair(THD *, HA_CHECK_OPT *check_opt) {
 }
 
 /*
+  We need to handle DOUBLE type in a special way.
+  This is because Federated SE does the update in the following way:
+  1. Query the remote server for the row(s) to be updated
+  2. Call update_row() for each row
+  3. Construct update query together with WHERE clause which contains all
+  columns (even if they were not specified in the original query)
+  4. Query the remote server
+
+  If the row contains DOUBLE(M,D) column, the value in WHERE clause is rounded
+  to D digits after the decimal point comparing to the underlying, actually
+  stored value. This is because of field definition. This rounded value goes to
+  the server side and appears there as Item_decimal. It is converted to double
+  in the following way:
+  1. convert decimal to string by decimal2string()
+  2. convert string to double by my_strtod()
+  Then analyze_field_constant() detects that the result would be rounded for
+  comparison with field having precision (M,D), so it is decided that row
+  matching is not safe and query execution does not continue.
+
+  This is desired behavior because if we have table:
+  CREATE TABLE t1 (id INT PRIMARY KEY AUTO_INCREMENT, i INT, d DOUBLE(8,6));
+  INSERT INTO f1(i, d) VALUES (0, 8.730550);
+  and we execute:
+  UPDATE t1 set i=1 where d=8.7305501;
+  we do not expect row to be updated.
+
+  Note that there is the same issue even if we use a single server.
+  If DOUBLE(M,D) column is specified in WHERE clause, the column is row is
+  not found. Like in the above example: UPDATE t1 set i=1 where d=8.730550;
+  Item_decimal = 8.730550 => string 8.730550 => double = 8.7305499999999991
+
+  Here we force server side to pass stored value through string to double
+  conversion which results in the same number as conversion of provided constant
+  to double (both go through the same conversion path). E.g.: Constant:
+  Item_decimal = 8.730550 => string 8.730550 => double = 8.7305499999999991
+  Stored value: Stored in DB as 8.7305500000000009 => apply (M,D) 8.730550 =>
+                string 8.730550 => double = 8.7305499999999991
+  */
+static bool handle_double_type_with_explicit_precision(Field *field,
+                                                       uchar *record,
+                                                       const uchar *old_data,
+                                                       String &where_string,
+                                                       String &field_value) {
+  if (field->type() != MYSQL_TYPE_DOUBLE) {
+    return true;
+  }
+  if (field->is_null_in_record(old_data)) {
+    return true;
+  }
+  const auto fn = down_cast<Field_num *>(field);
+  if (fn->dec == DECIMAL_NOT_SPECIFIED) {
+    return true;
+  }
+
+  where_string.append("CAST(");
+  size_t field_name_length = strlen(field->field_name);
+  append_ident(&where_string, field->field_name, field_name_length,
+               ident_quote_char);
+  where_string.append(" AS CHAR) = ");
+
+  field->val_str(&field_value,
+                 const_cast<uchar *>(old_data + field->offset(record)));
+  field_value.print(&where_string);
+
+  return false;
+}
+
+/*
   Yes, update_row() does what you expect, it updates a row. old_data will have
   the previous row record in it, while new_data will have the newest data in
   it.
@@ -2057,31 +2130,37 @@ int ha_federated::update_row(const uchar *old_data, uchar *) {
     }
 
     if (bitmap_is_set(table->read_set, (*field)->field_index())) {
-      const size_t field_name_length = strlen((*field)->field_name);
-      append_ident(&where_string, (*field)->field_name, field_name_length,
-                   ident_quote_char);
-      if ((*field)->is_null_in_record(old_data))
-        where_string.append(STRING_WITH_LEN(" IS NULL "));
-      else {
-        const bool needs_quote = (*field)->str_needs_quotes();
-        where_string.append(STRING_WITH_LEN(" = "));
-
-        const bool is_json = (*field)->type() == MYSQL_TYPE_JSON;
-        if (is_json) {
-          where_string.append("CAST(");
-        }
-
-        (*field)->val_str(
-            &field_value,
-            const_cast<uchar *>(old_data + (*field)->offset(record)));
-        if (needs_quote) where_string.append(value_quote_char);
-        field_value.print(&where_string);
-        if (needs_quote) where_string.append(value_quote_char);
-
-        if (is_json) {
-          where_string.append(" AS JSON)");
-        }
+      if (!handle_double_type_with_explicit_precision(
+              *field, record, old_data, where_string, field_value)) {
         field_value.length(0);
+      } else {
+        const size_t field_name_length = strlen((*field)->field_name);
+        append_ident(&where_string, (*field)->field_name, field_name_length,
+                     ident_quote_char);
+        if ((*field)->is_null_in_record(old_data))
+          where_string.append(STRING_WITH_LEN(" IS NULL "));
+        else {
+          const bool needs_quote = (*field)->str_needs_quotes();
+          where_string.append(STRING_WITH_LEN(" = "));
+
+          const bool is_json = (*field)->type() == MYSQL_TYPE_JSON;
+          if (is_json) {
+            where_string.append("CAST(");
+          }
+
+          (*field)->val_str(
+              &field_value,
+              const_cast<uchar *>(old_data + (*field)->offset(record)));
+
+          if (needs_quote) where_string.append(value_quote_char);
+          field_value.print(&where_string);
+          if (needs_quote) where_string.append(value_quote_char);
+
+          if (is_json) {
+            where_string.append(" AS JSON)");
+          }
+          field_value.length(0);
+        }
       }
       where_string.append(STRING_WITH_LEN(" AND "));
     }
@@ -2992,6 +3071,20 @@ int ha_federated::real_query(const char *query, size_t length) {
 
   if (!query || !length) goto end;
 
+  /* Here we operate on internal proxy -> server connection which uses
+     client code. But it is compiled in context of server code, so
+     all things like:
+     #ifdef MYSQL_SERVER
+         my_error(net->last_errno, MYF(0));
+     #endif
+     are compiled in.
+     proxy -> server connection has reconnection logic, and all internal errors
+     should be handled silently as long as the overal result of the operation
+     is success.
+     If this connection fails and cannot be recovered, the function will return
+     error, which will be handled by the server.
+  */
+
   rc = mysql_real_query(mysql, query, static_cast<ulong>(length));
 
   // Simulate as errors happened within the previous query
@@ -3027,6 +3120,7 @@ int ha_federated::real_query(const char *query, size_t length) {
     Diagnostics_area *da = current_thd->get_stmt_da();
     if (da->is_set()) {
       const uint err = da->mysql_errno();
+
       if ((err == ER_NET_PACKETS_OUT_OF_ORDER || err == ER_NET_ERROR_ON_WRITE ||
            err == ER_NET_WRITE_INTERRUPTED || err == ER_NET_READ_ERROR ||
            err == ER_NET_READ_INTERRUPTED) &&
@@ -3040,6 +3134,18 @@ int ha_federated::real_query(const char *query, size_t length) {
     }
   }
 end:
+  /* Reconnection can take place above or inside cli_advanced_command().
+   If it happens in cli_advanced_command(), diagnositcs are may contain
+   the information about the error which triggered the reconnection.
+   But as the reconnection was fine, the information about transient
+   problems should not be propagated to the client.
+   */
+  if (!rc) {
+    Diagnostics_area *da = current_thd->get_stmt_da();
+    da->reset_condition_info(current_thd);
+    da->reset_diagnostics_area();
+  }
+
   return rc;
 }
 

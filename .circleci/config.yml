@@ -1,0 +1,108 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: cimg/base:24.04
+        auth:
+          username: $DOCKERHUB_USERNAME
+          password: $DOCKERHUB_PASSWORD
+    steps:
+      - checkout
+      - run:
+          name: Ensure all submodules are updated recursively
+          command: git submodule update --init --recursive
+      - run:
+          name: Clang-format and Clang-tidy test
+          command: |
+            set -o xtrace
+            UBUNTU_CODE_NAME="noble"
+            BASE_OWNER="percona"
+            BASE_REPO="percona-server"
+            BASE_BRANCH="8.4"
+            COMPILER_VERSION="19"
+
+            sudo -E apt-get -yq update >> ~/apt-get-update.log 2>&1
+            sudo apt-get install -yq --no-install-suggests --allow-unauthenticated --no-install-recommends clang-${COMPILER_VERSION} clang-tidy-${COMPILER_VERSION} clang-format-${COMPILER_VERSION} clang-tools-${COMPILER_VERSION} libc++-${COMPILER_VERSION}-dev libc++abi-${COMPILER_VERSION}-dev libldap2-dev curl libcurl4-openssl-dev bison libudev-dev libkrb5-dev libreadline-dev zlib1g-dev liblz4-dev libedit-dev libevent-dev protobuf-compiler libprotobuf-dev libprotoc-dev libldap2-dev libsasl2-dev libsasl2-modules-gssapi-mit cmake libicu-dev libtirpc-dev
+
+            # Prepare compile_commands.json
+            cd ~/project
+            cmake -B /home/circleci/debug-build -DCMAKE_BUILD_TYPE=Debug -DWITH_SSL=system -DWITH_AUTHENTICATION_LDAP=ON -DWITH_ROCKSDB=ON -DCMAKE_C_COMPILER=clang-${COMPILER_VERSION} -DCMAKE_CXX_COMPILER=clang++-${COMPILER_VERSION} -DCMAKE_CXX_FLAGS="-stdlib=libc++" -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DWITH_SYSTEM_LIBS=ON -DWITH_FIDO=bundled -DWITH_ZSTD=bundled -DWITH_LZ4=bundled -DWITH_PROTOBUF=bundled ~/project
+
+            # Method to fetch JSON from a Github API URL with error handling
+            fetch_json() {
+              local url="$1" tmp http_code curl_exit body
+              tmp=$(mktemp) || return 1
+              # write body to tmp, capture HTTP code on stdout
+              http_code=$(curl -sS --location --connect-timeout 10 --max-time 30 -w "%{http_code}" -o "$tmp" "$url" 2>/dev/null) || true
+              curl_exit=$?
+              body="$(cat "$tmp")"
+              rm -f "$tmp"
+
+              if [ $curl_exit -ne 0 ]; then
+                echo "curl exit $curl_exit for $url" >&2
+                return 2
+              fi
+              if [ -z "$http_code" ] || [ "$http_code" -ge 400 ]; then
+                echo "HTTP $http_code from $url" >&2
+                return 3
+              fi
+              if [ -z "${body:-}" ]; then
+                echo "empty response from $url" >&2
+                return 4
+              fi
+              if ! printf '%s' "$body" | jq -e . >/dev/null 2>&1; then
+                echo "response from $url is not valid JSON" >&2
+                return 5
+              fi
+
+              printf '%s' "$body"
+            }
+
+            PR_DATA=""
+            if [[ "$CIRCLE_BRANCH" =~ ^pull/[0-9]+$ ]]; then
+              # If the circleCI check is run in the context of the official percona repo.
+              PR_API_URL="https://api.github.com/repos/${BASE_OWNER}/${BASE_REPO}/pulls/${CIRCLE_PR_NUMBER}"
+              PR_DATA="$(fetch_json "$PR_API_URL")" || PR_DATA=""
+            else
+              # GitHub API URL to get open PRs matching this fork + branch
+              API_URL="https://api.github.com/repos/${BASE_OWNER}/${BASE_REPO}/pulls?head=${CIRCLE_PROJECT_USERNAME}:${CIRCLE_BRANCH}"
+              echo "Fetching PRs from: $API_URL" >&2
+
+              # Fetch PRs
+              PRS_JSON="$(fetch_json "$API_URL")" || PRS_JSON="[]"
+
+              # Filter PR whose head.sha matches CIRCLE_SHA1
+              PR_DATA="$(printf '%s' "$PRS_JSON" | jq --arg sha "$CIRCLE_SHA1" '.[] | select(.head.sha == $sha)')"
+            fi
+
+            if [[ -z "$PR_DATA" ]]; then
+              echo "Failed to find PR data for commit $CIRCLE_SHA1. $BASE_BRANCH will be used as the base branch."
+            else
+              BASE_BRANCH=$(echo "$PR_DATA" | jq -r '.base.ref')
+              PR_NUMBER=$(echo "$PR_DATA" | jq -r '.number')
+              echo "Found PR: $PR_NUMBER with base branch: $BASE_BRANCH"
+            fi
+
+            echo "$BASE_BRANCH"
+            git remote add target "https://github.com/${BASE_OWNER}/${BASE_REPO}"
+            git fetch --no-tags --no-recurse-submodules target $BASE_BRANCH
+
+            echo "Checking clang-format results"
+            git diff -U0 "$(git merge-base HEAD target/$BASE_BRANCH)" *.c *.cc *.cpp *.h *.hpp *.i *.ic *.ih | clang-format-diff-$COMPILER_VERSION -style=file -p1 >_GIT_DIFF || true
+            if [ ! -s _GIT_DIFF ]; then
+              echo The last git commit is clang-formatted;
+            else
+              cat _GIT_DIFF;
+              false;
+            fi
+
+            echo "Checking clang-tidy static code analysis results"
+            git diff -U0 "$(git merge-base HEAD target/$BASE_BRANCH)" *.c *.cc *.cpp *.h *.hpp *.i *.ic *.ih | clang-tidy-diff-${COMPILER_VERSION}.py -clang-tidy-binary clang-tidy-${COMPILER_VERSION} -p1 -path /home/circleci/debug-build -export-fixes=fixes.yaml || true
+            clang-apply-replacements-${COMPILER_VERSION} .
+            git diff > _GIT_DIFF_TIDY
+            if [ ! -s _GIT_DIFF_TIDY ]; then
+               echo The last git commit is clang-tidy clean;
+            else
+               echo The last git commit has clang-tidy warnings;
+               cat _GIT_DIFF_TIDY;
+            fi

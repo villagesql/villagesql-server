@@ -76,6 +76,7 @@
 #include "sql/protocol.h"
 #include "sql/psi_memory_key.h"
 #include "sql/spatial.h"                // Geometry
+#include "sql/sql_base.h"
 #include "sql/sql_class.h"              // THD
 #include "sql/sql_exception_handler.h"  // handle_std_exception
 #include "sql/sql_lex.h"
@@ -236,6 +237,9 @@ bool change_prevents_inplace(const Field_str &from, const Create_field &to) {
   DBUG_TRACE;
   return sql_type_prevents_inplace(from, to) ||
          length_prevents_inplace(from, to) ||
+         // Changing column format to/from compressed or changing associated
+         // compression dictionary must result in table rebuild
+         from.has_different_compression_attributes_with(to) ||
          charset_prevents_inplace(from, to);
 }
 }  // namespace
@@ -1694,6 +1698,8 @@ Field::Field(uchar *ptr_arg, uint32 length_arg, uchar *null_ptr_arg,
       null_bit(null_bit_arg),
       auto_flags(auto_flags_arg),
       is_created_from_null_item(false),
+      zip_dict_name(null_lex_cstr),
+      zip_dict_data(null_lex_cstr),
       m_indexed(false),
       m_warnings_pushed(0),
       gcol_info(nullptr),
@@ -1817,6 +1823,31 @@ bool Field::send_to_protocol(Protocol *protocol) const {
   String tmp(buff, sizeof(buff), charset());
   String *res = val_str(&tmp);
   return res ? protocol->store(res) : protocol->store_null();
+}
+
+/**
+  Checks if the current field definition and provided create field
+  definition have different compression attributes.
+
+  @param   new_field   create field definition to compare with
+
+  @return
+    true  - if compression attributes are different
+    false - if compression attributes are identical.
+*/
+bool Field::has_different_compression_attributes_with(
+    const Create_field &new_field) const noexcept {
+  if (new_field.column_format() != COLUMN_FORMAT_TYPE_COMPRESSED &&
+      column_format() != COLUMN_FORMAT_TYPE_COMPRESSED)
+    return false;
+
+  if (new_field.column_format() != column_format()) return true;
+
+  if ((zip_dict_name.str == nullptr) &&
+      (new_field.zip_dict_name.str == nullptr))
+    return false;
+
+  return !::is_equal(&new_field.zip_dict_name, &zip_dict_name);
 }
 
 /**
@@ -2165,8 +2196,13 @@ Field *Field::new_field(MEM_ROOT *root, TABLE *new_table) const {
     sure which parts of the server will break.
   */
   tmp->auto_flags = Field::NONE;
+  /* COMPRESSED column format flag must not be cleared here */
+  const bool has_compressed_flag =
+      (tmp->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED);
   tmp->flags &= (NOT_NULL_FLAG | BLOB_FLAG | UNSIGNED_FLAG | ZEROFILL_FLAG |
                  BINARY_FLAG | ENUM_FLAG | SET_FLAG | NOT_SECONDARY_FLAG);
+  if (has_compressed_flag)
+    tmp->set_column_format(COLUMN_FORMAT_TYPE_COMPRESSED);
   return tmp;
 }
 
@@ -7016,8 +7052,7 @@ Field_blob::Field_blob(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
   /* TODO: why do not fill table->s->blob_field array here? */
 }
 
-static void store_blob_length(uchar *i_ptr, uint i_packlength,
-                              uint32 i_number) {
+void store_blob_length(uchar *i_ptr, uint i_packlength, uint32 i_number) {
   switch (i_packlength) {
     case 1:
       assert(i_number <= 0xff);
@@ -7036,7 +7071,7 @@ static void store_blob_length(uchar *i_ptr, uint i_packlength,
   }
 }
 
-uint32 Field_blob::get_length(const uchar *pos, uint packlength_arg) const {
+uint32 Field_blob::get_length(const uchar *pos, uint packlength_arg) {
   switch (packlength_arg) {
     case 1:
       return (uint32)pos[0];
@@ -7532,7 +7567,8 @@ uint Field_blob::is_equal(const Create_field *new_field) const {
   // equality so would be redundant here.
   if (new_field->sql_type != get_blob_type_from_length(max_data_length()) ||
       new_field->pack_length() != pack_length() ||
-      charset_prevents_inplace(*this, *new_field)) {
+      charset_prevents_inplace(*this, *new_field) ||
+      has_different_compression_attributes_with(*new_field)) {
     return IS_EQUAL_NO;
   }
 
@@ -7671,7 +7707,8 @@ Field_json *Field_json::clone(MEM_ROOT *mem_root) const {
 */
 uint Field_json::is_equal(const Create_field *new_field) const {
   // All JSON fields are compatible with each other.
-  return (new_field->sql_type == real_type());
+  return (new_field->sql_type == real_type() &&
+          !has_different_compression_attributes_with(*new_field));
 }
 
 /**
@@ -7732,7 +7769,8 @@ type_conversion_status Field_json::store(const char *from, size_t length,
         s_err.append('.');
         s_err.append(err_field_name);
         my_error(ER_INVALID_JSON_TEXT, MYF(0), parse_err, err_offset,
-                 s_err.c_ptr_safe());
+                 s_err.c_ptr_safe(),
+                 current_thd->get_stmt_da()->current_row_for_condition());
       },
       JsonDepthErrorHandler));
 
@@ -7765,7 +7803,7 @@ type_conversion_status Field_json::unsupported_conversion() {
   s.append('.');
   s.append(field_name);
   my_error(ER_INVALID_JSON_TEXT, MYF(0), "not a JSON text, may need CAST", 0,
-           s.c_ptr_safe());
+           s.c_ptr_safe(), 1);
   return TYPE_ERR_BAD_VALUE;
 }
 
@@ -9669,7 +9707,7 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share) {
     length
 */
 
-uint32 Field_blob::char_length() const {
+uint32 Field_blob::char_length() const noexcept {
   switch (packlength) {
     case 1:
       return 255;

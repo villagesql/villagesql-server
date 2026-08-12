@@ -3530,6 +3530,9 @@ class Gtid_state {
   int warn_or_err_on_modify_gtid_table(THD *thd, Table_ref *table);
 #endif
 
+  /* Allows to extract snapshot GTID_EXECUTED */
+  void get_snapshot_gtid_executed(std::string &snapshot_gtid_executed);
+
  private:
   /**
     Remove the GTID owned by thread from owned GTIDs.
@@ -4267,6 +4270,17 @@ bool set_gtid_next(THD *thd, const Gtid_specification &spec);
 #ifdef HAVE_GTID_NEXT_LIST
 int gtid_acquire_ownership_multiple(THD *thd);
 #endif
+
+/**
+  Check if current transaction should be skipped, that is, if GTID_NEXT
+  was already logged.
+
+  @param  thd    The calling thread.
+
+  @retval true   Transaction was already logged.
+  @retval false  Transaction must be executed.
+*/
+bool is_already_logged_transaction(const THD *thd);
 
 /**
   Return sidno for a given tsid, see Tsid_map::add_sid() for details.

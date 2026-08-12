@@ -73,6 +73,7 @@
 
 #define SERVER_VERSION_LENGTH 60
 #define SQLSTATE_LENGTH 5
+#define LIST_PROCESS_HOST_LEN 64
 
 /*
   In FIDO terminology, relying party is the server where required services are
@@ -197,6 +198,8 @@
 /** Field is explicitly marked as invisible by the user. */
 #define FIELD_IS_INVISIBLE (1 << 30)
 
+#define CLUSTERING_FLAG (1 << 31)
+
 /** @}*/
 
 /**
@@ -252,6 +255,14 @@
 #define REFRESH_FOR_EXPORT 0x100000L      /** FLUSH TABLES ... FOR EXPORT */
 #define REFRESH_OPTIMIZER_COSTS 0x200000L /** FLUSH OPTIMIZER_COSTS */
 #define REFRESH_PERSIST 0x400000L         /** RESET PERSIST */
+#define REFRESH_TABLE_STATS 0x800000L     /** Refresh table stats */
+#define REFRESH_INDEX_STATS 0x1000000L    /** Refresh index stats */
+#define REFRESH_USER_STATS 0x2000000L     /** Refresh user stats */
+#define REFRESH_CLIENT_STATS 0x4000000L   /** Refresh client stats */
+#define REFRESH_THREAD_STATS 0x8000000L   /** Refresh thread stats */
+#define DUMP_MEMORY_PROFILE 0x10000000L
+
+static const int PURGE_BITMAPS_TO_LSN = 1;
 
 /** @}*/
 
@@ -1103,6 +1114,8 @@ bool net_write_command(struct NET *net, unsigned char command,
 bool net_write_packet(struct NET *net, const unsigned char *packet,
                       size_t length);
 unsigned long my_net_read(struct NET *net);
+bool my_net_shrink_buffer(NET *net, unsigned long min_buf_size,
+                          unsigned long *max_interval_packet);
 void my_net_set_write_timeout(struct NET *net, unsigned int timeout);
 void my_net_set_read_timeout(struct NET *net, unsigned int timeout);
 void my_net_set_retry_count(struct NET *net, unsigned int retry_count);

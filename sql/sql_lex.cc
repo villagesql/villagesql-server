@@ -1,3 +1,4 @@
+
 /*
    Copyright (c) 2000, 2026, Oracle and/or its affiliates.
    Copyright (c) 2026 VillageSQL Contributors
@@ -91,6 +92,7 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd);
   LEX_STRING constant for null-string to be used in parser and other places.
 */
 const LEX_STRING null_lex_str = {nullptr, 0};
+const LEX_CSTRING null_lex_cstr = {nullptr, 0};
 /**
   Mapping from enum values in enum_binlog_stmt_unsafe to error codes.
 
@@ -473,6 +475,7 @@ void LEX::reset() {
   mark_broken(false);
   reset_exec_started();
   max_execution_time = 0;
+  switch_resource_group = nullptr;
   reparse_common_table_expr_at = 0;
   reparse_derived_table_condition = false;
   opt_hints_global = nullptr;
@@ -483,6 +486,7 @@ void LEX::reset() {
 
   clear_privileges();
   grant_as.cleanup();
+  donor_transaction_id = nullptr;
   alter_user_attribute = enum_alter_user_attribute::ALTER_USER_COMMENT_NOT_USED;
   m_was_replication_command_executed = false;
 

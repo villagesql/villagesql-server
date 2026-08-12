@@ -160,6 +160,7 @@ When one supplies long data for a placeholder:
 #include "sql/sql_class.h"
 #include "sql/sql_cmd.h"
 #include "sql/sql_cmd_ddl_table.h"
+#include "sql/sql_connect.h"  // update_global_user_stats
 #include "sql/sql_const.h"
 #include "sql/sql_cursor.h"  // Server_side_cursor
 #include "sql/sql_db.h"      // mysql_change_db
@@ -1273,6 +1274,8 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_REPLICA_STOP:
     case SQLCOM_INSTALL_PLUGIN:
     case SQLCOM_UNINSTALL_PLUGIN:
+    case SQLCOM_CREATE_COMPRESSION_DICTIONARY:
+    case SQLCOM_DROP_COMPRESSION_DICTIONARY:
     case SQLCOM_CREATE_DB:
     case SQLCOM_DROP_DB:
     case SQLCOM_CHECKSUM:
@@ -1928,6 +1931,7 @@ void mysqld_stmt_fetch(THD *thd, Prepared_statement *stmt, ulong num_rows) {
 
   thd->stmt_arena = &stmt->m_arena;
   Statement_backup stmt_backup;
+
   stmt_backup.set_thd_to_ps(thd, stmt);
 
   cursor->fetch(num_rows);
@@ -1959,6 +1963,7 @@ void mysqld_stmt_reset(THD *thd, Prepared_statement *stmt) {
 
   thd->status_var.com_stmt_reset++;
   global_aggregated_stats.get_shard(thd->thread_id()).com_stmt_reset++;
+
   stmt->close_cursor();
 
   /*
@@ -2708,6 +2713,7 @@ bool Prepared_statement::check_parameter_types() {
     }
 
     switch (item->data_type()) {
+      case MYSQL_TYPE_NULL:
       case MYSQL_TYPE_BOOL:
       case MYSQL_TYPE_TINY:
       case MYSQL_TYPE_SHORT:
@@ -3386,7 +3392,6 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
 
     if (resource_group_switched)
       mgr_ptr->restore_original_resource_group(thd, src_res_grp, dest_res_grp);
-    thd->resource_group_ctx()->m_switch_resource_group_str[0] = '\0';
     if (ticket != nullptr)
       mgr_ptr->release_shared_mdl_for_resource_group(thd, ticket);
     if (cur_ticket != nullptr)

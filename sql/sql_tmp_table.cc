@@ -522,6 +522,13 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
       assert(false);
       break;
   }
+
+  /* Make sure temporary fields are never compressed */
+  if (result->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED)
+    result->clear_flag(FIELD_FLAGS_COLUMN_FORMAT_MASK);
+  result->zip_dict_name = null_lex_cstr;
+  result->zip_dict_data = null_lex_cstr;
+
   return result;
 }
 
@@ -2464,6 +2471,9 @@ bool instantiate_tmp_table(THD *thd, TABLE *table) {
 void close_tmp_table(TABLE *table) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("table: %s", table->alias));
+
+  if (table->file && table->in_use != nullptr)
+    table->in_use->tmp_tables_size += table->file->stats.data_file_length;
 
   TABLE_SHARE *const share = table->s;
 

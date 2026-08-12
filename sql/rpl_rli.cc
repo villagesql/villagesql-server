@@ -480,6 +480,42 @@ err:
   return ret;
 }
 
+bool Relay_log_info::mts_workers_queue_empty() const {
+  ulong ret = 0;
+
+  for (Slave_worker *const *it = workers.begin();
+       ret == 0 && it != workers.end(); ++it) {
+    Slave_worker *worker = *it;
+    mysql_mutex_lock(&worker->jobs_lock);
+    ret += worker->curr_jobs;
+    mysql_mutex_unlock(&worker->jobs_lock);
+  }
+  return ret == 0;
+}
+
+/* Checks if all in-flight stmts/trx can be safely rolled back */
+bool Relay_log_info::cannot_safely_rollback() const {
+  if (!is_parallel_exec())
+    return info_thd->get_transaction()->cannot_safely_rollback(
+        Transaction_ctx::SESSION);
+
+  bool ret = false;
+
+  for (Slave_worker *const *it = workers.begin(); !ret && it != workers.end();
+       ++it) {
+    Slave_worker *worker = *it;
+    mysql_mutex_lock(&worker->jobs_lock);
+    mysql_mutex_lock(&worker->info_thd_lock);
+    if (worker->info_thd != nullptr) {
+      const auto &trx = worker->info_thd->get_transaction();
+      ret = trx ? trx->cannot_safely_rollback(Transaction_ctx::SESSION) : false;
+    }
+    mysql_mutex_unlock(&worker->info_thd_lock);
+    mysql_mutex_unlock(&worker->jobs_lock);
+  }
+  return ret;
+}
+
 static inline int add_relay_log(Relay_log_info *rli, LOG_INFO *linfo) {
   MY_STAT s;
   DBUG_TRACE;
@@ -1287,6 +1323,12 @@ void Relay_log_info::cleanup_context(THD *thd, bool error) {
 
   assert(info_thd == thd);
   /*
+    It's required to close thread tables before rollback, because some
+    rollback operations, like replay_remove_cache_log, require closed tables.
+  */
+  m_table_map.clear_tables();
+  slave_close_thread_tables(thd);
+  /*
     1) Instances of Table_map_log_event, if ::do_apply_event() was called on
     them, may have opened tables, which we cannot be sure have been closed
     (because maybe the Rows_log_event have not been found or will not be,
@@ -1318,8 +1360,6 @@ void Relay_log_info::cleanup_context(THD *thd, bool error) {
       assert(!debug_sync_set_action(info_thd, STRING_WITH_LEN(action)));
     };);
   }
-  m_table_map.clear_tables();
-  slave_close_thread_tables(thd);
   if (error) {
     /*
       trans_rollback above does not rollback XA transactions.
@@ -2963,6 +3003,17 @@ bool Relay_log_info::is_time_for_mta_checkpoint() {
   }
   return false;
 }
+
+void *Relay_log_info::operator new(size_t request [[maybe_unused]]) {
+  void *ptr;
+  if (posix_memalign(&ptr, __alignof__(Relay_log_info),
+                     sizeof(Relay_log_info))) {
+    throw std::bad_alloc();
+  }
+  return ptr;
+}
+
+void Relay_log_info::operator delete(void *ptr) { free(ptr); }
 
 bool operator!(Relay_log_info::enum_priv_checks_status status) {
   return status == Relay_log_info::enum_priv_checks_status::SUCCESS;

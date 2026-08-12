@@ -715,6 +715,14 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
     if (field.flags & NOT_SECONDARY_FLAG)
       col_options->set("not_secondary", true);
 
+    if (field.zip_dict_id != 0) {
+      DBUG_LOG("zip_dict", "Table: " << tab_obj->name()
+                                     << " setting field_name "
+                                     << field.field_name
+                                     << " to id: " << field.zip_dict_id);
+      col_options->set("zip_dict_id", field.zip_dict_id);
+    }
+
     if (field.is_array) {
       col_options->set("is_array", true);
     }
@@ -1110,6 +1118,10 @@ static void fill_dd_indexes_from_keyinfo(
 
     if (key->parser_name.str)
       idx_options->set("parser_name", key->parser_name.str);
+
+    if (key->flags & HA_CLUSTERING) {
+      idx_options->set("clustering_key", true);
+    }
 
     /*
       If we have no primary key, then we pick the first candidate primary
@@ -2139,6 +2151,22 @@ static bool fill_dd_table_from_create_info(
     table_options->set("encrypt_type", encrypt_type);
   }
 
+  // assign explicit encryption. explict_encryption can come from ENCRYPTION
+  // clause usage (used_fields) or from DD (create_info->explicit_encryption -
+  // this means table originally was created with explicit_encryption
+  // (ENCRYPTION clause was used with CREATE)).
+  if ((create_info->used_fields & HA_CREATE_USED_ENCRYPT) ||
+      create_info->explicit_encryption) {
+    // clear explicit encryption if SE does not support encryption
+    if (!(hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION)) {
+      table_options->set("explicit_encryption", false);
+    } else {
+      table_options->set("explicit_encryption", true);
+    }
+  } else {
+    table_options->set("explicit_encryption", false);
+  }
+
   // Storage media
   if (create_info->storage_media > HA_SM_DEFAULT)
     table_options->set("storage", create_info->storage_media);
@@ -2663,8 +2691,8 @@ bool recreate_table(THD *thd, const char *schema_name, const char *table_name) {
   build_table_filename(path, sizeof(path) - 1, schema_name, table_name, "", 0);
 
   // Attempt to reconstruct the table
-  return ha_create_table(thd, path, schema_name, table_name, &create_info, true,
-                         false, table_def);
+  return ha_create_table(thd, path, schema_name, table_name, &create_info,
+                         nullptr, true, false, table_def);
 }
 
 /**
@@ -2718,6 +2746,35 @@ inline void report_error_as_tablespace_missing(Object_id id) {
 
 inline void report_error_as_tablespace_missing(const String_type name) {
   my_error(ER_TABLESPACE_MISSING_WITH_NAME, MYF(0), name.c_str());
+}
+
+Encrypt_result is_system_tablespace_encrypted(THD *thd) {
+  MDL_request system_mdl_request;
+  MDL_REQUEST_INIT(&system_mdl_request, MDL_key::TABLESPACE, "",
+                   "innodb_system", MDL_INTENTION_EXCLUSIVE, MDL_STATEMENT);
+
+  cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+
+  if (thd->mdl_context.acquire_lock(&system_mdl_request,
+                                    thd->variables.lock_wait_timeout)) {
+    return {true, false};
+  }
+
+  // Acquire the tablespace object.
+  const Tablespace *tsp = nullptr;
+  if (thd->dd_client()->acquire("innodb_system", &tsp)) {
+    return {true, false};
+  }
+  assert(tsp);
+
+  if (tsp->options().exists("encryption")) {
+    String_type e;
+    (void)tsp->options().get("encryption", &e);
+    assert(!e.empty());
+    return {false, is_encrypted(e)};
+  }
+
+  return {false, false};
 }
 
 /*

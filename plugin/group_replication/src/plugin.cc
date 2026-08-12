@@ -72,6 +72,9 @@ static struct plugin_local_variables lv;
 */
 static struct plugin_options_variables ov;
 
+/* Flow Control Status variables that are only accessible inside plugin.cc */
+static struct group_replication_fc_stats fc_stats;
+
 /*
   Log service log_bi and log_bs are extern variables.
 */
@@ -327,6 +330,22 @@ ulong get_exit_state_action_var() { return ov.exit_state_action_var; }
 
 ulong get_flow_control_mode_var() { return ov.flow_control_mode_var; }
 
+ulong get_certification_loop_sleep_time_var() {
+  return ov.certification_loop_sleep_time_var;
+}
+
+ulong get_certification_loop_chunk_size_var() {
+  return ov.certification_loop_chunk_size_var;
+}
+
+ulong get_xcom_ssl_socket_timeout_var() {
+  return ov.xcom_ssl_socket_timeout_var;
+}
+
+ulong get_xcom_ssl_accept_retries_var() {
+  return ov.xcom_ssl_accept_retries_var;
+}
+
 long get_flow_control_certifier_threshold_var() {
   return ov.flow_control_certifier_threshold_var;
 }
@@ -375,6 +394,8 @@ bool get_allow_single_leader() {
   else
     return ov.allow_single_leader_var;
 }
+
+uint get_auto_evict_timeout() { return ov.auto_evict_timeout; }
 
 /**
  * @brief Callback implementation of
@@ -2607,6 +2628,9 @@ int build_gcs_parameters(Gcs_interface_parameters &gcs_module_parameters) {
     std::string ssl_crlpath("");
     std::string tls_version("");
     std::string ssl_fips_mode("");
+    std::string xcom_ssl_socket_timeout("");
+    std::string xcom_ssl_accept_retries("");
+
     if (xcom_comm_protocol == XCOM_PROTOCOL) {
       ssl_key.append(sv.ssl_key ? sv.ssl_key : "");
       ssl_cert.append(sv.ssl_cert ? sv.ssl_cert : "");
@@ -2617,6 +2641,16 @@ int build_gcs_parameters(Gcs_interface_parameters &gcs_module_parameters) {
       ssl_crlpath.append(sv.ssl_crlpath ? sv.ssl_crlpath : "");
       tls_version.append(sv.tls_version ? sv.tls_version : "");
       ssl_fips_mode.append(ov.ssl_fips_mode_values[sv.ssl_fips_mode]);
+
+      if (ov.xcom_ssl_socket_timeout_var > 0) {
+        xcom_ssl_socket_timeout.append(
+            std::to_string(ov.xcom_ssl_socket_timeout_var));
+      }
+
+      if (ov.xcom_ssl_accept_retries_var > 0) {
+        xcom_ssl_accept_retries.append(
+            std::to_string(ov.xcom_ssl_accept_retries_var));
+      }
     } else if (xcom_comm_protocol == MYSQL_PROTOCOL) {
       ssl_key.append(ov.recovery_ssl_key_var ? ov.recovery_ssl_key_var : "");
       ssl_cert.append(ov.recovery_ssl_cert_var ? ov.recovery_ssl_cert_var : "");
@@ -2646,6 +2680,11 @@ int build_gcs_parameters(Gcs_interface_parameters &gcs_module_parameters) {
                                           ssl_capath); /* purecov: inspected */
     gcs_module_parameters.add_parameter("cipher", ssl_cipher);
     gcs_module_parameters.add_parameter("tls_version", tls_version);
+
+    gcs_module_parameters.add_parameter("xcom_ssl_socket_timeout",
+                                        xcom_ssl_socket_timeout);
+    gcs_module_parameters.add_parameter("xcom_ssl_accept_retries",
+                                        xcom_ssl_accept_retries);
 
     bool is_ciphersuites_null =
         xcom_comm_protocol == XCOM_PROTOCOL
@@ -4701,6 +4740,70 @@ static MYSQL_SYSVAR_ULONG(
 );
 
 static MYSQL_SYSVAR_ULONG(
+    certification_loop_sleep_time,        /* name */
+    ov.certification_loop_sleep_time_var, /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_NODEFAULT |
+        PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var | no set default */
+    "The sleep time, in microseconds, the certifier garbage collection loop "
+    "allows client transactions to interleave."
+    "Default: 0.",
+    nullptr,                               /* check func. */
+    nullptr,                               /* update func. */
+    DEFAULT_CERTIFICATION_LOOP_SLEEP_TIME, /* default */
+    MIN_CERTIFICATION_LOOP_SLEEP_TIME,     /* min */
+    MAX_CERTIFICATION_LOOP_SLEEP_TIME,     /* max */
+    0                                      /* block */
+);
+
+static MYSQL_SYSVAR_ULONG(
+    certification_loop_chunk_size,        /* name */
+    ov.certification_loop_chunk_size_var, /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_NODEFAULT |
+        PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var | no set default */
+    "The size of the chunk that must be processed during the certifier garbage "
+    "collection after which the client transactions will be allowed to "
+    "interleave. "
+    "Default: 0.",
+    nullptr,                               /* check func. */
+    nullptr,                               /* update func. */
+    DEFAULT_CERTIFICATION_LOOP_CHUNK_SIZE, /* default */
+    MIN_CERTIFICATION_LOOP_CHUNK_SIZE,     /* min */
+    MAX_CERTIFICATION_LOOP_CHUNK_SIZE,     /* max */
+    0                                      /* block */
+);
+
+static MYSQL_SYSVAR_ULONG(
+    xcom_ssl_socket_timeout,        /* name */
+    ov.xcom_ssl_socket_timeout_var, /* var */
+    PLUGIN_VAR_OPCMDARG |
+        PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var | no set default */
+    "The timeout in seconds for the socket used for SSL Handshake on xcom port "
+    "Default: 0.",
+    nullptr,                         /* check func. */
+    nullptr,                         /* update func. */
+    DEFAULT_XCOM_SSL_SOCKET_TIMEOUT, /* default */
+    MIN_XCOM_SSL_SOCKET_TIMEOUT,     /* min */
+    MAX_XCOM_SSL_SOCKET_TIMEOUT,     /* max */
+    0                                /* block */
+);
+
+static MYSQL_SYSVAR_ULONG(
+    xcom_ssl_accept_retries,        /* name */
+    ov.xcom_ssl_accept_retries_var, /* var */
+    PLUGIN_VAR_OPCMDARG |
+        PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var | no set default */
+    "Number of retries to be performed before closing the socket listenting on "
+    "the xcom port. "
+    "Default: 10.",
+    nullptr,                         /* check func. */
+    nullptr,                         /* update func. */
+    DEFAULT_XCOM_SSL_ACCEPT_RETRIES, /* default */
+    MIN_XCOM_SSL_ACCEPT_RETRIES,     /* min */
+    MAX_XCOM_SSL_ACCEPT_RETRIES,     /* max */
+    0                                /* block */
+);
+
+static MYSQL_SYSVAR_ULONG(
     compression_threshold,        /* name */
     ov.compression_threshold_var, /* var */
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_NODEFAULT |
@@ -5316,6 +5419,19 @@ static MYSQL_SYSVAR_UINT(
     0                                                     /* block */
 );
 
+static MYSQL_SYSVAR_UINT(auto_evict_timeout,    /* name */
+                         ov.auto_evict_timeout, /* var */
+                         PLUGIN_VAR_OPCMDARG |
+                             PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
+                         "Flow control auto eviction timeout",
+                         nullptr, /* check func */
+                         nullptr, /* update func */
+                         0U,      /* default */
+                         0U,      /* min */
+                         65535U,  /* max */
+                         0        /* block */
+);
+
 static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(group_name),
     MYSQL_SYSVAR(start_on_boot),
@@ -5377,10 +5493,47 @@ static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(paxos_single_leader),
     MYSQL_SYSVAR(preemptive_garbage_collection),
     MYSQL_SYSVAR(preemptive_garbage_collection_rows_threshold),
+    MYSQL_SYSVAR(auto_evict_timeout),            /* Added by Percona */
+    MYSQL_SYSVAR(certification_loop_sleep_time), /* Added by Percona */
+    MYSQL_SYSVAR(certification_loop_chunk_size), /* Added by Percona */
+    MYSQL_SYSVAR(xcom_ssl_socket_timeout),       /* Added by Percona */
+    MYSQL_SYSVAR(xcom_ssl_accept_retries),       /* Added by Percona */
     nullptr,
 };
 
+#define DEF_GR_FC_STATUS_VAR_PTR(name, ptr, option) \
+  { name, (char *)ptr, option, SHOW_SCOPE_GLOBAL }
+
+static SHOW_VAR gr_flow_control_status_variables[] = {
+    DEF_GR_FC_STATUS_VAR_PTR("active", &fc_stats.active, SHOW_CHAR_PTR),
+    DEF_GR_FC_STATUS_VAR_PTR("threshold_nodes", &fc_stats.nodes, SHOW_CHAR_PTR),
+    DEF_GR_FC_STATUS_VAR_PTR("throttle_quota", &fc_stats.quota, SHOW_LONGLONG),
+    // end of the array marker
+    {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
+
+static void update_gr_flow_control_status_vars(THD *thd, SHOW_VAR *var,
+                                               char *buff) {
+  if (applier_module && plugin_is_group_replication_running()) {
+    group_replication_fc_stats tmp;
+    applier_module->get_flow_control_stats(tmp);
+    fc_stats = tmp;
+  } else {
+    fc_stats.active.clear();
+    fc_stats.nodes.clear();
+    fc_stats.quota = 0;
+  }
+}
+
+static void show_flow_control_status_vars(THD *thd, SHOW_VAR *var, char *buff) {
+  update_gr_flow_control_status_vars(thd, var, buff);
+  var->type = SHOW_ARRAY;
+  var->value = reinterpret_cast<char *>(&gr_flow_control_status_variables);
+}
+
 static SHOW_VAR group_replication_status_vars[] = {
+    {"group_replication_flow_control",
+     reinterpret_cast<char *>(&show_flow_control_status_vars), SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
     {"Gr_control_messages_sent_count",
      (char *)&Plugin_status_variables::get_control_messages_sent_count,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},

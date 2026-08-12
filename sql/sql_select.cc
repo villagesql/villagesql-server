@@ -1212,10 +1212,10 @@ bool Sql_cmd_select::check_privileges(THD *thd) {
 
 bool Sql_cmd_dml::check_all_table_privileges(THD *thd) {
   // Check for all possible DML privileges
-
   const Table_ref *const first_not_own_table = thd->lex->first_not_own_table();
-  for (Table_ref *tr = lex->query_tables; tr != first_not_own_table;
-       tr = tr->next_global) {
+
+  for (Table_ref *tr = lex->query_tables;
+       tr != nullptr && tr != first_not_own_table; tr = tr->next_global) {
     if (tr->is_internal())  // No privilege check required for internal tables
       continue;
     // Calculated wanted privilege based on how table/view is used:
@@ -1419,7 +1419,7 @@ SJ_TMP_TABLE *create_sj_tmp_table(THD *thd, JOIN *join,
   return sjtbl;
 }
 
-/**
+/*
   Setup the strategies to eliminate semi-join duplicates.
 
   @param join           Join to process
@@ -2037,6 +2037,7 @@ void JOIN::cleanup_item_list(const mem_root_deque<Item *> &items) const {
 bool Query_block::optimize(THD *thd, bool finalize_access_paths) {
   DBUG_TRACE;
 
+  assert(master_query_expression()->cleaned == Query_expression::UC_DIRTY);
   assert(join == nullptr);
   JOIN *const join_local = new (thd->mem_root) JOIN(thd, this);
   if (!join_local) return true; /* purecov: inspected */
@@ -5197,9 +5198,11 @@ bool test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER_with_src *order,
     if (usable_keys.is_set(nr) &&
         (direction = test_if_order_by_key(order, table, nr, &used_key_parts,
                                           &skip_quick))) {
-      const bool is_covering = table->covering_keys.is_set(nr) ||
-                               (nr == table->s->primary_key &&
-                                table->file->primary_key_is_clustered());
+      const bool is_covering =
+          table->covering_keys.is_set(nr) ||
+          (nr == table->s->primary_key &&
+           table->file->primary_key_is_clustered()) ||
+          (table->file->index_flags(nr, 0, 0) & HA_CLUSTERED_INDEX);
       // Don't allow backward scans on indexes with mixed ASC/DESC key parts
       if (skip_quick) table->quick_keys.clear_bit(nr);
 
@@ -5321,7 +5324,9 @@ bool test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER_with_src *order,
           if (best_key < 0 ||
               (select_limit <= min(quick_records, best_records)
                    ? keyinfo->user_defined_key_parts < best_key_parts
-                   : quick_records < best_records) ||
+                   : quick_records < best_records ||
+                         ((quick_records == best_records) &&
+                          !is_best_covering && is_covering)) ||
               // We assume forward scan is faster than backward even if the
               // key is longer. This should be taken into account in cost
               // calculation.

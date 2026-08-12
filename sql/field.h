@@ -195,9 +195,10 @@ enum Derivation {
 
 /* Specifies data storage format for individual columns */
 enum column_format_type {
-  COLUMN_FORMAT_TYPE_DEFAULT = 0, /* Not specified (use engine default) */
-  COLUMN_FORMAT_TYPE_FIXED = 1,   /* FIXED format */
-  COLUMN_FORMAT_TYPE_DYNAMIC = 2  /* DYNAMIC format */
+  COLUMN_FORMAT_TYPE_DEFAULT = 0,   /* Not specified (use engine default) */
+  COLUMN_FORMAT_TYPE_FIXED = 1,     /* FIXED format */
+  COLUMN_FORMAT_TYPE_DYNAMIC = 2,   /* DYNAMIC format */
+  COLUMN_FORMAT_TYPE_COMPRESSED = 3 /* COMPRESSED format*/
 };
 
 /**
@@ -783,6 +784,8 @@ class Field {
 
    */
   bool is_created_from_null_item;
+  LEX_CSTRING zip_dict_name;  // associated compression dictionary name
+  LEX_CSTRING zip_dict_data;  // associated compression dictionary data
   /**
     If true, it's a Create_field_wrapper (a sub-class of Field used during
     CREATE/ALTER that we mustn't cast to other sub-classes of Field that
@@ -1283,6 +1286,17 @@ class Field {
   }
 
   /**
+    Checks if the field has COLUMN_FORMAT_TYPE_COMPRESSED flag and non-empty
+    associated compression dictionary.
+  */
+  bool has_associated_compression_dictionary() const noexcept {
+    assert(zip_dict_name.str == 0 ||
+           column_format() == COLUMN_FORMAT_TYPE_COMPRESSED);
+    return column_format() == COLUMN_FORMAT_TYPE_COMPRESSED &&
+           zip_dict_name.str != 0;
+  }
+
+  /**
     Check if the Field has value NULL or the record specified by argument
     has value NULL for this Field.
 
@@ -1733,6 +1747,7 @@ class Field {
 
   void set_column_format(column_format_type column_format_arg) {
     assert(column_format() == COLUMN_FORMAT_TYPE_DEFAULT);
+    flags &= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
     flags |= (column_format_arg << FIELD_FLAGS_COLUMN_FORMAT);
   }
 
@@ -1920,6 +1935,19 @@ class Field {
   void set_type_decoder(villagesql::TypeDecoder *decoder) const {
     type_decoder_ = decoder;
   }
+
+  /**
+    Checks if the current field definition and provided create field
+    definition have different compression attributes.
+
+    @param   new_field   create field definition to compare with
+
+    @return
+      true  - if compression attributes are different
+      false - if compression attributes are identical.
+  */
+  bool has_different_compression_attributes_with(
+      const Create_field &new_field) const noexcept;
 };
 
 /**
@@ -3680,7 +3708,8 @@ class Field_blob : public Field_longstr {
 
  private:
   /**
-    In order to support update of virtual generated columns of blob type,
+    In order to support update of virtual generated columns and columns in
+    a Blackhole table of BLOB type,
     we need to allocate the space blob needs on server for old_row and
     new_row respectively. This variable is used to record the
     allocated blob space for old_row.
@@ -3838,7 +3867,7 @@ class Field_blob : public Field_longstr {
     return get_length(row_offset);
   }
   uint32 get_length(ptrdiff_t row_offset = 0) const;
-  uint32 get_length(const uchar *ptr, uint packlength) const;
+  static uint32 get_length(const uchar *ptr, uint packlength);
   uint32 get_length(const uchar *ptr_arg) const;
   /** Get a const pointer to the BLOB data of this field. */
   const uchar *get_blob_data() const { return get_blob_data(ptr + packlength); }
@@ -3898,7 +3927,7 @@ class Field_blob : public Field_longstr {
     return charset() == &my_charset_bin ? false : true;
   }
   uint32 max_display_length() const final;
-  uint32 char_length() const override;
+  uint32 char_length() const noexcept override;
   bool copy_blob_value(MEM_ROOT *mem_root);
   uint is_equal(const Create_field *new_field) const override;
   bool is_text_key_type() const final { return binary() ? false : true; }
@@ -3906,21 +3935,16 @@ class Field_blob : public Field_longstr {
   /**
     Mark that the BLOB stored in value should be copied before updating it.
 
-    When updating virtual generated columns we need to keep the old
-    'value' for BLOBs since this can be needed when the storage engine
-    does the update. During read of the record the old 'value' for the
+    When updating virtual generated columns or columns in a Blackhole table
+    we need to keep the old 'value' for BLOBs since this can be needed when
+    the storage engine does the update.
+    During read of the record the old 'value' for the
     BLOB is evaluated and stored in 'value'. This function is to be used
     to specify that we need to copy this BLOB 'value' into 'old_value'
     before we compute the new BLOB 'value'. For more information @see
     Field_blob::keep_old_value().
   */
   void set_keep_old_value(bool old_value_flag) {
-    /*
-      We should only need to keep a copy of the blob 'value' in the case
-      where this is a virtual generated column (that is indexed).
-    */
-    assert(is_virtual_gcol());
-
     /*
       If set to true, ensure that 'value' is copied to 'old_value' when
       keep_old_value() is called.
@@ -3931,8 +3955,9 @@ class Field_blob : public Field_longstr {
   /**
     Save the current BLOB value to avoid that it gets overwritten.
 
-    This is used when updating virtual generated columns that are
-    BLOBs. Some storage engines require that we have both the old and
+    This is used when updating virtual generated columns or columns in a
+    Blackhole table that are BLOBs.
+    Some storage engines require that we have both the old and
     new BLOB value for virtual generated columns that are indexed in
     order for the storage engine to be able to maintain the index. This
     function will transfer the buffer storing the current BLOB value
@@ -3957,16 +3982,15 @@ class Field_blob : public Field_longstr {
     old value for the BLOB and use table->record[0] to read the new
     value.
 
+    Similarly, in case of Blackhole "old" BLOB values are not read by
+    the storage engine and therefore 'Field_blob' is not made to point to the
+    engine's internal buffer. Therefore, in order to avoid "old" BLOB data
+    corruption, it also needs to be saved in 'old_value'.
+
     This function must be called before we store the new BLOB value in
     this field object.
   */
   void keep_old_value() {
-    /*
-      We should only need to keep a copy of the blob value in the case
-      where this is a virtual generated column (that is indexed).
-    */
-    assert(is_virtual_gcol());
-
     // Transfer ownership of the current BLOB value to old_value
     if (m_keep_old_value) {
       old_value.takeover(value);
@@ -4000,6 +4024,8 @@ class Field_blob : public Field_longstr {
  private:
   int do_save_field_metadata(uchar *first_byte) const override;
 };
+
+void store_blob_length(uchar *i_ptr, uint i_packlength, uint32 i_number);
 
 class Field_geom final : public Field_blob {
  private:
@@ -4260,7 +4286,7 @@ class Field_typed_array final : public Field_json {
                     uchar auto_flags_arg, const char *field_name_arg,
                     TABLE_SHARE *share, uint blob_pack_length,
                     const CHARSET_INFO *cs);
-  uint32 char_length() const override {
+  uint32 char_length() const noexcept override {
     return field_length / charset()->mbmaxlen;
   }
   void init(TABLE *table_arg) override;

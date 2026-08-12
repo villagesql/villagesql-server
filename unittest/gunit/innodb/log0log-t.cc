@@ -239,12 +239,7 @@ static bool log_test_recovery() {
     EXPECT_EQ(nullptr, ret);
 
   } else {
-    srv_shutdown_state = SRV_SHUTDOWN_FLUSH_PHASE;
-
-    /* XXX: Shouldn't this be guaranteed within log0recv.cc ? */
-    while (srv_thread_is_active(srv_threads.m_recv_writer)) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+    srv_shutdown_state.store(SRV_SHUTDOWN_FLUSH_PHASE);
   }
 
   recv_sys_close();

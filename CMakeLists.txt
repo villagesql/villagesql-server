@@ -134,6 +134,8 @@ IF(NOT DEFINED MANUFACTURER)
   MARK_AS_ADVANCED(MANUFACTURER)
 ENDIF()
 
+#Caching for BUILD TESTING
+SET(BUILD_TESTING OFF CACHE BOOL "")
 
 # MAX_INDEXES - Set the maximum number of indexes per table, default 64U
 IF (NOT MAX_INDEXES)
@@ -153,6 +155,9 @@ ELSEIF(MAX_INDEXES LESS 64)
   MESSAGE(WARNING "MAX_INDEXES option ignored because it is less than 64.")
   SET(MAX_INDEXES 64U)
 ENDIF()
+
+# PAM build Handling
+OPTION(WITH_PAM "Build with Percona PAM plugin" OFF)
 
 # We choose to provide WITH_DEBUG as alias to standard CMAKE_BUILD_TYPE=Debug
 # which turns out to be not trivial, as this involves synchronization
@@ -264,6 +269,12 @@ IF(NOT LINUX_RHEL AND MY_HOST_SYSTEM_NAME MATCHES "Linux")
     FILE(READ "/etc/os-release" MY_OS_RELEASE)
     IF(MY_OS_RELEASE MATCHES "Debian")
       SET(LINUX_DEBIAN 1)
+      IF(MY_OS_RELEASE MATCHES "jessie")
+        SET(LINUX_DEBIAN_8 1)
+      ENDIF()
+      IF(MY_OS_RELEASE MATCHES "stretch")
+        SET(LINUX_DEBIAN_9 1)
+      ENDIF()
     ELSEIF(MY_OS_RELEASE MATCHES "Ubuntu")
       SET(LINUX_UBUNTU 1)
       # /etc/os-release contains a line like
@@ -637,6 +648,13 @@ IF(MY_COMPILER_IS_CLANG OR MY_COMPILER_IS_GNU)
   SET(MY_COMPILER_IS_GNU_OR_CLANG 1)
 ENDIF()
 
+SET(BUILD_TESTING ON)
+INCLUDE(CTest)
+# Explicitly disabling BUILD_TESTING since other code is not ready to handle
+# BUILD_TESTING set. If you try to remove the directive and CMake configuration
+# and reconfiguration finishes successfully, remove the hack.
+SET(BUILD_TESTING OFF)
+
 # Maintainer mode is default on only for debug builds using GCC/G++
 IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
   IF(MY_COMPILER_IS_GNU)
@@ -800,6 +818,8 @@ INCLUDE(component)
 INCLUDE(install_macros)
 INCLUDE(mysql_add_executable)
 INCLUDE(curl)
+INCLUDE(coredumper)
+INCLUDE(prepend_append_cflags_if_supported)
 INCLUDE(rapidjson)
 INCLUDE(fido2)
 INCLUDE(win_jemalloc)
@@ -848,7 +868,12 @@ ENDIF()
 
 OPTION(ENABLED_PROFILING "Enable profiling" ON)
 OPTION(WITHOUT_SERVER OFF)
-
+IF(UNIX)
+  OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
+  IF (WITH_VALGRIND)
+    ADD_DEFINITIONS(-DUSE_VALGRIND)
+  ENDIF()
+ENDIF()
 IF(WIN32)
   OPTION(WITH_MSCRT_DEBUG "MS Visual Studio Debug CRT instrumentation" OFF)
 ENDIF()
@@ -873,7 +898,7 @@ IF(NOT DEFINED WITH_INTERNAL)
 ENDIF()
 
 # On windows we need a non-standard package for SASL.
-IF(WITH_INTERNAL AND (NOT WIN32 OR WITH_SASL))
+IF(NOT WIN32 OR WITH_SASL)
   SET(WITH_AUTHENTICATION_LDAP_DEFAULT ON)
 ELSE()
   SET(WITH_AUTHENTICATION_LDAP_DEFAULT OFF)
@@ -955,14 +980,10 @@ IF(NOT WITH_AUTHENTICATION_WEBAUTHN AND
   SET(WITH_FIDO "none" CACHE STRING "fido2 is disabled")
 ENDIF()
 
-IF(WITH_INTERNAL)
-  IF(UNIX)
-    SET(WITH_CURL_DEFAULT "system")
-  ELSE()
-    SET(WITH_CURL_DEFAULT "bundled")
-  ENDIF()
+IF(UNIX)
+  SET(WITH_CURL_DEFAULT "system")
 ELSE()
-  SET(WITH_CURL_DEFAULT "none")
+  SET(WITH_CURL_DEFAULT "bundled")
 ENDIF()
 
 OPTION(WITH_LOCK_ORDER
@@ -1170,8 +1191,8 @@ ENDIF()
 
 OPTION(WITH_MSAN "Enable memory sanitizer" OFF)
 IF(WITH_MSAN)
-  MY_SANITIZER_CHECK("-fsanitize=memory -fsanitize-memory-track-origins"
-    TRUE WITH_MSAN_OK)
+  MY_SANITIZER_CHECK("-fsanitize=memory -fsanitize-memory-track-origins -fsanitize-blacklist=${CMAKE_CURRENT_SOURCE_DIR}/cmake/msan-blacklist.txt"
+                     TRUE WITH_MSAN_OK)
   IF(NOT WITH_MSAN_OK)
     MESSAGE(FATAL_ERROR "Do not know how to enable memory sanitizer")
   ELSE()
@@ -1224,6 +1245,8 @@ IF(CMAKE_C_FLAGS MATCHES "-fsanitize" OR CMAKE_CXX_FLAGS MATCHES "-fsanitize")
   SET(CMAKE_COMPILER_FLAG_WITH_SANITIZE 1)
 ENDIF()
 
+# Older versions of ccache must be disabled: export CCACHE_DISABLE=1
+# See https://gitlab.kitware.com/cmake/community/-/wikis/doc/ctest/Coverage
 OPTION(ENABLE_GCOV "Enable gcov (debug, Linux builds only)" OFF)
 IF (ENABLE_GCOV AND NOT WIN32 AND NOT APPLE)
   SET(GCOV_COMPILER_OPTIONS
@@ -1405,8 +1428,10 @@ IF(CMAKE_C_LINK_FLAGS MATCHES "-fuse-ld=gold" OR
     "-fuse-ld=gold" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 ENDIF()
 
+# Linker/binutils bug in Fedora 28, Ubuntu 16.04, Debian 8 and Debian 9,
+# undefined reference to symbol '__bss_start'
 # Fedora 34, RHEL9: undefined reference to symbol 'crc32_z@@ZLIB_1.2.9'
-IF(LINUX_FEDORA_34 OR LINUX_RHEL9)
+IF(LINUX_FEDORA_34 OR LINUX_RHEL9 OR LINUX_DEBIAN_8 OR LINUX_DEBIAN_9)
   IF(NOT USING_LD_LLD AND NOT USING_LD_MOLD)
     STRING_APPEND(CMAKE_CXX_LINK_FLAGS " -Wl,--copy-dt-needed-entries")
   ENDIF()
@@ -1496,6 +1521,8 @@ OPTION(ENABLED_LOCAL_INFILE
  "If we should enable LOAD DATA LOCAL by default" OFF)
 MARK_AS_ADVANCED(ENABLED_LOCAL_INFILE)
 
+OPTION (WITH_COREDUMPER "Enable support for coredumper library" ON)
+
 #
 # Options related to client-side protocol tracing
 #
@@ -1518,6 +1545,13 @@ IF(WITH_TEST_TRACE_PLUGIN AND NOT CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG")
     "Test trace plugin was selected but it can be included only in
      debug binaries. Set WITH_TEST_TRACE_PLUGIN to OFF or WITH_DEBUG to ON.")
 ENDIF()
+
+# Set NDEBUG, and FORTIFY_SOURCE for non-debug project types.
+FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
+  FOREACH(LANG C CXX)
+    STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} "-DNDEBUG -D_FORTIFY_SOURCE=2 ")
+  ENDFOREACH()
+ENDFOREACH()
 
 # Add safemutex for debug configurations
 # Enable debug sync for debug builds.
@@ -1595,6 +1629,11 @@ ELSE()
   IF (WITH_SYSTEMD_DEBUG)
     MESSAGE(FATAL_ERROR "systemd-debugging requires systemd, and systemd requires linux")
   ENDIF()
+ENDIF()
+
+IF(APPLE)
+  # Get access to memset_s
+  ADD_DEFINITIONS(-D__STDC_WANT_LIB_EXT1__=1)
 ENDIF()
 
 # Run platform tests
@@ -1740,7 +1779,6 @@ ADD_CUSTOM_TARGET(executable_all)
 # To get all the Homebrew libraries, do 'brew install' <name of lib>.
 SET(SYSTEM_LIBRARIES
   CURL      # Xcode
-  EDITLINE  # Xcode
   ICU       # Homebrew  icu4c
   LZ4       # Homebrew  lz4
   PROTOBUF  # Homebrew  protobuf
@@ -1922,6 +1960,15 @@ MYSQL_CHECK_SASL_DLLS()
 MYSQL_CHECK_LDAP()
 MYSQL_CHECK_LDAP_DLLS()
 
+# Percona LDAP Simple / LDAP SASL authentication plugins
+# Problem with  MacOS system libraries and complains for compilation error ldap_set_urllist_proc
+IF(APPLE)
+  SET(WITH_PERCONA_AUTHENTICATION_LDAP_DEFAULT OFF)
+ELSE()
+  SET(WITH_PERCONA_AUTHENTICATION_LDAP_DEFAULT ON)
+ENDIF()
+OPTION(WITH_PERCONA_AUTHENTICATION_LDAP "Build with Percona LDAP Simple / LDAP SASL authentication plugins" ${WITH_PERCONA_AUTHENTICATION_LDAP_DEFAULT})
+
 # Add Windows specific jemalloc DLL
 IF(WIN32)
   MYSQL_CHECK_WIN_JEMALLOC()
@@ -2043,6 +2090,8 @@ IF(CURL_WARN_GIVEN)
 ENDIF()
 # Add RapidJSON library.
 MYSQL_CHECK_RAPIDJSON()
+# Add coredumper
+MYSQL_CHECK_COREDUMPER()
 
 # Look for fido2 library
 MYSQL_CHECK_FIDO()
@@ -2194,6 +2243,11 @@ IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   ENDIF()
 ENDIF()
 
+IF(NOT DEFINED WITH_COMPONENT_KEYRING_KMIP AND NOT DEFINED WITHOUT_COMPONENT_KEYRING_KMIP
+   OR WITH_COMPONENT_KEYRING_KMIP)
+  ADD_SUBDIRECTORY(extra/libkmip)
+ENDIF()
+
 #
 # Setup maintainer mode options by the end. Platform checks are
 # not run with the warning options as to not perturb fragile checks
@@ -2264,6 +2318,13 @@ OPTION(WITH_SHOW_PARSE_TREE
   "Allow showing the parse tree"
   ${WITH_SHOW_PARSE_TREE_DEFAULT}
   )
+
+OPTION(WITH_ENCRYPTION_UDF "Build Encryption UDF plugin" ON)
+IF(WITH_ENCRYPTION_UDF)
+  ADD_SUBDIRECTORY(extra/opensslpp)
+ENDIF()
+
+option(WITH_PERCONA_TELEMETRY "Build Percona Telemetry component" OFF)
 
 # We may run clang-tidy on individual .h files. Tell clang to treat them as C++.
 # To generate entries for header files in compile_commands.json:
@@ -2664,7 +2725,7 @@ ENDIF()
 #
 IF(NOT INSTALL_LAYOUT MATCHES "RPM")
   INSTALL(FILES
-    README
+    README.md
     LICENSE
     DESTINATION ${INSTALL_DOCREADMEDIR} COMPONENT Readme)
   INSTALL(FILES

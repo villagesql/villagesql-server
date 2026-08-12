@@ -292,14 +292,16 @@ bool row_purge_poss_sec(purge_node_t *node,    /*!< in/out: row purge node */
 {
   bool can_delete;
   mtr_t mtr;
+  row_prebuilt_t *prebuilt =
+      static_cast<que_thr_t *>(node->common.parent)->prebuilt;
 
   ut_ad(!index->is_clustered());
   mtr_start(&mtr);
 
-  can_delete =
-      !row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr) ||
-      !row_vers_old_has_index_entry(true, node->pcur.get_rec(), &mtr, index,
-                                    entry, node->roll_ptr, node->trx_id);
+  can_delete = !row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr) ||
+               !row_vers_old_has_index_entry(true, node->pcur.get_rec(), &mtr,
+                                             index, entry, node->roll_ptr,
+                                             node->trx_id, prebuilt);
 
   /* Persistent cursor is closed if reposition fails. */
   if (node->found_clust) {
@@ -1281,6 +1283,14 @@ que_thr_t *row_purge_step(que_thr_t *thr) {
   } else {
     row_purge_end(thr);
   }
+
+  /* Most probably this is not needed at all, because purge for virtual columns
+   is disabled in 8.0 (see #ifdef INNODB_DD_VC_SUPPORT) */
+  if (thr->prebuilt != nullptr && thr->prebuilt->blob_heap != nullptr)
+    mem_heap_empty(thr->prebuilt->blob_heap);
+
+  /* compress_heap was not used */
+  ut_ad(thr->prebuilt == 0 || thr->prebuilt->compress_heap == 0);
 
   return (thr);
 }
