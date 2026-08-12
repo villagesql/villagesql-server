@@ -33,6 +33,7 @@ Test
 mtr
 sys
 test
+villagesql
 [log_stop.inc] percona.slow_extended.log_error_4
 [log_grep.inc] file: percona.slow_extended.log_error_4 pattern: ^.*Last_errno: 0 .*$
 [log_grep.inc] lines:   2
