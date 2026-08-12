@@ -45,6 +45,12 @@
 // DECLARE_*_METHOD) with doxygen @param/@retval docs. To consume it:
 //
 //   1. Include that MySQL header (for SERVICE_TYPE(NAME) and its method decls).
+//      Service definitions belong to MySQL's component framework, not to VEF,
+//      and the server does not install them: they exist only in a server source
+//      tree. An extension consuming services therefore builds against that tree
+//      (-I <source>/include), plus <build>/include for generated headers such
+//      as mysqld_error.h. The in-tree test extensions get both from the
+//      MYSQL_HEADERS flag on vsql_add_test_extension().
 //   2. VSQL_REQUIRE_SERVICE(services, NAME, var)  — acquires it into `var`.
 //      (The service-name string is derived from NAME; if a service's registry
 //      name differs from its SERVICE_TYPE name, use the explicit
@@ -64,25 +70,38 @@
 //
 // EXAMPLE
 // -------
+// keyring_ready() answers whether a keyring component is installed and
+// initialized, so an extension can check before attempting a keyring
+// operation rather than failing part-way through one.
 //
-//   #include <villagesql/vsql.h>
-//   #include <villagesql/preview/mysql_services.h>
+//   #include <cstddef>
+//
 //   #include <mysql/components/services/keyring_metadata_query.h>
+//   #include <villagesql/preview/mysql_services.h>
+//   #include <villagesql/vsql.h>
 //
 //   using namespace vsql;
 //
-//   static vsql::preview_mysql_services::MysqlServices services;
-//   VSQL_REQUIRE_SERVICE(services, keyring_component_status, status);
+//   static preview_mysql_services::MysqlServices services;
+//   VSQL_REQUIRE_SERVICE(services, keyring_component_status, keyring_status);
 //
-//   void f_impl(IntResult out) {
-//     // is_initialized() is MySQL's method, documented in the service's
-//     // header. Guard with valid() first, then call through with ->.
-//     out.set((status.valid() && status->is_initialized()) ? 1 : 0);
+//   void keyring_ready_impl(IntResult out) {
+//     // valid() is this SDK's "was it acquired". is_initialized() is MySQL's
+//     // own method, documented in the service's header. Guard, then call
+//     // through with ->.
+//     const bool ready =
+//         keyring_status.valid() && keyring_status->is_initialized();
+//     out.set(ready ? 1 : 0);
 //   }
 //
 //   VEF_GENERATE_ENTRY_POINTS(
 //     make_extension().with(services).func(
-//         make_func<&f_impl>("f").returns(INT).no_params().build()))
+//         make_func<&keyring_ready_impl>("keyring_ready")
+//             .returns(INT).no_params().build()))
+//
+// Include <cstddef> (or any villagesql header) before the MySQL service
+// header. Several service definitions use size_t without including it
+// themselves, and fail with "unknown type name 'size_t'" when they come first.
 
 #include <cstddef>
 #include <vector>
