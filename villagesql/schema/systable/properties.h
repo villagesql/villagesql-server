@@ -108,7 +108,7 @@ struct TableTraits<PropertyEntry> {
   // properties)
   static bool update_in_table(TABLE & /*table*/,
                               const PropertyEntry & /*entry*/,
-                              const std::string & /*old_key*/) {
+                              const PropertyKey & /*old_key*/) {
     assert(VILLAGESQL_NOT_IMPLEMENTED);
     return true;  // Not implemented - return error
   }

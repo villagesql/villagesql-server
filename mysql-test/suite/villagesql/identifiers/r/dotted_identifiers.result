@@ -1,0 +1,22 @@
+CREATE DATABASE dotted_db;
+USE dotted_db;
+CREATE TABLE `my.table` (
+`col.one` vsql_complex.COMPLEX,
+plain INT
+);
+SHOW FIELDS FROM `my.table`;
+Field	Type	Null	Key	Default	Extra
+col.one	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+ALTER TABLE `my.table` RENAME COLUMN `col.one` TO `col.two`;
+SHOW FIELDS FROM `my.table`;
+Field	Type	Null	Key	Default	Extra
+col.two	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+RENAME TABLE `my.table` TO `renamed.table`;
+SHOW FIELDS FROM `renamed.table`;
+Field	Type	Null	Key	Default	Extra
+col.two	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+DROP TABLE `renamed.table`;
+DROP DATABASE dotted_db;
