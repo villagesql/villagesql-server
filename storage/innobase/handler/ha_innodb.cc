@@ -10377,9 +10377,13 @@ static dberr_t calc_row_difference(
         ut_a(dtype->mtype != DATA_INT);
 
         if (o_len != UNIV_SQL_NULL) {
+          // No compression: COLUMN_FORMAT COMPRESSED is rejected on
+          // custom-typed columns (see mysql_prepare_create_table()), so a
+          // column with extension-managed storage is never compressed. Matches
+          // the argument idiom of the other non-compressing call sites.
           std::ignore = row_mysql_store_col_in_innobase_format(
               &ufield->old_val, nullptr, true, old_mysql_row_col, col_pack_len,
-              comp);
+              comp, false, nullptr, 0, nullptr);
 
         } else {
           dfield_set_null(&ufield->old_val);
