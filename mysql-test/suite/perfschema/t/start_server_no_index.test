@@ -30,7 +30,7 @@ select COUNT_STAR from performance_schema.table_io_waits_summary_by_table
 # There should be 1 entry in following table. Thats is for select.
 # This is because lock stats are still in the table handles
 select COUNT_STAR from performance_schema.table_io_waits_summary_by_index_usage
-       where INDEX_NAME!='NULL';
+       where INDEX_NAME!='NULL' and OBJECT_SCHEMA <> 'villagesql';
 
 # Now force aggregation by closing table handles
 FLUSH TABLES;
@@ -41,7 +41,7 @@ select COUNT_STAR from performance_schema.table_io_waits_summary_by_table
 
 # Stats are now missing
 select COUNT_STAR from performance_schema.table_io_waits_summary_by_index_usage
-       where INDEX_NAME!='NULL';
+       where INDEX_NAME!='NULL' and OBJECT_SCHEMA <> 'villagesql';
 
 # Expect INDEX_STAT lost
 --disable_warnings
