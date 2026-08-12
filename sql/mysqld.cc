@@ -11928,8 +11928,11 @@ static int show_threadpool_average_queue_wait_us(THD *thd [[maybe_unused]],
   var->type = SHOW_CHAR;
   var->value = buff;
   auto stat = tp_get_average_queue_wait_stats();
-  sprintf(buff, "avg: %.3f, min: %.3f, max: %.3f, dev: %.3f, cnt: %ld",
-          stat.average, stat.min, stat.max, stat.deviation, stat.count);
+  // stat.count is int64_t, which is 'long' on LP64 Linux but 'long long' on
+  // macOS/arm64, so a bare %ld fails -Werror=format there.
+  sprintf(buff, "avg: %.3f, min: %.3f, max: %.3f, dev: %.3f, cnt: %lld",
+          stat.average, stat.min, stat.max, stat.deviation,
+          static_cast<long long>(stat.count));
   return 0;
 }
 
@@ -11938,8 +11941,11 @@ static int show_threadpool_average_hp_queue_wait_us(THD *thd [[maybe_unused]],
   var->type = SHOW_CHAR;
   var->value = buff;
   auto stat = tp_get_average_hp_queue_wait_stats();
-  sprintf(buff, "avg: %.3f, min: %.3f, max: %.3f, dev: %.3f, cnt: %ld",
-          stat.average, stat.min, stat.max, stat.deviation, stat.count);
+  // stat.count is int64_t, which is 'long' on LP64 Linux but 'long long' on
+  // macOS/arm64, so a bare %ld fails -Werror=format there.
+  sprintf(buff, "avg: %.3f, min: %.3f, max: %.3f, dev: %.3f, cnt: %lld",
+          stat.average, stat.min, stat.max, stat.deviation,
+          static_cast<long long>(stat.count));
   return 0;
 }
 
