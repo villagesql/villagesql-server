@@ -69,7 +69,11 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 ### Build Steps (Linux & macOS)
 
-> **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths.
+> **Note:** These steps are the same on Linux and macOS. Paths use `$HOME`
+> rather than `~` because the shell only expands `~` at the start of a word:
+> `--datadir=~/mysql-data/data` reaches `mysqld` as a directory literally named
+> `~`, and the server aborts. Quoting `"$HOME/..."` keeps the path in one piece
+> if your home directory name contains a space.
 
 1. **Clone the repository:**
    ```bash
@@ -79,36 +83,19 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 2. **Create a build directory (outside the repository):**
 
-   **Linux:**
    ```bash
-   mkdir -p $HOME/build/villagesql
-   cd $HOME/build/villagesql
-   ```
-
-   **macOS:**
-   ```bash
-   mkdir -p ~/build/villagesql
-   cd ~/build/villagesql
+   mkdir -p "$HOME/build/villagesql"
+   cd "$HOME/build/villagesql"
    ```
 
 3. **Configure with CMake:**
 
-   **Linux:**
    ```bash
    # Standard build
-   cmake $HOME/villagesql-server -DWITH_SSL=system
+   cmake "$HOME/villagesql-server" -DWITH_SSL=system
 
    # Or for a debug build (recommended for development)
-   cmake $HOME/villagesql-server -DWITH_DEBUG=1 -DWITH_SSL=system
-   ```
-
-   **macOS:**
-   ```bash
-   # Standard build
-   cmake ~/villagesql-server -DWITH_SSL=system
-
-   # Or for a debug build (recommended for development)
-   cmake ~/villagesql-server -DWITH_DEBUG=1 -DWITH_SSL=system
+   cmake "$HOME/villagesql-server" -DWITH_DEBUG=1 -DWITH_SSL=system
    ```
 
 4. **Build:**
@@ -118,10 +105,9 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 5. **Initialize and Start the Server:**
 
-   **Linux:**
    ```bash
    # Create the data directory
-   mkdir -p $HOME/mysql-data/data
+   mkdir -p "$HOME/mysql-data/data"
 
    # Initialize the data directory (insecure mode for development)
    bin/mysqld --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
@@ -147,24 +133,6 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    bin/mysqld --user=root --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
    ```
 
-   **macOS:**
-   ```bash
-   # Create the data directory
-   mkdir -p ~/mysql-data/data
-
-   # Initialize the data directory (insecure mode for development)
-   bin/mysqld --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
-
-   # Start the server (runs in foreground, use Ctrl-C to stop)
-   bin/mysqld --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
-
-   # In a new terminal, connect using the client
-   ~/build/villagesql/bin/mysql -u root
-
-   # Verify the installation
-   ~/build/villagesql/bin/mysql -u root -e "SELECT VERSION()"
-   ```
-
    *Note: `--initialize-insecure` creates a root user with no password for development. The `--gdb` flag installs a signal handler that allows you to Ctrl-C to quit the server. For production, use `--initialize` instead (generates a temporary password) and refer to [MySQL 8.4 initialization documentation](https://dev.mysql.com/doc/refman/8.4/en/data-directory-initialization.html) for secure setup.*
 
    **Setting up users and permissions:**
@@ -178,42 +146,17 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
    **Verify the new user:**
 
-   **Linux:**
    ```bash
    "$HOME/build/villagesql/bin/mysql" -u myuser -p -e "SELECT USER()"
-   ```
-
-   **macOS:**
-   ```bash
-   ~/build/villagesql/bin/mysql -u myuser -p -e "SELECT USER()"
    ```
 
 ### Running Tests
 
 Verify your build with the test suite:
 
-**Linux:**
 ```bash
 # From your build directory
-cd $HOME/build/villagesql
-
-# Run all VillageSQL tests including sub-suites
-mysql-test/mysql-test-run.pl --do-suite=villagesql --parallel=auto
-
-# Run a specific test
-mysql-test/mysql-test-run.pl villagesql.my_test_name
-
-# Update test results after making changes
-mysql-test/mysql-test-run.pl --record villagesql.my_test_name
-
-# Run VillageSQL unit tests
-make -j $(getconf _NPROCESSORS_ONLN) villagesql-unit-tests && ctest -L villagesql
-```
-
-**macOS:**
-```bash
-# From your build directory
-cd ~/build/villagesql
+cd "$HOME/build/villagesql"
 
 # Run all VillageSQL tests including sub-suites
 mysql-test/mysql-test-run.pl --do-suite=villagesql --parallel=auto
@@ -322,11 +265,11 @@ Priority items are listed below. The full roadmap can be found at [villagesql.co
 ```bash
 # macOS with Homebrew
 brew install openssl@3
-cmake ~/villagesql-server -DWITH_SSL=/opt/homebrew/opt/openssl@3
+cmake "$HOME/villagesql-server" -DWITH_SSL=/opt/homebrew/opt/openssl@3
 
 # Linux (Ubuntu/Debian)
 sudo apt-get install libssl-dev
-cmake ~/villagesql-server -DWITH_SSL=system
+cmake "$HOME/villagesql-server" -DWITH_SSL=system
 ```
 
 **Bison version too old:**
