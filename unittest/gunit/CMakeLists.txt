@@ -373,7 +373,7 @@ TARGET_LINK_LIBRARIES(sqlgunitlib PRIVATE extra::rapidjson)
 SET_TARGET_PROPERTIES(sqlgunitlib
   PROPERTIES COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}"
 )
-TARGET_LINK_LIBRARIES(sqlgunitlib ext::zlib)
+TARGET_LINK_LIBRARIES(sqlgunitlib PRIVATE ext::zlib)
 
 MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   ADD_TEST merge_small_tests

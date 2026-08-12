@@ -1060,8 +1060,12 @@ char *AuditUdf::audit_log_read_bookmark_udf(AuditUdf *udf [[maybe_unused]],
                                             unsigned char *error) noexcept {
   auto bookmark = SysVars::get_log_bookmark();
 
-  std::snprintf(result, MYSQL_ERRMSG_SIZE, R"({"timestamp": "%s", "id": %lu})",
-                bookmark.timestamp.c_str(), bookmark.id);
+  // bookmark.id is uint64_t, which is 'unsigned long' on LP64 Linux but
+  // 'unsigned long long' on macOS/arm64, so a bare %lu fails -Werror=format
+  // there. Cast to the widest unsigned type so one format string works on both.
+  std::snprintf(result, MYSQL_ERRMSG_SIZE, R"({"timestamp": "%s", "id": %llu})",
+                bookmark.timestamp.c_str(),
+                static_cast<unsigned long long>(bookmark.id));
 
   *length = std::strlen(result);
   *is_null = 0;

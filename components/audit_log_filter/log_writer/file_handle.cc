@@ -119,8 +119,11 @@ FileHandle::~FileHandle() noexcept {
   }
 }
 
+// flush_on_write is only consumed inside the #ifdef O_DIRECT branch below, so it
+// is genuinely unused on platforms without O_DIRECT (e.g. macOS).
 bool FileHandle::open_file(const std::filesystem::path &file_path,
-                           bool direct_io, bool flush_on_write) noexcept {
+                           bool direct_io,
+                           bool flush_on_write [[maybe_unused]]) noexcept {
   assert(m_file < 0 && m_path.empty());
   m_path = std::move(file_path);
   m_flush_on_write = false;
