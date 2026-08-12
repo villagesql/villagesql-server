@@ -46,3 +46,9 @@ mysql/time_zone_transition	161
 mysql/time_zone_transition_type	161
 mysql/user	161
 sys/sys_config	33
+villagesql/custom_columns	33
+villagesql/custom_indexes	33
+villagesql/custom_index_columns	33
+villagesql/custom_sp_params	33
+villagesql/extensions	33
+villagesql/properties	33
