@@ -82,6 +82,7 @@ jobs:
     - name: Record run parameters
       run: |
         source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
+        source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
         vsql_parse_version "$SOURCE_DIR"
         vsql_platform_info
         BUILD_TARGET="${VSQL_CODE_BASE}_${VSQL_VERSION}-${PLATFORM}-${ARCH}"
