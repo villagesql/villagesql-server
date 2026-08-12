@@ -49,6 +49,24 @@ cd "$BUILD_DIR"
 
 CMAKE_FLAGS=(
     "-DWITH_SSL=system"
+    # The Percona 8.4.10 merge brings in Percona's .gitmodules, which declares
+    # three submodules we do not vendor and CI does not clone:
+    #
+    #   storage/rocksdb/rocksdb  -> percona/rocksdb        (MyRocks)
+    #   extra/coredumper         -> Percona-Lab/coredumper
+    #   extra/libkmip            -> Percona-Lab/libkmip    (KMIP keyring)
+    #
+    # All three default ON, so without these flags configure fails hunting for
+    # sources that were never checked out ("does not contain a CMakeLists.txt",
+    # "build_version.cc.in does not exist").
+    #
+    # Turning them off is a deliberate scope decision, not just a build fix:
+    # enabling MyRocks et al. means vendoring three new dependencies and taking
+    # on the rocksdb/percona_innodb test suites. Revisit as its own change. The
+    # corresponding suites skip, which is expected rather than a regression.
+    "-DWITH_ROCKSDB=0"
+    "-DWITH_COREDUMPER=OFF"
+    "-DWITHOUT_COMPONENT_KEYRING_KMIP=ON"
 )
 
 if [[ "$BUILD_TYPE" == "debug" ]]; then
