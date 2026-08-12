@@ -6,6 +6,9 @@
 # Usage:
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   source "$SCRIPT_DIR/build_info.sh"
+#
+# Expects a prior inclusion of the utities
+#   source "$SOURCE_DIR/villagesql/scripts/vsql_scripts_utils.sh"
 
 # Parse VSQL_VERSION file from <source_dir>.
 # Sets VSQL_MAJOR, VSQL_MINOR, VSQL_PATCH, VSQL_PRE, VSQL_VERSION.
@@ -27,6 +30,37 @@ vsql_parse_version() {
     if [[ -n "$VSQL_PRE" ]]; then
         VSQL_VERSION="${VSQL_VERSION}-${VSQL_PRE}"
     fi
+}
+
+# Print the VillageSQL version of <source_dir> as <major>.<minor>.<patch>,
+# with -<pre_release> appended when there is one.
+#
+# Usage: vsql_json_version <source_dir> [pre_release]
+#   The version comes from villagesql/bld_matrix/json_version.sh. With no
+#   pre_release argument the file's own suffix is used; passing one replaces it,
+#   and passing "" prints the version with no suffix, as a release build wants.
+#
+# Prints to stdout and sets nothing, so a caller captures it:
+#   VSQL_VERSION=$(vsql_json_version "$SOURCE_DIR")
+vsql_json_version() {
+    local source_dir="$1"
+    local json
+    json=$("$source_dir/villagesql/bld_matrix/json_version.sh") \
+        || die "Cannot read the version of $source_dir"
+
+    local pre
+    if [[ $# -ge 2 ]]; then
+        pre="$2"
+    else
+        pre=$(jq -r '.pre_release' <<<"$json")
+    fi
+
+    local version
+    version=$(jq -r '"\(.major).\(.minor).\(.patch)"' <<<"$json")
+    if [[ -n "$pre" ]]; then
+        version="${version}-${pre}"
+    fi
+    echo "$version"
 }
 
 # Set PLATFORM (linux|macos) and ARCH (x86_64|aarch64|arm64) for this machine.
