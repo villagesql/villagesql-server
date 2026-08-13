@@ -42,16 +42,22 @@ if (!$extension_version)
 
 --exec test -d "$sdk_dir" || (echo "ERROR: SDK not found at $sdk_dir. Run 'make sdk' first." && exit 1)
 
+# --mkdir is not recursive, so each level is created separately. --force-rmdir
+# fails if the directory is not there, which is the normal case.
+--error 0,1
+--force-rmdir $ext_build_dir
+--mkdir $ext_build_dir
+--mkdir $ext_build_dir/src
+--mkdir $ext_build_dir/build
+
+--copy_file $extension_source $ext_build_dir/src/extension.cc
+
 # Every --exec below strips LD_PRELOAD so the exec'd command does not run under
 # the LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise uninstrumented
-# system binaries (cp, mkdir, sed, gcc) trip LeakSanitizer on their own
+# system binaries (sh, cp, sed, grep, gcc) trip LeakSanitizer on their own
 # allocations and fail for the wrong reason (see create_extension_sdk.inc for
-# the full explanation).
---exec unset LD_PRELOAD && rm -rf $ext_build_dir
---exec unset LD_PRELOAD && mkdir -p $ext_build_dir/src
---exec unset LD_PRELOAD && mkdir -p $ext_build_dir/build
-
---exec unset LD_PRELOAD && cp $extension_source $ext_build_dir/src/extension.cc
+# the full explanation). The file operations above use mysqltest's built-in
+# commands, which run in-process and never inherit the preloaded runtime.
 
 # Optionally place shared companion header(s) next to extension.cc so the source
 # can #include them.
@@ -74,7 +80,7 @@ if ($extension_common_header)
 --exec cd $ext_build_dir/build && unset LD_PRELOAD && make > make_output.txt 2>&1 || true
 
 # Verify the build actually failed (no VEB produced).
---exec test ! -f $ext_build_dir/build/$extension_name.veb || (echo "ERROR: $extension_name.veb was produced; expected build failure" && exit 1)
+--exec unset LD_PRELOAD && test ! -f $ext_build_dir/build/$extension_name.veb || (echo "ERROR: $extension_name.veb was produced; expected build failure" && exit 1)
 
 # If a pattern is specified, verify it appears in the build output.
 if ($build_failure_grep)
@@ -84,7 +90,7 @@ if ($build_failure_grep)
 
 --echo Build failed as expected.
 
---exec unset LD_PRELOAD && rm -rf $ext_build_dir
+--force-rmdir $ext_build_dir
 
 --let $extension_name =
 --let $extension_version =

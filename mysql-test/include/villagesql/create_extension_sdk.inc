@@ -60,19 +60,27 @@ if (!$extension_version)
 # Every --exec below strips LD_PRELOAD. On sanitizer builds MTR's safe_process
 # LD_PRELOADs the shared ASan runtime into every child process, and that
 # propagates through mysqltest into these exec'd commands. The uninstrumented
-# system binaries (cp, mkdir, sed, and the gcc/cc1 toolchain) then run under
+# system binaries (sh, cp, sed, and the gcc/cc1 toolchain) then run under
 # LeakSanitizer, which flags their own internal allocations at exit and fails
 # the command with LSAN_OPTIONS=exitcode=42. LD_PRELOAD only loads the runtime
 # into the child process; it does not add -fsanitize instrumentation, so
 # unsetting it yields identical results while avoiding spurious leak reports.
+#
+# The remaining file operations use mysqltest's built-in commands (--mkdir,
+# --copy_file, --force-rmdir, ...), which run in-process and so never inherit
+# the preloaded runtime at all.
 
-# Create build directory structure
---exec unset LD_PRELOAD && rm -rf $ext_build_dir
---exec unset LD_PRELOAD && mkdir -p $ext_build_dir/src
---exec unset LD_PRELOAD && mkdir -p $ext_build_dir/build
+# Create build directory structure.
+# --force-rmdir fails if the directory is not there, which
+# is the normal case.
+--error 0,1
+--force-rmdir $ext_build_dir
+--mkdir $ext_build_dir
+--mkdir $ext_build_dir/src
+--mkdir $ext_build_dir/build
 
 # Copy source file
---exec unset LD_PRELOAD && cp $extension_source $ext_build_dir/src/extension.cc
+--copy_file $extension_source $ext_build_dir/src/extension.cc
 
 # Optionally place shared companion header(s) next to extension.cc so the source
 # can #include them. Gated on $extension_common_header, so other consumers of
@@ -102,23 +110,28 @@ if ($extension_common_header)
 # Verify VEB was created
 --file_exists $ext_build_dir/build/$extension_name.veb
 
-# Move VEB to server's VEB directory (see the LD_PRELOAD note above).
---exec unset LD_PRELOAD && mkdir -p $veb_dir
+# Move VEB to server's VEB directory.
+--error 0,1
+--mkdir $veb_dir
 
 if ($extension_versioned)
 {
-  --exec unset LD_PRELOAD && cp $ext_build_dir/build/$extension_name.veb $veb_dir/$extension_name-$extension_version.veb
+  --error 0,1
+  --remove_file $veb_dir/$extension_name-$extension_version.veb
+  --copy_file $ext_build_dir/build/$extension_name.veb $veb_dir/$extension_name-$extension_version.veb
   --echo Created $extension_name-$extension_version.veb
 }
 
 if (!$extension_versioned)
 {
-  --exec unset LD_PRELOAD && cp $ext_build_dir/build/$extension_name.veb $veb_dir/
+  --error 0,1
+  --remove_file $veb_dir/$extension_name.veb
+  --copy_file $ext_build_dir/build/$extension_name.veb $veb_dir/$extension_name.veb
   --echo Created $extension_name.veb
 }
 
 # Cleanup build directory
---exec unset LD_PRELOAD && rm -rf $ext_build_dir
+--force-rmdir $ext_build_dir
 
 # Reset variables
 --let $extension_name =
