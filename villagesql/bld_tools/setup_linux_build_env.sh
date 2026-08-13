@@ -39,4 +39,5 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     openssl \
     libdbd-mysql-perl \
     zip \
-    unzip
+    unzip \
+    jq
