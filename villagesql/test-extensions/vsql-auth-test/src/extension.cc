@@ -15,9 +15,17 @@
 
 // Trivial VillageSQL auth extension exercising the vsql::preview::auth
 // capability end to end -- no JWT, no crypto. It registers an auth method named
-// "vsql_auth_test"; an account created with IDENTIFIED WITH vsql_auth_test
-// authenticates iff the client sends one of the fixed tokens below, and is then
-// mapped to the account "vsql_auth_test_user".
+// "vsql_auth_test" that authenticates iff the client sends one of the fixed
+// tokens below, then resolves the session account:
+//   - the connecting account "auth_user" is proxy-mapped to the fixed account
+//     "vsql_auth_test_user" (auth_basic/auth_roles set up GRANT PROXY for
+//     this);
+//   - any other connecting account authenticates AS ITSELF (the auto-create
+//     flow, where the provisioned account then runs as itself, no proxy).
+//
+// It also opts in to handling UNKNOWN accounts: an unknown-account login with a
+// valid token is provisioned on the fly (request_provision) and then runs as
+// the newly-created account. See auth_auto_create.test.
 //
 // Accepted tokens:
 //   kToken           -- accept, map to the account, stage no roles (the
@@ -72,8 +80,15 @@ bool token_matches(const unsigned char *pkt, size_t token_len,
          std::memcmp(pkt, expected, token_len) == 0;
 }
 
+// Opt in to handling unknown accounts: this test method always wants
+// unknown-account logins routed to it, so it can validate the token and
+// provision the account. A real extension would back this with a runtime
+// sysvar (e.g. SET GLOBAL <ext>.auto_create) and query it here.
+bool auto_create_enabled() { return true; }
+
 // The authenticator. Reads one packet (the token), compares it to the fixed
-// test tokens, and on success maps to the fixed account. Fail closed otherwise.
+// test tokens, and on success resolves the session account. Fail closed
+// otherwise.
 AuthResult authenticate(AuthContext &c) {
   auto pkt = c.read_packet();
   if (pkt.empty()) return AuthResult::kError;
@@ -88,10 +103,36 @@ AuthResult authenticate(AuthContext &c) {
       token_matches(pkt.data(), token_len, kTokenQuotedRole);
   if (!plain && !with_roles && !quoted_role) return AuthResult::kReject;
 
-  c.authenticate_as(kMappedAccount);
+  const char *const user = c.user_name();
+
+  // Auto-create: if the account does not exist (this login was routed here by
+  // the unknown-account opt-in), ask the server to provision it as itself,
+  // IDENTIFIED WITH this method, granting the mapped role. The server defers
+  // the DDL until this handler returns kOk and fails the login if it can't
+  // create the account; the session then runs AS the (now-real) connecting
+  // account.
+  if (c.account_unknown()) {
+    const char *roles[] = {kRoleGranted};
+    c.request_provision(user, roles, 1);
+    c.authenticate_as(user);
+    c.set_external_user(user);
+    return AuthResult::kOk;
+  }
+
+  // A pre-existing account. Two shapes the tests exercise:
+  //   - auth_basic/auth_roles connect as "auth_user" and expect a fixed proxy
+  //     map to kMappedAccount (they set up GRANT PROXY for exactly this);
+  //   - an auto-created account (provisioned above on a prior login) connects
+  //     AS ITSELF on a later login and must authenticate as itself, not proxy.
+  // Distinguish by the connecting user: only auth_user proxies to the fixed
+  // mapped account; everyone else authenticates as themselves.
+  const bool proxy_to_mapped =
+      user != nullptr && std::strcmp(user, "auth_user") == 0;
+  const char *const account = proxy_to_mapped ? kMappedAccount : user;
+  c.authenticate_as(account);
   // @@external_user is the original identity for the audit trail: the account
   // the client connected as, NOT the account we mapped to.
-  c.set_external_user(c.user_name());
+  c.set_external_user(user);
 
   if (with_roles) {
     // Stage a granted + an ungranted role. The server activates only the
@@ -110,6 +151,7 @@ AuthResult authenticate(AuthContext &c) {
 constexpr auto AUTH_METHOD =
     vsql::preview_auth::make_auth<&authenticate>("vsql_auth_test")
         .client_plugin("mysql_clear_password")
+        .auto_create(&auto_create_enabled)
         .build();
 vsql::preview_auth::AuthCapability g_auth{AUTH_METHOD};
 

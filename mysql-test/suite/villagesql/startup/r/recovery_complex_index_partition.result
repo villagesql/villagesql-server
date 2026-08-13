@@ -2,6 +2,7 @@
 # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
 # with PARTITIONED table
 #
+# restart
 #
 # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
 #

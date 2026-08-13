@@ -118,11 +118,14 @@ typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
 // An index profile is declared by the extension when registering an index type.
 // It enumerates helper functions (e.g. distance, compare) each identified by a
 // uint32_t fn_id. This callback is the server's generic dispatcher for those
-// functions. The layouts of args (input array of nargs elements) and result
-// (output buffer) are defined by the specific function registered at fn_id;
-// the extension determines these conventions when it registers the profile.
+// functions. key_pos is the 0-based index key column whose bound profile this
+// call dispatches fn_id through. The layouts of args (input array of nargs
+// elements) and result (output buffer) are defined by the specific function
+// registered at fn_id; the extension determines these conventions when it
+// registers the profile.
 // Profile functions are infallible.
-typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref, uint32_t fn_id,
+typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref,
+                                     uint32_t key_pos, uint32_t fn_id,
                                      const void *const *args, uint32_t nargs,
                                      void *result);
 
@@ -630,11 +633,18 @@ typedef struct {
 #define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION \
   VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1
 
+// Maximum number of parameters a single index profile/helper function may
+// declare in its signature. The server rejects registration of any binding
+// whose signature.param_count exceeds this at load time.
+#define VEF_INDEX_PROFILE_FN_MAX_ARGS 8
+
 // One function binding within an index profile.
 // fn_id is the identifier used by the index storage implementation when it
 // calls vef_index_profile_fn in the index context. The remaining fields carry
 // the VDF metadata the server uses to register the function as a SQL function.
 typedef struct {
+  // Minimum VEF protocol version required to call vdf.
+  vef_protocol_t protocol;
   uint32_t fn_id;
   const char *name;
   vef_vdf_func_t vdf;
@@ -657,7 +667,7 @@ typedef struct {
   // function_count is zero.
   const vef_index_profile_fn_binding_t *functions;
   // Helper functions invoked only by the index implementation via
-  // vef_index_ctx_t.profile_fn. fn_ids are independent of function fn_ids.
+  // vef_index_ctx_t.helper_fn. fn_ids are independent of function fn_ids.
   uint32_t helper_count;
   // Pointer to a flat array of helper_count bindings. NULL when
   // helper_count is zero.

@@ -81,11 +81,18 @@ jobs:
 
     - name: Record run parameters
       run: |
+        source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
+        source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
+        vsql_parse_version "$SOURCE_DIR"
+        vsql_platform_info
+        BUILD_TARGET="${VSQL_CODE_BASE}_${VSQL_VERSION}-${PLATFORM}-${ARCH}"
+
         jq -n \
           --arg capturedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
           --arg trigger "$GITHUB_EVENT_NAME" \
           --arg gitRev "$REF" \
           --arg buildType "$BUILD_TYPE" \
+          --arg buildTarget "$BUILD_TARGET" \
           --arg artifactPrefix "$ARTIFACT_PREFIX" \
           --arg sha "$(git -C source rev-parse HEAD)" \
           --arg commitSubject "$(git -C source log -n1 --format=%s)" \

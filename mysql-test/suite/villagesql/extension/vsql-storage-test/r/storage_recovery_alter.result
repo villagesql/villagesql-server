@@ -1,3 +1,4 @@
+# restart
 SET PERSIST vsql_allow_preview_extensions = ON;
 # Install the column-store test extension (provides STORED_INT)
 INSTALL EXTENSION vsql_storage_test;

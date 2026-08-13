@@ -16,12 +16,14 @@
 
 #include "villagesql/veb/validate.h"
 
+#include <algorithm>
 #include <cstring>
 #include <optional>
 #include <string>
 #include <unordered_set>
 
 #include "sql/field.h"
+#include "sql/sql_const.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
@@ -36,6 +38,18 @@
 
 namespace villagesql {
 namespace veb {
+
+// A custom column is backed by a VARBINARY field, so it costs its declared
+// width plus 2 length bytes against MySQL's 65535-byte per-row record budget,
+// and the row spends at least one more byte on its null bitmap unless every
+// column is NOT NULL. Whether a column is nullable is decided per use at DDL
+// time -- and nullable is the default -- so the widest footprint a type can
+// declare and still be usable either way is the field width less that overhead.
+//
+constexpr int64_t kVarbinaryLengthBytes = 2;
+constexpr int64_t kRowNullByte = 1;
+constexpr int64_t kMaxCustomTypeDeclaredLength =
+    MAX_FIELD_VARCHARLENGTH - kVarbinaryLengthBytes - kRowNullByte;
 
 static Item_result vef_type_to_item_result(const vef_type_t &type) {
   switch (type.id) {
@@ -98,6 +112,27 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         error_out = "type '" + type_name + "' failed validation";
         return std::nullopt;
       }
+
+      // A fixed non-parameterized type declares persisted_length
+      // (max_persisted_length stays 0); parameterized and variable-length types
+      // declare max_persisted_length, and a parameterized type's resolved
+      // persisted_length is checked against it at DDL time, so bounding the
+      // declared values bounds every parameterization.
+      const int64_t declared_length =
+          std::max(maybe_descriptor->persisted_length(),
+                   maybe_descriptor->max_persisted_length());
+      if (declared_length > kMaxCustomTypeDeclaredLength) {
+        error_out =
+            "type '" + type_name + "' declares " +
+            std::to_string(declared_length) +
+            " bytes of storage per value, which exceeds the maximum of " +
+            std::to_string(kMaxCustomTypeDeclaredLength) +
+            " bytes supported for custom-type columns today";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
       result.types.push_back(std::move(*maybe_descriptor));
     }
   }
@@ -348,6 +383,28 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
             error_out = std::string("index profile '") + profile.name +
                         "': " + kind + " '" + fn.name +
                         "' has non-zero param_count but NULL params";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          if (fn.signature.param_count > VEF_INDEX_PROFILE_FN_MAX_ARGS) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name + "' declares " +
+                        std::to_string(fn.signature.param_count) +
+                        " parameters, exceeding the maximum of " +
+                        std::to_string(VEF_INDEX_PROFILE_FN_MAX_ARGS);
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          // TODO(villagesql-indexing): Lift this restriction once
+          // call_profile_binding() in custom_index.cc supports STRING/INT/
+          // CUSTOM results, not just REAL.
+          if (fn.signature.return_type.id != VEF_TYPE_REAL) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has return type other than REAL, which is not yet "
+                        "supported for index profile/helper functions";
             LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
                     error_out.c_str());
             return true;

@@ -29,6 +29,19 @@ find_package(VillageSQLExtensionFramework REQUIRED)
 
 include_directories(${VillageSQLExtensionFramework_INCLUDE_DIR})
 
+# Extensions that consume/provide raw MySQL component services need MySQL's
+# own headers. The parent passes these only for those extensions (the
+# MYSQL_HEADERS flag on vsql_add_test_extension); VEF-only extensions leave
+# them unset. Two locations: the source tree for service definitions
+# (<mysql/components/services/*.h>), and the build tree for generated headers
+# like mysqld_error.h (error-code constants).
+if(MYSQL_INCLUDE_DIR)
+  include_directories(${MYSQL_INCLUDE_DIR})
+endif()
+if(MYSQL_GENERATED_INCLUDE_DIR)
+  include_directories(${MYSQL_GENERATED_INCLUDE_DIR})
+endif()
+
 add_library(extension SHARED
   ${EXTENSION_SOURCE_DIR}/src/extension.cc
 )

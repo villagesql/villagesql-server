@@ -5,19 +5,7 @@
 #
 # Usage:
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-#   source "$SCRIPT_DIR/vsql_script_utils.sh"
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log_info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
-log_step()  { echo -e "${BLUE}==>${NC} $*"; }
-die()       { log_error "$*"; exit 1; }
+#   source "$SCRIPT_DIR/build_info.sh"
 
 # Parse VSQL_VERSION file from <source_dir>.
 # Sets VSQL_MAJOR, VSQL_MINOR, VSQL_PATCH, VSQL_PRE, VSQL_VERSION.
@@ -25,6 +13,7 @@ vsql_parse_version() {
     local source_dir="$1"
     local f="$source_dir/VSQL_VERSION"
     [[ -f "$f" ]] || die "VSQL_VERSION file not found at $f"
+    VSQL_CODE_BASE=$(grep "^VSQL_CODE_BASE=" "$f" | cut -d'=' -f2)
     VSQL_MAJOR=$(grep "^VSQL_MAJOR_VERSION=" "$f" | cut -d'=' -f2)
     VSQL_MINOR=$(grep "^VSQL_MINOR_VERSION=" "$f" | cut -d'=' -f2)
     VSQL_PATCH=$(grep "^VSQL_PATCH_VERSION=" "$f" | cut -d'=' -f2)

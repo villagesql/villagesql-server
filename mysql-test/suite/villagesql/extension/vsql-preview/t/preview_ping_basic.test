@@ -2,9 +2,11 @@
 # Verifies that the ping() VDF returns an incrementing counter, proving
 # the server-side preview capability was populated correctly.
 
---echo # SET GLOBAL is rejected; must use SET PERSIST
+--echo # SET GLOBAL is rejected in both directions; must use SET PERSIST
 --error ER_VILLAGESQL_GENERIC_ERROR
 SET GLOBAL vsql_allow_preview_extensions = ON;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SET GLOBAL vsql_allow_preview_extensions = OFF;
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 

@@ -84,3 +84,7 @@ leak:ndb_sign_keys
 leak:/usr/bin/python3
 # curl: vsql-rest tests pipe curl output — libcurl/OpenSSL one-time init
 leak:/usr/bin/curl
+# tr/grep: vsql-rest tests pipe curl through these; whichever is last in the
+# pipeline sets its exit status, so a benign one-time leak surfaces as exit 42
+leak:/usr/bin/tr
+leak:/usr/bin/grep

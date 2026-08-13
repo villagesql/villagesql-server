@@ -10,7 +10,7 @@
 [![Discord](https://img.shields.io/discord/1445037832707113043?logo=discord&label=discord)](https://discord.com/invite/KSr6whd3Fr)
 [![GitHub Release](https://img.shields.io/github/v/release/villagesql/villagesql-server?include_prereleases)](https://github.com/villagesql/villagesql-server/releases)
 
-VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL 8.4.10 LTS** that introduces the **VillageSQL Extension Framework (VEF)**.
+VillageSQL is the innovation platform for MySQL and a new path for MySQL in the agentic AI era. VillageSQL Server is an open-source tracking fork of **MySQL** that introduces the **VillageSQL Extension Framework (VEF)**.
 
 VEF enables custom data types and functions while maintaining MySQL 8.4 compatibility.
 
@@ -46,9 +46,8 @@ For quick installation, visit [villagesql.com/install](https://villagesql.com/in
 
 ### Prerequisites
 
-- **CMake** (3.14.6 or higher)
-- **C++20 Compiler** (GCC 10+, Clang 14+, Xcode 10+ on macOS, or MSVC 2019
-  Update 11 (16.11)+)
+- **CMake** (3.14.6 or higher; macOS requires 3.19 or higher)
+- **C++20 Compiler** (GCC 10+ or Clang 14+)
 - **OpenSSL 3.0+**
 - **Bison** (3.0.4 or higher)
 - **pkg-config**
@@ -115,7 +114,7 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 4. **Build:**
    ```bash
-   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
    This builds every target, including the `mysql` client that Step 5 uses to
@@ -158,10 +157,10 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    mkdir -p ~/mysql-data/data
 
    # Initialize the data directory (insecure mode for development)
-   bin/mysqld --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
+   bin/mysqld --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
 
    # Start the server (runs in foreground, use Ctrl-C to stop)
-   bin/mysqld --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
+   bin/mysqld --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
 
    # In a new terminal, connect using the client
    ~/build/villagesql/bin/mysql -u root
@@ -212,7 +211,7 @@ mysql-test/mysql-test-run.pl villagesql.my_test_name
 mysql-test/mysql-test-run.pl --record villagesql.my_test_name
 
 # Run VillageSQL unit tests
-make -j $(($(getconf _NPROCESSORS_ONLN) - 2)) villagesql-unit-tests && ctest -L villagesql
+make -j $(getconf _NPROCESSORS_ONLN) villagesql-unit-tests && ctest -L villagesql
 ```
 
 **macOS:**
@@ -230,7 +229,7 @@ mysql-test/mysql-test-run.pl villagesql.my_test_name
 mysql-test/mysql-test-run.pl --record villagesql.my_test_name
 
 # Run VillageSQL unit tests
-make -j $(($(getconf _NPROCESSORS_ONLN) - 2)) villagesql-unit-tests && ctest -L villagesql
+make -j $(getconf _NPROCESSORS_ONLN) villagesql-unit-tests && ctest -L villagesql
 ```
 
 ## Quick Start: Using Extensions
@@ -296,12 +295,12 @@ VillageSQL provides a C++ SDK and a Rust SDK for building high-performance exten
 - **Templates:**
   - [`villagesql/vsql-extension-template`](https://github.com/villagesql/vsql-extension-template) (C++)
   - [`villagesql/vsql-extension-template-rust`](https://github.com/villagesql/vsql-extension-template-rust) (Rust)
-- **Header API:** Detailed extension API definitions can be found in `villagesql/include/villagesql/vsql.h`.
+- **Header API:** Detailed extension API definitions can be found in `villagesql/sdk/include/villagesql/vsql.h`.
 - **Rust SDK:** [`villagesql/vsql-rust-sdk`](https://github.com/villagesql/vsql-rust-sdk) provides the `villagesql` crate and the `cargo-vsql` build tool, with runnable examples under `examples/`.
 
 ## Known Limitations
 
-- **No Custom Indexes:** Custom data types cannot be indexed in this version (coming soon).
+- **No Custom Index Types:** Custom-typed columns work with standard B-tree indexes via the type's compare function. Extension-defined custom index types are not available yet (coming soon).
 - **Limited Built-in Aggregate Support:** COUNT(DISTINCT), MIN, and MAX work with custom types. Extensions can define custom aggregate functions via VDF Aggregates. Built-in aggregates like SUM and AVG are not yet supported for custom types.
 - **Alpha Stability:** Expect breaking changes and potential bugs as we progress towards Beta.
 - **No Windows Support:** We don't support compiling to .dll to Windows yet. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
@@ -310,9 +309,9 @@ VillageSQL provides a C++ SDK and a Rust SDK for building high-performance exten
 
 Priority items are listed below. The full roadmap can be found at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
-- [ ] **Custom Indexes:** Support for indexing custom data types. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
+- [ ] **Custom Index Types:** Support for extension-defined index types. Standard B-tree indexing of custom-typed columns already works. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
 - [ ] **Variable Length Custom Types:** Support for custom types with variable storage size. ([#13](https://github.com/villagesql/villagesql-server/issues/13))
-- [ ] **ALTER/UPGRADE Extension:** Lifecycle management for installed extensions. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
+- [ ] **Extension Upgrades Without a Restart:** `ALTER EXTENSION <name> VERSION '<v>' AT RESTART` applies a version change at the next restart today; applying one to a running server does not. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
 - [ ] **Full Built-in Aggregate Support:** Investigating support for built-in aggregate functions (SUM, AVG, etc.) with custom types. COUNT(DISTINCT), MIN, and MAX work today. Extensions can implement custom aggregates via VDF Aggregates. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
 - [ ] **Startup Install Flag:** Automatic extension installation on server startup. ([#17](https://github.com/villagesql/villagesql-server/issues/17))
 - [ ] **Windows Support:** Native Windows compilation and .dll support. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
@@ -354,7 +353,7 @@ sudo apt-get install bison
 **Port already in use:**
 If you see "Bind on TCP/IP port: Address already in use", either stop the existing MySQL instance or specify a different port:
 ```bash
-bin/mysqld --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql --port=3307
+bin/mysqld --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql" --port=3307
 ```
 
 For more help, visit our [Discord community](https://discord.gg/KSr6whd3Fr) or [file an issue](https://github.com/villagesql/villagesql-server/issues).

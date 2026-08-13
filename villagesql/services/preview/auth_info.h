@@ -24,6 +24,12 @@ namespace villagesql::services {
 // maybe_apply_vef_auth_state() after account resolution and never inspects it.
 struct VefAuthState;
 
+// Opaque provisioning request staged by request_provision(): the account (and
+// roles) to CREATE. Owned and defined by the VEF auth seam; core auth runs it
+// via run_vef_provision() only after the handler returns OK, so a login the
+// handler ultimately denies creates nothing.
+struct VefProvisionRequest;
+
 // The VEF-auth-specific fields on MPVIO_EXT, grouped so core auth carries a
 // single member instead of one field per VEF feature. Core reads/forwards these
 // but does not interpret them; the VEF auth seam populates them. All nullptr
@@ -35,6 +41,7 @@ struct VefAuthInfo {
   // client_plugin_name(plugin). Set by the seam before invoking the handler.
   const char *vef_client_auth_plugin;
   villagesql::services::VefAuthState *vef_auth_state;
+  villagesql::services::VefProvisionRequest *vef_provision_request;
 };
 
 }  // namespace villagesql::services

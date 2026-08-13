@@ -28,7 +28,7 @@
 
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 
 namespace villagesql {
@@ -43,7 +43,7 @@ struct IndexProfileDescriptorKeyPrefix {
   // Query by profile name only (for unqualified lookups).
   explicit IndexProfileDescriptorKeyPrefix(std::string profile_name)
       : profile_name_(std::move(profile_name)),
-        normalized_prefix_(normalize_extension_name(profile_name_) + ".") {}
+        normalized_prefix_(canonical_extension_name(profile_name_) + ".") {}
 
   // Query by profile name + extension name.
   IndexProfileDescriptorKeyPrefix(std::string profile_name,
@@ -51,10 +51,10 @@ struct IndexProfileDescriptorKeyPrefix {
       : profile_name_(std::move(profile_name)),
         extension_name_(std::move(extension_name)),
         normalized_prefix_(
-            normalize_extension_name(profile_name_) + "." +
+            canonical_extension_name(profile_name_) + "." +
             (extension_name_.empty()
                  ? ""
-                 : normalize_extension_name(extension_name_) + ".")) {}
+                 : canonical_extension_name(extension_name_) + ".")) {}
 
   const std::string &str() const { return normalized_prefix_; }
   const std::string &profile_name() const { return profile_name_; }

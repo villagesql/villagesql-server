@@ -1,0 +1,12 @@
+# Test that requesting a MySQL service that isn't in the registry causes
+# INSTALL EXTENSION to fail with a useful, named error.
+#
+# vsql_mysql_services_missing_test declares a RequiredService<> for a
+# service ("vsql_intentionally_missing") that no component will ever
+# register.
+
+call mtr.add_suppression("failed to acquire MySQL service");
+
+--echo # INSTALL must fail before the extension becomes usable
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_mysql_services_missing_test;

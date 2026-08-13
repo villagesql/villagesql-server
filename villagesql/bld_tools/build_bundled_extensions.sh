@@ -31,8 +31,10 @@ INCLUDE_UNBUNDLED="${5:-no}"
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
-source "$SOURCE_DIR/scripts/vsql_script_utils.sh"
+
 EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
+
+source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 case "$INCLUDE_UNBUNDLED" in
     1|yes) INCLUDE_UNBUNDLED=yes ;;
@@ -87,6 +89,21 @@ while IFS= read -r line; do
     REPO_NAME="${SOURCE##*/}"
 
     if [[ -n "$EXTENSION_FILTER" && "$REPO_NAME" != "$EXTENSION_FILTER" ]]; then
+        continue
+    fi
+
+    # This script builds with cmake. Skip entries that use another build tool
+    # such as cargo. The real issue is that we try to clone the rust-sdk
+    # multiple times, leading to an error.
+    # TODO(villagesql-rust): Let's consider doing a bigger rework of the
+    # extension build system to support multiple build tools, but for now we just
+    # skip non-cmake extensions.
+    BUILD_TOOL=cmake
+    for FIELD in "${FIELDS[@]:2}"; do
+        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
+    done
+    if [[ "$BUILD_TOOL" != "cmake" ]]; then
+        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
         continue
     fi
 

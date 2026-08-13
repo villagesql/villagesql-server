@@ -1,0 +1,7 @@
+{
+  "name": "vsql_on_init_test",
+  "version": "0.0.1",
+  "description": "VEF extension exercising the on_init/on_deinit builder hooks.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

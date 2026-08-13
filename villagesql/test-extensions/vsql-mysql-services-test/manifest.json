@@ -1,0 +1,7 @@
+{
+  "name": "vsql_mysql_services_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension exercising the MySQL Services capability",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

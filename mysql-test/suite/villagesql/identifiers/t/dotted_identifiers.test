@@ -1,0 +1,28 @@
+# Identifiers may contain dots. Victionary update and delete operations must
+# locate rows by the key components, not by re-splitting the dot-joined key
+# string.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE dotted_db;
+USE dotted_db;
+
+CREATE TABLE `my.table` (
+    `col.one` vsql_complex.COMPLEX,
+    plain INT
+);
+
+SHOW FIELDS FROM `my.table`;
+
+# Column rename updates the victionary row keyed by the dotted names.
+ALTER TABLE `my.table` RENAME COLUMN `col.one` TO `col.two`;
+SHOW FIELDS FROM `my.table`;
+
+# Table rename rewrites the keys of all column rows for the table.
+RENAME TABLE `my.table` TO `renamed.table`;
+SHOW FIELDS FROM `renamed.table`;
+
+DROP TABLE `renamed.table`;
+DROP DATABASE dotted_db;
+
+--source include/villagesql/uninstall_complex_extension.inc

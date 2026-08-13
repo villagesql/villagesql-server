@@ -368,6 +368,12 @@ class Index {
 
   explicit Index(const vef_index_ctx_t &ctx) : ctx_(ctx) {}
 
+  uint32_t get_num_key_cols() const { return ctx_.num_key_columns; }
+
+  uint32_t get_max_col_len(uint32_t key_pos) const {
+    return ctx_.key_len_fn(ctx_.index_ref, key_pos, false);
+  }
+
   uint32_t get_primary_num_key_cols() const {
     return ctx_.num_primary_key_columns;
   }
@@ -381,16 +387,28 @@ class Index {
     return static_cast<const T *>(ctx_.options);
   }
 
-  template <typename Result, typename... Args>
-  void profile(uint32_t fn_id, Result *result, const Args &...args) const {
+  // args are the raw column values (persisted format) the profile/helper
+  // function operates on, e.g. the indexed column and a query value for a
+  // distance function. key_pos identifies which key column's bound profile to
+  // dispatch fn_id through.
+  template <typename Result, typename... ColData>
+  void profile(uint32_t key_pos, uint32_t fn_id, Result *result,
+               const ColData &...args) const {
+    static_assert((std::is_same_v<ColData, vef_storage_col_data_t> && ...),
+                  "profile() args must be vef_storage_col_data_t");
     const void *argv[] = {static_cast<const void *>(&args)...};
-    ctx_.profile_fn(ctx_.index_ref, fn_id, argv, sizeof...(Args), result);
+    ctx_.profile_fn(ctx_.index_ref, key_pos, fn_id, argv, sizeof...(ColData),
+                    result);
   }
 
-  template <typename Result, typename... Args>
-  void helper(uint32_t fn_id, Result *result, const Args &...args) const {
+  template <typename Result, typename... ColData>
+  void helper(uint32_t key_pos, uint32_t fn_id, Result *result,
+              const ColData &...args) const {
+    static_assert((std::is_same_v<ColData, vef_storage_col_data_t> && ...),
+                  "helper() args must be vef_storage_col_data_t");
     const void *argv[] = {static_cast<const void *>(&args)...};
-    ctx_.helper_fn(ctx_.index_ref, fn_id, argv, sizeof...(Args), result);
+    ctx_.helper_fn(ctx_.index_ref, key_pos, fn_id, argv, sizeof...(ColData),
+                   result);
   }
 
   bool get_key_data(IndexScanKey::KeyPartRef key_ref,
@@ -1080,6 +1098,7 @@ constexpr IndexTypeRootBuilder<Name, Context> make_index_type() {
 // that the bound function was declared by the same extension.
 struct IndexFunctionDesc {
   const char *name;
+  vef_protocol_t protocol;
   vef_vdf_func_t vdf;
   vef_type_t return_type;
   std::array<vef_type_t, vsql::func_builder::kMaxParams> param_types;
@@ -1099,7 +1118,7 @@ struct IndexProfileDesc {
   // User-visible SQL functions associated with this profile.
   // The optimizer may generate index scan plans for calls to these functions.
   std::vector<IndexProfileFunctionBinding> functions;
-  // Helper functions invoked only by the index implementation via profile_fn.
+  // Helper functions invoked only by the index implementation via helper_fn.
   // fn_ids are independent of the functions fn_id sequence.
   std::vector<IndexProfileFunctionBinding> helpers;
   uint8_t ordering;
@@ -1136,7 +1155,7 @@ class IndexProfileBuilder {
   }
 
   // Bind fn_id to a helper function invoked only by the index implementation
-  // via vef_index_ctx_t.profile_fn. fn_ids are independent of the functions
+  // via vef_index_ctx_t.helper_fn. fn_ids are independent of the functions
   // sequence and must be unique within the helpers list.
   IndexProfileBuilder &with_helper(uint32_t fn_id,
                                    const IndexFunctionDesc &fn) {
@@ -1223,6 +1242,7 @@ class IndexFuncBuilder {
     auto d = inner_.build();
     IndexFunctionDesc result{};
     result.name = d.name();
+    result.protocol = d.required_protocol();
     result.vdf = d.vdf();
     result.return_type = d.return_type();
     result.num_params = d.num_params();
@@ -1355,6 +1375,7 @@ class IndexProfileCapability
               vef_index_profile_fn_binding_t b{};
               b.fn_id = fb.fn_id;
               b.name = fb.function.name;
+              b.protocol = fb.function.protocol;
               b.vdf = fb.function.vdf;
               b.signature.return_type = fb.function.return_type;
               b.signature.param_count =

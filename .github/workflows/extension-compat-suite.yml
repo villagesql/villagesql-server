@@ -70,18 +70,25 @@ jobs:
           EXTENSION_FILTER: ${{ inputs.extension_filter }}
           ABI_FILTER: ${{ inputs.abi_filter }}
         run: |
-          # Delegate all matrix logic to the script so it can be tested locally:
-          #   PLATFORM_FILTER=macos-arm64 ABI_FILTER=stable \
-          #     ./scripts/villagesql_build-compat-matrix.sh
-          mapfile -t MATRICES < <(./scripts/villagesql_build-compat-matrix.sh)
-          BUILD_MATRIX="${MATRICES[0]}"
-          TEST_MATRIX="${MATRICES[1]}"
+          # Matrix logic lives in villagesql/bld_matrix, so it can be run
+          # locally exactly as it runs here:
+          #   villagesql/bld_matrix/json_test_extensions.sh macos-arm64 "" stable
+          MATRIX=villagesql/bld_matrix
 
-          COUNT=$(echo "$TEST_MATRIX" | jq '.include | length')
+          BUILD_MATRIX=$("$MATRIX/json_build_matrix.sh" "$PLATFORM_FILTER")
+          TESTS=$("$MATRIX/json_test_extensions.sh" \
+            "$PLATFORM_FILTER" "$EXTENSION_FILTER" "$ABI_FILTER")
+
+          COUNT=$(jq 'length' <<<"$TESTS")
           if [ "$COUNT" -eq 0 ]; then
             echo "::error::No test jobs matched filters (platform='$PLATFORM_FILTER' extension='$EXTENSION_FILTER' abi='$ABI_FILTER'). Nothing to test."
             exit 1
           fi
+
+          # json_test_extensions.sh prints a bare array; the strategy matrix
+          # wants it under "include".
+          TEST_MATRIX=$(jq -c '{include: .}' <<<"$TESTS")
+
           echo "build-matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
           echo "test-matrix=$TEST_MATRIX" >> "$GITHUB_OUTPUT"
 

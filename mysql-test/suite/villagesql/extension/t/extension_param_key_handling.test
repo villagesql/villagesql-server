@@ -1,0 +1,45 @@
+# Scenario: how unrecognized parameter keys are handled. The set of valid
+# parameter keys is entirely defined by the extension's resolve_params callback;
+# the server treats the parameter string as opaque. This test documents the two
+# reachable behaviors:
+#
+#   * A lenient resolve_params silently ignores an unknown key supplied in the
+#     parameter string (LENIENT_PARAM_TYPE). Because the unknown key cannot be
+#     reproduced by int_to_params, SHOW CREATE TABLE prints the long form.
+#   * A strict resolve_params rejects an unknown key (STRICT_PARAM_TYPE).
+#   * When int_to_params itself emits an extra key alongside the real one
+#     (EXTRA_KEY_PARAM_TYPE), the TYPE(N) form still round-trips through
+#     SHOW CREATE TABLE because int_to_params(N) reproduces the exact parameter
+#     set.
+#
+# Fixture: vsql_test_only exposes LENIENT_PARAM_TYPE, STRICT_PARAM_TYPE, and
+# EXTRA_KEY_PARAM_TYPE.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Lenient type: an unknown key in the parameter string is accepted and
+--echo # silently ignored by resolve_params.
+CREATE TABLE t_lenient (id INT PRIMARY KEY, v LENIENT_PARAM_TYPE('length=3,bogus=9'));
+--echo # The unknown key is preserved in the canonical parameters, so the long
+--echo # form is shown.
+SHOW CREATE TABLE t_lenient;
+DROP TABLE t_lenient;
+
+--echo # Strict type: an unknown key in the parameter string is rejected.
+--error ER_PARSE_ERROR
+CREATE TABLE t_strict (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,bogus=1'));
+
+--echo # Strict type accepts the known key, via both the string and (N) forms.
+CREATE TABLE t_strict (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t_strict;
+DROP TABLE t_strict;
+CREATE TABLE t_strict (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(4));
+SHOW CREATE TABLE t_strict;
+DROP TABLE t_strict;
+
+--echo # int_to_params emits an extra 'bogus' key. SHOW CREATE doesn't show it.
+CREATE TABLE t_extra (id INT PRIMARY KEY, v EXTRA_KEY_PARAM_TYPE(3));
+SHOW CREATE TABLE t_extra;
+DROP TABLE t_extra;
+
+UNINSTALL EXTENSION vsql_test_only;

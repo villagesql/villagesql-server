@@ -1,0 +1,35 @@
+INSTALL EXTENSION vsql_test_only;
+# intrinsic_default_str: NULL under IGNORE becomes the literal default.
+CREATE TABLE t_str (id INT PRIMARY KEY, v DEFAULT_STR_TYPE NOT NULL);
+INSERT IGNORE INTO t_str VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+INSERT INTO t_str VALUES (2, '(42)');
+SELECT id, v FROM t_str ORDER BY id;
+id	v
+1	(7)
+2	(42)
+DROP TABLE t_str;
+# intrinsic_default VDF: NULL under IGNORE becomes the VDF-computed default.
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_vdf VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+INSERT INTO t_vdf VALUES (2, '(42)');
+SELECT id, v FROM t_vdf ORDER BY id;
+id	v
+1	(9)
+2	(42)
+DROP TABLE t_vdf;
+# Parameterized type
+CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
+INSERT IGNORE INTO t_param VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+INSERT INTO t_param VALUES (2, '(42)');
+SELECT id, v FROM t_param ORDER BY id;
+id	v
+1	(5)
+2	(42)
+DROP TABLE t_param;
+UNINSTALL EXTENSION vsql_test_only;
