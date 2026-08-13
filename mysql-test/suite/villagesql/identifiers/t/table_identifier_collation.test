@@ -15,13 +15,16 @@ CREATE TABLE groß (id INT);
 SHOW TABLES;
 DROP TABLE cafe, café, gross, groß;
 
-# TODO(villagesql-crash): CREATE TABLE pairs whose names are treated as
-# duplicates under custom_columns utf8mb4_0900_ai_ci collation
-#CREATE TABLE cafe (value COMPLEX);
-#CREATE TABLE café (value COMPLEX);
-#
-#CREATE TABLE gross (value COMPLEX);
-#CREATE TABLE groß (value COMPLEX);
+# Custom-type tables whose names differ only by accent or sharp-s folding
+# are distinct identifiers; each pair lands as separate custom_columns rows.
+CREATE TABLE cafe (value COMPLEX);
+CREATE TABLE café (value COMPLEX);
+
+CREATE TABLE gross (value COMPLEX);
+CREATE TABLE groß (value COMPLEX);
+
+SHOW TABLES;
+DROP TABLE cafe, café, gross, groß;
 
 DROP DATABASE test_collation;
 

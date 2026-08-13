@@ -88,8 +88,18 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     // Use entry's key() method
     std::string key_str = entry.key().str();
 
-    // Add to committed map
-    m_committed[key_str] = std::make_shared<EntryType>(std::move(entry));
+    // Add to committed map. Two rows must never share a canonical key;
+    // overwriting would silently drop one of them. No assert: duplicate
+    // rows are a datadir fault, not a code bug.
+    auto inserted = m_committed.emplace(
+        key_str, std::make_shared<EntryType>(std::move(entry)));
+    if (!inserted.second) {
+      LogVSQL(ERROR_LEVEL,
+              "Duplicate canonical key '%s' while loading %s.%s; "
+              "remove or rename one of the conflicting rows",
+              key_str.c_str(), schema_name, table_name);
+      return true;
+    }
     loaded_count++;
   }
 

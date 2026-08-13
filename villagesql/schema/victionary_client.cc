@@ -71,7 +71,9 @@ bool VictionaryClient::init(THD *thd) {
     return true;
   }
 
-  if (should_assert_if_true(reload_all_tables(thd))) {
+  // No assert: reload can fail on bad table contents (e.g. rows with
+  // duplicate canonical keys), which is a datadir fault, not a code bug.
+  if (reload_all_tables(thd)) {
     LogVSQL(ERROR_LEVEL, "Failed to load all villagesql tables");
     return true;
   }

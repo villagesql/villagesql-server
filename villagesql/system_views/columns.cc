@@ -131,11 +131,17 @@ Columns::Columns() {
   m_target_def.add_from(
       "JOIN mysql.character_sets cs "
       "ON coll.character_set_id= cs.id");
+  // custom_columns and the dictionary both store names as entered, written
+  // together by the same statement, so the join matches exact bytes. The
+  // explicit binary collation keeps the comparison independent of either
+  // table's collation.
   m_target_def.add_from(
       "LEFT JOIN villagesql.custom_columns vcc "
-      "ON vcc.db_name=sch.name "
-      "AND vcc.table_name=tbl.name "
-      "AND vcc.column_name=col.name");
+      "ON vcc.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin "
+      "AND vcc.table_name=CONVERT(tbl.name USING utf8mb4) "
+      "COLLATE utf8mb4_bin "
+      "AND vcc.column_name=CONVERT(col.name USING utf8mb4) "
+      "COLLATE utf8mb4_bin");
 
   m_target_def.add_where(
       "INTERNAL_GET_VIEW_WARNING_OR_ERROR(sch.name,"

@@ -27,6 +27,7 @@ namespace upgrade {
 // Version-specific upgrade functions
 bool upgrade_villagesql_from_0_0_1_to_0_0_3(THD *thd);
 bool upgrade_villagesql_from_0_0_4_to_0_0_5(THD *thd);
+bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd);
 
 }  // namespace upgrade
 }  // namespace villagesql
