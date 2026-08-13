@@ -8,7 +8,7 @@ on:
 jobs:
   test-and-tag:
     name: Nightly Build and Test
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x86_64]
     permissions:
       contents: write  # Required to push tags
       actions: write   # Required to read/write caches

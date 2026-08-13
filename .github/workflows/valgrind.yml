@@ -24,7 +24,7 @@ on:
 jobs:
   valgrind-test:
     name: Build and Run Valgrind Tests
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x86_64]
     permissions:
       contents: read
 
