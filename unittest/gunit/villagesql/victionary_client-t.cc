@@ -733,8 +733,8 @@ TEST_F(VictionaryClientTest, MixedCaseRoundTripCaseSensitive) {
   test_set_lower_case_table_names(original_setting);
 }
 
-// Accented names stay distinct from their unaccented forms through the map:
-// lookups should be case and not strip accents.
+// Accented db/table names stay distinct from their unaccented forms through the
+// map: lookups should be case insensitive but not strip accents.
 TEST_F(VictionaryClientTest, AccentedNameRoundTrip) {
   int original_setting = test_get_lower_case_table_names();
   test_set_lower_case_table_names(2);
