@@ -102,8 +102,6 @@ bool TableTraits<IndexEntry>::write_to_table(TABLE &table,
 bool TableTraits<IndexEntry>::update_in_table(TABLE &table,
                                               const IndexEntry &entry,
                                               const IndexKey &old_key) {
-  // Probe with the as-entered components: the stored row holds the original
-  // bytes, not the normalized form.
   const IndexKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   Field **field = table.field;

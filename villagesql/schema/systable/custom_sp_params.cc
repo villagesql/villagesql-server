@@ -98,8 +98,6 @@ bool TableTraits<SpParamEntry>::write_to_table(TABLE &table,
 bool TableTraits<SpParamEntry>::update_in_table(TABLE &table,
                                                 const SpParamEntry &entry,
                                                 const SpParamKey &old_key) {
-  // Probe with the as-entered components: the stored row holds the original
-  // bytes, not the normalized form.
   const SpParamKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   Field **field = table.field;

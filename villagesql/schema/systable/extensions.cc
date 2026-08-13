@@ -355,8 +355,6 @@ bool TableTraits<ExtensionEntry>::write_to_table(TABLE &table,
 bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
                                                   const ExtensionEntry &entry,
                                                   const ExtensionKey &old_key) {
-  // Probe with the as-entered name: the stored row holds the original bytes,
-  // not the normalized form.
   const ExtensionKey &lookup_key =
       old_key.str().empty() ? entry.key() : old_key;
 

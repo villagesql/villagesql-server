@@ -99,8 +99,6 @@ bool TableTraits<ColumnEntry>::write_to_table(TABLE &table,
 bool TableTraits<ColumnEntry>::update_in_table(TABLE &table,
                                                const ColumnEntry &entry,
                                                const ColumnKey &old_key) {
-  // Probe with the as-entered components: the stored row holds the original
-  // bytes, not the normalized form.
   const ColumnKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   // Set up the key fields for index lookup
