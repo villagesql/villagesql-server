@@ -2842,6 +2842,12 @@ static void clean_up(bool print_message) {
   deinit_srv_event_tracking_handles();
   Singleton_event_tracking_service_to_plugin_mapping::remove_instance();
   component_infrastructure_deinit(print_message);
+  // TODO(villagesql-rebase): backported from MySQL 9.0+ (WL#15535). The
+  // component unregister_variable() api for THD-local (session) string
+  // variables depends on global_system_variables, so its cleanup is yanked out
+  // of plugin_shutdown() and run here, after component_infrastructure_deinit().
+  // Drop this on rebase onto a 9.x base.
+  cleanup_global_system_variables();
   /*
     component unregister_variable() api depends on system_variable_hash.
     component_infrastructure_deinit() interns calls the deinit function

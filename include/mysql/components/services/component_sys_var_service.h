@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -121,6 +122,22 @@ typedef void (*mysql_sys_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
   sys_var_type->max_val = check_arg_type->max_val;                    \
   sys_var_type->blk_sz = check_arg_type->blk_sz;
 
+// TODO(villagesql-rebase): backport of MySQL 9.0+ (WL#15535) — THD-local
+// (session-scope) variants of the component sysvar macros. Upstream 9.x defines
+// these in component_sys_var_service_imp.h (it moved the SYSVAR macros there
+// too); we keep them beside the existing SYSVAR macros to minimize the diff.
+// Drop this backport on rebase onto a 9.x base.
+#define COPY_MYSQL_PLUGIN_THDVAR_HEADER(sys_var_type, type, sys_var_check, \
+                                        sys_var_update)                    \
+  sys_var_type->flags = flags;                                             \
+  sys_var_type->name = var_name;                                           \
+  sys_var_type->comment = comment;                                         \
+  sys_var_type->check = check_func ? check_func : sys_var_check;           \
+  sys_var_type->update = update_func ? update_func : sys_var_update;       \
+  sys_var_type->offset = -1;
+
+#define THDVAR_FUNC(type) type *(*resolve)(MYSQL_THD thd, int offset)
+
 #define SYSVAR_INTEGRAL_TYPE(type) \
   struct sysvar_##type##_type {    \
     MYSQL_PLUGIN_VAR_HEADER;       \
@@ -131,11 +148,31 @@ typedef void (*mysql_sys_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
     type blk_sz;                   \
   }
 
+#define THDVAR_INTEGRAL_TYPE(type) \
+  struct thdvar_##type##_type {    \
+    MYSQL_PLUGIN_VAR_HEADER;       \
+    int offset;                    \
+    type def_val;                  \
+    type min_val;                  \
+    type max_val;                  \
+    type blk_sz;                   \
+    THDVAR_FUNC(type);             \
+  }
+
 #define SYSVAR_ENUM_TYPE(type)  \
   struct sysvar_##type##_type { \
     MYSQL_PLUGIN_VAR_HEADER;    \
     unsigned long *value;       \
     unsigned long def_val;      \
+    TYPE_LIB *typelib;          \
+  }
+
+#define THDVAR_ENUM_TYPE(type)  \
+  struct thdvar_##type##_type { \
+    MYSQL_PLUGIN_VAR_HEADER;    \
+    int offset;                 \
+    unsigned long def_val;      \
+    THDVAR_FUNC(unsigned long); \
     TYPE_LIB *typelib;          \
   }
 
@@ -146,11 +183,27 @@ typedef void (*mysql_sys_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
     bool def_val;               \
   }
 
+#define THDVAR_BOOL_TYPE(type)  \
+  struct thdvar_##type##_type { \
+    MYSQL_PLUGIN_VAR_HEADER;    \
+    int offset;                 \
+    bool def_val;               \
+    THDVAR_FUNC(type);          \
+  }
+
 #define SYSVAR_STR_TYPE(type)   \
   struct sysvar_##type##_type { \
     MYSQL_PLUGIN_VAR_HEADER;    \
     char **value;               \
     char *def_val;              \
+  }
+
+#define THDVAR_STR_TYPE(type)   \
+  struct thdvar_##type##_type { \
+    MYSQL_PLUGIN_VAR_HEADER;    \
+    int offset;                 \
+    char *def_val;              \
+    THDVAR_FUNC(char *);        \
   }
 
 /**

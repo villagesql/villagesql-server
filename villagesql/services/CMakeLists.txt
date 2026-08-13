@@ -23,6 +23,7 @@ SET(VILLAGESQL_SERVICES_SOURCES
   preview/keyring.cc
   preview/mysql_services.cc
   preview/ping.cc
+  preview/session_var.cc
   preview/statement_event.cc
   preview/sql_query.cc
   preview/status_var.cc
