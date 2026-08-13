@@ -42,30 +42,31 @@ if (!$extension_version)
 
 --exec test -d "$sdk_dir" || (echo "ERROR: SDK not found at $sdk_dir. Run 'make sdk' first." && exit 1)
 
---exec rm -rf $ext_build_dir
---exec mkdir -p $ext_build_dir/src
---exec mkdir -p $ext_build_dir/build
+# Every --exec below strips LD_PRELOAD so the exec'd command does not run under
+# the LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise uninstrumented
+# system binaries (cp, mkdir, sed, gcc) trip LeakSanitizer on their own
+# allocations and fail for the wrong reason (see create_extension_sdk.inc for
+# the full explanation).
+--exec unset LD_PRELOAD && rm -rf $ext_build_dir
+--exec unset LD_PRELOAD && mkdir -p $ext_build_dir/src
+--exec unset LD_PRELOAD && mkdir -p $ext_build_dir/build
 
---exec cp $extension_source $ext_build_dir/src/extension.cc
+--exec unset LD_PRELOAD && cp $extension_source $ext_build_dir/src/extension.cc
 
 # Optionally place shared companion header(s) next to extension.cc so the source
 # can #include them.
 if ($extension_common_header)
 {
-  --exec cp $extension_common_header $ext_build_dir/src/
+  --exec unset LD_PRELOAD && cp $extension_common_header $ext_build_dir/src/
 }
 
---exec printf '%s' '{"name": "$extension_name", "version": "$extension_version"}' > $ext_build_dir/manifest.json
+--exec unset LD_PRELOAD && printf '%s' '{"name": "$extension_name", "version": "$extension_version"}' > $ext_build_dir/manifest.json
 
 --let $cmake_template = $MYSQL_TEST_DIR/suite/villagesql/data/extension_creator/CMakeLists.txt.template
---exec sed 's/@EXTENSION_NAME@/$extension_name/g' $cmake_template > $ext_build_dir/CMakeLists.txt
+--exec unset LD_PRELOAD && sed 's/@EXTENSION_NAME@/$extension_name/g' $cmake_template > $ext_build_dir/CMakeLists.txt
 
 --echo Attempting to build $extension_name (expecting build failure)...
 
-# unset LD_PRELOAD so the toolchain sub-build does not run under the
-# LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise the uninstrumented
-# system gcc trips LeakSanitizer on GCC's own allocations and fails for the
-# wrong reason (see create_extension_sdk.inc for the full explanation).
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR $build_dir BUILD_DIR
 --exec cd $ext_build_dir/build && unset LD_PRELOAD && cmake -DVillageSQL_SDK_DIR=$sdk_dir -DCMAKE_MODULE_PATH=$sdk_dir/lib/cmake/VillageSQLExtensionFramework -DVSQL_USE_DEV_ABI=ON .. > cmake_output.txt 2>&1 || (cat cmake_output.txt && exit 1)
 
@@ -78,12 +79,12 @@ if ($extension_common_header)
 # If a pattern is specified, verify it appears in the build output.
 if ($build_failure_grep)
 {
-  --exec grep -q "$build_failure_grep" $ext_build_dir/build/make_output.txt || (echo "ERROR: build output missing expected pattern: $build_failure_grep" && cat $ext_build_dir/build/make_output.txt && exit 1)
+  --exec unset LD_PRELOAD && grep -q "$build_failure_grep" $ext_build_dir/build/make_output.txt || (echo "ERROR: build output missing expected pattern: $build_failure_grep" && cat $ext_build_dir/build/make_output.txt && exit 1)
 }
 
 --echo Build failed as expected.
 
---exec rm -rf $ext_build_dir
+--exec unset LD_PRELOAD && rm -rf $ext_build_dir
 
 --let $extension_name =
 --let $extension_version =

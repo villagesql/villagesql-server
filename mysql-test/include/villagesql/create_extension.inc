@@ -33,12 +33,16 @@ if (!$extension_files)
 --replace_result $MYSQL_BASEDIR MYSQL_BASEDIR
 --exec $create_veb_script $extension_name $extension_files
 
-# Get VEB directory from server and ensure it exists
+# Get VEB directory from server and ensure it exists.
+# The --exec commands strip LD_PRELOAD so the uninstrumented system binaries do
+# not run under the LD_PRELOAD'd ASan runtime on sanitizer builds and trip
+# LeakSanitizer on their own allocations (see create_extension_sdk.inc for the
+# full explanation).
 --let $veb_dir = `SELECT @@veb_dir`
---exec mkdir -p $veb_dir
+--exec unset LD_PRELOAD && mkdir -p $veb_dir
 
 # Move the VEB file to the VEB directory
---exec mv $MYSQL_TMP_DIR/$extension_name.veb $veb_dir/
+--exec unset LD_PRELOAD && mv $MYSQL_TMP_DIR/$extension_name.veb $veb_dir/
 
 # Reset variables to avoid pollution
 --let $extension_name =
