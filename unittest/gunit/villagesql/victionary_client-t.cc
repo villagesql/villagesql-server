@@ -733,6 +733,57 @@ TEST_F(VictionaryClientTest, MixedCaseRoundTripCaseSensitive) {
   test_set_lower_case_table_names(original_setting);
 }
 
+// Accented names stay distinct from their unaccented forms through the map:
+// lookups should be case and not strip accents.
+TEST_F(VictionaryClientTest, AccentedNameRoundTrip) {
+  int original_setting = test_get_lower_case_table_names();
+  test_set_lower_case_table_names(2);
+
+  THD *fake_thd = reinterpret_cast<THD *>(0x7890);
+
+  ColumnEntry entry(ColumnKey("db1", "table1", "caf\xC3\xA9"));  // café
+  entry.extension_name = "test_ext";
+  entry.extension_version = "1.0";
+  entry.type_name = "COMPLEX";
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    // A differently-cased accented lookup finds the entry.
+    const ColumnEntry *found = client_->columns().get_committed(
+        ColumnKey("db1", "table1", "CAF\xC3\x89"));  // CAFÉ
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->column_name(), "caf\xC3\xA9");
+
+    // The unaccented spelling is a different identifier.
+    EXPECT_EQ(
+        client_->columns().get_committed(ColumnKey("db1", "table1", "cafe")),
+        nullptr);
+  }
+
+  // Delete via the differently-cased accented spelling.
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->columns().MarkForDeletion(
+        *fake_thd, ColumnKey("db1", "table1", "CAF\xC3\x89")));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->columns().get_committed(
+                  ColumnKey("db1", "table1", "caf\xC3\xA9")),
+              nullptr);
+  }
+
+  test_set_lower_case_table_names(original_setting);
+}
+
 // Test multiple operations on same key (DELETE then INSERT)
 TEST_F(VictionaryClientTest, MultipleOperationsSameKey) {
   // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
