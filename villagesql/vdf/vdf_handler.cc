@@ -15,6 +15,7 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <optional>
 #include <type_traits>
 
 #include "lex_string.h"
@@ -218,14 +219,21 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   // on any such early return. On success, we release() this and cleanup() owns
   // postrun as usual. Mirrors the cleanup_guard in udf_handler::fix_fields.
   bool prerun_completed = false;
-  auto postrun_guard = create_scope_guard([&]() {
-    if (prerun_completed && m_udf->vdf_func_desc->postrun != nullptr) {
+  auto run_postrun = [&]() {
+    if (prerun_completed) {
       vef_postrun_args_t postrun_args{};
       postrun_args.user_data = m_vdf_args.user_data;
       vef_postrun_result_t postrun_result{};
       m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
     }
-  });
+  };
+  // Only arm the guard when the extension actually has a postrun. A prerun-only
+  // VDF has nothing to tear down, so we skip constructing the guard entirely
+  // instead of building one that no-ops.
+  std::optional<decltype(create_scope_guard(run_postrun))> postrun_guard;
+  if (m_udf->vdf_func_desc->postrun != nullptr) {
+    postrun_guard.emplace(create_scope_guard(run_postrun));
+  }
 
   // Call prerun if present
   if (m_udf->vdf_func_desc->prerun) {
@@ -323,7 +331,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   }
 
   m_active = true;
-  postrun_guard.release();  // success: cleanup() owns postrun from here.
+  // success: cleanup() owns postrun from here (no-op if no guard was armed).
+  if (postrun_guard) postrun_guard->release();
   return false;
 }
 
