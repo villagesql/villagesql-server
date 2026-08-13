@@ -212,7 +212,7 @@ struct TableTraits<ExtensionEntry> {
   // set in old_key; otherwise, entry.key() is used.
   // Returns false on success, true on error
   static bool update_in_table(TABLE &table, const ExtensionEntry &entry,
-                              const std::string &old_key);
+                              const ExtensionKey &old_key);
 
   // Delete an ExtensionEntry from villagesql.extensions table
   // Returns false on success, true on error

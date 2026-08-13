@@ -112,7 +112,7 @@ struct TableTraits<YourTableEntry> {
   static bool read_from_table(TABLE &table, YourTableEntry &entry);
   static bool write_to_table(TABLE &table, const YourTableEntry &entry);
   static bool update_in_table(TABLE &table, const YourTableEntry &entry,
-                              const std::string &old_key);
+                              const YourTableKey &old_key);
   static bool delete_from_table(TABLE &table, const YourTableEntry &entry);
 };
 ```
