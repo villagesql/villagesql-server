@@ -35,10 +35,12 @@ if (!$extension_files)
 
 # Get VEB directory from server and ensure it exists
 --let $veb_dir = `SELECT @@veb_dir`
---exec mkdir -p $veb_dir
+# --mkdir fails if the directory already exists
+--error 0,1
+--mkdir $veb_dir
 
 # Move the VEB file to the VEB directory
---exec mv $MYSQL_TMP_DIR/$extension_name.veb $veb_dir/
+--move_file $MYSQL_TMP_DIR/$extension_name.veb $veb_dir/$extension_name.veb
 
 # Reset variables to avoid pollution
 --let $extension_name =

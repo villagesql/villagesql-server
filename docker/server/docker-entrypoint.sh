@@ -2,6 +2,12 @@
 # Adapted from https://github.com/docker-library/mysql
 # Original: Copyright (c) Docker Community and MySQL Team, licensed under GPL v2
 # See: https://github.com/docker-library/mysql/blob/master/docker-entrypoint.sh
+#
+# We've started to modify this file relative to the upstream file. Notable
+# changes that must be preserved:
+#  - Added MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX environment variable to
+#    provide the ability to set a specific root password hash instead of a
+#    plaintext password.
 set -eo pipefail
 shopt -s nullglob
 
@@ -121,31 +127,100 @@ mysql_socket_fix() {
 	fi
 }
 
-# Do a temporary startup of the MySQL server, for init purposes
+# PID and error-log file of the temporary init-time server (see
+# docker_temp_server_start / docker_temp_server_stop).
+MYSQL_TEMP_SERVER_PID=
+MYSQL_TEMP_SERVER_LOG=
+
+# Do a temporary startup of the MySQL server, for init purposes.
+#
+# We run it backgrounded rather than with --daemonize so it stays a child
+# process we can stop with a signal and reap with `wait` (see
+# docker_temp_server_stop) instead of polling. Readiness is detected by racing a
+# log watcher against the server process: whichever finishes first tells us
+# whether the server came up or died. There is deliberately no timeout — WAL
+# recovery on a large datadir can legitimately take a long time.
 docker_temp_server_start() {
-	# For 5.7+ the server is ready for use as soon as startup command unblocks
-	if ! "$@" --daemonize --skip-networking --default-time-zone=SYSTEM --socket="${SOCKET}"; then
-		mysql_error "Unable to start server."
+	MYSQL_TEMP_SERVER_LOG="$(mktemp)"
+
+	# Force the error log to a known file (regardless of any configured
+	# log-error) so we can watch it for readiness; a regular file also means
+	# mysqld never blocks on a full pipe. Disable the X plugin so the only
+	# "ready for connections" line is the main server's. Launch directly in
+	# the background so $! is mysqld itself, not a pipeline element.
+	"$@" --skip-networking --skip-mysqlx --default-time-zone=SYSTEM \
+		--socket="${SOCKET}" --log-error="${MYSQL_TEMP_SERVER_LOG}" &
+	MYSQL_TEMP_SERVER_PID=$!
+
+	# Readiness watcher. We run `tail` and `grep` as two separately-tracked
+	# background jobs joined by a FIFO (rather than a `tail | grep` pipeline or a
+	# process substitution) so that we hold both PIDs and can reap them
+	# explicitly below — otherwise the follower `tail` is left behind as a zombie
+	# once this shell exec()s the real server. `tail -n +0 -f` streams the log
+	# from the start then follows it; `grep -m1` exits the instant the
+	# readiness line appears.
+	# mysqlx is disabled above, so the only "ready for connections" line is the
+	# main server's.
+	local -r fifo="$(mktemp -u)"
+	mkfifo "${fifo}"
+
+	tail -n +0 -f "${MYSQL_TEMP_SERVER_LOG}" > "${fifo}" &
+	local tail_pid=$!
+
+	grep -q -m1 'ready for connections' < "${fifo}" &
+	local watcher_pid=$!
+
+	# Both jobs now hold the FIFO open, so drop its direntry immediately.
+	rm -f "${fifo}"
+
+	# Block until whichever comes first:
+	#  - the watcher sees readiness (grep exits),
+	#  - mysqld exits (startup failure).
+	#
+	# `wait -n` returns as soon as the next background job
+	# finishes, so a crash wakes us immediately with no polling and no
+	# deadline (WAL recovery on a large datadir can legitimately take a
+	# long time). tail never exits on its own, so it is never the job that
+	# returns here. Guard set -e since a crashed mysqld exits nonzero.
+	wait -n || true
+
+	# Stop and reap both watcher jobs either way (grep may already have exited on
+	# the ready path; tail is still following). This is what keeps tail from
+	# lingering.
+	kill "${tail_pid}" "${watcher_pid}" 2>/dev/null || true
+	wait "${tail_pid}" "${watcher_pid}" 2>/dev/null || true
+
+	if ! kill -0 "${MYSQL_TEMP_SERVER_PID}" 2>/dev/null; then
+		# mysqld exited before becoming ready.
+		cat "${MYSQL_TEMP_SERVER_LOG}" >&2
+		mysql_error "Temporary server exited during startup before it became ready."
 	fi
+
+	# Surface the startup log in `docker logs`.
+	cat "${MYSQL_TEMP_SERVER_LOG}" >&2
 }
 
-# Stop the server. When using a local socket file mysqladmin will block until
-# the shutdown is complete.
+# Stop the temporary server via signal + wait. SIGTERM triggers a clean mysqld
+# shutdown and needs no authentication, so this works even in the hash path
+# where we no longer know root's password. `wait` blocks in waitpid (no poll).
 docker_temp_server_stop() {
-	if ! mysqladmin --defaults-extra-file=<( _mysql_passfile ) shutdown -uroot --socket="${SOCKET}"; then
-		mysql_error "Unable to shut down server."
-	fi
+	kill -TERM "${MYSQL_TEMP_SERVER_PID}"
+	# mysqld traps SIGTERM and exits 0 on a clean shutdown; guard set -e in case
+	# it reports nonzero.
+	wait "${MYSQL_TEMP_SERVER_PID}" || true
+	rm -f "${MYSQL_TEMP_SERVER_LOG}"
 }
 
 # Verify that the minimally required password settings are set for new databases.
 docker_verify_minimum_env() {
-	if [ -z "$MYSQL_ROOT_PASSWORD" -a -z "$MYSQL_ALLOW_EMPTY_PASSWORD" -a -z "$MYSQL_RANDOM_ROOT_PASSWORD" ]; then
+	if [ -z "$MYSQL_ROOT_PASSWORD" -a -z "$MYSQL_ALLOW_EMPTY_PASSWORD" -a -z "$MYSQL_RANDOM_ROOT_PASSWORD" -a -z "$MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX" ]; then
 		mysql_error <<-'EOF'
 			Database is uninitialized and password option is not specified
 			    You need to specify one of the following as an environment variable:
 			    - MYSQL_ROOT_PASSWORD
 			    - MYSQL_ALLOW_EMPTY_PASSWORD
 			    - MYSQL_RANDOM_ROOT_PASSWORD
+			    - MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX
 		EOF
 	fi
 
@@ -157,6 +232,20 @@ docker_verify_minimum_env() {
 			    - MYSQL_ROOT_PASSWORD
 			    - MYSQL_ALLOW_EMPTY_PASSWORD
 			    - MYSQL_RANDOM_ROOT_PASSWORD
+			    - MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX
+		EOF
+	fi
+
+	# The shebang is explicitly using bash, so we can use the [[ ]] variant for regexp checking.
+	# the password hashes will have the form `$A$<rounds>$salt$digest$`.
+	# Enforce that the password hash has the correct prefix ($A$ encodes as
+	# 0x244124) and that there are an even number of hex nibbles following
+	# that.
+	if [ -n "$MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX" ] && ! [[ "$MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX" =~ ^244124([0-9a-fA-F][0-9a-fA-F])+$ ]]; then
+		mysql_error <<-'EOF'
+			MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX was specified, but, its value is not fully hexadecimal or lacks the correct prefix.
+			    The value must be a hexadecimal encoded password hash that encodes a mysql caching_sha2_password password hash.
+			    These passwords will generally have the form `$A$<rounds>$salt$digest$` (before hex encoding)
 		EOF
 	fi
 
@@ -236,6 +325,7 @@ docker_setup_env() {
 	file_env 'MYSQL_USER'
 	file_env 'MYSQL_PASSWORD'
 	file_env 'MYSQL_ROOT_PASSWORD'
+	file_env 'MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX'
 
 	declare -g DATABASE_ALREADY_EXISTS
 	if [ -d "$DATADIR/mysql" ]; then
@@ -276,6 +366,37 @@ docker_setup_db() {
 		MYSQL_ROOT_PASSWORD="$(openssl rand -base64 24)"; export MYSQL_ROOT_PASSWORD
 		mysql_note "GENERATED ROOT PASSWORD: $MYSQL_ROOT_PASSWORD"
 	fi
+
+	# identifiedClause is the real, intended credential for root: the operator's
+	# caching_sha2_password hash in hash mode, otherwise the plaintext password.
+	# It is applied immediately to the remote root user (rootCreate), which is
+	# never used to authenticate during init.
+	local identifiedClause=
+	if [ -n "$MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX" ]; then
+		# no, we don't care if read finds a terminating character in this heredoc (see above)
+		read -r -d '' identifiedClause <<-EOSQL || true
+			IDENTIFIED WITH caching_sha2_password AS 0x${MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX}
+		EOSQL
+	else
+		read -r -d '' identifiedClause <<-EOSQL || true
+			IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}'
+		EOSQL
+	fi
+
+	# The rest of init (schema/user creation, initdb.d scripts, and the temporary
+	# server shutdown) authenticates as root@localhost via MYSQL_ROOT_PASSWORD. In
+	# hash mode we don't know the plaintext behind the hash, so give root@localhost
+	# a throwaway random password for the duration of init; the real hash is
+	# applied (via ALTER USER) as the final step before the server is stopped.
+	# In non-hash mode localhost just uses the real credential.
+	local localhostIdentifiedClause="$identifiedClause"
+	if [ -n "$MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX" ]; then
+		MYSQL_ROOT_PASSWORD="$(openssl rand -base64 24)"; export MYSQL_ROOT_PASSWORD
+		read -r -d '' localhostIdentifiedClause <<-EOSQL || true
+			IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}'
+		EOSQL
+	fi
+
 	# Sets root password and creates root users for non-localhost hosts
 	local rootCreate=
 	# default root to listen for connections from anywhere
@@ -283,7 +404,7 @@ docker_setup_db() {
 		# no, we don't care if read finds a terminating character in this heredoc
 		# https://unix.stackexchange.com/questions/265149/why-is-set-o-errexit-breaking-this-read-heredoc-expression/265151#265151
 		read -r -d '' rootCreate <<-EOSQL || true
-			CREATE USER 'root'@'${MYSQL_ROOT_HOST}' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
+			CREATE USER 'root'@'${MYSQL_ROOT_HOST}' ${identifiedClause?} ;
 			GRANT ALL ON *.* TO 'root'@'${MYSQL_ROOT_HOST}' WITH GRANT OPTION ;
 		EOSQL
 	fi
@@ -291,7 +412,7 @@ docker_setup_db() {
 	local passwordSet=
 	# no, we don't care if read finds a terminating character in this heredoc (see above)
 	read -r -d '' passwordSet <<-EOSQL || true
-		ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
+		ALTER USER 'root'@'localhost' ${localhostIdentifiedClause?} ;
 	EOSQL
 
 	# tell docker_process_sql to not use MYSQL_ROOT_PASSWORD since it is just now being set
@@ -402,6 +523,16 @@ _main() {
 			docker_process_init_files /docker-entrypoint-initdb.d/*
 
 			mysql_expire_root_user
+
+			if [ -n "$MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX" ]; then
+				# root@localhost still holds the throwaway init password (see
+				# docker_setup_db); set the real hash now. Shutdown below is by
+				# signal, so no password is needed afterward.
+				mysql_note "Setting final root password hash"
+				docker_process_sql --database=mysql <<-EOSQL
+					ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password AS 0x${MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX} ;
+				EOSQL
+			fi
 
 			mysql_note "Stopping temporary server"
 			docker_temp_server_stop

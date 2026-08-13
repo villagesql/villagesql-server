@@ -37,10 +37,10 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_sp_params.h"
 #include "villagesql/schema/systable/extensions.h"
-#include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/sql/custom_vdf.h"
@@ -105,12 +105,9 @@ bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
     // For CREATE ... SELECT statement, field redefinition is possible.
     bool duplicate = false;
     for (const ColumnEntry &entry : to_add_) {
-      if ((my_strcasecmp(system_charset_info, create_field.field_name,
-                         entry.column_name().c_str()) == 0) &&
-          (my_strcasecmp(system_charset_info, db_name,
-                         entry.db_name().c_str()) == 0) &&
-          (my_strcasecmp(system_charset_info, table_name,
-                         entry.table_name().c_str()) == 0)) {
+      if (column_names_equal(create_field.field_name, entry.column_name()) &&
+          database_names_equal(db_name, entry.db_name()) &&
+          table_names_equal(table_name, entry.table_name())) {
         duplicate = true;
         break;
       }
@@ -157,8 +154,8 @@ static const EntryType *resolve_unique_descriptor(const Map &map,
 // sets out_* on success. Returns true and sets a villagesql_error if the column
 // type cannot be determined or no default profile is registered for the pair.
 // REQUIRES: Caller must hold vclient read lock.
-// TODO(villagesql): string parameters here (and normalize_type_name /
-// normalize_extension_name) should use std::string_view; requires updating the
+// TODO(villagesql): string parameters here (and canonical_type_name /
+// canonical_extension_name) should use std::string_view; requires updating the
 // downstream helpers consistently.
 static bool find_default_profile(VictionaryClient &vclient,
                                  const Alter_info *alter_info, const char *db,
@@ -179,7 +176,7 @@ static bool find_default_profile(VictionaryClient &vclient,
     bool being_dropped = false;
     for (const Alter_drop *drop : alter_info->drop_list) {
       if (drop->type == Alter_drop::COLUMN &&
-          my_strcasecmp(system_charset_info, drop->name, field_name) == 0) {
+          column_names_equal(drop->name, field_name)) {
         being_dropped = true;
         break;
       }
@@ -197,8 +194,7 @@ static bool find_default_profile(VictionaryClient &vclient,
     // a custom_type_context using the field's SQL type name.
     for (const Create_field &field : alter_info->create_list) {
       if (field.custom_type_context &&
-          my_strcasecmp(system_charset_info, field.field_name, field_name) ==
-              0) {
+          column_names_equal(field.field_name, field_name)) {
         col_type_name = field.custom_type_context->type_name();
         col_ext_name = field.custom_type_context->extension_name();
         assert(!col_ext_name.empty());
@@ -217,23 +213,23 @@ static bool find_default_profile(VictionaryClient &vclient,
   // profiles. A secondary map in VictionaryClient keyed by (type_name,
   // index_type_name) would make it faster. Currently justified by small profile
   // counts and DDL-only call site.
-  const std::string norm_col = normalize_type_name(col_type_name);
-  const std::string norm_col_ext = normalize_extension_name(col_ext_name);
-  const std::string norm_idx = normalize_type_name(index_type_name);
+  const std::string norm_col = canonical_type_name(col_type_name);
+  const std::string norm_col_ext = canonical_extension_name(col_ext_name);
+  const std::string norm_idx = canonical_type_name(index_type_name);
   const std::string norm_index_type_ext =
-      normalize_extension_name(index_type_ext_name);
+      canonical_extension_name(index_type_ext_name);
   for (const IndexProfileDescriptor *pd :
        vclient.index_profile_descriptors().get_all_committed()) {
     if (!pd->default_for_type()) continue;
-    if (normalize_type_name(pd->type_name()) != norm_col) continue;
+    if (canonical_type_name(pd->type_name()) != norm_col) continue;
     assert(!pd->type_ref().extension_name().empty());
-    if (normalize_extension_name(pd->type_ref().extension_name()) !=
+    if (canonical_extension_name(pd->type_ref().extension_name()) !=
         norm_col_ext)
       continue;
-    if (normalize_type_name(pd->index_type_name()) != norm_idx) continue;
+    if (canonical_type_name(pd->index_type_name()) != norm_idx) continue;
     assert(!norm_index_type_ext.empty());
     assert(!pd->index_type_ref().extension_name().empty());
-    if (normalize_extension_name(pd->index_type_ref().extension_name()) !=
+    if (canonical_extension_name(pd->index_type_ref().extension_name()) !=
         norm_index_type_ext)
       continue;
     out_profile_name = pd->profile_name();
@@ -324,8 +320,7 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
             bool being_dropped = false;
             for (const Alter_drop *drop : alter_info->drop_list) {
               if (drop->type == Alter_drop::COLUMN &&
-                  my_strcasecmp(system_charset_info, drop->name, field_name) ==
-                      0) {
+                  column_names_equal(drop->name, field_name)) {
                 being_dropped = true;
                 break;
               }
@@ -338,8 +333,7 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
           if (col_type_name.empty()) {
             for (const Create_field &field : alter_info->create_list) {
               if (field.custom_type_context &&
-                  my_strcasecmp(system_charset_info, field.field_name,
-                                field_name) == 0) {
+                  column_names_equal(field.field_name, field_name)) {
                 col_type_name = field.custom_type_context->type_name();
                 col_ext_name = field.custom_type_context->extension_name();
                 break;
@@ -347,10 +341,10 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
             }
           }
           if (col_type_name.empty() ||
-              normalize_type_name(col_type_name) !=
-                  normalize_type_name(prof_desc->type_name()) ||
-              normalize_extension_name(col_ext_name) !=
-                  normalize_extension_name(
+              canonical_type_name(col_type_name) !=
+                  canonical_type_name(prof_desc->type_name()) ||
+              canonical_extension_name(col_ext_name) !=
+                  canonical_extension_name(
                       prof_desc->type_ref().extension_name())) {
             villagesql_error(
                 "Column '%s' is not of type '%s' (extension '%s') required"
@@ -537,14 +531,14 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   // Build a set of custom column names for fast lookup
   std::unordered_set<std::string> custom_column_names;
   for (const ColumnEntry *col : custom_columns) {
-    custom_column_names.insert(normalize_column_name(col->column_name()));
+    custom_column_names.insert(canonical_column_name(col->column_name()));
   }
   existing_custom_count_ = custom_column_names.size();
 
   // 1. Handle DROP COLUMN - delete from custom_columns if custom type
   for (const Alter_drop *drop : alter_info->drop_list) {
     if (drop->type == Alter_drop::COLUMN) {
-      if (custom_column_names.count(normalize_column_name(drop->name))) {
+      if (custom_column_names.count(canonical_column_name(drop->name))) {
         to_remove_.emplace_back(ColumnKey(db_name, table_name, drop->name));
       }
     }
@@ -553,12 +547,12 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   // 2. Handle RENAME COLUMN - update custom_columns entry
   for (const Alter_column *alter : alter_info->alter_list) {
     if (alter->change_type() == Alter_column::Type::RENAME_COLUMN) {
-      if (custom_column_names.count(normalize_column_name(alter->name))) {
+      if (custom_column_names.count(canonical_column_name(alter->name))) {
         // Find the existing entry to get full metadata
         const ColumnEntry *old_entry_ptr = nullptr;
         for (const ColumnEntry *col : custom_columns) {
-          if (normalize_column_name(col->column_name()) ==
-              normalize_column_name(alter->name)) {
+          if (canonical_column_name(col->column_name()) ==
+              canonical_column_name(alter->name)) {
             old_entry_ptr = col;
             break;
           }
@@ -583,7 +577,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
       if (!field.change) continue;
       bool is_custom_type = (field.custom_type_context != nullptr);
       bool was_custom_type =
-          custom_column_names.count(normalize_column_name(field.change));
+          custom_column_names.count(canonical_column_name(field.change));
 
       if (!was_custom_type && is_custom_type) {
         // Non-custom → custom: not allowed. Use explicit conversion functions.
@@ -620,7 +614,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
     bool is_custom_type = (field.custom_type_context != nullptr);
     bool was_custom_type =
         field.change &&
-        custom_column_names.count(normalize_column_name(field.change));
+        custom_column_names.count(canonical_column_name(field.change));
 
     if (field.change) {
       // This is MODIFY COLUMN or CHANGE COLUMN
@@ -671,14 +665,14 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
   std::unordered_set<std::string> dropping;
   for (const Alter_drop *drop : alter_info->drop_list) {
     if (drop->type == Alter_drop::KEY)
-      dropping.insert(normalize_index_name(drop->name));
+      dropping.insert(canonical_index_name(drop->name));
   }
   if (dropping.empty()) return false;
 
   auto guard = vclient.get_read_lock();
   for (const IndexEntry *entry :
        vclient.GetCustomIndexesForTable(db, table_name)) {
-    if (!entry || !dropping.count(normalize_index_name(entry->index_name())))
+    if (!entry || !dropping.count(canonical_index_name(entry->index_name())))
       continue;
 
     // Queue child column rows for deletion before the parent index row.
@@ -741,7 +735,7 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   // Lambda to add MDL request for an extension (if not already added)
   auto add_mdl_request = [&](const std::string &ext_name) -> bool {
     if (ext_name.empty() ||
-        seen_extensions.count(normalize_extension_name(ext_name))) {
+        seen_extensions.count(canonical_extension_name(ext_name))) {
       return false;  // Already processed or empty
     }
 
@@ -757,7 +751,7 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
     MDL_REQUEST_INIT(new_request, MDL_key::EXTENSION, "",
                      normalized_name.c_str(), MDL_SHARED, MDL_STATEMENT);
     mdl_requests.push_front(new_request);
-    seen_extensions.insert(normalize_extension_name(ext_name));
+    seen_extensions.insert(canonical_extension_name(ext_name));
     return false;
   };
 

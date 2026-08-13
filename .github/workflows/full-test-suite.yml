@@ -46,7 +46,7 @@ on:
 jobs:
   build-and-test:
     name: Build and Run All Tests
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x86_64]
     permissions:
       contents: read
 

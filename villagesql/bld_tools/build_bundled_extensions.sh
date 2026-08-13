@@ -8,14 +8,15 @@
 # <sdk_dir>:        Path to an extracted villagesql-extension-sdk-* directory.
 #                   After 'make', this is $BUILD_DIR/villagesql-extension-sdk-<version>.
 # <veb_output_dir>: Directory where built .veb files are placed.
-# [extension]:      Optional repo name to build only one extension (e.g. vsql-ai).
-#                   Omit to build all extensions in bundled_extensions.txt.
+# [extension]:      Optional extension name to build only one extension (e.g.
+#                   vsql-ai). Omit to build every extension in the manifest.
 # [include_unbundled]: 0/no (default) to skip bundle=false extensions, 1/yes to
 #                   build them too. They ship with no dev server, but are still
 #                   built and tested (e.g. by the sanitizer workflow).
 #
-# The extension list is read from villagesql/dev_server/bundled_extensions.txt,
-# located relative to this script's source tree.
+# The manifest is parsed by villagesql/bld_matrix/json_extensions.sh, which
+# reads villagesql/dev_server/bundled_extensions.txt from this script's own
+# source tree.
 #
 # Env vars:
 #   CMAKE_EXTRA_FLAGS  - additional per-extension cmake flags appended verbatim
@@ -32,8 +33,6 @@ INCLUDE_UNBUNDLED="${5:-no}"
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
 
-EXTENSIONS_LIST="$SOURCE_DIR/villagesql/dev_server/bundled_extensions.txt"
-
 source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 case "$INCLUDE_UNBUNDLED" in
@@ -43,13 +42,7 @@ case "$INCLUDE_UNBUNDLED" in
 esac
 
 if [[ ! -d "$SDK_DIR" ]]; then
-    log_error "SDK directory not found: $SDK_DIR"
-    exit 1
-fi
-
-if [[ ! -f "$EXTENSIONS_LIST" ]]; then
-    log_error "Extensions list not found: $EXTENSIONS_LIST"
-    exit 1
+    die "SDK directory not found: $SDK_DIR"
 fi
 
 if [[ ! -d "$EXTENSION_CLONES_DIR" ]]; then
@@ -78,60 +71,49 @@ NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
 BUILT=0
 FAILED=0
 
-while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
+# One tab-separated row per manifest entry the filter keeps. Collected up front,
+# rather than piped into the loop, so a manifest error stops the script here.
+ENTRIES="$("$SOURCE_DIR/villagesql/bld_matrix/json_extensions.sh" \
+    | jq -r --arg f "$EXTENSION_FILTER" '
+        .[]
+        | select($f == "" or .extension == $f)
+        | [.extension, .url, .branch, .build, (.bundle | tostring), .path]
+        | @tsv')"
 
-    # Parse "url [branch-or-tag] [key=value ...]" — all fields after url are optional
-    read -ra FIELDS <<< "$line"
-    SOURCE="${FIELDS[0]%/}"
-    BRANCH="${FIELDS[1]:-}"
-    REPO_NAME="${SOURCE##*/}"
-
-    if [[ -n "$EXTENSION_FILTER" && "$REPO_NAME" != "$EXTENSION_FILTER" ]]; then
-        continue
-    fi
+while IFS=$'\t' read -r EXTENSION SOURCE BRANCH BUILD_TOOL BUNDLE EXT_PATH; do
+    [[ -z "$EXTENSION" ]] && continue
 
     # This script builds with cmake. Skip entries that use another build tool
-    # such as cargo. The real issue is that we try to clone the rust-sdk
-    # multiple times, leading to an error.
+    # such as cargo.
     # TODO(villagesql-rust): Let's consider doing a bigger rework of the
     # extension build system to support multiple build tools, but for now we just
     # skip non-cmake extensions.
-    BUILD_TOOL=cmake
-    for FIELD in "${FIELDS[@]:2}"; do
-        [[ "$FIELD" == build=* ]] && BUILD_TOOL="${FIELD#build=}"
-    done
     if [[ "$BUILD_TOOL" != "cmake" ]]; then
-        log_info "Skipping $REPO_NAME (build=$BUILD_TOOL not supported here)"
+        log_info "Skipping $EXTENSION (build=$BUILD_TOOL not supported here)"
         continue
     fi
 
-    if [[ "$INCLUDE_UNBUNDLED" == "no" ]]; then
-        BUNDLE=true
-        for FIELD in "${FIELDS[@]:2}"; do
-            [[ "$FIELD" == "bundle=false" || "$FIELD" == "bundle=no" ]] && BUNDLE=false
-        done
-        if [[ "$BUNDLE" == "false" ]]; then
-            log_info "Skipping $REPO_NAME (bundle=false)"
-            continue
-        fi
+    if [[ "$INCLUDE_UNBUNDLED" == "no" && "$BUNDLE" == "false" ]]; then
+        log_info "Skipping $EXTENSION (bundle=false)"
+        continue
     fi
 
-    log_step "Building $REPO_NAME ($SOURCE${BRANCH:+ @ $BRANCH})"
+    log_step "Building $EXTENSION ($SOURCE @ $BRANCH)"
 
-    CLONE_DIR="$EXTENSION_CLONES_DIR/$REPO_NAME"
-    EXT_BUILD_DIR="$BUILD_BASE/$REPO_NAME"
+    # The clone is named for the repo, not the extension, since one repo can
+    # hold several extensions; path= says where in the clone this one lives.
+    CLONE_DIR="$EXTENSION_CLONES_DIR/${SOURCE##*/}${EXT_PATH:+/$EXT_PATH}"
+    EXT_BUILD_DIR="$BUILD_BASE/$EXTENSION"
 
     if ! cmake -S "$CLONE_DIR" -B "$EXT_BUILD_DIR" \
             "${CMAKE_FLAGS[@]}" 2>&1; then
-        log_error "CMake configure failed for $REPO_NAME"
+        log_error "CMake configure failed for $EXTENSION"
         FAILED=$((FAILED + 1))
         continue
     fi
 
     if ! cmake --build "$EXT_BUILD_DIR" --parallel "$NCORES" 2>&1; then
-        log_error "Build failed for $REPO_NAME"
+        log_error "Build failed for $EXTENSION"
         FAILED=$((FAILED + 1))
         continue
     fi
@@ -144,18 +126,17 @@ while IFS= read -r line; do
     done < <(find "$EXT_BUILD_DIR" -maxdepth 1 -name "*.veb")
 
     if [[ $VEB_COUNT -eq 0 ]]; then
-        log_error "No .veb file found after building $REPO_NAME"
+        log_error "No .veb file found after building $EXTENSION"
         FAILED=$((FAILED + 1))
         continue
     fi
 
     BUILT=$((BUILT + 1))
-done < "$EXTENSIONS_LIST"
+done <<< "$ENTRIES"
 
 echo ""
 if [[ -n "$EXTENSION_FILTER" && $BUILT -eq 0 && $FAILED -eq 0 ]]; then
-    log_error "'$EXTENSION_FILTER' not found in $EXTENSIONS_LIST"
-    exit 1
+    die "'$EXTENSION_FILTER' matched no extension to build"
 fi
 echo "Extensions built: $BUILT, failed: $FAILED"
 [[ $FAILED -eq 0 ]] || exit 1

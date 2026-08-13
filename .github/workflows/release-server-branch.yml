@@ -48,7 +48,7 @@ permissions:
 jobs:
   report-parameters:
     name: Report Parameters
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x86_64]
     steps:
     - name: Report Parameters
       run: |
