@@ -152,7 +152,7 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
       case OperationType::UPDATE:
         // Use TableTraits to update the row
         if (should_assert_if_true(TableTraits<EntryType>::update_in_table(
-                *sys_table, *op->entry, op->key.str()))) {
+                *sys_table, *op->entry, op->key))) {
           LogVSQL(ERROR_LEVEL, "Error updating %s.%s from key %s to %s",
                   schema_name, table_name, op->entry->key().str().c_str(),
                   op->key.str().c_str());

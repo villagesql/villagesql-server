@@ -158,7 +158,7 @@ struct TableTraits<ColumnEntry> {
   // key columns changed)
   // Returns false on success, true on error
   static bool update_in_table(TABLE &table, const ColumnEntry &entry,
-                              const std::string &old_key);
+                              const ColumnKey &old_key);
 
   // Delete a ColumnEntry from villagesql.custom_columns table
   // Returns false on success, true on error
