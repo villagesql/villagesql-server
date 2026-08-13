@@ -42,6 +42,10 @@ Standard MySQL Docker environment variables are supported:
 - `MYSQL_DATABASE` — create a database on first startup
 - `MYSQL_USER` / `MYSQL_PASSWORD` — create a non-root user on first startup
 
+Additionally, VillageSQL adds support for:
+- `MYSQL_ROOT_PASSWORD_CACHING_SHA2_HASH_HEX` — set the root caching_sha2_password password hash
+  directly (hexadecimal encoded)
+
 At least one of the password options is required.
 
 Wait for the server to be ready:
