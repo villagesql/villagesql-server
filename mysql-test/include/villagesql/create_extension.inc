@@ -33,7 +33,7 @@ if (!$extension_files)
 --replace_result $MYSQL_BASEDIR MYSQL_BASEDIR
 --exec $create_veb_script $extension_name $extension_files
 
-# Get VEB directory from server and ensure it exists.
+# Get VEB directory from server and ensure it exists
 --let $veb_dir = `SELECT @@veb_dir`
 # --mkdir fails if the directory already exists
 --error 0,1
