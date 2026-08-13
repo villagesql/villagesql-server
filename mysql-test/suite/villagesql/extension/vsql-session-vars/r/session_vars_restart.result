@@ -1,0 +1,28 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+# Install extension
+INSTALL EXTENSION vsql_session_var_test;
+# Touch the session-scoped string so its per-session slot is populated
+SET SESSION vsql_session_var_test.session_label = 'before_restart';
+SELECT @@session.vsql_session_var_test.session_label;
+@@session.vsql_session_var_test.session_label
+before_restart
+# Restart WITHOUT uninstalling: shutdown must tear the variables down
+# cleanly (extension is reinstated from villagesql.extensions on startup)
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# Extension is back after restart; variables exist with their defaults
+# (session override did not survive the reconnect, as expected)
+SELECT @@global.vsql_session_var_test.session_label;
+@@global.vsql_session_var_test.session_label
+default_label
+SELECT @@session.vsql_session_var_test.session_label;
+@@session.vsql_session_var_test.session_label
+default_label
+SELECT vsql_session_var_test.read_session_label();
+vsql_session_var_test.read_session_label()
+default_label
+# Uninstall cleanly
+UNINSTALL EXTENSION vsql_session_var_test;
+SELECT @@global.vsql_session_var_test.session_label;
+ERROR HY000: Unknown system variable 'vsql_session_var_test.session_label'
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

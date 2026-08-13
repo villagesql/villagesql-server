@@ -1,0 +1,41 @@
+# Regression test for the server-shutdown path of session-scoped (THD-local)
+# system variables: the extension is left INSTALLED across a restart (no
+# UNINSTALL), so the server tears the variables down during shutdown.
+#
+# This exercises the shutdown-ordering fix: the component unregister_variable()
+# path for THD-local MEMALLOC string variables reads global_system_variables,
+# so cleanup_global_system_variables() must run from clean_up() AFTER component
+# infrastructure deinit, not inside plugin_shutdown(). Without the fix, shutdown
+# frees global_system_variables first and the session-string unregistration
+# dereferences freed memory (SIGSEGV on shutdown).
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Install extension
+INSTALL EXTENSION vsql_session_var_test;
+
+--echo # Touch the session-scoped string so its per-session slot is populated
+SET SESSION vsql_session_var_test.session_label = 'before_restart';
+SELECT @@session.vsql_session_var_test.session_label;
+
+--echo # Restart WITHOUT uninstalling: shutdown must tear the variables down
+--echo # cleanly (extension is reinstated from villagesql.extensions on startup)
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # Extension is back after restart; variables exist with their defaults
+--echo # (session override did not survive the reconnect, as expected)
+SELECT @@global.vsql_session_var_test.session_label;
+SELECT @@session.vsql_session_var_test.session_label;
+SELECT vsql_session_var_test.read_session_label();
+
+--echo # Uninstall cleanly
+UNINSTALL EXTENSION vsql_session_var_test;
+
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_session_var_test.session_label;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
