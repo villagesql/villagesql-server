@@ -1,0 +1,92 @@
+# Port of upstream's service_sys_var_registration/session_var_service.test,
+# adapted to the vsql::session_var preview capability (INT + STR only), with
+# the string-variable coverage upstream deliberately COMMENTED OUT re-enabled.
+#
+# Upstream's test SET SESSIONs only the null-default string (test_component.
+# str_session_var) and comments out every operation on the non-null-default
+# string (test_component.str_session_var_default, lines 56-61 of the upstream
+# .test) -- because that exact operation crashes the server (a latent upstream
+# bug: the THD-local MEMALLOC-string seed loop misses the bookmark by name and
+# leaves the session slot aliasing the global default pointer; SET SESSION then
+# frees a non-owned pointer). Reproduced on stock MySQL trunk 26.7.0.
+#
+# Our fork fixes it (TODO(villagesql-back-to-mysql) in sql/sql_plugin.cc), so
+# vsql_session_var_test.session_label -- a THD-local MEMALLOC string WITH a
+# non-null default ("default_label") -- is SET SESSION'd here without crashing.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Simple load test
+INSTALL EXTENSION vsql_session_var_test;
+
+--echo # Testing integer session variable, @@session vs @@global
+SELECT @@global.vsql_session_var_test.ef_search;
+SELECT @@session.vsql_session_var_test.ef_search;
+
+SET SESSION vsql_session_var_test.ef_search = 7;
+SELECT @@session.vsql_session_var_test.ef_search;
+--echo # global is unaffected by the session SET
+SELECT @@global.vsql_session_var_test.ef_search;
+
+--echo # Range clamping: max is 4096
+SET SESSION vsql_session_var_test.ef_search = 999999;
+SELECT @@session.vsql_session_var_test.ef_search;
+--echo # Range clamping: min is 1
+SET SESSION vsql_session_var_test.ef_search = -1;
+SELECT @@session.vsql_session_var_test.ef_search;
+
+--echo # Wrong-type assignments are rejected
+--error ER_WRONG_TYPE_FOR_VAR
+SET SESSION vsql_session_var_test.ef_search = "hello";
+
+SET SESSION vsql_session_var_test.ef_search = DEFAULT;
+SELECT @@session.vsql_session_var_test.ef_search;
+
+--echo #
+--echo # Testing STRING session variable WITH a non-null default.
+--echo # (This is the operation upstream commented out because it crashed.)
+--echo #
+SELECT @@global.vsql_session_var_test.session_label;
+SELECT @@session.vsql_session_var_test.session_label;
+
+SET SESSION vsql_session_var_test.session_label = "dictionary.txt";
+SELECT @@session.vsql_session_var_test.session_label;
+--echo # global default is unchanged by the session SET
+SELECT @@global.vsql_session_var_test.session_label;
+
+SET SESSION vsql_session_var_test.session_label = "another_value";
+SELECT @@session.vsql_session_var_test.session_label;
+
+--echo # Reset the session value back to the default
+SET SESSION vsql_session_var_test.session_label = DEFAULT;
+SELECT @@session.vsql_session_var_test.session_label;
+
+--echo # The VDF reads the caller's per-session values (get_session_int/str)
+SET SESSION vsql_session_var_test.ef_search = 321;
+SET SESSION vsql_session_var_test.session_label = "vdf_value";
+SELECT vsql_session_var_test.read_ef_search();
+SELECT vsql_session_var_test.read_session_label();
+
+--echo #
+--echo # Stored-procedure paths (mirrors the upstream SP coverage): SET and
+--echo # SELECT of the session string var from inside a procedure.
+--echo #
+CREATE PROCEDURE set_label(x VARCHAR(64))
+  SET @@SESSION.vsql_session_var_test.session_label = x;
+CREATE PROCEDURE get_label() SELECT @@vsql_session_var_test.session_label;
+
+CALL get_label();
+CALL set_label('from_sp');
+CALL get_label();
+
+DROP PROCEDURE set_label;
+DROP PROCEDURE get_label;
+
+--echo # Uninstall
+UNINSTALL EXTENSION vsql_session_var_test;
+
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_session_var_test.session_label;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
