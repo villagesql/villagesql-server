@@ -47,9 +47,9 @@ For quick installation, visit [villagesql.com/install](https://villagesql.com/in
 ### Prerequisites
 
 - **CMake** (3.14.6 or higher; macOS requires 3.19 or higher)
-- **C++17 Compiler** (GCC 10+ or Clang 14+)
+- **C++20 Compiler** (GCC 10+ or Clang 14+)
 - **OpenSSL 3.0+**
-- **Bison** (3.0 or higher)
+- **Bison** (3.0.4 or higher)
 - **pkg-config**
 - **ncurses development libraries**
 - **libtirpc and rpcsvc-proto**
@@ -69,10 +69,11 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 ### Build Steps (Linux & macOS)
 
-> **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths.
+> **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths, except in `mysqld` option values such as `--datadir=` and `--basedir=`, which need `$HOME`: the shell does not expand a tilde that follows `=`, and `mysqld` then treats the literal `~` as a directory name and aborts.
 
-1. **Clone the repository:**
+1. **Clone the repository into your home directory**, which is where Step 3 expects it:
    ```bash
+   cd $HOME
    git clone --depth 1 https://github.com/villagesql/villagesql-server.git
    cd villagesql-server
    ```
@@ -115,6 +116,9 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    ```bash
    make -j $(getconf _NPROCESSORS_ONLN)
    ```
+
+   This builds every target, including the `mysql` client that Step 5 uses to
+   connect. A build limited to the `mysqld` target leaves Step 5 with no client.
 
 5. **Initialize and Start the Server:**
 

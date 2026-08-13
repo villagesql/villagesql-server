@@ -13,7 +13,8 @@ without producing a package.
 
 - **Environment.** `setup_build_env.sh` installs the toolchain, dispatching to
   the per-OS script for the host it detects.
-- **Build.** `build_ci.sh` configures with CMake and builds `mysqld` plus the
+- **Build.** `build_ci.sh` configures with CMake, builds the default target set
+  (`mysqld`, the `mysql` client, and the rest), then builds the
   `villagesql-unit-tests` target.
 - **Extensions.** `checkout_bundled_extensions.sh` clones the extension repos,
   `build_bundled_extensions.sh` builds each into a `.veb`, and
@@ -51,6 +52,11 @@ Two ordering constraints are not evident from the script names:
 | `package_dev_server.sh`          | Package a completed build as a dev-server tarball.                                                            |
 | `workflow_skips_build.sh`        | Decide whether a pull request may skip the required build gate. Prints `skip` or `build`, failing safe to `build`. |
 | `workflow_skip_paths.txt`        | The authoritative list of paths exempt from that gate.                                                        |
+| `build_info.sh`                  | Version and platform helpers. Sourced, not executed.                                                          |
+
+`build_info.sh` is the only file here meant to be sourced. The other shared
+helper the scripts source, `die` and the colour codes, lives outside this
+directory at [../scripts/vsql_script_utils.sh](../scripts/vsql_script_utils.sh).
 
 Each script's header comment documents its arguments and environment
 variables, and is the source of truth for them. See
