@@ -19,7 +19,7 @@
 
 #include <string>
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 // Forward declarations
 struct TABLE;
@@ -40,8 +40,8 @@ struct ColumnKeyPrefix {
       : db_(std::move(db_name)),
         table_(std::move(table_name)),
         normalized_prefix_(
-            normalize_database_name(db_) + "." +
-            (table_.empty() ? "" : normalize_table_name(table_) + ".")) {}
+            canonical_database_name(db_) + "." +
+            (table_.empty() ? "" : canonical_table_name(table_) + ".")) {}
 
   const std::string &str() const { return normalized_prefix_; }
 
@@ -68,9 +68,9 @@ struct ColumnKey {
       : db_(std::move(db_name)),
         table_(std::move(table_name)),
         column_(std::move(column_name)),
-        normalized_key_(normalize_database_name(db_) + "." +
-                        normalize_table_name(table_) + "." +
-                        normalize_column_name(column_)) {}
+        normalized_key_(canonical_database_name(db_) + "." +
+                        canonical_table_name(table_) + "." +
+                        canonical_column_name(column_)) {}
 
   const std::string &str() const { return normalized_key_; }
 

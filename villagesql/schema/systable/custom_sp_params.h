@@ -19,7 +19,7 @@
 
 #include <string>
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 // Forward declarations
 struct TABLE;
@@ -42,8 +42,8 @@ struct SpParamKeyPrefix {
   SpParamKeyPrefix(std::string db_name, std::string sp_name)
       : db_(std::move(db_name)),
         sp_name_(std::move(sp_name)),
-        normalized_prefix_(normalize_database_name(db_) + "." +
-                           normalize_table_name(sp_name_) + ".") {}
+        normalized_prefix_(canonical_database_name(db_) + "." +
+                           canonical_table_name(sp_name_) + ".") {}
 
   // TODO(villagesql-beta): Add a db-only constructor (no sp_name) to support
   // bulk deletion of all sp params for a given database, needed for DROP
@@ -69,9 +69,9 @@ struct SpParamKey {
       : db_(std::move(db_name)),
         sp_name_(std::move(sp_name)),
         param_(std::move(param_name)),
-        normalized_key_(normalize_database_name(db_) + "." +
-                        normalize_table_name(sp_name_) + "." +
-                        normalize_column_name(param_)) {}
+        normalized_key_(canonical_database_name(db_) + "." +
+                        canonical_table_name(sp_name_) + "." +
+                        canonical_column_name(param_)) {}
 
   const std::string &str() const { return normalized_key_; }
 
