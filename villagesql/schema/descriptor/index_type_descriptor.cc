@@ -15,7 +15,7 @@
 
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 namespace villagesql {
 
@@ -25,9 +25,9 @@ IndexTypeDescriptorKey::IndexTypeDescriptorKey(std::string index_type_name,
     : index_type_name_(std::move(index_type_name)),
       extension_name_(std::move(extension_name)),
       extension_version_(std::move(extension_version)),
-      normalized_key_(normalize_type_name(index_type_name_) + "." +
-                      normalize_extension_name(extension_name_) + "." +
-                      normalize_extension_name(extension_version_)) {}
+      normalized_key_(canonical_type_name(index_type_name_) + "." +
+                      canonical_extension_name(extension_name_) + "." +
+                      canonical_extension_name(extension_version_)) {}
 
 IndexTypeDescriptor::IndexTypeDescriptor(IndexTypeDescriptorKey key,
                                          vef_type_index_intf_t intf)

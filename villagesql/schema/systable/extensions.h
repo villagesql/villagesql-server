@@ -21,7 +21,7 @@
 #include <string>
 #include <string_view>
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 // Forward declarations
 struct TABLE;
@@ -127,7 +127,7 @@ struct ExtensionKey {
 
   explicit ExtensionKey(std::string name)
       : extension_name_(std::move(name)),
-        normalized_key_(normalize_extension_name(extension_name_)) {}
+        normalized_key_(canonical_extension_name(extension_name_)) {}
 
   const std::string &str() const { return normalized_key_; }
 

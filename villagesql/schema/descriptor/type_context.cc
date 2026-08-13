@@ -27,6 +27,7 @@
 #include "sql/strfunc.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/types/special_vdf_call.h"
 
 namespace villagesql {
@@ -303,7 +304,7 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
   // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
   // re-serialize. Use the same charset for both lowercasing and sort order.
   // TODO(villagesql-beta): refactor parsing to use std::string_view.
-  const CHARSET_INFO *cs = &my_charset_utf8mb4_0900_ai_ci;
+  const CHARSET_INFO *cs = type_parameter_collation();
   std::vector<std::pair<std::string, std::string>> pairs;
   size_t start = 0;
   while (start < raw.size()) {

@@ -21,7 +21,7 @@
 #include <string>
 
 #include "sql/key_spec.h"
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 struct TABLE;
 
@@ -39,8 +39,8 @@ struct IndexKeyPrefix {
       : db_(std::move(db_name)),
         table_(std::move(table_name)),
         normalized_prefix_(
-            normalize_database_name(db_) + "." +
-            (table_.empty() ? "" : normalize_table_name(table_) + ".")) {}
+            canonical_database_name(db_) + "." +
+            (table_.empty() ? "" : canonical_table_name(table_) + ".")) {}
 
   const std::string &str() const { return normalized_prefix_; }
   const std::string &db() const { return db_; }
@@ -62,9 +62,9 @@ struct IndexKey {
       : db_(std::move(db_name)),
         table_(std::move(table_name)),
         index_(std::move(index_name)),
-        normalized_key_(normalize_database_name(db_) + "." +
-                        normalize_table_name(table_) + "." +
-                        normalize_index_name(index_)) {}
+        normalized_key_(canonical_database_name(db_) + "." +
+                        canonical_table_name(table_) + "." +
+                        canonical_index_name(index_)) {}
 
   const std::string &str() const { return normalized_key_; }
 
