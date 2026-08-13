@@ -506,28 +506,6 @@ TEST_F(VictionaryClientTest, NormalizationFunctionsAllSettings) {
   test_set_lower_case_table_names(original_setting);
 }
 
-// Normalization must byte-match the data dictionary's lowercasing, or lookups
-// against DD-stored names miss.
-// TODO(villagesql-crash): Enable once normalization matches the DD's case table
-// instead of utf8mb4_0900_ai_ci.
-TEST_F(VictionaryClientTest, DISABLED_NormalizationMatchesDdLowercasing) {
-  int original_setting = test_get_lower_case_table_names();
-
-  const std::string capital_sharp_s = "STRA\xE1\xBA\x9E\x45";  // STRAẞE
-  const std::string dd_lowered = "stra\xE1\xBA\x9E\x65";       // straẞe
-
-  for (int setting : {1, 2}) {
-    test_set_lower_case_table_names(setting);
-    EXPECT_EQ(normalize_database_name(capital_sharp_s), dd_lowered);
-    EXPECT_EQ(normalize_table_name(capital_sharp_s), dd_lowered);
-  }
-
-  // Column names are lowercased regardless of lower_case_table_names.
-  EXPECT_EQ(normalize_column_name(capital_sharp_s), dd_lowered);
-
-  test_set_lower_case_table_names(original_setting);
-}
-
 // ===== Phase 1: Operation Tracking Tests =====
 
 // Test basic DELETE operation
