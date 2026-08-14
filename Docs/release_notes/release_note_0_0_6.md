@@ -1,6 +1,10 @@
 # VillageSQL 0.0.6
 
-Draft release notes — the release commit will be recorded when 0.0.6 is tagged.
+Draft release notes through commit `c187bec42b8`: vef: improve mysql_services example (#974).
+
+The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
+The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
+The Cargo release artifacts are available at https://crates.io/crates/villagesql.
 
 ## What's New
 
@@ -48,7 +52,6 @@ The server and the bundled extensions now run under ASAN, UBSAN and LSAN every n
 - **README corrections** — The stated build prerequisites were looser than what the build enforces (Clang 14 and CMake 3.19, not Clang 13 and CMake 3.16; Windows is not supported), two documented commands could not run as written, and two Known Limitations were broader than reality. The Rust SDK, its crate and build tool, and the Rust extension template are now named alongside the C++ ones. (`2e620ad5d7b`, #962; `927e57622c3`, #934)
 - **Release artifact naming** — Server tarballs are named per codebase and platform, SDK tarballs per release version. (`0e7e6d669ee`, #803)
 - **Build tooling consolidated under `villagesql/bld_tools/`** — The older top-level scripts (`build-ci.sh`, `test-ci.sh`, `make_villagesql_dev_server.sh`, `build_bundled_extension`, `setup_linux_build_env.sh`) are retired in favor of the `bld_tools` versions, which now carry a README, and build information is published as JSON. (`d823a3e6a96`, #888; `a2b40362189`, #886; `582e58f00c9`, #889; `c83946394f4`, #887; `3920398fec3`, #935; `af1938f0285`, #969)
-- **Release-mode compilation fix** — An assertion inside an `else` branch broke the release build under `-Werror=empty-body`. (`e834978b761`, #897)
 - **Dev server socket override** — The dev server wrapper script accepts a custom socket path. (`b3096f2ace0`, #882)
 
 ## Community
