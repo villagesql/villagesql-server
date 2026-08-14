@@ -77,13 +77,20 @@ CREATE TABLE global_vars (id INT PRIMARY KEY AUTO_INCREMENT, var_name VARCHAR(64
 # ERROR 1231 (42000): Variable 'innodb_monitor_reset_all' can't be set to the value of 'NULL'
 #
 # Bug#27534122 - RBR_EXEC_MODE DOES NOT SUPPORT GLOBAL SCOPE
+#
+# VillageSQL: vsql_allow_preview_extensions deliberately rejects SET GLOBAL so
+# that enabling preview extensions always survives a restart; only SET PERSIST
+# is accepted. It reports that with its own error rather than one of the two
+# tolerated below, so it cannot take part in this loop. It is still exercised
+# by the SET PERSIST loop in section 2.
 INSERT INTO global_vars (var_name, var_value) SELECT * FROM
 performance_schema.global_variables WHERE variable_name NOT IN
 ('innodb_monitor_enable',
 'innodb_monitor_disable',
 'innodb_monitor_reset',
 'innodb_monitor_reset_all',
-'rbr_exec_mode');
+'rbr_exec_mode',
+'vsql_allow_preview_extensions');
 
 --let $count_vars= `SELECT COUNT(*) FROM global_vars;`
 --let $var_id=1
