@@ -16,28 +16,28 @@ fi
 APT_OPTS=(-o Acquire::Retries=5)
 $SUDO apt-get "${APT_OPTS[@]}" update
 $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    libssl-dev \
-    pkg-config \
-    bison \
-    libncurses5-dev \
-    libaio-dev \
-    libmecab-dev \
-    libnuma-dev \
-    libjson-perl \
-    libz-dev \
-    g++ \
-    make \
-    git \
-    curl \
     bash \
-    valgrind \
-    libtirpc-dev \
+    bison \
+    build-essential \
     ccache \
-    perl \
-    openssl \
+    cmake \
+    curl \
+    g++ \
+    git \
+    jq \
+    libaio-dev \
     libdbd-mysql-perl \
-    zip \
+    libjson-perl \
+    libmecab-dev \
+    libncurses5-dev \
+    libnuma-dev \
+    libssl-dev \
+    libtirpc-dev \
+    libz-dev \
+    make \
+    openssl \
+    perl \
+    pkg-config \
     unzip \
-    jq
+    valgrind \
+    zip
