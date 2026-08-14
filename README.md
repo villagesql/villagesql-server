@@ -46,26 +46,12 @@ For quick installation, visit [villagesql.com/install](https://villagesql.com/in
 
 ### Prerequisites
 
-- **CMake** (3.14.6 or higher; macOS requires 3.19 or higher)
-- **C++20 Compiler** (GCC 10+ or Clang 14+)
-- **OpenSSL 3.0+**
-- **Bison** (3.0.4 or higher)
-- **pkg-config**
-- **ncurses development libraries**
-- **libtirpc and rpcsvc-proto**
+- **Git**
+- **A supported platform**: Debian or Ubuntu Linux, or macOS with Homebrew
 
-#### Installing Dependencies
-
-**Linux (Debian/Ubuntu):**
-```bash
-sudo apt install cmake libssl-dev libncurses5-dev pkg-config bison \
-                 libtirpc-dev rpcsvc-proto build-essential zlib1g-dev
-```
-
-**macOS (Homebrew):**
-```bash
-brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
-```
+The build also needs a C++20 compiler, CMake 3.14.6 or newer (3.19 on macOS),
+Bison 3.0.4 or newer, OpenSSL 3, and several development libraries. Step 2
+below installs all of them.
 
 ### Build Steps (Linux & macOS)
 
@@ -78,21 +64,37 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 1. **Clone the repository into `$HOME`:**
 
    The steps below assume the clone is at `$HOME/villagesql-server`. If you put
-   it elsewhere, use that path in step 3.
+   it elsewhere, use that path in step 4.
 
    ```bash
    cd "$HOME"
    git clone --depth 1 https://github.com/villagesql/villagesql-server.git
    ```
 
-2. **Create a build directory (outside the repository):**
+2. **Install the build dependencies:**
+
+   ```bash
+   cd "$HOME/villagesql-server"
+   villagesql/bld_tools/setup_build_env.sh
+   ```
+
+   The script detects the operating system and runs
+   `villagesql/bld_tools/setup_linux_build_env.sh` or
+   `villagesql/bld_tools/setup_macos_build_env.sh`. Those two scripts are the
+   definitive dependency lists, and VillageSQL CI installs from the same ones.
+   On Linux the script uses `apt-get` and asks for `sudo`; on macOS it uses
+   Homebrew. On a Linux distribution that is not Debian or Ubuntu, read
+   `villagesql/bld_tools/setup_linux_build_env.sh` and install the equivalent
+   packages with your own package manager.
+
+3. **Create a build directory (outside the repository):**
 
    ```bash
    mkdir -p "$HOME/build/villagesql"
    cd "$HOME/build/villagesql"
    ```
 
-3. **Configure with CMake:**
+4. **Configure with CMake:**
 
    ```bash
    # Standard build
@@ -102,15 +104,15 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    cmake "$HOME/villagesql-server" -DWITH_DEBUG=1 -DWITH_SSL=system
    ```
 
-4. **Build:**
+5. **Build:**
    ```bash
    make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
-   This builds every target, including the `mysql` client that Step 5 uses to
-   connect. A build limited to the `mysqld` target leaves Step 5 with no client.
+   This builds every target, including the `mysql` client that step 6 uses to
+   connect. A build limited to the `mysqld` target leaves step 6 with no client.
 
-5. **Initialize and Start the Server:**
+6. **Initialize and Start the Server:**
 
    ```bash
    # Create the data directory
