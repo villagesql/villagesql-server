@@ -269,7 +269,7 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   // Inject per-column profile into each KEY_PART_INFO.
   std::vector<const IndexColumnEntry *> col_entries =
-      vclient.GetColumnsForIndex(index_entry->index_id);
+      vclient.GetColumnsForIndex(thd, index_entry->index_id);
   for (const IndexColumnEntry *col_entry : col_entries) {
     uint32_t pos = col_entry->key_position();
     if (pos >= keyinfo->user_defined_key_parts) {

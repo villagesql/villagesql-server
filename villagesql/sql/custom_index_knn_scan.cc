@@ -46,9 +46,12 @@ struct CustomIndexKnnScan {
   vef_storage_ctx_t *storage{nullptr};
   vef_index_cursor_ref_t cursor{0};
   bool eof{true};
+  // scan_fetch fills these; the REF_LOOKUP read path consumes only key_ref
+  // (the extension's stable column reference), resolving it to the row inside
+  // the engine. key_columns/pkey_columns arrays are still passed to scan_fetch
+  // per the ABI, but their contents are not consumed here.
   std::vector<vef_storage_col_data_t> key_columns;
   std::vector<vef_storage_col_data_t> pkey_columns;
-  std::vector<unsigned char> pkey_buffer;
 };
 
 bool custom_index_knn_scan_begin(TABLE *table, uint key_idx,
@@ -110,17 +113,9 @@ bool custom_index_knn_scan_begin(TABLE *table, uint key_idx,
              "custom KNN scans require a one-column index");
     return true;
   }
-  if (table->s->primary_key >= MAX_KEY) {
-    snprintf(error_msg, error_msg_len,
-             "custom KNN scans require a primary key");
-    return true;
-  }
-  const KEY &primary_key = table->s->key_info[table->s->primary_key];
-  if (primary_key.user_defined_key_parts != 1) {
-    snprintf(error_msg, error_msg_len,
-             "custom KNN scans require a one-column primary key");
-    return true;
-  }
+  // No primary-key requirement: the REF_LOOKUP read path resolves the
+  // extension's column reference to the row inside the engine (works for
+  // PK-less tables via the hidden DB_ROW_ID too).
 
   // Use the loaded index instance the storage engine already holds for this
   // open index (it loaded the extension with the correct persisted
@@ -174,12 +169,10 @@ bool custom_index_knn_scan_begin(TABLE *table, uint key_idx,
   return false;
 }
 
-bool custom_index_knn_scan_next(CustomIndexKnnScan *scan,
-                                const unsigned char **pkey_data,
-                                uint32_t *pkey_len, bool *eof, char *error_msg,
+bool custom_index_knn_scan_next(CustomIndexKnnScan *scan, uint64_t *out_key_ref,
+                                bool *eof, char *error_msg,
                                 uint32_t error_msg_len) {
-  if (scan == nullptr || pkey_data == nullptr || pkey_len == nullptr ||
-      eof == nullptr) {
+  if (scan == nullptr || out_key_ref == nullptr || eof == nullptr) {
     snprintf(error_msg, error_msg_len, "invalid custom index KNN cursor");
     return true;
   }
@@ -195,15 +188,15 @@ bool custom_index_knn_scan_next(CustomIndexKnnScan *scan,
     return true;
   }
 
-  const vef_storage_col_data_t &pkey = scan->pkey_columns[0];
-  if (pkey.data == nullptr || pkey.length == 0) {
+  // REF_LOOKUP: the extension's stable column reference identifies the row; the
+  // server resolves it to the base row inside the engine (see
+  // handler::custom_index_ref_to_row). No primary key is consumed here.
+  if (key_ref == VEF_STORAGE_EMPTY_COLUMN_REF) {
     snprintf(error_msg, error_msg_len,
-             "custom index KNN cursor returned an empty primary key");
+             "custom index KNN cursor returned an empty column reference");
     return true;
   }
-  scan->pkey_buffer.assign(pkey.data, pkey.data + pkey.length);
-  *pkey_data = scan->pkey_buffer.data();
-  *pkey_len = static_cast<uint32_t>(scan->pkey_buffer.size());
+  *out_key_ref = static_cast<uint64_t>(key_ref);
   *eof = false;
 
   bool next_eof = false;
@@ -245,8 +238,10 @@ class CustomHypergraphDistanceIterator final : public TableRowIterator {
   bool Init() override {
     custom_index_knn_scan_end(&m_scan);
     int error = 0;
+    // Random-read init: the REF_LOOKUP fetch (custom_index_ref_to_row) does its
+    // own clustered lookup through the prebuilt read state, like rnd_pos.
     if (!table()->file->inited) {
-      error = table()->file->ha_index_init(table()->s->primary_key, false);
+      error = table()->file->ha_rnd_init(false);
       if (error) {
         PrintError(error);
         return true;
@@ -271,28 +266,24 @@ class CustomHypergraphDistanceIterator final : public TableRowIterator {
 
   int Read() override {
     for (;;) {
-      const unsigned char *pkey_data = nullptr;
-      uint32_t pkey_len = 0;
+      uint64_t key_ref = 0;
       bool eof = false;
       char error_msg[512]{};
-      if (custom_index_knn_scan_next(m_scan, &pkey_data, &pkey_len, &eof,
-                                     error_msg, sizeof(error_msg))) {
+      if (custom_index_knn_scan_next(m_scan, &key_ref, &eof, error_msg,
+                                     sizeof(error_msg))) {
         LogVSQL(ERROR_LEVEL, "Failed to read custom KNN scan: %s", error_msg);
         return HandleError(HA_ERR_INTERNAL_ERROR);
       }
       if (eof) return -1;
 
-      const KEY &primary_key = table()->s->key_info[table()->s->primary_key];
-      if (pkey_len != primary_key.key_length) {
+      // REF_LOOKUP: resolve the extension's column reference to the full row
+      // inside the engine. No primary key involved.
+      if (table()->file->custom_index_ref_to_row(m_key_idx, key_ref, m_record,
+                                                 error_msg,
+                                                 sizeof(error_msg))) {
+        LogVSQL(ERROR_LEVEL, "Failed to fetch row for KNN hit: %s", error_msg);
         return HandleError(HA_ERR_INTERNAL_ERROR);
       }
-
-      const int error = table()->file->ha_index_read_map(
-          m_record, pkey_data, HA_WHOLE_KEY, HA_READ_KEY_EXACT);
-      if (error == HA_ERR_KEY_NOT_FOUND || error == HA_ERR_END_OF_FILE) {
-        return HandleError(HA_ERR_INTERNAL_ERROR);
-      }
-      if (error) return HandleError(error);
       if (m_examined_rows != nullptr) {
         ++*m_examined_rows;
       }

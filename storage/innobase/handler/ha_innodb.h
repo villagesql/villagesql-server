@@ -606,6 +606,13 @@ class ha_innobase : public handler {
   @return false and fills @p out if keynr is a custom index; true otherwise. */
   bool get_custom_index_handle(uint keynr, CustomIndexHandle *out) override;
 
+  /** VillageSQL: resolve a custom index's stable column reference to the owning
+  row and read it into @p buf (REF_LOOKUP read path). Resolves key_ref to the
+  clustered field-0 bytes via the indexed column's store, then does a clustered
+  read. @return false on success; true if not a custom index or on error. */
+  bool custom_index_ref_to_row(uint keynr, uint64_t key_ref, uchar *buf,
+                               char *error_msg, uint error_msg_len) override;
+
   /** Builds a 'template' to the m_prebuilt struct. The template is used in fast
   retrieval of just those column values MySQL needs in its processing.
   @param[in] whole_row true if access is needed to a whole row, false if

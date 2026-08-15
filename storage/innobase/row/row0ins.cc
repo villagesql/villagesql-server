@@ -3632,12 +3632,13 @@ static inline void row_ins_get_row_from_query_block(
 
   while (node->index != nullptr) {
     // VillageSQL: a custom index is registered as a dict_index_t on the table
-    // but has no B-tree of its own (its root page is FIL_NULL). InnoDB must
-    // not walk it here as an ordinary secondary index: the extension maintains
-    // it through the VillageSQL custom-index runtime, invoked from the
-    // ha_write_row handler hook. Skip it the same way FTS indexes are skipped.
-    if (node->index->type != DICT_FTS &&
-        !villagesql::innodb::Custom_index::is_custom(node->index)) {
+    // but has no B-tree of its own (its root page is FIL_NULL), so it must not
+    // be walked as an ordinary secondary index. It IS stepped, though:
+    // row_ins_index_entry_step -> row_ins_index_entry ->
+    // row_ins_sec_index_entry -> row_ins_sec_index_entry_low dispatches it to
+    // Custom_index::insert (which calls the extension's intf.insert) instead of
+    // touching a B-tree. Only FTS indexes are truly skipped here.
+    if (node->index->type != DICT_FTS) {
       err = row_ins_index_entry_step(node, thr);
 
       switch (err) {

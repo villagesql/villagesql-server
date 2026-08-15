@@ -56,7 +56,7 @@ bool get_custom_index_columns(THD * /*thd*/, uint64_t index_id,
                               std::vector<std::string> *out) {
   VictionaryClient &vclient = VictionaryClient::instance();
   std::vector<const IndexColumnEntry *> columns =
-      vclient.GetColumnsForIndex(index_id);
+      vclient.GetColumnsForIndex(/*thd=*/nullptr, index_id);
   std::sort(columns.begin(), columns.end(),
             [](const IndexColumnEntry *a, const IndexColumnEntry *b) {
               return a->key_position() < b->key_position();

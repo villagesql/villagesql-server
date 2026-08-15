@@ -10733,6 +10733,70 @@ bool ha_innobase::get_custom_index_handle(uint keynr, CustomIndexHandle *out) {
   return false;
 }
 
+bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
+                                          uchar *buf, char *error_msg,
+                                          uint error_msg_len) {
+  dict_index_t *index = innobase_get_index(keynr);
+  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index)) {
+    snprintf(error_msg, error_msg_len,
+             "custom_index_ref_to_row: keynr %u is not a custom index", keynr);
+    return true;
+  }
+
+  // Step 1: resolve the extension's column reference to the owning row's
+  // clustered field-0 bytes (InnoDB native format), copied into a local buffer.
+  unsigned char rowid_buf[REC_MAX_N_FIELDS * sizeof(uint64_t)];
+  uint32_t rowid_len = 0;
+  if (villagesql::innodb::Custom_index::col_ref_to_rowid(
+          index, key_ref, rowid_buf, sizeof(rowid_buf), &rowid_len, error_msg,
+          error_msg_len)) {
+    return true;
+  }
+
+  ut_a(m_prebuilt->trx == thd_to_trx(ha_thd()));
+
+  // Step 2: position the prebuilt read on the clustered index and (re)build the
+  // row template so row_search_mvcc materializes the full MySQL row into buf.
+  if (change_active_index(MAX_KEY)) {
+    snprintf(error_msg, error_msg_len,
+             "custom_index_ref_to_row: failed to select clustered index");
+    return true;
+  }
+  dict_index_t *clust = m_prebuilt->index;
+
+  if (m_prebuilt->mysql_template == nullptr || m_prebuilt->sql_stat_start) {
+    build_template(false);
+  }
+
+  // Step 3: build the clustered search tuple directly from the native field-0
+  // bytes. Unlike index_read()'s key path we do NOT call
+  // row_sel_convert_mysql_key_to_innobase: rowid_buf is already in InnoDB
+  // clustered-storage format (it was snapshotted from a clustered record), so
+  // it goes straight into field 0. Field 0 is the clustered index's unique key
+  // for a single-column PK, or the hidden DB_ROW_ID for a PK-less table.
+  dtuple_t *search_tuple = m_prebuilt->search_tuple;
+  dict_index_copy_types(search_tuple, clust, clust->n_fields);
+  dtuple_set_n_fields(search_tuple, 1);
+  dfield_t *dfield = dtuple_get_nth_field(search_tuple, 0);
+  dfield_set_data(dfield, rowid_buf, rowid_len);
+
+  // Step 4: exact clustered lookup into buf.
+  m_prebuilt->m_mysql_handler = this;
+  dberr_t ret = innobase_srv_conc_enter_innodb(m_prebuilt);
+  if (ret == DB_SUCCESS) {
+    ret = row_search_mvcc(buf, PAGE_CUR_GE, m_prebuilt, ROW_SEL_EXACT, 0);
+    innobase_srv_conc_exit_innodb(m_prebuilt);
+  }
+
+  if (ret != DB_SUCCESS) {
+    snprintf(error_msg, error_msg_len,
+             "custom_index_ref_to_row: clustered lookup failed (err %d)",
+             static_cast<int>(ret));
+    return true;
+  }
+  return false;
+}
+
 /** Changes the active index of a handle.
  @return 0 or error code */
 int ha_innobase::change_active_index(

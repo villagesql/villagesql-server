@@ -563,6 +563,66 @@ class SystemTableMap {
     return result;
   }
 
+  // Uncommitted-aware prefix query: committed entries matching the prefix with
+  // this THD's staged operations overlaid (updates replace, inserts add,
+  // deletes hide). Parallels get() vs get_committed() for the point case.
+  // Needed so a DDL statement that has STAGED but not yet committed inserts
+  // (e.g. CREATE TABLE writing custom_index_columns) can still resolve them
+  // before the systable rows are committed. Falls back to committed-only when
+  // thd is null or has no staged ops.
+  // REQUIRES: Caller must hold read lock.
+  template <typename T = EntryType>
+  std::vector<const EntryType *> get_prefix(
+      THD *thd, const typename T::key_prefix_type &prefix) const {
+    assert_read_or_write_lock_held();
+    if (!thd) return get_prefix_committed(prefix);
+
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+      return get_prefix_committed(prefix);
+    }
+
+    const std::string &prefix_str = prefix.str();
+    if (prefix_str.empty()) return {};
+    std::string upper = prefix_str;
+    upper.back() = upper.back() + 1;
+    auto in_range = [&](const std::string &k) {
+      return k >= prefix_str && k < upper;
+    };
+
+    // Most-recent staged op per key, restricted to the prefix range.
+    std::unordered_map<std::string, OperationType> op_by_key;
+    std::unordered_map<std::string, const EntryType *> entry_by_key;
+    for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
+         op = op->next) {
+      const std::string &k = op->entry ? op->entry->key().str() : op->key.str();
+      if (!in_range(k)) continue;
+      op_by_key[k] = op->op_type;
+      entry_by_key[k] = op->entry.get();
+    }
+
+    std::vector<const EntryType *> result;
+    // Committed entries in range, overridden/hidden by staged ops.
+    const std::string &pstr = prefix_str;
+    auto it = m_committed.lower_bound(pstr);
+    while (it != m_committed.end() && it->first < upper) {
+      auto override_it = op_by_key.find(it->first);
+      if (override_it == op_by_key.end()) {
+        result.push_back(it->second.get());
+      } else if (override_it->second != OperationType::DELETE) {
+        result.push_back(entry_by_key[it->first]);
+      }
+      ++it;
+    }
+    // Staged inserts in range not present in committed.
+    for (const auto &[key, op_type] : op_by_key) {
+      if (op_type != OperationType::INSERT) continue;
+      if (m_committed.find(key) != m_committed.end()) continue;
+      result.push_back(entry_by_key[key]);
+    }
+    return result;
+  }
+
   // Get all committed entries in the map
   // Useful for iterating over all entries (e.g., during startup validation)
   // REQUIRES: Caller must hold read lock
@@ -835,8 +895,11 @@ class VictionaryClient {
   // Get all per-column profile bindings for a custom index.
   // Caller must hold at least read lock.
   // Returns vector of pointers (valid while lock is held).
+  // thd makes the lookup uncommitted-aware: a DDL statement that has staged but
+  // not yet committed custom_index_columns inserts (e.g. CREATE TABLE) sees
+  // them. Pass nullptr for a committed-only view.
   std::vector<const IndexColumnEntry *> GetColumnsForIndex(
-      uint64_t index_id) const;
+      THD *thd, uint64_t index_id) const;
 
   // Allocate a unique index_id for a new custom index. The counter is
   // initialized at startup from MAX(index_id) in custom_indexes so the

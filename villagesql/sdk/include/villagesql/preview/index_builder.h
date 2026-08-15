@@ -1242,7 +1242,14 @@ class IndexFuncBuilder {
     auto d = inner_.build();
     IndexFunctionDesc result{};
     result.name = d.name();
-    result.protocol = d.required_protocol();
+    // Index profile/helper functions are always invoked through the server's
+    // protocol-3 profile dispatcher (vef_index_ctx_t::profile_fn/helper_fn),
+    // which marshals args via the v3 vef_invalue_t channel (needed to convey
+    // custom-type parameters). So an index function is at least PROTOCOL_3,
+    // regardless of whether the underlying VDF would otherwise qualify as v1.
+    result.protocol = d.required_protocol() > VEF_PROTOCOL_3
+                          ? d.required_protocol()
+                          : VEF_PROTOCOL_3;
     result.vdf = d.vdf();
     result.return_type = d.return_type();
     result.num_params = d.num_params();

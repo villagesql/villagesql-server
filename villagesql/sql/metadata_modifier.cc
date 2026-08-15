@@ -677,7 +677,7 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
 
     // Queue child column rows for deletion before the parent index row.
     for (const IndexColumnEntry *col :
-         vclient.GetColumnsForIndex(entry->index_id)) {
+         vclient.GetColumnsForIndex(/*thd=*/nullptr, entry->index_id)) {
       if (!col) continue;
       assert(!col->profile_extension_name.empty());
       to_remove_index_columns_.emplace_back(
@@ -707,7 +707,7 @@ bool Metadata_modifier::remove_all_indexes(THD *thd [[maybe_unused]],
     if (!entry) continue;
 
     for (const IndexColumnEntry *col :
-         vclient.GetColumnsForIndex(entry->index_id)) {
+         vclient.GetColumnsForIndex(/*thd=*/nullptr, entry->index_id)) {
       if (!col) continue;
       assert(!col->profile_extension_name.empty());
       to_remove_index_columns_.emplace_back(

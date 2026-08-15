@@ -5533,6 +5533,34 @@ class handler {
   }
 
   /**
+    VillageSQL: fetch a base-table row via a custom index's stable column
+    reference (REF_LOOKUP / HAS_COLUMN_REF read path).
+
+    For a custom KNN index the scan returns, per hit, the extension's stable
+    column reference (@p key_ref) rather than a primary key. The engine
+    resolves that reference to the owning row's identity (the clustered
+    field-0 bytes it snapshotted at insert) and reads the full row into @p buf,
+    entirely inside the engine — the SQL layer never needs the row's PK or its
+    byte format.
+
+    @param keynr    key number of the custom index (table->key_info[]).
+    @param key_ref  the extension's stable column reference (opaque uint64).
+    @param[out] buf record buffer to receive the fetched row (table->record[0]).
+    @param error_msg      buffer for an error description on failure.
+    @param error_msg_len  size of @p error_msg.
+
+    @retval false  the row was fetched into @p buf.
+    @retval true   not a custom index, unsupported, or the fetch failed.
+  */
+  virtual bool custom_index_ref_to_row(uint keynr [[maybe_unused]],
+                                       uint64_t key_ref [[maybe_unused]],
+                                       uchar *buf [[maybe_unused]],
+                                       char *error_msg [[maybe_unused]],
+                                       uint error_msg_len [[maybe_unused]]) {
+    return true;
+  }
+
+  /**
     Wrapper function to call records() in storage engine.
 
       @param num_rows [out]  Number of rows in table.

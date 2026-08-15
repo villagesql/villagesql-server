@@ -301,10 +301,9 @@ std::vector<const IndexEntry *> VictionaryClient::GetCustomIndexesForTable(
 }
 
 std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
-    uint64_t index_id) const {
+    THD *thd, uint64_t index_id) const {
   if (!m_initialized.load()) return {};
-  return m_custom_index_columns.get_prefix_committed(
-      IndexColumnKeyPrefix(index_id));
+  return m_custom_index_columns.get_prefix(thd, IndexColumnKeyPrefix(index_id));
 }
 
 void VictionaryClient::init_index_id_counter() {

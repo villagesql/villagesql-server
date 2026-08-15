@@ -29,7 +29,9 @@
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
 #include "storage/innobase/include/mem0mem.h"
+#include "storage/innobase/include/mtr0mtr.h"
 #include "storage/innobase/include/univ.i"
+#include "storage/innobase/villagesql/custom_column.h"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
@@ -228,6 +230,142 @@ static dberr_t parse_index_options(dict_index_t *index,
   return DB_SUCCESS;
 }
 
+// Resolves a stable column reference (produced by the SVECTOR column store at
+// insert and stored by the extension as its node's vector reference) back to the
+// column's data bytes, so the extension can compute distances during an index
+// walk. Implements vef_index_ctx_t::col_ref_to_data_fn (required non-NULL when
+// the index declares VEF_INDEX_STORAGE_HAS_COLUMN_REF).
+//
+// Latch lifetime: the column store's select() returns a pointer into a latched
+// page and releases the latch when its mini-transaction commits. The ABI
+// contract lets us hand back a borrowed pointer rather than force the caller to
+// supply a buffer, so we copy the bytes into thread-local scratch that stays
+// valid until this thread's next call, then commit (releasing the latch). The
+// extension reads the result immediately (to compute one distance) before
+// resolving another reference, so a single per-thread buffer is sufficient on
+// the server side; an extension that needs two resolved vectors live at once
+// (e.g. distance(node_a, node_b)) copies the first into its own scratch before
+// resolving the second.
+static bool vef_index_col_ref_to_data_impl(vef_index_ref_t index_ref,
+                                           vef_storage_col_ref_t col_ref,
+                                           vef_storage_col_data_t *col_data,
+                                           char *error_msg,
+                                           uint32_t error_msg_len) {
+  thread_local std::vector<unsigned char> tl_buf;
+
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  // The indexed vector is the single key column at position 0.
+  const dict_col_t *col = index->get_field(0)->col;
+  if (col->custom_column == nullptr || !col->stored_by_extn()) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_data: indexed column is not externally stored");
+    return true;
+  }
+
+  auto &custom_column = col->custom_column;
+  if (custom_column->storage_ctx() == nullptr) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_data: uninitialized custom column store");
+    return true;
+  }
+
+  const auto &intf = custom_column->storage_interface();
+  if (!intf) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_data: custom column store has no interface");
+    return true;
+  }
+
+  Custom_column::Data data{};
+  Custom_column::Data rowid_prefix{};
+  Custom_column::TrxRef trx_ref = 0;
+  bool deleted = false;
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+  bool failed = intf->select(custom_column->storage_ctx(), &mtr, col_ref, &data,
+                             &rowid_prefix, &trx_ref, &deleted, error_msg,
+                             error_msg_len);
+  if (failed || data.data == nullptr) {
+    mtr_commit(&mtr);
+    if (!failed) {
+      snprintf(error_msg, error_msg_len,
+               "col_ref_to_data: column store returned no data");
+    }
+    return true;
+  }
+
+  // Copy out of the page before the latch is released on commit.
+  tl_buf.assign(data.data, data.data + data.length);
+  mtr_commit(&mtr);
+
+  col_data->data = tl_buf.data();
+  col_data->length = static_cast<uint32_t>(tl_buf.size());
+  return false;
+}
+
+bool Custom_index::col_ref_to_rowid(const dict_index_t *index,
+                                    vef_storage_col_ref_t key_ref,
+                                    unsigned char *out, uint32_t out_cap,
+                                    uint32_t *out_len, char *error_msg,
+                                    uint32_t error_msg_len) {
+  // The indexed vector is the single key column at position 0; its column
+  // store holds, per value, the owning row's clustered field-0 bytes as
+  // rowid_prefix (see Custom_column insert_impl).
+  const dict_col_t *col = index->get_field(0)->col;
+  if (col->custom_column == nullptr || !col->stored_by_extn()) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: indexed column is not externally stored");
+    return true;
+  }
+
+  auto &custom_column = col->custom_column;
+  if (custom_column->storage_ctx() == nullptr) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: uninitialized custom column store");
+    return true;
+  }
+
+  const auto &intf = custom_column->storage_interface();
+  if (!intf) {
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: custom column store has no interface");
+    return true;
+  }
+
+  Custom_column::Data data{};
+  Custom_column::Data rowid_prefix{};
+  Custom_column::TrxRef trx_ref = 0;
+  bool deleted = false;
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+  bool failed = intf->select(custom_column->storage_ctx(), &mtr, key_ref, &data,
+                             &rowid_prefix, &trx_ref, &deleted, error_msg,
+                             error_msg_len);
+  if (failed || rowid_prefix.data == nullptr || rowid_prefix.length == 0) {
+    mtr_commit(&mtr);
+    if (!failed) {
+      snprintf(error_msg, error_msg_len,
+               "col_ref_to_rowid: column store returned no rowid_prefix");
+    }
+    return true;
+  }
+  if (rowid_prefix.length > out_cap) {
+    mtr_commit(&mtr);
+    snprintf(error_msg, error_msg_len,
+             "col_ref_to_rowid: rowid_prefix (%u) exceeds buffer (%u)",
+             rowid_prefix.length, out_cap);
+    return true;
+  }
+
+  // Copy out of the page before the latch is released on commit.
+  memcpy(out, rowid_prefix.data, rowid_prefix.length);
+  *out_len = rowid_prefix.length;
+  mtr_commit(&mtr);
+  return false;
+}
+
 static dberr_t init_index_ctx(dict_index_t *index) {
   vef_index_ctx_t *ctx = index->custom_index->index_ctx();
   ctx->version = VEF_INDEX_TYPE_INTF_VERSION;
@@ -237,6 +375,12 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->profile_fn = vef_index_profile_fn_impl;
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
+  ctx->col_ref_to_data_fn = vef_index_col_ref_to_data_impl;
+  // col_data_to_ref is intentionally left NULL: a stable col_ref cannot be
+  // derived from column data (it is an opaque storage address produced only at
+  // insert). The extension instead takes the col_ref from the indexed column's
+  // extended-ref prefix at insert time.
+  ctx->col_data_to_ref_fn = nullptr;
   ctx->options = nullptr;
 
   const auto &intf = index->custom_index->interface();

@@ -133,7 +133,6 @@
 #include "string_with_len.h"
 #include "template_utils.h"
 #include "uniques.h"  // Unique_on_insert
-#include "villagesql/sql/custom_index_runtime.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -8120,9 +8119,6 @@ int handler::ha_write_row(uchar *buf) {
                       { error = write_row(buf); })
 
   if (unlikely(error)) return error;
-  if (unlikely((error = villagesql::custom_index_after_write_row(ha_thd(),
-                                                                 table, buf))))
-    return error;
 
   if (unlikely((error = binlog_log_row(table, nullptr, buf, log_func))))
     return error; /* purecov: inspected */
