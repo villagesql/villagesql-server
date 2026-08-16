@@ -1,0 +1,7 @@
+{
+  "name": "vsql_knn_store_test",
+  "version": "0.0.1",
+  "description": "VillageSQL internal test extension: a brute-force KNN custom index over REAL external column storage, exercising the InnoDB-resident HAS_COLUMN_REF/REF_LOOKUP custom-index surface",
+  "author": "VillageSQL Contributors",
+  "license": "GPL-2.0"
+}

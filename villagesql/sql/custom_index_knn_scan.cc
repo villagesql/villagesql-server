@@ -120,9 +120,9 @@ bool custom_index_knn_scan_begin(TABLE *table, uint key_idx,
   // Use the loaded index instance the storage engine already holds for this
   // open index (it loaded the extension with the correct persisted
   // storage_ref at table-open). We drive the extension's scan callbacks
-  // against that live storage rather than re-loading our own copy. The insert
-  // path (custom_index_after_write_row) uses the same handle, so insert and
-  // scan operate on the same engine-owned storage context.
+  // against that live storage rather than re-loading our own copy. The
+  // InnoDB-resident insert path (Custom_index::insert) uses the same handle,
+  // so insert and scan operate on the same engine-owned storage context.
   const vef_type_index_intf_t *intf = nullptr;
   vef_index_ctx_t *ctx = nullptr;
   vef_storage_ctx_t *storage = nullptr;

@@ -1,0 +1,62 @@
+# Regression: a custom-index KNN query under the CLASSIC optimizer must not
+# crash. The custom KNN distance scan is a hypergraph-optimizer-only access
+# path, so under the classic optimizer the query falls back to filesort. The
+# custom index has no InnoDB B-tree (index->page == FIL_NULL), so a normal
+# index scan of it would read a nonexistent root page and assert in
+# buf_page_init_low (signal 6). The handler now refuses to scan the custom
+# index: change_active_index raises a warning (naming the hypergraph optimizer
+# requirement) and returns HA_ERR_WRONG_COMMAND, which surfaces to the client as
+# ER_ILLEGAL_HA (1031) -- a clean error instead of a crash. Enabling the
+# hypergraph optimizer makes the KNN distance scan available (see knn_store.test).
+#
+# Deliberately does NOT source include/have_hypergraph.inc -- this test is
+# specifically about the classic path. villagesql_custom_index_proceed only
+# bypasses the parse-time guard; it does not enable the hypergraph optimizer.
+--source include/have_debug.inc
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+# Ensure the classic optimizer (hypergraph OFF -- the default; set explicitly so
+# the test is robust to server defaults).
+SET SESSION optimizer_switch='hypergraph_optimizer=off';
+
+INSTALL EXTENSION vsql_knn_store_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v KVECTOR
+);
+
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_store_test.kvec_store);
+
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo #
+--echo # KNN query under the classic optimizer. Before the fix this crashed the
+--echo # server (buf_page_init_low assert) by scanning the page-less custom
+--echo # index. Now the handler refuses to scan the custom index: the query
+--echo # raises a warning explaining the hypergraph optimizer is required, then
+--echo # fails cleanly with ER_ILLEGAL_HA (1031) instead of crashing.
+--echo #
+--error ER_ILLEGAL_HA
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+--echo #
+--echo # The warning tells the user WHY the custom index could not be used and
+--echo # how to enable the KNN scan (turn on the hypergraph optimizer).
+--echo #
+SHOW WARNINGS;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_store_test;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';

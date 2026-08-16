@@ -130,34 +130,6 @@ std::unique_ptr<CustomIndexDropSnapshot> custom_index_snapshot_for_drop(
 void custom_index_drop_snapshotted_storage(
     THD *thd, const CustomIndexDropSnapshot *snapshot);
 
-// Open and write-lock the per-statement resources needed to maintain this
-// base table's custom indexes. Called by handler::ha_external_lock when
-// the engine acquires a write lock on the table, before the first row is
-// written. Dispatches to each backend's prepare_table_writes.
-//
-// Returns 0 on success or a non-zero HA_ERR_* code on failure; in the
-// failure case any partial state has been rolled back so the caller can
-// abort the lock.
-int custom_index_prepare_table_writes(THD *thd, TABLE *table);
-
-// Tear down the per-statement resources opened by
-// custom_index_prepare_table_writes. Called by handler::ha_external_lock
-// on the unlock path before the engine's external_lock(F_UNLCK).
-void custom_index_finish_table_writes(THD *thd, TABLE *table);
-
-int custom_index_after_write_row(THD *thd, TABLE *table,
-                                 const unsigned char *record);
-int custom_index_after_update_row(THD *thd, TABLE *table,
-                                  const unsigned char *old_record,
-                                  const unsigned char *new_record);
-int custom_index_after_delete_row(THD *thd, TABLE *table,
-                                  const unsigned char *record);
-
-void custom_index_commit_stmt(THD *thd);
-void custom_index_commit(THD *thd);
-void custom_index_rollback_stmt(THD *thd);
-void custom_index_rollback(THD *thd);
-
 void custom_index_schedule_drop(THD *thd, const char *db, const char *table,
                                 const char *index_name);
 

@@ -191,7 +191,7 @@ IF(NOT WITHOUT_SERVER)
   vsql_add_test_extension(vsql-test-only          vsql_test_only)
   vsql_add_test_extension(vsql-storage-test       vsql_storage_test)
   vsql_add_test_extension(vsql-index-test         vsql_index_test)
-  vsql_add_test_extension(vsql-knn-mem-test       vsql_knn_mem_test)
+  vsql_add_test_extension(vsql-knn-store-test     vsql_knn_store_test)
 
   include(test-extensions/CMakeLists.txt)
 ENDIF()
