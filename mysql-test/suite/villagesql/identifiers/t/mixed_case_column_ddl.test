@@ -1,0 +1,33 @@
+# Column names are case-insensitive, so ALTER may spell a custom-type column
+# with different case than CREATE did. The victionary delete must locate the
+# stored row by the stored entry's bytes, not the statement's spelling;
+# a missed delete leaves an orphan row that aborts the next startup.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE mixed_case;
+USE mixed_case;
+
+# MODIFY spelled in different case: delete-then-insert must replace the row.
+CREATE TABLE t1 (MyCol vsql_complex.COMPLEX);
+ALTER TABLE t1 MODIFY mycol vsql_complex.COMPLEX;
+
+--source include/villagesql/query_custom_columns.inc
+
+# DROP COLUMN spelled in different case: the row must go away.
+CREATE TABLE t2 (OtherCol vsql_complex.COMPLEX, keep INT);
+ALTER TABLE t2 DROP COLUMN OTHERCOL;
+
+--source include/villagesql/query_custom_columns.inc
+
+# A clean restart proves no orphaned rows collide on reload.
+--source include/restart_mysqld.inc
+
+USE mixed_case;
+SHOW FIELDS FROM t1;
+SHOW FIELDS FROM t2;
+
+DROP TABLE t1, t2;
+DROP DATABASE mixed_case;
+
+--source include/villagesql/uninstall_complex_extension.inc

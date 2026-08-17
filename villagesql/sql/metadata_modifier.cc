@@ -421,8 +421,7 @@ bool Metadata_modifier::remove_columns(THD *thd [[maybe_unused]],
   for (const ColumnEntry *entry : custom_columns) {
     if (!entry) continue;
 
-    to_remove_.emplace_back(
-        ColumnKey(db_name, table_name, entry->column_name()));
+    to_remove_.emplace_back(entry->key());
   }
 
   return false;
@@ -535,11 +534,22 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   }
   existing_custom_count_ = custom_column_names.size();
 
+  // Deletions must carry the stored entry's key: the disk probe uses the
+  // key's as-entered components, and the statement may spell the name with
+  // different case than the stored row.
+  auto find_custom_column = [&custom_columns](const char *name) {
+    for (const ColumnEntry *col : custom_columns) {
+      if (column_names_equal(col->column_name(), name)) return col;
+    }
+    return static_cast<const ColumnEntry *>(nullptr);
+  };
+
   // 1. Handle DROP COLUMN - delete from custom_columns if custom type
   for (const Alter_drop *drop : alter_info->drop_list) {
     if (drop->type == Alter_drop::COLUMN) {
-      if (custom_column_names.count(canonical_column_name(drop->name))) {
-        to_remove_.emplace_back(ColumnKey(db_name, table_name, drop->name));
+      const ColumnEntry *entry = find_custom_column(drop->name);
+      if (entry) {
+        to_remove_.emplace_back(entry->key());
       }
     }
   }
@@ -620,7 +630,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
       // This is MODIFY COLUMN or CHANGE COLUMN
       if (was_custom_type && !is_custom_type) {
         // Changing FROM custom TO non-custom - delete entry
-        to_remove_.emplace_back(ColumnKey(db_name, table_name, field.change));
+        to_remove_.emplace_back(find_custom_column(field.change)->key());
       } else if (!was_custom_type && is_custom_type) {
         // Changing FROM non-custom TO custom - insert entry
         to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
@@ -632,7 +642,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         // Changing FROM custom TO custom - use delete-then-insert pattern
         // Note: Apply removals before additions
         // See Metadata_modifier::mark_victionary_modifications()
-        to_remove_.emplace_back(ColumnKey(db_name, table_name, field.change));
+        to_remove_.emplace_back(find_custom_column(field.change)->key());
 
         to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
                              field.custom_type_context->extension_name(),

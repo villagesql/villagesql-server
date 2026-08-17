@@ -1,0 +1,22 @@
+CREATE DATABASE mixed_case;
+USE mixed_case;
+CREATE TABLE t1 (MyCol vsql_complex.COMPLEX);
+ALTER TABLE t1 MODIFY mycol vsql_complex.COMPLEX;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+mixed_case	t1	mycol	vsql_complex	0.0.1	COMPLEX	{}
+CREATE TABLE t2 (OtherCol vsql_complex.COMPLEX, keep INT);
+ALTER TABLE t2 DROP COLUMN OTHERCOL;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+mixed_case	t1	mycol	vsql_complex	0.0.1	COMPLEX	{}
+# restart
+USE mixed_case;
+SHOW FIELDS FROM t1;
+Field	Type	Null	Key	Default	Extra
+mycol	vsql_complex.COMPLEX	YES		NULL	
+SHOW FIELDS FROM t2;
+Field	Type	Null	Key	Default	Extra
+keep	int	YES		NULL	
+DROP TABLE t1, t2;
+DROP DATABASE mixed_case;
