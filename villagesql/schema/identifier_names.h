@@ -17,6 +17,7 @@
 #ifndef VILLAGESQL_SCHEMA_IDENTIFIER_NAMES_H_
 #define VILLAGESQL_SCHEMA_IDENTIFIER_NAMES_H_
 
+#include <initializer_list>
 #include <string>
 
 struct CHARSET_INFO;
@@ -70,6 +71,11 @@ std::string column_name_match_sql(const std::string &vsql_name,
 
 // Collation canonicalizing custom-type parameter strings
 const CHARSET_INFO *type_parameter_collation();
+
+// Joins canonical key components with '.', escaping '.' and '\' inside
+// components so distinct component tuples never produce the same key
+// (identifiers may contain dots).
+std::string join_key_components(std::initializer_list<std::string> parts);
 
 }  // namespace villagesql
 

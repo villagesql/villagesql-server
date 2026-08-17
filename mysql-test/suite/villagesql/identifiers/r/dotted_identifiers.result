@@ -19,4 +19,15 @@ Field	Type	Null	Key	Default	Extra
 col.two	vsql_complex.COMPLEX	YES		NULL	
 plain	int	YES		NULL	
 DROP TABLE `renamed.table`;
+CREATE TABLE `my.table` (`col.one` vsql_complex.COMPLEX);
+CREATE TABLE `my.table.col` (`one` vsql_complex.COMPLEX);
+# restart
+USE dotted_db;
+SHOW FIELDS FROM `my.table`;
+Field	Type	Null	Key	Default	Extra
+col.one	vsql_complex.COMPLEX	YES		NULL	
+SHOW FIELDS FROM `my.table.col`;
+Field	Type	Null	Key	Default	Extra
+one	vsql_complex.COMPLEX	YES		NULL	
+DROP TABLE `my.table`, `my.table.col`;
 DROP DATABASE dotted_db;

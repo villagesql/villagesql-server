@@ -183,4 +183,16 @@ TEST_F(IdentifierNamesTest, ViewMatchSqlFollowsIdentifierRules) {
   }
 }
 
+// Identifiers may contain dots; joining must keep distinct component tuples
+// distinct.
+TEST_F(IdentifierNamesTest, JoinKeyComponentsIsUnambiguous) {
+  EXPECT_EQ(join_key_components({"db", "table", "column"}), "db.table.column");
+  EXPECT_EQ(join_key_components({"db", "my.table", "col.one"}),
+            "db.my\\.table.col\\.one");
+  EXPECT_NE(join_key_components({"db", "my.table", "col.one"}),
+            join_key_components({"db", "my.table.col", "one"}));
+  EXPECT_NE(join_key_components({"db", "a\\", "b"}),
+            join_key_components({"db", "a", "\\b"}));
+}
+
 }  // namespace villagesql_unittest
