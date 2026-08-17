@@ -86,6 +86,11 @@ struct WorkerState {
   // which outlives the handle, so it stays valid across the teardown.
   std::mutex stop_mu;
 
+  // Serializes worker_start()/worker_stop(). LOCK_global_system_variables is
+  // released around the enabled-var callback, so concurrent SET GLOBALs (or a
+  // SET racing UNINSTALL EXTENSION) can reach the lifecycle code at once.
+  std::mutex lifecycle_mu;
+
   // Current dynamic wakeup config, updated from work_fn return values.
   int current_poll_fd{-1};
   unsigned int current_sleep_ms{0};
@@ -313,6 +318,7 @@ static void thread_main(WorkerState *state) {
 }
 
 static void worker_start(WorkerState *state) {
+  std::lock_guard<std::mutex> lifecycle(state->lifecycle_mu);
   if (state->thread.joinable()) return;
 
   const vef_thread_worker_descriptor_t *desc = state->descriptor;
@@ -330,8 +336,11 @@ static void worker_start(WorkerState *state) {
 }
 
 static void worker_stop(WorkerState *state) {
+  std::lock_guard<std::mutex> lifecycle(state->lifecycle_mu);
   if (!state->thread.joinable()) return;
 
+  // TODO(villagesql-performance): replace this spin with a condition variable
+  // signaled when thread_main publishes the handle.
   vef_thread_handle_t *handle;
   while ((handle = state->handle.load(std::memory_order_acquire)) ==
          kHandlePending) {

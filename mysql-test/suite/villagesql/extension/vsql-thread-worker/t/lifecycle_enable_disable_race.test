@@ -1,0 +1,39 @@
+# Test thread_worker lifecycle: disabling a worker must not wedge the server.
+#
+# The enabled-var callback runs from a sys var update function, which the server
+# calls with LOCK_global_system_variables held. The disable path waits for the
+# worker to publish its handle and then joins it, and a starting worker needs
+# that same mutex to construct its THD. Holding the mutex across the wait made
+# an OFF that landed in the worker's startup window deadlock permanently: the
+# server stopped answering any query needing the mutex, and the test only failed
+# once the MTR testcase timeout expired.
+#
+# Verifies:
+# - Rapid ON/OFF cycles complete, with no wait between them
+# - The worker is stopped and the server still answers queries afterwards
+
+# The processlist check requires PSI thread instrumentation.
+if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
+{
+  skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
+}
+
+INSTALL EXTENSION vsql_lifecycle_test;
+
+--echo # 20 ON/OFF cycles with no wait between them, so an OFF lands while the
+--echo # worker is still starting up.
+--disable_query_log
+let $counter=20;
+while ($counter>0)
+{
+  SET GLOBAL vsql_lifecycle_test.monitor_enabled = ON;
+  SET GLOBAL vsql_lifecycle_test.monitor_enabled = OFF;
+  dec $counter;
+}
+--enable_query_log
+
+--echo # Worker is stopped and the server still answers queries
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+
+UNINSTALL EXTENSION vsql_lifecycle_test;

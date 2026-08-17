@@ -27,7 +27,9 @@
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
+#include "mysql/psi/mysql_mutex.h"
 #include "mysql/service_plugin_registry.h"
+#include "sql/mysqld.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql::services {
@@ -61,7 +63,20 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
       }
     }
   }
-  if (on_change != nullptr) on_change(var_name_copy.c_str(), new_val);
+  if (on_change == nullptr) return;
+
+  // sys_var::update() holds LOCK_global_system_variables across this callback
+  // (asserted in sys_var_pluginvar::global_update()), and an on_change callback
+  // can block: stopping a background worker joins a thread that may need the
+  // same mutex to create a THD, run SQL, or read a sys var. Release it around
+  // the callback, the way event_scheduler_update() does in sql/sys_vars.cc.
+  //
+  // The new value is published above, so the callback sees it. Dropping the
+  // mutex lets two SET GLOBALs interleave here; callbacks serialize themselves.
+  mysql_mutex_assert_owner(&LOCK_global_system_variables);
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+  on_change(var_name_copy.c_str(), new_val);
+  mysql_mutex_lock(&LOCK_global_system_variables);
 }
 
 }  // namespace
