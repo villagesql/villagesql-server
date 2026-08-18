@@ -1,0 +1,96 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: a COMPLEX value survives a client text round-trip unchanged.
+#
+# The rendered form must carry enough digits to parse back to the identical
+# double.
+#
+########################################################################
+
+CREATE TABLE test_fidelity (
+    id INT PRIMARY KEY,
+    original COMPLEX,
+    restored COMPLEX
+);
+
+#
+# Values needing more than 6 significant digits in both components, including
+# the extremes of the double range.
+#
+INSERT INTO test_fidelity (id, original) VALUES
+    (1, '(0.6666666666666666,0.1234567890123456)'),
+    (2, '(3.141592653589793,2.718281828459045)'),
+    (3, '(-99.12345678901234,0.000123456789012345)'),
+    (4, '(1.7976931348623157e308,-2.2250738585072014e-308)');
+
+#
+# Read each rendered value and write it straight back, exactly as a client or a
+# dump/restore would.
+#
+--let $i = 1
+while ($i <= 4)
+{
+  --let $rendered = query_get_value(SELECT original AS v FROM test_fidelity WHERE id = $i, v, 1)
+  --eval UPDATE test_fidelity SET restored = '$rendered' WHERE id = $i
+  --inc $i
+}
+
+#
+# Every difference must be exactly zero. A lossy rendering shows up as a
+# non-zero residual.
+#
+SELECT id, vsql_complex.complex_subtract(original, restored) AS must_be_zero
+FROM test_fidelity ORDER BY id;
+
+#
+# The same property as a count, so a regression fails loudly even if the
+# rendering itself changes.
+#
+SELECT COUNT(*) AS rows_that_did_not_round_trip
+FROM test_fidelity
+WHERE vsql_complex.complex_real(vsql_complex.complex_subtract(original, restored)) <> 0
+   OR vsql_complex.complex_imag(vsql_complex.complex_subtract(original, restored)) <> 0;
+
+DROP TABLE test_fidelity;
+
+########################################################################
+#
+# Input forms std::from_chars is stricter about than sscanf was.
+#
+# from_chars requires the first character to be part of the number: the
+# standard excludes a leading '+' (only '-' is recognized) and it never skips
+# whitespace. sscanf's " ( %lg , %lg )" did both. from_string compensates for
+# each, so these forms must keep parsing. A '+' inside an exponent was always
+# accepted by both and is included as a control.
+#
+########################################################################
+
+CREATE TABLE test_input_forms (
+    id INT PRIMARY KEY,
+    note VARCHAR(30),
+    v COMPLEX
+);
+
+INSERT INTO test_input_forms VALUES (1, 'plain',           '(1.5,-2.5)');
+INSERT INTO test_input_forms VALUES (2, 'leading plus',    '(+1.5,+2.5)');
+INSERT INTO test_input_forms VALUES (3, 'internal spaces', '(  1.5 ,  -2.5  )');
+INSERT INTO test_input_forms VALUES (4, 'leading space',   '   (1.5,-2.5)');
+INSERT INTO test_input_forms VALUES (5, 'exponent plus',   '(1.5e+15,2.3e-10)');
+
+SELECT id, note, v FROM test_input_forms ORDER BY id;
+
+#
+# Rows 1, 3 and 4 spell the same value three ways; all must be identical.
+#
+SELECT COUNT(*) AS spellings_that_disagree
+FROM test_input_forms a JOIN test_input_forms b ON b.id = 1
+WHERE a.id IN (3, 4)
+  AND (vsql_complex.complex_real(vsql_complex.complex_subtract(a.v, b.v)) <> 0
+    OR vsql_complex.complex_imag(vsql_complex.complex_subtract(a.v, b.v)) <> 0);
+
+DROP TABLE test_input_forms;
+
+UNINSTALL EXTENSION vsql_complex;

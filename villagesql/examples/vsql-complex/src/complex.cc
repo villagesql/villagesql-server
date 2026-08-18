@@ -28,11 +28,11 @@
 
 #include <villagesql/vsql.h>
 
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <string>
+#include <cstring>
 #include <string_view>
 
 using namespace vsql;
@@ -102,6 +102,39 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
   return hash;
 }
 
+// Parse "( <double> , <double> )" out of `from` into `cx`, tolerating
+// whitespace around every token. Returns false on any malformed input,
+// including trailing garbage.
+//
+static bool parse_complex(std::string_view from, Complex *cx) {
+  const char *p = from.data();
+  const char *const end = p + from.size();
+
+  auto skip_ws = [&] {
+    while (p < end && (*p == ' ' || *p == '\t')) ++p;
+  };
+  auto parse_double = [&](double *out) {
+    skip_ws();
+    if (p < end && *p == '+') ++p;  // from_chars rejects an explicit plus
+    const std::from_chars_result r = std::from_chars(p, end, *out);
+    if (r.ec != std::errc()) return false;
+    p = r.ptr;
+    return true;
+  };
+  auto expect = [&](char ch) {
+    skip_ws();
+    if (p == end || *p != ch) return false;
+    ++p;
+    return true;
+  };
+
+  if (!expect('(') || !parse_double(&cx->re) || !expect(',') ||
+      !parse_double(&cx->im) || !expect(')'))
+    return false;
+  skip_ws();
+  return p == end;
+}
+
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
 // STRING -> COMPLEX
 //
@@ -109,10 +142,9 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
 // warning.
 void complex_from_string(std::string_view from, vsql::CustomResult out) {
   auto buf = out.buffer();
-  if (buf.size() < kComplexSize) return;
+  if (buf.size() < static_cast<size_t>(kComplexSize)) return;
   Complex cx;
-  std::string from_str(from);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) return;
+  if (!parse_complex(from, &cx)) return;
   cx.canonicalize();
   store_complex(buf.data(), cx);
   out.set_length(kComplexSize);
@@ -123,10 +155,9 @@ void complex_from_string(std::string_view from, vsql::CustomResult out) {
 // STRING -> COMPLEX2
 void complex2_from_string(std::string_view from, vsql::CustomResult out) {
   auto buf = out.buffer();
-  if (buf.size() < kComplexSize) return;
+  if (buf.size() < static_cast<size_t>(kComplexSize)) return;
   Complex cx;
-  std::string from_str(from);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) return;
+  if (!parse_complex(from, &cx)) return;
   // No canonicalization - -0.0 is preserved in binary representation.
   // The custom hash function will canonicalize on the fly.
   store_complex(buf.data(), cx);
@@ -140,9 +171,21 @@ void complex_to_string(CustomArg in, StringResult out) {
   if (data.size() != kComplexSize) return;  // wrapper default ERROR
   Complex cx = load_complex(data.data());
   auto buf = out.buffer();
-  int written = snprintf(buf.data(), buf.size(), "(%g,%g)", cx.re, cx.im);
-  if (written < 0 || static_cast<size_t>(written) >= buf.size()) return;
-  out.set_length(static_cast<size_t>(written));
+  char *p = buf.data();
+  char *const end = p + buf.size();
+
+  if (p == end) return;  // wrapper default ERROR
+  *p++ = '(';
+  const std::to_chars_result re = std::to_chars(p, end, cx.re);
+  if (re.ec != std::errc() || re.ptr >= end) return;  // wrapper default ERROR
+  p = re.ptr;
+  *p++ = ',';
+  const std::to_chars_result im = std::to_chars(p, end, cx.im);
+  if (im.ec != std::errc() || im.ptr >= end) return;  // wrapper default ERROR
+  p = im.ptr;
+  *p++ = ')';
+  assert(p <= end);
+  out.set_length(static_cast<size_t>(p - buf.data()));
 }
 
 // Compare: (COMPLEX, COMPLEX) -> INT for ORDER BY, indexes
