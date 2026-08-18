@@ -88,7 +88,7 @@ bool extension_names_equal(const std::string &a, const std::string &b) {
 namespace {
 
 // Lower both sides under utf8mb4_bin, which uses the same case tables as
-// the DD's utf8mb3_tolower_ci. 
+// the DD's utf8mb3_tolower_ci.
 std::string folded_match_sql(const std::string &vsql_name,
                              const std::string &dd_name) {
   return "LOWER(" + vsql_name + ")=LOWER(CONVERT(" + dd_name +

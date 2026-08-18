@@ -16,7 +16,7 @@ SHOW TABLES;
 DROP TABLE cafe, café, gross, groß;
 
 # Custom-type tables whose names differ only by accent or sharp-s folding
-# are distinct identifiers; each pair lands as separate custom_columns rows.
+# are distinct identifiers; each pair should be separate custom_columns rows.
 CREATE TABLE cafe (value COMPLEX);
 CREATE TABLE café (value COMPLEX);
 

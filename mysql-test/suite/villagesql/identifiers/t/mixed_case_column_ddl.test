@@ -1,7 +1,5 @@
-# Column names are case-insensitive, so ALTER may spell a custom-type column
-# with different case than CREATE did. The victionary delete must locate the
-# stored row by the stored entry's bytes, not the statement's spelling;
-# a missed delete leaves an orphan row that aborts the next startup.
+# ALTER may spell a custom-type column with different case than CREATE did;
+# deletes must locate the stored row by the stored entry's bytes.
 
 --source include/villagesql/install_complex_extension.inc
 

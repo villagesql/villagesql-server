@@ -42,9 +42,8 @@ class Village_system_table_intact : public Table_check_intact {
 
   THD *thd() { return m_thd; }
 
-  // Base-class check() plus a collation check. The base class verifies the
-  // charset name only; identifier lookups depend on the exact binary
-  // collation, so a wrong-collation table must be caught at startup.
+  // Base-class check() verifies the charset name only; identifier lookups
+  // also depend on the collation.
   bool check_with_collation(THD *thd, TABLE *table,
                             const TABLE_FIELD_DEF *table_def) {
     if (check(thd, table, table_def)) return true;

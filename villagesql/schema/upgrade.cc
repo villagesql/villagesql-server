@@ -52,10 +52,9 @@ bool upgrade_villagesql_from_0_0_4_to_0_0_5(THD *thd) {
 }
 
 bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
-  // Convert all system tables to utf8mb4_bin. Identifiers are stored as
-  // entered and compared through the canonicalization library, so the
-  // index must match bytes exactly. The charset stays utf8mb4; stored
-  // values do not change. CONVERT TO is idempotent.
+  // Upgrade all villagesql system tables to utf8mb4_bin collation. This is
+  // to standardize the collation across all system tables, and to avoid issues with
+  // comparisons between villagesql system tables and the data dictionary.
   LogVSQL(INFORMATION_LEVEL,
           "Upgrading villagesql system tables to utf8mb4_bin");
   static const char *statements[] = {

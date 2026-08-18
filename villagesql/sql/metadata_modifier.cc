@@ -534,9 +534,9 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   }
   existing_custom_count_ = custom_column_names.size();
 
-  // Deletions must carry the stored entry's key: the disk probe uses the
-  // key's as-entered components, and the statement may spell the name with
-  // different case than the stored row.
+  // Deletions must carry the stored entry's key: the disk probe uses its
+  // as-entered components, and the statement may spell the name with
+  // different case.
   auto find_custom_column = [&custom_columns](const char *name) {
     for (const ColumnEntry *col : custom_columns) {
       if (column_names_equal(col->column_name(), name)) return col;

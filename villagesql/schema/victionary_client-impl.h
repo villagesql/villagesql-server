@@ -88,9 +88,8 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     // Use entry's key() method
     std::string key_str = entry.key().str();
 
-    // Add to committed map. Two rows must never share a canonical key;
-    // overwriting would silently drop one of them. No assert: duplicate
-    // rows are a datadir fault, not a code bug.
+    // Duplicate canonical keys are a datadir fault, not a code bug, so
+    // fail without asserting.
     auto inserted = m_committed.emplace(
         key_str, std::make_shared<EntryType>(std::move(entry)));
     if (!inserted.second) {
