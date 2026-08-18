@@ -103,9 +103,8 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
 }
 
 // Parse "( <double> , <double> )" out of `from` into `cx`, tolerating
-// whitespace around every token. Returns false on any malformed input,
+// whitespace around every token. Returns false on success, true on error --
 // including trailing garbage.
-//
 static bool parse_complex(std::string_view from, Complex *cx) {
   const char *p = from.data();
   const char *const end = p + from.size();
@@ -117,22 +116,22 @@ static bool parse_complex(std::string_view from, Complex *cx) {
     skip_ws();
     if (p < end && *p == '+') ++p;  // from_chars rejects an explicit plus
     const std::from_chars_result r = std::from_chars(p, end, *out);
-    if (r.ec != std::errc()) return false;
+    if (r.ec != std::errc()) return true;
     p = r.ptr;
-    return true;
+    return false;
   };
   auto expect = [&](char ch) {
     skip_ws();
-    if (p == end || *p != ch) return false;
+    if (p == end || *p != ch) return true;
     ++p;
-    return true;
+    return false;
   };
 
-  if (!expect('(') || !parse_double(&cx->re) || !expect(',') ||
-      !parse_double(&cx->im) || !expect(')'))
-    return false;
+  if (expect('(') || parse_double(&cx->re) || expect(',') ||
+      parse_double(&cx->im) || expect(')'))
+    return true;
   skip_ws();
-  return p == end;
+  return p != end;
 }
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
@@ -144,7 +143,7 @@ void complex_from_string(std::string_view from, vsql::CustomResult out) {
   auto buf = out.buffer();
   if (buf.size() < static_cast<size_t>(kComplexSize)) return;
   Complex cx;
-  if (!parse_complex(from, &cx)) return;
+  if (parse_complex(from, &cx)) return;
   cx.canonicalize();
   store_complex(buf.data(), cx);
   out.set_length(kComplexSize);
@@ -157,7 +156,7 @@ void complex2_from_string(std::string_view from, vsql::CustomResult out) {
   auto buf = out.buffer();
   if (buf.size() < static_cast<size_t>(kComplexSize)) return;
   Complex cx;
-  if (!parse_complex(from, &cx)) return;
+  if (parse_complex(from, &cx)) return;
   // No canonicalization - -0.0 is preserved in binary representation.
   // The custom hash function will canonicalize on the fly.
   store_complex(buf.data(), cx);
