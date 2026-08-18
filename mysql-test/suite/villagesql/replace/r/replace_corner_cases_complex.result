@@ -27,7 +27,7 @@ REPLACE INTO t1 VALUES (9, '(0.000000001,0.000000002)', 'small_positive');
 REPLACE INTO t1 VALUES (10, '(-0.000000001,-0.000000002)', 'small_negative');
 SELECT id, val, description FROM t1 WHERE id BETWEEN 8 AND 10 ORDER BY id;
 id	val	description
-8	(1e+09,-1e+09)	large
+8	(999999999.1234568,-999999999.9876543)	large
 9	(1e-09,2e-09)	small_positive
 10	(-1e-09,-2e-09)	small_negative
 REPLACE INTO t1 VALUES (11, NULL, 'null1');
@@ -103,7 +103,7 @@ id	val	description
 5	(5,6)	whitespace2
 6	(7,8)	whitespace3
 7	(9,10)	whitespace4
-8	(1e+09,-1e+09)	large
+8	(999999999.1234568,-999999999.9876543)	large
 9	(1e-09,2e-09)	small_positive
 10	(-1e-09,-2e-09)	small_negative
 11	(3,4)	replace_null_with_value
