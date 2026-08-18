@@ -16,9 +16,12 @@
 
 #include "villagesql/schema/upgrade.h"
 
+#include <string>
+
 #include "mysqld_error.h"
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/helpers.h"
 
 namespace villagesql {
@@ -49,6 +52,36 @@ bool upgrade_villagesql_from_0_0_4_to_0_0_5(THD *thd) {
       "COMMENT 'Pending deferred action (e.g. version update). "
       "NULL when no action is pending.'",
       {ER_DUP_FIELDNAME});
+}
+
+bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
+  // Disable persistent InnoDB statistics on the system tables, matching the
+  // mysql.* tables. With persistent stats, InnoDB queues a table for background
+  // recalculation once 10% of its rows change, and these tables are small
+  // enough that a single write crosses that line. The background stats thread
+  // then takes MDL on the table, which can hang startup: the pending
+  // extension-update apply writes these tables just before
+  // dd::reset_tables_and_tablespaces() takes MDL_EXCLUSIVE on every cached
+  // table with a one-year lock wait.
+  //
+  // Keep this list in sync with villagesql/schema/villagesql_schema.sql.in.
+  const char *const tables[] = {SchemaManager::EXTENSIONS_TABLE_NAME,
+                                SchemaManager::COLUMNS_TABLE_NAME,
+                                SchemaManager::SP_PARAMS_TABLE_NAME,
+                                SchemaManager::INDEXES_TABLE_NAME,
+                                SchemaManager::INDEX_COLUMNS_TABLE_NAME,
+                                SchemaManager::PROPERTIES_TABLE_NAME};
+
+  LogVSQL(
+      INFORMATION_LEVEL,
+      "Upgrading villagesql system tables: disabling persistent statistics");
+  for (const char *table : tables) {
+    const std::string query = std::string("ALTER TABLE ") +
+                              SchemaManager::VILLAGESQL_SCHEMA_NAME + "." +
+                              table + " STATS_PERSISTENT=0";
+    if (execute_statement(thd, query.c_str())) return true;
+  }
+  return false;
 }
 
 }  // namespace upgrade
