@@ -191,7 +191,7 @@ typedef struct {
   // Optional callback: return true if this method currently wants the server to
   // GRANT the roles it stages via set_active_roles() to the (already-existing)
   // account, so a token claiming a role the account was not granted takes
-  // effect instead of being skipped by the activate-only path. Independent of
+  // effect instead of being skipped. Independent of
   // auto_create_unknown_accounts: this governs granting to existing accounts,
   // that governs provisioning unknown ones. QUERIED LIVE per login, so it can
   // reflect a runtime sysvar. NULL, or a callback returning false, keeps the

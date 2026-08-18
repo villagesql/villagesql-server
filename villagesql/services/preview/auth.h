@@ -87,8 +87,8 @@ std::string auth_method_for_unknown_accounts();
 
 // True if `method_name` currently opts into auto-grant (its live
 // auto_grant_roles callback returns true). Independent of the unknown-account
-// opt-in above; gates maybe_apply_vef_role_grants for a login using this
-// method.
+// opt-in above; when false, maybe_apply_vef_role_grants grants nothing for a
+// login using this method.
 bool method_wants_auto_grant(std::string_view method_name);
 
 // Handle a CREATE USER ... IDENTIFIED WITH <method_name> [BY '...'] whose name

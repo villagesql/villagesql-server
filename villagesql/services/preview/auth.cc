@@ -447,10 +447,10 @@ std::string auth_method_for_unknown_accounts() {
 }
 
 bool method_wants_auto_grant(std::string_view method_name) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  // Queried live so it reflects the extension's runtime sysvar.
   const std::string normalized =
       canonical_extension_name(std::string(method_name));
+  std::lock_guard<std::mutex> lock(g_mu);
+  // Queried live so it reflects the extension's runtime sysvar.
   for (const auto &m : g_methods) {
     if (m.method_name == normalized) {
       return m.cc != nullptr && m.cc->auto_grant_roles != nullptr &&
@@ -465,8 +465,10 @@ void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
   const VefAuthState *state = mpvio->vef_auth_info.vef_auth_state;
   if (state == nullptr || state->roles.empty()) return;  // nothing staged
 
-  // Gate on this login's method opting into auto-grant; off by default, so the
-  // token stays activate-only. The method name is the account's plugin.
+  // Only grant when this login's method has opted into auto-grant; off by
+  // default, in which case the staged roles are used solely to activate roles
+  // the account already holds, never to grant new ones. The method name is the
+  // account's plugin.
   const char *const method = mpvio->acl_user_plugin.str;
   if (method == nullptr || !method_wants_auto_grant(method)) return;
 
@@ -480,7 +482,7 @@ void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
   // GRANT each staged role additively -- never revoke. Roles must pre-exist as
   // DB roles; an ungrantable one is skipped.
   //
-  // TODO(villagesql-beta): authoritative reconcile (revoke roles no longer
+  // TODO(villagesql-ga): authoritative reconcile (revoke roles no longer
   // claimed) is a separate, deferred task.
   for (const char *staged : state->roles) grant_staged_role(staged, account_id);
 }

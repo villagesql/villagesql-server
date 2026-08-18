@@ -1,5 +1,5 @@
 # Auto-grant-role for the vsql::preview::auth capability: with a method's
-# auto_grant enabled, a login whose token stages roles the account was not
+# auto_grant enabled, a login whose token-staged roles the account was not
 # granted causes the server to grant them; with auto_grant off, those roles are
 # skipped. The same login runs under each setting so the flag is the only
 # difference.
@@ -8,13 +8,18 @@
 # via mysql_clear_password, so each login uses the CLEARTEXT connect option.
 
 # With auto_grant OFF the login requests roles the account lacks; the server
-# refuses to activate them and logs it.
+# refuses to activate each and logs a warning to the error log. That warning
+# never reaches the client (it is server-side only, so it is not in this test's
+# output either way); the suppression just keeps MTR from failing the run over
+# an "unexpected" error-log line.
 call mtr.add_suppression("VEF auth: role .* is not granted; skipping");
 
 INSTALL EXTENSION vsql_auth_test;
 
-# An existing account bound to the method, plus roles granted to nobody. The
-# "-token-roles" token stages both.
+# The "-token-roles" token stages two roles, vsql_role_granted and
+# vsql_role_denied (see kTokenRoles in the vsql-auth-test extension). Neither is
+# granted to the account up front, so with auto_grant OFF both are skipped and
+# with auto_grant ON both get granted to the proxied account.
 CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
 CREATE USER vsql_auth_test_user;
 GRANT SELECT ON *.* TO vsql_auth_test_user;
