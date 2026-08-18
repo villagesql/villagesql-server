@@ -155,4 +155,32 @@ TEST_F(IdentifierNamesTest, TypeParameterCollation) {
   EXPECT_EQ(type_parameter_collation(), &my_charset_utf8mb4_0900_ai_ci);
 }
 
+// Database and table names compare exact bytes at lower_case_table_names=0
+// and fold otherwise; column names always fold.
+TEST_F(IdentifierNamesTest, ViewMatchSqlFollowsIdentifierRules) {
+  test_set_lower_case_table_names(0);
+  EXPECT_EQ(database_name_match_sql("vcc.db_name", "sch.name"),
+            "vcc.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin");
+  EXPECT_EQ(
+      table_name_match_sql("vcc.table_name", "tbl.name"),
+      "vcc.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin");
+
+  for (int setting : {1, 2}) {
+    test_set_lower_case_table_names(setting);
+    EXPECT_EQ(database_name_match_sql("vcc.db_name", "sch.name"),
+              "LOWER(vcc.db_name)=LOWER(CONVERT(sch.name USING utf8mb4) "
+              "COLLATE utf8mb4_bin)");
+    EXPECT_EQ(table_name_match_sql("vcc.table_name", "tbl.name"),
+              "LOWER(vcc.table_name)=LOWER(CONVERT(tbl.name USING utf8mb4) "
+              "COLLATE utf8mb4_bin)");
+  }
+
+  for (int setting : {0, 2}) {
+    test_set_lower_case_table_names(setting);
+    EXPECT_EQ(column_name_match_sql("vcc.column_name", "col.name"),
+              "LOWER(vcc.column_name)=LOWER(CONVERT(col.name USING utf8mb4) "
+              "COLLATE utf8mb4_bin)");
+  }
+}
+
 }  // namespace villagesql_unittest

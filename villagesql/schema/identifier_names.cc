@@ -85,6 +85,46 @@ bool extension_names_equal(const std::string &a, const std::string &b) {
   return canonical_extension_name(a) == canonical_extension_name(b);
 }
 
+namespace {
+
+// Lower both sides under utf8mb4_bin, which uses the same case tables as
+// the DD's utf8mb3_tolower_ci. 
+std::string folded_match_sql(const std::string &vsql_name,
+                             const std::string &dd_name) {
+  return "LOWER(" + vsql_name + ")=LOWER(CONVERT(" + dd_name +
+         " USING utf8mb4) COLLATE utf8mb4_bin)";
+}
+
+// Exact-bytes comparison
+std::string binary_match_sql(const std::string &vsql_name,
+                             const std::string &dd_name) {
+  return vsql_name + "=CONVERT(" + dd_name +
+         " USING utf8mb4) COLLATE utf8mb4_bin";
+}
+
+}  // namespace
+
+std::string database_name_match_sql(const std::string &vsql_name,
+                                    const std::string &dd_name) {
+  if (::lower_case_table_names == 0) {
+    return binary_match_sql(vsql_name, dd_name);
+  }
+  return folded_match_sql(vsql_name, dd_name);
+}
+
+std::string table_name_match_sql(const std::string &vsql_name,
+                                 const std::string &dd_name) {
+  if (::lower_case_table_names == 0) {
+    return binary_match_sql(vsql_name, dd_name);
+  }
+  return folded_match_sql(vsql_name, dd_name);
+}
+
+std::string column_name_match_sql(const std::string &vsql_name,
+                                  const std::string &dd_name) {
+  return folded_match_sql(vsql_name, dd_name);
+}
+
 const CHARSET_INFO *type_parameter_collation() {
   return &my_charset_utf8mb4_0900_ai_ci;
 }
