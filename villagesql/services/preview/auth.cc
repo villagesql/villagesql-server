@@ -35,6 +35,7 @@
 #include "sql/mem_root_array.h"
 #include "sql/statement/ed_connection.h"
 #include "sql/strfunc.h"
+#include "sql/thd_raii.h"
 #include "sql_string.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
@@ -187,6 +188,19 @@ static bool provision_run(const std::string &sql) {
   {
     Auto_THD provisioner;
     provisioner.thd->security_context()->skip_grants();
+
+    // We do not replicate auto-provisioned accounts. Who exists is decided by
+    // the extension and its identity provider, so each server provisions its
+    // own -- the same way victionary metadata and INSTALL EXTENSION do, which
+    // follow INSTALL PLUGIN (see sql/sql_plugin.cc). A replica without the
+    // extension installed cannot even execute CREATE USER ... IDENTIFIED WITH
+    // that method (ER_PLUGIN_IS_NOT_LOADED), so replicating it would stop
+    // replication rather than merely skew ACLs. This also keeps provisioning
+    // off the GTID path, which an Auto_THD (thread_id 0) cannot own.
+    // TODO(villagesql-beta): make this optional -- a DBA who installs the
+    // extension on every server may want these accounts to replicate.
+    const Disable_binlog_guard binlog_guard(provisioner.thd);
+
     Ed_connection conn(provisioner.thd);
     MYSQL_LEX_STRING s;
     lex_string_strmake(provisioner.thd->mem_root, &s, sql.c_str(),
