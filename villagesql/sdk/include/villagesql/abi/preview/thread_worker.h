@@ -108,6 +108,9 @@ typedef struct {
 // extension's behalf at load time. The var name is descriptor->var_name if set,
 // otherwise
 // "{suffix}_enabled". Setting it ON starts the background thread; OFF stops it.
+// Both are synchronous: ON returns after work_fn(ENABLE), OFF after the thread
+// has exited. Neither holds a server sys var lock, so work_fn may read sys vars
+// and run SQL.
 //
 // Capability name: VEF_PREVIEW_THREAD_WORKER_NAME
 

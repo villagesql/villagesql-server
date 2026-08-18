@@ -86,6 +86,11 @@ struct WorkerState {
   // which outlives the handle, so it stays valid across the teardown.
   std::mutex stop_mu;
 
+  // Serializes worker_start()/worker_stop(). LOCK_global_system_variables is
+  // released around the enabled-var callback, so concurrent SET GLOBALs (or a
+  // SET racing UNINSTALL EXTENSION) can reach the lifecycle code at once.
+  std::mutex lifecycle_mu;
+
   // Current dynamic wakeup config, updated from work_fn return values.
   int current_poll_fd{-1};
   unsigned int current_sleep_ms{0};
@@ -314,6 +319,7 @@ static void thread_main(WorkerState *state) {
 }
 
 static void worker_start(WorkerState *state) {
+  std::lock_guard<std::mutex> lifecycle(state->lifecycle_mu);
   if (state->thread.joinable()) return;
 
   const vef_thread_worker_descriptor_t *desc = state->descriptor;
@@ -331,8 +337,11 @@ static void worker_start(WorkerState *state) {
 }
 
 static void worker_stop(WorkerState *state) {
+  std::lock_guard<std::mutex> lifecycle(state->lifecycle_mu);
   if (!state->thread.joinable()) return;
 
+  // TODO(villagesql-performance): replace this spin with a condition variable
+  // signaled when thread_main publishes the handle.
   vef_thread_handle_t *handle;
   while ((handle = state->handle.load(std::memory_order_acquire)) ==
          kHandlePending) {
@@ -364,11 +373,24 @@ static void on_enabled_change(const char *var_name, bool new_val) {
   }
   if (state == nullptr) return;
 
+  // MySQL calls sys var update functions with LOCK_global_system_variables
+  // held, and worker_start()/worker_stop() block: the worker thread needs that
+  // same mutex to construct its THD, and the extension code it runs needs it to
+  // read a sys var or execute SQL. Release it around the lifecycle call and
+  // re-acquire before returning, the way event_scheduler_update() does for the
+  // event scheduler in sql/sys_vars.cc.
+  //
+  // As with the event scheduler, dropping the mutex means two concurrent SET
+  // GLOBALs can interleave here, so the variable can end up out of sync with
+  // the real worker state; lifecycle_mu keeps the start/stop itself serialized.
+  mysql_mutex_assert_owner(&LOCK_global_system_variables);
+  mysql_mutex_unlock(&LOCK_global_system_variables);
   if (new_val) {
     worker_start(state);
   } else {
     worker_stop(state);
   }
+  mysql_mutex_lock(&LOCK_global_system_variables);
 }
 
 bool on_populate_thread_worker(const PopulateContext &ctx,

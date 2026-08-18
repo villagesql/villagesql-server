@@ -72,6 +72,15 @@ typedef struct {
 } vef_sys_var_change_t;
 
 // Callback invoked after the server writes a new value for a system variable.
+//
+// Runs while the server holds its global system-variable lock, which has two
+// consequences. Reading or writing another of this extension's variables
+// through its storage pointer is safe and immediately visible to other
+// sessions, because the server reads those under the same lock. But anything
+// that re-enters the server to touch a system variable will deadlock on that
+// lock: do not call sys_var get/set, do not execute SQL, and do not wait on a
+// thread that does either. Keep the callback short and non-blocking; use a
+// thread_worker if the work needs SQL or can block.
 typedef void (*vef_sys_var_on_change_func_t)(const vef_sys_var_change_t *);
 
 // TODO(villagesql-beta): rename vef_sys_var_desc_t to vef_sys_var_cc_t
