@@ -1,0 +1,63 @@
+name: Build cmake extension VEB
+description: >
+  Download the SDK, clone a cmake VillageSQL extension, build its .veb against
+  that SDK, and copy it into the dev server's lib/veb. Runs as steps inside the
+  caller's job, so it reads PACKAGE_DIR from the job env and writes EXT_ROOT
+  back to it for the later test steps.
+
+inputs:
+  platform:
+    description: Platform id, used to select the sdk-<platform> artifact.
+    required: true
+  url:
+    description: Extension repository to clone.
+    required: true
+  branch:
+    description: Branch or tag to check out; empty for the repo default.
+    required: false
+    default: ''
+  abi:
+    description: ABI to build against (stable or dev).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download SDK
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: sdk-${{ inputs.platform }}
+        path: artifacts/
+
+    - name: Extract SDK
+      shell: bash
+      run: |
+        mkdir -p sdk
+        tar xzf artifacts/villagesql-extension-sdk-*.tar.gz -C sdk
+        echo "SDK_DIR=$(echo "$PWD"/sdk/villagesql-extension-sdk-*)" >> "$GITHUB_ENV"
+
+    - name: Clone extension
+      shell: bash
+      run: |
+        # Self-hosted runners reuse the workspace; wipe any stale clone.
+        rm -rf extension
+        CLONE_ARGS=(--depth=1)
+        [[ -n "${{ inputs.branch }}" ]] && CLONE_ARGS+=(--branch "${{ inputs.branch }}")
+        git clone "${CLONE_ARGS[@]}" ${{ inputs.url }} extension/
+        # C++ extensions live at the repo root.
+        echo "EXT_ROOT=extension" >> "$GITHUB_ENV"
+
+    - name: Build extension VEB
+      shell: bash
+      run: |
+        NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
+        DEV_ABI_FLAG=""
+        [ "${{ inputs.abi }}" = "dev" ] && DEV_ABI_FLAG="-DVSQL_USE_DEV_ABI=ON"
+        cmake -S "$EXT_ROOT"/ -B ext-build/ \
+          -DVillageSQL_SDK_DIR="$SDK_DIR" \
+          -DCMAKE_BUILD_TYPE=Release \
+          $DEV_ABI_FLAG
+        cmake --build ext-build/ --parallel "$NCORES"
+        # Copy the built VEB into the dev server's extension directory.
+        find ext-build/ -maxdepth 1 -name "*.veb" \
+          -exec cp {} "$PACKAGE_DIR/lib/veb/" \;

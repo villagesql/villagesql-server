@@ -1,0 +1,54 @@
+name: Build cargo extension VEB
+description: >
+  Clone a Rust/cargo VillageSQL extension, build its .veb with cargo-vsql, and
+  copy it into the dev server's lib/veb. Runs as steps inside the caller's job,
+  so it reads PACKAGE_DIR from the job env and writes EXT_ROOT back to it for
+  the later test steps. Needs no SDK - cargo-vsql carries its own.
+
+inputs:
+  url:
+    description: Extension repository to clone.
+    required: true
+  branch:
+    description: Branch or tag to check out; empty for the repo default.
+    required: false
+    default: ''
+  path:
+    description: Subdirectory of the repo holding the extension (Rust examples).
+    required: false
+    default: ''
+  extension:
+    description: Extension name; names the packaged <extension>.veb.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Clone extension
+      shell: bash
+      run: |
+        # Self-hosted runners reuse the workspace; wipe any stale clone.
+        rm -rf extension
+        CLONE_ARGS=(--depth=1)
+        [[ -n "${{ inputs.branch }}" ]] && CLONE_ARGS+=(--branch "${{ inputs.branch }}")
+        git clone "${CLONE_ARGS[@]}" ${{ inputs.url }} extension/
+        # Rust examples live in a subdir of the repo (inputs.path).
+        if [ -n "${{ inputs.path }}" ]; then
+          echo "EXT_ROOT=extension/${{ inputs.path }}" >> "$GITHUB_ENV"
+        else
+          echo "EXT_ROOT=extension" >> "$GITHUB_ENV"
+        fi
+
+    - name: Set up Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+
+    # TODO(villagesql-rust): build the HEAD version of the SDK from the repo.
+    - name: Install cargo-vsql
+      shell: bash
+      run: cargo install --path extension/cargo-vsql --locked
+
+    - name: Build extension VEB
+      shell: bash
+      run: |
+        ( cd "$EXT_ROOT" && cargo vsql package )
+        cp "extension/dist/${{ inputs.extension }}.veb" "$PACKAGE_DIR/lib/veb/"
