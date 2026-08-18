@@ -103,6 +103,14 @@ class SysVarChange {
 //
 //   {sv::INT, "threshold_ms", "Threshold", &g_threshold, 1000, 0, 3600000}
 //       .on_change<&my_on_change>()
+//
+// The callback runs while the server holds its global system-variable lock, so
+// it must stay short and non-blocking. Reading or writing another of this
+// extension's variables through its storage pointer is safe and immediately
+// visible to other sessions. Calling sys var get/set, running SQL, or waiting
+// on a thread that does either deadlocks on that lock; do that work in a
+// thread_worker instead. See vef_sys_var_on_change_func_t in
+// villagesql/abi/preview/sys_var.h.
 struct SysVarDescriptor {
   Type type;
   const char *name;
