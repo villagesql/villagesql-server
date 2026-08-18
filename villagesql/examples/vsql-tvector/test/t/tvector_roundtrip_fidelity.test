@@ -1,0 +1,128 @@
+--source include/villagesql/install_tvector_extension.inc
+
+########################################################################
+#
+# Test: a TVECTOR value survives a client text round-trip unchanged.
+#
+# The rendered form must carry enough digits to parse back to the identical
+# value.
+#
+########################################################################
+
+CREATE TABLE test_fidelity (
+    id INT PRIMARY KEY,
+    original TVECTOR(4),
+    restored TVECTOR(4)
+);
+
+CREATE TABLE test_fidelity_d (
+    id INT PRIMARY KEY,
+    original TVECTOR('dimension=4,type=double'),
+    restored TVECTOR('dimension=4,type=double')
+);
+
+#
+# float: values needing 7+ significant digits, plus the extremes.
+#
+INSERT INTO test_fidelity (id, original) VALUES
+    (1, '[1.2345679,0.1234567,9.876543,-99.12345]'),
+    (2, '[3.1415927,2.7182818,1.6180340,0.5772157]'),
+    (3, '[3.4028235e38,1.1754944e-38,-3.4028235e38,1.4012985e-45]');
+
+#
+# double: values needing 16+ significant digits, plus the extremes.
+#
+INSERT INTO test_fidelity_d (id, original) VALUES
+    (1, '[0.6666666666666666,3.141592653589793,2.718281828459045,1.0778787]'),
+    (2, '[1.7976931348623157e308,2.2250738585072014e-308,-99.12345678901234,0.000123456789012345]');
+
+#
+# Read each rendered value and write it straight back.
+#
+--let $i = 1
+while ($i <= 3)
+{
+  --let $r = query_get_value(SELECT original AS v FROM test_fidelity WHERE id = $i, v, 1)
+  --eval UPDATE test_fidelity SET restored = '$r' WHERE id = $i
+  --inc $i
+}
+--let $i = 1
+while ($i <= 2)
+{
+  --let $r = query_get_value(SELECT original AS v FROM test_fidelity_d WHERE id = $i, v, 1)
+  --eval UPDATE test_fidelity_d SET restored = '$r' WHERE id = $i
+  --inc $i
+}
+
+#
+# A dot product of a vector with itself is non-zero, so comparing the dot
+# product of original and restored against each vector's own gives an exact
+# equality check without needing an elementwise subtraction.
+#
+SELECT id,
+       vsql_tvector.tvector_dot_product(original, restored)
+         = vsql_tvector.tvector_dot_product(original, original) AS float_roundtrips
+FROM test_fidelity ORDER BY id;
+
+SELECT id,
+       vsql_tvector.tvector_dot_product(original, restored)
+         = vsql_tvector.tvector_dot_product(original, original) AS double_roundtrips
+FROM test_fidelity_d ORDER BY id;
+
+#
+# The same property as counts, so a regression fails loudly even if the
+# rendering itself changes.
+#
+SELECT COUNT(*) AS float_rows_that_did_not_round_trip
+FROM test_fidelity
+WHERE vsql_tvector.tvector_dot_product(original, restored)
+   <> vsql_tvector.tvector_dot_product(original, original);
+
+SELECT COUNT(*) AS double_rows_that_did_not_round_trip
+FROM test_fidelity_d
+WHERE vsql_tvector.tvector_dot_product(original, restored)
+   <> vsql_tvector.tvector_dot_product(original, original);
+
+DROP TABLE test_fidelity, test_fidelity_d;
+
+########################################################################
+#
+# Test: the widest values a float can render still fit the decode buffer.
+#
+########################################################################
+
+CREATE TABLE test_widest (
+    id INT PRIMARY KEY,
+    v1 TVECTOR(1),
+    v3 TVECTOR(3),
+    v16 TVECTOR(16)
+);
+
+INSERT INTO test_widest VALUES (1,
+    '[-1.00000075e-36]',
+    '[-1.00000075e-36,-1.00000075e-36,-1.00000075e-36]',
+    '[-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36]');
+
+SELECT id, v1 FROM test_widest;
+SELECT id, v3 FROM test_widest;
+SELECT id, v16 FROM test_widest;
+
+#
+# The same for double, whose longest rendering is 24 characters.
+#
+CREATE TABLE test_widest_d (
+    id INT PRIMARY KEY,
+    v1 TVECTOR('dimension=1,type=double'),
+    v3 TVECTOR('dimension=3,type=double')
+);
+
+INSERT INTO test_widest_d VALUES (1,
+    '[-1.7976931348623157e308]',
+    '[-1.7976931348623157e308,-1.7976931348623157e308,-1.7976931348623157e308]');
+
+SELECT id, v1 FROM test_widest_d;
+SELECT id, v3 FROM test_widest_d;
+
+DROP TABLE test_widest, test_widest_d;
+
+--source include/villagesql/uninstall_tvector_extension.inc
