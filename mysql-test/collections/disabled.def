@@ -165,3 +165,6 @@ rpl_nogtid.rpl_nogtid_rollback_on_anonymous_gtid : Bug#37582501 Replication test
 
 #Daily test failures
 rpl.rpl_row_idempotency : WL#11249 old error - timeout
+
+# VillageSQL 9.7 port
+villagesql/extension/vsql-auth.auth_auto_create : BUG#0 9.7 gtid_mode=ON aborts auto-provisioning in debug builds
