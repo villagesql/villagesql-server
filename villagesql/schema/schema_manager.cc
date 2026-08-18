@@ -641,6 +641,19 @@ bool install_villagesql_schema(THD *thd) {
   return false;
 }
 
+// Bootstrap-thread handler with the guards upgrade_villagesql_schema
+// normally inherits from dd::upgrade::upgrade_system_schemas.
+bool upgrade_villagesql_schema_in_bootstrap(THD *thd) {
+  const Disable_autocommit_guard autocommit_guard(thd);
+  dd::upgrade::Bootstrap_error_handler error_handler;
+  const Disable_binlog_guard disable_binlog(thd);
+  const Disable_sql_log_bin_guard disable_sql_log_bin(thd);
+
+  const bool err = SchemaManager::upgrade_villagesql_schema(thd);
+  clear_table_caches(thd);
+  return dd::end_transaction(thd, err);
+}
+
 }  // namespace
 
 bool SchemaManager::maybe_install_villagesql_schema_on_first_run(
@@ -672,6 +685,15 @@ bool SchemaManager::maybe_install_villagesql_schema_on_first_run(
   delete_optimizer_cost_module();
 
   return false;
+}
+
+bool SchemaManager::run_villagesql_upgrades_standalone() {
+  init_optimizer_cost_module(true);
+  const bool err = bootstrap::run_bootstrap_thread(
+      nullptr, nullptr, &upgrade_villagesql_schema_in_bootstrap,
+      SYSTEM_THREAD_SERVER_UPGRADE);
+  delete_optimizer_cost_module();
+  return err;
 }
 
 bool SchemaManager::upgrade_villagesql_schema(THD *thd) {

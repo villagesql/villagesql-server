@@ -8386,11 +8386,22 @@ static int init_server_components() {
 #endif
 
   bool recreate_non_dd_based_system_view = dd::upgrade::I_S_upgrade_required();
+  bool villagesql_upgraded_in_minimal = false;
   if (!is_help_or_validate_option() && !opt_initialize &&
       !dd::upgrade::no_server_upgrade_required()) {
-    if (opt_upgrade_mode == UPGRADE_MINIMAL)
+    if (opt_upgrade_mode == UPGRADE_MINIMAL) {
       LogErr(WARNING_LEVEL, ER_SERVER_UPGRADE_SKIP);
-    else {
+      // VillageSQL system tables are dictionary state, so their upgrades
+      // run even in MINIMAL mode.
+      if (villagesql::SchemaManager::is_villagesql_upgrade_needed()) {
+        if (villagesql::SchemaManager::run_villagesql_upgrades_standalone()) {
+          LogErr(ERROR_LEVEL, ER_SERVER_UPGRADE_FAILED);
+          unireg_abort(MYSQLD_ABORT_EXIT);
+        }
+        recreate_non_dd_based_system_view = true;
+        villagesql_upgraded_in_minimal = true;
+      }
+    } else {
       init_optimizer_cost_module(true);
       if (bootstrap::run_bootstrap_thread(nullptr, nullptr,
                                           &dd::upgrade::upgrade_system_schemas,
@@ -8429,10 +8440,12 @@ static int init_server_components() {
     Re-create non DD based system views after a) if we upgraded system
     schemas b) I_S system view version is changed and server system views
     were recreated. c) If the database was upgraded. We do not update this
-    in upgrade-minimal mode.
+    in upgrade-minimal mode, except when VillageSQL schema upgrades ran.
+    The VillageSQL I_S view overrides are non DD based and must match the
+    upgraded schema.
    */
   if (!is_help_or_validate_option() && !opt_initialize &&
-      opt_upgrade_mode != UPGRADE_MINIMAL &&
+      (opt_upgrade_mode != UPGRADE_MINIMAL || villagesql_upgraded_in_minimal) &&
       recreate_non_dd_based_system_view) {
     if (dd::init(
             dd::enum_dd_init_type::DD_INITIALIZE_NON_DD_BASED_SYSTEM_VIEWS)) {
