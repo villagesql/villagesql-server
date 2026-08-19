@@ -18,22 +18,25 @@
 #include <sql_const.h>
 
 #include <array>
+#include <cstdio>
 #include <memory>
 #include <new>
-#include <type_traits>
 #include <vector>
 
+#include "custom_column.h"
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
+#include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "storage/innobase/include/univ.i"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/types/util.h"
+#include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
 namespace innodb {
@@ -60,48 +63,39 @@ static const vef_index_profile_fn_binding_t *find_fn_binding(
   return nullptr;
 }
 
-template <typename InvalueType>
 static void fill_custom_invalue(const vef_storage_col_data_t &col_data,
-                                const TypeContext *tc, InvalueType &v) {
+                                const TypeContext *tc, vef_invalue_t &v) {
   v.type = VEF_TYPE_CUSTOM;
   v.is_null = col_data.data == nullptr;
   v.bin_value = col_data.data;
   v.bin_len = col_data.length;
-  if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
-    if (tc != nullptr) {
-      const TypeParameters &params = tc->parameters();
-      v.type_params = {params.count(), params.key_data(), params.value_data()};
-    } else {
-      v.type_params = {0, nullptr, nullptr};
-    }
+  if (tc != nullptr) {
+    const TypeParameters &params = tc->parameters();
+    v.type_params = {params.count(), params.key_data(), params.value_data()};
+  } else {
+    v.type_params = {0, nullptr, nullptr};
   }
 }
 
-template <typename InvalueType>
 static bool call_vdf(const vef_index_profile_fn_binding_t &binding,
                      const TypeContext *tc, const void *const *args,
                      uint32_t nargs, vef_vdf_result_t *vdf_result) {
-  std::array<InvalueType, MAX_PROFILE_FN_ARGS> invalues{};
+  std::array<vef_invalue_t, MAX_PROFILE_FN_ARGS> invalues{};
+  std::array<vef_invalue_t *, MAX_PROFILE_FN_ARGS> invalue_ptrs{};
   for (uint32_t i = 0; i < nargs; i++) {
     const auto *col_data = static_cast<const vef_storage_col_data_t *>(args[i]);
     fill_custom_invalue(*col_data, tc, invalues[i]);
+    invalue_ptrs[i] = &invalues[i];
   }
 
   vef_context_t ctx{};
-  ctx.protocol = binding.protocol;
+  ctx.protocol = veb::vef_server_protocol_version;
 
   vef_vdf_args_t vdf_args{};
   vdf_args.value_count = nargs;
+  vdf_args.values = invalue_ptrs.data();
 
-  if constexpr (std::is_same_v<InvalueType, vef_invalue_v1_t>) {
-    vdf_args.values_v1 = invalues.data();
-    binding.vdf(&ctx, &vdf_args, vdf_result);
-  } else {
-    std::array<vef_invalue_t *, MAX_PROFILE_FN_ARGS> invalue_ptrs{};
-    for (uint32_t i = 0; i < nargs; i++) invalue_ptrs[i] = &invalues[i];
-    vdf_args.values = invalue_ptrs.data();
-    binding.vdf(&ctx, &vdf_args, vdf_result);
-  }
+  binding.vdf(&ctx, &vdf_args, vdf_result);
   return vdf_result->type == VEF_RESULT_VALUE;
 }
 
@@ -126,8 +120,12 @@ static void call_profile_binding(const dict_index_t *index, uint32_t key_pos,
   vef_vdf_result_t vdf_result{};
   vdf_result.error_msg = error_msg;
 
-  ut_a(binding.protocol >= VEF_PROTOCOL_3);
-  bool ok = call_vdf<vef_invalue_t>(binding, tc, args, nargs, &vdf_result);
+  // binding.protocol is the minimum protocol the binding can be called at, so
+  // this server must be new enough to meet it. veb/validate.cc has no
+  // equivalent check, but every binding that reaches here came from an
+  // extension the server already accepted at load time.
+  ut_a(binding.protocol <= veb::vef_server_protocol_version);
+  bool ok = call_vdf(binding, tc, args, nargs, &vdf_result);
   if (!ok) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
