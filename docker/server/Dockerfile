@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1-labs
 # Copyright (c) 2026 VillageSQL Contributors
 #
 # This program is free software; you can redistribute it and/or
@@ -34,7 +33,8 @@ RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/*
 # it needs the syntax directive at the top of this file; without it the build
 # uses whatever Dockerfile parser is compiled into the local daemon, and older
 # ones reject the flag.
-COPY --exclude=docker . /source
+# COPY --exclude=docker . /source
+COPY . /source
 
 # Build and install
 # VSQL_PRE_RELEASE_VERSION defaults to "dev"; set to "" for release builds
