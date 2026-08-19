@@ -174,9 +174,31 @@ if [ "$RUN_INTEGRATION_TESTS" = "true" ]; then
     MYSQL_TEST_CMD="$MYSQL_TEST_CMD --do-suite=${TEST_SUITE}"
   fi
 
-  # Add skip suite if specified
+  # Add skip suite if specified, and always exclude the junit suites.
+  #
+  # Done here rather than by passing a different skip-suite from
+  # .github/workflows/full-test-suite.yml, because that workflow file is read
+  # from the ref the run is DISPATCHED on (main), not from the ref being tested.
+  # Editing it on this branch would have no effect. This script and
+  # .github/actions/run-tests are both taken from the checked-out source, so a
+  # change here does take effect.
+  #
+  # Two traps in the value itself:
+  #   - --skip-suite takes a Perl REGEX, not a comma-separated list.
+  #     "village,junit" matches no suite name and silently skips NOTHING --
+  #     including re-enabling village. Alternation is spelled '|'.
+  #   - MYSQL_TEST_CMD is run through `eval` below, where a bare '|' would be
+  #     read as a shell pipe. Hence the single quotes.
+  # Anchored with ^ so each alternative matches a suite name prefix; '^junit'
+  # also covers junit_combinations.
+  #
+  # Why junit: its tests crash, hang, mismatch and leak ON PURPOSE, to exercise
+  # MTR's own junit XML reporting -- the server carries matching self-destruct
+  # hooks (DBUG_SUICIDE, DBUG_ABORT, trigger_buffer_overrun) inside #ifndef
+  # NDEBUG. They cannot pass in a wide run and never should have been in one.
+  # The suite comes from Percona and does not exist on origin/main.
   if [ -n "$SKIP_SUITE" ]; then
-    MYSQL_TEST_CMD="$MYSQL_TEST_CMD --skip-suite=${SKIP_SUITE}"
+    MYSQL_TEST_CMD="$MYSQL_TEST_CMD --skip-suite='^${SKIP_SUITE}|^junit'"
   fi
 
   # Add big test flag if requested
