@@ -17,6 +17,7 @@ This is VillageSQL Server, a fork of MySQL 8.4.6 LTS that adds VillageSQL Extens
 - [CI Build Cache](.github/CI_BUILD_CACHE.md) - How CI build caching works, known issues, and diagnostics
 - [VEF SDK Overview](villagesql/sdk/README.md) - The extension SDK, protocol versions, and how to stabilize a protocol
 - [VEF API vs ABI](villagesql/sdk/API_ABI.md) - The API/ABI distinction and the rules for evolving each compatibly
+- [Merging Upstream](Docs/merging/HOW_TO_MERGE.md) - How to merge an Oracle MySQL release into VillageSQL, the files that conflict every time, and the checks nothing will remind you to run
 
 **When changing the VEF framework** (anything under `villagesql/sdk/`, especially
 the ABI in `villagesql/sdk/include/villagesql/abi/types.h`), update the SDK
