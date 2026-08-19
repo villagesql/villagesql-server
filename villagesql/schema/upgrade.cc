@@ -63,8 +63,6 @@ bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
   // extension-update apply writes these tables just before
   // dd::reset_tables_and_tablespaces() takes MDL_EXCLUSIVE on every cached
   // table with a one-year lock wait.
-  //
-  // Keep this list in sync with villagesql/schema/villagesql_schema.sql.in.
   const char *const tables[] = {SchemaManager::EXTENSIONS_TABLE_NAME,
                                 SchemaManager::COLUMNS_TABLE_NAME,
                                 SchemaManager::SP_PARAMS_TABLE_NAME,
