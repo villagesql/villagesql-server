@@ -52,12 +52,15 @@ let $total_global_vars=`SELECT COUNT(*)
    WHERE variable_name NOT LIKE 'ndb_%'
    AND variable_name NOT LIKE 'debug_%'
    AND variable_name NOT LIKE '%telemetry%'`;
-# VillageSQL hardcodes an absolute count here (441 at 0.0.3, 442 on main);
-# Percona derives it instead. Percona's derived form is kept: 225 is the number
-# of non-persistable global variables, so variables VillageSQL adds raise both
-# $total_global_vars and the expected persisted count and cancel out -- no
-# VillageSQL-specific adjustment is needed. The 8.4.8 Percona merge resolved this
-# the same way and the test passed unchanged.
+# VillageSQL hardcoded an absolute count here (441 at 0.0.3, 442 on main);
+# Percona derives it instead, and Percona's derived form is kept. The 225 is the
+# number of *non-persistable* global variables, so a variable VillageSQL adds
+# cancels out only if it is persistable: it raises $total_global_vars, and the
+# SET PERSIST loop below raises the actual persisted count by the same one.
+# Read-only VillageSQL variables do not cancel -- they raise $total_global_vars
+# and can never be persisted -- so each one has to be named in the exclusion
+# list below. Four of VillageSQL's five global variables are read-only; only
+# vsql_allow_preview_extensions is persistable.
 let $total_persistent_vars= `SELECT $total_global_vars - 225`;
 
 # If mysqlx is not present, increment the persisted count by $no_mysqlx * count
@@ -110,6 +113,10 @@ let $total_excluded_vars=`SELECT COUNT(*) FROM performance_schema.global_variabl
 'sql_wsenv_uri_prefix',
 'sql_wsenv_lib_name',
 'default_dd_system_storage_engine',
+'villagesql_build_info',
+'villagesql_schema_version',
+'villagesql_server_version',
+'villagesql_vef_server_protocol',
 '_list_end_'
 )`;
 let $total_persistent_vars= `SELECT $total_persistent_vars - $total_excluded_vars`;
@@ -141,6 +148,12 @@ CREATE TABLE global_vars (id INT PRIMARY KEY AUTO_INCREMENT, var_name VARCHAR(64
 #
 # Bug#27534122 - RBR_EXEC_MODE DOES NOT SUPPORT GLOBAL SCOPE
 # jemalloc_profiling cannot be set when jemalloc_detected is OFF
+#
+# VillageSQL: vsql_allow_preview_extensions deliberately rejects SET GLOBAL so
+# that enabling preview extensions always survives a restart; only SET PERSIST
+# is accepted. It reports that with its own error rather than one of the two
+# tolerated below, so it cannot take part in this loop. It is still exercised
+# by the SET PERSIST loop in section 2.
 INSERT INTO global_vars (var_name, var_value) SELECT * FROM
 performance_schema.global_variables WHERE variable_name NOT IN
 ('innodb_monitor_enable',
@@ -148,7 +161,8 @@ performance_schema.global_variables WHERE variable_name NOT IN
 'innodb_monitor_reset',
 'innodb_monitor_reset_all',
 'rbr_exec_mode',
-'jemalloc_profiling');
+'jemalloc_profiling',
+'vsql_allow_preview_extensions');
 
 --let $count_vars= `SELECT COUNT(*) FROM global_vars;`
 --let $var_id=1
