@@ -259,13 +259,21 @@ void vef_auth_request_provision(vef_auth_ctx_t *ctx, const char *account,
   mpvio->vef_auth_info.vef_provision_request = req;
 }
 
+const char *vef_auth_client_plugin(vef_auth_ctx_t *ctx) {
+  // The client-plugin name the client advertised for this connection, cached on
+  // the handshake context. Set before the handler's first read, so it is
+  // available throughout the handler call.
+  const char *p = ctx->mpvio->cached_client_reply.plugin;
+  return p != nullptr ? p : "";
+}
+
 const vef_auth_ops_t g_vef_auth_ops = {
     VEF_PREVIEW_AUTH_ABI_VERSION,  vef_auth_read_packet,
     vef_auth_write_packet,         vef_auth_user_name,
     vef_auth_auth_string,          vef_auth_host_or_ip,
     vef_auth_set_authenticated_as, vef_auth_set_external_user,
     vef_auth_set_active_roles,     vef_auth_account_unknown,
-    vef_auth_request_provision};
+    vef_auth_request_provision,    vef_auth_client_plugin};
 
 }  // namespace
 
@@ -545,6 +553,10 @@ static bool try_vef_authenticate(const vef_auth_cc_t *cc, MPVIO_EXT *mpvio) {
   // driving the handler: the handler's first read_packet triggers the handshake
   // change-plugin request that reads it back via mpvio_client_plugin_name().
   mpvio->vef_auth_info.vef_client_auth_plugin = cc->client_auth_plugin;
+  // Stash the method's accept-offer predicate (may be null) so the negotiation
+  // that first read triggers can ask this method whether the client's offered
+  // plugin is acceptable as-is.
+  mpvio->vef_auth_info.vef_accepts_client_plugin = cc->accepts_client_plugin;
 
   // Run the extension's authenticator over an ops table on this MPVIO_EXT.
   vef_auth_ctx_t ctx{mpvio};

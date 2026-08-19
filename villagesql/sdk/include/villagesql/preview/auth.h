@@ -70,6 +70,14 @@ class AuthContext {
   // The client host or IP.
   const char *host_or_ip() const { return ops_->host_or_ip(ctx_); }
 
+  // The client-side auth plugin the connection actually used (as advertised by
+  // the client), e.g. "mysql_clear_password" or
+  // "authentication_openid_connect_client". Lets a handler pick how to parse
+  // the credential packet by which client plugin produced it. Empty if unknown.
+  const char *client_auth_plugin() const {
+    return ops_->client_auth_plugin(ctx_);
+  }
+
   // Set the effective account the session runs AS (CURRENT_USER()). Required
   // before returning kOk. Mapping to a different account than user_name() is
   // proxying and needs a GRANT PROXY, exactly as on the plugin path.
@@ -174,6 +182,19 @@ class AuthDescriptor {
   // the activate-only default (the DBA owns grants).
   constexpr AuthDescriptor &auto_grant(bool (*callback)()) {
     cc_.auto_grant_roles = callback;
+    return *this;
+  }
+
+  // `accepts_client_plugin`: a callback letting the method accept or reject the
+  // client plugin the client initially offered. Returning true keeps that
+  // plugin; returning false switches the client to client_plugin(). If not set,
+  // the normal client plugin negotiation continues (every offer switches to
+  // client_plugin()). The callback must only inspect the offered name and
+  // return a decision -- no packet I/O, blocking, or side effects (it runs
+  // mid-handshake). See vef_auth_cc_t::accepts_client_plugin for the contract.
+  constexpr AuthDescriptor &accepts_client_plugin(
+      bool (*callback)(const char *offered)) {
+    cc_.accepts_client_plugin = callback;
     return *this;
   }
 

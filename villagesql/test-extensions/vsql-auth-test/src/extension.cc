@@ -19,7 +19,8 @@
 // tokens below. The connecting account "auth_user" proxies to
 // "vsql_auth_test_user"; any other account authenticates as itself. The
 // auto_create / auto_grant opt-ins are exposed as sysvars (default OFF) so
-// tests toggle each independently.
+// tests toggle each independently, and accept_client_plugin (a sysvar) selects
+// one extra client plugin the method accepts as-is during negotiation.
 //
 // Tokens: kToken (no roles); kTokenRoles (stages vsql_role_granted +
 // vsql_role_denied); kTokenQuotedRole (stages a role whose name has a quoted
@@ -44,6 +45,11 @@ constexpr char kToken[] = "vsql-auth-test-token";
 constexpr char kTokenRoles[] = "vsql-auth-test-token-roles";
 constexpr char kTokenQuotedRole[] = "vsql-auth-test-token-quoted-role";
 constexpr char kMappedAccount[] = "vsql_auth_test_user";
+
+// The client plugin this method advertises (via .client_plugin) and reads a
+// verbatim token from. The accept-offer callback below always accepts this
+// name; a test can additionally accept one other client plugin via a sysvar.
+constexpr char kClientPlugin[] = "mysql_clear_password";
 
 using vsql::preview_auth::AuthContext;
 using vsql::preview_auth::AuthResult;
@@ -74,6 +80,25 @@ bool g_auto_create = false;
 bool g_auto_grant = false;
 bool auto_create_enabled() { return g_auto_create; }
 bool auto_grant_enabled() { return g_auto_grant; }
+
+// One extra client plugin (besides kClientPlugin) this method accepts as-is,
+// selected by a test via SET GLOBAL vsql_auth_test.accept_client_plugin. Empty
+// (the default) means the method accepts only kClientPlugin. Set it to another
+// plugin name to prove the server accepts that offer without forcing a switch.
+char *g_accept_client_plugin = nullptr;
+
+// accepts_client_plugin: the server asks this during handshake negotiation
+// which client plugins this method accepts a credential from as-is. Accept
+// kClientPlugin always, plus whatever plugin the test selected via the sysvar;
+// any other offer returns false, so the server switches the client to
+// kClientPlugin and it resends the token verbatim.
+bool accepts_client_plugin(const char *offered) {
+  if (offered == nullptr) return false;
+  if (std::strcmp(offered, kClientPlugin) == 0) return true;
+  const char *extra = g_accept_client_plugin;
+  return extra != nullptr && extra[0] != '\0' &&
+         std::strcmp(offered, extra) == 0;
+}
 
 // The authenticator. Reads one packet (the token), compares it to the fixed
 // test tokens, and on success resolves the session account. Fail closed
@@ -135,19 +160,25 @@ AuthResult authenticate(AuthContext &c) {
 
 constexpr auto AUTH_METHOD =
     vsql::preview_auth::make_auth<&authenticate>("vsql_auth_test")
-        .client_plugin("mysql_clear_password")
+        .client_plugin(kClientPlugin)
         .auto_create(&auto_create_enabled)
         .auto_grant(&auto_grant_enabled)
+        .accepts_client_plugin(&accepts_client_plugin)
         .build();
 vsql::preview_auth::AuthCapability g_auth{AUTH_METHOD};
 
-// Sysvars backing the two opt-ins (default OFF): SET GLOBAL
-// vsql_auth_test.auto_create / .auto_grant lets a test enable each feature.
+// Sysvars backing the opt-ins. auto_create / auto_grant default OFF; SET GLOBAL
+// vsql_auth_test.auto_create / .auto_grant toggles each feature.
+// accept_client_plugin defaults empty (accept only kClientPlugin); set it to
+// another plugin name to have the method accept that offer as-is.
 auto SYS_VARS = sv::make_capability({
     sv::make_bool("auto_create", "Route unknown accounts here for provisioning",
                   &g_auto_create, false),
     sv::make_bool("auto_grant", "Grant token-staged roles to existing accounts",
                   &g_auto_grant, false),
+    sv::make_str("accept_client_plugin",
+                 "One extra client plugin to also accept as-is",
+                 &g_accept_client_plugin, ""),
 });
 
 }  // namespace
