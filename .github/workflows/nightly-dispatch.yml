@@ -115,6 +115,7 @@ jobs:
           echo "workflow_branch=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
 
   start-full-test-release:
+    if: always()
     name: Start full test suite (release)
     needs: collect-info
     runs-on: ubuntu-latest
@@ -138,8 +139,7 @@ jobs:
           echo "Started full-test-suite (release) on $REF" >> "$GITHUB_STEP_SUMMARY"
 
   start-full-test-debug:
-    # Disable for now, demonstrate pattern and use of custom parameters
-    if: false
+    if: always()
     name: Start full test suite (debug)
     needs: collect-info
     runs-on: ubuntu-latest
