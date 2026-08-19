@@ -411,15 +411,21 @@ class Index {
                    result);
   }
 
-  bool get_key_data(IndexScanKey::KeyPartRef key_ref,
+  // Reads the value key_ref points to for the key column at key_pos. key_data
+  // must point at a buffer of key_data->length bytes, at least
+  // get_max_col_len(key_pos); on success key_data->length is the value length.
+  // Must not be called while holding page latches.
+  bool get_key_data(uint32_t key_pos, IndexScanKey::KeyPartRef key_ref,
                     IndexScanKey::KeyPartData *key_data) const {
-    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_ref, key_data,
+    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_pos, key_ref, key_data,
                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
-  bool get_key_ref(IndexScanKey::KeyPartData key_data,
+  // Derives the column reference for a value of the key column at key_pos that
+  // is already in the column store, e.g. a key column handed to insert().
+  bool get_key_ref(uint32_t key_pos, IndexScanKey::KeyPartData key_data,
                    IndexScanKey::KeyPartRef *key_ref) const {
-    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_data, key_ref,
+    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_pos, key_data, key_ref,
                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
