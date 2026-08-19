@@ -33,6 +33,7 @@
 
 #include <villagesql/vsql.h>
 
+#include <charconv>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
@@ -41,6 +42,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 // Largest dimension a TVECTOR may declare. Enforced in resolve_params and
 // int_to_params; also drives kTVectorMaxPersistedLength below for the
@@ -123,6 +125,21 @@ double load_double(const unsigned char *buf) {
   return val;
 }
 
+// Longest std::to_chars output for one element: 15 characters for a float
+// ("-1.00000075e-36") and 24 for a double ("-1.7976931348623157e+308"). We
+// use 32 per element for double to be safe. The float bound was measured
+// exhaustively over all 2^32 bit patterns; We use 17 characters for float to
+// be safe.
+constexpr size_t kMaxFloatChars = 17;
+constexpr size_t kMaxDoubleChars = 32;
+
+// Rendering a whole vector needs dimension*max, one separator between elements,
+// and two brackets. Budgeting max + 1 per element to cover the comma.
+// The caller needs to budget for brackets.
+static size_t chars_per_element(size_t bpe) {
+  return (bpe == 8 ? kMaxDoubleChars : kMaxFloatChars) + 1;
+}
+
 // Returns bytes per element based on the "type" parameter.
 // Absent or "float" -> 4, "double" -> 8.
 size_t bytes_per_element(const std::map<std::string, std::string> &params) {
@@ -186,8 +203,8 @@ bool tvector_resolve_params(std::map<std::string, std::string> &params,
 
   size_t bpe = bytes_per_element(params);
   result->persisted_length = dimension * static_cast<int64_t>(bpe);
-  // %.17g for double can produce up to ~24 chars; use 32 per element to be safe
-  result->max_decode_buffer_length = dimension * (bpe == 8 ? 32 : 16);
+  result->max_decode_buffer_length =
+      dimension * chars_per_element(bpe) + 2;  // +2 for brackets
   return false;
 }
 
@@ -281,31 +298,30 @@ void tvector_to_string(vsql::CustomArgWith<TVectorParams> in,
   if (data.size() != static_cast<size_t>(p.dimension) * bpe) return;
 
   auto buf = out.buffer();
-  size_t pos = 0;
-  if (pos >= buf.size()) return;
-  buf[pos++] = '[';
+  char *w = buf.data();
+  char *const end = w + buf.size();
 
-  for (size_t i = 0; i < static_cast<size_t>(p.dimension); i++) {
-    if (i > 0) {
-      if (pos >= buf.size()) return;
-      buf[pos++] = ',';
-    }
-    int written;
-    if (bpe == 8) {
-      double val = load_double(data.data() + i * bpe);
-      written = snprintf(buf.data() + pos, buf.size() - pos, "%.17g", val);
-    } else {
-      float val = load_float(data.data() + i * bpe);
-      written = snprintf(buf.data() + pos, buf.size() - pos, "%g", val);
-    }
-    if (written < 0 || pos + static_cast<size_t>(written) >= buf.size()) return;
-    pos += static_cast<size_t>(written);
-  }
+  auto put = [&](char ch) {
+    if (w >= end) return true;
+    *w++ = ch;
+    return false;
+  };
+  auto put_value = [&](size_t i) {
+    std::to_chars_result r =
+        (bpe == 8) ? std::to_chars(w, end, load_double(data.data() + i * bpe))
+                   : std::to_chars(w, end, load_float(data.data() + i * bpe));
+    if (r.ec != std::errc()) return true;
+    w = r.ptr;
+    return false;
+  };
 
-  if (pos >= buf.size()) return;
-  buf[pos++] = ']';
+  if (put('[')) return;
+  if (p.dimension > 0 && put_value(0)) return;
+  for (size_t i = 1; i < static_cast<size_t>(p.dimension); i++)
+    if (put(',') || put_value(i)) return;
+  if (put(']')) return;
 
-  out.set_length(pos);
+  out.set_length(static_cast<size_t>(w - buf.data()));
 }
 
 // Compare: (TVECTOR, TVECTOR) -> INT for ORDER BY, indexes.
@@ -448,19 +464,20 @@ static constexpr const char kTVectorTypeName[] = "TVECTOR";
 // tvector_resolve_params.
 constexpr int64_t kTVectorMaxPersistedLength = kTVectorMaxDimension * 8;
 
-constexpr auto TVECTOR = vsql::make_type<kTVectorTypeName>()
-                             .persisted_length(-1)
-                             .max_decode_buffer_length(16)
-                             .max_persisted_length(kTVectorMaxPersistedLength)
-                             .params<TVectorParams, &TVectorParams::parse,
-                                     &TVectorParams::to_strings>()
-                             .int_to_params<&tvector_int_to_params>()
-                             .resolve_params<&tvector_resolve_params>()
-                             .from_string<&tvector_from_string>()
-                             .to_string<&tvector_to_string>()
-                             .compare<&tvector_compare>()
-                             .intrinsic_default_vdf("tvector_intrinsic_default")
-                             .build();
+constexpr auto TVECTOR =
+    vsql::make_type<kTVectorTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(kMaxDoubleChars + 2)  // + 2 for brackets
+        .max_persisted_length(kTVectorMaxPersistedLength)
+        .params<TVectorParams, &TVectorParams::parse,
+                &TVectorParams::to_strings>()
+        .int_to_params<&tvector_int_to_params>()
+        .resolve_params<&tvector_resolve_params>()
+        .from_string<&tvector_from_string>()
+        .to_string<&tvector_to_string>()
+        .compare<&tvector_compare>()
+        .intrinsic_default_vdf("tvector_intrinsic_default")
+        .build();
 
 using namespace vsql;
 
