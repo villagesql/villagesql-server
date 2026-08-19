@@ -1,5 +1,12 @@
 # Setup test to use keyring component
 
+# Same guard as inc/setup_component.inc, where the reasoning is written out.
+if (!$KMS_REGION) {
+  if (!$kms_backend_not_required) {
+    --skip AWS KMS is not configured; set KMS_REGION, KMS_KEY, KMS_AUTH_KEY and KMS_SECRET_ACCESS_KEY to run this suite
+  }
+}
+
 --echo # ----------------------------------------------------------------------
 --echo # Setup
 

@@ -1,6 +1,8 @@
 --source include/have_component_keyring_kms.inc
 --source include/have_debug.inc
 
+# Loads the component but never asks it for a key, so no KMS backend is needed.
+--let $kms_backend_not_required = 1
 --source ../inc/setup_component.inc
 --source include/keyring_tests/mats/database.inc
 --source ../inc/teardown_component.inc

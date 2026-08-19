@@ -1,5 +1,7 @@
 --source include/have_component_keyring_kms.inc
 # Load-Unload test for component_keyring_kms
 
+# Loads the component but never asks it for a key, so no KMS backend is needed.
+--let $kms_backend_not_required = 1
 --source ../inc/setup_component.inc
 --source ../inc/teardown_component.inc

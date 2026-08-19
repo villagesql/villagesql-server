@@ -4,7 +4,31 @@
 # KMS_REGION
 # KMS_KEY
 # KMS_AUTH_KEY
-# KMS_SECURE_ACCESS_KEY
+# KMS_SECRET_ACCESS_KEY
+
+# TODO(villagesql-rebase): test KMS for real. Nothing in this suite has ever run
+# against a live AWS KMS endpoint in VillageSQL, so the skip below hides whatever
+# these tests would say -- including any breakage a Percona merge caused.
+# Provision a KMS key and run the suite properly at least once per rebase rather
+# than letting the skip stand in for a pass.
+#
+# No KMS configured at all means nobody asked for this suite -- it was swept up
+# by --suite=all. Unlike keyring_vault, nothing here checked, because there is
+# nothing to check at load time: the component initialises fine without
+# credentials. The first key operation is an HTTPS call to
+# kms.$KMS_REGION.amazonaws.com (backend/kms.cc), so with KMS_REGION unset that
+# host is unresolvable and every test needing a master key fails -- six of them
+# by crashing a debug server, since InnoDB asserts that a loaded keyring is a
+# working one. A region that is set but wrong still fails loudly, which is what
+# a deliberately configured run wants.
+#
+# Tests that only load the component and never ask it for a key set
+# $kms_backend_not_required and keep running; see load.test and database.test.
+if (!$KMS_REGION) {
+  if (!$kms_backend_not_required) {
+    --skip AWS KMS is not configured; set KMS_REGION, KMS_KEY, KMS_AUTH_KEY and KMS_SECRET_ACCESS_KEY to run this suite
+  }
+}
 
 --echo # ----------------------------------------------------------------------
 --echo # Setup
