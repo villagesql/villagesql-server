@@ -14,6 +14,9 @@ ALTER TABLE t1 MODIFY mycol vsql_complex.COMPLEX;
 
 # DROP COLUMN spelled in different case: the row must go away.
 CREATE TABLE t2 (OtherCol vsql_complex.COMPLEX, keep INT);
+
+--source include/villagesql/query_custom_columns.inc
+
 ALTER TABLE t2 DROP COLUMN OTHERCOL;
 
 --source include/villagesql/query_custom_columns.inc
