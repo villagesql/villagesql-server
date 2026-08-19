@@ -1,6 +1,6 @@
 # VillageSQL 0.0.6
 
-Draft release notes — the release commit will be recorded when 0.0.6 is tagged.
+Draft release notes through commit `44828a4218a`: test: note the lock fix in worker test (#1016).
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
