@@ -10,6 +10,7 @@ call mtr.add_suppression("Server upgrade is required, but skipped");
 
 # Pretend the datadir is at schema version 0.0.5.
 UPDATE villagesql.properties SET value = 'mysql-8.4_0.0.5' WHERE name = 'version';
+SELECT value FROM villagesql.properties WHERE name = 'version';
 
 --let $restart_parameters = restart: --upgrade=MINIMAL
 --source include/restart_mysqld.inc
