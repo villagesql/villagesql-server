@@ -5176,8 +5176,15 @@ error_handling:
       my_error(ER_TABLE_CANT_HANDLE_SPKEYS, MYF(0));
       break;
     case DB_VILLAGESQL_ERROR:
-      ut_ad(ctx->trx->error_state == DB_VILLAGESQL_ERROR);
-      villagesql_error("%s", MYF(0), ctx->trx->detailed_error);
+      if (ctx->trx->error_state == DB_VILLAGESQL_ERROR &&
+          *ctx->trx->detailed_error != 0) {
+        villagesql_error("%s", MYF(0), ctx->trx->detailed_error);
+      } else {
+        villagesql_error(
+            "InnoDB: Custom type operation failed. See server"
+            " error log for details.",
+            MYF(0));
+      }
       break;
     default:
       my_error_innodb(error, table_name, user_table->flags);
