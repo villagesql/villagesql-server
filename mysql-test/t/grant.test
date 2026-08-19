@@ -193,27 +193,27 @@ drop user mysqltest_1@localhost;
 #
 SET NAMES koi8r;
 --character_set koi8r
-CREATE DATABASE О©╫О©╫;
-USE О©╫О©╫;
-CREATE TABLE О©╫О©╫О©╫ (О©╫О©╫О©╫ INT);
+CREATE DATABASE бд;
+USE бд;
+CREATE TABLE таб (кол INT);
 
-CREATE USER О©╫О©╫О©╫О©╫@localhost;
-GRANT SELECT ON О©╫О©╫.* TO О©╫О©╫О©╫О©╫@localhost;
-SHOW GRANTS FOR О©╫О©╫О©╫О©╫@localhost;
-REVOKE SELECT ON О©╫О©╫.* FROM О©╫О©╫О©╫О©╫@localhost;
+CREATE USER юзер@localhost;
+GRANT SELECT ON бд.* TO юзер@localhost;
+SHOW GRANTS FOR юзер@localhost;
+REVOKE SELECT ON бд.* FROM юзер@localhost;
 
-GRANT SELECT ON О©╫О©╫.О©╫О©╫О©╫ TO О©╫О©╫О©╫О©╫@localhost;
-SHOW GRANTS FOR О©╫О©╫О©╫О©╫@localhost;
-REVOKE SELECT ON О©╫О©╫.О©╫О©╫О©╫ FROM О©╫О©╫О©╫О©╫@localhost;
+GRANT SELECT ON бд.таб TO юзер@localhost;
+SHOW GRANTS FOR юзер@localhost;
+REVOKE SELECT ON бд.таб FROM юзер@localhost;
 
-GRANT SELECT (О©╫О©╫О©╫) ON О©╫О©╫.О©╫О©╫О©╫ TO О©╫О©╫О©╫О©╫@localhost;
-SHOW GRANTS FOR О©╫О©╫О©╫О©╫@localhost;
-REVOKE SELECT (О©╫О©╫О©╫) ON О©╫О©╫.О©╫О©╫О©╫ FROM О©╫О©╫О©╫О©╫@localhost;
+GRANT SELECT (кол) ON бд.таб TO юзер@localhost;
+SHOW GRANTS FOR юзер@localhost;
+REVOKE SELECT (кол) ON бд.таб FROM юзер@localhost;
 
 # Revoke does not drop user. Leave a clean user table for the next tests.
-DROP USER О©╫О©╫О©╫О©╫@localhost;
+DROP USER юзер@localhost;
 
-DROP DATABASE О©╫О©╫;
+DROP DATABASE бд;
 --character_set utf8mb4
 SET NAMES latin1;
 
@@ -507,15 +507,15 @@ set @user123="non-existent";
 select * from mysql.db where user=@user123;
 
 set names koi8r;
-create database О©╫О©╫;
-grant select on О©╫О©╫.* to root@localhost;
-select hex(Db) from mysql.db where Db='О©╫О©╫';
+create database бд;
+grant select on бд.* to root@localhost;
+select hex(Db) from mysql.db where Db='бд';
 --let $user = root@localhost
 --source include/show_grants.inc
 flush privileges;
 --source include/show_grants.inc
-drop database О©╫О©╫;
-revoke select on О©╫О©╫.* from root@localhost;
+drop database бд;
+revoke select on бд.* from root@localhost;
 --source include/show_grants.inc
 set names latin1;
 
