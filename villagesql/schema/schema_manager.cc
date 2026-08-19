@@ -88,13 +88,29 @@ class SchemaManagerStatus {
   }
 
   /**
-   * Was a villagesql upgraded needed when starting up. Only valid after
-   * preinit().
+   * Was a villagesql upgraded needed when starting up. Only valid after a
+   * *successful* preinit(); check upgrade_needed_determined() first on any
+   * path that can also run after a failed one.
    */
   static bool get_upgrade_needed() {
     assert(upgrade_needed);
     return *upgrade_needed;
   }
+
+  /**
+   * Has preinit() worked out whether an upgrade is needed?
+   *
+   * False in three distinct situations: before preinit() has run at all; after
+   * a preinit_for_restart() that could not read the installed version; and
+   * under --initialize, where preinit() succeeds without reading anything.
+   * Only the first is a call-ordering bug, which is why get_upgrade_needed()
+   * keeps its assert while callers that can legitimately run in the other two
+   * states ask here first.
+   *
+   * The mtr test villagesql/percona_merge.dd_init_failure_graceful_exit covers
+   * the second case and carries the full history in its header comment.
+   */
+  static bool upgrade_needed_determined() { return upgrade_needed != nullptr; }
 
   /**
    * Record the version of the VillageSQL Schema installed in memory.  This
@@ -149,7 +165,9 @@ class SchemaManagerStatus {
   // init(). Memory is managed via set_version() which handles
   // allocation/deallocation.
   static Semver *version;
-  // Set during preinit() never changed after that.
+  // Set by set_version() during a successful preinit(), and never changed
+  // after that. Stays null if preinit() fails before reading the installed
+  // version, so it is not enough to know that preinit() has been called.
   static bool *upgrade_needed;
 };
 
@@ -520,7 +538,12 @@ bool preinit_for_restart(THD *thd) {
   Semver current_villagesql_version;
   if (SchemaManagerStatus::read_villagesql_version(
           thd, &current_villagesql_version)) {
-    return true;  // Error reading version
+    // Returning here leaves upgrade_needed undetermined, because set_version()
+    // below is its only writer. Startup has to cope with that rather than treat
+    // it as impossible: dd::init() reports this failure up to
+    // init_server_components(), whose failure branch still asks whether an
+    // upgrade was under way. See SchemaManager::is_villagesql_upgrade_needed().
+    return true;
   }
 
   SchemaManagerStatus::set_version(current_villagesql_version);
@@ -540,6 +563,11 @@ bool SchemaManager::preinit(dd::enum_dd_init_type dd_init) {
         nullptr, nullptr, &preinit_for_restart, SYSTEM_THREAD_DD_INITIALIZE);
   }
 
+  // --initialize builds the schema from scratch, so there is no installed
+  // version to read and nothing to upgrade; init() records the version later.
+  // Note that this reports success while leaving upgrade_needed undetermined:
+  // "preinit() succeeded" is therefore not on its own enough to make
+  // get_upgrade_needed() safe to call.
   return false;
 }
 
@@ -784,6 +812,27 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
 }
 
 bool SchemaManager::is_villagesql_upgrade_needed() {
+  // This feeds dd::upgrade::no_server_upgrade_required(), which Percona's
+  // PS-8257 code calls on the dd::init(DD_RESTART_OR_UPGRADE) *failure* path
+  // (see init_server_components()). Reaching it with the answer undetermined is
+  // therefore normal, not a bug: preinit_for_restart() returns early when the
+  // DD cannot be read -- a mismatched --lower_case_table_names, or any
+  // bootstrap failure ahead of it -- so set_version() never runs.
+  //
+  // Report false there. False means "VillageSQL is not asking for the server
+  // upgrade machinery", which is the correct claim when we never established
+  // that it should: the term drops out of that predicate's disjunction, leaving
+  // the failure path to behave exactly as it does upstream rather than
+  // asserting on a value we never computed. Callers that run only after a
+  // successful preinit() are unaffected, so behaviour can only differ where the
+  // old code aborted.
+  //
+  // The mtr test villagesql/percona_merge.dd_init_failure_graceful_exit pins
+  // this and is the place with the full history: which Percona change added the
+  // caller, which two upstream tests trip over it, and why it is reproducible
+  // on every platform.
+  if (!SchemaManagerStatus::upgrade_needed_determined()) return false;
+
   return SchemaManagerStatus::get_upgrade_needed();
 }
 
@@ -803,6 +852,10 @@ void SchemaManagerStatus::set_version(const Semver &ver) {
   delete version;
   version = new Semver(ver);
 
+  // First call wins. set_version() also runs later, after an upgrade has been
+  // applied, and the verdict reached at startup must not be rewritten by those
+  // callers. Being the only writer is also what makes a non-null
+  // upgrade_needed mean exactly "a preinit path got this far".
   if (!upgrade_needed) {
     // Treat as an upgrade when the stored version is invalid, when its code
     // base differs from the build (including legacy stored versions that

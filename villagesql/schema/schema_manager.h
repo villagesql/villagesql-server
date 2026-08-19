@@ -135,6 +135,12 @@ class SchemaManager {
   /**
    * Returns true iff the version of the schema stored in the database
    * is less than the version of the binary currently running.
+   *
+   * Safe to call at any point during startup. Returns false when startup never
+   * established an answer, which happens on the dd::init() failure path and
+   * under --initialize; see the definition for why, and the mtr test
+   * villagesql/percona_merge.dd_init_failure_graceful_exit for the case that
+   * made it matter.
    */
   static bool is_villagesql_upgrade_needed();
 
