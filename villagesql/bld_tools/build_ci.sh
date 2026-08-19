@@ -62,8 +62,20 @@ CMAKE_FLAGS=(
     #
     # Turning them off is a deliberate scope decision, not just a build fix:
     # enabling MyRocks et al. means vendoring three new dependencies and taking
-    # on the rocksdb/percona_innodb test suites. Revisit as its own change. The
-    # corresponding suites skip, which is expected rather than a regression.
+    # on the rocksdb/percona_innodb test suites. Revisit as its own change.
+    #
+    # Most of the affected tests notice the missing feature and skip on their
+    # own -- the rocksdb suite does, and component_keyring_kmip does once
+    # dynamic_loading.test guards on the KMIP component instead of the file one
+    # (it was the only one of the 28 that did not skip). percona.coredump is
+    # the remaining exception: it guards only on ARM/valgrind/ASAN, so with
+    # coredumper compiled out it execs mysqld --coredumper, never matches the
+    # pattern it greps for, and hangs to the 900s timeout -- three times over,
+    # with retries. It still needs a guard of its own; there is no
+    # include/have_coredumper.inc to source, and --coredumper is registered
+    # unconditionally in mysqld.cc so its presence proves nothing.
+    #
+    # TODO(villagesql-rebase): reenable in CI
     "-DWITH_ROCKSDB=0"
     "-DWITH_COREDUMPER=OFF"
     "-DWITHOUT_COMPONENT_KEYRING_KMIP=ON"

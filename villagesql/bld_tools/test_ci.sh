@@ -111,6 +111,13 @@ TEST_SUITE="${TEST_SUITE:-village}"
 SOURCE_DIR="${SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-${SOURCE_DIR}/../build}"
 
+# Tests that cannot pass against a build_ci.sh binary because the feature they
+# exercise is compiled out, and that have no guard of their own to notice.
+# Resolved to an absolute path from this script's own location: MTR searches
+# several directories for a bare filename, and callers may point SOURCE_DIR
+# somewhere else entirely.
+SKIP_TEST_LIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/mysql-test/collections/disabled-villagesql-ci.list"
+
 # Validate suite selection options
 if [ "$RUN_ALL_SUITES" = "true" ] && [ "$TEST_SUITE" != "village" ]; then
   echo "ERROR: Cannot specify both --all-suites and --suite"
@@ -157,6 +164,7 @@ if [ "$RUN_INTEGRATION_TESTS" = "true" ]; then
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --nounit-tests"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --force"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --max-test-fail=0"
+  MYSQL_TEST_CMD="$MYSQL_TEST_CMD --skip-test-list=${SKIP_TEST_LIST}"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --xml-report=${XML_REPORT_FILE}"
 
   # Add suite selection

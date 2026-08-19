@@ -1,0 +1,25 @@
+# Tests skipped in VillageSQL CI, passed to mysql-test-run.pl via
+# --skip-test-list from villagesql/bld_tools/test_ci.sh. This is in addition to
+# tests disabled by the normal disabled.def files.
+#
+# Prefer not to add entries here. VillageSQL's convention, established by the
+# 8.4.8 merge, is to skip at the feature level -- build_ci.sh turns the feature
+# off and the suite notices and skips itself -- or to guard inside the test.
+# This file is only for tests that neither mechanism reaches, and every entry
+# should be a bug worth fixing rather than a permanent exclusion.
+#
+# Entry format is fixed by mysql-test/lib/mtr_cases.pm and validated on load, so
+# a malformed line fails the whole run rather than being ignored:
+#
+#   <suite>.<test> [@platform|@!platform] : <BUG|WL>#<XXXX> [<comment>]
+#
+# The <BUG|WL>#<digits> token is mandatory and the trailing comment must be 79
+# characters or fewer. That requirement is upstream Oracle's, unchanged since at
+# least mysql-8.4.0 -- not something Percona or VillageSQL added -- so entries
+# need a tracking number even when the cause is fully understood.
+#
+# BUG#0 means "no tracking issue filed yet". It satisfies the validator without
+# pointing at someone else's bug database. Replace it with a real number when
+# one exists; grep for BUG#0 to find entries still owed an issue.
+
+percona.coredump : BUG#0 Placeholder id; no WITH_COREDUMPER=OFF guard, hangs to 900s timeout

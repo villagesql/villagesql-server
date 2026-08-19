@@ -29,6 +29,12 @@ fi
 # and nothing that would switch curl to bundled), so libcurl needs its headers.
 # To drop any of these instead, turn the corresponding option off explicitly in
 # build_ci.sh rather than removing the package and rediscovering this.
+#
+# libxml-parser-perl is a test dependency rather than a build one: the
+# component_audit_log_filter suite validates its XML output through a Perl
+# helper (validate_logs_format.inc) that uses XML::Parser. The suite has no
+# guard for the module being absent, so without the package every test in it
+# fails outright instead of skipping.
 APT_OPTS=(-o Acquire::Retries=5)
 $SUDO apt-get "${APT_OPTS[@]}" update
 $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
@@ -54,6 +60,7 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     libsasl2-modules-gssapi-mit \
     libssl-dev \
     libtirpc-dev \
+    libxml-parser-perl \
     libz-dev \
     make \
     openssl \
