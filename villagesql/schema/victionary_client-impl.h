@@ -91,6 +91,8 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     // Duplicate canonical keys are a datadir fault, not a code bug, so
     // fail without asserting. Keep scanning so one failed startup reports
     // every conflict.
+    // TODO(villagesql) collect all duplicate keys and report them in one
+    // error message
     auto inserted = m_committed.emplace(
         key_str, std::make_shared<EntryType>(std::move(entry)));
     if (!inserted.second) {
