@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1505,8 +1506,36 @@ static bool setup_utility_user_dynamic_privileges() {
   std::string privileges(utility_user_dynamic_privileges);
 
   // check if the string is valid
-  std::regex validate_regex("(\\s*[A-Za-z0-9_]+\\s*,*)*\\s*[A-Za-z0-9_]+\\s*",
-                            std::regex::nosubs);
+  //
+  // Accepts exactly what it has always accepted: one or more tokens, separated
+  // by runs of commas and/or whitespace, with optional surrounding whitespace.
+  // Note that a separator need not contain a comma -- "A B" is a valid value,
+  // and the split below then yields the single privilege name "A B".
+  //
+  // The shape of the pattern is load-bearing. Percona's original,
+  // (\s*TOKEN\s*,*)*\s*TOKEN\s*, is ambiguous twice over: the trailing TOKEN
+  // can equally be matched by one more iteration of the group, and ,* lets a
+  // separator match nothing, so a run of token characters can be split across
+  // iterations as well. Accepting a value is unaffected -- the first parse
+  // found wins -- but *rejecting* one means proving no parse exists, so the
+  // engine has to try every such decomposition. That is exponential in the
+  // token lengths. Requiring a non-empty separator, and splitting it into the
+  // comma-bearing and whitespace-only cases (disjoint on whether a comma is
+  // present), gives every input a unique parse, so rejection fails fast.
+  //
+  // Deliberately one pattern for every platform, not an #ifdef. libc++ turns
+  // the old pattern into a crash, by throwing regex_error(error_complexity) out
+  // of this function to std::terminate; libstdc++ has no such limit and instead
+  // performs the whole exponential search. The throw is a backstop doing its
+  // job, so the platform that looks healthy is really the unguarded one --
+  // there is no build on which the old pattern is the better choice. The two
+  // forms accept the same language, verified by exhaustive comparison over the
+  // four character classes they can distinguish, so nothing is given up by
+  // using one everywhere. See
+  // villagesql/percona_merge.utility_user_dynamic_privileges_*.
+  std::regex validate_regex(
+      "\\s*[A-Za-z0-9_]+((\\s*,+\\s*|\\s+)[A-Za-z0-9_]+)*\\s*",
+      std::regex::nosubs);
   if (!std::regex_match(privileges, validate_regex)) {
     sql_print_error(
         "Wrong format of --utility-user-dynamic-privileges parameter value: %s",

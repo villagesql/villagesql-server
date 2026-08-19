@@ -1,0 +1,31 @@
+# Pins: a whitespace-only separator in --utility-user-dynamic-privileges is
+# accepted, and the value becomes one privilege name containing the space.
+#
+# Guards a defect in the Percona 8.4.10 merge, found while burning down
+# percona.utility_user (see percona-merge/test-burndown/tests/percona.utility_user.md).
+#
+# The companion test, utility_user_dynamic_privileges_malformed, covers the
+# rejecting side. This one exists because the validation regex there had to be
+# rewritten to remove an ambiguity that aborted the server, and the accepted
+# language must come through that rewrite unchanged. Percona's pattern separated
+# tokens with \s*,*\s*, where ,* may match nothing -- so whitespace alone has
+# always been a valid separator. A rewrite that requires a comma looks correct
+# against every value percona.utility_user uses, because all of its multi-token
+# values are comma separated, and silently narrows the option's accepted input.
+# That mistake was actually made here, hence this test.
+#
+# The value cannot be passed via $restart_parameters, which splits on whitespace
+# regardless of quoting, so it is set in the -master.opt file instead.
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_only_after = CURRENT_TEST: villagesql/percona_merge.utility_user_dynamic_privileges_whitespace
+
+--let $assert_text = the space-separated value is accepted as a single privilege name
+--let $assert_select = in use with dynamic privileges 'SYSTEM_USER PRIVILEGE_ALPHA'\.
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--let $assert_text = and it is not reported as a format error
+--let $assert_select = Wrong format of --utility-user-dynamic-privileges
+--let $assert_count = 0
+--source include/assert_grep.inc

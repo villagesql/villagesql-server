@@ -1,0 +1,68 @@
+# Pins: a malformed --utility-user-dynamic-privileges value must be rejected
+# with an error at startup, promptly, on every platform.
+#
+# Guards a defect in the Percona 8.4.10 merge, found while burning down
+# percona.utility_user (see percona-merge/test-burndown/tests/percona.utility_user.md).
+#
+# The option is validated in setup_utility_user_dynamic_privileges() with a
+# std::regex. The pattern Percona shipped,
+#
+#     (\s*[A-Za-z0-9_]+\s*,*)*\s*[A-Za-z0-9_]+\s*
+#
+# is ambiguous twice over: the trailing token can equally be matched by one more
+# iteration of the group, and ,* lets a separator be empty, so a run of token
+# characters can be split across iterations too. A value that has to be
+# *rejected* therefore makes the engine try every such decomposition, which is
+# exponential in the token lengths. libc++ gives up by throwing regex_error(error_complexity);
+# nothing caught it, so it escaped the function and terminated the server with
+# SIGABRT. libstdc++ performs the whole search instead of throwing, so upstream
+# percona.utility_user kept passing on Linux and pinned none of this.
+#
+# The values below carry several long tokens on purpose: the ambiguous pattern
+# cannot finish on any naive backtracking engine, so a regression shows up on
+# Linux as well, not only on macOS.
+
+--source include/no_valgrind_without_big.inc
+
+--let $error_log_file = $MYSQLTEST_VARDIR/tmp/utility_user_dyn_priv.err
+--let $do_not_echo_parameters = 1
+
+--connection default
+--source include/shutdown_mysqld.inc
+
+--echo #
+--echo # A valid list of several long privilege names is still accepted.
+--echo #
+--let $restart_parameters = "restart:--log-error=$error_log_file --utility-user-dynamic-privileges='SYSTEM_USER,PRIVILEGE_ALPHA,PRIVILEGE_BRAVO,PRIVILEGE_CHARLIE,PRIVILEGE_DELTA,PRIVILEGE_ECHO'"
+--source include/start_mysqld.inc
+--connection default
+--source include/shutdown_mysqld.inc
+
+--let ABORT_ON = NOT_FOUND
+--let SEARCH_FILE = $error_log_file
+--let SEARCH_PATTERN = in use with dynamic privileges 'SYSTEM_USER,PRIVILEGE_ALPHA,PRIVILEGE_BRAVO,PRIVILEGE_CHARLIE,PRIVILEGE_DELTA,PRIVILEGE_ECHO'\.
+--let PRINT_SEARCH_RESULT = 1
+--source include/search_pattern_in_file.inc
+--remove_file $error_log_file
+
+--echo #
+--echo # The same list with a trailing comma is rejected, and the server neither
+--echo # aborts nor stalls doing it.
+--echo #
+--let $restart_parameters = "restart:--log-error=$error_log_file --utility-user-dynamic-privileges='SYSTEM_USER,PRIVILEGE_ALPHA,PRIVILEGE_BRAVO,PRIVILEGE_CHARLIE,PRIVILEGE_DELTA,PRIVILEGE_ECHO,'"
+--source include/start_mysqld.inc
+--connection default
+--source include/shutdown_mysqld.inc
+
+--let ABORT_ON = NOT_FOUND
+--let SEARCH_FILE = $error_log_file
+--let SEARCH_PATTERN = Wrong format of --utility-user-dynamic-privileges parameter value: SYSTEM_USER,PRIVILEGE_ALPHA,PRIVILEGE_BRAVO,PRIVILEGE_CHARLIE,PRIVILEGE_DELTA,PRIVILEGE_ECHO,
+--let PRINT_SEARCH_RESULT = 1
+--source include/search_pattern_in_file.inc
+--remove_file $error_log_file
+
+--let $error_log_file =
+--let $restart_parameters =
+--let $do_not_echo_parameters =
+
+--source include/start_mysqld.inc
