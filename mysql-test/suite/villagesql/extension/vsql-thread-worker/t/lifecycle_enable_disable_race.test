@@ -6,7 +6,9 @@
 # that same mutex to construct its THD. Holding the mutex across the wait made
 # an OFF that landed in the worker's startup window deadlock permanently: the
 # server stopped answering any query needing the mutex, and the test only failed
-# once the MTR testcase timeout expired.
+# once the MTR testcase timeout expired. on_enabled_change() now releases the
+# mutex around the start/stop and re-acquires it before returning, so the wait
+# no longer happens under it and a work function may read sys vars and run SQL.
 #
 # Verifies:
 # - Rapid ON/OFF cycles complete, with no wait between them
