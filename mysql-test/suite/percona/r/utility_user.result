@@ -52,6 +52,7 @@ mysql
 performance_schema
 sys
 test
+villagesql
 CREATE USER 'frankjr'@'localhost' IDENTIFIED BY 'password';
 GRANT ALL ON mysql.* TO 'frankjr'@'localhost';
 REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'frankjr'@'localhost';
