@@ -13,7 +13,16 @@ INSERT INTO villagesql.custom_columns
 (db_name, table_name, column_name, extension_name, extension_version,
 type_name, type_parameters)
 VALUES ('db1', 't1', 'MYCOL', 'test_ext', '1.0.0', 'COMPLEX', '{}');
+INSERT INTO villagesql.custom_columns
+(db_name, table_name, column_name, extension_name, extension_version,
+type_name, type_parameters)
+VALUES ('db1', 't2', 'Other', 'test_ext', '1.0.0', 'COMPLEX', '{}');
+INSERT INTO villagesql.custom_columns
+(db_name, table_name, column_name, extension_name, extension_version,
+type_name, type_parameters)
+VALUES ('db1', 't2', 'OTHER', 'test_ext', '1.0.0', 'COMPLEX', '{}');
 # restart_abort: --datadir=MYSQL_TMP_DIR/dup_datadir
-include/wait_for_pattern_in_file.inc [Duplicate canonical key]
-# Error log reports the duplicate canonical key
+include/wait_for_pattern_in_file.inc [Duplicate canonical key 'db1.t1.mycol']
+include/wait_for_pattern_in_file.inc [Duplicate canonical key 'db1.t2.other']
+# Error log reports both duplicate canonical keys
 # restart

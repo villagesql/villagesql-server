@@ -89,7 +89,8 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     std::string key_str = entry.key().str();
 
     // Duplicate canonical keys are a datadir fault, not a code bug, so
-    // fail without asserting.
+    // fail without asserting. Keep scanning so one failed startup reports
+    // every conflict.
     auto inserted = m_committed.emplace(
         key_str, std::make_shared<EntryType>(std::move(entry)));
     if (!inserted.second) {
@@ -97,7 +98,8 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
               "Duplicate canonical key '%s' while loading %s.%s; "
               "remove or rename one of the conflicting rows",
               key_str.c_str(), schema_name, table_name);
-      return true;
+      error = true;
+      continue;
     }
     loaded_count++;
   }
