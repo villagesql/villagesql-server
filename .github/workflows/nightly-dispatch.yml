@@ -12,6 +12,8 @@ name: Nightly Dispatch
 #
 # Suites are started with `gh workflow run`, NOT `uses:`, so each is a
 # genuinely separate workflow run with its own run ID and artifact namespace.
+# These jobs never check out the repo, so `gh` has no git remote to infer from;
+# every job that calls `gh` must set `GH_REPO`.
 #
 # `workflow_dispatch` is exempt from the GITHUB_TOKEN recursion guard
 # ("workflow_dispatch and repository_dispatch events always create workflow
@@ -123,6 +125,7 @@ jobs:
       - name: Start full-test-suite (release)
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           REF: ${{ needs.collect-info.outputs.ref }}
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
@@ -147,6 +150,7 @@ jobs:
       - name: Start full-test-suite (debug)
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           REF: ${{ needs.collect-info.outputs.ref }}
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
