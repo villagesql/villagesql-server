@@ -24,8 +24,8 @@
 #                       (default: the copy in this script's own source tree)
 #
 # Testable locally:
-#   villagesql/bld_matrix/json_version.sh | jq .
 #   VSQL_VERSION_FILE=/tmp/version villagesql/bld_matrix/json_version.sh
+#   villagesql/bld_matrix/json_version.sh | jq .
 
 set -euo pipefail
 
