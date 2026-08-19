@@ -1,5 +1,6 @@
 # A VEF auth method decides which client-side auth plugins it accepts as-is. The
-# vsql_auth_test method pins mysql_clear_password; SET GLOBAL
+# vsql_auth_test method pins mysql_clear_password (its "pin" = the client plugin
+# the server switches an unaccepted client to); SET GLOBAL
 # vsql_auth_test.accept_client_plugin names one extra plugin it also accepts
 # (empty by default = accept only the pin). This test drives real logins and
 # checks whether the server accepts the client's offered plugin or forces a
@@ -65,7 +66,7 @@ SET GLOBAL vsql_auth_test.accept_client_plugin = 'caching_sha2_password';
 --echo # cleartext client authenticates again.
 --echo #
 SET GLOBAL vsql_auth_test.accept_client_plugin = '';
---exec $MYSQL --enable_cleartext_plugin --user=auth_user --password=vsql-auth-test-token -e "SELECT CURRENT_USER()"
+--exec $MYSQL --enable_cleartext_plugin --user=auth_user --password=vsql-auth-test-token -e "SELECT CURRENT_USER(), @@external_user"
 
 --echo #
 --echo # Decoy path: the accept decision is consulted for the single auto-create

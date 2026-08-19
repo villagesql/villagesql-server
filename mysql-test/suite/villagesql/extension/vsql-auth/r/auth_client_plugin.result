@@ -41,8 +41,8 @@ ERROR 1045 (28000): Access denied for user 'auth_user'@'localhost' (using passwo
 # cleartext client authenticates again.
 #
 SET GLOBAL vsql_auth_test.accept_client_plugin = '';
-CURRENT_USER()
-vsql_auth_test_user@%
+CURRENT_USER()	@@external_user
+vsql_auth_test_user@%	auth_user
 #
 # Decoy path: the accept decision is consulted for the single auto-create
 # method too. Opt the method into unknown accounts, then a strict pin

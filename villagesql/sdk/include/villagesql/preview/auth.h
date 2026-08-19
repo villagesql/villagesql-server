@@ -185,13 +185,13 @@ class AuthDescriptor {
     return *this;
   }
 
-  // `accepts_client_plugin`: which client plugins this method can parse a
-  // credential from as-is; the server accepts an offer this returns true for
-  // without switching to client_plugin(). Optional -- unset switches every
-  // offer to client_plugin(). Return true for a token-framing plugin whose
-  // payload this method decodes (and typically client_plugin() itself). Must be
-  // a pure predicate; see vef_auth_cc_t::accepts_client_plugin for the
-  // contract.
+  // `accepts_client_plugin`: a callback letting the method accept or reject the
+  // client plugin the client initially offered. Returning true keeps that
+  // plugin; returning false switches the client to client_plugin(). If not set,
+  // the normal client plugin negotiation continues (every offer switches to
+  // client_plugin()). The callback must only inspect the offered name and
+  // return a decision -- no packet I/O, blocking, or side effects (it runs
+  // mid-handshake). See vef_auth_cc_t::accepts_client_plugin for the contract.
   constexpr AuthDescriptor &accepts_client_plugin(
       bool (*callback)(const char *offered)) {
     cc_.accepts_client_plugin = callback;
