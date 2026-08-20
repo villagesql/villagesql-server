@@ -91,17 +91,19 @@ class SysVarChange {
   vef_invalue_t v_;
 };
 
-// Aggregate descriptor for a single system variable. Use brace-init:
+// Aggregate descriptor for a single system variable. Construct one with the
+// type-specific factory functions declared below -- make_bool(), make_int(),
+// make_double(), make_str() -- not by brace-init: the storage pointer and the
+// default value live in an anonymous union whose first member is the bool pair,
+// so a braced initializer list cannot reach the int, double or string members.
 //
-//   {sv::BOOL,   "enabled",      "Enable feature",   &g_enabled,   true}
-//   {sv::INT,    "threshold_ms", "Threshold in ms",  &g_threshold, 1000, 0,
-//   3600000} {sv::DOUBLE, "ratio",        "Ratio", &g_ratio,     1.0,
-//   0.0, 10.0} {sv::STR,    "log_file",     "Log file path",    &g_log_file,
-//   "/tmp/myext.log"}
+//   sv::make_int("threshold_ms", "Threshold in ms", &g_threshold, 1000, 0,
+//                3600000)
 //
-// To register an on_change callback, use .on_change<&fn>() on the descriptor:
+// To register an on_change callback, chain .on_change<&fn>() onto the
+// descriptor a factory returns:
 //
-//   {sv::INT, "threshold_ms", "Threshold", &g_threshold, 1000, 0, 3600000}
+//   sv::make_int("threshold_ms", "Threshold", &g_threshold, 1000, 0, 3600000)
 //       .on_change<&my_on_change>()
 //
 // The callback runs while the server holds its global system-variable lock, so
