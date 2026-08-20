@@ -391,7 +391,9 @@ bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
   if (from_version < version_005) {
     if (upgrade::upgrade_villagesql_from_0_0_4_to_0_0_5(thd)) return true;
   }
-  // Upgrade from 0.0.5 to 0.0.6: convert system tables to utf8mb4_bin
+  // Upgrade from 0.0.5 to 0.0.6: convert system tables to utf8mb4_bin and
+  // disable persistent InnoDB statistics on the system tables so the background
+  // stats thread stops taking MDL on them.
   Semver version_006;
   version_006.from_components(0, 0, 6, from_version.code_base());
   if (from_version < version_006) {

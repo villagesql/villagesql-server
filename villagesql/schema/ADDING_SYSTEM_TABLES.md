@@ -14,12 +14,19 @@ CREATE TABLE IF NOT EXISTS villagesql.your_table (
   data_field VARCHAR(64) NOT NULL COMMENT 'Data field',
   PRIMARY KEY (key_field)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-ROW_FORMAT=DYNAMIC
+ROW_FORMAT=DYNAMIC STATS_PERSISTENT=0
 COMMENT='Description of your table';
 ```
 
 **Important**: Use VARCHAR(64) for string fields in keys to be consistent with other VillageSQL tables.
 This is because there's a limit on key size that affects system tables.
+
+**Important**: Include `STATS_PERSISTENT=0`, as the `mysql.*` system tables do.
+System tables are small, so a single write puts them over InnoDB's 10%-modified
+threshold for background statistics recalculation, and the stats thread takes
+MDL on the table. During startup that MDL can collide with
+`dd::reset_tables_and_tablespaces()`, which locks every cached table with a
+one-year lock wait — losing that race hangs the server on boot.
 
 ### Create Entry and Key Structs (villagesql/schema/systable/your_table.h)
 

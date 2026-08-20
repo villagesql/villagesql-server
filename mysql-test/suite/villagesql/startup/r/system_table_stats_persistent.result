@@ -1,0 +1,16 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
+# No villagesql system table may leave persistent statistics enabled
+SELECT COUNT(*) AS tables_with_persistent_stats
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+  AND t.options NOT LIKE '%stats_persistent=0%';
+tables_with_persistent_stats
+0
+# Sanity check: the query above matched a non-empty set of tables
+SELECT COUNT(*) > 0 AS villagesql_tables_present
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql';
+villagesql_tables_present
+1
