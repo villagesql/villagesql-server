@@ -235,7 +235,7 @@ static bool dummy_parse_options(const vef_index_param_t *params, uint32_t count,
     const char *key = params[i].key;
     const char *val = params[i].value;
     char *end;
-    if (strcmp(key, "M") == 0) {
+    if (strcmp(key, "m") == 0) {
       unsigned long v = strtoul(val, &end, 10);
       if (*end != '\0' || v == 0 || v > 65536) {
         snprintf(error_msg, error_msg_len,
@@ -251,7 +251,7 @@ static bool dummy_parse_options(const vef_index_param_t *params, uint32_t count,
         return true;
       }
       out->ef_construction = static_cast<uint32_t>(v);
-    } else {
+    } else if (strcmp(key, "label") != 0 && strcmp(key, "mode") != 0) {
       snprintf(error_msg, error_msg_len, "unknown option '%s'", key);
       return true;
     }

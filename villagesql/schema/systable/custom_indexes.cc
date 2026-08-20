@@ -223,13 +223,13 @@ std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
   // deterministic canonical serialization order.
   for (const IndexWithParam &p : params) {
     std::string key(p.key.str, p.key.length);
-    Json_dom_ptr val;
-    if (p.is_string) {
-      val.reset(new (std::nothrow) Json_string(
-          std::string(p.value.str.str, p.value.str.length)));
-    } else {
-      val.reset(new (std::nothrow) Json_uint(p.value.num));
-    }
+    // TypeParameters::from_json() only accepts quoted string values (per its
+    // documented contract), so encode numeric WITH-clause values as JSON
+    // strings too, rather than bare JSON numbers.
+    std::string value = p.is_string
+                            ? std::string(p.value.str.str, p.value.str.length)
+                            : std::to_string(p.value.num);
+    Json_dom_ptr val(new (std::nothrow) Json_string(value));
     if (!val || obj->add_alias(key, std::move(val))) return "{}";  // OOM
   }
 
