@@ -42,6 +42,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0pread-histogram.h"
 #include "trx0trx.h"
 
+#include "villagesql/sdk/include/villagesql/abi/preview/index.h"
+
 /** "GEN_CLUST_INDEX" is the name reserved for InnoDB default
 system clustered index when there is no primary key. */
 extern const char innobase_index_reserve_name[];
@@ -599,19 +601,16 @@ class ha_innobase : public handler {
 
   virtual dict_index_t *innobase_get_index(uint keynr);
 
-  /** VillageSQL: hand back the loaded custom-index handle for key @p keynr
-  (its vef_index_ctx_t + storage context + intf), which InnoDB loads onto the
-  dict_index_t at table-open. Lets the SQL-layer custom-index scan drive the
-  extension against InnoDB's live storage instead of re-loading it.
-  @return false and fills @p out if keynr is a custom index; true otherwise. */
-  bool get_custom_index_handle(uint keynr, CustomIndexHandle *out) override;
+  /** VillageSQL: open the extension KNN cursor on m_custom_index for the query
+  vector @p key (@p key_len bytes), then return the first (nearest) row into
+  @p buf. Subsequent rows come from custom_index_knn_fetch. */
+  int custom_index_knn_open(uchar *buf, const uchar *key, uint key_len);
 
-  /** VillageSQL: resolve a custom index's stable column reference to the owning
-  row and read it into @p buf (REF_LOOKUP read path). Resolves key_ref to the
-  clustered field-0 bytes via the indexed column's store, then does a clustered
-  read. @return false on success; true if not a custom index or on error. */
-  bool custom_index_ref_to_row(uint keynr, uint64_t key_ref, uchar *buf,
-                               char *error_msg, uint error_msg_len) override;
+  /** VillageSQL: fetch the row at the current custom-index cursor position into
+  @p buf (advance=false), or advance the cursor first and fetch (advance=true).
+  Resolves the extension's column reference to the owning row and does the shared
+  clustered read. Returns 0, HA_ERR_END_OF_FILE, or an error code. */
+  int custom_index_knn_fetch(uchar *buf, bool advance);
 
   /** Builds a 'template' to the m_prebuilt struct. The template is used in fast
   retrieval of just those column values MySQL needs in its processing.
@@ -701,6 +700,16 @@ class ha_innobase : public handler {
 
   /** Save CPU time with prebuilt/cached data structures */
   row_prebuilt_t *m_prebuilt;
+
+  /** VillageSQL: the active custom (USING EXTENDED) index for an engine-side
+  KNN scan, or nullptr when the active index is a normal B-tree. Set in
+  index_init, cleared in index_end. */
+  dict_index_t *m_custom_index{nullptr};
+
+  /** VillageSQL: live extension KNN cursor for the active custom-index scan, or
+  0 when none is open. Opened lazily in index_read (it needs the query vector),
+  released in index_end. */
+  vef_index_cursor_ref_t m_custom_cursor{nullptr};
 
   /** Thread handle of the user currently using the handler;
   this is set in external_lock function */

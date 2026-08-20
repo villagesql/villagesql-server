@@ -65,16 +65,4 @@ bool get_custom_index_columns(THD * /*thd*/, uint64_t index_id,
   return false;
 }
 
-bool get_loaded_custom_index(handler *file, uint key_idx,
-                             const vef_type_index_intf_t **intf,
-                             vef_index_ctx_t **ctx,
-                             vef_storage_ctx_t **storage) {
-  handler::CustomIndexHandle handle;
-  if (file->get_custom_index_handle(key_idx, &handle)) return true;
-  *intf = static_cast<const vef_type_index_intf_t *>(handle.intf);
-  *ctx = static_cast<vef_index_ctx_t *>(handle.index_ctx);
-  *storage = static_cast<vef_storage_ctx_t *>(handle.storage_ctx);
-  return *intf == nullptr || *ctx == nullptr;
-}
-
 }  // namespace villagesql

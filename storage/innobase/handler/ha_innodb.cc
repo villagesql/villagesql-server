@@ -10364,6 +10364,23 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
 {
   DBUG_TRACE;
 
+  /* VillageSQL: a custom (USING EXTENDED) index has no InnoDB B-tree, so
+  change_active_index would refuse it (its FIL_NULL guard). Instead remember it
+  and defer opening the extension cursor to index_read, which has the query
+  vector. index_read/index_next/index_end dispatch on m_custom_index. */
+  dict_index_t *ix = innobase_get_index(keynr);
+  if (villagesql::innodb::Custom_index::is_custom(ix)) {
+    m_custom_index = ix;
+    m_custom_cursor = nullptr;
+    active_index = keynr;
+    /* Point the prebuilt read at the custom index too, so shared handler
+    machinery that reads m_prebuilt->index (e.g. the stock index_end body,
+    which touches m_prebuilt->index->last_sel_cur) sees a valid index even
+    when the scan produces no rows and never reaches change_active_index. */
+    m_prebuilt->index = ix;
+    return 0;
+  }
+
   return change_active_index(keynr);
 }
 
@@ -10372,6 +10389,14 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
 
 int ha_innobase::index_end(void) {
   DBUG_TRACE;
+
+  /* VillageSQL: release the extension KNN cursor for a custom-index scan. The
+  cursor is owned here and freed even if the scan stopped early (e.g. LIMIT). */
+  if (m_custom_cursor != nullptr) {
+    m_custom_index->custom_index->interface().scan_end(&m_custom_cursor);
+    m_custom_cursor = nullptr;
+  }
+  m_custom_index = nullptr;
 
   if (m_prebuilt->index->last_sel_cur) {
     m_prebuilt->index->last_sel_cur->release();
@@ -10497,6 +10522,13 @@ int ha_innobase::index_read(
 {
   DBUG_TRACE;
   DEBUG_SYNC_C("ha_innobase_index_read_begin");
+
+  /* VillageSQL: a custom-index scan opens the extension KNN cursor here (the
+  query vector is the key) and returns the first (nearest) row. */
+  if (m_custom_index != nullptr) {
+    ha_statistic_increment(&System_status_var::ha_read_key_count);
+    return custom_index_knn_open(buf, key_ptr, key_len);
+  }
 
   ut_a(m_prebuilt->trx == thd_to_trx(m_user_thd));
   ut_ad(key_len != 0 || find_flag != HA_READ_KEY_EXACT);
@@ -10727,47 +10759,130 @@ dict_index_t *ha_innobase::innobase_get_index(
   return index;
 }
 
-bool ha_innobase::get_custom_index_handle(uint keynr, CustomIndexHandle *out) {
-  dict_index_t *index = innobase_get_index(keynr);
-  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index) ||
-      index->custom_index == nullptr) {
-    return true;
+int ha_innobase::custom_index_knn_open(uchar *buf, const uchar *key,
+                                       uint key_len) {
+  villagesql::innodb::Custom_index *ci = m_custom_index->custom_index;
+  vef_index_ctx_t *ctx = ci->index_ctx();
+  vef_storage_ctx_t *store = ci->storage_ctx();
+  const vef_type_index_intf_t *intf = &ci->interface();
+
+  /* The query vector is the value of the single indexed key column (keypart 0).
+  Build a one-key KNN scan descriptor carrying it, mirroring the shape the SQL
+  layer used to build before this scan moved into the engine. */
+  vef_storage_col_data_t query_column{
+      .data = key,
+      .length = key_len,
+  };
+  vef_index_scan_key_t scan_key{
+      .version = 1,
+      .type = VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY,
+      .num_key_columns = 1,
+      .key_columns = &query_column,
+      .include_key = true,
+  };
+  /* This scan is a cursor over the nearest neighbours, not a top-k operator, so
+  it does not convey the query LIMIT: the server applies LIMIT above the scan by
+  stopping index_next once satisfied (as for the spatial distance scan). limit=0
+  tells the extension "no K" -- it streams the whole beam in ascending-distance
+  order and we take what the LIMIT wants. (The extension must not read limit as a
+  mandatory K; vsql_vector's begin() searches with ef_search and ignores it.) */
+  vef_index_scan_desc_t scan_desc{
+      .version = 1,
+      .scan_type = VEF_INDEX_SCAN_TYPE_KNN,
+      .reverse = false,
+      .limit = 0,
+      .num_keys = 1,
+      .keys = &scan_key,
+  };
+
+  bool eof = false;
+  char err[villagesql::innodb::Custom_index::ERROR_MSG_SIZE]{};
+  if (intf->scan_begin(ctx, store, /*mctx=*/0, &scan_desc, &m_custom_cursor,
+                       &eof, err, sizeof(err))) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: custom index KNN scan_begin failed: " << err;
+    return HA_ERR_INTERNAL_ERROR;
   }
-  villagesql::innodb::Custom_index *ci = index->custom_index;
-  out->index_ctx = ci->index_ctx();
-  out->storage_ctx = ci->storage_ctx();
-  out->intf = &ci->interface();
-  return false;
+  if (eof) {
+    /* Cursor was still created and must be released by index_end; report empty
+    result now. */
+    return HA_ERR_END_OF_FILE;
+  }
+
+  /* The cursor is already positioned on the first (nearest) entry after
+  scan_begin, so fetch without advancing. */
+  return custom_index_knn_fetch(buf, /*advance=*/false);
 }
 
-bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
-                                          uchar *buf, char *error_msg,
-                                          uint error_msg_len) {
-  dict_index_t *index = innobase_get_index(keynr);
-  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index)) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_ref_to_row: keynr %u is not a custom index", keynr);
-    return true;
+int ha_innobase::custom_index_knn_fetch(uchar *buf, bool advance) {
+  villagesql::innodb::Custom_index *ci = m_custom_index->custom_index;
+  const vef_type_index_intf_t *intf = &ci->interface();
+  vef_index_ctx_t *ctx = ci->index_ctx();
+  char err[villagesql::innodb::Custom_index::ERROR_MSG_SIZE]{};
+
+  if (advance) {
+    bool eof = false;
+    if (intf->scan_position(m_custom_cursor, VEF_INDEX_CURSOR_OP_NEXT, &eof, err,
+                            sizeof(err))) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: custom index KNN scan_position failed: " << err;
+      return HA_ERR_INTERNAL_ERROR;
+    }
+    if (eof) return HA_ERR_END_OF_FILE;
   }
 
-  // Step 1: resolve the extension's column reference to the owning row's
-  // clustered field-0 bytes (InnoDB native format), copied into a local buffer.
+  /* External traversal: read the current entry's stable column reference. The
+  key/pkey column arrays are required by the ABI but their contents are unused
+  on this read path (the col_ref resolves the row). */
+  std::vector<vef_storage_col_data_t> key_cols(ctx->num_key_columns);
+  std::vector<vef_storage_col_data_t> pkey_cols(ctx->num_primary_key_columns);
+  vef_storage_col_ref_t col_ref = VEF_STORAGE_EMPTY_COLUMN_REF;
+  if (intf->scan_fetch(m_custom_cursor, &col_ref, key_cols.data(),
+                       pkey_cols.data(), err, sizeof(err))) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: custom index KNN scan_fetch failed: " << err;
+    return HA_ERR_INTERNAL_ERROR;
+  }
+  if (col_ref == VEF_STORAGE_EMPTY_COLUMN_REF) {
+    /* No entry at this position. */
+    return HA_ERR_END_OF_FILE;
+  }
+
+  /* col_ref -> rowid: DISPATCH on storage_props. This one branch is the entire
+  "support both options" mechanism. */
   unsigned char rowid_buf[REC_MAX_N_FIELDS * sizeof(uint64_t)];
   uint32_t rowid_len = 0;
-  if (villagesql::innodb::Custom_index::col_ref_to_rowid(
-          index, key_ref, rowid_buf, sizeof(rowid_buf), &rowid_len, error_msg,
-          error_msg_len)) {
-    return true;
+  const vef_index_storage_t props = intf->storage_props;
+  if (props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) {
+    /* Option A: the extension colocates the owning row's clustered field-0
+    bytes with the vector; read them back. */
+    if (villagesql::innodb::Custom_index::col_ref_to_rowid(
+            m_custom_index, col_ref, rowid_buf, sizeof(rowid_buf), &rowid_len,
+            err, sizeof(err))) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: custom index col_ref_to_rowid failed: " << err;
+      return HA_ERR_INTERNAL_ERROR;
+    }
+  } else {
+    /* Option B: server-owned col_ref -> rowid B-tree (Deb's future). */
+    if (villagesql::innodb::Custom_index::col_ref_to_rowid_btree(
+            m_custom_index, col_ref, rowid_buf, sizeof(rowid_buf), &rowid_len,
+            err, sizeof(err))) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: custom index col_ref_to_rowid_btree failed: " << err;
+      return HA_ERR_INTERNAL_ERROR;
+    }
   }
 
+  /* rowid -> full row: the SHARED clustered read, lifted verbatim from the
+  former handler::custom_index_ref_to_row steps 2-4. */
   ut_a(m_prebuilt->trx == thd_to_trx(ha_thd()));
 
-  // Step 2: position the prebuilt read on the clustered index and (re)build the
-  // row template so row_search_mvcc materializes the full MySQL row into buf.
   if (change_active_index(MAX_KEY)) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_ref_to_row: failed to select clustered index");
-    return true;
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: custom index clustered read: failed to select clustered "
+           "index";
+    return HA_ERR_INTERNAL_ERROR;
   }
   dict_index_t *clust = m_prebuilt->index;
 
@@ -10775,19 +10890,19 @@ bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
     build_template(false);
   }
 
-  // Step 3: build the clustered search tuple directly from the native field-0
-  // bytes. Unlike index_read()'s key path we do NOT call
-  // row_sel_convert_mysql_key_to_innobase: rowid_buf is already in InnoDB
-  // clustered-storage format (it was snapshotted from a clustered record), so
-  // it goes straight into field 0. Field 0 is the clustered index's unique key
-  // for a single-column PK, or the hidden DB_ROW_ID for a PK-less table.
+  /* Build the clustered search tuple directly from the native field-0 bytes.
+  Unlike index_read()'s key path we do NOT call
+  row_sel_convert_mysql_key_to_innobase: rowid_buf is already in InnoDB
+  clustered-storage format (it was snapshotted from a clustered record), so it
+  goes straight into field 0. Field 0 is the clustered index's unique key for a
+  single-column PK, or the hidden DB_ROW_ID for a PK-less table. */
   dtuple_t *search_tuple = m_prebuilt->search_tuple;
   dict_index_copy_types(search_tuple, clust, clust->n_fields);
   dtuple_set_n_fields(search_tuple, 1);
   dfield_t *dfield = dtuple_get_nth_field(search_tuple, 0);
   dfield_set_data(dfield, rowid_buf, rowid_len);
 
-  // Step 4: exact clustered lookup into buf.
+  /* Exact clustered lookup into buf. */
   m_prebuilt->m_mysql_handler = this;
   dberr_t ret = innobase_srv_conc_enter_innodb(m_prebuilt);
   if (ret == DB_SUCCESS) {
@@ -10795,13 +10910,17 @@ bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
     innobase_srv_conc_exit_innodb(m_prebuilt);
   }
 
-  if (ret != DB_SUCCESS) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_ref_to_row: clustered lookup failed (err %d)",
-             static_cast<int>(ret));
-    return true;
+  switch (ret) {
+    case DB_SUCCESS:
+      return 0;
+    case DB_RECORD_NOT_FOUND:
+      return HA_ERR_KEY_NOT_FOUND;
+    default:
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: custom index clustered lookup failed (err "
+          << static_cast<int>(ret) << ")";
+      return HA_ERR_INTERNAL_ERROR;
   }
-  return false;
 }
 
 /** Changes the active index of a handle.
@@ -11015,6 +11134,12 @@ int ha_innobase::index_next(uchar *buf) /*!< in/out: buffer for next row in
                                         MySQL format */
 {
   ha_statistic_increment(&System_status_var::ha_read_next_count);
+
+  /* VillageSQL: advance the extension KNN cursor and fetch the next row (in
+  ascending-distance order) for a custom-index scan. */
+  if (m_custom_index != nullptr) {
+    return custom_index_knn_fetch(buf, /*advance=*/true);
+  }
 
   return (general_fetch(buf, ROW_SEL_NEXT, 0));
 }

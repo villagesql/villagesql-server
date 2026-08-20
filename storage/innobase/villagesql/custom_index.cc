@@ -439,6 +439,21 @@ bool Custom_index::col_ref_to_rowid(const dict_index_t *index,
   return false;
 }
 
+bool Custom_index::col_ref_to_rowid_btree(const dict_index_t *index,
+                                          vef_storage_col_ref_t key_ref,
+                                          unsigned char *out, uint32_t out_cap,
+                                          uint32_t *out_len, char *error_msg,
+                                          uint32_t error_msg_len) {
+  (void)index;
+  (void)key_ref;
+  (void)out;
+  (void)out_cap;
+  (void)out_len;
+  snprintf(error_msg, error_msg_len,
+           "server-owned col_ref->rowid B-tree not implemented (HAS_ROW_REF)");
+  return true;
+}
+
 static dberr_t init_index_ctx(dict_index_t *index) {
   vef_index_ctx_t *ctx = index->custom_index->index_ctx();
   ctx->version = VEF_INDEX_TYPE_INTF_VERSION;

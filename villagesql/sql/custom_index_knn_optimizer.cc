@@ -229,9 +229,9 @@ void CollectCustomKnnOrderingsForHypergraph(
     spec->table = table;
     spec->query_key = query_key;
     spec->query_key_len = static_cast<uint32_t>(query_value->length());
-    spec->limit = static_cast<uint32_t>(
-        std::min<ha_rows>(query_block->join->m_select_limit,
-                          std::numeric_limits<uint32_t>::max()));
+    // The KNN LIMIT is applied by the LIMIT operator above the scan (as for the
+    // spatial distance scan): the scan is a nearest-neighbour cursor, not a
+    // top-k operator, so k is not conveyed to it.
 
     SpatialDistanceScanInfo index_info;
     index_info.table = table;

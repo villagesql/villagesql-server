@@ -17,11 +17,12 @@
 #ifndef VILLAGESQL_SQL_CUSTOM_INDEX_KNN_SCAN_H_
 #define VILLAGESQL_SQL_CUSTOM_INDEX_KNN_SCAN_H_
 
-// KNN scan execution for custom indexes: the scan-dispatch entry points that
-// forward to the extension's scan callbacks on the loaded index, and the row
-// iterator that drives them. The optimizer (custom_index_knn_optimizer.cc)
-// recognizes the scan and fills a CustomHypergraphDistanceScanSpec; this unit
-// consumes it at execution time.
+// KNN scan execution for custom indexes: the row iterator that drives a custom
+// distance-scan index through the standard handler index-scan verbs
+// (ha_index_init / ha_index_read_map with HA_READ_NEAREST_NEIGHBOR /
+// ha_index_next), mirroring the stock IndexDistanceScanIterator. The optimizer
+// (custom_index_knn_optimizer.cc) recognizes the scan and fills a
+// CustomHypergraphDistanceScanSpec; this unit consumes it at execution time.
 
 #include <cstdint>
 
@@ -35,30 +36,21 @@ struct TABLE;
 
 namespace villagesql {
 
-struct CustomIndexKnnScan;
-
 // Per-query KNN scan spec. Allocated on thd->mem_root by
 // CollectCustomKnnOrderingsForHypergraph and threaded through
 // SpatialDistanceScanInfo::custom_scan_spec →
 // AccessPath::index_distance_scan().custom_scan_spec →
 // CreateCustomHypergraphDistanceIterator. No process-wide registry.
+//
+// query_key is the encoded query vector -- the value of the single indexed key
+// column -- handed to ha_index_read_map as the nearest-neighbour seek key. The
+// LIMIT that bounds the KNN result is applied by the LIMIT operator above the
+// scan (as for the spatial distance scan), so it is not carried here.
 struct CustomHypergraphDistanceScanSpec {
   TABLE *table = nullptr;
   const unsigned char *query_key = nullptr;
   uint32_t query_key_len = 0;
-  uint32_t limit = 0;
 };
-
-bool custom_index_knn_scan_begin(TABLE *table, uint key_idx,
-                                 const char *index_name,
-                                 const unsigned char *query_key,
-                                 uint32_t query_key_len, uint32_t limit,
-                                 CustomIndexKnnScan **scan, char *error_msg,
-                                 uint32_t error_msg_len);
-bool custom_index_knn_scan_next(CustomIndexKnnScan *scan, uint64_t *out_key_ref,
-                                bool *eof, char *error_msg,
-                                uint32_t error_msg_len);
-void custom_index_knn_scan_end(CustomIndexKnnScan **scan);
 
 // `custom_scan_spec` is the opaque pointer parked on
 // AccessPath::index_distance_scan().custom_scan_spec.

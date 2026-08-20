@@ -145,6 +145,15 @@ class Custom_index {
                                uint32_t out_cap, uint32_t *out_len,
                                char *error_msg, uint32_t error_msg_len);
 
+  // Option B resolver for a HAS_ROW_REF index: a point lookup in a server-owned
+  // col_ref -> rowid B-tree that InnoDB would maintain at insert time. Same
+  // contract as col_ref_to_rowid. Not yet implemented; stub returns an error.
+  static bool col_ref_to_rowid_btree(const dict_index_t *index,
+                                     vef_storage_col_ref_t key_ref,
+                                     unsigned char *out, uint32_t out_cap,
+                                     uint32_t *out_len, char *error_msg,
+                                     uint32_t error_msg_len);
+
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.
   template <typename Index>
