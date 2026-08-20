@@ -37,6 +37,16 @@ on:
         required: false
         type: string
         default: 'villagesql/server'
+      pre_release_version:
+        description: 'Pre-release suffix for the version. Empty (the default) is a release build; set e.g. dev or rc1 otherwise.'
+        required: false
+        type: string
+        default: ''
+      dev_abi:
+        description: 'Expose the development ABI: ON or OFF.'
+        required: false
+        type: string
+        default: 'ON'
   workflow_dispatch:
     inputs:
       ref:
@@ -57,15 +67,28 @@ on:
           - linux/arm64
         default: linux/amd64
       runner:
-        description: 'JSON-encoded runs-on value, e.g. ["self-hosted","linux","x86_64"] or "ubuntu-24.04-arm".'
+        description: 'JSON-encoded runs-on value, e.g. "ubuntu-latest" or "ubuntu-24.04-arm".'
         required: true
         type: string
-        default: '["self-hosted","linux","x86_64"]'
+        default: '"ubuntu-latest"'
       repo:
         description: 'Image repository to push to.'
         required: false
         type: string
         default: 'villagesql/server'
+      pre_release_version:
+        description: 'Pre-release suffix for the version. Empty (the default) is a release build; set e.g. dev or rc1 otherwise.'
+        required: false
+        type: string
+        default: ''
+      dev_abi:
+        description: 'Expose the development ABI: ON or OFF.'
+        required: true
+        type: choice
+        options:
+          - 'ON'
+          - 'OFF'
+        default: 'ON'
 
 permissions:
   contents: read
@@ -75,7 +98,7 @@ jobs:
   build-image:
     name: Build Image (${{ inputs.platform }})
     runs-on: ${{ fromJSON(inputs.runner) }}
-    timeout-minutes: 60
+    timeout-minutes: 360
 
     steps:
       - name: Report Parameters
@@ -85,6 +108,8 @@ jobs:
           echo "Platform: ${{ inputs.platform }}"
           echo "Runner: ${{ inputs.runner }}"
           echo "Repository: ${{ inputs.repo }}"
+          echo "Pre-release Version: '${{ inputs.pre_release_version }}'"
+          echo "Dev ABI: ${{ inputs.dev_abi }}"
 
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -114,14 +139,16 @@ jobs:
           docker image rm -f "$IMAGE" || true
 
       # The default buildx 'docker' driver is what we want: a native
-      # single-platform build whose layer cache lives in the daemon and so
-      # outlives the job. Creating a docker-container builder would only buy
-      # multi-platform and cache export, neither of which applies, at the cost
-      # of a cold source compile every run.
+      # single-platform build. 
       #
-      # Build args (VSQL_PRE_RELEASE_VERSION, VSQL_DEV_ABI) are left at the
-      # publish_image.sh defaults: a release build against the dev ABI.
+      # There is no layer cache to speak of: these run on ephemeral
+      # GitHub-hosted runners, so every build compiles the server from cold.
+      # If that wall-clock becomes the problem, a registry-backed cache is the
+      # lever, and it needs the docker-container driver.
       - name: Build and push image
+        env:
+          VSQL_PRE_RELEASE_VERSION: ${{ inputs.pre_release_version }}
+          VSQL_DEV_ABI: ${{ inputs.dev_abi }}
         run: |
           source/docker/server/publish_image.sh \
             --tag "${{ inputs.tag }}" \
