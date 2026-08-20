@@ -294,5 +294,10 @@ EOF
 
 SET @use_secondary_engine_saved = @@use_secondary_engine;
 SET @@use_secondary_engine = OFF;
+# The check's row estimates grow with server metadata and must not trip
+# ER_TOO_BIG_SELECT under a --maximum-max-join-size cap (sys_vars.maximum_basic).
+SET @sql_big_selects_saved = @@sql_big_selects;
+SET @@sql_big_selects = 1;
 CALL mtr.check_testcase();
+SET @@sql_big_selects = @sql_big_selects_saved;
 SET @@use_secondary_engine = @use_secondary_engine_saved;
