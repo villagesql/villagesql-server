@@ -435,8 +435,10 @@ static vef_storage_col_data_t to_col_data(const dfield_t *field) {
   if (dfield_is_null(field)) {
     return {nullptr, 0};
   }
+  // Pass ref_length=false to use total length for extended storage columns
+  // while setting data length for index entries.
   return {static_cast<const unsigned char *>(dfield_get_data(field)),
-          static_cast<uint32_t>(dfield_get_len(field))};
+          static_cast<uint32_t>(dfield_get_len(field, false))};
 }
 
 dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
