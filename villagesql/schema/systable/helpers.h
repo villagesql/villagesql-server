@@ -30,30 +30,6 @@ namespace villagesql {
 // For use with asserts.
 const bool VILLAGESQL_NOT_IMPLEMENTED = false;
 
-// ===== Identifier normalization utilities =====
-// Get the appropriate charset for identifier normalization
-// Uses fs_name_collation() logic from MySQL DD
-const CHARSET_INFO *get_identifier_charset();
-
-// Normalize different identifier types according to MySQL rules
-// Database names: Follow lower_case_table_names setting (like MySQL DD)
-std::string normalize_database_name(const std::string &name);
-
-// Table names: Follow lower_case_table_names setting (like MySQL DD)
-std::string normalize_table_name(const std::string &name);
-
-// Column names: Always case-insensitive (per MySQL standard)
-std::string normalize_column_name(const std::string &name);
-
-// Extension names: Always case-insensitive (like plugin names)
-std::string normalize_extension_name(const std::string &name);
-
-// Type names: Always case-insensitive (like SQL type names)
-std::string normalize_type_name(const std::string &name);
-
-// Index names: Follow lower_case_table_names setting (same as table names)
-std::string normalize_index_name(const std::string &name);
-
 // Build a qualified base name string "extension_name.type_name".
 inline std::string make_qualified_base_name(std::string_view extension_name,
                                             std::string_view type_name) {
