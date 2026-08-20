@@ -129,4 +129,18 @@ const CHARSET_INFO *type_parameter_collation() {
   return &my_charset_utf8mb4_0900_ai_ci;
 }
 
+std::string join_key_components(std::initializer_list<std::string> parts) {
+  std::string key;
+  bool first = true;
+  for (const std::string &part : parts) {
+    if (!first) key += '.';
+    first = false;
+    for (char c : part) {
+      if (c == '.' || c == '\\') key += '\\';
+      key += c;
+    }
+  }
+  return key;
+}
+
 }  // namespace villagesql

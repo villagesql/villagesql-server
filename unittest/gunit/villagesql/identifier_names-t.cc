@@ -183,4 +183,23 @@ TEST_F(IdentifierNamesTest, ViewMatchSqlFollowsIdentifierRules) {
   }
 }
 
+// Identifiers may contain dots; joining must keep distinct component tuples
+// distinct.
+TEST_F(IdentifierNamesTest, JoinKeyComponentsIsUnambiguous) {
+  EXPECT_EQ(join_key_components({"db", "table", "column"}), "db.table.column");
+  EXPECT_EQ(join_key_components({"db", "my.table", "col.one"}),
+            "db.my\\.table.col\\.one");
+  EXPECT_NE(join_key_components({"db", "my.table", "col.one"}),
+            join_key_components({"db", "my.table.col", "one"}));
+  EXPECT_NE(join_key_components({"db", "a\\", "b"}),
+            join_key_components({"db", "a", "\\b"}));
+
+  // Backslashes must be escaped too: with dot-only escaping, ("a\", "b.c")
+  // and ("a.b\", "c") would both join to "db.a\.b\.c".
+  EXPECT_EQ(join_key_components({"db", "a\\", "b.c"}), "db.a\\\\.b\\.c");
+  EXPECT_EQ(join_key_components({"db", "a.b\\", "c"}), "db.a\\.b\\\\.c");
+  EXPECT_NE(join_key_components({"db", "a\\", "b.c"}),
+            join_key_components({"db", "a.b\\", "c"}));
+}
+
 }  // namespace villagesql_unittest
