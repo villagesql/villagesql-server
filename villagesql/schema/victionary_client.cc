@@ -307,6 +307,12 @@ std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
       IndexColumnKeyPrefix(index_id));
 }
 
+std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
+    THD *thd, uint64_t index_id) const {
+  if (!m_initialized.load()) return {};
+  return m_custom_index_columns.get_prefix(thd, IndexColumnKeyPrefix(index_id));
+}
+
 void VictionaryClient::init_index_id_counter() {
   // Must be called while holding write lock (reload_all_tables holds it).
   uint64_t max_id = 0;

@@ -563,6 +563,63 @@ class SystemTableMap {
     return result;
   }
 
+  // Get all entries matching a prefix that are visible to this THD: committed
+  // entries with any uncommitted operations for this THD overlaid (inserts add,
+  // updates replace, deletes hide). Needed during DDL, where the rows staged by
+  // the current statement are not yet committed.
+  // REQUIRES: Caller must hold read lock
+  // WARNING: Returned pointers are only valid while lock is held
+  template <typename T = EntryType>
+  std::vector<const EntryType *> get_prefix(
+      THD *thd, const typename T::key_prefix_type &prefix) const {
+    assert_read_or_write_lock_held();
+    const std::string &prefix_str = prefix.str();
+    if (prefix_str.empty()) return {};
+    if (!thd) return get_prefix_committed<T>(prefix);
+
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+      return get_prefix_committed<T>(prefix);
+    }
+
+    std::string upper = prefix_str;
+    upper.back() = upper.back() + 1;
+    auto in_range = [&](const std::string &k) {
+      return k >= prefix_str && k < upper;
+    };
+
+    // Walk staged ops in order; the most recent op per key wins. A nullptr
+    // entry means the key is hidden (DELETE, or the old key of a rename).
+    std::map<std::string, const EntryType *> staged;
+    for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
+         op = op->next) {
+      if (op->op_type == OperationType::UPDATE) {
+        const std::string &old_key = op->key.str();
+        if (!old_key.empty() && in_range(old_key)) staged[old_key] = nullptr;
+      }
+      const std::string &k = op->entry ? op->entry->key().str() : op->key.str();
+      if (in_range(k)) staged[k] = op->entry.get();
+    }
+
+    std::map<std::string, const EntryType *> merged;
+    for (auto it = m_committed.lower_bound(prefix_str);
+         it != m_committed.end() && it->first < upper; ++it) {
+      merged[it->first] = it->second.get();
+    }
+    for (const auto &[key, entry] : staged) {
+      if (entry == nullptr) {
+        merged.erase(key);
+      } else {
+        merged[key] = entry;
+      }
+    }
+
+    std::vector<const EntryType *> result;
+    result.reserve(merged.size());
+    for (const auto &[key, entry] : merged) result.push_back(entry);
+    return result;
+  }
+
   // Get all committed entries in the map
   // Useful for iterating over all entries (e.g., during startup validation)
   // REQUIRES: Caller must hold read lock
@@ -837,6 +894,12 @@ class VictionaryClient {
   // Returns vector of pointers (valid while lock is held).
   std::vector<const IndexColumnEntry *> GetColumnsForIndex(
       uint64_t index_id) const;
+
+  // Same, but also sees the rows staged (uncommitted) by this THD. Use this on
+  // DDL paths, where the index and its column bindings are staged together and
+  // are not yet committed.
+  std::vector<const IndexColumnEntry *> GetColumnsForIndex(
+      THD *thd, uint64_t index_id) const;
 
   // Allocate a unique index_id for a new custom index. The counter is
   // initialized at startup from MAX(index_id) in custom_indexes so the
