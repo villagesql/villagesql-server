@@ -28,11 +28,14 @@
 
 #include <villagesql/vsql.h>
 
+#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <string_view>
 
 using namespace vsql;
@@ -106,18 +109,26 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
 // whitespace around every token. Returns false on success, true on error --
 // including trailing garbage.
 static bool parse_complex(std::string_view from, Complex *cx) {
-  const char *p = from.data();
-  const char *const end = p + from.size();
+  // strtod needs a null-terminated string. Short inputs stay within the
+  // small-string buffer, so the common case does not allocate.
+  const std::string input(from);
+  const char *p = input.c_str();
+  const char *const end = p + input.size();
 
   auto skip_ws = [&] {
     while (p < end && (*p == ' ' || *p == '\t')) ++p;
   };
   auto parse_double = [&](double *out) {
     skip_ws();
-    if (p < end && *p == '+') ++p;  // from_chars rejects an explicit plus
-    const std::from_chars_result r = std::from_chars(p, end, *out);
-    if (r.ec != std::errc()) return true;
-    p = r.ptr;
+    errno = 0;
+    char *endptr = nullptr;
+    const double v = strtod(p, &endptr);
+    if (endptr == p) return true;
+    // Reject overflow ("1e400"), but accept underflow to a denormal or zero.
+    // A literal "inf" parses without setting ERANGE, so it still round-trips.
+    if (errno == ERANGE && std::isinf(v)) return true;
+    *out = v;
+    p = endptr;
     return false;
   };
   auto expect = [&](char ch) {

@@ -58,13 +58,12 @@ DROP TABLE test_fidelity;
 
 ########################################################################
 #
-# Input forms std::from_chars is stricter about than sscanf was.
+# Input forms the parser must keep accepting.
 #
-# from_chars requires the first character to be part of the number: the
-# standard excludes a leading '+' (only '-' is recognized) and it never skips
-# whitespace. sscanf's " ( %lg , %lg )" did both. from_string compensates for
-# each, so these forms must keep parsing. A '+' inside an exponent was always
-# accepted by both and is included as a control.
+# from_string used to be a single sscanf(" ( %lg , %lg )") that skipped
+# whitespace and took a signed number anywhere. The hand-rolled parser has to
+# reproduce that: leading and internal whitespace, an explicit '+' on either
+# component, and a '+' inside an exponent.
 #
 ########################################################################
 
