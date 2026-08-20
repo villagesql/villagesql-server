@@ -36,6 +36,29 @@ SHOW FIELDS FROM `my.table`;
 SHOW FIELDS FROM `my.table.col`;
 
 DROP TABLE `my.table`, `my.table.col`;
+
+# Backslashes must be escaped in the key too: with dot-only escaping,
+# "a\" + "b.c" and "a.b\" + "c" would join to the same key.
+CREATE TABLE `a\` (`b.c` vsql_complex.COMPLEX, plain INT);
+CREATE TABLE `a.b\` (`c` vsql_complex.COMPLEX);
+
+--source include/restart_mysqld.inc
+
+USE dotted_db;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+
+# Rename and drop must update only the intended table's row; the colliding
+# table's column keeps its type.
+ALTER TABLE `a\` RENAME COLUMN `b.c` TO `b\c`;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+
+ALTER TABLE `a\` DROP COLUMN `b\c`;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+
+DROP TABLE `a\`, `a.b\`;
 DROP DATABASE dotted_db;
 
 --source include/villagesql/uninstall_complex_extension.inc

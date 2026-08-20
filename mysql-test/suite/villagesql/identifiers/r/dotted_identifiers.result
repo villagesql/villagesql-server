@@ -30,4 +30,31 @@ SHOW FIELDS FROM `my.table.col`;
 Field	Type	Null	Key	Default	Extra
 one	vsql_complex.COMPLEX	YES		NULL	
 DROP TABLE `my.table`, `my.table.col`;
+CREATE TABLE `a\` (`b.c` vsql_complex.COMPLEX, plain INT);
+CREATE TABLE `a.b\` (`c` vsql_complex.COMPLEX);
+# restart
+USE dotted_db;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+Field	Type	Null	Key	Default	Extra
+b.c	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+Field	Type	Null	Key	Default	Extra
+c	vsql_complex.COMPLEX	YES		NULL	
+ALTER TABLE `a\` RENAME COLUMN `b.c` TO `b\c`;
+SHOW FIELDS FROM `a\`;
+Field	Type	Null	Key	Default	Extra
+b\c	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+SHOW FIELDS FROM `a.b\`;
+ALTER TABLE `a\` DROP COLUMN `b\c`;
+Field	Type	Null	Key	Default	Extra
+c	vsql_complex.COMPLEX	YES		NULL	
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+Field	Type	Null	Key	Default	Extra
+plain	int	YES		NULL	
+Field	Type	Null	Key	Default	Extra
+c	vsql_complex.COMPLEX	YES		NULL	
+DROP TABLE `a\`, `a.b\`;
 DROP DATABASE dotted_db;
