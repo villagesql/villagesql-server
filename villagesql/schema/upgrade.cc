@@ -51,5 +51,31 @@ bool upgrade_villagesql_from_0_0_4_to_0_0_5(THD *thd) {
       {ER_DUP_FIELDNAME});
 }
 
+bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
+  // Upgrade all villagesql system tables to utf8mb4_bin collation. This is
+  // to standardize the collation across all system tables, and to avoid issues
+  // with comparisons between villagesql system tables and the data dictionary.
+  LogVSQL(INFORMATION_LEVEL,
+          "Upgrading villagesql system tables to utf8mb4_bin");
+  static const char *statements[] = {
+      "ALTER TABLE villagesql.extensions "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+      "ALTER TABLE villagesql.custom_columns "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+      "ALTER TABLE villagesql.custom_sp_params "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+      "ALTER TABLE villagesql.custom_indexes "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+      "ALTER TABLE villagesql.custom_index_columns "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+      "ALTER TABLE villagesql.properties "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+  };
+  for (const char *statement : statements) {
+    if (execute_statement(thd, statement)) return true;
+  }
+  return false;
+}
+
 }  // namespace upgrade
 }  // namespace villagesql

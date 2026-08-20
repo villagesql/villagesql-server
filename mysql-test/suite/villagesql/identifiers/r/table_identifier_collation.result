@@ -11,4 +11,15 @@ café
 gross
 groß
 DROP TABLE cafe, café, gross, groß;
+CREATE TABLE cafe (value COMPLEX);
+CREATE TABLE café (value COMPLEX);
+CREATE TABLE gross (value COMPLEX);
+CREATE TABLE groß (value COMPLEX);
+SHOW TABLES;
+Tables_in_test_collation
+cafe
+café
+gross
+groß
+DROP TABLE cafe, café, gross, groß;
 DROP DATABASE test_collation;

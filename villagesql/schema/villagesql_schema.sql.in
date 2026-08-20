@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS villagesql.extensions (
   veb_sha256 VARCHAR(64) NOT NULL COMMENT 'SHA256 hash of the VEB file in hex',
   pending_action JSON NULL COMMENT 'Pending deferred action (e.g. version update). NULL when no action is pending.',
   PRIMARY KEY (extension_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL installed extensions registry';
 
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_columns (
   type_parameters JSON NOT NULL COMMENT 'Type instantiation parameters as JSON',
   PRIMARY KEY (db_name, table_name, column_name),
   INDEX idx_extension (extension_name, extension_version, type_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL columns that use custom types';
 
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_sp_params (
   type_parameters JSON NOT NULL COMMENT 'Type instantiation parameters as JSON',
   PRIMARY KEY (db_name, sp_name, param_name),
   INDEX idx_extension (extension_name, extension_version, type_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL stored procedure/function parameters that use custom types';
 
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_indexes (
   index_type_parameters  JSON NOT NULL COMMENT 'Index type instantiation parameters as JSON',
   PRIMARY KEY (index_id),
   UNIQUE KEY idx_natural (db_name, table_name, index_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL indexes that use custom index types';
 
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_index_columns (
   extension_version VARCHAR(64) NOT NULL COMMENT 'Version of the extension',
   profile_name      VARCHAR(64) NOT NULL COMMENT 'Index profile name binding type to index algorithm',
   PRIMARY KEY (index_id, key_position)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
 ROW_FORMAT=DYNAMIC
 COMMENT='Per-column profile bindings for VillageSQL custom indexes';
 
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS villagesql.properties (
   value LONGTEXT COMMENT 'Property value',
   description TEXT COMMENT 'Property description',
   PRIMARY KEY (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL system properties and configuration';
 

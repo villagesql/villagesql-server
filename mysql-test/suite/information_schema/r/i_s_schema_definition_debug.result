@@ -230,7 +230,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON col.collation_id=coll.id
   JOIN mysql.character_sets cs ON coll.character_set_id= cs.id
-  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=sch.name AND vcc.table_name=tbl.name AND vcc.column_name=col.name WHERE 
+  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vcc.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vcc.column_name)=LOWER(CONVERT(col.name USING utf8mb4) COLLATE utf8mb4_bin) WHERE 
   INTERNAL_GET_VIEW_WARNING_OR_ERROR(sch.name,tbl.name, tbl.type, tbl.options)
   AND CAN_ACCESS_COLUMN(sch.name, tbl.name, col.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, col.hidden NOT IN ('Visible', 'User'), col.options)
@@ -264,7 +264,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON col.collation_id=coll.id
   JOIN mysql.character_sets cs ON coll.character_set_id= cs.id
-  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=sch.name AND vcc.table_name=tbl.name AND vcc.column_name=col.name WHERE 
+  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vcc.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vcc.column_name)=LOWER(CONVERT(col.name USING utf8mb4) COLLATE utf8mb4_bin) WHERE 
   INTERNAL_GET_VIEW_WARNING_OR_ERROR(sch.name,tbl.name, tbl.type, tbl.options)
   AND CAN_ACCESS_COLUMN(sch.name, tbl.name, col.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, col.hidden NOT IN ('Visible', 'User'), col.options)
