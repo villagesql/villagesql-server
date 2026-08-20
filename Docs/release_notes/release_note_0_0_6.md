@@ -1,6 +1,6 @@
 # VillageSQL 0.0.6
 
-Draft release notes through commit `44828a4218a`: test: note the lock fix in worker test (#1016).
+Draft release notes through commit `25a7e3f32ff`: sdk: fix sys_var descriptor comment (#1021).
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
@@ -25,6 +25,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 - **Richer statement telemetry** — The statement-event capability now reports the performance-schema statement digest hash and the per-statement handler row-access counters (`read_key`, `read_next`, `read_rnd_next`, and the rest), which quantify the access method that the existing flags only flagged. (`de3d664cbae`, #921)
 - **`EXTENSION_ADMIN` privilege** — Extension management is now gated by its own dynamic privilege rather than `SUPER`. In-place upgrades grant it to existing `SUPER` holders. (`9854529cb56`, #752; `9e0577bd0b6`, #941)
 - **Rust extensions in nightly testing** — The nightly extension suite builds and tests Rust extensions alongside the C++ ones. (`c323f70848c`, #932; `f2e6b27ad9e`, #949)
+- **SDK `SysVarDescriptor` example corrected** — The brace-init example in the comment above `SysVarDescriptor` showed four descriptor lines, three of which did not compile. (`25a7e3f32ff`, #1021)
 - **`vsql_allow_preview_extensions` can no longer be changed with `SET GLOBAL`** — Both directions are now rejected. Previously turning it off was accepted and then silently reverted on restart. (`079184a2216`, #960)
 
 ### Custom Types
@@ -38,6 +39,12 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 
 - **`vsql_tvector` lost float precision on read** — The text conversion capped at 6 significant digits where a float needs about 7.2, so a stored `1.2345679` came back as `1.23457`. Any read-modify-write — a dump and restore, `INSERT ... SELECT` through a client — silently changed the data, and float is the default element type, so the default configuration was the lossy one. Doubles no longer render binary artefacts such as `1.0778787000000001` either. (`97cf46cbe67`, #999; #1007)
 - **`vsql_complex` lost precision on read** — The same defect on the complex type's double components: `999999999.1234568` rendered as `1e+09`. Adds a round-trip fidelity test that fails on every row against the old code. (`8b088c2d848`, #996; #998)
+- **`vsql_complex` failed to build against an older deployment target** — libc++ marks the floating-point overloads of `std::from_chars` availability-gated, so building the extension reported `error: 'from_chars' is unavailable: introduced in macOS 26.0`. The components are parsed with `strtod` instead. (`072fe7b4065`, #1027)
+
+### Schema & Upgrades
+
+- **VillageSQL system tables moved to `utf8mb4_bin`** — All six VillageSQL system tables change from `utf8mb4_0900_ai_ci` to `utf8mb4_bin`, so identifiers that differ only in case or accents stay distinct. An in-place upgrade converts the tables and bumps the stored schema version to 0.0.6, startup validation catches a table left on the wrong collation, the `INFORMATION_SCHEMA.COLUMNS` view join casefolds explicitly, and the victionary checks for duplicate rows when it reloads at startup. (`41d6f86b943`, #987)
+- **Upgrades now run under `--upgrade=MINIMAL`** — The VillageSQL upgrade was skipped whenever the server started with `--upgrade=MINIMAL`, which left the server running against an older schema than it was built for and could block startup. It now runs in that mode too. (`a2a952155b4`, #1004)
 
 ### Stability
 
@@ -56,7 +63,7 @@ The server and the bundled extensions now run under ASAN, UBSAN and LSAN every n
 
 ### Build & Compatibility
 
-- **Release Docker images** — Publishing Docker images is now part of the release process, built one architecture at a time on its own runner. (`b6d70466949`, #818; `a13a537f01f`, #973)
+- **Release Docker images** — Publishing Docker images is now part of the release process, built one architecture at a time on its own runner, and a release workflow orchestrates those builds and pushes the images to Docker Hub together. (`b6d70466949`, #818; `a13a537f01f`, #973; `50da376e7b1`, #1025)
 - **README corrections** — The stated build prerequisites were looser than what the build enforces (Clang 14 and CMake 3.19, not Clang 13 and CMake 3.16; Windows is not supported), two documented commands could not run as written, and two Known Limitations were broader than reality. The Rust SDK, its crate and build tool, and the Rust extension template are now named alongside the C++ ones. (`2e620ad5d7b`, #962; `927e57622c3`, #934)
 - **Release artifact naming** — Server tarballs are named per codebase and platform, SDK tarballs per release version. (`0e7e6d669ee`, #803)
 - **Build tooling consolidated under `villagesql/bld_tools/`** — The older top-level scripts (`build-ci.sh`, `test-ci.sh`, `make_villagesql_dev_server.sh`, `build_bundled_extension`, `setup_linux_build_env.sh`) are retired in favor of the `bld_tools` versions, which now carry a README, and build information is published as JSON. (`d823a3e6a96`, #888; `a2b40362189`, #886; `582e58f00c9`, #889; `c83946394f4`, #887; `3920398fec3`, #935; `af1938f0285`, #969)
@@ -66,6 +73,7 @@ The server and the bundled extensions now run under ASAN, UBSAN and LSAN every n
 - **Build prerequisites and steps corrected** — The prerequisites named C++17 where the build compiles with `-std=c++20`, and Bison 3.0 where 3.0.4 is the floor. The clone step now says to clone into the home directory, which the later steps assume, and the note about `~` carves out `mysqld` option values such as `--datadir=`, where the shell leaves the tilde unexpanded and the server aborts on the literal character. The README also stops carrying its own copy of the apt and brew package lists, which had drifted from `villagesql/bld_tools/`, and points at the setup script instead. (`ea11e2bb5c2`, #945; `e5b6ed67650`, #993; `cf887bc37cf`, #963)
 - **Contributor Guide overhaul** — The first set of changes from a rewrite of the contributor guide. (`3d0c834cda4`, #760)
 - **Nightly and release CI reworked** — A nightly run now dispatches listener workflows, so one event can start several workflows with different inputs, and it drives the release-build Full Test Suite. Its run summary names the nightly tag it created rather than leaving `nightly.latest` ambiguous. Version and extension information moved into JSON for parsing, the CMake and Cargo extension builds share one framework, and the self-hosted jobs are consolidated onto Linux x86-64 runners. (`1055b3c761e`, #1005; `de2afc6adfc`, #1008; `f03c8298f8a`, #1009; `b0c08387ddf`, #1002; `29c178727b5`, #1006; `e6d077f0975`, #989; `87cd97def3c`, #986; `93d13d9d147`, #990)
+- **Pull request label and merge checks** — A pull request is now checked for an `area/` and a `kind/` label. One carrying both an LGTM and an approval merges automatically on an hourly pass, and the LGTM is withdrawn when new changes arrive. (`a946ab5d922`, #997)
 
 ## Community
 
