@@ -2555,6 +2555,7 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   {
     dberr_t cerr = villagesql::innodb::Custom_index::load(new_index, index);
     if (cerr != DB_SUCCESS) {
+      rw_lock_free(&new_index->lock);
       dict_mem_index_free(new_index);
       dict_mem_index_free(index);
       return cerr;

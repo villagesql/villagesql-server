@@ -29,6 +29,11 @@ ERROR HY000: No default index profile found: column 'id' is not a custom type
 # --- Explicit profile for wrong column type ---
 CREATE INDEX idx ON t (id dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
 ERROR HY000: Column 'id' is not of type 'dummy_type_vector' (extension 'vsql_index_test') required by index profile 'dummy_profile_hnsw_l2'
+# --- CREATE INDEX: WITH incorrect parameter N ---
+CREATE INDEX idx_ext ON t (b) USING EXTENDED(dummy_index_hnsw)
+WITH (N = 16, ef_construction = 200);
+ERROR HY000: InnoDB: Custom type operation failed. See server error log for details.
+Pattern "VillageSQL: Error parsing custom index options" found
 # --- Drop+re-add: old type matches profile but new type does not (error) ---
 CREATE TABLE t_readd (id INT PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a INT,

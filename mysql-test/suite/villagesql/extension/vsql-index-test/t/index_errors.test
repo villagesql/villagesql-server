@@ -17,6 +17,9 @@
 # custom index execution is fully implemented and the guard in
 # PT_custom_index_type::do_contextualize() is removed.
 --source include/have_debug.inc
+--disable_query_log
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* VillageSQL: Error parsing custom index options");
+--enable_query_log
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
@@ -58,6 +61,15 @@ CREATE INDEX idx ON t (id) USING EXTENDED(dummy_index_hnsw);
 --echo # --- Explicit profile for wrong column type ---
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE INDEX idx ON t (id dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- CREATE INDEX: WITH incorrect parameter N ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx_ext ON t (b) USING EXTENDED(dummy_index_hnsw)
+  WITH (N = 16, ef_construction = 200);
+
+let SEARCH_FILE= $MYSQLTEST_VARDIR/log/mysqld.1.err;
+let SEARCH_PATTERN= VillageSQL: Error parsing custom index options;
+--source include/search_pattern.inc
 
 --echo # --- Drop+re-add: old type matches profile but new type does not (error) ---
 # Column a was dummy_type_vector (T1); re-added as INT (T2). Profile requires
