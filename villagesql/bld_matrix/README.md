@@ -12,6 +12,7 @@ span lines. Pipe through `jq .` to read it.
 | `json_extensions.sh` | The bundled-extension manifest, parsed into an array of objects. |
 | `json_platforms.sh`  | The platforms built and tested on, as an array of objects.     |
 | `json_version.sh`    | The VSQL_VERSION file, parsed into a single object.            |
+| `json_docker.sh`     | The Docker images published, as an array of objects.           |
 | `json_build_matrix.sh` | The build-server matrix, one row per platform.                |
 | `json_test_extensions.sh` | The extension tests, one row per (platform, extension, abi). |
 
@@ -20,8 +21,9 @@ variables, and is the source of truth for them.
 
 ## Scope
 
-`json_extensions.sh`, `json_platforms.sh`, and `json_version.sh` are the data
-tables. They parse and shape but never select, and each prints its whole set.
+`json_extensions.sh`, `json_platforms.sh`, `json_version.sh`, and
+`json_docker.sh` are the data tables. They parse and shape but never select,
+and each prints its whole set.
 
 The rest select and combine. They call the tables they need and take filters
 as positional arguments; pass "" for a filter to keep everything.
@@ -46,6 +48,10 @@ EXTENSIONS_FILE=/tmp/exts.txt "$MATRIX/json_extensions.sh"
 # The version, then the semver string built from its fields.
 "$MATRIX/json_version.sh" | jq .
 "$MATRIX/json_version.sh" | jq -r '"\(.major).\(.minor).\(.patch)"'
+
+# The Docker images published, and the same wrapped as an Actions matrix.
+"$MATRIX/json_docker.sh" | jq .
+"$MATRIX/json_docker.sh" | jq -c '{include: .}'
 
 # The build-server matrix, every platform and then just one.
 "$MATRIX/json_build_matrix.sh"

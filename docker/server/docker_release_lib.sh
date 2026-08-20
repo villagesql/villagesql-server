@@ -72,6 +72,10 @@ split_list() {
     local raw="$1"
     local item
     SPLIT_RESULT=()
+    # An empty list leaves _split_raw unset rather than empty, which "$@" on
+    # it treats as an unbound variable under bash 3.2 and so macOS. Return
+    # before read rather than relying on the bash 4.4 behaviour.
+    [ -n "$raw" ] || return 0
     IFS=',' read -ra _split_raw <<< "$raw"
     for item in "${_split_raw[@]}"; do
         [ -n "$item" ] && SPLIT_RESULT+=("$item")
