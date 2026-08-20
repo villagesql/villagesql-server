@@ -55,6 +55,10 @@ bool upgrade_villagesql_from_0_0_4_to_0_0_5(THD *thd) {
 }
 
 bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
+  // Upgrade all villagesql system tables to utf8mb4_bin collation. This is
+  // to standardize the collation across all system tables, and to avoid issues
+  // with comparisons between villagesql system tables and the data dictionary.
+  //
   // Disable persistent InnoDB statistics on the system tables, matching the
   // mysql.* tables. With persistent stats, InnoDB queues a table for background
   // recalculation once 10% of its rows change, and these tables are small
@@ -63,21 +67,31 @@ bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
   // extension-update apply writes these tables just before
   // dd::reset_tables_and_tablespaces() takes MDL_EXCLUSIVE on every cached
   // table with a one-year lock wait.
-  const char *const tables[] = {SchemaManager::EXTENSIONS_TABLE_NAME,
-                                SchemaManager::COLUMNS_TABLE_NAME,
-                                SchemaManager::SP_PARAMS_TABLE_NAME,
-                                SchemaManager::INDEXES_TABLE_NAME,
-                                SchemaManager::INDEX_COLUMNS_TABLE_NAME,
-                                SchemaManager::PROPERTIES_TABLE_NAME};
-
-  LogVSQL(
-      INFORMATION_LEVEL,
-      "Upgrading villagesql system tables: disabling persistent statistics");
-  for (const char *table : tables) {
-    const std::string query = std::string("ALTER TABLE ") +
-                              SchemaManager::VILLAGESQL_SCHEMA_NAME + "." +
-                              table + " STATS_PERSISTENT=0";
-    if (execute_statement(thd, query.c_str())) return true;
+  LogVSQL(INFORMATION_LEVEL,
+          "Upgrading villagesql system tables to utf8mb4_bin and adding "
+          "STATS_PERSISTENT=0");
+  static const char *statements[] = {
+      "ALTER TABLE villagesql.extensions "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "STATS_PERSISTENT=0",
+      "ALTER TABLE villagesql.custom_columns "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "STATS_PERSISTENT=0",
+      "ALTER TABLE villagesql.custom_sp_params "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "STATS_PERSISTENT=0",
+      "ALTER TABLE villagesql.custom_indexes "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "STATS_PERSISTENT=0",
+      "ALTER TABLE villagesql.custom_index_columns "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "STATS_PERSISTENT=0",
+      "ALTER TABLE villagesql.properties "
+      "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "STATS_PERSISTENT=0",
+  };
+  for (const char *statement : statements) {
+    if (execute_statement(thd, statement)) return true;
   }
   return false;
 }

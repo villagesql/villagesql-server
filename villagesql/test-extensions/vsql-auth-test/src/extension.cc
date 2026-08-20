@@ -14,32 +14,17 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 // Trivial VillageSQL auth extension exercising the vsql::preview::auth
-// capability end to end -- no JWT, no crypto. It registers an auth method named
+// capability end to end -- no JWT, no crypto. It registers method
 // "vsql_auth_test" that authenticates iff the client sends one of the fixed
-// tokens below, then resolves the session account:
-//   - the connecting account "auth_user" is proxy-mapped to the fixed account
-//     "vsql_auth_test_user" (auth_basic/auth_roles set up GRANT PROXY for
-//     this);
-//   - any other connecting account authenticates AS ITSELF (the auto-create
-//     flow, where the provisioned account then runs as itself, no proxy).
+// tokens below. The connecting account "auth_user" proxies to
+// "vsql_auth_test_user"; any other account authenticates as itself. The
+// auto_create / auto_grant opt-ins are exposed as sysvars (default OFF) so
+// tests toggle each independently, and accept_client_plugin (a sysvar) selects
+// one extra client plugin the method accepts as-is during negotiation.
 //
-// It also opts in to handling UNKNOWN accounts: an unknown-account login with a
-// valid token is provisioned on the fly (request_provision) and then runs as
-// the newly-created account. See auth_auto_create.test.
-//
-// Accepted tokens:
-//   kToken           -- accept, map to the account, stage no roles (the
-//                       account's default roles apply).
-//   kTokenRoles      -- accept and additionally stage a fixed role set via
-//                       set_active_roles: one role the test grants to the
-//                       account ("vsql_role_granted") and one it does NOT
-//                       ("vsql_role_denied"). Lets auth_roles.test assert that
-//                       a granted role activates while an ungranted requested
-//                       role is silently skipped (the no-escalation guarantee).
-//   kTokenQuotedRole -- accept and stage a role whose name contains a quoted
-//                       '@' ("`vsql_role@weird`"), so auth_roles.test can
-//                       assert the name is parsed whole rather than split at
-//                       the '@'.
+// Tokens: kToken (no roles); kTokenRoles (stages vsql_role_granted +
+// vsql_role_denied); kTokenQuotedRole (stages a role whose name has a quoted
+// '@'). What each proves lives in the corresponding .test.
 //
 // Pairs with the built-in mysql_clear_password client plugin so the token
 // arrives verbatim in the password slot (client must use
@@ -48,9 +33,11 @@
 #include <cstring>
 
 #include <villagesql/preview/auth.h>
+#include <villagesql/preview/sys_var.h>
 #include <villagesql/vsql.h>
 
 using namespace vsql;
+namespace sv = vsql::preview_sys_var;
 
 namespace {
 
@@ -58,6 +45,11 @@ constexpr char kToken[] = "vsql-auth-test-token";
 constexpr char kTokenRoles[] = "vsql-auth-test-token-roles";
 constexpr char kTokenQuotedRole[] = "vsql-auth-test-token-quoted-role";
 constexpr char kMappedAccount[] = "vsql_auth_test_user";
+
+// The client plugin this method advertises (via .client_plugin) and reads a
+// verbatim token from. The accept-offer callback below always accepts this
+// name; a test can additionally accept one other client plugin via a sysvar.
+constexpr char kClientPlugin[] = "mysql_clear_password";
 
 using vsql::preview_auth::AuthContext;
 using vsql::preview_auth::AuthResult;
@@ -80,11 +72,33 @@ bool token_matches(const unsigned char *pkt, size_t token_len,
          std::memcmp(pkt, expected, token_len) == 0;
 }
 
-// Opt in to handling unknown accounts: this test method always wants
-// unknown-account logins routed to it, so it can validate the token and
-// provision the account. A real extension would back this with a runtime
-// sysvar (e.g. SET GLOBAL <ext>.auto_create) and query it here.
-bool auto_create_enabled() { return true; }
+// The two auto-* opt-ins, each backed by its own sysvar (default OFF) so tests
+// can toggle them independently: auto_create routes unknown accounts here for
+// provisioning; auto_grant has the server grant staged roles to existing
+// accounts. Queried live by the auth capability's callbacks below.
+bool g_auto_create = false;
+bool g_auto_grant = false;
+bool auto_create_enabled() { return g_auto_create; }
+bool auto_grant_enabled() { return g_auto_grant; }
+
+// One extra client plugin (besides kClientPlugin) this method accepts as-is,
+// selected by a test via SET GLOBAL vsql_auth_test.accept_client_plugin. Empty
+// (the default) means the method accepts only kClientPlugin. Set it to another
+// plugin name to prove the server accepts that offer without forcing a switch.
+char *g_accept_client_plugin = nullptr;
+
+// accepts_client_plugin: the server asks this during handshake negotiation
+// which client plugins this method accepts a credential from as-is. Accept
+// kClientPlugin always, plus whatever plugin the test selected via the sysvar;
+// any other offer returns false, so the server switches the client to
+// kClientPlugin and it resends the token verbatim.
+bool accepts_client_plugin(const char *offered) {
+  if (offered == nullptr) return false;
+  if (std::strcmp(offered, kClientPlugin) == 0) return true;
+  const char *extra = g_accept_client_plugin;
+  return extra != nullptr && extra[0] != '\0' &&
+         std::strcmp(offered, extra) == 0;
+}
 
 // The authenticator. Reads one packet (the token), compares it to the fixed
 // test tokens, and on success resolves the session account. Fail closed
@@ -119,13 +133,9 @@ AuthResult authenticate(AuthContext &c) {
     return AuthResult::kOk;
   }
 
-  // A pre-existing account. Two shapes the tests exercise:
-  //   - auth_basic/auth_roles connect as "auth_user" and expect a fixed proxy
-  //     map to kMappedAccount (they set up GRANT PROXY for exactly this);
-  //   - an auto-created account (provisioned above on a prior login) connects
-  //     AS ITSELF on a later login and must authenticate as itself, not proxy.
-  // Distinguish by the connecting user: only auth_user proxies to the fixed
-  // mapped account; everyone else authenticates as themselves.
+  // Pre-existing account: only "auth_user" proxies to the fixed mapped account
+  // (auth_basic/auth_roles GRANT PROXY for that); everyone else -- including an
+  // auto-created account on a later login -- authenticates as itself.
   const bool proxy_to_mapped =
       user != nullptr && std::strcmp(user, "auth_user") == 0;
   const char *const account = proxy_to_mapped ? kMappedAccount : user;
@@ -150,11 +160,27 @@ AuthResult authenticate(AuthContext &c) {
 
 constexpr auto AUTH_METHOD =
     vsql::preview_auth::make_auth<&authenticate>("vsql_auth_test")
-        .client_plugin("mysql_clear_password")
+        .client_plugin(kClientPlugin)
         .auto_create(&auto_create_enabled)
+        .auto_grant(&auto_grant_enabled)
+        .accepts_client_plugin(&accepts_client_plugin)
         .build();
 vsql::preview_auth::AuthCapability g_auth{AUTH_METHOD};
 
+// Sysvars backing the opt-ins. auto_create / auto_grant default OFF; SET GLOBAL
+// vsql_auth_test.auto_create / .auto_grant toggles each feature.
+// accept_client_plugin defaults empty (accept only kClientPlugin); set it to
+// another plugin name to have the method accept that offer as-is.
+auto SYS_VARS = sv::make_capability({
+    sv::make_bool("auto_create", "Route unknown accounts here for provisioning",
+                  &g_auto_create, false),
+    sv::make_bool("auto_grant", "Grant token-staged roles to existing accounts",
+                  &g_auto_grant, false),
+    sv::make_str("accept_client_plugin",
+                 "One extra client plugin to also accept as-is",
+                 &g_accept_client_plugin, ""),
+});
+
 }  // namespace
 
-VEF_GENERATE_ENTRY_POINTS(make_extension().with(g_auth))
+VEF_GENERATE_ENTRY_POINTS(make_extension().with(g_auth).with(SYS_VARS))

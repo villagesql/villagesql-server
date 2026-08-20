@@ -1,0 +1,31 @@
+# At lower_case_table_names=2 statements are lowercased while the data
+# dictionary keeps the CREATE-time case, so the I_S.COLUMNS join against
+# villagesql.custom_columns must be case-insensitive.
+
+--source include/have_case_insensitive_file_system.inc
+--source include/have_lowercase2.inc
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE MixedDb;
+USE MixedDb;
+
+CREATE TABLE MixedTab (MixedCol vsql_complex.COMPLEX, plain INT);
+
+# The stored rows: db and table names lowercase, column name as entered.
+--source include/villagesql/query_custom_columns.inc
+
+# SHOW FIELDS goes through the I_S.COLUMNS join.
+SHOW FIELDS FROM MixedTab;
+
+SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = 'mixeddb'
+  ORDER BY COLUMN_NAME;
+
+# ALTER spelled in different case than the stored table name.
+ALTER TABLE mixedtab ADD COLUMN Extra vsql_complex.COMPLEX;
+SHOW FIELDS FROM MixedTab;
+
+DROP DATABASE MixedDb;
+
+--source include/villagesql/uninstall_complex_extension.inc

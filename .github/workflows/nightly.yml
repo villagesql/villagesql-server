@@ -72,3 +72,29 @@ jobs:
         # Update/create nightly.latest tag (force update if exists)
         git tag -fa "nightly.latest" -m "Latest nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"
         git push origin "nightly.latest" --force
+
+    - name: Prepare nightly info
+      if: always()
+      env:
+        DATE_TAG: ${{ steps.tags.outputs.date_tag }}
+        REF: ${{ github.ref }}
+      run: |
+        jq -n \
+          --arg tagName "$DATE_TAG" \
+          --arg gitRev "$REF" \
+          --arg sha "$(git -C "$SOURCE_DIR" rev-parse HEAD)" \
+          --arg commitSubject "$(git -C "$SOURCE_DIR" log -n1 --format=%s)" \
+          '$ARGS.named' > nightly-info.json
+
+        # Pretty print for humans
+        jq . nightly-info.json
+
+    - name: Upload nightly
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: nightly-info
+        path: nightly-info.json
+        if-no-files-found: warn
+        retention-days: 7
+

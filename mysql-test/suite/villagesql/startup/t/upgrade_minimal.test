@@ -1,0 +1,25 @@
+# --upgrade=MINIMAL skips the server upgrades but must still run the
+# VillageSQL schema upgrades.
+
+--source include/villagesql/internal_schema_test.inc
+
+# MINIMAL logs that it skipped the server upgrades.
+call mtr.add_suppression("Server upgrade is required, but skipped");
+
+--let $build_version= `SELECT value FROM villagesql.properties WHERE name = 'version'`
+
+# Pretend the datadir is at schema version 0.0.5.
+UPDATE villagesql.properties SET value = 'mysql-8.4_0.0.5' WHERE name = 'version';
+SELECT value FROM villagesql.properties WHERE name = 'version';
+
+--let $restart_parameters = restart: --upgrade=MINIMAL
+--source include/restart_mysqld.inc
+
+# The stored version is back at the build version iff the upgrades ran.
+--source include/villagesql/internal_schema_test.inc
+--disable_query_log
+--eval SELECT value = '$build_version' AS villagesql_upgrades_ran FROM villagesql.properties WHERE name = 'version'
+--enable_query_log
+
+--let $restart_parameters = restart
+--source include/restart_mysqld.inc

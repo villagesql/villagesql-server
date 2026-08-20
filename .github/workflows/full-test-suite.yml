@@ -37,11 +37,6 @@ on:
         required: false
         type: string
         default: 'full-test'
-  # Runs after every Nightly run, as an independent workflow.
-  # Runs even if Nightly failed, as a source of nightly test results.
-  workflow_run:
-    workflows: ['Nightly Build and Test']
-    types: [completed]
 
 jobs:
   build-and-test:
@@ -53,11 +48,9 @@ jobs:
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
-      # workflow_run supplies no inputs, so fall back to the commit the nightly
-      # run built.
-      REF: ${{ inputs.ref || github.event.workflow_run.head_sha || 'main' }}
-      BUILD_TYPE: ${{ inputs.build-type || 'debug' }}
-      ARTIFACT_PREFIX: ${{ inputs.artifact-prefix || 'nightly-full' }}
+      REF: ${{ inputs.ref }}
+      BUILD_TYPE: ${{ inputs.build-type }}
+      ARTIFACT_PREFIX: ${{ inputs.artifact-prefix }}
 
     steps:
     - name: Report Parameters

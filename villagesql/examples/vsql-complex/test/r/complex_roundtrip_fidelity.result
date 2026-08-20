@@ -1,0 +1,55 @@
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE test_fidelity (
+id INT PRIMARY KEY,
+original COMPLEX,
+restored COMPLEX
+);
+INSERT INTO test_fidelity (id, original) VALUES
+(1, '(0.6666666666666666,0.1234567890123456)'),
+(2, '(3.141592653589793,2.718281828459045)'),
+(3, '(-99.12345678901234,0.000123456789012345)'),
+(4, '(1.7976931348623157e308,-2.2250738585072014e-308)');
+UPDATE test_fidelity SET restored = '(0.6666666666666666,0.1234567890123456)' WHERE id = 1;
+UPDATE test_fidelity SET restored = '(3.141592653589793,2.718281828459045)' WHERE id = 2;
+UPDATE test_fidelity SET restored = '(-99.12345678901234,0.000123456789012345)' WHERE id = 3;
+UPDATE test_fidelity SET restored = '(1.7976931348623157e+308,-2.2250738585072014e-308)' WHERE id = 4;
+SELECT id, vsql_complex.complex_subtract(original, restored) AS must_be_zero
+FROM test_fidelity ORDER BY id;
+id	must_be_zero
+1	(0,0)
+2	(0,0)
+3	(0,0)
+4	(0,0)
+SELECT COUNT(*) AS rows_that_did_not_round_trip
+FROM test_fidelity
+WHERE vsql_complex.complex_real(vsql_complex.complex_subtract(original, restored)) <> 0
+OR vsql_complex.complex_imag(vsql_complex.complex_subtract(original, restored)) <> 0;
+rows_that_did_not_round_trip
+0
+DROP TABLE test_fidelity;
+CREATE TABLE test_input_forms (
+id INT PRIMARY KEY,
+note VARCHAR(30),
+v COMPLEX
+);
+INSERT INTO test_input_forms VALUES (1, 'plain',           '(1.5,-2.5)');
+INSERT INTO test_input_forms VALUES (2, 'leading plus',    '(+1.5,+2.5)');
+INSERT INTO test_input_forms VALUES (3, 'internal spaces', '(  1.5 ,  -2.5  )');
+INSERT INTO test_input_forms VALUES (4, 'leading space',   '   (1.5,-2.5)');
+INSERT INTO test_input_forms VALUES (5, 'exponent plus',   '(1.5e+15,2.3e-10)');
+SELECT id, note, v FROM test_input_forms ORDER BY id;
+id	note	v
+1	plain	(1.5,-2.5)
+2	leading plus	(1.5,2.5)
+3	internal spaces	(1.5,-2.5)
+4	leading space	(1.5,-2.5)
+5	exponent plus	(1.5e+15,2.3e-10)
+SELECT COUNT(*) AS spellings_that_disagree
+FROM test_input_forms a JOIN test_input_forms b ON b.id = 1
+WHERE a.id IN (3, 4)
+AND (vsql_complex.complex_real(vsql_complex.complex_subtract(a.v, b.v)) <> 0
+OR vsql_complex.complex_imag(vsql_complex.complex_subtract(a.v, b.v)) <> 0);
+spellings_that_disagree
+0
+DROP TABLE test_input_forms;
+UNINSTALL EXTENSION vsql_complex;

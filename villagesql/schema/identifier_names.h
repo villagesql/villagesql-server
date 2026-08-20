@@ -59,9 +59,16 @@ bool index_names_equal(const std::string &a, const std::string &b);
 bool type_names_equal(const std::string &a, const std::string &b);
 bool extension_names_equal(const std::string &a, const std::string &b);
 
-// Collation canonicalizing custom-type parameter strings. Parameters are not
-// MySQL identifiers; the canonical form is embedded in stored
-// type_parameters JSON, so this must stay stable.
+// SQL equality predicates for I_S view definitions, comparing a villagesql
+// system-table name column (utf8mb4) against a DD name column (utf8mb3)
+std::string database_name_match_sql(const std::string &vsql_name,
+                                    const std::string &dd_name);
+std::string table_name_match_sql(const std::string &vsql_name,
+                                 const std::string &dd_name);
+std::string column_name_match_sql(const std::string &vsql_name,
+                                  const std::string &dd_name);
+
+// Collation canonicalizing custom-type parameter strings
 const CHARSET_INFO *type_parameter_collation();
 
 }  // namespace villagesql

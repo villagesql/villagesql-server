@@ -1,0 +1,28 @@
+name: Validate prow-github-actions
+on: pull_request
+
+jobs:
+  execute:
+      runs-on: ubuntu-latest
+      steps:
+        # Removes LGTM if changes are detected
+        - name: Validate LGTM
+          uses: jpmcb/prow-github-actions@c44ac3a57d67639e39e4a4988b52049ef45b80dd
+          with:
+            jobs: lgtm
+            github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+        # Requires area and kind labels
+        - name: Validate Area
+          uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
+          with:
+            prefix_mode: true
+            one_of: "area"
+            repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Validate Kind
+          uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
+          with:
+            prefix_mode: true
+            one_of: "kind"
+            repo_token: ${{ secrets.GITHUB_TOKEN }}

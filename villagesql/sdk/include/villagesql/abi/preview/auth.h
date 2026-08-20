@@ -156,6 +156,14 @@ typedef struct {
   // copied.
   void (*request_provision)(vef_auth_ctx_t *ctx, const char *account,
                             const char *const *roles, uint32_t n_roles);
+
+  // The name of the client-side auth plugin the connection actually used (as
+  // advertised by the client), e.g. "mysql_clear_password" or
+  // "authentication_openid_connect_client". Lets a handler pick how to parse
+  // the credential packet by which client plugin produced it, instead of
+  // sniffing packet bytes (different client plugins frame the credential
+  // differently). Empty if unknown. Valid for the duration of the handler call.
+  const char *(*client_auth_plugin)(vef_auth_ctx_t *ctx);
 } vef_auth_ops_t;
 
 // The handler the extension implements. Invoked synchronously on the connecting
@@ -188,6 +196,25 @@ typedef struct {
   // -> access denied". At most one registered method may return true at a time;
   // the server routes normally (as if none opted in) if more than one does.
   bool (*auto_create_unknown_accounts)(void);
+  // Optional callback: return true if this method currently wants the server to
+  // GRANT the roles it stages via set_active_roles() to the (already-existing)
+  // account, so a token claiming a role the account was not granted takes
+  // effect instead of being skipped. Independent of
+  // auto_create_unknown_accounts: this governs granting to existing accounts,
+  // that governs provisioning unknown ones. QUERIED LIVE per login, so it can
+  // reflect a runtime sysvar. NULL, or a callback returning false, keeps the
+  // activate-only default (the DBA owns grants; a token can only activate roles
+  // already granted).
+  bool (*auto_grant_roles)(void);
+  // Optional callback: return true if this method can parse a credential
+  // delivered by the client plugin named `offered` as-is, so the server accepts
+  // it without switching to client_auth_plugin. Returning false (or a nullptr
+  // callback) forces a change-plugin switch to client_auth_plugin -- the client
+  // resends the credential verbatim -- so a naive client still connects.
+  // Queried during handshake negotiation, before the handler's first read, so
+  // it must be a pure predicate (no packet I/O, no blocking, no side effects).
+  // `offered` is the raw client-supplied plugin name.
+  bool (*accepts_client_plugin)(const char *offered);
 } vef_auth_cc_t;
 
 // Server-side vtable. Version first, matching the other preview capabilities.

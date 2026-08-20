@@ -1226,6 +1226,23 @@ static bool maybe_provision(THD *thd, MPVIO_EXT *mpvio) {
   return false;
 }
 
+// VillageSQL: whether this VEF connection accepts the client's OFFERED plugin
+// as-is (no switch to the pin). Only reached for an offer that is not already
+// the pin (the caller accepts an exact-pin match separately). The extension --
+// not the server -- knows which client plugins frame a credential it can parse,
+// so the accept decision is entirely the method's: the server stays agnostic
+// about client plugins and simply asks the method's accepts_client_plugin
+// callback (stashed on the connection before the handler runs). A method that
+// declares no callback accepts no non-pin offer, so it forces the usual switch
+// to the pinned plugin (the client resends the credential verbatim), and a
+// naive client still connects.
+inline bool vef_offered_plugin_acceptable(MPVIO_EXT *mpvio) {
+  const char *offered = mpvio->cached_client_reply.plugin;
+  if (offered == nullptr) return false;
+  if (mpvio->vef_auth_info.vef_accepts_client_plugin == nullptr) return false;
+  return mpvio->vef_auth_info.vef_accepts_client_plugin(offered);
+}
+
 LEX_CSTRING validate_password_plugin_name = {
     STRING_WITH_LEN("validate_password")};
 
@@ -3536,7 +3553,10 @@ static int server_mpvio_read_packet(MYSQL_PLUGIN_VIO *param, uchar **buf) {
     // VillageSQL: via mpvio_client_plugin_name() so a VEF method (which has no
     // MySQL plugin) resolves its pinned client plugin instead.
     auto client_auth_plugin_name = mpvio_client_plugin_name(mpvio);
-    if (client_auth_plugin_name == nullptr ||
+    // VillageSQL: a VEF login (no MySQL plugin) relaxes the exact-match below.
+    const bool vef_accepts_offer =
+        mpvio->plugin == nullptr && vef_offered_plugin_acceptable(mpvio);
+    if (client_auth_plugin_name == nullptr || vef_accepts_offer ||
         my_strcasecmp(system_charset_info, mpvio->cached_client_reply.plugin,
                       client_auth_plugin_name) == 0) {
       mpvio->status = MPVIO_EXT::FAILURE;
@@ -4309,6 +4329,13 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       assert(mpvio.restrictions);
       sctx->set_master_access(acl_user->access, *(mpvio.restrictions));
       assign_priv_user_host(sctx, const_cast<ACL_USER *>(acl_user));
+      // VillageSQL: if a VEF method opted into auto_grant, GRANT the
+      // token-staged roles to the account here, BEFORE the activation block
+      // below takes the ACL cache lock, since granting runs DDL on a separate
+      // THD that takes ACL locks itself. The grant-checked activation then
+      // finds and activates them.
+      villagesql::services::maybe_apply_vef_role_grants(
+          &mpvio, acl_user->user, acl_user->host.get_host());
       /* Assign default role */
       {
         List_of_auth_id_refs default_roles;

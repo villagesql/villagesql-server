@@ -1,0 +1,14 @@
+name: Merge on LGTM and Approve
+on:
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jpmcb/prow-github-actions@c44ac3a57d67639e39e4a4988b52049ef45b80dd
+        with:
+          jobs: lgtm
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          merge-method: squash

@@ -1,0 +1,163 @@
+name: Nightly Dispatch
+
+# Handle workflows that want to run nightly, after the nightly build.
+#
+# The nightly build (nightly.yml) uploads a `nightly-info` artifact describing
+# the commit it built and the tag it pushed. `collect-info` reads that artifact
+# and publishes the ref, so each downstream run can use the exact commit.
+#
+# Each suite is started by its own job, so a suite that fails to start is
+# visible on its own in the Actions UI and does not stop the others. To add a
+# suite, copy a `start-*` job below and point it at another workflow.
+#
+# Suites are started with `gh workflow run`, NOT `uses:`, so each is a
+# genuinely separate workflow run with its own run ID and artifact namespace.
+# These jobs never check out the repo, so `gh` has no git remote to infer from;
+# every job that calls `gh` must set `GH_REPO`.
+#
+# `workflow_dispatch` is exempt from the GITHUB_TOKEN recursion guard
+# ("workflow_dispatch and repository_dispatch events always create workflow
+# runs"), so `actions: write` on the default token is enough — no PAT needed.
+
+on:
+  # A trigger for testing
+  workflow_dispatch:
+
+  workflow_run:
+    workflows: ['Nightly Build and Test']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # Resolve the commit every downstream suite should test.
+  collect-info:
+    name: Collect nightly info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # Required to read artifacts from the nightly run
+    # Exactly one of the two resolve steps runs, so each output takes whichever
+    # one produced a value. A skipped step's outputs are empty, so `||` picks
+    # the live one.
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref || steps.resolve-manual.outputs.ref }}
+      tag: ${{ steps.resolve.outputs.tag || steps.resolve-manual.outputs.tag }}
+      workflow-branch: ${{ steps.resolve.outputs.workflow_branch || steps.resolve-manual.outputs.workflow_branch }}
+
+    steps:
+      - name: Resolve ref (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        id: resolve-manual
+        env:
+          TAG: ${{ github.ref_name }}
+          # `gh workflow run --ref` takes a branch or tag, never a SHA. This is
+          # the branch whose workflow *definitions* are used; the commit under
+          # test is passed separately as each workflow's `ref` input.
+          WORKFLOW_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # There is no nightly to read on a manual run, so test the branch
+          # this run was dispatched from.
+          echo "Testing ref:     $WORKFLOW_BRANCH"
+          echo "Workflow branch: $WORKFLOW_BRANCH"
+
+          echo "ref=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "workflow_branch=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Download nightly info
+        if: github.event_name == 'workflow_run'
+        # The nightly may have died before uploading it. Tolerate the failed
+        # download so the resolve step below reports the cause.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-info
+          path: nightly-info/
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Resolve ref (nightly run)
+        if: github.event_name == 'workflow_run'
+        id: resolve
+        env:
+          # `gh workflow run --ref` takes a branch or tag, never a SHA. This is
+          # the branch whose workflow *definitions* are used; the commit under
+          # test is passed separately as each workflow's `ref` input.
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          INFO=nightly-info/nightly-info.json
+          if [[ ! -f "$INFO" ]]; then
+            echo "::error::No nightly-info artifact; cannot resolve the commit to test."
+            exit 1
+          fi
+          # Show humans what was received.
+          jq . "$INFO"
+
+          SHA=$(jq -r '.sha // ""' "$INFO")
+          TAG=$(jq -r '.tagName // ""' "$INFO")
+          if [[ -z "$SHA" ]]; then
+            echo "::error::nightly-info.json has no 'sha'; cannot resolve the commit to test."
+            exit 1
+          fi
+
+          echo "Testing ref:     $SHA (nightly tag: ${TAG:-none})"
+          echo "Workflow branch: $WORKFLOW_BRANCH"
+
+          echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "workflow_branch=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
+
+  start-full-test-release:
+    if: always()
+    name: Start full test suite (release)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start full-test-suite (release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run full-test-suite.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f build-type=release \
+            -f artifact-prefix=nightly-full-release
+          echo "Started full-test-suite (release) on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  start-full-test-debug:
+    if: always()
+    name: Start full test suite (debug)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start full-test-suite (debug)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run full-test-suite.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f build-type=debug \
+            -f artifact-prefix=nightly-full-debug
+          echo "Started full-test-suite (debug) on $REF" >> "$GITHUB_STEP_SUMMARY"

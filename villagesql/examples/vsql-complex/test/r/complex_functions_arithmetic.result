@@ -23,8 +23,8 @@ ORDER BY id;
 id	name	val1	val2	sum	difference	product	quotient
 1	basic	(1,2)	(3,4)	(4,6)	(-2,-2)	(-5,10)	(0.44,0.08)
 2	with_negatives	(-1,-2)	(3,4)	(2,2)	(-4,-6)	(5,-10)	(-0.44,-0.08)
-3	pure_real	(5,0)	(3,0)	(8,0)	(2,0)	(15,0)	(1.66667,0)
-4	pure_imag	(0,2)	(0,3)	(0,5)	(0,-1)	(-6,0)	(0.666667,0)
+3	pure_real	(5,0)	(3,0)	(8,0)	(2,0)	(15,0)	(1.6666666666666667,0)
+4	pure_imag	(0,2)	(0,3)	(0,5)	(0,-1)	(-6,0)	(0.6666666666666666,0)
 5	mixed	(1.5,2.5)	(-0.5,1.5)	(1,4)	(2,1)	(-4.5,1)	(1.2,-1.4)
 6	divide_by_zero	(1,2)	(0,0)	(1,2)	(1,2)	(0,0)	NULL
 7	divide_by_null	(1,2)	NULL	NULL	NULL	NULL	NULL
@@ -73,8 +73,8 @@ ORDER BY id;
 name	val1	val2	result
 basic	(1,2)	(3,4)	(0.44,0.08)
 with_negatives	(-1,-2)	(3,4)	(-0.44,-0.08)
-pure_real	(5,0)	(3,0)	(1.66667,0)
-pure_imag	(0,2)	(0,3)	(0.666667,0)
+pure_real	(5,0)	(3,0)	(1.6666666666666667,0)
+pure_imag	(0,2)	(0,3)	(0.6666666666666666,0)
 mixed	(1.5,2.5)	(-0.5,1.5)	(1.2,-1.4)
 divide_by_zero	(1,2)	(0,0)	NULL
 divide_by_null	(1,2)	NULL	NULL

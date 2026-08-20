@@ -71,7 +71,9 @@ bool VictionaryClient::init(THD *thd) {
     return true;
   }
 
-  if (should_assert_if_true(reload_all_tables(thd))) {
+  // Bad table contents (e.g. duplicate canonical keys) are a datadir
+  // fault, not a code bug, so no assert.
+  if (reload_all_tables(thd)) {
     LogVSQL(ERROR_LEVEL, "Failed to load all villagesql tables");
     return true;
   }
@@ -305,6 +307,12 @@ std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
   if (!m_initialized.load()) return {};
   return m_custom_index_columns.get_prefix_committed(
       IndexColumnKeyPrefix(index_id));
+}
+
+std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
+    THD *thd, uint64_t index_id) const {
+  if (!m_initialized.load()) return {};
+  return m_custom_index_columns.get_prefix(thd, IndexColumnKeyPrefix(index_id));
 }
 
 void VictionaryClient::init_index_id_counter() {

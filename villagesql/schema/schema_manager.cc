@@ -172,33 +172,37 @@ struct VillageSQL_table {
 
 // Define expected structure for properties table
 static const TABLE_FIELD_TYPE properties_fields[] = {
-    {{STRING_WITH_LEN("name")}, {STRING_WITH_LEN("varchar(64)")}, {nullptr, 0}},
-    {{STRING_WITH_LEN("value")}, {STRING_WITH_LEN("longtext")}, {nullptr, 0}},
+    {{STRING_WITH_LEN("name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {STRING_WITH_LEN("utf8mb4")}},
+    {{STRING_WITH_LEN("value")},
+     {STRING_WITH_LEN("longtext")},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("description")},
      {STRING_WITH_LEN("text")},
-     {nullptr, 0}}};
+     {STRING_WITH_LEN("utf8mb4")}}};
 static const TABLE_FIELD_DEF properties_def = {3, properties_fields};
 
 // Define expected structure for properties table
 static const TABLE_FIELD_TYPE columns_fields[] = {
     {{STRING_WITH_LEN("db_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("table_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("column_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_version")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("type_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("type_parameters")},
      {STRING_WITH_LEN("json")},
      {nullptr, 0}}};
@@ -208,22 +212,22 @@ static const TABLE_FIELD_DEF columns_def = {7, columns_fields};
 static const TABLE_FIELD_TYPE sp_params_fields[] = {
     {{STRING_WITH_LEN("db_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("sp_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("param_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_version")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("type_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("type_parameters")},
      {STRING_WITH_LEN("json")},
      {nullptr, 0}}};
@@ -233,13 +237,13 @@ static const TABLE_FIELD_DEF sp_params_def = {7, sp_params_fields};
 static const TABLE_FIELD_TYPE extensions_fields[] = {
     {{STRING_WITH_LEN("extension_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_version")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("veb_sha256")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("pending_action")},
      {STRING_WITH_LEN("json")},
      {nullptr, 0}}};
@@ -252,22 +256,22 @@ static const TABLE_FIELD_TYPE custom_indexes_fields[] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("db_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("table_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("index_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_version")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("index_type_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("index_type_parameters")},
      {STRING_WITH_LEN("json")},
      {nullptr, 0}}};
@@ -283,16 +287,16 @@ static const TABLE_FIELD_TYPE custom_index_columns_fields[] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("column_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("extension_version")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}},
+     {STRING_WITH_LEN("utf8mb4")}},
     {{STRING_WITH_LEN("profile_name")},
      {STRING_WITH_LEN("varchar(64)")},
-     {nullptr, 0}}};
+     {STRING_WITH_LEN("utf8mb4")}}};
 static const TABLE_FIELD_DEF custom_index_columns_def = {
     6, custom_index_columns_fields};
 
@@ -353,7 +357,8 @@ static bool validate_villagesql_tables(THD *thd) {
     // or version mismatches early (same pattern as component system)
     Village_system_table_intact table_intact(thd);
 
-    if (table_intact.check(thd, table, table_info.expected_def)) {
+    if (table_intact.check_with_collation(thd, table,
+                                          table_info.expected_def)) {
       // Table structure doesn't match expected schema
       LogVSQL(ERROR_LEVEL, "%s table structure is incorrect",
               table_info.table_name);
@@ -386,8 +391,9 @@ bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
   if (from_version < version_005) {
     if (upgrade::upgrade_villagesql_from_0_0_4_to_0_0_5(thd)) return true;
   }
-  // Upgrade from 0.0.5 to 0.0.6: disable persistent InnoDB statistics on the
-  // system tables so the background stats thread stops taking MDL on them.
+  // Upgrade from 0.0.5 to 0.0.6: convert system tables to utf8mb4_bin and
+  // disable persistent InnoDB statistics on the system tables so the background
+  // stats thread stops taking MDL on them.
   Semver version_006;
   version_006.from_components(0, 0, 6, from_version.code_base());
   if (from_version < version_006) {
@@ -648,6 +654,19 @@ bool install_villagesql_schema(THD *thd) {
   return false;
 }
 
+// Bootstrap-thread handler with the guards upgrade_villagesql_schema
+// normally inherits from dd::upgrade::upgrade_system_schemas.
+bool upgrade_villagesql_schema_in_bootstrap(THD *thd) {
+  const Disable_autocommit_guard autocommit_guard(thd);
+  dd::upgrade::Bootstrap_error_handler error_handler;
+  const Disable_binlog_guard disable_binlog(thd);
+  const Disable_sql_log_bin_guard disable_sql_log_bin(thd);
+
+  const bool err = SchemaManager::upgrade_villagesql_schema(thd);
+  clear_table_caches(thd);
+  return dd::end_transaction(thd, err);
+}
+
 }  // namespace
 
 bool SchemaManager::maybe_install_villagesql_schema_on_first_run(
@@ -679,6 +698,15 @@ bool SchemaManager::maybe_install_villagesql_schema_on_first_run(
   delete_optimizer_cost_module();
 
   return false;
+}
+
+bool SchemaManager::run_villagesql_upgrades_standalone() {
+  init_optimizer_cost_module(true);
+  const bool err = bootstrap::run_bootstrap_thread(
+      nullptr, nullptr, &upgrade_villagesql_schema_in_bootstrap,
+      SYSTEM_THREAD_SERVER_UPGRADE);
+  delete_optimizer_cost_module();
+  return err;
 }
 
 bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
