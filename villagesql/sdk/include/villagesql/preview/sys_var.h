@@ -163,9 +163,9 @@ struct SysVarDescriptor {
 //   namespace sv = vsql::preview_sys_var;
 //
 //   static auto g_sys_vars = sv::make_capability({
-//       {sv::BOOL, "enabled",      "Enable feature",  &g_enabled,   true},
-//       {sv::INT,  "threshold_ms", "Threshold in ms", &g_threshold, 1000, 0,
-//       3600000}});
+//       sv::make_bool("enabled", "Enable feature", &g_enabled, true),
+//       sv::make_int("threshold_ms", "Threshold in ms", &g_threshold, 1000, 0,
+//                    3600000)});
 //
 //   VEF_GENERATE_ENTRY_POINTS(
 //       make_extension()
