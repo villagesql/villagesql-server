@@ -139,7 +139,7 @@ jobs:
           docker image rm -f "$IMAGE" || true
 
       # The default buildx 'docker' driver is what we want: a native
-      # single-platform build. 
+      # single-platform build.
       #
       # There is no layer cache to speak of: these run on ephemeral
       # GitHub-hosted runners, so every build compiles the server from cold.

@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: 'ON'
+      shared_tags:
+        description: 'Comma-separated tags the manifest is published under in addition to "tag". Empty publishes only "tag", which is what a test push wants.'
+        required: false
+        type: string
+        default: 'latest,stable'
   workflow_dispatch:
     inputs:
       ref:
@@ -67,6 +72,11 @@ on:
           - 'ON'
           - 'OFF'
         default: 'ON'
+      shared_tags:
+        description: 'Comma-separated tags the manifest is published under in addition to "tag". Clear this for a test push, so latest and stable do not move.'
+        required: false
+        type: string
+        default: 'latest,stable'
 
 permissions:
   contents: read
@@ -99,6 +109,7 @@ jobs:
           echo "Repository: ${{ inputs.repo }}"
           echo "Pre-release Version: '${{ inputs.pre_release_version }}'"
           echo "Dev ABI: ${{ inputs.dev_abi }}"
+          echo "Shared Tags: '${{ inputs.shared_tags }}'"
 
       # Matrix logic lives in villagesql/bld_matrix, so it can be run locally
       # exactly as it runs here:
@@ -166,11 +177,12 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # The shared tags (latest, stable) are left at the publish_manifest.sh
-      # default, and move to this tag.
+      # The shared tags move to this manifest. A test push clears them, so
+      # that a 'docker pull villagesql/server' cannot see the result.
       - name: Publish manifest
         run: |
           docker/server/publish_manifest.sh \
             --tag "${{ inputs.tag || inputs.ref }}" \
             --repo "${{ inputs.repo }}" \
-            --platforms "${{ needs.report-parameters.outputs.platforms }}"
+            --platforms "${{ needs.report-parameters.outputs.platforms }}" \
+            --shared-tags "${{ inputs.shared_tags }}"

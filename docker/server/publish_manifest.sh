@@ -88,9 +88,13 @@ verify_arch_images() {
 publish_manifest() {
     local manifest_args=() shared_tag
     manifest_args+=(-t "$REPO:$TAG")
-    for shared_tag in "${SHARED_TAG_LIST[@]}"; do
-        manifest_args+=(-t "$REPO:$shared_tag")
-    done
+    # Guarded by the count: bash 3.2, and so macOS, treats "${arr[@]}" on an
+    # empty array as an unbound variable under set -u.
+    if [ "${#SHARED_TAG_LIST[@]}" -gt 0 ]; then
+        for shared_tag in "${SHARED_TAG_LIST[@]}"; do
+            manifest_args+=(-t "$REPO:$shared_tag")
+        done
+    fi
 
     echo "--- Publishing manifest tags ---"
     run docker buildx imagetools create "${manifest_args[@]}" "${ARCH_TAGS[@]}"
