@@ -62,7 +62,11 @@ WHERE t_temp.amount > 100
 ORDER BY t_temp.amount;
 
 # Test 6: Verify EXPLAIN shows join plan
-EXPLAIN SELECT * FROM t_perm INNER JOIN t_temp ON t_perm.val = t_temp.val;
+# STRAIGHT_JOIN pins the join order: the row-count estimates for these tiny
+# tables vary between runs, which otherwise flips which table is scanned first.
+# rows and filtered are optimizer estimates that vary by platform/run
+--replace_column 10 # 11 #
+EXPLAIN SELECT * FROM t_perm STRAIGHT_JOIN t_temp ON t_perm.val = t_temp.val;
 
 DROP TABLE t_temp;
 DROP TABLE t_perm;
