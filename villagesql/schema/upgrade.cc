@@ -67,21 +67,37 @@ bool upgrade_villagesql_from_0_0_5_to_0_0_6(THD *thd) {
   // extension-update apply writes these tables just before
   // dd::reset_tables_and_tablespaces() takes MDL_EXCLUSIVE on every cached
   // table with a one-year lock wait.
+  //
+  // CONVERT TO is table-wide and also stamps the table collation onto JSON
+  // columns, which CREATE TABLE leaves at binary. Restate each JSON column so
+  // it is re-parsed as JSON and keeps the binary collation an install produces;
+  // otherwise an upgraded datadir carries different column metadata than a
+  // fresh one. Keep these definitions in sync with
+  // villagesql/schema/villagesql_schema.sql.in.
   LogVSQL(INFORMATION_LEVEL,
           "Upgrading villagesql system tables to utf8mb4_bin and adding "
           "STATS_PERSISTENT=0");
   static const char *statements[] = {
       "ALTER TABLE villagesql.extensions "
       "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "MODIFY pending_action JSON NULL "
+      "COMMENT 'Pending deferred action (e.g. version update). "
+      "NULL when no action is pending.', "
       "STATS_PERSISTENT=0",
       "ALTER TABLE villagesql.custom_columns "
       "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "MODIFY type_parameters JSON NOT NULL "
+      "COMMENT 'Type instantiation parameters as JSON', "
       "STATS_PERSISTENT=0",
       "ALTER TABLE villagesql.custom_sp_params "
       "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "MODIFY type_parameters JSON NOT NULL "
+      "COMMENT 'Type instantiation parameters as JSON', "
       "STATS_PERSISTENT=0",
       "ALTER TABLE villagesql.custom_indexes "
       "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
+      "MODIFY index_type_parameters JSON NOT NULL "
+      "COMMENT 'Index type instantiation parameters as JSON', "
       "STATS_PERSISTENT=0",
       "ALTER TABLE villagesql.custom_index_columns "
       "CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, "
