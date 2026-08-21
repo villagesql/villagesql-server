@@ -335,7 +335,7 @@ INSERT INTO I_S_published_schema
 # lctn=1 (case-insensitive FS, e.g. macOS) recorded 2026-08-11 from this merge.
 # lctn=0 still holds VillageSQL's pre-merge value and MUST be recomputed on a
 # case-sensitive filesystem (Linux) -- it cannot be produced on macOS.
-        '046414dff37c1d172842d5d012e1887fee3fb87600ae0554a409892b85396c2b');
+        'c0f7d9d5c9fcf7cf67cb0da828ec4cfa08e8feeac183a2727e63e7ed568d91aa');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 1,
         '7f528649d6b321e72becbe3439b982925ba4408402b9577b774cfd72d14d6ad7');
