@@ -322,7 +322,7 @@ INSERT INTO I_S_published_schema
         '043975d2bcbbf7eed996b8917c41b14363c2c2904658355a414d3ebbb96a8f2b');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 0,
-        '046414dff37c1d172842d5d012e1887fee3fb87600ae0554a409892b85396c2b');
+        '2f3bb6a6328931f023ead68c3cfdf3fcbc69c004ab30c5770229d6c4f1ebb4d6');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 1,
         '09304ef7f82d7b15c4d4225f081c91b55e9bcb847107e58f03195e9dc0bab664');
