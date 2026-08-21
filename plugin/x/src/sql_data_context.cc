@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, 2026, Oracle and/or its affiliates.
+ * Copyright (c) 2026 VillageSQL Contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -680,7 +681,9 @@ ngs::Error_code Sql_data_context::execute_server_command(
 
 // UBSAN vptr instrumentation emits a THD RTTI reference, but xplugin_unit_tests
 // links libmysqlx without the server THD typeinfo.
-bool Sql_data_context::is_sql_mode_set(const std::string &mode) SUPPRESS_UBSAN {
+// TODO(villagesql-rebase): upstream puts SUPPRESS_UBSAN after the declarator,
+// which GCC rejects on a function definition; keep it in prefix position.
+SUPPRESS_UBSAN bool Sql_data_context::is_sql_mode_set(const std::string &mode) {
   if (mode == "NO_BACKSLASH_ESCAPES") {
     // This mode is checked by X Plugin query builders while preparing SQL
     // literals. Read it directly from THD to avoid executing SELECT @@sql_mode:
