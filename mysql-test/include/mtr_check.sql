@@ -140,7 +140,9 @@ BEGIN
     FROM INFORMATION_SCHEMA.TABLES
       WHERE table_schema='mysql' AND table_name != 'ndb_apply_status'
         ORDER BY tables_in_mysql;
-  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ CONCAT(table_schema, '.', table_name) AS columns_in_mysql,
+  -- sql_big_selects=1 exempts this query from max_join_size: its row
+  -- estimate exceeds the cap on servers started with --maximum-max-join-size.
+  SELECT /*+SET_VAR(use_secondary_engine=OFF) SET_VAR(sql_big_selects=1)*/ CONCAT(table_schema, '.', table_name) AS columns_in_mysql,
        column_name, ordinal_position, column_default, is_nullable,
        data_type, character_maximum_length, character_octet_length,
        numeric_precision, numeric_scale, character_set_name,
