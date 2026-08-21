@@ -45,7 +45,16 @@ echo $str;
 eval INSERT INTO I_S_check_table(t) VALUES ("$str");
 
 let $WHERE_COND = AND TABLE_NAME='COLUMNS';
-replace_regex /(cat|sch|tbl).name COLLATE utf8mb3_tolower_ci/\1.name/;
+# VillageSQL's COLUMNS override joins villagesql.custom_columns, and the
+# db/table name predicate depends on lower_case_table_names (see
+# database_name_match_sql() in villagesql/schema/identifier_names.cc): a
+# byte compare at 0, case-folded otherwise. Normalize the folded spelling
+# to the byte-compare spelling, the same direction the fs_name_collation()
+# masks above use, so one result file serves both filesystem kinds. The
+# predicate itself stays covered by PART 3, whose checksum is recorded per
+# lower_case_file_system value.
+replace_regex /(cat|sch|tbl).name COLLATE utf8mb3_tolower_ci/\1.name/
+              /LOWER\(vcc.(db_name|table_name)\)=LOWER\(CONVERT\((sch|tbl).name USING utf8mb4\) COLLATE utf8mb4_bin\)/vcc.\1=CONVERT(\2.name USING utf8mb4) COLLATE utf8mb4_bin/;
 let $str = `$SELECT_CMD $WHERE_COND`;
 echo $str;
 eval INSERT INTO I_S_check_table(t) VALUES ("$str");

@@ -112,9 +112,10 @@ let $expected_system_view_count = 51;
 # not done.
 # The 90500 lctn=0 (case-sensitive FS) row is re-recorded on Linux and covers the
 # EXTENSIONS PENDING_* columns and the COLUMNS MYSQL_TYPE_VECTOR arms.
-# TODO(villagesql-rebase): the 90500 lctn=1 (case-insensitive FS) row predates
-# both of those and is stale -- re-record it on macOS; that FS combo cannot be
-# reproduced on Linux.
+# The 90500 lctn=1 (case-insensitive FS) row is re-recorded on macOS/APFS, where
+# lower_case_file_system is ON and mysqld raises lower_case_table_names to 2. A
+# case-sensitive APFS disk image gives the lctn=0 combination on the same host,
+# so either row can be re-recorded on macOS; Linux only reaches lctn=0.
 
 --echo ########################################################################
 --echo # PART 1
@@ -377,7 +378,7 @@ INSERT INTO I_S_published_schema
         'b739947ca72b56e1a2b850bacc8d2c67fa8ce6fbfa99f9a7457d910038e46dd4');
 INSERT INTO I_S_published_schema
   VALUES ('90500', '90500', 1,
-        '0431c2684b70d9ee4c507ea9979af3ba65f6bfff00824cbffc83ab794ac1d86b');
+        'b8e84217fc979ad3550ec403343db7c94e657d7319aa7bf86eac68e3ff1fd304');
 
 LET $checksum_version = `SELECT IF(ISNULL(mysqld_version), "0", i_s_version)
                   FROM I_S_published_schema i RIGHT OUTER JOIN whole_schema w
