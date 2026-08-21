@@ -2915,7 +2915,12 @@ dberr_t row_create_index_for_mysql(
     ut_ad(table->is_intrinsic());
   }
 
-  for (i = 0; i < index->n_def; i++) {
+  // VillageSQL: an extension-defined index keys on a small stable reference,
+  // not the column value, so the column-length limit does not apply; whether it
+  // can be built is the extension's decision (its create hook).
+  const bool custom_index = villagesql::innodb::Custom_index::is_custom(index);
+
+  for (i = 0; i < index->n_def && !custom_index; i++) {
     /* Check that prefix_len and actual length
     < DICT_MAX_INDEX_COL_LEN */
 

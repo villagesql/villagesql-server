@@ -3215,6 +3215,13 @@ index for FTS index */
 {
   for (ulint key_part = 0; key_part < key_info->user_defined_key_parts;
        key_part++) {
+    // VillageSQL: an externally-stored column contributes only a small stable
+    // reference to the index key, not its value, so the column-length limit
+    // does not apply to it.
+    const Field *field = key_info->key_part[key_part].field;
+    if (field != nullptr && field->has_external_storage()) {
+      continue;
+    }
     if (key_info->key_part[key_part].length > max_col_len) {
       return (true);
     }

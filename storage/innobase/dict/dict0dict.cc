@@ -2236,6 +2236,15 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
     return;
   }
 
+  // VillageSQL: an externally-stored column keeps only a fixed-size reference in
+  // the record; its value lives outside. Its record footprint is that reference
+  // even when the column is used for B-tree navigation, since the key is on the
+  // reference, not the value.
+  if (col->stored_by_extn()) {
+    rec_max_size += dfield_t::extended_ref_size();
+    return;
+  }
+
   size_t field_max_size = col->get_max_size();
   size_t field_ext_max_size = DATA_BIG_COL(col) ? 2 : 1;
 

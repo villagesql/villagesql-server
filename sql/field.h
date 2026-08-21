@@ -1911,6 +1911,13 @@ class Field {
   }
   bool has_type_context() const { return nullptr != custom_type; }
 
+  // VillageSQL: true if this column's value lives in external (columnar)
+  // storage, so only a small stable reference is kept inline. Column-length and
+  // key-length limits apply to that reference, not the value.
+  bool has_external_storage() const {
+    return has_type_context() && custom_type->storage_intf().has_value();
+  }
+
   villagesql::TypeEncoder *get_type_encoder() const { return type_encoder_; }
   void set_type_encoder(villagesql::TypeEncoder *encoder) {
     type_encoder_ = encoder;
