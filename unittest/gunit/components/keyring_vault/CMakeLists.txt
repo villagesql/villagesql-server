@@ -69,6 +69,39 @@ target_link_libraries(merge_component_keyring_vault_tests-t
 
 add_dependencies(merge_component_keyring_vault_tests-t GenError)
 
+# Unlike upstream's aggregate merge targets, this one links the server libraries
+# directly rather than through server_unittest_library, so it inherits none of
+# the link-time warning downgrades that whole-server links need. Without them a
+# RelWithDebInfo build on a DEB platform fails: dpkg-buildflags supplies
+# -flto=auto, and under LTO these diagnostics are emitted at link time, where
+# per-source-file suppressions cannot reach them. The same three warning classes
+# upstream downgrades elsewhere then become fatal via VILLAGESQL_WERROR --
+# boost geometry/spirit and sql/rpl_info_values.cc, the very sites named in the
+# server_unittest_library block in the top-level CMakeLists.txt.
+#
+# Shape and gating copied from the two existing precedents rather than invented:
+# unittest/gunit/CMakeLists.txt's merge_large_tests-t for the alloc-size and
+# stringop downgrades, and server_unittest_library for the LTO-gated
+# maybe-uninitialized one.
+#
+# TODO(villagesql-rebase): the underlying deviation is the direct link above. If
+# this target is ever reworked to link server_unittest_library like
+# merge_large_tests-t does, it inherits the downgrades and this block goes away.
+IF(TARGET merge_component_keyring_vault_tests-t)
+  IF(MY_COMPILER_IS_GNU)
+    TARGET_LINK_OPTIONS(merge_component_keyring_vault_tests-t
+      PRIVATE -Wno-alloc-size-larger-than)
+  ENDIF()
+  DOWNGRADE_STRINGOP_WARNINGS(merge_component_keyring_vault_tests-t)
+  IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
+    MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
+    IF(HAS_WARN_FLAG)
+      MY_TARGET_LINK_OPTIONS(merge_component_keyring_vault_tests-t
+        "${HAS_WARN_FLAG}")
+    ENDIF()
+  ENDIF()
+ENDIF()
+
 foreach(test ${TESTS})
   MYSQL_ADD_EXECUTABLE(${test}-t ${test}-t.cc
     ENABLE_EXPORTS SKIP_INSTALL EXCLUDE_FROM_ALL)
