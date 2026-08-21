@@ -7,8 +7,8 @@
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   source "$SCRIPT_DIR/build_info.sh"
 #
-# Expects a prior inclusion of the utities
-#   source "$SOURCE_DIR/villagesql/scripts/vsql_scripts_utils.sh"
+# Expects a prior inclusion of the utilities
+#   source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 # Parse VSQL_VERSION file from <source_dir>.
 # Sets VSQL_MAJOR, VSQL_MINOR, VSQL_PATCH, VSQL_PRE, VSQL_VERSION.
