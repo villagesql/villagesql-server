@@ -325,7 +325,7 @@ INSERT INTO I_S_published_schema
         '2f3bb6a6328931f023ead68c3cfdf3fcbc69c004ab30c5770229d6c4f1ebb4d6');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 1,
-        '09304ef7f82d7b15c4d4225f081c91b55e9bcb847107e58f03195e9dc0bab664');
+        '377b58a949f952fab90c2a00e59614f0c0150892e071acd289f3e47ff92dd5a7');
 
 LET $checksum_version = `SELECT IF(ISNULL(mysqld_version), "0", i_s_version)
                   FROM I_S_published_schema i RIGHT OUTER JOIN whole_schema w
