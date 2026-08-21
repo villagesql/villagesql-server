@@ -1,0 +1,91 @@
+# Verify that a data directory whose stored version names a different code base
+# is rejected at startup.
+#
+# Semver deliberately leaves versions from different code bases unordered, so
+# the numeric upgrade comparison can never see a code base change. Without an
+# explicit check the upgrade is skipped silently, the stored version keeps
+# naming the old code base, and every later restart re-runs the whole server
+# upgrade path.
+
+--source include/villagesql/internal_schema_test.inc
+
+let BASEDIR= `select @@basedir`;
+let DDIR=$MYSQL_TMP_DIR/upgrade_code_base_mismatch_test;
+let INIT_LOG=$MYSQL_TMP_DIR/upgrade_code_base_mismatch_init.log;
+let START_LOG=$MYSQL_TMP_DIR/upgrade_code_base_mismatch_start.log;
+let MINIMAL_LOG=$MYSQL_TMP_DIR/upgrade_code_base_mismatch_minimal.log;
+let SOCKET=$MYSQL_TMP_DIR/upgrade_code_base_mismatch.sock;
+let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --tls-version= --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR;
+let BOOTSTRAP_SQL=$MYSQL_TMP_DIR/upgrade_code_base_mismatch_bootstrap.sql;
+
+write_file $BOOTSTRAP_SQL;
+CREATE DATABASE test;
+EOF
+
+--echo # Shut server down
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--echo # Initialize a fresh datadir
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 > $INIT_LOG 2>&1
+
+--echo # Start the server on the fresh datadir, which must succeed
+--exec echo "restart:--datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+--source include/villagesql/internal_schema_test.inc
+
+--echo # Rewrite the stored version to name a different code base. The value is
+--echo # a valid version so this exercises the code base check rather than
+--echo # version parsing, and is picked so it always differs from the code base
+--echo # of the running build.
+UPDATE villagesql.properties
+   SET value = IF(@@GLOBAL.villagesql_server_version LIKE 'percona-9.7\_%',
+                  'mysql-8.4_0.0.1',
+                  'percona-9.7_0.0.1')
+ WHERE name = 'version';
+
+SELECT SUBSTRING_INDEX(value, '_', 1)
+         <> SUBSTRING_INDEX(@@GLOBAL.villagesql_server_version, '_', 1)
+         AS code_base_differs
+  FROM villagesql.properties
+ WHERE name = 'version';
+
+--echo # Shut server down
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server
+--source include/wait_until_disconnected.inc
+
+--echo # Starting on that datadir must fail rather than skip the upgrade.
+# mysqld is run directly rather than through the restart mechanism so that a
+# failed start is the expected outcome. Should the check ever regress, the
+# server starts instead of exiting and this exec blocks until the testcase
+# timeout, which still fails the test.
+--error 1
+--exec $MYSQLD $extra_args --datadir=$DDIR --skip-networking --socket=$SOCKET > $START_LOG 2>&1
+
+let SEARCH_FILE= $START_LOG;
+let SEARCH_PATTERN= Cannot upgrade the VillageSQL schema across code bases;
+--source include/search_pattern.inc
+
+--echo # --upgrade=MINIMAL skips the server upgrades but still runs the
+--echo # VillageSQL ones, so it must be rejected too.
+--error 1
+--exec $MYSQLD $extra_args --datadir=$DDIR --skip-networking --socket=$SOCKET --upgrade=MINIMAL > $MINIMAL_LOG 2>&1
+
+let SEARCH_FILE= $MINIMAL_LOG;
+let SEARCH_PATTERN= Cannot upgrade the VillageSQL schema across code bases;
+--source include/search_pattern.inc
+
+--echo # Cleanup
+remove_file $INIT_LOG;
+remove_file $START_LOG;
+remove_file $MINIMAL_LOG;
+remove_file $BOOTSTRAP_SQL;
+--force-rmdir $DDIR
+
+--echo # Restart with the original datadir
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # Test completed successfully

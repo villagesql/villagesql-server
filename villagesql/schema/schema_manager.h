@@ -113,6 +113,9 @@ class SchemaManager {
    * constant. If an upgrade is needed, it runs version-specific migration
    * functions and updates the stored version.
    *
+   * Fails if the stored version names a different code base than the running
+   * build, since upgrading across code bases is not supported.
+   *
    * @param[in]  thd   Thread handle.
    *
    * @retval false  ON SUCCESS

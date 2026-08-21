@@ -1,6 +1,10 @@
 SET SESSION debug='+d,skip_dd_table_access_check';
 call mtr.add_suppression("Server upgrade is required, but skipped");
-UPDATE villagesql.properties SET value = 'mysql-9.7_0.0.5' WHERE name = 'version';
+UPDATE villagesql.properties
+SET value = CONCAT(
+SUBSTRING_INDEX(@@GLOBAL.villagesql_server_version, '_', 1),
+'_0.0.5')
+WHERE name = 'version';
 SELECT value FROM villagesql.properties WHERE name = 'version';
 value
 mysql-9.7_0.0.5

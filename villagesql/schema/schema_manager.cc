@@ -714,6 +714,32 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
   const Semver current_villagesql_version = get_version();
   const Semver target_villagesql_version = GetBuildVersion();
 
+  // A code base change is not a numeric upgrade, so Semver deliberately leaves
+  // versions from different code bases unordered and the comparison below can
+  // never see one. Refuse to start rather than fall through it: otherwise the
+  // version-specific upgrades are skipped, the stored version keeps naming the
+  // old code base, and is_villagesql_upgrade_needed() stays true so every
+  // later restart re-runs the whole server upgrade path.
+  //
+  // An invalid stored version means the schema is missing or incomplete, not
+  // that it came from another code base: an unparsable stored version already
+  // failed startup back in read_villagesql_version(). Installing is the job of
+  // maybe_install_villagesql_schema_on_first_run(), which runs after this, so
+  // there is nothing to check or upgrade here.
+  //
+  // TODO(villagesql-ga): support upgrading a data directory across code bases.
+  if (current_villagesql_version.is_valid() &&
+      current_villagesql_version.code_base() !=
+          target_villagesql_version.code_base()) {
+    LogVSQL(ERROR_LEVEL,
+            "Cannot upgrade the VillageSQL schema across code bases: this data "
+            "directory was created by a %s build, but this server is a %s "
+            "build. Use the original server binary for this data directory.",
+            current_villagesql_version.to_string().c_str(),
+            target_villagesql_version.to_string().c_str());
+    return true;
+  }
+
   if (current_villagesql_version < target_villagesql_version) {
     if (opt_upgrade_mode == UPGRADE_NONE) {
       LogVSQL(ERROR_LEVEL,
