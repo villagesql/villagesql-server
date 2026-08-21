@@ -16,10 +16,15 @@ call mtr.add_suppression("Server upgrade is required, but skipped");
 --eval $dd_columns_query
 --enable_query_log
 
-# Pretend the datadir is at schema version 0.0.5. The codebase prefix must match
-# VSQL_CODE_BASE: a stored version with a different codebase is refused rather
-# than upgraded, which would make this test assert the opposite of its intent.
-UPDATE villagesql.properties SET value = 'percona-8.4_0.0.5' WHERE name = 'version';
+# Pretend the datadir is at schema version 0.0.5 of this build's code base.
+# The code base is read from the build rather than written as a literal because
+# upgrade_villagesql_schema() refuses to upgrade across code bases: after a code
+# base port a stale literal would stop exercising the upgrade at all.
+UPDATE villagesql.properties
+   SET value = CONCAT(
+         SUBSTRING_INDEX(@@GLOBAL.villagesql_server_version, '_', 1),
+         '_0.0.5')
+ WHERE name = 'version';
 SELECT value FROM villagesql.properties WHERE name = 'version';
 
 --let $restart_parameters = restart: --upgrade=MINIMAL
@@ -28,7 +33,10 @@ SELECT value FROM villagesql.properties WHERE name = 'version';
 # The stored version is back at the build version iff the upgrades ran.
 --source include/villagesql/internal_schema_test.inc
 --disable_query_log
---eval SELECT value = '$build_version' AS villagesql_upgrades_ran FROM villagesql.properties WHERE name = 'version'
+# The stored version is printed too: a bare 0 cannot distinguish "the upgrades
+# did not run" from "they ran but stamped a different code base".
+--replace_result $build_version BUILD_VERSION
+--eval SELECT value = '$build_version' AS villagesql_upgrades_ran, value AS stored_version FROM villagesql.properties WHERE name = 'version'
 --enable_query_log
 
 --let $restart_parameters = restart
