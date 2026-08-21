@@ -6,6 +6,8 @@
 #   mysql-test/suite/villagesql/startup/r/upgrade_basic.result
 #   mysql-test/suite/villagesql/startup/r/upgrade_scenarios.result
 #   mysql-test/suite/villagesql/startup/r/upgrade_skip_grant_tables.result
+# When changing the codebase, also update:
+#   mysql-test/suite/villagesql/startup/r/upgrade_minimal.result
 # Codebase identifies a named fork that receives VillageSQL changes.
 # Versions with different codebase values should not allow upgrades.
 VSQL_CODE_BASE=mysql-8.4
