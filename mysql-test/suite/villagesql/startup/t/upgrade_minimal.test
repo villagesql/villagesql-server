@@ -17,7 +17,7 @@ call mtr.add_suppression("Server upgrade is required, but skipped");
 --enable_query_log
 
 # Pretend the datadir is at schema version 0.0.5.
-UPDATE villagesql.properties SET value = 'mysql-8.4_0.0.5' WHERE name = 'version';
+UPDATE villagesql.properties SET value = 'mysql-9.7_0.0.5' WHERE name = 'version';
 SELECT value FROM villagesql.properties WHERE name = 'version';
 
 --let $restart_parameters = restart: --upgrade=MINIMAL
@@ -26,7 +26,10 @@ SELECT value FROM villagesql.properties WHERE name = 'version';
 # The stored version is back at the build version iff the upgrades ran.
 --source include/villagesql/internal_schema_test.inc
 --disable_query_log
---eval SELECT value = '$build_version' AS villagesql_upgrades_ran FROM villagesql.properties WHERE name = 'version'
+# Print the stored version too: a bare 0 cannot distinguish "the upgrades
+# did not run" from "they ran but stamped a different code base".
+--replace_result $build_version BUILD_VERSION
+--eval SELECT value = '$build_version' AS villagesql_upgrades_ran, value AS stored_version FROM villagesql.properties WHERE name = 'version'
 --enable_query_log
 
 --let $restart_parameters = restart
