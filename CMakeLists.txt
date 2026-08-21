@@ -1547,9 +1547,23 @@ IF(WITH_TEST_TRACE_PLUGIN AND NOT CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG")
 ENDIF()
 
 # Set NDEBUG, and FORTIFY_SOURCE for non-debug project types.
+#
+# Only add _FORTIFY_SOURCE when the base flags do not already carry it. On DEB
+# platforms WITH_PACKAGE_FLAGS defaults to ON for RELWITHDEBINFO and pulls
+# -D_FORTIFY_SOURCE=3 out of dpkg-buildflags (Ubuntu 24.04), which lands in
+# CMAKE_${LANG}_FLAGS above. Prepending =2 here would then put two different
+# values of the same macro on one command line: gcc reports
+# '"_FORTIFY_SOURCE" redefined' for every translation unit, which
+# VILLAGESQL_WERROR turns into a build failure. Same test as the annobin
+# check below.
 FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
   FOREACH(LANG C CXX)
-    STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} "-DNDEBUG -D_FORTIFY_SOURCE=2 ")
+    IF(CMAKE_${LANG}_FLAGS MATCHES "FORTIFY_SOURCE")
+      STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} "-DNDEBUG ")
+    ELSE()
+      STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE}
+        "-DNDEBUG -D_FORTIFY_SOURCE=2 ")
+    ENDIF()
   ENDFOREACH()
 ENDFOREACH()
 
