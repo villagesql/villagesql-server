@@ -168,10 +168,20 @@
   - added table
   performance_schema.replication_asynchronous_connection_failover_managed
 
+  performance_schema tables changed in Percona Server 8.0.23-14
+  - add time_ms, rows_sent and rows_examined columns to
+  performance_schema.processlist
+
   80024:
 
   performance_schema tables changed in MySQL 8.0.24
   - WL#13446 added performance_schema.keyring_component_status
+
+  80025:
+
+  performance_schema tables changed in Percona Server 8.0.25-15
+  - malloc_stats
+  - malloc_stats_totals
 
   80027:
 
@@ -234,6 +244,10 @@
      SYS.INNODB_LOCK_WAITS IN MYSQL 8.0
      - Table performance_schema.data_lock_waits, add PRIMARY KEY.
 
+  80044:
+   - Percona Server added performance_schema.account_failed_login_lock_stats
+     table.
+
   80200:
 
    - WL#15199: PERFORMANCE_SCHEMA, OTEL METRICS INTERFACE
@@ -264,6 +278,10 @@
    - Bug#31763497 PERFORMANCE DEGRADATION CAUSED BY MONITORING
      SYS.INNODB_LOCK_WAITS IN MYSQL 8.0
      - Table performance_schema.data_lock_waits, add PRIMARY KEY.
+
+  80407:
+   - Percona Server added performance_schema.account_failed_login_lock_stats
+     table.
 
   80409:
 

@@ -972,7 +972,8 @@ Sql_cmd *PT_delete::make_cmd(THD *thd) {
     if (opt_delete_limit_clause->itemize(&pc, &opt_delete_limit_clause))
       return nullptr;
     select->select_limit = opt_delete_limit_clause;
-    lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_LIMIT);
+    if (select->select_limit->fixed && select->select_limit->val_int() != 0)
+      lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_LIMIT);
   }
 
   if (is_multitable() && multi_delete_link_tables(&pc, &delete_tables))
@@ -1220,6 +1221,8 @@ Sql_cmd *PT_call::make_cmd(THD *thd) {
 
   Parse_context pc(thd, lex->current_query_block());
 
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
+
   if (opt_expr_list != nullptr && opt_expr_list->contextualize(&pc))
     return nullptr; /* purecov: inspected */
 
@@ -1300,7 +1303,6 @@ bool PT_query_specification::do_contextualize(Parse_context *pc) {
 
   pc->select->parsing_place = CTX_NONE;
 
-  QueryLevel ql = pc->m_stack.back();
   pc->m_stack.pop_back();
   pc->m_stack.back().m_elts.push_back(pc->select);
   return (opt_hints != nullptr ? opt_hints->contextualize(pc) : false);
@@ -1329,7 +1331,6 @@ bool PT_table_value_constructor::do_contextualize(Parse_context *pc) {
     pc->select->fields.push_back(item);
   }
 
-  QueryLevel ql = pc->m_stack.back();
   pc->m_stack.pop_back();
   pc->m_stack.back().m_elts.push_back(pc->select);
 
@@ -1398,6 +1399,29 @@ bool PT_table_factor_function::do_contextualize(Parse_context *pc) {
                                               TL_READ, MDL_SHARED_READ);
   if (m_table_ref == nullptr || pc->select->add_joined_table(m_table_ref))
     return true;
+
+  return false;
+}
+
+bool PT_table_sequence_function::do_contextualize(Parse_context *pc) {
+  if (super::do_contextualize(pc) || m_expr->itemize(pc, &m_expr)) return true;
+
+  auto stf = new (pc->mem_root)
+      Table_function_sequence(m_table_alias.str, m_expr);
+  if (stf == nullptr) return true;  // OOM
+
+  LEX_CSTRING alias;
+  alias.length = strlen(stf->func_name());
+  alias.str = sql_strmake(stf->func_name(), alias.length);
+  if (alias.str == nullptr) return true;  // OOM
+
+  auto ti = new (pc->mem_root) Table_ident(alias, stf);
+  if (ti == nullptr) return true;
+
+  m_table_ref = pc->select->add_table_to_list(pc->thd, ti, m_table_alias.str, 0,
+                                        TL_READ, MDL_SHARED_READ);
+  if (m_table_ref == nullptr) return true;
+  if (pc->select->add_joined_table(m_table_ref)) return true;
 
   return false;
 }
@@ -1787,7 +1811,7 @@ bool PT_set_operation::contextualize_setop(Parse_context *pc,
     pc->thd->lex->pop_context();
   }
 
-  QueryLevel ql = pc->m_stack.back();
+  QueryLevel ql = std::move(pc->m_stack.back());
   pc->m_stack.pop_back();
 
   Query_term_set_op *setop = nullptr;
@@ -2360,9 +2384,9 @@ bool PT_column_def::do_contextualize(Table_ddl_parse_context *pc) {
       field_def->on_update_value, &field_def->comment, nullptr,
       field_def->interval_list, field_def->charset,
       field_def->has_explicit_collation, field_def->uint_geom_type,
-      field_def->gcol_info, field_def->default_val_info, opt_place,
-      field_def->m_srid, field_def->check_const_spec_list, field_hidden_type,
-      false, field_def->get_type_context());
+      &field_def->m_zip_dict, field_def->gcol_info, field_def->default_val_info,
+      opt_place, field_def->m_srid, field_def->check_const_spec_list,
+      field_hidden_type, false, field_def->get_type_context());
 }
 
 Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
@@ -2371,6 +2395,8 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   lex->sql_command = SQLCOM_CREATE_TABLE;
 
   Parse_context pc(thd, lex->current_query_block());
+
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
 
   Table_ref *table = pc.select->add_table_to_list(
       thd, table_name, nullptr, TL_OPTION_UPDATING, TL_WRITE, MDL_SHARED);
@@ -2762,6 +2788,51 @@ Sql_cmd *PT_show_databases::make_cmd(THD *thd) {
   return &m_sql_cmd;
 }
 
+Sql_cmd *PT_show_client_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_CLIENT_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_index_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_INDEX_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_table_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_TABLE_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_thread_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_THREAD_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_user_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_USER_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
 Sql_cmd *PT_show_engine_logs::make_cmd(THD *thd) {
   LEX *lex = thd->lex;
   lex->sql_command = m_sql_command;
@@ -3117,9 +3188,10 @@ bool PT_alter_table_change_column::do_contextualize(
       m_field_def->on_update_value, &m_field_def->comment, m_old_name.str,
       m_field_def->interval_list, m_field_def->charset,
       m_field_def->has_explicit_collation, m_field_def->uint_geom_type,
-      m_field_def->gcol_info, m_field_def->default_val_info, m_opt_place,
-      m_field_def->m_srid, m_field_def->check_const_spec_list,
-      field_hidden_type, false, m_field_def->get_type_context());
+      &m_field_def->m_zip_dict, m_field_def->gcol_info,
+      m_field_def->default_val_info, m_opt_place, m_field_def->m_srid,
+      m_field_def->check_const_spec_list, field_hidden_type, false,
+      m_field_def->get_type_context());
 }
 
 bool PT_alter_table_rename::do_contextualize(Table_ddl_parse_context *pc) {
@@ -3279,6 +3351,8 @@ Sql_cmd *PT_alter_table_stmt::make_cmd(THD *thd) {
   Table_ddl_parse_context pc(thd, thd->lex->current_query_block(),
                              &m_alter_info);
 
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
+
   if (init_alter_table_stmt(&pc, m_table_name, m_algo, m_lock, m_validation))
     return nullptr;
 
@@ -3317,6 +3391,9 @@ Sql_cmd *PT_alter_table_standalone_stmt::make_cmd(THD *thd) {
 
   Table_ddl_parse_context pc(thd, thd->lex->current_query_block(),
                              &m_alter_info);
+
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
+
   if (init_alter_table_stmt(&pc, m_table_name, m_algo, m_lock, m_validation) ||
       m_action->contextualize(&pc))
     return nullptr;
@@ -3349,6 +3426,9 @@ Sql_cmd *PT_analyze_table_stmt::make_cmd(THD *thd) {
   LEX *const lex = thd->lex;
   Query_block *const select = lex->current_query_block();
 
+  Parse_context pc(thd, select);
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
+
   lex->no_write_to_binlog = m_no_write_to_binlog;
   if (select->add_tables(thd, m_table_list, TL_OPTION_UPDATING, TL_UNLOCK,
                          MDL_SHARED_READ))
@@ -3376,6 +3456,10 @@ Sql_cmd *PT_check_table_stmt::make_cmd(THD *thd) {
     return nullptr;
   }
 
+  Parse_context pc(thd, select);
+
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
+
   lex->check_opt.flags |= m_flags;
   lex->check_opt.sql_flags |= m_sql_flags;
   if (select->add_tables(thd, m_table_list, TL_OPTION_UPDATING, TL_UNLOCK,
@@ -3393,6 +3477,11 @@ Sql_cmd *PT_optimize_table_stmt::make_cmd(THD *thd) {
   Query_block *const select = lex->current_query_block();
 
   lex->no_write_to_binlog = m_no_write_to_binlog;
+
+  Parse_context pc(thd, select);
+
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
+
   if (select->add_tables(thd, m_table_list, TL_OPTION_UPDATING, TL_UNLOCK,
                          MDL_SHARED_READ))
     return nullptr;
@@ -3507,6 +3596,8 @@ Sql_cmd *PT_load_index_stmt::make_cmd(THD *thd) {
 
   Table_ddl_parse_context pc(thd, thd->lex->current_query_block(),
                              &m_alter_info);
+
+  if (m_opt_hints != nullptr && m_opt_hints->contextualize(&pc)) return nullptr;
 
   for (auto *preload_keys : *m_preload_list)
     if (preload_keys->contextualize(&pc)) return nullptr;
@@ -3630,6 +3721,7 @@ bool PT_json_table_column_with_path::do_contextualize(Parse_context *pc) {
                  cs,                            // Charset & collation
                  m_collation != nullptr,        // Has "COLLATE" clause
                  m_type->get_uint_geom_type(),  // Geom type
+                 nullptr,                       // Compression dictionary name
                  nullptr,                       // Gcol_info
                  nullptr,                       // Default gen expression
                  {},                            // SRID
@@ -4338,7 +4430,7 @@ bool PT_query_expression::do_contextualize(Parse_context *pc) {
   if (Parse_tree_node::do_contextualize(pc) || m_body->contextualize(pc))
     return true;
 
-  QueryLevel ql = pc->m_stack.back();
+  QueryLevel ql = std::move(pc->m_stack.back());
   Query_term *expr = ql.m_elts.back();
   pc->m_stack.pop_back();
 
@@ -4379,7 +4471,7 @@ bool PT_query_expression::do_contextualize(Parse_context *pc) {
         expr = new (pc->mem_root) Query_term_unary(pc->mem_root, expr);
         if (expr == nullptr) return true;
       }
-      QueryLevel upper = pc->m_stack.back();
+      QueryLevel upper = std::move(pc->m_stack.back());
       pc->m_stack.pop_back();
       ql.m_elts.pop_back();
       if (upper.m_type == SC_UNION_DISTINCT || upper.m_type == SC_UNION_ALL ||
@@ -4388,7 +4480,7 @@ bool PT_query_expression::do_contextualize(Parse_context *pc) {
           upper.m_type == SC_INTERSECT_ALL)
         ql = upper;
       ql.m_elts.push_back(expr);
-      pc->m_stack.push_back(ql);
+      pc->m_stack.push_back(std::move(ql));
     } break;
     case QT_QUERY_BLOCK: {
       if (contextualize_order_and_limit(pc)) return true;
@@ -4396,7 +4488,7 @@ bool PT_query_expression::do_contextualize(Parse_context *pc) {
         expr = new (pc->mem_root) Query_term_unary(pc->mem_root, expr);
         if (expr == nullptr) return true;
       }
-      QueryLevel upper = pc->m_stack.back();
+      QueryLevel upper = std::move(pc->m_stack.back());
       pc->m_stack.pop_back();
       ql.m_elts.pop_back();
       if (upper.m_type == SC_UNION_DISTINCT || upper.m_type == SC_UNION_ALL ||
@@ -4405,7 +4497,7 @@ bool PT_query_expression::do_contextualize(Parse_context *pc) {
           upper.m_type == SC_INTERSECT_ALL)
         ql = upper;
       ql.m_elts.push_back(expr);
-      pc->m_stack.push_back(ql);
+      pc->m_stack.push_back(std::move(ql));
     } break;
     case QT_UNION:
     case QT_EXCEPT:

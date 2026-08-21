@@ -118,7 +118,6 @@ SET(TESTS
   charset_bug32788301
   collation_loader
   cost_estimate
-  dbug
   decimal
   dns_srv_data
   dphyp
@@ -187,6 +186,11 @@ SET(TESTS
   )
 
 LIST(TRANSFORM TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_SMALL_TESTS)
+
+OPTION(WITH_FAILING_GUNIT_TESTS "Build deliberately failing GUint tests" OFF)
+IF (WITH_FAILING_GUNIT_TESTS)
+    LIST(APPEND TESTS junit_integration)
+ENDIF()
 
 # Add tests (link them with gunit/gmock libraries and the server libraries)
 SET(SERVER_TESTS
@@ -307,7 +311,15 @@ IF(LINUX_ALPINE)
 ENDIF()
 
 IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
-  ADD_COMPILE_FLAGS(regexp_engine-t.cc COMPILE_FLAGS "-Wno-restrict")
+  ADD_COMPILE_FLAGS(
+    regexp_engine-t.cc
+    gis_area-t.cc
+    gis_is_simple-t.cc
+    gis_isvalid-t.cc
+    gis_relops-t.cc
+    gis_setops-t.cc
+    COMPILE_FLAGS "-Wno-restrict"
+  )
 ENDIF()
 
 IF(WIN32)
@@ -318,6 +330,22 @@ ENDIF()
 MY_CHECK_CXX_COMPILER_WARNING("format-overflow" HAS_WARN_FLAG)
 IF(HAS_WARN_FLAG)
   ADD_COMPILE_FLAGS(segfault-t.cc COMPILE_FLAGS ${HAS_WARN_FLAG})
+ENDIF()
+
+# Suppress warnings for gcc-10 or newer
+IF(CMAKE_COMPILER_IS_GNUCXX AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-Wno-stringop-overflow FILES integer_digits-t.cc)
+ENDIF()
+
+# Suppress warnings for gcc-14 or newer
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+  ADD_COMPILE_FLAGS(hypergraph_optimizer-t.cc COMPILE_FLAGS "-Wno-array-bounds")
+ENDIF()
+
+# Avoid 'requires dynamic R_X86_64_PC32 reloc' linker error for dd_sdi-t.cc
+# when built with ASAN
+IF(WITH_ASAN OR WITH_VALGRIND)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-fPIC FILES dd_sdi-t.cc)
 ENDIF()
 
 # Warnings about missing PGO profile data are not useful for unit tests.
@@ -345,6 +373,7 @@ TARGET_LINK_LIBRARIES(sqlgunitlib PRIVATE extra::rapidjson)
 SET_TARGET_PROPERTIES(sqlgunitlib
   PROPERTIES COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}"
 )
+TARGET_LINK_LIBRARIES(sqlgunitlib ext::zlib)
 
 MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   ADD_TEST merge_small_tests
@@ -458,10 +487,23 @@ IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
     )
 ENDIF()
 
+ADD_LIBRARY(rpl_event_ctx_lib STATIC
+  ${CMAKE_SOURCE_DIR}/sql/rpl_event_ctx.cc
+)
+TARGET_LINK_LIBRARIES(rpl_event_ctx_lib ext::zlib)
+
+MYSQL_ADD_EXECUTABLE(rpl_event_ctx-t rpl_event_ctx-t.cc
+  ENABLE_EXPORTS
+  ADD_TEST rpl_event_ctx
+  LINK_LIBRARIES rpl_event_ctx_lib gunit_small
+)
+
 ADD_SUBDIRECTORY(ddl_rewriter)
 ADD_SUBDIRECTORY(innodb)
 ADD_SUBDIRECTORY(components/mysql_server)
 ADD_SUBDIRECTORY(components/keyring_common)
+ADD_SUBDIRECTORY(components/keyring_vault)
+ADD_SUBDIRECTORY(components/percona_telemetry)
 ADD_SUBDIRECTORY(xplugin)
 ADD_SUBDIRECTORY(group_replication)
 ADD_SUBDIRECTORY(libmysqlgcs)

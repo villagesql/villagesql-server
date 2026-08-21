@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -394,7 +395,7 @@ std::tuple<bool, bool> Pages::is_actual_page_corrupted(fil_space_t *space,
 
   /* Read in the page from the data file to compare. */
   auto err = fil_io(request, true, page_id, page_size, 0, page_size.physical(),
-                    buffer.begin(), nullptr);
+                    buffer.begin(), nullptr, nullptr, false);
 
   if (err != DB_SUCCESS) {
     ib::warn(ER_IB_MSG_DBLWR_1314)
@@ -1590,11 +1591,6 @@ void Double_write::check_block(const buf_block_t *block) noexcept {
 
       /* TODO: validate also non-index pages */
       return;
-
-    case FIL_PAGE_TYPE_ALLOCATED:
-      /* Empty pages should never be flushed. Unless we are creating the
-      legacy doublewrite buffer.  */
-      break;
   }
 
   croak(block);
@@ -1637,8 +1633,8 @@ dberr_t Double_write::write_to_datafile(const buf_page_t *in_bpage, bool sync,
 #endif /* UNIV_DEBUG */
 
   io_request.set_original_size(bpage->size.physical());
-  auto err =
-      fil_io(io_request, sync, bpage->id, bpage->size, 0, len, frame, bpage);
+  auto err = fil_io(io_request, sync, bpage->id, bpage->size, 0, len, frame,
+                    bpage, nullptr, false);
 
   /* When a tablespace is deleted with BUF_REMOVE_NONE, fil_io() might
   return DB_PAGE_IS_STALE or DB_TABLESPACE_DELETED. */
@@ -1969,6 +1965,12 @@ bool Double_write::create_v1(page_no_t &page_no1,
 
 dberr_t Double_write::load(dblwr::File &file, recv::Pages *pages) noexcept {
   os_offset_t size = os_file_get_size(file.m_pfs);
+
+  if (srv_read_only_mode) {
+    ib::info() << "Skipping doublewrite buffer processing due to "
+                  "InnoDB running in read only mode";
+    return (DB_SUCCESS);
+  }
 
   if (size == 0) {
     /* Double write buffer is empty. */
@@ -2424,6 +2426,10 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage,
     return nullptr;
   }
 
+  if (space_id == TRX_SYS_SPACE && page_no == TRX_SYS_PAGE_NO) {
+    return nullptr;
+  }
+
   if (fsp_is_undo_tablespace(space_id) && !srv_undo_log_encrypt) {
     /* It is an undo tablespace and undo encryption is not enabled. */
     return nullptr;
@@ -2432,6 +2438,12 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage,
   fil_space_t *space = bpage->get_space();
   if (space->encryption_op_in_progress == Encryption::Progress::DECRYPTION ||
       !space->is_encrypted()) {
+    return nullptr;
+  }
+
+  /* Don't encrypt pages of system tablespace upto TRX_SYS_PAGE(including). The
+  doublewrite buffer header is on TRX_SYS_PAGE */
+  if (fsp_is_system_tablespace(space_id) && page_no <= FSP_TRX_SYS_PAGE_NO) {
     return nullptr;
   }
 
@@ -2469,6 +2481,9 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage,
   }
 
   type.get_encryption_info().set(space->m_encryption_metadata);
+  type.set_encryption_algorithm(Encryption::AES);
+  page_size_t page_size(space->flags);
+
   auto e_block = os_file_encrypt_page(type, frame, n);
 
   if (compressed_block != nullptr) {
@@ -2952,6 +2967,7 @@ static bool is_dblwr_page_corrupted(byte *page, fil_space_t *space,
     size_t z_page_size;
 
     en.set(space->m_encryption_metadata);
+    req_type.set_encryption_algorithm(Encryption::AES);
     fil_node_t *node = space->get_file_node(&page_no);
     req_type.block_size(node->block_size);
 
@@ -3056,7 +3072,7 @@ bool dblwr::recv::Pages::dblwr_recover_page(page_no_t dblwr_page_no,
 
   /* Read in the page from the data file to compare. */
   auto err = fil_io(request, true, page_id, page_size, 0, page_size.physical(),
-                    buffer.begin(), nullptr);
+                    buffer.begin(), nullptr, nullptr, false);
 
   if (err != DB_SUCCESS) {
     ib::warn(ER_IB_MSG_DBLWR_1314)
@@ -3100,10 +3116,9 @@ bool dblwr::recv::Pages::dblwr_recover_page(page_no_t dblwr_page_no,
     bool data_page_zeroes = buf_page_is_zeroes(buffer.begin(), page_size);
     bool dblwr_zeroes = buf_page_is_zeroes(page, page_size);
     dberr_t dblwr_err;
-    const bool dblwr_corrupted =
-        is_dblwr_page_corrupted(page, space, page_no, &dblwr_err);
 
-    if (data_page_zeroes && !dblwr_zeroes && !dblwr_corrupted) {
+    if (data_page_zeroes && !dblwr_zeroes &&
+        !is_dblwr_page_corrupted(page, space, page_no, &dblwr_err)) {
       /* Database page contained only zeroes, while a valid copy is
       available in dblwr buffer. */
     } else {
@@ -3135,7 +3150,7 @@ bool dblwr::recv::Pages::dblwr_recover_page(page_no_t dblwr_page_no,
   intended position. */
 
   err = fil_io(write_request, true, page_id, page_size, 0, page_size.physical(),
-               const_cast<byte *>(page), nullptr);
+               const_cast<byte *>(page), nullptr, nullptr, false);
 
   ut_a(err == DB_SUCCESS || err == DB_TABLESPACE_DELETED);
 

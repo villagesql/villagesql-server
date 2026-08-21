@@ -39,6 +39,7 @@
 
 #include "my_config.h"
 
+#include <dlfcn.h>
 #include <string.h>
 #include <algorithm>
 
@@ -165,6 +166,104 @@ int make_profile_table_for_show(THD *thd, ST_SCHEMA_TABLE *schema_table) {
   return 0;
 }
 
+typedef int (*je_mallctl_func)(const char *name, void *oldp, size_t *oldlenp,
+                               void *newp, size_t newlen);
+
+bool opt_jemalloc_profiling_enabled = false;
+bool opt_jemalloc_detected = false;
+static je_mallctl_func mallctl_p = nullptr;
+static bool jemalloc_initialized = false;
+static unsigned jemalloc_profile_counter = 0;
+
+/**
+  Wrapper over jemalloc mallctl
+
+  @param  name      The period-separated name argument specifies a location in a
+                    tree-structured namespace
+  @param  oldp      To read a value, pass a pointer via oldp to adequate space
+                    to contain the value; otherwise pass nullptr.
+  @param  oldlenp   A pointer to oldp allocated memory size or nullptr if empty.
+  @param  newp      To write a value, pass a pointer to the value via newp;
+                    otherwise pass nullptr.
+  @param  newlen    Size of the memory allocated to newp or 0.
+
+  @return Result of mallctl, mallctl returns 0 on success, or 1 if mallctl is
+  not available.
+*/
+int jemalloc_mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp,
+                     size_t newlen) {
+  if (!jemalloc_initialized) {
+    mallctl_p = (je_mallctl_func)dlsym(RTLD_DEFAULT, "mallctl");
+    jemalloc_initialized = true;
+  }
+
+  if (!mallctl_p) return 1;
+
+  return mallctl_p(name, oldp, oldlenp, newp, newlen);
+}
+
+/**
+  Dumps a memory profile to a temporary file.
+
+  It writes to /tmp/jeprof_mysqld.<PID>.<COUNTER>.<DATE> or
+  to a file determined by `prof_prefix` if `prof_prefix`
+  is different from default.
+
+  @return 0 on success.
+*/
+int jemalloc_profiling_dump() {
+  char *pfn;
+  size_t sz = sizeof(pfn);
+  int n = jemalloc_mallctl("opt.prof_prefix", &pfn, &sz, nullptr, 0);
+
+  /* Only write to custom file if user doesn't overwrite prof_prefix in
+   * MALLOC_CONF */
+  if (n || !strcmp(pfn, "jeprof")) {
+    char buff[64];
+    size_t buff_size = sizeof(buff);
+    int i = snprintf(buff, buff_size, "/tmp/jeprof_mysqld.%u.%u.", getpid(),
+                     jemalloc_profile_counter++);
+    if (i < 0 || static_cast<size_t>(i) >= buff_size) return 1;
+
+    time_t t = time(nullptr);
+    struct tm ltm;
+    localtime_r(&t, &ltm);
+    strftime(buff + i, buff_size - i, "%y%m%d%H%M%S", &ltm);
+
+    pfn = buff;
+    return jemalloc_mallctl("prof.dump", nullptr, 0, &pfn, sz);
+  }
+
+  return jemalloc_mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
+}
+
+/**
+  Detected means Jemalloc loaded and profiling initialized using prof:true in
+  MALLOC_CONF environment variable.
+
+  @return true on Jemalloc with profiling detected.
+*/
+bool jemalloc_detected() {
+  char active;
+  size_t sz = sizeof(active);
+  int n = jemalloc_mallctl("opt.prof", &active, &sz, nullptr, 0);
+  return !n && active;
+}
+
+/**
+  Actually enable or disable profiling during runtime, for existing and
+  newly created threads.
+
+  @return 0 on success.
+*/
+int jemalloc_profiling_enable(bool enable) {
+  int n = jemalloc_mallctl("prof.active", nullptr, nullptr, &enable,
+                           sizeof(enable));
+  n |= jemalloc_mallctl("prof.thread_active_init", nullptr, nullptr, &enable,
+                        sizeof(enable));
+  return n;
+}
+
 #if defined(ENABLED_PROFILING)
 
 #define RUSAGE_USEC(tv) ((tv).tv_sec * 1000 * 1000 + (tv).tv_usec)
@@ -264,7 +363,13 @@ void PROF_MEASUREMENT::set_label(const char *status_arg,
 void PROF_MEASUREMENT::collect() {
   time_usecs = (double)my_getsystime() / 10.0; /* 1 sec was 1e7, now is 1e6 */
 #ifdef HAVE_GETRUSAGE
-  getrusage(RUSAGE_SELF, &rusage);
+  if ((profile->get_profiling())->enabled_getrusage()) {
+#ifdef RUSAGE_THREAD
+    getrusage(RUSAGE_THREAD, &rusage);
+#else
+    getrusage(RUSAGE_SELF, &rusage);
+#endif
+  }
 #elif defined(_WIN32)
   FILETIME ftDummy;
   // NOTE: Get{Process|Thread}Times has a granularity of the clock interval,
@@ -272,6 +377,17 @@ void PROF_MEASUREMENT::collect() {
   // measurable by this function.
   GetProcessTimes(GetCurrentProcess(), &ftDummy, &ftDummy, &ftKernel, &ftUser);
 #endif
+
+#ifdef HAVE_CLOCK_GETTIME
+  struct timespec tp;
+
+  if (!(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &tp))) {
+    cpu_time_usecs = tp.tv_sec * 1000000000.0 + tp.tv_nsec;
+  } else
+#endif
+  {
+    cpu_time_usecs = 0;
+  }
 }
 
 QUERY_PROFILE::QUERY_PROFILE(PROFILING *profiling_arg, const char *status_arg)
@@ -378,7 +494,9 @@ void PROFILING::start_new_query(const char *initial_state) {
     finish_current_query();
   }
 
-  enabled = ((thd->variables.option_bits & OPTION_PROFILING) != 0);
+  enabled =
+      ((thd->variables.option_bits & OPTION_PROFILING) != 0) ||
+      ((thd->variables.log_slow_verbosity & (1ULL << SLOG_V_PROFILING)) != 0);
 
   if (!enabled) return;
 
@@ -409,8 +527,9 @@ void PROFILING::finish_current_query() {
     status_change("ending", nullptr, nullptr, 0);
 
     if ((enabled) && /* ON at start? */
-        ((thd->variables.option_bits & OPTION_PROFILING) !=
-         0) && /* and ON at end? */
+        (((thd->variables.option_bits & OPTION_PROFILING) != 0) ||
+         ((thd->variables.log_slow_verbosity & (1ULL << SLOG_V_PROFILING)) !=
+          0)) && /* and ON at end? */
         (current->m_query_source.str != nullptr) &&
         (!current->entries.is_empty())) {
       current->profiling_query_id = next_profile_id(); /* assign an id */
@@ -494,6 +613,111 @@ void PROFILING::set_query_source(const char *query_source_arg,
     DBUG_PRINT("info", ("no current profile to send query source to"));
 }
 
+bool PROFILING::enabled_getrusage() const noexcept {
+  return ((thd->variables.log_slow_verbosity &
+           (1ULL << SLOG_V_PROFILING_USE_GETRUSAGE)) != 0);
+}
+
+/**
+   For a given profile entry specified by a name and 2 time measurements,
+   print its normalized name (i.e. with all spaces replaced with underscores)
+   along with its wall clock and CPU time.
+*/
+
+static void my_b_print_status(IO_CACHE *log_file, const char *status,
+                              const PROF_MEASUREMENT &start,
+                              const PROF_MEASUREMENT &stop) noexcept {
+  DBUG_ENTER("my_b_print_status");
+  assert(log_file != nullptr);
+  assert(status != nullptr);
+  char query_time_buff[22 + 7];
+  const char *tmp;
+
+  my_b_printf(log_file, "Profile_");
+  for (tmp = status; *tmp; tmp++)
+    my_b_printf(log_file, "%c", *tmp == ' ' ? '_' : *tmp);
+
+  snprintf(query_time_buff, sizeof(query_time_buff), "%.6f",
+           (stop.time_usecs - start.time_usecs) / (1000.0 * 1000));
+  my_b_printf(log_file, ": %s ", query_time_buff);
+
+  my_b_printf(log_file, "Profile_");
+  for (tmp = status; *tmp; tmp++)
+    my_b_printf(log_file, "%c", *tmp == ' ' ? '_' : *tmp);
+  my_b_printf(log_file, "_cpu: ");
+
+  snprintf(
+      query_time_buff, sizeof(query_time_buff), "%.6f",
+      (stop.cpu_time_usecs - start.cpu_time_usecs) / (1000.0 * 1000 * 1000));
+  my_b_printf(log_file, "%s ", query_time_buff);
+
+  DBUG_VOID_RETURN;
+}
+
+/**
+  Print output for current query to file
+*/
+
+int PROFILING::print_current(IO_CACHE *log_file) const noexcept {
+  DBUG_ENTER("PROFILING::print_current");
+  /* Get current query */
+  if (current == NULL) {
+    DBUG_RETURN(0);
+  }
+
+  my_b_printf(log_file, "# ");
+
+  QUERY_PROFILE *const query = current;
+
+  void *entry_iterator;
+  PROF_MEASUREMENT *entry = nullptr, *previous = nullptr, *first = nullptr;
+  /* ...and for each query, go through all its state-change steps. */
+  for (entry_iterator = query->entries.new_iterator();
+       entry_iterator != nullptr;
+       entry_iterator = query->entries.iterator_next(entry_iterator),
+      previous = entry) {
+    entry = query->entries.iterator_value(entry_iterator);
+
+    /* Skip the first.  We count spans of fence, not fence-posts. */
+    if (previous == nullptr) {
+      first = entry;
+      continue;
+    }
+
+    if (thd->lex->sql_command == SQLCOM_SHOW_PROFILE) {
+      /*
+        We got here via a SHOW command.  That means that we stored
+        information about the query we wish to show and that isn't
+        in a WHERE clause at a higher level to filter out rows we
+        wish to exclude.
+
+        Because that functionality isn't available in the server yet,
+        we must filter here, at the wrong level.  Once one can con-
+        struct where and having conditions at the SQL layer, then this
+        condition should be ripped out.
+      */
+      if (thd->lex->show_profile_query_id == 0) /* 0 == show final query */
+      {
+        if (query != last) continue;
+      } else {
+        if (thd->lex->show_profile_query_id != query->profiling_query_id)
+          continue;
+      }
+    }
+
+    my_b_print_status(log_file, previous->status, *previous, *entry);
+  }
+
+  my_b_printf(log_file, "\n");
+  if ((entry != nullptr) && (first != nullptr)) {
+    my_b_printf(log_file, "# ");
+    my_b_print_status(log_file, "total", *first, *entry);
+    my_b_printf(log_file, "\n");
+  }
+
+  DBUG_RETURN(0);
+}
+
 /**
   Fill the information schema table, "query_profile", as defined in show.cc .
   There are two ways to get to this function:  Selecting from the information
@@ -502,7 +726,6 @@ void PROFILING::set_query_source(const char *query_source_arg,
 int PROFILING::fill_statistics_info(THD *thd_arg, Table_ref *tables) {
   DBUG_TRACE;
   TABLE *table = tables->table;
-  ulonglong row_number = 0;
 
   QUERY_PROFILE *query;
   /* Go through each query in this thread's stored history... */
@@ -524,7 +747,7 @@ int PROFILING::fill_statistics_info(THD *thd_arg, Table_ref *tables) {
     for (entry_iterator = query->entries.new_iterator();
          entry_iterator != nullptr;
          entry_iterator = query->entries.iterator_next(entry_iterator),
-        previous = entry, row_number++) {
+        previous = entry) {
       entry = query->entries.iterator_value(entry_iterator);
       seq = entry->m_seq;
 
@@ -584,24 +807,25 @@ int PROFILING::fill_statistics_info(THD *thd_arg, Table_ref *tables) {
 
 #ifdef HAVE_GETRUSAGE
 
-      my_decimal cpu_utime_decimal, cpu_stime_decimal;
+      if (enabled_getrusage()) {
+        my_decimal cpu_utime_decimal, cpu_stime_decimal;
 
-      double2my_decimal(
-          E_DEC_FATAL_ERROR,
-          RUSAGE_DIFF_USEC(entry->rusage.ru_utime, previous->rusage.ru_utime) /
-              (1000.0 * 1000),
-          &cpu_utime_decimal);
+        double2my_decimal(E_DEC_FATAL_ERROR,
+                          RUSAGE_DIFF_USEC(entry->rusage.ru_utime,
+                                           previous->rusage.ru_utime) /
+                              (1000.0 * 1000),
+                          &cpu_utime_decimal);
 
-      double2my_decimal(
-          E_DEC_FATAL_ERROR,
-          RUSAGE_DIFF_USEC(entry->rusage.ru_stime, previous->rusage.ru_stime) /
-              (1000.0 * 1000),
-          &cpu_stime_decimal);
+        double2my_decimal(E_DEC_FATAL_ERROR,
+                          RUSAGE_DIFF_USEC(entry->rusage.ru_stime,
+                                           previous->rusage.ru_stime) /
+                              (1000.0 * 1000),
+                          &cpu_stime_decimal);
 
-      table->field[4]->store_decimal(&cpu_utime_decimal);
-      table->field[5]->store_decimal(&cpu_stime_decimal);
-      table->field[4]->set_notnull();
-      table->field[5]->set_notnull();
+        table->field[4]->store_decimal(&cpu_utime_decimal);
+        table->field[5]->store_decimal(&cpu_stime_decimal);
+        table->field[4]->set_notnull();
+        table->field[5]->set_notnull();
 #elif defined(_WIN32)
       my_decimal cpu_utime_decimal, cpu_stime_decimal;
 
@@ -623,53 +847,58 @@ int PROFILING::fill_statistics_info(THD *thd_arg, Table_ref *tables) {
 #endif
 
 #ifdef HAVE_GETRUSAGE
-      table->field[6]->store(
-          (uint32)(entry->rusage.ru_nvcsw - previous->rusage.ru_nvcsw));
-      table->field[6]->set_notnull();
-      table->field[7]->store(
-          (uint32)(entry->rusage.ru_nivcsw - previous->rusage.ru_nivcsw));
-      table->field[7]->set_notnull();
+        table->field[6]->store(
+            (uint32)(entry->rusage.ru_nvcsw - previous->rusage.ru_nvcsw));
+        table->field[6]->set_notnull();
+        table->field[7]->store(
+            (uint32)(entry->rusage.ru_nivcsw - previous->rusage.ru_nivcsw));
+        table->field[7]->set_notnull();
 #else
       /* TODO: Add context switch info for non-BSD systems */
 #endif
 
 #ifdef HAVE_GETRUSAGE
-      table->field[8]->store(
-          (uint32)(entry->rusage.ru_inblock - previous->rusage.ru_inblock));
-      table->field[8]->set_notnull();
-      table->field[9]->store(
-          (uint32)(entry->rusage.ru_oublock - previous->rusage.ru_oublock));
-      table->field[9]->set_notnull();
+        table->field[8]->store(
+            (uint32)(entry->rusage.ru_inblock - previous->rusage.ru_inblock));
+        table->field[8]->set_notnull();
+        table->field[9]->store(
+            (uint32)(entry->rusage.ru_oublock - previous->rusage.ru_oublock));
+        table->field[9]->set_notnull();
 #else
       /* TODO: Add block IO info for non-BSD systems */
 #endif
 
 #ifdef HAVE_GETRUSAGE
-      table->field[10]->store(
-          (uint32)(entry->rusage.ru_msgsnd - previous->rusage.ru_msgsnd), true);
-      table->field[10]->set_notnull();
-      table->field[11]->store(
-          (uint32)(entry->rusage.ru_msgrcv - previous->rusage.ru_msgrcv), true);
-      table->field[11]->set_notnull();
+        table->field[10]->store(
+            (uint32)(entry->rusage.ru_msgsnd - previous->rusage.ru_msgsnd),
+            true);
+        table->field[10]->set_notnull();
+        table->field[11]->store(
+            (uint32)(entry->rusage.ru_msgrcv - previous->rusage.ru_msgrcv),
+            true);
+        table->field[11]->set_notnull();
 #else
       /* TODO: Add message info for non-BSD systems */
 #endif
 
 #ifdef HAVE_GETRUSAGE
-      table->field[12]->store(
-          (uint32)(entry->rusage.ru_majflt - previous->rusage.ru_majflt), true);
-      table->field[12]->set_notnull();
-      table->field[13]->store(
-          (uint32)(entry->rusage.ru_minflt - previous->rusage.ru_minflt), true);
-      table->field[13]->set_notnull();
+        table->field[12]->store(
+            (uint32)(entry->rusage.ru_majflt - previous->rusage.ru_majflt),
+            true);
+        table->field[12]->set_notnull();
+        table->field[13]->store(
+            (uint32)(entry->rusage.ru_minflt - previous->rusage.ru_minflt),
+            true);
+        table->field[13]->set_notnull();
 #else
       /* TODO: Add page fault info for non-BSD systems */
 #endif
 
 #ifdef HAVE_GETRUSAGE
-      table->field[14]->store(
-          (uint32)(entry->rusage.ru_nswap - previous->rusage.ru_nswap), true);
-      table->field[14]->set_notnull();
+        table->field[14]->store(
+            (uint32)(entry->rusage.ru_nswap - previous->rusage.ru_nswap), true);
+        table->field[14]->set_notnull();
+      }
 #else
       /* TODO: Add swap info for non-BSD systems */
 #endif

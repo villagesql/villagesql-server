@@ -743,6 +743,9 @@ bool set_record_buffer(TABLE *table, double expected_rows_to_fetch) {
     }
   }
 
+  // Do not allocate space for more rows than the handler asked for.
+  rows_in_buffer = std::min(rows_in_buffer, max_rows);
+
   // After adjustments made above, we still need a minimum of 2 rows to
   // use a record buffer.
   if (rows_in_buffer <= 1) {
@@ -3510,7 +3513,7 @@ int do_sj_dups_weedout(THD *thd, SJ_TMP_TABLE *sjtbl) {
   }
 
   // 3. Put the rowids
-  for (uint i = 0; tab != tab_end; tab++, i++) {
+  for (; tab != tab_end; tab++) {
     handler *h = tab->qep_tab->table()->file;
     if (tab->qep_tab->table()->is_nullable() &&
         tab->qep_tab->table()->has_null_row()) {

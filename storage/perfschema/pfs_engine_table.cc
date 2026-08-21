@@ -54,6 +54,7 @@
 #include "sql/table.h"
 /* For show status */
 #include "storage/perfschema/pfs_column_values.h"
+#include "storage/perfschema/table_account_failed_login_lock_status.h"
 #include "storage/perfschema/table_accounts.h"
 #include "storage/perfschema/table_binary_log_transaction_compression_stats.h"
 #include "storage/perfschema/table_data_lock_waits.h"
@@ -102,6 +103,7 @@
 #include "storage/perfschema/table_hosts.h"
 #include "storage/perfschema/table_keyring_component_status.h"
 #include "storage/perfschema/table_keyring_keys.h"
+#include "storage/perfschema/table_malloc_stats.h"
 #include "storage/perfschema/table_md_locks.h"
 #include "storage/perfschema/table_mems_by_account_by_event_name.h"
 #include "storage/perfschema/table_mems_by_host_by_event_name.h"
@@ -608,7 +610,14 @@ static PFS_engine_table_share *all_shares[] = {
     &table_user_defined_functions::m_share,
     &table_binary_log_transaction_compression_stats::m_share,
     &table_tls_channel_status::m_share,
+
+    &table_malloc_stats_totals::m_share,
+    &table_malloc_stats::m_share,
+
     &table_keyring_component_status::m_share,
+
+    &table_account_failed_login_lock_status::m_share,
+
     nullptr};
 
 static PSI_mutex_key key_LOCK_pfs_share_list;

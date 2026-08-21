@@ -41,6 +41,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <time.h>
 #include <string_view>
 #include <unordered_map>
+#include "sql/debug_sync.h"
+#include "sql/item.h"
+#include "sql/item_cmpfunc.h"
+#include "sql/item_func.h"
+#include "sql/item_sum.h"
 
 #include "auth_acls.h"
 #include "btr0btr.h"
@@ -68,6 +73,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "pars0pars.h"
 #include "sql/sql_class.h" /* For THD */
 #include "srv0mon.h"
+#include "srv0srv.h"
 #include "srv0start.h"
 #include "srv0tmp.h"
 #include "trx0i_s.h"
@@ -6804,9 +6810,8 @@ static int i_s_dict_fill_innodb_tablespaces(
 
   if (fsp_is_undo_tablespace(space_id)) {
     row_format = "Undo";
-  } else if (fsp_is_system_or_temp_tablespace(space_id)) {
-    row_format = "Compact or Redundant";
-  } else if (fsp_is_shared_tablespace(flags) && !is_compressed) {
+  } else if (fsp_is_system_or_temp_tablespace(space_id) ||
+             (fsp_is_shared_tablespace(flags) && !is_compressed)) {
     row_format = "Any";
   } else if (is_compressed) {
     row_format = "Compressed";
@@ -6824,6 +6829,17 @@ static int i_s_dict_fill_innodb_tablespaces(
     space_type = "General";
   } else {
     space_type = "Single";
+  }
+
+  /* Temporary tablespace encryption flags are not updated in DD. It is not
+  necessary because bootstrap doesn't check temporary tablespace from DD.
+  Temporary tablespace has to be ready before DD validation can take place */
+  if (fsp_is_global_temporary(space_id)) {
+    fil_space_t *space = fil_space_acquire_silent(space_id);
+    if (space != nullptr) {
+      is_encrypted = FSP_FLAGS_GET_ENCRYPTION(space->flags);
+      fil_space_release(space);
+    }
   }
 
   fields = table_to_fill->field;
@@ -6854,12 +6870,15 @@ static int i_s_dict_fill_innodb_tablespaces(
 
   OK(fields[INNODB_TABLESPACES_SPACE_VERSION]->store(space_version, true));
 
-  dict_sys_mutex_enter();
-  char *filepath = fil_space_get_first_path(space_id);
-  dict_sys_mutex_exit();
+  char *filepath = nullptr;
+  if (!fsp_is_system_tablespace(space_id)) {
+    dict_sys_mutex_enter();
+    filepath = fil_space_get_first_path(space_id);
+    dict_sys_mutex_exit();
 
-  if (filepath == nullptr) {
-    filepath = Fil_path::make_ibd_from_table_name(name);
+    if (filepath == nullptr) {
+      filepath = Fil_path::make_ibd_from_table_name(name);
+    }
   }
 
   os_file_stat_t stat;
@@ -6961,7 +6980,7 @@ static int i_s_innodb_tablespaces_fill_table(THD *thd, Table_ref *tables,
     mtr_commit(&mtr);
     dict_sys_mutex_exit();
 
-    if (ret && space != 0) {
+    if (ret) {
       i_s_dict_fill_innodb_tablespaces(
           thd, space, name, flags, server_version, space_version, is_encrypted,
           autoextend_size, state.c_str(), tables->table);
@@ -7342,12 +7361,7 @@ static int i_s_innodb_session_temp_tablespaces_fill_one(
 
   ibt::tbsp_purpose purpose = ts->purpose();
 
-  const char *p =
-      purpose == ibt::TBSP_NONE
-          ? "NONE"
-          : (purpose == ibt::TBSP_USER
-                 ? "USER"
-                 : (purpose == ibt::TBSP_INTRINSIC ? "INTRINSIC" : "SLAVE"));
+  const char *p = ibt::get_purpose_str(purpose);
 
   OK(field_store_string(fields[INNODB_SESSION_TEMP_TABLESPACES_PURPOSE], p));
 
@@ -7377,7 +7391,13 @@ static int i_s_innodb_session_temp_tablespaces_fill(THD *thd, Table_ref *tables,
   mutex again */
   check_trx_exists(thd);
   innodb_session_t *innodb_session = thd_to_innodb_session(thd);
-  innodb_session->get_instrinsic_temp_tblsp();
+  if (srv_default_table_encryption == DEFAULT_TABLE_ENC_ON ||
+      srv_tmp_tablespace_encrypt) {
+    innodb_session->get_enc_instrinsic_temp_tblsp();
+  } else {
+    innodb_session->get_instrinsic_temp_tblsp();
+  }
+
   auto print = [&](const ibt::Tablespace *ts) {
     i_s_innodb_session_temp_tablespaces_fill_one(thd, ts, tables->table);
   };

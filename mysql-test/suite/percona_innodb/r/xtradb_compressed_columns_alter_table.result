@@ -1,0 +1,1453 @@
+CREATE COMPRESSION_DICTIONARY dict1('foo');
+CREATE COMPRESSION_DICTIONARY dict2('bar');
+# from 'BLOB' to 'xxx'
+*** "a BLOB" -> "a BLOB", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB COLUMN_FORMAT COMPRESSED' to 'xxx'
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY <dict>' to 'xxx'
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict2", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+0
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary at the first position
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary between existing columns
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary at the last position
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for removing a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "b BLOB", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# add a new column to an existing table so that a column with associated compression dictionary would get shifted
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# remove a column from an existing table so that a column with associated compression dictionary would get shifted
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# explicitly move a column with associated compression dictionary to a new position (forward)
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# explicitly move a column with associated compression dictionary to a new position (backward)
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# rename a table which has a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# change storage engine for a table without compressed columns
+*** "a BLOB" -> "a BLOB", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_references_cleaned
+1
+
+# change storage engine for a table which has a compressed column
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Table storage engine 'MyISAM' does not support the create option 'COMPRESSED COLUMNS'
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# change storage engine for a table which has a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR HY000: Table storage engine 'MyISAM' does not support the create option 'COMPRESSED COLUMNS'
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB' to 'xxx'
+*** "a BLOB" -> "a BLOB", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB COLUMN_FORMAT COMPRESSED' to 'xxx'
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY <dict>' to 'xxx'
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict2", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+0
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary at the first position
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary between existing columns
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary at the last position
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for removing a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "b BLOB", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# add a new column to an existing table so that a column with associated compression dictionary would get shifted
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# remove a column from an existing table so that a column with associated compression dictionary would get shifted
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# explicitly move a column with associated compression dictionary to a new position (forward)
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# explicitly move a column with associated compression dictionary to a new position (backward)
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# rename a table which has a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# change storage engine for a table without compressed columns
+*** "a BLOB" -> "a BLOB", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_references_cleaned
+1
+
+# change storage engine for a table which has a compressed column
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=COPY
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Table storage engine 'MyISAM' does not support the create option 'COMPRESSED COLUMNS'
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# change storage engine for a table which has a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=COPY
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR HY000: Table storage engine 'MyISAM' does not support the create option 'COMPRESSED COLUMNS'
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB' to 'xxx'
+*** "a BLOB" -> "a BLOB", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB COLUMN_FORMAT COMPRESSED' to 'xxx'
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# from 'BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY <dict>' to 'xxx'
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+successful execution is expected
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY unknown", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR HY000: Compression dictionary 'unknown' does not exist
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict2", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+error is expected
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary at the first position
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary between existing columns
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for adding a column with associated compression dictionary at the last position
+*** "a BLOB" -> "b BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# check for removing a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "b BLOB", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+original_dictionary_reference_cleared
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# add a new column to an existing table so that a column with associated compression dictionary would get shifted
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# remove a column from an existing table so that a column with associated compression dictionary would get shifted
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# explicitly move a column with associated compression dictionary to a new position (forward)
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# explicitly move a column with associated compression dictionary to a new position (backward)
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# rename a table which has a column with associated compression dictionary
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=INPLACE
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# test if 'ALTER TABLE ... DISCARD/IMPORT TABLESPACE' works for tables without compressed columns
+*** "a BLOB" -> "a BLOB", ALGORITHM=INPLACE
+original_dictionary_reference_does_not_exist
+1
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# test if 'ALTER TABLE ... DISCARD/IMPORT TABLESPACE' returns an error for tables that have compressed columns
+*** "a BLOB COLUMN_FORMAT COMPRESSED" -> "a BLOB COLUMN_FORMAT COMPRESSED", ALGORITHM=DEFAULT
+original_dictionary_reference_does_not_exist
+1
+ERROR HY000: Table storage engine for 't1' doesn't have this option
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_does_not_exist
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+# test if 'ALTER TABLE ... DISCARD/IMPORT TABLESPACE' returns an error for tables that have columns with associated compression dictionaries
+*** "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1" -> "a BLOB COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY dict1", ALGORITHM=DEFAULT
+original_dictionary_reference_exists
+1
+original_dictionary_reference_matches
+1
+ERROR HY000: Table storage engine for 't1' doesn't have this option
+*** after table alteration
+long_value_match
+1
+short_value_match
+1
+modified_dictionary_reference_exists
+1
+modified_dictionary_reference_matches
+1
+original_dictionary_references_cleaned
+1
+modified_dictionary_references_cleaned
+1
+
+DROP COMPRESSION_DICTIONARY dict1;
+DROP COMPRESSION_DICTIONARY dict2;
+#
+# Bug PS-1108 : Changing a column from uncompressed to compressed for JSON crashes the server
+#
+CREATE TABLE t1 (json_variables JSON);
+INSERT INTO t1 VALUES('{"name":"json test"}');
+ALTER TABLE t1 MODIFY json_variables JSON COLUMN_FORMAT COMPRESSED;
+SELECT * FROM t1;
+json_variables
+{"name": "json test"}
+DROP TABLE t1;
+CREATE TABLE t2 (a TEXT);
+INSERT INTO t2 VALUES('test value');
+ALTER TABLE t2 MODIFY a TEXT COLUMN_FORMAT COMPRESSED;
+SELECT * FROM t2;
+a
+test value
+DROP TABLE t2;
+CREATE TABLE t1 (json_variables JSON,t VARCHAR(3) AS (CONCAT(SUBSTRING(json_variables,1,1)))) PARTITION BY KEY(t) PARTITIONS 4;
+INSERT INTO t1 VALUES('{"name":"json test"}',DEFAULT);
+ALTER TABLE t1 MODIFY json_variables JSON COLUMN_FORMAT COMPRESSED;
+SELECT json_variables FROM t1;
+json_variables
+{"name": "json test"}
+DROP TABLE t1;
+SET @dictionary_data='"name"';
+CREATE COMPRESSION_DICTIONARY test_dictionary (@dictionary_data);
+CREATE TABLE t1 (json_variables JSON);
+INSERT INTO t1 VALUES('{"name":"json test"}');
+ALTER TABLE t1 MODIFY json_variables JSON COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY test_dictionary;
+SELECT * FROM t1;
+json_variables
+{"name": "json test"}
+DROP TABLE t1;
+CREATE TABLE t1 (json_variables JSON COLUMN_FORMAT COMPRESSED);
+INSERT INTO t1 VALUES('{"name":"json test"}');
+ALTER TABLE t1 MODIFY json_variables JSON COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY test_dictionary;
+SELECT * FROM t1;
+json_variables
+{"name": "json test"}
+DROP TABLE t1;
+CREATE TABLE t1 (json_variables JSON COLUMN_FORMAT COMPRESSED);
+INSERT INTO t1 VALUES('{"name":"json test"}');
+ALTER TABLE t1 MODIFY json_variables JSON;
+SELECT * FROM t1;
+json_variables
+{"name": "json test"}
+DROP TABLE t1;
+DROP COMPRESSION_DICTIONARY test_dictionary;

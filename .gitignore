@@ -16,6 +16,10 @@ TAGS_sorted_by_file
 # Configuration files for Visual Studio Code
 .vscode/
 
+/GPATH
+/GRTAGS
+/GTAGS
+
 build/
 build-debug/
 # Exception: libarchive needs its build/ directory for version and cmake modules
@@ -31,6 +35,7 @@ scalability_jobs_*
 .cproject
 .project
 .settings/
+.idea
 
 *.local.md
 .DS_Store

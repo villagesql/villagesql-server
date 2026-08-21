@@ -378,6 +378,7 @@ struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
 
   /** Thread instrumentation flag. */
   bool m_enabled;
+  bool m_disable_instrumentation;
   /** Thread history instrumentation flag. */
   bool m_history;
 
@@ -612,6 +613,12 @@ struct PFS_ALIGNED PFS_thread : PFS_connection_slice {
   enum_vio_type m_connection_type;
   /** Start time. */
   time_t m_start_time;
+  /** Start time usec. */
+  ulonglong m_start_time_usec;
+  /** Rows sent. */
+  ulonglong m_rows_sent;
+  /** Rows examined. */
+  ulonglong m_rows_examined;
   /**
     Internal lock, for statement attributes.
     Statement attributes are expected to be updated frequently,

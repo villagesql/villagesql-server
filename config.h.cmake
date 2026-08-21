@@ -120,7 +120,10 @@
 #cmakedefine HAVE_MEMALIGN 1
 #cmakedefine HAVE_NL_LANGINFO 1
 #cmakedefine HAVE_HTONLL 1
+#cmakedefine HAVE_MEMSET_S 1
 #cmakedefine HAVE_EPOLL 1
+#cmakedefine HAVE_X509_CHECK_HOST 1
+#cmakedefine HAVE_X509_CHECK_IP 1
 
 /* WL2373 */
 #cmakedefine HAVE_SYS_TIME_H 1
@@ -174,6 +177,7 @@
 #cmakedefine HAVE_BUILTIN_STPCPY 1
 #cmakedefine HAVE_GCC_SYNC_BUILTINS 1
 #cmakedefine HAVE_VALGRIND
+#cmakedefine HAVE_PERCONA_TELEMETRY
 #cmakedefine HAVE_SYS_GETTID 1
 #cmakedefine HAVE_PTHREAD_GETTHREADID_NP 1
 #cmakedefine HAVE_PTHREAD_THREADID_NP 1
@@ -188,6 +192,7 @@
  * Platform specific CMake files
  */
 #define MACHINE_TYPE "@MYSQL_MACHINE_TYPE@"
+#cmakedefine TARGET_OS_LINUX 1
 #cmakedefine LINUX_ALPINE 1
 #cmakedefine LINUX_SUSE
 #cmakedefine LINUX_RHEL6
@@ -251,7 +256,6 @@
 #cmakedefine USE_NEW_EDITLINE_INTERFACE 1
 #cmakedefine EDITLINE_HAVE_COMPLETION_CHAR 1
 #cmakedefine EDITLINE_HAVE_COMPLETION_INT 1
-
 
 /*
  * Libedit
@@ -352,6 +356,8 @@
 #define DEFAULT_PARTIAL_REVOKES @DEFAULT_PARTIAL_REVOKES@
 
 #define SO_EXT "@CMAKE_SHARED_MODULE_SUFFIX@"
+/* coredumper library */
+#cmakedefine01 HAVE_LIBCOREDUMPER
 
 
 /* From libmysql/CMakeLists.txt */

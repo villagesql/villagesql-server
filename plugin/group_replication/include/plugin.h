@@ -226,6 +226,7 @@ uint get_number_of_autorejoin_tries();
 ulonglong get_rejoin_timeout();
 void declare_plugin_cloning(bool is_running);
 bool get_allow_single_leader();
+uint get_auto_evict_timeout();
 /**
   Encapsulates the logic necessary to attempt a rejoin, i.e. gracefully leave
   the group, terminate GCS infrastructure, terminate auto-rejoin relevant plugin
@@ -248,6 +249,10 @@ const char *get_group_name_var();
 const char *get_view_change_uuid_var();
 ulong get_exit_state_action_var();
 ulong get_flow_control_mode_var();
+ulong get_certification_loop_sleep_time_var();
+ulong get_certification_loop_chunk_size_var();
+ulong get_xcom_ssl_socket_timeout_var();
+ulong get_xcom_ssl_accept_retries_var();
 long get_flow_control_certifier_threshold_var();
 long get_flow_control_applier_threshold_var();
 long get_flow_control_min_quota_var();

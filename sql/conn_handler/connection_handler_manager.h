@@ -110,6 +110,7 @@ class Connection_handler_manager {
   enum scheduler_types {
     SCHEDULER_ONE_THREAD_PER_CONNECTION = 0,
     SCHEDULER_NO_THREADS,
+    SCHEDULER_THREAD_POOL,
     SCHEDULER_TYPES_COUNT
   };
 
@@ -233,6 +234,12 @@ class Connection_handler_manager {
     wat till connection_count to become zero.
   */
   static void wait_till_no_connection();
+
+  /**
+    Performs required initializations after the daemonization of the mysqld
+    process.
+  */
+  void post_daemonize_init();
 
   /**
     Return number of connections in thread-safe way.

@@ -40,10 +40,11 @@
 #include <functional>
 #include <list>
 #include <map>
-#include <set>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
+#include "my_aes.h"
 #include "m_string.h"     // native_strncasecmp
 #include "my_bitmap.h"    // MY_BITMAP
 #include "my_checksum.h"  // ha_checksum
@@ -2382,6 +2383,8 @@ class Unknown_log_event : public mysql::binlog::event::Unknown_event,
   Unknown_log_event(const Unknown_log_event &) = delete;
   Unknown_log_event &operator=(const Unknown_log_event &) = delete;
 
+  enum class kind { UNKNOWN, ENCRYPTED } what;
+
   /**
     Even if this is an unknown event, we still pass description_event to
     Log_event's ctor, this way we can extract maximum information from the
@@ -2945,30 +2948,51 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
   uchar *m_key;                /* Buffer to keep key value during searches */
   uint m_key_index;
   KEY *m_key_info; /* Points to description of index #m_key_index */
-  class Key_compare {
+  class Key_equal {
    public:
     /**
        @param  ki  Where to find KEY description
        @note m_distinct_keys is instantiated when Rows_log_event is constructed;
-       it stores a Key_compare object internally. However at that moment, the
+       it stores a Key_equal object internally. However at that moment, the
        index (KEY*) to use for comparisons, is not yet known. So, at
-       instantiation, we indicate the Key_compare the place where it can
+       instantiation, we indicate the Key_equal the place where it can
        find the KEY* when needed (this place is Rows_log_event::m_key_info),
-       Key_compare remembers the place in member m_key_info.
+       Key_equal remembers the place in member m_key_info.
        Before we need to do comparisons - i.e. before we need to insert
        elements, we update Rows_log_event::m_key_info once for all.
     */
-    Key_compare(KEY **ki = nullptr) : m_key_info(ki) {}
+    Key_equal(KEY **ki = nullptr) : m_key_info(ki) {}
     bool operator()(uchar *k1, uchar *k2) const {
       return key_cmp2((*m_key_info)->key_part, k1, (*m_key_info)->key_length,
-                      k2, (*m_key_info)->key_length) < 0;
+                      k2, (*m_key_info)->key_length) == 0;
     }
 
    private:
     KEY **m_key_info;
   };
-  std::set<uchar *, Key_compare> m_distinct_keys;
-  std::set<uchar *, Key_compare>::iterator m_itr;
+  class Key_hash {
+   public:
+    Key_hash(KEY **ki = nullptr) : m_key_info(ki) {}
+    size_t operator()(uchar *ptr) const {
+      size_t hash = 0;
+      if (ptr) {
+        std::string_view sv{reinterpret_cast<const char *>(ptr),
+                            (*m_key_info)->key_length};
+        return std::hash<std::string_view>{}(sv);
+      }
+      return hash;
+    }
+
+   private:
+    KEY **m_key_info;
+  };
+  std::unordered_set<uchar *, Key_hash, Key_equal> m_distinct_keys;
+
+  /**
+    A linear list to store the distinct keys preserving the insert order
+  */
+  std::vector<uchar *> m_distinct_keys_original_order;
+  std::size_t m_distinct_key_idx = 0;
   /**
     A spare buffer which will be used when saving the distinct keys
     for doing an index scan with HASH_SCAN search algorithm.
@@ -2981,6 +3005,8 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
     @param rli The applier context.
 
     @param cols The bitmap of columns included in the update.
+
+    @param local_cols The bitmap of local columns included in the update.
 
     @param is_after_image Should be true if this is an after-image,
     false if it is a before-image.
@@ -2997,7 +3023,8 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
     and maybe others).
   */
   int unpack_current_row(const Relay_log_info *const rli, MY_BITMAP const *cols,
-                         bool is_after_image, bool only_seek = false);
+                         MY_BITMAP const *local_cols, bool is_after_image,
+                         bool only_seek = false);
   /**
     Updates the generated columns of the `TABLE` object referenced by
     `m_table`, that have an active bit in the parameter bitset

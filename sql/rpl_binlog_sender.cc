@@ -64,6 +64,7 @@
 #include "sql/sql_class.h"      // THD
 #include "sql/system_variables.h"
 #include "sql_string.h"
+#include "strings/m_ctype_internals.h"
 #include "string_with_len.h"
 #include "typelib.h"
 #include "unsafe_string_append.h"
@@ -100,8 +101,8 @@ class Observe_transmission_guard {
 
     - The event is an `XID_EVENT`
     - The event is an `XA_PREPARE_LOG_EVENT`.
-    - The event is a `QUERY_EVENT` with query equal to "XA COMMIT" or "XA ABORT"
-      or "COMMIT".
+    - The event is a `QUERY_EVENT` with query equal to "XA COMMIT" or
+      "XA ROLLBACK" or "COMMIT".
     - The event is the first `QUERY_EVENT` after a `GTID_EVENT` and the query is
       not "BEGIN" --the statement is a DDL, for instance.
 
@@ -139,7 +140,7 @@ class Observe_transmission_guard {
             m_to_set = (strcmp("BEGIN", ev.query) != 0);
           else
             m_to_set = (strncmp("XA COMMIT", ev.query, 9) == 0) ||
-                       (strncmp("XA ABORT", ev.query, 8) == 0) ||
+                       (strncmp("XA ROLLBACK", ev.query, 11) == 0) ||
                        (strncmp("COMMIT", ev.query, 6) == 0);
           break;
         }
@@ -479,12 +480,12 @@ void Binlog_sender::run() {
   if (reader.is_open()) {
     if (is_fatal_error()) {
       /* output events range to error message */
-      snprintf(error_text, sizeof(error_text),
-               "%s; the first event '%s' at %lld, "
-               "the last event read from '%s' at %lld, "
-               "the last byte read from '%s' at %lld.",
-               m_errmsg, m_start_file, m_start_pos, m_last_file, m_last_pos,
-               log_file, reader.position());
+      my_snprintf_8bit(nullptr, error_text, sizeof(error_text),
+                       "%s; the first event '%s' at %lld, "
+                       "the last event read from '%s' at %lld, "
+                       "the last byte read from '%s' at %lld.",
+                       m_errmsg, m_start_file, m_start_pos, m_last_file,
+                       m_last_pos, log_file, reader.position());
       set_fatal_error(error_text);
     }
 
@@ -634,6 +635,8 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       auto now = now_in_nanosecs();
       assert(now >= m_last_event_sent_ts);
 
+      if (before_send_hook(log_file, log_pos)) return 1;
+
       // if enough time has elapsed so that we should send another heartbeat
       if (m_heartbeat_period > std::chrono::nanoseconds(0) &&
           (now - m_last_event_sent_ts) >= m_heartbeat_period) {
@@ -642,6 +645,10 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       } else {
         exclude_group_end_pos = log_pos;
       }
+
+      if (unlikely(after_send_hook(log_file, in_exclude_group ? log_pos : 0)))
+        return 1;
+
       DBUG_PRINT("info", ("Event of type %s is skipped",
                           Log_event::get_type_str(event_type)));
     } else {
@@ -671,6 +678,18 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
 
       if (before_send_hook(log_file, log_pos)) return 1;
       if (unlikely(send_packet())) return 1;
+
+      DBUG_EXECUTE_IF("dump_thread_wait_after_send_write_rows", {
+        if (event_type == mysql::binlog::event::WRITE_ROWS_EVENT) {
+          thd->get_protocol()->flush();
+          static constexpr char act[] =
+              "now "
+              "wait_for signal.continue";
+          assert(opt_debug_sync_timeout > 0);
+          assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
+        }
+      });
+
       if (unlikely(after_send_hook(log_file, in_exclude_group ? log_pos : 0)))
         return 1;
     }

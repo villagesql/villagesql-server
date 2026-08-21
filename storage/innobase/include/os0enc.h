@@ -201,10 +201,18 @@ class Encryption {
   @return the string representation */
   [[nodiscard]] static const char *to_string(Type type) noexcept;
 
-  /** Check if the string is "empty" or "none".
+  /** Check if the string is "" or "n".
   @param[in]  algorithm  Encryption algorithm to check
   @return true if no algorithm requested */
   [[nodiscard]] static bool is_none(const char *algorithm) noexcept;
+
+  /** Check if the NO algorithm was explicitly specified.
+  @param[in]      explicit_encryption was ENCRYPTION clause
+                  specified explicitly
+  @param[in]      algorithm       Encryption algorithm to check
+  @return true if no algorithm explicitly requested */
+  [[nodiscard]] static bool none_explicitly_specified(
+      bool explicit_encryption, const char *algorithm) noexcept;
 
   /** Generate random encryption value for key and iv.
   @param[in,out]  value Encryption value */
@@ -371,7 +379,7 @@ class Encryption {
                                 byte *tmp, ulint tmp_len) const noexcept;
 
   /** Check if keyring plugin loaded. */
-  static bool check_keyring() noexcept;
+  [[nodiscard]] static bool check_keyring() noexcept;
 
   /** Get encryption type
   @return encryption type **/

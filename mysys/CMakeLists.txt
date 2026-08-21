@@ -27,9 +27,12 @@ SET(MY_TIME_SOURCES my_time.cc my_systime.cc)
 
 ADD_CONVENIENCE_LIBRARY(mytime ${MY_TIME_SOURCES})
 
+INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
+
 SET(MYSYS_SOURCES
   array.cc
   base64_encode.cc
+  buffered_error_log.cc
   charset.cc
   dbug.cc
   decimal.cc
@@ -193,6 +196,10 @@ IF(HAS_MISSING_PROFILE)
   ADD_COMPILE_FLAGS(mf_path.cc COMPILE_FLAGS "${HAS_MISSING_PROFILE}")
 ENDIF()
 
+IF (WITH_COREDUMPER)
+  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extra/coredumper/include)
+ENDIF()
+
 ADD_CONVENIENCE_LIBRARY(mysys ${MYSYS_SOURCES}
   LINK_LIBRARIES
   mytime
@@ -220,6 +227,9 @@ ENDIF()
 # Need explicit pthread for gcc -fsanitize=address
 IF(CMAKE_USE_PTHREADS_INIT AND CMAKE_C_FLAGS MATCHES "-fsanitize=")
   TARGET_LINK_LIBRARIES(mysys pthread)
+ENDIF()
+IF (WITH_COREDUMPER)
+  TARGET_LINK_LIBRARIES(mysys coredumper)
 ENDIF()
 # Needed to resolve OpenSSL dependency on Windows
 IF(WIN32)

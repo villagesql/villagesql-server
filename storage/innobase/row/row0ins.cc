@@ -349,7 +349,7 @@ void ins_node_set_new_row(
 
   update = row_upd_build_difference_binary(cursor->index, entry, rec, nullptr,
                                            true, thr_get_trx(thr), heap,
-                                           mysql_table, &err);
+                                           mysql_table, thr->prebuilt, &err);
   if (err != DB_SUCCESS) {
     return err;
   }
@@ -936,6 +936,8 @@ static void row_ins_foreign_fill_virtual(upd_node_t *cascade, const rec_t *rec,
   ulint n_diff;
   upd_field_t *upd_field;
   const dict_vcol_set *const v_cols = foreign->v_cols;
+  row_prebuilt_t *prebuilt =
+      static_cast<que_thr_t *>(node->common.parent)->prebuilt;
 
   update->old_vrow = row_build(ROW_COPY_POINTERS, index, rec, offsets, table,
                                nullptr, nullptr, &ext, update->heap);
@@ -959,7 +961,8 @@ static void row_ins_foreign_fill_virtual(upd_node_t *cascade, const rec_t *rec,
     }
 
     const dfield_t *const vfield = innobase_get_computed_value(
-        update->old_vrow, col, table, &v_heap, update->heap, thd, nullptr);
+        &prebuilt->blob_heap, update->old_vrow, col, table, &v_heap,
+        update->heap, thd, nullptr);
 
     if (vfield == nullptr) {
       *err = DB_COMPUTE_VALUE_FAILED;
@@ -981,8 +984,8 @@ static void row_ins_foreign_fill_virtual(upd_node_t *cascade, const rec_t *rec,
       dfield_copy(&(upd_field->new_val), vfield);
     } else {
       const dfield_t *const new_vfield = innobase_get_computed_value(
-          update->old_vrow, col, table, &v_heap, update->heap, thd, nullptr,
-          nullptr, nullptr, update);
+          &prebuilt->blob_heap, update->old_vrow, col, table, &v_heap,
+          update->heap, thd, nullptr, nullptr, nullptr, update);
 
       if (new_vfield == nullptr) {
         *err = DB_COMPUTE_VALUE_FAILED;
@@ -1603,6 +1606,11 @@ dberr_t row_ins_check_foreign_constraint(
     const rec_t *rec = pcur.get_rec();
     const buf_block_t *block = pcur.get_block();
 
+    SRV_CORRUPT_TABLE_CHECK(block, {
+      err = DB_CORRUPTION;
+      goto exit_loop;
+    });
+
     if (page_rec_is_infimum(rec)) {
       continue;
     }
@@ -1729,6 +1737,7 @@ dberr_t row_ins_check_foreign_constraint(
     }
   } while (pcur.move_to_next(&mtr));
 
+exit_loop:
   if (check_ref) {
     row_ins_foreign_report_add_err(trx, foreign, pcur.get_rec(), entry);
     err = DB_NO_REFERENCED_ROW;
@@ -2691,9 +2700,15 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
   mtr = &index->last_ins_cur->mtr;
 
   /* Search for position if tree needs to be split or if last position
-  is not cached. */
+  is not cached. Also commit mtr and do the search if we have inserted
+  more than MAX_INTRINSIC_MTR_RECORDS within this mtr. The latter is
+  done to unfix buffer pages used by the mtr. Otherwise statements
+  (even single statement in extreme case) using intrinsic tables can
+  consume the whole buffer pool by their buffer fixed pages causing
+  performance problems or even stalls. */
   if (mode == BTR_MODIFY_TREE || index->last_ins_cur->rec == nullptr ||
-      index->last_ins_cur->disable_caching) {
+      index->last_ins_cur->disable_caching ||
+      index->last_ins_cur->mtr_records > MAX_INTRINSIC_MTR_RECORDS) {
     /* Commit the previous mtr. */
     index->last_ins_cur->release();
 
@@ -2765,6 +2780,7 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
         index->last_ins_cur->rec = insert_rec;
 
         index->last_ins_cur->block = cursor.page_cur.block;
+        index->last_ins_cur->mtr_records++;
       } else {
         index->last_ins_cur->release();
       }

@@ -624,7 +624,12 @@ static inline void free_plugin_mem(st_plugin_dl *p) {
     PSI_SYSTEM_CALL(unload_plugin)
     (std::string(p->dl.str, p->dl.length).c_str());
 #endif
+#if !defined(HAVE_VALGRIND) && !defined(HAVE_ASAN)
+    /*
+     * Avoid closing components under ASAN / Valgrind in order to get
+     * meaningfull leak report */
     dlclose(p->handle);
+#endif
   }
   my_free(p->dl.str);
   if (p->version != MYSQL_PLUGIN_INTERFACE_VERSION) my_free(p->plugins);
@@ -3200,7 +3205,7 @@ static int construct_options(MEM_ROOT *mem_root, st_plugin_int *tmp,
   char *comment = (char *)mem_root->Alloc(max_comment_len + 1);
   char *optname;
 
-  int index = 0, offset = 0;
+  int offset = 0;
   SYS_VAR *opt, **plugin_option;
   st_bookmark *v;
 
@@ -3266,7 +3271,7 @@ static int construct_options(MEM_ROOT *mem_root, st_plugin_int *tmp,
   */
 
   for (plugin_option = tmp->plugin->system_vars;
-       plugin_option && *plugin_option; plugin_option++, index++) {
+       plugin_option && *plugin_option; plugin_option++) {
     opt = *plugin_option;
     if (!(opt->flags & PLUGIN_VAR_THDLOCAL)) continue;
     if (!(register_var(plugin_name_ptr, opt->name, opt->flags))) continue;
@@ -3314,7 +3319,7 @@ static int construct_options(MEM_ROOT *mem_root, st_plugin_int *tmp,
   }
 
   for (plugin_option = tmp->plugin->system_vars;
-       plugin_option && *plugin_option; plugin_option++, index++) {
+       plugin_option && *plugin_option; plugin_option++) {
     switch ((opt = *plugin_option)->flags & PLUGIN_VAR_TYPEMASK) {
       case PLUGIN_VAR_BOOL:
         if (!opt->check) opt->check = check_func_bool;

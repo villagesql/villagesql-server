@@ -376,6 +376,10 @@ enum Log_event_type {
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers
   */
+
+  /* New MySQL events are to be added right above this comment */
+  MYSQL_END_EVENT,
+
   ENUM_END_EVENT /* end marker */
 };
 
@@ -754,7 +758,14 @@ class Log_event_header {
     @return True if the event object is valid, false otherwise.
   */
 
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#endif
   bool get_is_valid() { return m_is_valid; }
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
 
   /**
     Set if the event object shall be considered valid or not.
@@ -861,9 +872,11 @@ class Binary_log_event {
   /*
      The number of types we handle in Format_description_event (UNKNOWN_EVENT
      is not to be handled, it does not exist in binlogs, it does not have a
-     format).
+     format - unless it's START_5_7_ENCRYPTION_EVENT - then
+     Format_description_event is not aware of it. That's OK as this event never
+     leaves the server - it's not sent to slave).
   */
-  static const int LOG_EVENT_TYPES = (ENUM_END_EVENT - 1);
+  static constexpr int LOG_EVENT_TYPES = (MYSQL_END_EVENT - 1);
 
   /**
     The lengths for the fixed data part of each event.

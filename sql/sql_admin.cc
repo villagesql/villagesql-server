@@ -44,6 +44,7 @@
 #include "my_sys.h"
 #include "myisam.h"  // TT_USEFRM
 #include "mysql/components/services/log_builtins.h"
+#include "mysql/plugin.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/strings/m_ctype.h"
@@ -1482,6 +1483,9 @@ static bool mysql_admin_table(
       }
     }
     if (table->table) {
+      const bool skip_flush =
+          (operator_func == &handler::ha_analyze) &&
+          (table->table->file->ha_table_flags() & HA_ONLINE_ANALYZE);
       if (table->table->s->tmp_table) {
         /*
           If the table was not opened successfully, do not try to get
@@ -1489,7 +1493,7 @@ static bool mysql_admin_table(
         */
         if (open_for_modify && !open_error)
           table->table->file->info(HA_STATUS_CONST);
-      } else if (open_for_modify || fatal_error) {
+      } else if ((!skip_flush && open_for_modify) || fatal_error) {
         if (operator_func == &handler::ha_analyze && !histogram_update_failed)
           /*
             Force update of key distribution statistics in rec_per_key array and
@@ -1850,7 +1854,7 @@ bool Sql_cmd_analyze_table::execute(THD *thd) {
     return true;
   });
 
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
 
   if (get_histogram_command() != Histogram_command::NONE) {
     res = handle_histogram_command(thd, first_table);
@@ -1935,7 +1939,7 @@ bool Sql_cmd_optimize_table::execute(THD *thd) {
 
   if (check_optimize_table_access(thd)) goto error; /* purecov: inspected */
 
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
   res = (specialflag & SPECIAL_NO_NEW_FUNC)
             ? mysql_recreate_table(thd, first_table, true)
             : mysql_admin_table(thd, first_table, &thd->lex->check_opt,
@@ -1963,7 +1967,7 @@ bool Sql_cmd_repair_table::execute(THD *thd) {
   if (check_table_access(thd, SELECT_ACL | INSERT_ACL, first_table, false,
                          UINT_MAX, false))
     goto error; /* purecov: inspected */
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
   res = mysql_admin_table(
       thd, first_table, &thd->lex->check_opt, "repair", TL_WRITE, true,
       thd->lex->check_opt.sql_flags & TT_USEFRM, HA_OPEN_FOR_REPAIR,
@@ -2039,10 +2043,42 @@ class Alter_instance_reload_tls : public Alter_instance {
       }
     }
 
-    if (!res) my_ok(m_thd);
+    if (!res) {
+      String specified_channel(channel_name_.str, channel_name_.length,
+                               system_charset_info);
+      if (!my_strcasecmp(system_charset_info, mysql_main_channel.c_str(),
+                         specified_channel.ptr())) {
+        for (auto const &cb : callbacks_) {
+          if (!cb(nullptr)) {
+            push_warning_printf(m_thd, Sql_condition::SL_WARNING,
+                                ER_DA_SSL_LIBRARY_ERROR,
+                                ER_THD(m_thd, ER_DA_SSL_LIBRARY_ERROR),
+                                "One of the TLS reload callbacks failed");
+            LogErr(WARNING_LEVEL, ER_SSL_LIBRARY_ERROR,
+                   "One of the TLS reload callbacks failed");
+          }
+        };
+      }
+
+      my_ok(m_thd);
+    }
     return res;
   }
   ~Alter_instance_reload_tls() override = default;
+
+  static bool register_callback(ssl_reload_callback_t c) {
+    auto it = std::find(callbacks_.begin(), callbacks_.end(), c);
+    if (it != callbacks_.end()) return false;
+    callbacks_.push_back(c);
+    return true;
+  }
+
+  static bool deregister_callback(ssl_reload_callback_t c) {
+    auto it = std::find(callbacks_.begin(), callbacks_.end(), c);
+    if (it == callbacks_.end()) return false;
+    callbacks_.erase(it);
+    return true;
+  }
 
  protected:
   bool match_channel_name() {
@@ -2068,7 +2104,21 @@ class Alter_instance_reload_tls : public Alter_instance {
   LEX_CSTRING channel_name_;
   bool force_;
   Ssl_acceptor_context_type context_type_;
+  static std::vector<ssl_reload_callback_t> callbacks_;
 };
+
+std::vector<ssl_reload_callback_t> Alter_instance_reload_tls::callbacks_;
+
+extern "C" {
+
+bool register_ssl_reload_callback(ssl_reload_callback_t c) {
+  return Alter_instance_reload_tls::register_callback(c);
+}
+
+bool deregister_ssl_reload_callback(ssl_reload_callback_t c) {
+  return Alter_instance_reload_tls::deregister_callback(c);
+}
+}
 
 bool Sql_cmd_alter_instance::execute(THD *thd) {
   bool res = true;

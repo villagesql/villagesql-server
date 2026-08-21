@@ -205,6 +205,15 @@ enum enum_sql_command {
   SQLCOM_CREATE_SRS,
   SQLCOM_DROP_SRS,
   SQLCOM_SHOW_PARSE_TREE,
+  SQLCOM_SHOW_USER_STATS,
+  SQLCOM_SHOW_TABLE_STATS,
+  SQLCOM_SHOW_INDEX_STATS,
+  SQLCOM_SHOW_CLIENT_STATS,
+  SQLCOM_SHOW_THREAD_STATS,
+  SQLCOM_LOCK_TABLES_FOR_BACKUP,
+  SQLCOM_CREATE_COMPRESSION_DICTIONARY,
+  SQLCOM_DROP_COMPRESSION_DICTIONARY,
+
   // Count of contiguous MySQL-native commands. Must stay at the end of the
   // MySQL command block, before SQLCOM_VSQL_FIRST.
   SQLCOM_MYSQL_COUNT,
@@ -215,6 +224,7 @@ enum enum_sql_command {
   SQLCOM_INSTALL_EXTENSION = SQLCOM_VSQL_FIRST,
   SQLCOM_UNINSTALL_EXTENSION,
   // Add future VillageSQL commands here.
+
 
   /* This should be the last !!! */
   SQLCOM_END

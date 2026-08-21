@@ -194,6 +194,26 @@ struct plugin_options_variables {
 #define MIN_COMPRESSION_THRESHOLD 0
   ulong compression_threshold_var;
 
+#define DEFAULT_CERTIFICATION_LOOP_SLEEP_TIME 0
+#define MAX_CERTIFICATION_LOOP_SLEEP_TIME 1000000
+#define MIN_CERTIFICATION_LOOP_SLEEP_TIME 0
+  ulong certification_loop_sleep_time_var;
+
+#define DEFAULT_CERTIFICATION_LOOP_CHUNK_SIZE 0
+#define MAX_CERTIFICATION_LOOP_CHUNK_SIZE UINT_MAX32
+#define MIN_CERTIFICATION_LOOP_CHUNK_SIZE 0
+  ulong certification_loop_chunk_size_var;
+
+#define DEFAULT_XCOM_SSL_SOCKET_TIMEOUT 0
+#define MAX_XCOM_SSL_SOCKET_TIMEOUT UINT_MAX32
+#define MIN_XCOM_SSL_SOCKET_TIMEOUT 0
+  ulong xcom_ssl_socket_timeout_var;
+
+#define DEFAULT_XCOM_SSL_ACCEPT_RETRIES 10
+#define MAX_XCOM_SSL_ACCEPT_RETRIES UINT_MAX32
+#define MIN_XCOM_SSL_ACCEPT_RETRIES 0
+  ulong xcom_ssl_accept_retries_var;
+
 #define DEFAULT_GTID_ASSIGNMENT_BLOCK_SIZE 1000000
 #define MIN_GTID_ASSIGNMENT_BLOCK_SIZE 1
 #define MAX_GTID_ASSIGNMENT_BLOCK_SIZE GNO_END
@@ -221,9 +241,9 @@ struct plugin_options_variables {
   bool single_primary_mode_var;
   bool enforce_update_everywhere_checks_var;
 
-  const char *flow_control_mode_values[3] = {"DISABLED", "QUOTA",
+  const char *flow_control_mode_values[4] = {"DISABLED", "QUOTA", "MAJORITY",
                                              (const char *)nullptr};
-  TYPELIB flow_control_mode_typelib_t = {2, "flow_control_mode_typelib_t",
+  TYPELIB flow_control_mode_typelib_t = {3, "flow_control_mode_typelib_t",
                                          flow_control_mode_values, nullptr};
   ulong flow_control_mode_var;
 #define DEFAULT_FLOW_CONTROL_THRESHOLD 25000
@@ -288,6 +308,8 @@ struct plugin_options_variables {
   bool preemptive_garbage_collection_var;
 
   uint preemptive_garbage_collection_rows_threshold_var;
+
+  uint auto_evict_timeout;
 };
 
 #endif /* PLUGIN_VARIABLES_INCLUDE */

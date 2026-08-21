@@ -71,6 +71,10 @@ Alter_info::Alter_info(const Alter_info &rhs, MEM_ROOT *mem_root)
                                  rhs.check_constraint_spec_list.begin(),
                                  rhs.check_constraint_spec_list.end()),
       create_list(rhs.create_list, mem_root),
+      delayed_key_list(mem_root, rhs.delayed_key_list.cbegin(),
+                       rhs.delayed_key_list.cend()),
+      delayed_key_info(rhs.delayed_key_info),
+      delayed_key_count(rhs.delayed_key_count),
       flags(rhs.flags),
       keys_onoff(rhs.keys_onoff),
       partition_names(rhs.partition_names, mem_root),
@@ -93,6 +97,22 @@ Alter_info::Alter_info(const Alter_info &rhs, MEM_ROOT *mem_root)
   while ((el = it++)) it.replace(el->clone(mem_root));
 
   /* partition_names are not deeply copied currently */
+}
+
+/**
+  Checks if there are any columns with COLUMN_FORMAT COMRPESSED
+  attribute among field definitions in create_list.
+
+  @retval false there are no compressed columns
+  @retval true there is at least one compressed column
+*/
+bool Alter_info::has_compressed_columns() const {
+  List_iterator<Create_field> it(const_cast<List<Create_field> &>(create_list));
+  const Create_field *sql_field;
+  while ((sql_field = it++))
+    if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED)
+      return true;
+  return false;
 }
 
 Alter_table_ctx::Alter_table_ctx()
@@ -340,7 +360,7 @@ bool Sql_cmd_alter_table::execute(THD *thd) {
                         ER_THD(thd, WARN_OPTION_IGNORED), "INDEX DIRECTORY");
   create_info.data_file_name = create_info.index_file_name = nullptr;
 
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
 
   /* Push Strict_error_handler for alter table*/
   Strict_error_handler strict_handler;
@@ -394,7 +414,7 @@ bool Sql_cmd_discard_import_tablespace::execute(THD *thd) {
   if (check_grant(thd, ALTER_ACL, table_list, false, UINT_MAX, false))
     return true;
 
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
 
   /*
     Check if we attempt to alter mysql.slow_log or

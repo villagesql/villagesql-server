@@ -521,6 +521,10 @@ void PFS_thread::set_history_derived_flags() {
 }
 
 void PFS_thread::rebase_memory_stats() {
+  if (m_instr_class_memory_stats == nullptr || memory_class_max == 0) {
+    return;
+  }
+
   PFS_memory_safe_stat *stat = m_instr_class_memory_stats;
   const PFS_memory_safe_stat *stat_last = stat + memory_class_max;
   for (; stat < stat_last; stat++) {
@@ -625,6 +629,7 @@ PFS_thread *create_thread(PFS_thread_class *klass, PSI_thread_seqnum seqnum,
     pfs->m_stmt_lock.set_allocated();
     pfs->m_session_lock.set_allocated();
     pfs->set_enabled(klass->m_enabled);
+    pfs->m_disable_instrumentation = false;
     pfs->set_history(klass->m_history);
     pfs->m_class = klass;
     pfs->m_events_waits_current = &pfs->m_events_waits_stack[WAIT_STACK_BOTTOM];
@@ -663,12 +668,17 @@ PFS_thread *create_thread(PFS_thread_class *klass, PSI_thread_seqnum seqnum,
     pfs->m_processlist_info_length = 0;
     pfs->m_secondary = false;
     pfs->m_connection_type = NO_VIO_TYPE;
+    pfs->m_start_time_usec = 0;
+    pfs->m_rows_sent = 0;
+    pfs->m_rows_examined = 0;
 
     pfs->m_thd = nullptr;
     pfs->m_cnt_thd = nullptr;
 #ifndef NDEBUG
     pfs->current_key_name = nullptr;
 #endif
+    pfs->m_session_all_memory_stat.reset();
+    pfs->rebase_memory_stats();
     pfs->m_host = nullptr;
     pfs->m_user = nullptr;
     pfs->m_account = nullptr;
@@ -720,8 +730,6 @@ PFS_thread *create_thread(PFS_thread_class *klass, PSI_thread_seqnum seqnum,
                      klass->m_os_name);
     }
     pfs->m_os_name[PFS_MAX_OS_NAME_LENGTH - 1] = '\0';
-
-    pfs->m_session_all_memory_stat.reset();
 
 #ifdef HAVE_PSI_SERVER_TELEMETRY_TRACES_INTERFACE
     pfs->m_telemetry = nullptr;

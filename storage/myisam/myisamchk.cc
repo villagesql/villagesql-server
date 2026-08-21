@@ -1083,12 +1083,14 @@ static int myisamchk(MI_CHECK *param, char *filename) {
         if (param->testflag & (T_EXTEND | T_MEDIUM))
           (void)init_key_cache(dflt_key_cache, opt_key_cache_block_size,
                                (size_t)param->use_buffers, 0, 0);
-        (void)init_io_cache(
-            &param->read_cache, datafile, (uint)param->read_buffer_length,
-            READ_CACHE,
-            (param->start_check_pos ? param->start_check_pos
-                                    : share->pack.header_length),
-            true, MYF(MY_WME));
+        [[maybe_unused]]
+        int init_res =
+            init_io_cache(&param->read_cache, datafile,
+                          (uint)param->read_buffer_length, READ_CACHE,
+                          (param->start_check_pos ? param->start_check_pos
+                                                  : share->pack.header_length),
+                          true, MYF(MY_WME));
+        assert(init_res == 0);
         if ((info->s->options &
              (HA_OPTION_PACK_RECORD | HA_OPTION_COMPRESS_RECORD)) ||
             (param->testflag & (T_EXTEND | T_MEDIUM)))
@@ -1398,11 +1400,10 @@ static int mi_sort_records(MI_CHECK *param, MI_INFO *info, char *name,
   MYISAM_SHARE *share = info->s;
   char llbuff[22], llbuff2[22];
   SORT_INFO sort_info;
-  MI_SORT_PARAM sort_param;
+  MI_SORT_PARAM sort_param{};
   DBUG_TRACE;
 
   memset(&sort_info, 0, sizeof(sort_info));
-  memset(&sort_param, 0, sizeof(sort_param));
   sort_param.sort_info = &sort_info;
   sort_info.param = param;
   keyinfo = &share->keyinfo[sort_key];
@@ -1678,6 +1679,14 @@ void mi_check_print_error(MI_CHECK *param, const char *fmt, ...) {
   (void)fputc('\n', stderr);
   fflush(stderr);
   va_end(args);
+}
+
+bool get_global_encrypt_tmp_files() { return false; }
+
+bool open_cached_file_encrypted(IO_CACHE *cache, const char *dir,
+                                const char *prefix, size_t cache_size,
+                                myf cache_myflags, bool /*encrypted*/) {
+  return open_cached_file(cache, dir, prefix, cache_size, cache_myflags);
 }
 
 #include "storage/myisam/mi_extrafunc.h"

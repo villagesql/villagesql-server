@@ -1,4 +1,5 @@
 /* Copyright (c) 2001, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2018, Percona and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -121,8 +122,9 @@ static uint uniq_read_to_buffer(IO_CACHE *fromfile, Merge_chunk *merge_chunk,
                         merge_chunk,
                         static_cast<ulonglong>(merge_chunk->file_position()),
                         static_cast<ulonglong>(bytes_to_read)));
-    if (mysql_file_pread(fromfile->file, merge_chunk->buffer_start(),
-                         bytes_to_read, merge_chunk->file_position(), MYF_RW))
+    if (mysql_encryption_file_pread(fromfile, merge_chunk->buffer_start(),
+                                    bytes_to_read, merge_chunk->file_position(),
+                                    MYF_RW))
       return (uint)-1; /* purecov: inspected */
 
     merge_chunk->init_current_key();
@@ -369,8 +371,9 @@ Unique::Unique(qsort2_cmp comp_func, void *comp_func_fixed_arg, uint size_arg,
   */
   max_elements =
       (ulong)(max_in_memory_size / ALIGN_SIZE(sizeof(TREE_ELEMENT) + size));
-  (void)open_cached_file(&file, mysql_tmpdir, TEMP_PREFIX, DISK_BUFFER_SIZE,
-                         MYF(MY_WME));
+  (void)open_cached_file_encrypted(&file, mysql_tmpdir, TEMP_PREFIX,
+                                   DISK_BUFFER_SIZE, MYF(MY_WME),
+                                   encrypt_tmp_files);
 }
 
 /**
@@ -655,7 +658,9 @@ void Unique::reset() {
   */
   if (elements) {
     file_ptrs.clear();
-    reinit_io_cache(&file, WRITE_CACHE, 0L, false, true);
+    [[maybe_unused]]
+    int reinit_res = reinit_io_cache(&file, WRITE_CACHE, 0L, false, true);
+    assert(reinit_res == 0);
   }
   /*
     If table is used - finish index access and delete all records.
@@ -920,10 +925,15 @@ bool Unique::get(TABLE *table) {
       key_memory_TABLE_sort_io_cache, sizeof(IO_CACHE), MYF(MY_ZEROFILL));
 
   if (!outfile || (!my_b_inited(outfile) &&
-                   open_cached_file(outfile, mysql_tmpdir, TEMP_PREFIX,
-                                    READ_RECORD_BUFFER, MYF(MY_WME))))
+                   open_cached_file_encrypted(outfile, mysql_tmpdir,
+                                              TEMP_PREFIX, READ_RECORD_BUFFER,
+                                              MYF(MY_WME), encrypt_tmp_files)))
     return true;
-  reinit_io_cache(outfile, WRITE_CACHE, 0L, false, false);
+  if (reinit_io_cache(outfile, WRITE_CACHE, 0L, 0, 0) != 0) return true;
+
+  [[maybe_unused]]
+  int reinit_res = reinit_io_cache(outfile, WRITE_CACHE, 0L, 0, 0);
+  assert(reinit_res == 0);
 
   Uniq_param uniq_param;
   uniq_param.max_rows = elements;

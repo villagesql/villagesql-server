@@ -1687,9 +1687,12 @@ bool ha_innobase::commit_inplace_alter_table(TABLE *altered_table,
   }
 
 #ifdef UNIV_DEBUG
+  /* Inplace ALTERs for expanded fast index creation can only be about
+  DROP and ADD INDEX and never be instant operation */
   if (dd_table_has_instant_cols(*old_dd_tab) &&
       (ctx == nullptr || !ctx->need_rebuild())) {
-    ut_ad(dd_table_has_instant_cols(*new_dd_tab));
+    ut_ad(dd_table_has_instant_cols(*new_dd_tab) ||
+          (ctx == nullptr || ctx->new_table->skip_alter_undo));
   }
 #endif /* UNIV_DEBUG */
 
@@ -2327,7 +2330,7 @@ void innobase_rec_to_mysql(struct TABLE *table, const rec_t *rec,
 
     field->reset();
 
-    ipos = index->get_col_pos(i, true, false);
+    ipos = index->get_col_pos(i, true, false, nullptr);
 
     if (ipos == ULINT_UNDEFINED || rec_offs_nth_extern(index, offsets, ipos)) {
     null_field:
@@ -2377,7 +2380,7 @@ void innobase_fields_to_mysql(struct TABLE *table, const dict_index_t *index,
       col_n = i - num_v;
     }
 
-    ipos = index->get_col_pos(col_n, true, innobase_is_v_fld(field));
+    ipos = index->get_col_pos(col_n, true, innobase_is_v_fld(field), nullptr);
 
     if (ipos == ULINT_UNDEFINED || dfield_is_ext(&fields[ipos]) ||
         dfield_is_null(&fields[ipos])) {
@@ -3341,7 +3344,8 @@ static void online_retry_drop_dict_indexes(dict_table_t *table, bool locked) {
 @param field MySQL value for the column
 @param comp nonzero if in compact format */
 static void innobase_build_col_map_add(mem_heap_t *heap, dfield_t *dfield,
-                                       const Field *field, ulint comp) {
+                                       const Field *field, ulint comp,
+                                       row_prebuilt_t *prebuilt) {
   if (field->is_real_null()) {
     dfield_set_null(dfield);
     return;
@@ -3353,8 +3357,11 @@ static void innobase_build_col_map_add(mem_heap_t *heap, dfield_t *dfield,
 
   const byte *mysql_data = field->field_ptr();
 
-  row_mysql_store_col_in_innobase_format(dfield, buf, true, mysql_data, size,
-                                         comp);
+  row_mysql_store_col_in_innobase_format(
+      dfield, buf, true, mysql_data, size, comp,
+      field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED,
+      reinterpret_cast<const byte *>(field->zip_dict_data.str),
+      field->zip_dict_data.length, &prebuilt->compress_heap);
 }
 
 /** Construct the translation table for reordering, dropping or
@@ -3372,7 +3379,8 @@ to column numbers in altered_table */
 [[nodiscard]] static const ulint *innobase_build_col_map(
     Alter_inplace_info *ha_alter_info, const TABLE *altered_table,
     const TABLE *table, const dict_table_t *new_table,
-    const dict_table_t *old_table, dtuple_t *add_cols, mem_heap_t *heap) {
+    const dict_table_t *old_table, dtuple_t *add_cols, mem_heap_t *heap,
+    row_prebuilt_t *prebuilt) {
   DBUG_TRACE;
   assert(altered_table != table);
   assert(new_table != old_table);
@@ -3431,7 +3439,7 @@ to column numbers in altered_table */
     ut_ad(!is_v);
     innobase_build_col_map_add(heap, dtuple_get_nth_field(add_cols, i),
                                altered_table->field[i + num_v],
-                               dict_table_is_comp(new_table));
+                               dict_table_is_comp(new_table), prebuilt);
   found_col:
     if (is_v) {
       num_v++;
@@ -4236,7 +4244,10 @@ template <typename Table>
 static void dd_commit_inplace_update_instant_meta(const dict_table_t *table,
                                                   const dd::Table *old_dd_tab,
                                                   dd::Table *new_dd_tab) {
-  if (!dd_table_has_instant_cols(*old_dd_tab)) {
+  /** If table->skip_alter_undo is true during inplace, it is expanded fast
+  index creation. The inplace ALTERs for that can only be about DROP INDEX
+  and ADD INDEX and can never be instant operations */
+  if (table->skip_alter_undo || !dd_table_has_instant_cols(*old_dd_tab)) {
     return;
   }
 
@@ -4357,7 +4368,16 @@ static void dd_commit_inplace_alter_table(
                                  FTS_DOC_ID_INDEX_NAME, col);
     }
 
-    dd_space_id = dd_first_index(old_dd_tab)->tablespace_id();
+    /* This can happen only with expanded fast index creation. On the
+    intermediate table during ALTER COPY, we drop secondary indexes using
+    inplace alter APIs. The old definition here is old copy of table. Hence we
+    should use new_dd_tab here for updating the dd::Indexes */
+    if (new_table->skip_alter_undo) {
+      dd_space_id = dd_first_index(new_dd_tab)->tablespace_id();
+    } else {
+      dd_space_id = dd_first_index(old_dd_tab)->tablespace_id();
+    }
+    ut_ad(dd_space_id != dd::INVALID_OBJECT_ID);
   }
 
   dd_set_table_options(new_dd_tab, new_table);
@@ -4431,7 +4451,8 @@ template <typename Table>
     Alter_inplace_info *ha_alter_info, const TABLE *altered_table,
     const TABLE *old_table, const Table *old_dd_tab, Table *new_dd_tab,
     const char *table_name, uint32_t flags, uint32_t flags2,
-    ulint fts_doc_id_col, bool add_fts_doc_id, bool add_fts_doc_id_idx) {
+    ulint fts_doc_id_col, bool add_fts_doc_id, bool add_fts_doc_id_idx,
+    row_prebuilt_t *prebuilt) {
   bool dict_locked = false;
   ulint *add_key_nums;         /* MySQL key numbers */
   ddl::Index_defn *index_defs; /* index definitions */
@@ -4754,6 +4775,9 @@ template <typename Table>
         }
       }
 
+      if (field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED)
+        field_type |= DATA_COMPRESSED;
+
       if (col_type == DATA_POINT) {
         /* DATA_POINT should be of fixed length,
         instead of the pack_length(blob length). */
@@ -4908,9 +4932,9 @@ template <typename Table>
       add_cols = nullptr;
     }
 
-    ctx->col_map =
-        innobase_build_col_map(ha_alter_info, altered_table, old_table,
-                               ctx->new_table, user_table, add_cols, ctx->heap);
+    ctx->col_map = innobase_build_col_map(ha_alter_info, altered_table,
+                                          old_table, ctx->new_table, user_table,
+                                          add_cols, ctx->heap, prebuilt);
     ctx->add_cols = add_cols;
   } else {
     assert(!innobase_need_rebuild(ha_alter_info));
@@ -5148,6 +5172,8 @@ template <typename Table>
       }
     }
   }
+
+  DBUG_EXECUTE_IF("crash_innodb_add_index_after", DBUG_SUICIDE(););
 
 error_handling:
 
@@ -5508,6 +5534,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
   bool add_fts_idx = false;
   dict_s_col_list *s_cols = nullptr;
   mem_heap_t *s_heap = nullptr;
+  ulint encrypt_flag = 0;
 
   DBUG_TRACE;
   assert(!ha_alter_info->handler_ctx);
@@ -5653,6 +5680,26 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
 
   if (!info.innobase_table_flags()) {
     goto err_exit_no_heap;
+  }
+
+  /* create_table_info_t::innobase_table_flags does not set encryption
+  flags. There are places where it is done afterwards, there are places
+  where it isn't done. We need to inspect all code paths and check if
+  encryption flag can be set in one place. */
+  if (!Encryption::is_none(ha_alter_info->create_info->encrypt_type.str)) {
+    /* Set the encryption flag. */
+    byte *master_key = nullptr;
+    uint32_t master_key_id;
+
+    /* Check if keyring is ready. */
+    Encryption::get_master_key(&master_key_id, &master_key);
+
+    if (master_key == nullptr) {
+      goto err_exit_no_heap;
+    } else {
+      my_free(master_key);
+      encrypt_flag = DICT_TF2_ENCRYPTION_FILE_PER_TABLE;
+    }
   }
 
   const uint32_t max_col_len = DICT_MAX_FIELD_LEN_BY_FORMAT_FLAG(info.flags());
@@ -6106,8 +6153,8 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
 
   return prepare_inplace_alter_table_dict(
       ha_alter_info, altered_table, table, old_dd_tab, new_dd_tab,
-      table_share->table_name.str, info.flags(), info.flags2(), fts_doc_col_no,
-      add_fts_doc_id, add_fts_doc_id_idx);
+      table_share->table_name.str, info.flags(), info.flags2() | encrypt_flag, fts_doc_col_no,
+      add_fts_doc_id, add_fts_doc_id_idx, m_prebuilt);
 }
 
 /** Check that the column is part of a virtual index(index contains
@@ -6143,11 +6190,10 @@ to rebuild the template.
 static bool alter_templ_needs_rebuild(TABLE *altered_table,
                                       Alter_inplace_info *ha_alter_info,
                                       dict_table_t *table) {
-  ulint i = 0;
   List_iterator_fast<Create_field> cf_it(
       ha_alter_info->alter_info->create_list);
 
-  for (Field **fp = altered_table->field; *fp; fp++, i++) {
+  for (Field **fp = altered_table->field; *fp; fp++) {
     cf_it.rewind();
     while (const Create_field *cf = cf_it++) {
       for (ulint j = 0; j < table->n_cols; j++) {
@@ -6701,8 +6747,15 @@ static void innobase_rename_or_enlarge_columns_cache(
     we expect the next value allocated from 201, but not 150.
 
     We could only search the tree to know current max counter
-    in the table and compare. */
-    if (ctx->max_autoinc <= max_value_table) {
+    in the table and compare.
+
+    If persisted auto-increment value is 0, it can't be trusted.
+    It might be an indication that auto-increment column just has
+    been added to the table by modifying existing column, so
+    the real maximum value in it has not been persisted yet.
+    This situation can also occur if table has been recently imported.
+    So we do index search in this case as well. */
+    if (max_value_table == 0 || ctx->max_autoinc <= max_value_table) {
       dberr_t err;
       dict_index_t *index;
 
@@ -7140,6 +7193,8 @@ inline void commit_cache_rebuild(ha_innobase_inplace_ctx *ctx) {
   so this must succeed. */
   error = dict_table_rename_in_cache(ctx->old_table, ctx->tmp_name, false);
   ut_a(error == DB_SUCCESS);
+
+  DEBUG_SYNC_C("commit_cache_rebuild_middle");
 
   error = dict_table_rename_in_cache(ctx->new_table, old_name, false);
   ut_a(error == DB_SUCCESS);
@@ -8000,6 +8055,21 @@ rollback_trx:
   }
 
   DBUG_EXECUTE_IF("ib_ddl_crash_before_update_stats", DBUG_SUICIDE(););
+
+  /* Rebuild index translation table now for temporary tables if we are
+  restoring secondary keys, as ha_innobase::open will not be called for
+  the next access.  */
+  if (DICT_TF2_FLAG_IS_SET(ctx0->new_table, DICT_TF2_TEMPORARY) &&
+      ctx0->num_to_add_index) {
+    ut_ad(!ctx0->num_to_drop_index);
+    ut_ad(!ctx0->num_to_rename);
+    ut_ad(!ctx0->num_to_drop_fk);
+    if (!innobase_build_index_translation(altered_table, ctx0->new_table,
+                                          m_share)) {
+      MONITOR_ATOMIC_DEC(MONITOR_PENDING_ALTER_TABLE);
+      return true;
+    }
+  }
 
   /* TODO: The following code could be executed
   while allowing concurrent access to the table
@@ -10461,7 +10531,13 @@ bool ha_innopart::prepare_inplace_alter_table(TABLE *altered_table,
     dd::Partition *new_part = *newp;
     ut_ad(old_part != nullptr);
     ut_ad(new_part != nullptr);
-    ut_ad(m_prebuilt->table->id == old_part->se_private_id());
+
+    /* We exempt this asserion when we do inplace during copy algorithm (ie.
+    during expanded fast index creation). This is OK because we are using an
+    intermediate table created during ALTER COPY algorithm. Hence
+    m_prebuilt->table->id is newer than the original id stored in DD */
+    ut_ad(m_prebuilt->table->id == old_part->se_private_id() ||
+          m_prebuilt->table->skip_alter_undo);
 
     ha_alter_info->handler_ctx = nullptr;
 

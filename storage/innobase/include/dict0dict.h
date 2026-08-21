@@ -51,6 +51,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "rem0types.h"
 #include "row0types.h"
 #include "sql/dd/object_id.h"
+#include "sql/dd/types/init_mode.h"  // dict_init_mode_t
 #include "srv0mon.h" /* for dict0dict.ic */
 #include "sync0rw.h"
 #include "trx0types.h"
@@ -184,7 +185,7 @@ static inline ulint dict_max_v_field_len_store_undo(dict_table_t *table,
 @param[in]      index   index to be searched for column
 @return position of column in the given index. */
 [[nodiscard]] static inline ulint dict_col_get_index_pos(
-    const dict_col_t *col, const dict_index_t *index) MY_ATTRIBUTE((nonnull));
+    const dict_col_t *col, const dict_index_t *index);
 
 /** If the given column name is reserved for InnoDB system columns, return
  true.
@@ -1649,14 +1650,55 @@ static inline void dict_allocate_mem_intrinsic_cache(dict_index_t *index);
 @param[in]      table_id        table id  */
 bool dict_table_is_system(table_id_t table_id);
 
-/** Change the table_id of SYS_* tables if they have been created after
-an earlier upgrade. This will update the table_id by adding DICT_MAX_DD_TABLES
-*/
-void dict_table_change_id_sys_tables();
-
 /** Get the tablespace data directory if set, otherwise empty string.
 @return the data directory */
 [[nodiscard]] std::string dict_table_get_datadir(const dict_table_t *table);
+
+/** Set is_corrupt flag by space_id */
+void dict_table_set_corrupt_by_space(space_id_t space_id,
+                                     bool need_mutex) noexcept;
+
+/** SYS_ZIP_DICT and SYS_ZIP_DICT_COLS will be missing when upgrading
+mysql-5.7 to PS-8.0 */
+extern bool dict_upgrade_zip_dict_missing;
+
+/** Get single compression dictionary id for the given
+(table id, column pos) pair.
+@param[in]	table_id	table id
+@param[in]	column_pos	column position
+@param[out]	dict_id		zip_dict id
+@retval	DB_SUCCESS		if OK
+@retval	DB_RECORD_NOT_FOUND	if not found */
+[[nodiscard]]
+dberr_t dict_get_dictionary_id_by_key(table_id_t table_id, ulint column_pos,
+                                      ulint *dict_id);
+
+/** Get compression dictionary info (name and data) for the given id.
+Allocates memory in name->str and data->str on success.
+Must be freed with mem_free().
+@param[in]	dict_id		zip dict id
+@param[out]	name		dictionary name
+@param[out]	name_len	dictionary name length
+@param[out]	data		dictionary data
+@param[out]	data_len	dictionary data length
+@retval	DB_SUCCESS		if OK
+@retval	DB_RECORD_NOT_FOUND	if not found */
+[[nodiscard]]
+dberr_t dict_get_dictionary_info_by_id(ulint dict_id, char **name,
+                                       ulint *name_len, char **data,
+                                       ulint *data_len);
+
+/** Detect if Percona Server 5.7 mysql database has encrypted InnoDB tables.
+This can happen if Percona Server is bootstrapped with
+--innodb-encrypt-tables=ON If yes or if srv_encrypt_tables is ON/FORCE, during
+upgrade, mysql.ibd should be encrpted.
+In no upgrade scenario it fetches encryption flag from first page of mysql.ibd
+to check whether it is encrypted.
+@param[in]  dict_init_mode  initalization mode
+@param[out] encrypt_mysql   true if encrypted, false if not encrypted
+@return true if success, false if failure */
+bool dict_detect_encryption_of_mysql_ibd(dict_init_mode_t dict_init_mode,
+                                         bool &encrypt_mysql);
 
 /** Set the compression type for the tablespace of a table
 @param[in]  table         The table that should be compressed

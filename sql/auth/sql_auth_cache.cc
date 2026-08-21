@@ -34,6 +34,7 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_macros.h"
+#include "my_user.h"  // parse_user
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
@@ -92,6 +93,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <regex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -169,6 +171,14 @@ bool validate_user_plugins = true;
 #define IP_ADDR_STRLEN (3 + 1 + 3 + 1 + 3 + 1 + 3)
 #define ACL_KEY_LENGTH (IP_ADDR_STRLEN + 1 + NAME_LEN + 1 + USERNAME_LENGTH + 1)
 
+ACL_USER acl_utility_user;
+static LEX_STRING acl_utility_user_name, acl_utility_user_host_name;
+static bool acl_utility_user_initialized = false;
+static std::vector<std::string> acl_utility_user_schema_access;
+static std::vector<std::string> uu_dynamic_privileges;
+
+static void acl_free_utility_user();
+
 /** Helper: Set user name */
 static void set_username(char **user, const char *user_arg, MEM_ROOT *mem) {
   assert(user != nullptr);
@@ -188,6 +198,20 @@ static void set_hostname(ACL_HOST_AND_IP *host, const char *host_arg,
 */
 void init_acl_memory() {
   init_sql_alloc(key_memory_acl_mem, &global_acl_memory, ACL_ALLOC_BLOCK_SIZE);
+}
+
+/**
+  Check if the given host name is equal to "localhost".
+
+  @return a flag telling if the given host name is equal to "localhost".
+  @retval TRUE the given host name is equal to "localhost".
+  @retval FALSE the given host name is not equal to "localhost".
+}
+*/
+bool is_localhost_string(const char *hostname) {
+  if (!hostname) return false;
+
+  return !strcmp(hostname, "localhost");
 }
 
 /**
@@ -387,6 +411,35 @@ void ACL_USER::Password_locked_state::set_parameters(
 }
 
 /**
+  Calculates how many days locked account should remain locked.
+
+  @param now_day  Current day number.
+
+  @retval -1 - if account lock should never expire.
+  @retval  0 - if account lock has expired.
+  @retval >0 - days remaining if account lock has not expired yet.
+*/
+long ACL_USER::Password_locked_state::get_remaining_days_locked(
+    long now_day) const {
+  /* We assume that account is locked. */
+  assert(m_daynr_locked != 0);
+
+  /* UNBOUNDED lock should never expire. */
+  if (m_daynr_locked > 0 && m_password_lock_time_days < 0) return -1;
+
+  if (now_day - m_daynr_locked < (long)m_password_lock_time_days) {
+    /*
+      Account lock time has not expired yet.
+      Return number of days remaining.
+    */
+    return ((long)m_password_lock_time_days) - (now_day - m_daynr_locked);
+  } else {
+    /* Account lock time has expired. */
+    return 0;
+  }
+}
+
+/**
   Updates the password locked state based on the time of day fetched from the
   THD
 
@@ -434,25 +487,24 @@ bool ACL_USER::Password_locked_state::update(THD *thd, bool successful_login,
     return true;
   };
 
-  /* if the lock should never expire we stop here */
-  if (m_daynr_locked > 0 && m_password_lock_time_days < 0) return true;
+  long days_remaining = get_remaining_days_locked(now_day);
 
-  /* check if the account is still to be locked */
-  if (now_day - m_daynr_locked < (long)m_password_lock_time_days) {
-    *ret_days_remaining =
-        ((long)m_password_lock_time_days) - (now_day - m_daynr_locked);
+  if (days_remaining < 0) {
+    /* If the lock should never expire simply return true. */
     return true;
-  }
-  /* reset the account lock if the time has expired */
-  if (now_day - m_daynr_locked >= (long)m_password_lock_time_days) {
+  } else if (days_remaining > 0) {
+    /*
+      The lock has not expired yet. Return number of days
+      remaining as out-parameter.
+    */
+    *ret_days_remaining = days_remaining;
+    return true;
+  } else {
+    /* Reset the account lock if the time has expired. */
     m_daynr_locked = 0;
     m_remaining_login_attempts = m_failed_login_attempts;
     return false;
   }
-
-  /* it should never get to here */
-  assert(false);
-  return false;
 }
 
 ACL_USER *ACL_USER::copy(MEM_ROOT *root) {
@@ -555,7 +607,7 @@ bool ACL_PROXY_USER::check_validity(bool check_no_resolve) {
   if (check_no_resolve &&
       (hostname_requires_resolving(host.get_host()) ||
        hostname_requires_resolving(proxied_host.get_host())) &&
-      strcmp(host.get_host(), "localhost") != 0) {
+      !is_localhost_string(host.get_host())) {
     LogErr(WARNING_LEVEL, ER_AUTHCACHE_PROXIES_PRIV_SKIPPED_NEEDS_RESOLVE,
            proxied_user ? proxied_user : "",
            proxied_host.get_host() ? proxied_host.get_host() : "",
@@ -1391,6 +1443,16 @@ Access_bitmask acl_get(THD *thd, const char *host, const char *ip,
     }
   }
 
+  /* Check to see if the inquiry is for the utility_user */
+  if (acl_is_utility_user(user, host, ip)) {
+    /* Check to see if database is within the schema access list */
+    const auto it = std::find(acl_utility_user_schema_access.cbegin(),
+                              acl_utility_user_schema_access.cend(), db);
+    if (it != acl_utility_user_schema_access.end())
+      db_access = host_access = GLOBAL_ACLS;
+    goto exit;
+  }
+
   /*
     Check if there are some access rights for database and user
   */
@@ -1429,6 +1491,279 @@ exit:
   }
   DBUG_PRINT("exit", ("access: 0x%" PRIx32, db_access & host_access));
   return db_access & host_access;
+}
+
+/*
+ Parse utility-user-dynamic-privileges parameter.
+*/
+static bool setup_utility_user_dynamic_privileges() {
+  if (!utility_user_dynamic_privileges) {
+    // no dynamic privileges provided
+    return false;
+  }
+
+  std::string privileges(utility_user_dynamic_privileges);
+
+  // check if the string is valid
+  std::regex validate_regex("(\\s*[A-Za-z0-9_]+\\s*,*)*\\s*[A-Za-z0-9_]+\\s*",
+                            std::regex::nosubs);
+  if (!std::regex_match(privileges, validate_regex)) {
+    sql_print_error(
+        "Wrong format of --utility-user-dynamic-privileges parameter value: %s",
+        utility_user_dynamic_privileges);
+    return true;
+  }
+
+  // split it into tokens and trim
+  std::regex split_regex("[^,\\s][^,]*[^,\\s]");
+  for (auto it = std::sregex_iterator(privileges.begin(), privileges.end(),
+                                      split_regex);
+       it != std::sregex_iterator(); ++it) {
+    // Unfortunately there is a bug related to std::regex_constants::icase
+    // https://stackoverflow.com/questions/37757863/c11-regexicase-inconsistent-behavior
+    auto s = it->str();
+    std::for_each(s.begin(), s.end(), [](char &c) { c = ::toupper(c); });
+    uu_dynamic_privileges.push_back(s);
+  }
+
+  return false;
+}
+
+int caching_sha2_password_generate(char *outbuf, unsigned int *buflen,
+                                   const char *inbuf, unsigned int inbuflen);
+
+/*
+  Set up the acl_utility_user and add it to the acl_user list.
+*/
+static bool acl_init_utility_user(bool check_no_resolve) {
+  bool ret = true;
+
+  unsigned int pwlen = 256;
+
+  if (!utility_user) goto end;
+
+  acl_free_utility_user();
+
+  /* Allocate all initial resources necessary */
+  acl_utility_user_name.str =
+      (char *)my_malloc(key_memory_acl_mem, USERNAME_LENGTH + 1, MY_ZEROFILL);
+  acl_utility_user_host_name.str =
+      (char *)my_malloc(key_memory_acl_mem, HOSTNAME_LENGTH + 1, MY_ZEROFILL);
+
+  acl_utility_user.credentials[0].m_auth_string.str =
+      static_cast<char *>(my_malloc(key_memory_acl_mem, pwlen, MY_ZEROFILL));
+
+  acl_utility_user_initialized = true;
+
+  /* parse out the option to its component user and host name parts */
+  parse_user(utility_user, strlen(utility_user), acl_utility_user_name.str,
+             &acl_utility_user_name.length, acl_utility_user_host_name.str,
+             &acl_utility_user_host_name.length);
+
+  /* Check to see if the username is anonymous */
+  if (!acl_utility_user_name.str || acl_utility_user_name.str[0] == '\0') {
+    sql_print_error(
+        "'utility user' specified as '%s' is anonymous"
+        " and not allowed.",
+        utility_user);
+    ret = false;
+    goto cleanup;
+  }
+
+  /* Check to see that a password was supplied */
+  if (!utility_user_password || utility_user_password[0] == '\0') {
+    sql_print_error(
+        "'utility user' specified as '%s' but has no "
+        "password. Please see --utility_user_password.",
+        utility_user);
+    ret = false;
+    goto cleanup;
+  }
+
+  /* set up some of the static utility user struct fields */
+  acl_utility_user.user = acl_utility_user_name.str;
+
+  acl_utility_user.host.update_hostname(acl_utility_user_host_name.str);
+
+  acl_utility_user.sort =
+      get_sort(2, acl_utility_user.host.get_host(), acl_utility_user.user);
+
+  /* Check to see if the utility user matches any existing user */
+  for (const ACL_USER &user : *acl_users) {
+    if (user.user && strcmp(acl_utility_user_name.str, user.user) == 0) {
+      if (user.sort == acl_utility_user.sort) {
+        sql_print_error(
+            "'utility user' specification '%s' exactly"
+            " matches existing user in mysql.user table.",
+            utility_user);
+        ret = false;
+        goto cleanup;
+      } else if (user.sort < acl_utility_user.sort) {
+        sql_print_warning(
+            "'utility user' specification '%s' closely"
+            " matches more specific existing user '%s@%s' in"
+            " mysql.user table which may render the utility_user"
+            " inaccessable from certain hosts.",
+            utility_user, user.user ? user.user : "", user.host.get_host());
+      }
+    }
+  }
+
+  if (check_no_resolve &&
+      hostname_requires_resolving(acl_utility_user.host.get_host())) {
+    sql_print_warning(
+        "'utility user' entry '%s@%s' "
+        "ignored in --skip-name-resolve mode.",
+        acl_utility_user.user ? acl_utility_user.user : "",
+        acl_utility_user.host.get_host() ? acl_utility_user.host.get_host()
+                                         : "");
+    ret = false;
+    goto cleanup;
+  }
+
+  /* Fill out the rest of the static utility user struct, and add it into the
+  acl_users list, then resort */
+
+  caching_sha2_password_generate(
+      const_cast<char *>(acl_utility_user.credentials[0].m_auth_string.str),
+      &pwlen, utility_user_password, strlen(utility_user_password));
+
+  acl_utility_user.credentials[0].m_auth_string.length = pwlen;
+
+  acl_utility_user.plugin.str = Cached_authentication_plugins::get_plugin_name(
+      PLUGIN_CACHING_SHA2_PASSWORD);
+  acl_utility_user.plugin.length = strlen(acl_utility_user.plugin.str);
+
+  if (set_user_salt(&acl_utility_user)) {
+    goto cleanup;
+  }
+
+  if (setup_utility_user_dynamic_privileges()) {
+    goto cleanup;
+  }
+
+  assert(utility_user_privileges <= UINT_MAX32);
+  acl_utility_user.access = utility_user_privileges & UINT_MAX32;
+  if (acl_utility_user.access) {
+    char privilege_desc[512];
+    get_privilege_desc(privilege_desc, array_elements(privilege_desc),
+                       acl_utility_user.access);
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with access rights "
+        "'%s'.",
+        acl_utility_user.user, acl_utility_user.host.get_host(),
+        privilege_desc);
+  } else {
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with basic "
+        "access rights.",
+        acl_utility_user.user, acl_utility_user.host.get_host());
+  }
+
+  if (!uu_dynamic_privileges.empty()) {
+    std::stringstream oss;
+    bool first = true;
+    for (const auto &item : uu_dynamic_privileges) {
+      oss << (first ? "" : ",") << item;
+      first = false;
+    }
+
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with dynamic privileges '%s'.",
+        acl_utility_user.user, acl_utility_user.host.get_host(),
+        oss.str().c_str());
+  }
+
+  acl_utility_user.ssl_type = SSL_TYPE_NONE;
+
+  acl_utility_user.can_authenticate = true;
+
+  acl_users->push_back(acl_utility_user);
+
+  rebuild_cached_acl_users_for_name();
+
+  /* initialize the schema access list if specified */
+  if (utility_user_schema_access) {
+    char *cur_pos = utility_user_schema_access;
+    char *cur_db = cur_pos;
+    std::stringstream formatted;
+    bool first_entry = true;
+    do {
+      if (*cur_pos == ',' || *cur_pos == '\0') {
+        if (cur_pos - cur_db > 0) {
+          const std::string db(cur_db, cur_pos - cur_db);
+          acl_utility_user_schema_access.push_back(db);
+          if (!first_entry) {
+            formatted << ", ";
+          }
+          formatted << db;
+          first_entry = false;
+        }
+        cur_db = cur_pos + 1;
+        if (*cur_pos == '\0') break;
+      }
+      cur_pos++;
+    } while (1);
+
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with full access to"
+        " schemas '%s'.",
+        acl_utility_user.user, acl_utility_user.host.get_host(),
+        formatted.str().c_str());
+  } else {
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with"
+        " no schema access",
+        acl_utility_user.user, acl_utility_user.host.get_host());
+  }
+  goto end;
+
+cleanup:
+  acl_free_utility_user();
+
+end:
+  return ret;
+}
+
+/*
+  Free up any resources allocated during acl_init_utility_user.
+*/
+static void acl_free_utility_user() {
+  if (acl_utility_user_initialized) {
+    acl_utility_user_schema_access.clear();
+    my_free(acl_utility_user_name.str);
+    my_free(acl_utility_user_host_name.str);
+    my_free(
+        const_cast<char *>(acl_utility_user.credentials[0].m_auth_string.str));
+    memset(static_cast<void *>(&acl_utility_user), 0, sizeof(acl_utility_user));
+    acl_utility_user_initialized = false;
+  }
+}
+
+bool acl_utility_user_has_global_grant(const std::string &privilege) {
+  if (!utility_user_dynamic_privileges) {
+    return false;
+  }
+
+  // std::regex (..., std::regex_constants::icase) would fit here perfectly,
+  // but unfortunately there is a bug related to std::regex_constants::icase
+  // https://stackoverflow.com/questions/37757863/c11-regexicase-inconsistent-behavior
+  auto tmp_str = privilege;
+  std::for_each(tmp_str.begin(), tmp_str.end(),
+                [](char &c) { c = ::toupper(c); });
+
+  auto it = std::find(uu_dynamic_privileges.begin(),
+                      uu_dynamic_privileges.end(), tmp_str);
+  return it != uu_dynamic_privileges.end();
+}
+
+/*
+  Determines if the user specified by user, host, ip matches the utility user
+*/
+bool acl_is_utility_user(const char *user, const char *host, const char *ip) {
+  return (user && acl_utility_user.user &&
+          strcmp(user, acl_utility_user.user) == 0 &&
+          acl_utility_user.host.compare_hostname(host, ip));
 }
 
 /*
@@ -1872,6 +2207,8 @@ static bool acl_load(THD *thd, Table_ref *tables) {
 
   if (read_user_table(thd, tables[0].table)) goto end;
 
+  if (!acl_init_utility_user(check_no_resolve)) goto end;
+
   /*
     Prepare reading from the mysql.db table
   */
@@ -1894,7 +2231,7 @@ static bool acl_load(THD *thd, Table_ref *tables) {
     }
     db.user = get_field(&global_acl_memory, table->field[MYSQL_DB_FIELD_USER]);
     if (check_no_resolve && hostname_requires_resolving(db.host.get_host()) &&
-        strcmp(db.host.get_host(), "localhost") != 0) {
+        !is_localhost_string(db.host.get_host())) {
       LogErr(WARNING_LEVEL, ER_AUTHCACHE_DB_SKIPPED_NEEDS_RESOLVE, db.db,
              db.user ? db.user : "",
              db.host.get_host() ? db.host.get_host() : "");
@@ -1989,6 +2326,7 @@ void free_name_to_userlist() {
 }
 
 void acl_free(bool end /*= false*/) {
+  acl_free_utility_user();
   free_name_to_userlist();
   delete acl_users;
   acl_users = nullptr;
@@ -2356,6 +2694,8 @@ bool acl_reload(THD *thd, bool mdl_locked,
 
   if (!acl_cache_lock.lock()) goto end;
 
+  DEBUG_SYNC(thd, "acl_x_lock");
+
   old_acl_users = acl_users;
   old_acl_dbs = acl_dbs;
   old_acl_proxy_users = acl_proxy_users;
@@ -2683,7 +3023,7 @@ static bool grant_load(THD *thd, Table_ref *tables) {
 
       if (check_no_resolve) {
         if (hostname_requires_resolving(mem_check->host.get_host()) &&
-            strcmp(mem_check->host.get_host(), "localhost") != 0) {
+            !is_localhost_string(mem_check->host.get_host())) {
           LogErr(WARNING_LEVEL, ER_AUTHCACHE_TABLES_PRIV_SKIPPED_NEEDS_RESOLVE,
                  mem_check->tname, mem_check->user ? mem_check->user : "",
                  mem_check->host.get_host() ? mem_check->host.get_host() : "");
@@ -3394,7 +3734,7 @@ Acl_map::Acl_map(Security_context *sctx, uint64 ver)
   get_privilege_access_maps(
       acl_user, sctx->get_active_roles(), &m_global_acl, &m_db_acls,
       &m_db_wild_acls, &m_table_acls, &m_sp_acls, &m_func_acls, &granted_roles,
-      &m_with_admin_acls, &m_dynamic_privileges, m_restrictions);
+      &m_with_admin_acls, &m_dynamic_privileges, m_restrictions, false);
 }
 
 Acl_map::~Acl_map() {

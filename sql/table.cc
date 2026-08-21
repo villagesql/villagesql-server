@@ -75,7 +75,8 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // acl_getroot
 #include "sql/auth/sql_security_ctx.h"
-#include "sql/binlog.h"                      // mysql_bin_log
+#include "sql/binlog.h"  // mysql_bin_log
+#include "sql/create_field.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache_Dictionary_client
 #include "sql/dd/dd.h"                       // dd::get_dictionary
 #include "sql/dd/dictionary.h"               // dd::Dictionary
@@ -307,6 +308,12 @@ GRANT_INFO::GRANT_INFO() {
 
 char *fn_rext(char *name) {
   char *res = strrchr(name, '.');
+  if (res && !strcmp(res, reg_ext)) return res;
+  return name + strlen(name);
+}
+
+const char *fn_rext(const char *name) {
+  const char *res = strrchr(name, '.');
   if (res && !strcmp(res, reg_ext)) return res;
   return name + strlen(name);
 }
@@ -607,6 +614,22 @@ void TABLE_SHARE::destroy() {
 }
 
 /**
+  Checks if TABLE_SHARE has at least one field with
+  COLUMN_FORMAT_TYPE_COMPRESSED flag.
+*/
+bool TABLE_SHARE::has_compressed_columns() const {
+  DBUG_ENTER("has_compressed_columns");
+  assert(field != 0);
+
+  Field **field_ptr = field;
+  while (*field_ptr != nullptr &&
+         (*field_ptr)->column_format() != COLUMN_FORMAT_TYPE_COMPRESSED)
+    ++field_ptr;
+
+  DBUG_RETURN(*field_ptr != nullptr);
+}
+
+/**
   Free table share and memory used by it
 
   @param share		Table share
@@ -750,12 +773,17 @@ void setup_key_part_field(TABLE_SHARE *share, handler *handler_file,
   KEY_PART_INFO *key_part = &keyinfo->key_part[key_part_n];
   Field *field = key_part->field;
 
-  /* Flag field as unique if it is the only keypart in a unique index */
-  if (key_part_n == 0 && key_n != primary_key_n)
+  /* Flag field as unique and/or clustering if it is the only keypart in a
+  unique/clustering index */
+  if (key_part_n == 0 && key_n != primary_key_n) {
     field->set_flag(
         ((keyinfo->flags & HA_NOSAME) && (keyinfo->user_defined_key_parts == 1))
             ? UNIQUE_KEY_FLAG
             : MULTIPLE_KEY_FLAG);
+    if (((keyinfo->flags & HA_CLUSTERING) &&
+         (keyinfo->user_defined_key_parts == 1)))
+      field->set_flag(CLUSTERING_FLAG);
+  }
   if (key_part_n == 0) field->key_start.set_bit(key_n);
   field->m_indexed = true;
 
@@ -1582,6 +1610,17 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
     keyinfo->table = nullptr;  // Updated in open_frm
     if (new_frm_ver >= 3) {
       keyinfo->flags = (uint)uint2korr(strpos) ^ HA_NOSAME;
+      /* Replace HA_FULLTEXT & HA_SPATIAL with HA_CLUSTERING. This way we
+         support TokuDB clustering key definitions without changing the FRM
+         format. */
+      if (keyinfo->flags & HA_SPATIAL && keyinfo->flags & HA_FULLTEXT) {
+        if (!ha_check_storage_engine_flag(share->db_type(),
+                                          HTON_SUPPORTS_CLUSTERED_KEYS))
+          goto err;
+        keyinfo->flags |= HA_CLUSTERING;
+        keyinfo->flags &= ~HA_SPATIAL;
+        keyinfo->flags &= ~HA_FULLTEXT;
+      }
       keyinfo->key_length = (uint)uint2korr(strpos + 2);
       keyinfo->user_defined_key_parts = (uint)strpos[4];
       keyinfo->algorithm = (enum ha_key_alg)strpos[5];
@@ -2064,6 +2103,32 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
   assert(share->fields >= frm_context->stored_fields);
   assert(share->reclength >= share->stored_rec_length);
 
+  /* update zip dict info (name + data) from the handler */
+  if (share->has_compressed_columns())
+    handler_file->upgrade_update_field_with_zip_dict_info(thd, NULL);
+
+  /* Use share mem root for zip dict name and data */
+  for (uint i2 = 0; i2 < share->fields; ++i2) {
+    Field *field = share->field[i2];
+    if (field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) {
+      if (field->zip_dict_data.str != nullptr) {
+        LEX_CSTRING saved_data = field->zip_dict_data;
+        field->zip_dict_data.str =
+            strmake_root(&share->mem_root, saved_data.str, saved_data.length);
+        field->zip_dict_data.length = saved_data.length;
+        my_free(const_cast<char *>(saved_data.str));
+      }
+
+      if (field->zip_dict_name.str != nullptr) {
+        LEX_CSTRING saved_data = field->zip_dict_name;
+        field->zip_dict_name.str =
+            strmake_root(&share->mem_root, saved_data.str, saved_data.length);
+        field->zip_dict_name.length = saved_data.length;
+        my_free(const_cast<char *>(saved_data.str));
+      }
+    }
+  }
+
   /* Fix key->name and key_part->field */
   if (key_parts) {
     const int pk_off =
@@ -2221,6 +2286,16 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
         share->max_unique_length =
             std::max(share->max_unique_length, keyinfo->key_length);
     }
+
+    /*
+      The next call is here for MyRocks:  Now, we have filled in field and key
+      definitions, give the storage engine a chance to adjust its properties.
+
+      MyRocks may (and typically does) adjust HA_PRIMARY_KEY_IN_READ_INDEX
+      flag in this call.
+    */
+    if (handler_file->init_with_fields()) goto err;
+
     if (primary_key < MAX_KEY && (share->keys_in_use.is_set(primary_key))) {
       share->primary_key = primary_key;
       /*
@@ -2296,6 +2371,8 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
 err:
   my_free(disk_buff);
   my_free(extra_segment_buff);
+  share->fields = 0;
+  share->field = 0;
   if (handler_file != nullptr) ::destroy_at(handler_file);
 
   open_table_error(thd, share, error, my_errno());
@@ -3101,6 +3178,10 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
     error_reported = true;
     goto err;
   }
+  /* Fill record with default values */
+  if (outparam->record[0] != outparam->s->default_values)
+    restore_record(outparam, s->default_values);
+
   /*
     Process generated columns, if any.
   */
@@ -3202,6 +3283,18 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
                                      cc_share.is_enforced(), val_gen_ptr,
                                      outparam));
     }
+  }
+
+  /*
+    If table has triggers create Table_trigger_dispacher object with some
+    initial state. Do not finalize trigger parsing/loading until it is
+    really required.
+    We need to create Table_trigger_dispatcher now as some places in code
+    use TABLE::triggers != nullptr check to determine presence of triggers.
+  */
+  if (share->triggers != nullptr) {
+    outparam->triggers = Table_trigger_dispatcher::create(outparam);
+    if (outparam->triggers == nullptr) goto err;  // OOM
   }
 
   /*
@@ -3609,6 +3702,7 @@ void update_create_info_from_table(HA_CREATE_INFO *create_info, TABLE *table) {
   create_info->tablespace = share->tablespace;
   create_info->compress = share->compress;
   create_info->encrypt_type = share->encrypt_type;
+  create_info->explicit_encryption = share->explicit_encryption;
   create_info->secondary_engine = share->secondary_engine;
 }
 
@@ -4395,8 +4489,7 @@ bool TABLE::fill_item_list(mem_root_deque<Item *> *item_list) const {
     All Item_field's created using a direct pointer to a field
     are fixed in Item_field constructor.
   */
-  uint i = 0;
-  for (Field **ptr = visible_field_ptr(); *ptr; ptr++, i++) {
+  for (Field **ptr = visible_field_ptr(); *ptr; ptr++) {
     Item_field *item = new Item_field(*ptr);
     if (!item) return true;
     item_list->push_back(item);
@@ -6028,7 +6121,7 @@ bool TABLE::add_tmp_key(Field_map *key_parts, bool invisible,
     s->max_key_length = std::max(s->max_key_length, key_len);
     s->key_parts += key_part_count;
     assert(s->keys < s->max_tmp_keys);
-    sprintf(s->key_names[s->keys].name, "<auto_key%d>", s->keys);
+    sprintf(s->key_names[s->keys].name, "<auto_key%d>", s->temp_table_key_id++);
     s->keys++;
   }
 
@@ -7144,6 +7237,57 @@ bool TABLE::check_read_removal(uint index) {
 
   bitmap_clear_all(&tmp_set);
   return retval;
+}
+
+/**
+  Checks if TABLE has at least one field with
+  COLUMN_FORMAT_TYPE_COMPRESSED flag.
+*/
+bool TABLE::has_compressed_columns() const {
+  DBUG_ENTER("has_compressed_columns");
+  assert(field != 0);
+
+  Field **field_ptr = field;
+  while (*field_ptr != nullptr &&
+         (*field_ptr)->column_format() != COLUMN_FORMAT_TYPE_COMPRESSED)
+    ++field_ptr;
+
+  DBUG_RETURN(*field_ptr != nullptr);
+}
+
+/**
+  Checks if TABLE has at least one field with
+  COLUMN_FORMAT_TYPE_COMPRESSED flag and non-empty
+  zip_dict.
+*/
+bool TABLE::has_compressed_columns_with_dictionaries() const {
+  DBUG_ENTER("has_compressed_columns_with_dictionaries");
+  assert(field != 0);
+
+  Field **field_ptr = field;
+  while (*field_ptr != nullptr &&
+         !(*field_ptr)->has_associated_compression_dictionary())
+    ++field_ptr;
+
+  DBUG_RETURN(*field_ptr != nullptr);
+}
+
+/**
+  Updates zip_dict_name in the TABLE's field definitions based on the
+  values from the supplied list of Create_field objects.
+*/
+void TABLE::update_compressed_columns_info(const List<Create_field> &fields) {
+  Field **field_ptr = field;
+  List_iterator<Create_field> it(const_cast<List<Create_field> &>(fields));
+  Create_field *field_definition = it++;
+
+  while (*field_ptr != nullptr && field_definition != nullptr) {
+    (*field_ptr)->zip_dict_name = field_definition->zip_dict_name;
+    ++field_ptr;
+    field_definition = it++;
+  }
+  assert(field_definition == nullptr);
+  assert(*field_ptr == nullptr);
 }
 
 /**

@@ -270,7 +270,7 @@ static int process_iterator(THD *thd, Command_iterator *it,
 
     // Ignore ER_TOO_LONG_KEY for system tables.
     thd->push_internal_handler(&error_handler);
-    dispatch_sql_command(thd, &parser_state);
+    dispatch_sql_command(thd, &parser_state, true);
     thd->pop_internal_handler();
 
     error = thd->is_error();
@@ -383,6 +383,20 @@ bool run_bootstrap_thread(const char *file_name, MYSQL_FILE *file,
   thd->security_context()->skip_grants();
 
   thd->set_new_thread_id();
+
+  DBUG_EXECUTE_IF("bootstrap_crash", DBUG_SUICIDE(););
+  DBUG_EXECUTE_IF("bootstrap_hang", {
+    while (1) my_sleep(1000000);
+  });
+  DBUG_EXECUTE_IF("bootstrap_buffer_overrun", {
+    int *mem = static_cast<int *>(my_malloc(PSI_NOT_INSTRUMENTED, 127, 0));
+    // Allocations are usually aligned, so even if 127 bytes were requested,
+    // it's mostly safe to assume there are 128 bytes. Writing into the last
+    // byte is safe for the rest of the code, but still enough to trigger
+    // AddressSanitizer (ASAN) or Valgrind.
+    *static_cast<volatile int *>(mem + (128 / sizeof(*mem)) - 1) = 1;
+    my_free(mem);
+  });
 
   handle_bootstrap_args args;
 

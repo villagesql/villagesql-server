@@ -473,6 +473,7 @@ LatchDebug::LatchDebug() {
   LEVEL_MAP_INSERT(SYNC_FTS_CACHE_INIT);
   LEVEL_MAP_INSERT(SYNC_RECV);
   LEVEL_MAP_INSERT(SYNC_RECV_WRITER);
+  LEVEL_MAP_INSERT(SYNC_LOG_ONLINE);
   LEVEL_MAP_INSERT(SYNC_LOG_SN);
   LEVEL_MAP_INSERT(SYNC_LOG_SN_MUTEX);
   LEVEL_MAP_INSERT(SYNC_LOG_LIMITS);
@@ -724,6 +725,7 @@ Latches *LatchDebug::check_order(const latch_t *latch,
     case SYNC_FTS_CACHE:
     case SYNC_FTS_CACHE_INIT:
     case SYNC_PAGE_CLEANER:
+    case SYNC_LOG_ONLINE:
     case SYNC_LOG_CHECKPOINTER:
     case SYNC_LOG_CLOSER:
     case SYNC_LOG_WRITER:
@@ -1371,6 +1373,8 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
   LATCH_ADD_MUTEX(TEMP_POOL_MANAGER, SYNC_TEMP_POOL_MANAGER,
                   temp_pool_manager_mutex_key);
 
+  LATCH_ADD_MUTEX(TEMP_POOL_TBLSP, SYNC_NO_ORDER_CHECK, PFS_NOT_INSTRUMENTED);
+
   LATCH_ADD_MUTEX(TRX, SYNC_TRX, trx_mutex_key);
 
   LATCH_ADD_MUTEX(LOCK_SYS_PAGE, SYNC_LOCK_SYS_SHARDED,
@@ -1688,9 +1692,10 @@ void sync_check_init(size_t max_threads) {
   sync_array_init(max_threads);
 }
 
-/** Frees the resources in InnoDB's own synchronization data structures. Use
-os_sync_free() after calling this. */
+/** Frees the resources in InnoDB's own synchronization data structures. */
 void sync_check_close() {
+  if (!mutex_monitor) return;
+
   ut_d(LatchDebug::shutdown());
 
   mutex_free(&rw_lock_list_mutex);

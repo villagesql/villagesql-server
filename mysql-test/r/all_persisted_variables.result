@@ -22,8 +22,7 @@ performance_schema.global_variables WHERE variable_name NOT IN
 'innodb_monitor_disable',
 'innodb_monitor_reset',
 'innodb_monitor_reset_all',
-'rbr_exec_mode',
-'vsql_allow_preview_extensions');
+'rbr_exec_mode');
 ************************************************************
 * 1. Check that there are no persisted variable settings.
 ************************************************************

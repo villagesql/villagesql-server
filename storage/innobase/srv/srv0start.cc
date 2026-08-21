@@ -52,6 +52,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/types.h>
 #include <zlib.h>
 
+#include <algorithm>
+
 #include "my_dbug.h"
 
 #include "btr0btr.h"
@@ -70,6 +72,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ibuf0ibuf.h"
 #include "log0buf.h"
 #include "log0chkp.h"
+#include "log0ddl.h"
 #include "log0recv.h"
 #include "log0write.h"
 #include "mem0mem.h"
@@ -108,6 +111,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0load.h"
 #include "dict0stats_bg.h"
 #include "lock0lock.h"
+#include "log0meb.h"
 #include "os0event.h"
 #include "os0proc.h"
 #include "pars0pars.h"
@@ -963,7 +967,7 @@ static dberr_t srv_undo_tablespaces_construct() {
   }
 
   if (srv_undo_log_encrypt) {
-    ut_d(bool ret =) srv_enable_undo_encryption();
+    ut_d(bool ret =) srv_enable_undo_encryption(nullptr);
     ut_ad(!ret);
   }
 
@@ -1285,6 +1289,22 @@ static dberr_t srv_open_tmp_tablespace(bool create_new_db,
     /* Open this shared temp tablespace in the fil_system so that
     it stays open until shutdown. */
     if (fil_space_open(tmp_space->space_id())) {
+      if (srv_tmp_tablespace_encrypt) {
+        /* Make sure the keyring is loaded. */
+        if (!Encryption::check_keyring()) {
+          srv_tmp_tablespace_encrypt = false;
+          ib::error() << "Can't set temporary"
+                      << " tablespace to be encrypted"
+                      << " because keyring plugin is"
+                      << " not available.";
+          return (DB_ERROR);
+        }
+        fil_space_t *const space = fil_space_get(dict_sys_t::s_temp_space_id);
+        err = fil_set_encryption(space->id, Encryption::AES, nullptr, nullptr);
+        tmp_space->set_flags(space->flags);
+        ut_a(err == DB_SUCCESS);
+      }
+
       /* Initialize the header page */
       mtr_start(&mtr);
       mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
@@ -1541,6 +1561,54 @@ static dberr_t recreate_redo_files(lsn_t &flushed_lsn) {
   return DB_SUCCESS;
 }
 
+/** Enable encryption of system tablespace if requested. At
+startup load the encryption information from first datafile
+to tablespace object
+@return DB_SUCCESS on succes, others on failure */
+static dberr_t srv_sys_enable_encryption(bool create_new_db) {
+  fil_space_t *space = fil_space_get(TRX_SYS_SPACE);
+  dberr_t err = DB_SUCCESS;
+
+  if (create_new_db && srv_sys_tablespace_encrypt) {
+    fsp_flags_set_encryption(space->flags);
+    srv_sys_space.set_flags(space->flags);
+
+    err = fil_set_encryption(space->id, Encryption::AES, nullptr, nullptr);
+    ut_ad(err == DB_SUCCESS);
+  } else {
+    const auto fsp_flags = srv_sys_space.m_files.begin()->flags();
+    const bool is_encrypted = FSP_FLAGS_GET_ENCRYPTION(fsp_flags);
+
+    if (is_encrypted && !srv_sys_tablespace_encrypt) {
+      ib::error() << "The system tablespace is encrypted but"
+                  << " --innodb_sys_tablespace_encrypt is"
+                  << " OFF. Enable the option and start server";
+      return (DB_ERROR);
+    }
+
+    if (!is_encrypted && srv_sys_tablespace_encrypt) {
+      ib::error() << "The system tablespace is not encrypted but"
+                  << " --innodb_sys_tablespace_encrypt is"
+                  << " ON. This instance was not bootstrapped"
+                  << " with --innodb_sys_tablespace_encrypt=ON."
+                  << " Disable this option and start server";
+      return (DB_ERROR);
+    }
+
+    if (is_encrypted) {
+      fsp_flags_set_encryption(space->flags);
+      srv_sys_space.set_flags(space->flags);
+
+      err = fil_set_encryption(space->id, Encryption::AES,
+                               srv_sys_space.m_files.begin()->m_encryption_key,
+                               srv_sys_space.m_files.begin()->m_encryption_iv);
+      ut_ad(err == DB_SUCCESS);
+    }
+  }
+
+  return (err);
+}
+
 dberr_t srv_start(bool create_new_db) {
   page_no_t sum_of_data_file_sizes;
   page_no_t tablespace_size_in_header;
@@ -1772,7 +1840,8 @@ dberr_t srv_start(bool create_new_db) {
   ib::info(ER_IB_MSG_1130, size, unit, srv_buf_pool_instances, chunk_size,
            chunk_unit);
 
-  err = buf_pool_init(srv_buf_pool_size, srv_buf_pool_instances);
+  err = buf_pool_init(srv_buf_pool_size, static_cast<bool>(srv_numa_interleave),
+                      srv_buf_pool_instances);
 
   if (err != DB_SUCCESS) {
     ib::error(ER_IB_MSG_1131);
@@ -1793,6 +1862,7 @@ dberr_t srv_start(bool create_new_db) {
 
   fsp_init();
   pars_init();
+
   recv_sys_create();
   recv_sys_init();
   trx_sys_create();
@@ -1822,6 +1892,8 @@ dberr_t srv_start(bool create_new_db) {
 
   switch (err) {
     case DB_SUCCESS:
+      err = srv_sys_enable_encryption(create_new_db);
+      if (err != DB_SUCCESS) return (srv_init_abort(err));
       break;
     case DB_CANNOT_OPEN_FILE:
       ib::error(ER_IB_MSG_1134);
@@ -1862,6 +1934,8 @@ dberr_t srv_start(bool create_new_db) {
   ut_a(log_sys != nullptr);
 
   arch_init();
+
+  bool srv_monitor_thread_created = false;
 
   if (create_new_db) {
     ut_a(buf_are_flush_lists_empty_validate());
@@ -1947,6 +2021,16 @@ dberr_t srv_start(bool create_new_db) {
     and there must be no page in the buf_flush list. */
     buf_pool_invalidate();
 
+    /* Start monitor thread early enough so that e.g. crash recovery failing to
+    find free pages in the buffer pool is diagnosed. */
+    if (!srv_read_only_mode) {
+      /* Create the thread which prints InnoDB monitor info */
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
+
     /* Open all data files in the system tablespace:
     we keep them open until database shutdown. */
     fil_open_system_tablespace_files();
@@ -1996,9 +2080,15 @@ dberr_t srv_start(bool create_new_db) {
 
       /* Initialize the change buffer. */
       err = dict_boot();
+      DBUG_EXECUTE_IF("ib_dic_boot_error", err = DB_ERROR;);
     }
 
     if (err != DB_SUCCESS) {
+      /* Set the abort flag to true. */
+      auto p = recv_recovery_from_checkpoint_finish(true);
+
+      ut_a(p == nullptr);
+
       return (srv_init_abort(err));
     }
 
@@ -2039,6 +2129,10 @@ dberr_t srv_start(bool create_new_db) {
 
       if (recv_sys->found_corrupt_log) {
         err = DB_ERROR;
+        /* Set the abort flag to true. */
+        auto p = recv_recovery_from_checkpoint_finish(true);
+
+        ut_a(p == nullptr);
         return (srv_init_abort(err));
       }
 
@@ -2070,6 +2164,11 @@ dberr_t srv_start(bool create_new_db) {
 
     /* We have successfully recovered from the redo log. The
     data dictionary should now be readable. */
+
+    DBUG_EXECUTE_IF(
+        "ib_recovery_print_mysql_binlog_offset",
+        if (srv_force_recovery < SRV_FORCE_NO_LOG_REDO &&
+            recv_needed_recovery) { trx_sys_print_mysql_binlog_offset(); });
 
     if (recv_sys->found_corrupt_log) {
       ib::warn(ER_IB_MSG_RECOVERY_CORRUPT);
@@ -2279,11 +2378,17 @@ dberr_t srv_start(bool create_new_db) {
     srv_threads.m_error_monitor.start();
 
     /* Create the thread which prints InnoDB monitor info */
-    srv_threads.m_monitor =
-        os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+    if (!srv_monitor_thread_created) {
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
 
-    srv_threads.m_monitor.start();
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
   }
+
+  /* wake main loop of page cleaner up */
+  os_event_set(buf_flush_event);
 
   srv_sys_tablespaces_open = true;
 
@@ -2304,9 +2409,6 @@ dberr_t srv_start(bool create_new_db) {
   srv_is_being_started = false;
 
   ut_a(trx_purge_state() == PURGE_STATE_INIT);
-
-  /* wake main loop of page cleaner up */
-  os_event_set(buf_flush_event);
 
   sum_of_data_file_sizes = srv_sys_space.get_sum_of_sizes();
   ut_a(sum_of_new_sizes != FIL_NULL);
@@ -2341,11 +2443,17 @@ dberr_t srv_start(bool create_new_db) {
     }
   }
 
+  if (!srv_file_per_table && srv_pass_corrupt_table) {
+    ib::warn() << "The option innodb_file_per_table is disabled, so using the "
+                  "option innodb_pass_corrupt_table doesn't make sense.";
+  }
+
   /* Finish clone files recovery. This call is idempotent and is no op
   if it is already done before creating new log files. */
   clone_files_recovery(true);
 
-  ib::info(ER_IB_MSG_1151, INNODB_VERSION_STR,
+  ib::info(ER_IB_MSG_1151,
+           "Percona XtraDB (http://www.percona.com) " INNODB_VERSION_STR,
            ulonglong{log_get_lsn(*log_sys)});
 
   return (DB_SUCCESS);
@@ -2500,6 +2608,9 @@ void srv_start_threads() {
     return;
   }
 
+  /* Enable row log encryption if it is set */
+  log_tmp_enable_encryption_if_set();
+
   /* Create the master thread which does purge and other utility
   operations */
   srv_threads.m_master =
@@ -2552,6 +2663,12 @@ void srv_start_threads_after_ddl_recovery() {
 
   /* Resume unfinished (un)encryption process in background thread. */
   if (!ts_encrypt_ddl_records.empty()) {
+    const bool is_mysql_ibd_encryption = std::any_of(
+        ts_encrypt_ddl_records.begin(), ts_encrypt_ddl_records.end(),
+        [](const DDL_Record *ddl_record) {
+          return ddl_record->get_space_id() == dict_sys_t::s_dict_space_id;
+        });
+
     srv_threads.m_ts_alter_encrypt =
         os_thread_create(srv_ts_alter_encrypt_thread_key, 0,
                          fsp_init_resume_alter_encrypt_tablespace);
@@ -2562,6 +2679,31 @@ void srv_start_threads_after_ddl_recovery() {
     for which (un)encryption is to be rolled forward. */
     mysql_cond_wait(&resume_encryption_cond, &resume_encryption_cond_m);
     mysql_mutex_unlock(&resume_encryption_cond_m);
+
+    /*
+      The mysql tablespace (mysql.ibd) holds the DD and replication metadata
+      tables that the rest of startup opens through attachable transactions.
+
+      The resume thread finishes the interrupted (un)encryption by re-running
+      the DD metadata transition via dd::alter_tablespace_encryption(), which
+      builds an "ALTER TABLESPACE mysql ENCRYPTION = ..." string and runs it
+      through execute_query() -> Sql_cmd_alter_tablespace::execute(). That is a
+      real, committing transaction on mysql.ibd. If we let startup continue
+      while that commit is still in flight, the attachable transactions opening
+      DD/replication tables can observe the rollback/commit bookkeeping left by
+      the resume THD and hit the GTID/binlog asserts this fix targets.
+
+      So when mysql.ibd is among the spaces being rolled forward we block here
+      until the resume thread is done. This intentionally also waits for any
+      general tablespaces handled in the same batch, but that only happens in
+      the rare case that mysql.ibd itself was mid-(un)encryption at the crash;
+      the common case (only general tablespaces) keeps the existing background
+      behavior and their normal DML, including dict stats work, remains covered
+      by the usual tablespace encryption machinery.
+    */
+    if (is_mysql_ibd_encryption) {
+      srv_threads.m_ts_alter_encrypt.wait();
+    }
   }
 
   /* Start and consume all GTIDs for recovered transactions. */
@@ -2613,6 +2755,7 @@ void srv_pre_dd_shutdown() {
     ib::warn(ER_IB_MSG_1154, threads_count);
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
+
   /* Crash if some query threads are still alive. */
   ut_a(srv_conc_get_active_threads() == 0);
 
@@ -2885,7 +3028,7 @@ static lsn_t srv_shutdown_log() {
   log_background_threads_inactive_validate();
   buf_assert_all_are_replaceable();
 
-  const lsn_t lsn = log_get_lsn(*log_sys);
+  lsn_t lsn = log_get_lsn(*log_sys);
 
   if (!srv_read_only_mode) {
     /* Redo log has been flushed at the log_flusher's exit. */
@@ -2899,7 +3042,6 @@ static lsn_t srv_shutdown_log() {
 
   ut_a(lsn == log_sys->last_checkpoint_lsn.load() ||
        srv_force_recovery >= SRV_FORCE_NO_LOG_REDO);
-
   ut_a(lsn == log_get_lsn(*log_sys));
 
   if (!srv_read_only_mode) {
@@ -2954,6 +3096,8 @@ void srv_thread_delay_cleanup_if_needed(bool wait_for_signal) {
   });
 }
 
+extern bool innodb_inited;
+
 /** Shut down the InnoDB database. */
 void srv_shutdown() {
   ut_d(trx_sys_after_pre_dd_shutdown_validate());
@@ -2968,7 +3112,7 @@ void srv_shutdown() {
 
   ib::info(ER_IB_MSG_1247);
 
-  ut_a(!srv_is_being_started);
+  if (innodb_inited) ut_a(!srv_is_being_started);
 
   /* Ensure threads below have been stopped. */
   const auto threads_stopped_before_shutdown = {
@@ -2991,6 +3135,7 @@ void srv_shutdown() {
 #endif /* UNIV_DEBUG */
 
   /* The SRV_SHUTDOWN_DD state was set during pre_dd_shutdown phase. */
+  if (!innodb_inited) srv_shutdown_state.store(SRV_SHUTDOWN_DD);
   ut_a(srv_shutdown_state.load() == SRV_SHUTDOWN_DD);
 
   /* Write dynamic metadata to DD buffer table. */
@@ -3072,6 +3217,7 @@ void srv_shutdown() {
   ibuf_close();
   ddl_log_close();
   log_sys_close();
+  recv_sys_free();
   recv_sys_close();
   trx_sys_close();
   lock_sys_close();
@@ -3096,6 +3242,8 @@ void srv_shutdown() {
 
   dblwr::close();
   os_thread_close();
+
+  meb::redo_log_archive_deinit();
 
   /* 6. Free the synchronisation infrastructure. */
   sync_check_close();

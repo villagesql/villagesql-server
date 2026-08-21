@@ -211,10 +211,11 @@ or greater than fts_max_token_size.
 @param[in]      stopwords       stopwords rb tree
 @param[in]      is_ngram        is ngram parser
 @param[in]      cs              token charset
+@param[in]      skip            true if the check should be skipped
 @retval true    if it is not stopword and length in range
 @retval false   if it is stopword or length not in range */
 bool fts_check_token(const fts_string_t *token, const ib_rbt_t *stopwords,
-                     bool is_ngram, const CHARSET_INFO *cs);
+                     bool is_ngram, const CHARSET_INFO *cs, bool skip);
 
 /** Initialize a document. */
 void fts_doc_init(fts_doc_t *doc); /*!< in: doc to initialize */
@@ -239,7 +240,8 @@ dberr_t fts_index_fetch_nodes(
     que_t **graph,            /*!< in: prepared statement */
     fts_table_t *fts_table,   /*!< in: FTS aux table */
     const fts_string_t *word, /*!< in: the word to fetch */
-    fts_fetch_t *fetch);      /*!< in: fetch callback.*/
+    fts_fetch_t *fetch,       /*!< in: fetch callback.*/
+    bool exact_match);        /*!< in: exact match.*/
 
 /** Compare two fts_trx_table_t instances, we actually compare the
 table id's here.

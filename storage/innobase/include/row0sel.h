@@ -421,36 +421,28 @@ enum row_sel_match_mode {
                        of a fixed length column) */
 };
 
-/** Stores a non-SQL-NULL field in the MySQL format. The counterpart of this
-function is row_mysql_store_col_in_innobase_format() in row0mysql.cc.
-@param[in,out] dest             buffer where to store; NOTE
-                                that BLOBs are not in themselves stored
-                                here: the caller must allocate and copy
-                                the BLOB into buffer before, and pass
-                                the pointer to the BLOB in 'data'
-@param[in]      templ           MySQL column template. Its following fields
-                                are referenced: type, is_unsigned,
-mysql_col_len, mbminlen, mbmaxlen
-@param[in]      index           InnoDB index
-@param[in]      field_no        templ->rec_field_no or templ->clust_rec_field_no
-                                or templ->icp_rec_field_no
-@param[in]      data            data to store
-@param[in]      len             length of the data
-@param[in]      sec_field       secondary index field no if the secondary index
-                                record but the prebuilt template is in
-                                clustered index format and used only for end
-                                range comparison. */
-void row_sel_field_store_in_mysql_format_func(
-    byte *dest, const mysql_row_templ_t *templ, const dict_index_t *index,
-    ulint field_no, const byte *data, ulint len IF_DEBUG(, ulint sec_field));
+/** VillageSQL: append an extension-managed column's payload after the storage
+reference that was copied out of the record.
 
-/** Convert a non-SQL-NULL field from Innobase format to MySQL format. */
-static inline void row_sel_field_store_in_mysql_format(
-    byte *dest, const mysql_row_templ_t *templ, const dict_index_t *idx,
-    ulint field, const byte *src, ulint len, ulint sec) {
-  row_sel_field_store_in_mysql_format_func(dest, templ, idx, field, src,
-                                           len IF_DEBUG(, sec));
-}
+Deliberately out-of-line, and declared here rather than defined in row0sel.ic,
+so that villagesql/custom_column.h is not pulled into every translation unit
+that includes row0sel.h. The extended-storage path is not the hot path -- it
+already reads from the extension's arena -- so the call is not worth inlining,
+whereas its caller row_sel_field_store_in_mysql_format_func() is ALWAYS_INLINE
+and runs per column per row.
+
+@param[in]      index           InnoDB index
+@param[in]      column          column whose storage is managed by an extension
+@param[out]     dest            buffer positioned just past the copied
+                                reference
+@param[in]      dest_len        remaining space in dest
+@param[in]      ref             the storage reference read from the record
+@param[in]      ref_len         length of the storage reference */
+void row_sel_fetch_extended_storage(const dict_index_t *index,
+                                    const dict_col_t *column, byte *dest,
+                                    ulint dest_len, const byte *ref,
+                                    ulint ref_len);
+
 
 /** Search the record present in innodb_table_stats table using
 db_name, table_name and fill it in table stats structure.

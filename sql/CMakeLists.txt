@@ -118,7 +118,7 @@ ADD_CUSTOM_COMMAND(
   DEPENDS gen_keyword_list
 )
 
-ADD_DEFINITIONS(-DMYSQL_SERVER)
+ADD_DEFINITIONS(-DMYSQL_SERVER -DHAVE_POOL_OF_THREADS)
 ADD_SUBDIRECTORY(server_component)
 ADD_SUBDIRECTORY(protobuf)
 include(../villagesql/subdirs.cmake)
@@ -173,6 +173,8 @@ SET(DD_SOURCES
   dd/impl/system_views/columns_extensions.cc
   dd/impl/system_views/column_statistics.cc
   dd/impl/system_views/enabled_roles.cc
+  dd/impl/system_views/compression_dictionary.cc
+  dd/impl/system_views/compression_dictionary_tables.cc
   dd/impl/system_views/events.cc
   dd/impl/system_views/files.cc
   dd/impl/system_views/innodb_datafiles.cc
@@ -605,6 +607,7 @@ SET(SQL_SHARED_SOURCES
   sql_union.cc
   sql_update.cc
   sql_view.cc
+  sql_zip_dict.cc
   ssl_acceptor_context_iterator.cc
   ssl_acceptor_context_data.cc
   ssl_acceptor_context_operator.cc
@@ -620,6 +623,7 @@ SET(SQL_SHARED_SOURCES
   table_trigger_dispatcher.cc
   tc_log.cc
   thr_malloc.cc
+  threadpool_common.cc
   time_zone_common.cc
   transaction.cc
   transaction_info.cc
@@ -627,6 +631,7 @@ SET(SQL_SHARED_SOURCES
   trigger_creation_ctx.cc
   trigger_chain.cc
   tztime.cc
+  userstat.cc
   uniques.cc
   xa.cc
   xa/recovery.cc
@@ -765,6 +770,13 @@ ELSEIF(WIN32)
     resourcegroups/platform/thread_attrs_api_win.cc)
 ENDIF()
 
+IF(WIN32)
+  LIST(APPEND SQL_SHARED_SOURCES threadpool_win.cc)
+ELSE()
+  LIST(APPEND SQL_SHARED_SOURCES threadpool_unix.cc)
+ENDIF()
+
+
 SET(SQL_SOURCE
   ${GEN_SOURCES}
   ${GEN_DIGEST_SOURCES}
@@ -859,6 +871,7 @@ IF(MY_COMPILER_IS_GNU)
   IF(HAS_WARN_FLAG)
     ADD_COMPILE_FLAGS(
       geometry_rtree.cc
+      join_optimizer/access_path.cc
       COMPILE_FLAGS ${HAS_WARN_FLAG}
       )
   ENDIF()
@@ -884,7 +897,9 @@ IF(MY_COMPILER_IS_GNU_OR_CLANG)
   ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
                     ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
                     COMPILE_FLAGS "-Wno-undef -Wno-unused-label")
-  IF(MY_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 14)
+  IF((MY_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 14)
+     OR
+     (MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16))
     ADD_COMPILE_FLAGS(${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
                       ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
                       COMPILE_FLAGS "-Wno-unused-but-set-variable")
@@ -916,6 +931,9 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
   )
 ENDIF()
 
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+  ADD_COMPILE_FLAGS(sql_planner.cc COMPILE_FLAGS "-Wno-array-bounds")
+ENDIF()
 ADD_STATIC_LIBRARY(sql_main ${SQL_SOURCE} LINK_LIBRARIES ext::icu ext::xxhash)
 
 include(../villagesql/sql_main.cmake)
@@ -962,6 +980,18 @@ IF(COMPRESS_DEBUG_SECTIONS)
 ENDIF()
 
 ADD_LIBRARY(sql_dd STATIC ${DD_SOURCES})
+# GCC 16's -O2 analysis emits false-positive -Wmaybe-uninitialized warnings
+# inside libstdc++ basic_string code instantiated for the dd::String_type
+# allocator (Stateless_allocator<char, dd::String_type_alloc>) when assigning
+# strings inside the generated dd::Object_table_definition_impl-derived
+# constructors.
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+  ADD_COMPILE_FLAGS(
+    dd/impl/tables/index_stats.cc
+    dd/impl/tables/table_stats.cc
+    dd/impl/tables/triggers.cc
+    COMPILE_FLAGS "-Wno-maybe-uninitialized")
+ENDIF()
 ADD_DEPENDENCIES(sql_dd GenFixPrivs)
 ADD_DEPENDENCIES(sql_dd GenServerSource)
 ADD_DEPENDENCIES(sql_dd GenDigestServerSource)
@@ -1063,6 +1093,7 @@ SET (RPL_REPLICA_SRCS
   rpl_async_conn_failover_reset_udf.cc
   rpl_channel_service_interface.cc
   rpl_channel_credentials.cc
+  rpl_event_ctx.cc
   rpl_info.cc
   rpl_info_dummy.cc
   rpl_info_factory.cc
@@ -1125,6 +1156,8 @@ IF(WIN32)
 ELSE()
   SET(MYSQLD_SOURCE main.cc)
 ENDIF()
+
+LIST(APPEND MYSQLD_SOURCE partitioning/partition_base.cc)
 
 MYSQL_ADD_EXECUTABLE(mysqld
   ${MYSQLD_SOURCE} DESTINATION ${INSTALL_SBINDIR} COMPONENT Server

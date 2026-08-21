@@ -550,13 +550,15 @@ exit:
 
   @param old_data  The old record in MySQL Row Format.
   @param new_data  The new record in MySQL Row Format.
+  @param lookup_rows Indicator for TokuDB read free replication.
 
   @return Operation status.
     @retval    0 Success
     @retval != 0 Error code
 */
 
-int Partition_helper::ph_update_row(const uchar *old_data, uchar *new_data) {
+int Partition_helper::ph_update_row(const uchar *old_data, uchar *new_data,
+                                    bool lookup_rows) {
   uint32 new_part_id, old_part_id;
   int error = 0;
   longlong func_value;
@@ -590,10 +592,14 @@ int Partition_helper::ph_update_row(const uchar *old_data, uchar *new_data) {
     error instead of correcting m_last_part, to make the user aware of the
     problem!
 
+    For TokuDB Read-Free-Replication optimization, there is no need to do
+    a read before update(row lookup is omitted), so m_last_part is not
+    necessarily same with old_part_id.
+
     Notice that HA_READ_BEFORE_WRITE_REMOVAL does not require this protocol,
     so this is not supported for this engine.
   */
-  if (old_part_id != m_last_part) {
+  if (old_part_id != m_last_part && lookup_rows) {
     m_err_rec = old_data;
     return HA_ERR_ROW_IN_WRONG_PARTITION;
   }
@@ -637,12 +643,36 @@ int Partition_helper::ph_update_row(const uchar *old_data, uchar *new_data) {
       !m_table->s->next_number_keypart &&
       bitmap_is_set(m_table->write_set,
                     m_table->found_next_number_field->field_index())) {
+    my_bitmap_map *old_map =
+        dbug_tmp_use_all_columns(m_table, m_table->read_set);
     set_auto_increment_if_higher();
+    dbug_tmp_restore_column_map(m_table->read_set, old_map);
   }
   return error;
 }
 
-int Partition_helper::ph_delete_row(const uchar *buf) {
+/**
+  Delete an existing row in the partitioned table.
+
+  This will delete a row. buf will contain a copy of the row to be deleted.
+  The server will call this right after the current row has been read
+  (from either a previous rnd_xxx() or index_xxx() call).
+  If you keep a pointer to the last row or can access a primary key it will
+  make doing the deletion quite a bit easier.
+  Keep in mind that the server does no guarentee consecutive deletions.
+  ORDER BY clauses can be used.
+
+  buf is either record[0] or record[1]
+
+  @param buf  The record in MySQL Row Format.
+  @param lookup_rows Indicator for TokuDB read free replication.
+
+  @return Operation status.
+    @retval    0 Success
+    @retval != 0 Error code
+*/
+
+int Partition_helper::ph_delete_row(const uchar *buf, bool lookup_rows) {
   int error;
   uint part_id;
   DBUG_TRACE;
@@ -672,13 +702,17 @@ int Partition_helper::ph_delete_row(const uchar *buf) {
     error instead of forwarding the delete to the correct (m_last_part)
     partition!
 
+    For TokuDB Read-Free-Replication optimization, there is no need to do
+    a read before delete(row lookup is omitted), so m_last_part is not
+    necessarily same with part_id.
+
     Notice that HA_READ_BEFORE_WRITE_REMOVAL does not require this protocol,
     so this is not supported for this engine.
 
     TODO: change the assert in InnoDB into an error instead and make this one
     an assert instead and remove the get_part_for_delete()!
   */
-  if (part_id != m_last_part) {
+  if (part_id != m_last_part && lookup_rows) {
     m_err_rec = buf;
     return HA_ERR_ROW_IN_WRONG_PARTITION;
   }
@@ -749,7 +783,7 @@ void Partition_helper::get_auto_increment_first_field(
   *nb_reserved_values = nb_desired_values;
 }
 
-inline void Partition_helper::set_auto_increment_if_higher() {
+void Partition_helper::set_auto_increment_if_higher() {
   Field_num *field = static_cast<Field_num *>(m_table->found_next_number_field);
   const ulonglong nr =
       (field->is_unsigned() || field->val_int() > 0) ? field->val_int() : 0;
@@ -1363,7 +1397,7 @@ err:
   Set table->read_set taking partitioning expressions into account.
 */
 
-inline void Partition_helper::set_partition_read_set() {
+void Partition_helper::set_partition_read_set() {
   /*
     For operations that may need to change data, we may need to extend
     read_set.

@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2018, Percona and/or its affiliates. All rights reserved.
    Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
@@ -432,6 +433,8 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
 
   thd->inc_status_sort_scan();
 
+  thd->query_plan_flags |= QPLAN_FILESORT;
+
   Bounded_queue<uchar *, uchar *, Sort_param, Mem_compare_queue_key> pq(
       param->max_record_length(),
       (Malloc_allocator<uchar *>(key_memory_Filesort_info_record_pointers)));
@@ -509,6 +512,7 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
         source_iterator, found_rows, &longest_key, &longest_addons);
     if (num_rows_found == HA_POS_ERROR) goto err;
   }
+  DEBUG_SYNC(thd, "after_find_all_keys");
 
   size_t num_chunks, num_initial_chunks;
   if (my_b_inited(&chunk_file)) {
@@ -526,6 +530,8 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
         param->using_pq ? pq.num_elements() : num_rows_found;
     if (save_index(param, rows_in_chunk, fs_info, sort_result)) goto err;
   } else {
+    thd->query_plan_flags |= QPLAN_FILESORT_DISK;
+
     // If deduplicating, we'll need to remember the previous key somehow.
     if (filesort->m_remove_duplicates) {
       param->m_last_key_seen =
@@ -544,8 +550,9 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
 
     /* Open cached file if it isn't open */
     if (!my_b_inited(outfile) &&
-        open_cached_file(outfile, mysql_tmpdir, TEMP_PREFIX, READ_RECORD_BUFFER,
-                         MYF(MY_WME)))
+        open_cached_file_encrypted(outfile, mysql_tmpdir, TEMP_PREFIX,
+                                   READ_RECORD_BUFFER, MYF(MY_WME),
+                                   encrypt_tmp_files))
       goto err;
     if (reinit_io_cache(outfile, WRITE_CACHE, 0L, false, false)) goto err;
 
@@ -1094,13 +1101,15 @@ static int write_keys(Sort_param *param, Filesort_info *fs_info, uint count,
   count = fs_info->sort_buffer(param, count, param->max_rows);
 
   if (!my_b_inited(chunk_file) &&
-      open_cached_file(chunk_file, mysql_tmpdir, TEMP_PREFIX, DISK_BUFFER_SIZE,
-                       MYF(MY_WME)))
+      open_cached_file_encrypted(chunk_file, mysql_tmpdir, TEMP_PREFIX,
+                                 DISK_BUFFER_SIZE, MYF(MY_WME),
+                                 encrypt_tmp_files))
     return 1;
 
   if (!my_b_inited(tempfile) &&
-      open_cached_file(tempfile, mysql_tmpdir, TEMP_PREFIX, DISK_BUFFER_SIZE,
-                       MYF(MY_WME)))
+      open_cached_file_encrypted(tempfile, mysql_tmpdir, TEMP_PREFIX,
+                                 DISK_BUFFER_SIZE, MYF(MY_WME),
+                                 encrypt_tmp_files))
     return 1; /* purecov: inspected */
 
   // Check that we won't have more chunks than we can possibly keep in memory.
@@ -1758,8 +1767,9 @@ static uint read_to_buffer(IO_CACHE *fromfile, Merge_chunk *merge_chunk,
                ("read_to_buffer %p at file_pos %llu bytes %llu", merge_chunk,
                 static_cast<ulonglong>(merge_chunk->file_position()),
                 static_cast<ulonglong>(bytes_to_read)));
-    if (mysql_file_pread(fromfile->file, merge_chunk->buffer_start(),
-                         bytes_to_read, merge_chunk->file_position(), MYF_RW))
+    if (mysql_encryption_file_pread(fromfile, merge_chunk->buffer_start(),
+                                    bytes_to_read, merge_chunk->file_position(),
+                                    MYF_RW))
       return (uint)-1; /* purecov: inspected */
     merge_chunk->set_valid_buffer_end(merge_chunk->buffer_start() +
                                       bytes_to_read);
@@ -1926,6 +1936,7 @@ static int merge_buffers(THD *thd, Sort_param *param, IO_CACHE *from_file,
   DBUG_TRACE;
 
   thd->inc_status_sort_merge_passes();
+  thd->query_plan_fsort_passes++;
 
   const my_off_t to_start_filepos = my_b_tell(to_file);
   strpos = sort_buffer.array();

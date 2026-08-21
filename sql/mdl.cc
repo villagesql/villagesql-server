@@ -52,12 +52,15 @@
 #include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql/current_thd.h"
 #include "sql/debug_sync.h"
+#include "sql/mysqld.h"
 #include "sql/thr_malloc.h"
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
 
 static PSI_memory_key key_memory_MDL_context_acquire_locks;
+static PSI_memory_key key_memory_MDL_context_upgrade_shared_locks;
 
 #ifdef HAVE_PSI_INTERFACE
 static PSI_mutex_key key_MDL_wait_LOCK_wait_status;
@@ -83,6 +86,9 @@ static PSI_cond_info all_mdl_conds[] = {{&key_MDL_wait_COND_wait_status,
 
 static PSI_memory_info all_mdl_memory[] = {
     {&key_memory_MDL_context_acquire_locks, "MDL_context::acquire_locks", 0, 0,
+     "Buffer for sorting lock requests."},
+    {&key_memory_MDL_context_upgrade_shared_locks,
+     "MDL_context::upgrade_shared_locks", 0, 0,
      "Buffer for sorting lock requests."}};
 
 /**
@@ -132,7 +138,8 @@ PSI_stage_info MDL_key::m_namespace_to_wait_state_name[NAMESPACE_END] = {
     {0, "Waiting for column statistics lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for resource groups metadata lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for foreign key metadata lock", 0, PSI_DOCUMENT_ME},
-    {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME}};
+    {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME},
+    {0, "Waiting for table backup lock", 0, PSI_DOCUMENT_ME}};
 
 #ifdef HAVE_PSI_INTERFACE
 void MDL_key::init_psi_keys() {
@@ -239,7 +246,8 @@ class MDL_map {
     return (mdl_key->mdl_namespace() == MDL_key::GLOBAL ||
             mdl_key->mdl_namespace() == MDL_key::COMMIT ||
             mdl_key->mdl_namespace() == MDL_key::ACL_CACHE ||
-            mdl_key->mdl_namespace() == MDL_key::BACKUP_LOCK);
+            mdl_key->mdl_namespace() == MDL_key::BACKUP_LOCK ||
+            mdl_key->mdl_namespace() == MDL_key::BACKUP_TABLES);
   }
 
  private:
@@ -271,6 +279,8 @@ class MDL_map {
     this into account.
   */
   std::atomic<int32> m_unused_lock_objects;
+  /** Pre-allocated MDL_lock object for Percona BACKUP TABLES namespace. */
+  MDL_lock *m_backup_tables_lock;
 };
 
 /**
@@ -829,6 +839,7 @@ class MDL_lock {
       case MDL_key::RESOURCE_GROUPS:
       case MDL_key::FOREIGN_KEY:
       case MDL_key::CHECK_CONSTRAINT:
+      case MDL_key::BACKUP_TABLES:
         return &m_scoped_lock_strategy;
       default:
         return &m_object_lock_strategy;
@@ -1145,6 +1156,9 @@ void MDL_map::init() {
   m_acl_cache_lock = MDL_lock::create(&acl_cache_lock_key);
   m_backup_lock = MDL_lock::create(&backup_lock_key);
 
+  const MDL_key percona_backup_lock_key(MDL_key::BACKUP_TABLES, "", "");
+  m_backup_tables_lock = MDL_lock::create(&percona_backup_lock_key);
+
   m_unused_lock_objects = 0;
 
   lf_hash_init2(&m_locks, sizeof(MDL_lock), LF_HASH_UNIQUE, 0, 0, mdl_locks_key,
@@ -1158,6 +1172,7 @@ void MDL_map::init() {
 */
 
 void MDL_map::destroy() {
+  MDL_lock::destroy(m_backup_tables_lock);
   MDL_lock::destroy(m_global_lock);
   MDL_lock::destroy(m_commit_lock);
   MDL_lock::destroy(m_acl_cache_lock);
@@ -1209,6 +1224,9 @@ MDL_lock *MDL_map::find(LF_PINS *pins, const MDL_key *mdl_key, bool *pinned) {
         break;
       case MDL_key::BACKUP_LOCK:
         lock = m_backup_lock;
+        break;
+      case MDL_key::BACKUP_TABLES:
+        lock = m_backup_tables_lock;
         break;
       default:
         assert(false);
@@ -2494,6 +2512,7 @@ void MDL_lock::remove_ticket(MDL_context *ctx, LF_PINS *pins,
   const bool is_singleton = mdl_locks.is_lock_object_singleton(&key);
 
   mysql_prlock_wrlock(&m_rwlock);
+
   (this->*list).remove_ticket(ticket);
 
   /*
@@ -3655,20 +3674,15 @@ bool MDL_context::acquire_locks(MDL_request_list *mdl_requests,
     any new such locks taken if acquisition fails.
   */
   MDL_ticket *explicit_front = m_ticket_store.front(MDL_EXPLICIT);
-  const size_t req_count = mdl_requests->elements();
-
-  if (req_count == 0) return false;
 
   /* Sort requests according to MDL_key. */
   Prealloced_array<MDL_request *, 16> sort_buf(
       key_memory_MDL_context_acquire_locks);
-  if (sort_buf.reserve(req_count)) return true;
 
-  for (size_t ii = 0; ii < req_count; ++ii) {
-    sort_buf.push_back(it++);
-  }
-
-  std::sort(sort_buf.begin(), sort_buf.end(), MDL_request_cmp());
+  if (filter_and_sort_requests_by_mdl_key(
+          &sort_buf, mdl_requests,
+          nullptr /* No filter, process whole array. */))
+    return true;
 
   size_t num_acquired = 0;
   for (p_req = sort_buf.begin(); p_req != sort_buf.end(); p_req++) {
@@ -3859,6 +3873,42 @@ bool MDL_context::upgrade_shared_lock(MDL_ticket *mdl_ticket,
   return false;
 }
 
+bool MDL_context::filter_and_sort_requests_by_mdl_key(
+    Prealloced_array<MDL_request *, 16> *sort_buf,
+    MDL_request_list *mdl_requests, bool (*filter_func)(MDL_request *)) {
+  const size_t req_count = mdl_requests->elements();
+  if (req_count == 0) return false;
+  if (sort_buf->reserve(req_count)) return true;
+  MDL_request_list::Iterator it(*mdl_requests);
+  for (size_t ii = 0; ii < req_count; ++ii) {
+    MDL_request *r = it++;
+    if (filter_func == nullptr || filter_func(r)) sort_buf->push_back(r);
+  }
+  std::sort(sort_buf->begin(), sort_buf->end(), MDL_request_cmp());
+  return false;
+}
+
+bool MDL_context::upgrade_shared_locks(MDL_request_list *mdl_requests,
+                                       enum_mdl_type new_type,
+                                       Timeout_type lock_wait_timeout,
+                                       bool (*filter_func)(MDL_request *)) {
+  const size_t req_count = mdl_requests->elements();
+  if (req_count == 0) return false;
+
+  /* Sort requests according to MDL_key. */
+  Prealloced_array<MDL_request *, 16> sort_buf(
+      key_memory_MDL_context_upgrade_shared_locks);
+
+  if (filter_and_sort_requests_by_mdl_key(&sort_buf, mdl_requests, filter_func))
+    return true;
+
+  for (MDL_request *r : sort_buf) {
+    if (upgrade_shared_lock(r->ticket, new_type, lock_wait_timeout))
+      return true;
+  }
+  return false;
+}
+
 /**
   A fragment of recursive traversal of the wait-for graph
   in search for deadlocks. Direct the deadlock visitor to all
@@ -3875,6 +3925,20 @@ bool MDL_lock::visit_subgraph(MDL_ticket *waiting_ticket,
   bool result = true;
 
   mysql_prlock_rdlock(&m_rwlock);
+
+#if defined(ENABLED_DEBUG_SYNC)
+  /*
+    Fire the sync point only when the visited ticket belongs to the thread
+    running this deadlock detection (i.e. the initial node of the graph
+    walk). At recursion depth >= 2 src_ctx belongs to another connection,
+    and debug_sync() would then manipulate that connection's
+    debug_sync_control without any synchronization, racing with the owner
+    thread (and with other concurrent deadlock detectors) executing the
+    same action.
+  */
+  if (src_ctx->get_thd() == current_thd)
+    DEBUG_SYNC(current_thd, "acl_mdl_dead_lock");
+#endif
 
   /*
     Iterators must be initialized after taking a read lock.

@@ -105,6 +105,7 @@ fts_ast_node_t *fts_ast_create_node_term(
   fts_ast_node_t *node = nullptr;
   fts_ast_node_t *node_list = nullptr;
   fts_ast_node_t *first_node = nullptr;
+  const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
   /* Scan the incoming string and filter out any "non-word" characters */
   while (cur_pos < len) {
@@ -113,7 +114,7 @@ fts_ast_node_t *fts_ast_create_node_term(
 
     cur_len = innobase_mysql_fts_get_token(
         state->charset, reinterpret_cast<const byte *>(ptr->str) + cur_pos,
-        reinterpret_cast<const byte *>(ptr->str) + len, &str);
+        reinterpret_cast<const byte *>(ptr->str) + len, extra_word_chars, &str);
 
     if (cur_len == 0) {
       break;
@@ -504,7 +505,8 @@ bool fts_ast_node_check_union(fts_ast_node_t *node) {
   } else if (node->type == FTS_AST_OPER &&
              (node->oper == FTS_IGNORE || node->oper == FTS_EXIST)) {
     return (false);
-  } else if (node->type == FTS_AST_TEXT) {
+  } else if (node->type == FTS_AST_TEXT ||
+             node->type == FTS_AST_PARSER_PHRASE_LIST) {
     /* Distance or phrase search query. */
     return (false);
   }

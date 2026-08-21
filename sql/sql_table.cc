@@ -44,6 +44,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 /* HAVE_PSI_*_INTERFACE */
 #include "my_psi_config.h"  // IWYU pragma: keep
@@ -106,6 +107,7 @@
 #include "sql/dd/dd_schema.h"   // dd::schema_exists
 #include "sql/dd/dd_table.h"    // dd::drop_table, dd::update_keys...
 #include "sql/dd/dictionary.h"  // dd::Dictionary
+#include "sql/dd/impl/types/index_impl.h"
 #include "sql/dd/properties.h"  // dd::Properties
 #include "sql/dd/sdi_api.h"     // dd::sdi::drop_sdis
 #include "sql/dd/string_type.h"
@@ -180,6 +182,7 @@
 #include "sql/sql_tablespace.h"  // validate_tablespace_name
 #include "sql/sql_time.h"        // make_truncated_value_warning
 #include "sql/sql_trigger.h"     // change_trigger_table_name
+#include "sql/sql_zip_dict.h"
 #include "sql/srs_fetcher.h"
 #include "sql/stateless_allocator.h"
 #include "sql/strfunc.h"  // find_type2
@@ -192,6 +195,7 @@
 #include "sql/trigger.h"
 #include "sql/xa.h"
 #include "sql_string.h"
+#include "sql_zip_dict.h"
 #include "string_with_len.h"
 #include "strmake.h"
 #include "strxmov.h"
@@ -457,12 +461,14 @@ const dd::Index *find_fk_parent_key(THD *thd, handlerton *hton,
 static int copy_data_between_tables(
     THD *thd, PSI_stage_progress *psi, TABLE *from, TABLE *to,
     List<Create_field> &create, ha_rows *copied, ha_rows *deleted,
-    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx);
+    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx,
+    bool expand_fast_index_creation);
 
 static bool prepare_blob_field(THD *thd, Create_field *sql_field,
                                bool convert_character_set);
-static bool check_engine(const char *db_name, const char *table_name,
-                         HA_CREATE_INFO *create_info);
+static bool check_engine(THD *thd, const char *db_name, const char *table_name,
+                         HA_CREATE_INFO *create_info,
+                         const Alter_info *alter_info);
 
 static bool prepare_set_field(THD *thd, Create_field *sql_field);
 static bool prepare_enum_field(THD *thd, Create_field *sql_field);
@@ -615,6 +621,13 @@ static char *add_identifier(THD *thd, char *to_p, const char *end_p,
   This should be used when something should be presented to a user in a
   diagnostic, error etc. when it would be useful to know what a particular
   file [and directory] means. Such as SHOW ENGINE STATUS, error messages etc.
+
+  Examples:
+
+    t1#P#p1                 table t1 partition p1
+    t1#P#p1#SP#sp1          table t1 partition p1 subpartition sp1
+    t1#P#p1#SP#sp1#TMP#     table t1 partition p1 subpartition sp1 temporary
+    t1#P#p1#SP#sp1#REN#     table t1 partition p1 subpartition sp1 renamed
 
    @param      thd          Thread handle
    @param      from         Path name in my_charset_filename
@@ -1017,8 +1030,8 @@ static bool rea_create_tmp_table(
   }
 
   // Create the table in the storage engine.
-  if (ha_create_table(thd, path, db, table_name, create_info, false, false,
-                      tmp_table_ptr.get())) {
+  if (ha_create_table(thd, path, db, table_name, create_info, &create_fields,
+                      false, false, tmp_table_ptr.get())) {
     return true;
   }
 
@@ -1203,8 +1216,8 @@ static bool rea_create_base_table(
       create_info->db_type->post_ddl)
     *post_ddl_ht = create_info->db_type;
 
-  if (ha_create_table(thd, path, db, table_name, create_info, false, false,
-                      table_def)) {
+  if (ha_create_table(thd, path, db, table_name, create_info, &create_fields,
+                      false, false, table_def)) {
     /*
       Remove table from data-dictionary if it was added and rollback
       won't do this automatically.
@@ -1219,6 +1232,10 @@ static bool rea_create_base_table(
         (void)trans_intermediate_ddl_commit(thd, result);
     }
     return true;
+  } else {
+    if (compression_dict::cols_table_insert(thd, *table_def)) {
+      return true;
+    }
   }
 
   /*
@@ -2311,10 +2328,12 @@ static bool rm_table_eval_gtid_and_table_groups_state(
         /*
           Normal case. Single base table in SE which don't support atomic DDL
           so it will be logged as a single-table DROP TABLES statement.
-          Other groups are empty.
+          We still can have temporary tables in this drop, but only those ones
+          which are not logged (previous 'if' would detect them).
+          Such temporary tables will be just dropped, but not logged.
         */
-        assert(!drop_ctx->has_tmp_trans_tables());
-        assert(!drop_ctx->has_tmp_non_trans_tables());
+        assert(!drop_ctx->has_tmp_trans_tables_to_binlog());
+        assert(!drop_ctx->has_tmp_non_trans_tables_to_binlog());
         assert(!drop_ctx->has_tmp_nonexistent_tables());
         drop_ctx->gtid_and_table_groups_state =
             Drop_tables_ctx::GTID_SINGLE_TABLE_GROUP;
@@ -3352,7 +3371,18 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
           built_query.add_table(table);
 
-          if (built_query.write_bin_log()) goto err_with_rollback;
+          if (thd->variables.binlog_ddl_skip_rewrite ||
+              thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+              thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER ||
+              thd->is_binlog_applier()) {
+            if (write_bin_log(thd, true, thd->query().str, thd->query().length,
+                              false)) {
+              goto err_with_rollback;
+            }
+
+          } else {
+            if (built_query.write_bin_log()) goto err_with_rollback;
+          }
         }
 
         if (drop_ctx.has_no_gtid_single_table_group() ||
@@ -3526,7 +3556,18 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
       thd->thread_specific_used = true;
 
-      if (built_query.write_bin_log()) goto err_with_rollback;
+      if (thd->variables.binlog_ddl_skip_rewrite ||
+          thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+          thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER ||
+          thd->is_binlog_applier()) {
+        if (write_bin_log(thd, true, thd->query().str, thd->query().length,
+                          drop_ctx.has_base_atomic_tables())) {
+          goto err_with_rollback;
+        }
+
+      } else {
+        if (built_query.write_bin_log()) goto err_with_rollback;
+      }
 
       // VillageSQL: Write uncommitted systable entries before commit.
       // At this point, all tables have been dropped and marked for deletion,
@@ -4295,6 +4336,12 @@ const CHARSET_INFO *get_sql_field_charset(const Create_field *sql_field,
     my_charset_bin to something else.
   */
   if (sql_field->is_array || cs == &my_charset_bin) return cs;
+
+  /*
+    Temporal types always use my_charset_numeric.
+    Ensure that it is not changed when altering table charset.
+  */
+  if (is_temporal_real_type(sql_field->sql_type)) return &my_charset_numeric;
 
   /*
     table_charset is set only in ALTER TABLE t1 CONVERT TO CHARACTER SET csname
@@ -5075,6 +5122,15 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
     }
   }
 
+  /* compressed column is not allowed to be defined as a key part */
+  DBUG_EXECUTE_IF("remove_compressed_attributes_for_keys",
+                  sql_field->set_column_format(COLUMN_FORMAT_TYPE_DEFAULT););
+  if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) {
+    my_error(ER_COMPRESSED_COLUMN_USED_AS_KEY, MYF(0),
+             column->get_field_name());
+    return true;
+  }
+
   uint column_length;
   if (key->type == KEYTYPE_FULLTEXT) {
     if ((sql_field->sql_type != MYSQL_TYPE_STRING &&
@@ -5281,7 +5337,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
             min(file->max_key_length(), file->max_key_part_length(create_info));
         if (max_field_size)
           key_part_length = min(key_part_length, max_field_size);
-        if (key->type == KEYTYPE_MULTIPLE) {
+        if (key->type & KEYTYPE_MULTIPLE) {
           /* not a critical problem */
           push_warning_printf(thd, Sql_condition::SL_WARNING, ER_TOO_LONG_KEY,
                               ER_THD(thd, ER_TOO_LONG_KEY),
@@ -5339,7 +5395,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
   if (key_part_length > file->max_key_part_length(create_info) &&
       key->type != KEYTYPE_FULLTEXT) {
     key_part_length = file->max_key_part_length(create_info);
-    if (key->type == KEYTYPE_MULTIPLE) {
+    if (key->type & KEYTYPE_MULTIPLE) {
       /* not a critical problem */
       push_warning_printf(thd, Sql_condition::SL_WARNING, ER_TOO_LONG_KEY,
                           ER_THD(thd, ER_TOO_LONG_KEY),
@@ -7543,7 +7599,7 @@ static bool prepare_key(
 #ifndef NDEBUG
   const decltype(key_info->flags) flags_before_switch = key_info->flags;
 #endif /* NDEBUG */
-  switch (key->type) {
+  switch (static_cast<int>(key->type)) {
     case KEYTYPE_MULTIPLE:
       break;
     case KEYTYPE_FULLTEXT:
@@ -7573,6 +7629,51 @@ static bool prepare_key(
     case KEYTYPE_UNIQUE:
       key_info->flags |= HA_NOSAME;
       break;
+    case KEYTYPE_CLUSTERING | KEYTYPE_UNIQUE:
+    case KEYTYPE_CLUSTERING | KEYTYPE_MULTIPLE:
+      if (thd->work_part_info) {
+        partition_info *part_info = thd->work_part_info;
+        List_iterator<partition_element> part_it(part_info->partitions);
+        partition_element *part_elem;
+
+        while ((part_elem = part_it++)) {
+          if (part_elem->subpartitions.elements) {
+            List_iterator<partition_element> sub_it(part_elem->subpartitions);
+            partition_element *subpart_elem;
+            while ((subpart_elem = sub_it++)) {
+              if (unlikely(!ha_check_storage_engine_flag(
+                      subpart_elem->engine_type,
+                      HTON_SUPPORTS_CLUSTERED_KEYS))) {
+                my_error(
+                    ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                    ha_resolve_storage_engine_name(subpart_elem->engine_type),
+                    "CLUSTERING");
+                return true;
+              }
+            }
+          } else if (unlikely(!ha_check_storage_engine_flag(
+                         part_elem->engine_type,
+                         HTON_SUPPORTS_CLUSTERED_KEYS))) {
+            my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                     ha_resolve_storage_engine_name(part_elem->engine_type),
+                     "CLUSTERING");
+            return true;
+          }
+        }
+      } else if (unlikely(!ha_check_storage_engine_flag(
+                     file->ht, HTON_SUPPORTS_CLUSTERED_KEYS))) {
+        my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                 ha_resolve_storage_engine_name(file->ht), "CLUSTERING");
+        return true;
+      }
+      if (key->type & KEYTYPE_UNIQUE)
+        key_info->flags = HA_NOSAME;
+      else
+        key_info->flags = 0;
+      key_info->flags |= HA_CLUSTERING;
+      break;
+    case KEYTYPE_CLUSTERING:
+      assert(0);
     default:
       assert(false);
       return true;
@@ -8368,6 +8469,54 @@ bool mysql_prepare_create_table(
   int blob_columns = 0;
   it.rewind();
   while ((sql_field = it++)) {
+    /*
+      Check if the column is compressible.
+      VIRTUAL generated columns cannot have COMPRESSED attribute.
+    */
+    if ((sql_field->sql_type == MYSQL_TYPE_TINY_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_MEDIUM_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_LONG_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_VARCHAR ||
+         sql_field->sql_type == MYSQL_TYPE_JSON) &&
+        (sql_field->gcol_info == nullptr ||
+         sql_field->gcol_info->get_field_stored())) {
+      DBUG_EXECUTE_IF(
+          "enforce_all_compressed_columns",
+          sql_field->set_column_format(COLUMN_FORMAT_TYPE_COMPRESSED););
+
+    } else {
+      if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) {
+        my_error(ER_UNSUPPORTED_COMPRESSED_COLUMN_TYPE, MYF(0),
+                 sql_field->field_name);
+        return true;
+      }
+    }
+
+    /* Verify if the compression dictionary entry exists. Open compression
+       dictionary table with MDL_SHARED_READ mode. If the entry exists,
+       do not release the MDL lock. This is because we don't want a concurrent
+       DROP COMPRESSION_DICTIONARY to remove the dictionary entry
+    */
+
+    if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED &&
+        sql_field->zip_dict_name.str != nullptr &&
+        sql_field->zip_dict_name.length != 0) {
+      if (compression_dict::acquire_dict_mdl(thd, MDL_SHARED_READ)) {
+        return true;
+      }
+
+      uint64 zip_dict_id =
+          compression_dict::get_id_for_name(thd, sql_field->zip_dict_name);
+
+      if (zip_dict_id == 0) {
+        my_error(ER_COMPRESSION_DICTIONARY_DOES_NOT_EXIST, MYF(0),
+                 sql_field->zip_dict_name.str);
+        return true;
+      }
+      sql_field->zip_dict_id = zip_dict_id;
+    }
+
     if (sql_field->auto_flags & Field::NEXT_NUMBER) auto_increment++;
     switch (sql_field->sql_type) {
       case MYSQL_TYPE_GEOMETRY:
@@ -8429,6 +8578,12 @@ bool mysql_prepare_create_table(
 
   if (!*key_info_buffer || !key_part_info) return true;  // Out of memory
 
+  alter_info->delayed_key_count = 0;
+  if (alter_info->delayed_key_list.size() > 0) {
+    alter_info->delayed_key_info =
+        static_cast<KEY *>(sql_calloc(sizeof(KEY) * (*key_count)));
+  }
+
   Mem_root_array<const KEY *> keys_to_check(thd->mem_root);
   if (keys_to_check.reserve(*key_count)) return true;  // Out of memory
 
@@ -8456,6 +8611,13 @@ bool mysql_prepare_create_table(
                       &key_part_info, keys_to_check, key_number, file,
                       &auto_increment))
         return true;
+      for (const auto &it2 : alter_info->delayed_key_list) {
+        if (it2 == key) {
+          alter_info->delayed_key_info[alter_info->delayed_key_count++] =
+              *key_info;
+          break;
+        }
+      }
       key_info++;
       key_number++;
     }
@@ -8467,7 +8629,8 @@ bool mysql_prepare_create_table(
       !thd->is_initialize_system_thread() &&
       (file->ha_table_flags() &
        (HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE)) != 0 &&
-      thd->variables.sql_require_primary_key) {
+      thd->variables.sql_require_primary_key &&
+      !(create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
     my_error(ER_TABLE_WITHOUT_PK, MYF(0));
     return true;
   }
@@ -9010,7 +9173,20 @@ static bool create_table_impl(
   DBUG_PRINT("enter", ("db: '%s'  table: '%s'  tmp: %d", db, table_name,
                        internal_tmp_table));
 
-  if (check_engine(db, table_name, create_info)) return true;
+  // Check that we have at least one visible column.
+  bool has_visible_column = false;
+  for (const Create_field &create_field : alter_info->create_list) {
+    if (create_field.hidden == dd::Column::enum_hidden_type::HT_VISIBLE) {
+      has_visible_column = true;
+      break;
+    }
+  }
+  if (!has_visible_column) {
+    my_error(ER_TABLE_MUST_HAVE_A_VISIBLE_COLUMN, MYF(0));
+    return true;
+  }
+
+  if (check_engine(thd, db, table_name, create_info, alter_info)) return true;
 
   // Secondary engine cannot be defined for temporary tables.
   if (create_info->secondary_engine.str != nullptr &&
@@ -9166,6 +9342,14 @@ static bool create_table_impl(
       }
       create_info->db_type = engine_type;
     }
+    if (alter_info->has_compressed_columns() &&
+        !ha_check_storage_engine_flag(part_info->default_engine_type,
+                                      HTON_SUPPORTS_COMPRESSED_COLUMNS)) {
+      my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+               ha_resolve_storage_engine_name(part_info->default_engine_type),
+               "COMPRESSED COLUMNS");
+      return true;
+    }
   }
 
   const Table_exists_result ter = check_if_table_exists(
@@ -9311,10 +9495,14 @@ static bool create_table_impl(
 
   @returns true on failure, false on success.
 */
+
+extern bool srv_sys_tablespace_encrypt;
 static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
+  DBUG_TRACE;
   // Study if this table uses general tablespaces and if any one is encrypted.
   bool uses_general_tablespace = false;
   bool uses_encrypted_tablespace = false;
+  bool uses_system_tablespace = false;
   dd::Encrypt_result result =
       dd::is_tablespace_encrypted(thd, create_info, &uses_general_tablespace);
   if (result.error) return true;
@@ -9333,7 +9521,14 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
             create_info->tablespace, &tt)) {
       return true;
     }
-    uses_general_tablespace = (tt != Tablespace_type::SPACE_TYPE_IMPLICIT);
+    uses_general_tablespace = (tt != Tablespace_type::SPACE_TYPE_IMPLICIT &&
+                               tt != Tablespace_type::SPACE_TYPE_SHARED);
+    uses_system_tablespace = tt == Tablespace_type::SPACE_TYPE_SYSTEM;
+    if (uses_system_tablespace) {
+      dd::Encrypt_result result2 = dd::is_system_tablespace_encrypted(thd);
+      if (result2.error) return true;
+      uses_encrypted_tablespace = result2.value;
+    }
   }
 
   /*
@@ -9341,7 +9536,8 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
     type does not match the general tablespace encryption type.
   */
   const bool requested_type = dd::is_encrypted(create_info->encrypt_type);
-  if (uses_general_tablespace && requested_type != uses_encrypted_tablespace) {
+  if ((uses_general_tablespace || uses_system_tablespace) &&
+      ((requested_type != uses_encrypted_tablespace))) {
     my_error(ER_INVALID_ENCRYPTION_REQUEST, MYF(0),
              requested_type ? "'encrypted'" : "'unencrypted'",
              uses_encrypted_tablespace ? "'encrypted'" : "'unencrypted'");
@@ -9447,14 +9643,16 @@ bool mysql_create_table_no_lock(THD *thd, const char *db,
     return true;
   }
 
-  // Do not accept ENCRYPTION and AUTOEXTEND_SIZE clauses for
+  // Fix create_info->explicit_encryption. For alter it is retrieved
+  // from share.
+  if (!(create_info->options & HA_LEX_CREATE_INTERNAL_TMP_TABLE) &&
+      (create_info->used_fields & HA_CREATE_USED_ENCRYPT)) {
+    create_info->explicit_encryption = true;
+  }
+
+  // Do not accept AUTOEXTEND_SIZE clauses for
   // temporary table.
   if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
-    if (create_info->encrypt_type.length) {
-      my_error(ER_CANNOT_USE_ENCRYPTION_CLAUSE, MYF(0), "temporary");
-      return true;
-    }
-
     if (create_info->m_implicit_tablespace_autoextend_size > 0) {
       my_error(ER_CANNOT_USE_AUTOEXTEND_SIZE_CLAUSE, MYF(0), "temporary");
       return true;
@@ -11267,15 +11465,6 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
   }
 
   /*
-    Do not keep ENCRYPTION clause for unencrypted table.
-    We raise error if we are creating encrypted temporary table later.
-  */
-  if (local_create_info.encrypt_type.str &&
-      !dd::is_encrypted(local_create_info.encrypt_type)) {
-    local_create_info.encrypt_type = {nullptr, 0};
-  }
-
-  /*
     Lock the FK children, in case the new table introduces a missing parent.
   */
   if (!(table->table || table->is_view()) &&
@@ -11413,9 +11602,10 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
 
           /*
             As the reference table is temporary and may not exist on slave, we
-            must force the ENGINE to be present into CREATE TABLE.
+            must force the ENGINE and CHARSET to be present into CREATE TABLE.
           */
           create_info->used_fields |= HA_CREATE_USED_ENGINE;
+          create_info->used_fields |= HA_CREATE_USED_DEFAULT_CHARSET;
 
           const bool result [[maybe_unused]] = store_create_info(
               thd, table, &query, create_info, true /* show_database */,
@@ -11630,10 +11820,18 @@ bool Sql_cmd_discard_import_tablespace::mysql_discard_or_import_tablespace(
        missing tablespace.
   */
 
-  const bool discard =
-      (m_alter_info->flags & Alter_info::ALTER_DISCARD_TABLESPACE);
-  error = table_list->table->file->ha_discard_or_import_tablespace(discard,
-                                                                   table_def);
+  if (table_list->table->has_compressed_columns()) {
+    /*
+      ALTER TABLE ... DISCARD/IMPORT TABLESPACE is not supported for tables
+      with compressed columns.
+    */
+    error = HA_ERR_WRONG_COMMAND;
+  } else {
+    const bool discard =
+        (m_alter_info->flags & Alter_info::ALTER_DISCARD_TABLESPACE);
+    error = table_list->table->file->ha_discard_or_import_tablespace(discard,
+                                                                     table_def);
+  }
 
   THD_STAGE_INFO(thd, stage_end);
 
@@ -13966,6 +14164,9 @@ static bool mysql_inplace_alter_table(
     close_all_tables_for_name(thd, table->s, false, nullptr);
     table_list->table = table = nullptr;
     reopen_tables = true;
+
+    DEBUG_SYNC(thd, "alter_before_close_temp_tables");
+
     close_temporary_table(thd, altered_table, true, false);
     rollback_needs_dict_cache_reset = true;
 
@@ -13997,6 +14198,13 @@ static bool mysql_inplace_alter_table(
       we call update on the new table definition.
     */
     altered_table_def->copy_triggers(table_def);
+
+    /* About the remove the old table definition, if there any columns
+    with compression dictionary, remove the entries from
+    mysql.compression_dictionary_cols table */
+    if (compression_dict::cols_table_delete(thd, *table_def)) {
+      goto cleanup2;
+    }
 
     if (thd->dd_client()->drop(table_def)) goto cleanup2;
     table_def = nullptr;
@@ -14929,6 +15137,8 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       PSI_INSTRUMENT_ME, alter_info->alter_index_visibility_list.cbegin(),
       alter_info->alter_index_visibility_list.cend());
 
+  /* List with secondary keys which should be created after copying the data */
+  Mem_root_array<const Key_spec *> delayed_key_list(thd->mem_root);
   /*
     Alter_info::alter_list is used by fill_alter_inplace_info() call as well.
     So this function works on its copy rather than original list.
@@ -15223,7 +15433,32 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
   /*
     Collect all keys which isn't in drop list. Add only those
     for which some fields exists.
+
+    We also store secondary keys in delayed_key_list to make use of
+    the InnoDB fast index creation. The following conditions must be
+    met:
+
+    - fast_index_creation is enabled for the current session
+    - expand_fast_index_creation is enabled for the current session;
+    - we are going to create an InnoDB table (this is checked later when the
+      target engine is known);
+    - the key most be a non-UNIQUE one;
+    - there are no foreign keys. This can be optimized later to exclude only
+      those keys which are a part of foreign key constraints. Currently we
+      simply disable this optimization for all keys if there are any foreign
+      key constraints in the table.
+    - there are no partitions involved in the operation
   */
+
+  const dd::Table *obj =
+      (table->s->tmp_table ? table->s->tmp_table_def : src_table);
+  const bool modifies_partitioning =
+      alter_info->flags &
+      (Alter_info::ALTER_PARTITION | Alter_info::ALTER_REMOVE_PARTITIONING);
+  bool skip_secondary =
+      thd->variables.expand_fast_index_creation &&
+      (obj == nullptr || obj->foreign_key_parents().empty()) &&
+      !modifies_partitioning;
 
   for (uint i = 0; i < table->s->keys; i++, key_info++) {
     const char *key_name = key_info->name;
@@ -15418,21 +15653,41 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         key_type = KEYTYPE_FULLTEXT;
       else
         key_type = KEYTYPE_MULTIPLE;
+      if (key_info->flags & HA_CLUSTERING)
+        key_type = static_cast<enum keytype>(key_type | KEYTYPE_CLUSTERING);
 
       /*
         If we have dropped a column associated with an index,
         this warrants a check for duplicate indexes
       */
-      new_key_list.push_back(new (thd->mem_root) Key_spec(
-          thd->mem_root, key_type, to_lex_cstring(key_name), &key_create_info,
-          (key_info->flags & HA_GENERATED_KEY), index_column_dropped,
-          key_parts));
+      Key_spec *const key = new (thd->mem_root)
+          Key_spec(thd->mem_root, key_type, to_lex_cstring(key_name),
+                   &key_create_info, (key_info->flags & HA_GENERATED_KEY),
+                   index_column_dropped, key_parts);
+      new_key_list.push_back(key);
+      if (skip_secondary && key_type & KEYTYPE_MULTIPLE) {
+        delayed_key_list.push_back(key);
+      }
     }
   }
   {
     new_key_list.reserve(new_key_list.size() + alter_info->key_list.size());
-    for (size_t i = 0; i < alter_info->key_list.size(); i++)
-      new_key_list.push_back(alter_info->key_list[i]);  // Add new keys
+    for (size_t i = 0; i < alter_info->key_list.size(); i++) {
+      Key_spec *const key = alter_info->key_list[i];
+      new_key_list.push_back(key);  // Add new keys
+      if (key->type != KEYTYPE_FOREIGN) {
+        if (skip_secondary && key->type & KEYTYPE_MULTIPLE) {
+          delayed_key_list.push_back(key);
+        }
+      } else if (skip_secondary) {
+        /*
+          We are adding a foreign key so disable the secondary keys
+          optimization.
+        */
+        skip_secondary = false;
+        delayed_key_list.clear();
+      }
+    }
   }
 
   /*
@@ -15509,6 +15764,10 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
   alter_info->key_list.resize(new_key_list.size());
   std::copy(new_key_list.begin(), new_key_list.end(),
             alter_info->key_list.begin());
+  alter_info->delayed_key_list.clear();
+  alter_info->delayed_key_list.resize(delayed_key_list.size());
+  std::copy(delayed_key_list.cbegin(), delayed_key_list.cend(),
+            alter_info->delayed_key_list.begin());
 
   return false;
 }
@@ -15652,11 +15911,12 @@ static const Create_field *get_field_by_old_name(Alter_info *alter_info,
 
 /** Type of change to foreign key column, */
 
-enum fk_column_change_type {
-  FK_COLUMN_NO_CHANGE,
-  FK_COLUMN_DATA_CHANGE,
-  FK_COLUMN_RENAMED,
-  FK_COLUMN_DROPPED
+enum class fk_column_change_type {
+  NO_CHANGE,
+  DATA_CHANGE,
+  RENAMED,
+  DROPPED,
+  SAFE_FOR_PARENT
 };
 
 /**
@@ -15680,13 +15940,15 @@ enum fk_column_change_type {
   @note This function takes into account value of @@foreign_key_checks
         setting.
 
-  @retval FK_COLUMN_NO_CHANGE    No significant changes are to be done on
+  @retval NO_CHANGE              No significant changes are to be done on
                                  foreign key columns.
-  @retval FK_COLUMN_DATA_CHANGE  ALTER TABLE might result in value
+  @retval DATA_CHANGE            ALTER TABLE might result in value
                                  change in foreign key column (and
                                  foreign_key_checks is on).
-  @retval FK_COLUMN_RENAMED      Foreign key column is renamed.
-  @retval FK_COLUMN_DROPPED      Foreign key column is dropped.
+  @retval ENAMED                 Foreign key column is renamed.
+  @retval DROPPED                Foreign key column is dropped.
+  @retval SAFE_FOR_PARENT        The column change is safe if this is a
+                                 referenced column.
 */
 
 template <class F>
@@ -15711,12 +15973,14 @@ static fk_column_change_type fk_check_column_changes(
           like it happens in case of in-place algorithm.
         */
         *bad_column_name = column;
-        return FK_COLUMN_RENAMED;
+        return fk_column_change_type::RENAMED;
       }
 
-      if ((old_field->is_equal(new_field) == IS_EQUAL_NO) ||
-          ((new_field->flags & NOT_NULL_FLAG) &&
-           !old_field->is_flag_set(NOT_NULL_FLAG))) {
+      const auto fields_differ =
+          (old_field->is_equal(new_field) == IS_EQUAL_NO);
+
+      if (fields_differ || ((new_field->flags & NOT_NULL_FLAG) &&
+                            !old_field->is_flag_set(NOT_NULL_FLAG))) {
         if (!(thd->variables.option_bits & OPTION_NO_FOREIGN_KEY_CHECKS)) {
           /*
             Column in a FK has changed significantly. Unless
@@ -15725,7 +15989,9 @@ static fk_column_change_type fk_check_column_changes(
             and thus referential integrity might be broken,
           */
           *bad_column_name = column;
-          return FK_COLUMN_DATA_CHANGE;
+          /* NULL to NOT NULL column change is safe for referenced columns */
+          return fields_differ ? fk_column_change_type::DATA_CHANGE
+                               : fk_column_change_type::SAFE_FOR_PARENT;
         }
       }
       assert(old_field->is_gcol() == new_field->is_gcol() &&
@@ -15742,11 +16008,11 @@ static fk_column_change_type fk_check_column_changes(
         integrity in this case.
       */
       *bad_column_name = column;
-      return FK_COLUMN_DROPPED;
+      return fk_column_change_type::DROPPED;
     }
   }
 
-  return FK_COLUMN_NO_CHANGE;
+  return fk_column_change_type::NO_CHANGE;
 }
 
 /**
@@ -15839,10 +16105,11 @@ static bool fk_check_copy_alter_table(THD *thd, Table_ref *table_list,
                                         fk_columns_lambda, &bad_column_name);
 
       switch (changes) {
-        case FK_COLUMN_NO_CHANGE:
+        case fk_column_change_type::SAFE_FOR_PARENT:
+        case fk_column_change_type::NO_CHANGE:
           /* No significant changes. We can proceed with ALTER! */
           break;
-        case FK_COLUMN_DATA_CHANGE: {
+        case fk_column_change_type::DATA_CHANGE: {
           char buff[NAME_LEN * 2 + 2];
           strxnmov(buff, sizeof(buff) - 1, fk_p->child_schema_name().c_str(),
                    ".", fk_p->child_table_name().c_str(), NullS);
@@ -15850,13 +16117,13 @@ static bool fk_check_copy_alter_table(THD *thd, Table_ref *table_list,
                    fk->name().c_str(), buff);
           return true;
         }
-        case FK_COLUMN_RENAMED:
+        case fk_column_change_type::RENAMED:
           my_error(
               ER_ALTER_OPERATION_NOT_SUPPORTED_REASON, MYF(0), "ALGORITHM=COPY",
               ER_THD(thd, ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_FK_RENAME),
               "ALGORITHM=INPLACE");
           return true;
-        case FK_COLUMN_DROPPED:
+        case fk_column_change_type::DROPPED:
           /*
             Should already have been checked in
             transfer_preexisting_foreign_keys().
@@ -15896,27 +16163,26 @@ static bool fk_check_copy_alter_table(THD *thd, Table_ref *table_list,
                                       fk_columns_lambda, &bad_column_name);
 
     switch (changes) {
-      case FK_COLUMN_NO_CHANGE:
+      case fk_column_change_type::NO_CHANGE:
         /* No significant changes. We can proceed with ALTER! */
         break;
-      case FK_COLUMN_DATA_CHANGE:
+      case fk_column_change_type::SAFE_FOR_PARENT:
+      case fk_column_change_type::DATA_CHANGE:
         my_error(ER_FK_COLUMN_CANNOT_CHANGE, MYF(0), bad_column_name,
                  fk->name().c_str());
         return true;
-      case FK_COLUMN_RENAMED:
+      case fk_column_change_type::RENAMED:
         my_error(ER_ALTER_OPERATION_NOT_SUPPORTED_REASON, MYF(0),
                  "ALGORITHM=COPY",
                  ER_THD(thd, ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_FK_RENAME),
                  "ALGORITHM=INPLACE");
         return true;
-      case FK_COLUMN_DROPPED:
+      case fk_column_change_type::DROPPED:
         /*
           Should already have been checked in
           transfer_preexisting_foreign_keys().
         */
         assert(false);
-      default:
-        assert(0);
     }
   }
 
@@ -16306,6 +16572,173 @@ static bool simple_rename_or_index_change(
   return error != 0 || reopen_error;
 }
 
+/*
+  Temporarily remove secondary keys previously stored in
+  alter_info->delayed_key_info.
+*/
+static bool remove_secondary_keys(
+    THD *thd, HA_CREATE_INFO *create_info, TABLE *table, Alter_info *alter_info,
+    const dd::Table *table_def, dd::Table *altered_table_def,
+    std::vector<dd::Index *> *dd_disabled_sec_keys) {
+  uint i;
+  DBUG_TRACE;
+  assert(alter_info->delayed_key_count > 0);
+
+  /*
+    We need to mark all fields for read and write as being done in
+    mysql_alter_table.
+  */
+  table->use_all_columns();
+
+  /*
+    Create Alter_info for the table and fill create_list with fields
+    definitions. Note that fields not changed, so we set field==orig_field.
+  */
+  Alter_info alter_info_new(thd->mem_root);
+  Field **f_ptr, *field;
+
+  for (f_ptr = table->field; (field = *f_ptr); f_ptr++) {
+    Create_field *new_field = new (thd->mem_root) Create_field(field, field);
+    alter_info_new.create_list.push_back(new_field);
+  }
+
+  /* table->key_info cannot be passed to ha_alter_info constructor,
+     because it has 1-based fieldnr in key_parts while ha_alter_info
+     expect them to be 0-based */
+  KEY *key_buf = (KEY *)thd->alloc(sizeof(KEY) * table->s->keys);
+  for (uint key_idx = 0; key_idx < table->s->keys; key_idx++) {
+    KEY *key = table->key_info + key_idx;
+    KEY_PART_INFO *key_parts_buf = (KEY_PART_INFO *)thd->alloc(
+        sizeof(KEY_PART_INFO) * key->user_defined_key_parts);
+    for (uint key_part_idx = 0; key_part_idx < key->user_defined_key_parts;
+         key_part_idx++) {
+      key_parts_buf[key_part_idx] = key->key_part[key_part_idx];
+      key_parts_buf[key_part_idx].fieldnr--;
+    }
+    key_buf[key_idx] = *key;
+    key_buf[key_idx].key_part = key_parts_buf;
+  }
+
+  Alter_inplace_info ha_alter_info(create_info, &alter_info_new, false, key_buf,
+                                   table->s->keys, thd->work_part_info);
+
+  ha_alter_info.handler_flags = Alter_inplace_info::DROP_INDEX;
+  ha_alter_info.index_drop_count = alter_info->delayed_key_count;
+
+  /* Fill index_drop_buffer with keys to drop */
+  ha_alter_info.index_drop_buffer =
+      (KEY **)thd->alloc(sizeof(KEY *) * alter_info->delayed_key_count);
+  for (i = 0; i < alter_info->delayed_key_count; i++)
+    ha_alter_info.index_drop_buffer[i] = &(alter_info->delayed_key_info[i]);
+
+  if (table->file->check_if_supported_inplace_alter(table, &ha_alter_info) ==
+      HA_ALTER_INPLACE_NOT_SUPPORTED)
+    return true;
+
+  for (const auto index : *altered_table_def->indexes()) {
+    const char *dd_index_name = index->name().c_str();
+    for (i = 0; i < alter_info->delayed_key_count; i++) {
+      if (strcmp(alter_info->delayed_key_info[i].name, dd_index_name) == 0) {
+        dd_disabled_sec_keys->push_back(index);
+        assert(index->type() == dd::Index::IT_MULTIPLE);
+        index->set_disabled(true);
+      }
+    }
+  }
+
+  /* Clone old Table and disable indexes we want to remove
+     (they are also disabled in altered_table_def) */
+  auto td = std::unique_ptr<dd::Table>(table_def->clone());
+  for (const auto index : *td->indexes()) {
+    const char *dd_index_name = index->name().c_str();
+    for (i = 0; i < alter_info->delayed_key_count; i++) {
+      if (strcmp(alter_info->delayed_key_info[i].name, dd_index_name) == 0) {
+        index->set_disabled(true);
+      }
+    }
+  }
+
+  if (table->file->ha_prepare_inplace_alter_table(table, &ha_alter_info,
+                                                  table_def, td.get()) ||
+      table->file->ha_inplace_alter_table(table, &ha_alter_info, table_def,
+                                          td.get()) ||
+      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
+                                                 table_def, td.get())) {
+    table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, false,
+                                               table_def, td.get());
+    return true;
+  }
+
+  return false;
+}
+
+/*
+  Restore secondary keys previously removed in remove_secondary_keys.
+*/
+
+static bool restore_secondary_keys(
+    THD *thd, HA_CREATE_INFO *create_info, TABLE *table, Alter_info *alter_info,
+    dd::Table *altered_table_def,
+    std::vector<dd::Index *> *dd_disabled_sec_keys) {
+  uint i;
+  DBUG_ENTER("restore_secondary_keys");
+  assert(alter_info->delayed_key_count > 0);
+
+  THD_STAGE_INFO(thd, stage_restoring_secondary_keys);
+
+  /*
+    Create Alter_info for the table and fill create_list with fields
+    definitions. Not that fields not changed, so we set field==ogrig_field.
+  */
+  Alter_info alter_info_new(thd->mem_root);
+  Field **f_ptr, *field;
+
+  for (f_ptr = table->field; (field = *f_ptr); f_ptr++) {
+    Create_field *new_field = new (thd->mem_root) Create_field(field, field);
+    alter_info_new.create_list.push_back(new_field);
+  }
+
+  Alter_inplace_info ha_alter_info(create_info, &alter_info_new, false,
+                                   alter_info->delayed_key_info, table->s->keys,
+                                   thd->work_part_info);
+
+  ha_alter_info.handler_flags = Alter_inplace_info::ADD_INDEX;
+  ha_alter_info.index_add_count = alter_info->delayed_key_count;
+
+  ha_alter_info.index_add_buffer =
+      (uint *)thd->alloc(sizeof(uint) * alter_info->delayed_key_count);
+
+  /* Clone current version of table def */
+  auto td = std::unique_ptr<dd::Table>(altered_table_def->clone());
+
+  for (const auto index : *dd_disabled_sec_keys) {
+    index->set_disabled(false);
+  }
+
+  /* Fill index_add_buffer with key indexes from key_info_buffer */
+  for (i = 0; i < alter_info->delayed_key_count; i++)
+    ha_alter_info.index_add_buffer[i] = i;
+
+  if (table->file->check_if_supported_inplace_alter(table, &ha_alter_info) ==
+      HA_ALTER_INPLACE_NOT_SUPPORTED)
+    DBUG_RETURN(-1);
+
+  /* Use previously clonned altered_table_def (the one with disabled keys)
+     and enable keys */
+
+  if (table->file->ha_prepare_inplace_alter_table(
+          table, &ha_alter_info, td.get(), altered_table_def) ||
+      table->file->ha_inplace_alter_table(table, &ha_alter_info, td.get(),
+                                          altered_table_def) ||
+      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
+                                                 td.get(), altered_table_def)) {
+    table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, false,
+                                               td.get(), altered_table_def);
+    DBUG_RETURN(true);
+  }
+  DBUG_RETURN(false);
+}
+
 /**
   Check if we are changing the SRID specification on a geometry column that
   has a spatial index. If that is the case, reject the change since allowing
@@ -16509,6 +16942,31 @@ static bool handle_rename_functional_index(THD *thd, Alter_info *alter_info,
   return false;
 }
 
+class Diagnostics_area_man {
+  THD *m_thd;
+  Diagnostics_area *da_prev;
+  Diagnostics_area da;
+
+ public:
+  Diagnostics_area_man(THD *thd)
+      : m_thd(thd), da_prev(thd->get_stmt_da()), da(false) {
+    // Don't copy existing conditions from the old DA so we don't get them
+    // twice when we call copy_non_errors_from_da below.
+    m_thd->push_diagnostics_area(&da, false);
+  }
+
+  ~Diagnostics_area_man() {
+    m_thd->pop_diagnostics_area();
+
+    if (da.is_error()) {
+      da_prev->set_error_status(da.mysql_errno(), da.message_text(),
+                                da.returned_sqlstate());
+      da_prev->push_warning(m_thd, da.mysql_errno(), da.returned_sqlstate(),
+                            Sql_condition::SL_ERROR, da.message_text());
+    }
+  }
+};
+
 /**
   Alter table
 
@@ -16549,6 +17007,16 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                        Alter_info *alter_info) {
   DBUG_TRACE;
 
+  /*
+   This change is necessary for MyRocks at
+   https://github.com/facebook/mysql-5.6/commit/1046d4f7074
+
+   Populate the actual user table name which is getting altered.
+   This flag will be used to put some additional constraints on user tables.*/
+  if (!dd::get_dictionary()->is_system_table_name(table_list->db,
+                                                  table_list->table_name)) {
+    create_info->actual_user_table_name = table_list->table_name;
+  }
   /*
     Check if we attempt to alter mysql.slow_log or
     mysql.general_log table and return an error if
@@ -16925,7 +17393,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       create_info->db_type = table->s->db_type();
   }
 
-  if (check_engine(alter_ctx.new_db, alter_ctx.new_name, create_info))
+  if (check_engine(thd, alter_ctx.new_db, alter_ctx.new_name, create_info,
+                   alter_info))
     return true;
 
   /*
@@ -17166,6 +17635,14 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       return true;
     }
   }
+  if (new_part_info != nullptr && alter_info->has_compressed_columns() &&
+      !ha_check_storage_engine_flag(new_part_info->default_engine_type,
+                                    HTON_SUPPORTS_COMPRESSED_COLUMNS)) {
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+             ha_resolve_storage_engine_name(new_part_info->default_engine_type),
+             "COMPRESSED COLUMNS");
+    return true;
+  }
 
   if ((alter_info->flags & Alter_info::ALTER_DROP_PARTITION) != 0U) {
     auto mdl_type = mdl_ticket->get_type();
@@ -17181,10 +17658,13 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                   &table_def))
       return true;
 
-    table_list->partition_names = &alter_info->partition_names;
-    if (secondary_engine_unload_table(
-            thd, table_list->db, table_list->table_name, *table_def, false))
-      return true;
+    const auto old_partition_names = std::exchange(
+        table_list->partition_names, &alter_info->partition_names);
+    auto unload_res = secondary_engine_unload_table(
+        thd, table_list->db, table_list->table_name, *table_def, false);
+    table_list->partition_names = old_partition_names;
+
+    if (unload_res) return true;
   }
 
   /*
@@ -17235,6 +17715,33 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   // Prepare check constraints for alter table operation.
   if (prepare_check_constraints_for_alter(thd, table, alter_info, &alter_ctx))
     return true;
+
+  if ((alter_info->flags & Alter_info::ALTER_ADD_COLUMN) != 0 &&
+      alter_info->has_compressed_columns()) {
+    switch (alter_info->requested_algorithm) {
+      case Alter_info::ALTER_TABLE_ALGORITHM_DEFAULT:
+
+        DBUG_LOG("zip_dict",
+                 "ALTER query "
+                     << thd->query().str
+                     << " is using INPLACE for add column"
+                        " because one of the ADD COLUMN is compressed column");
+
+        alter_info->requested_algorithm =
+            Alter_info::ALTER_TABLE_ALGORITHM_INPLACE;
+        break;
+      case Alter_info::ALTER_TABLE_ALGORITHM_INSTANT:
+        // Not possible, error out.
+        my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), "ALGORITHM=INSTANT",
+                 "ALGORITHM=INPLACE/COPY");
+        return true;
+      case Alter_info::ALTER_TABLE_ALGORITHM_COPY:
+      case Alter_info::ALTER_TABLE_ALGORITHM_INPLACE:
+        break;
+      default:
+        return 0;
+    }
+  }
 
   if (mysql_prepare_alter_table(thd, old_table_def, table, create_info,
                                 alter_info, &alter_ctx)) {
@@ -17687,8 +18194,19 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
               alter_ctx.tmp_name, true, false, *table_def)))
       goto err_new_table_cleanup;
 
+    DEBUG_SYNC(thd, "after_open_altered_table");
+
     /* Set markers for fields in TABLE object for altered table. */
     update_altered_table(ha_alter_info, altered_table);
+
+    /*
+    Updating field definitions in 'altered_table' with zip_dict_name values
+    from 'ha_alter_info.alter_info->create_list'
+    */
+    if (ha_alter_info.alter_info != 0 && altered_table != 0) {
+      altered_table->update_compressed_columns_info(
+          ha_alter_info.alter_info->create_list);
+    }
 
     /*
       Mark all columns in 'altered_table' as used to allow usage
@@ -17820,6 +18338,21 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                     fk_key_count, &fk_invalidator)) {
         return true;
       }
+
+      const dd::Table *new_table_def = nullptr;
+      if (thd->dd_client()->acquire(alter_ctx.new_db, alter_ctx.new_name,
+                                    &new_table_def)) {
+        DBUG_LOG("zip_dict",
+                 "Acquiring dictionary table object failed "
+                 " for query "
+                     << thd->query().str << " table_db: " << alter_ctx.new_db
+                     << " table_name: " << alter_ctx.new_name);
+        return true;
+      }
+      /* New table is successfully created, check if any columns have
+      compression dictionary and add entry for them in
+      mysql.compression_dictionary_cols table */
+      if (compression_dict::cols_table_insert(thd, *new_table_def)) return true;
 
       goto end_inplace;
     } else {
@@ -17964,8 +18497,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
 
   {
     if (ha_create_table(thd, alter_ctx.get_tmp_path(), alter_ctx.new_db,
-                        alter_ctx.tmp_name, create_info, false, true,
-                        table_def))
+                        alter_ctx.tmp_name, create_info,
+                        &alter_info->create_list, false, true, table_def))
       goto err_new_table_cleanup;
 
     /* Mark that we have created table in storage engine. */
@@ -18015,6 +18548,16 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     MERGE tables have HA_NO_COPY_ON_ALTER set.
   */
   if (!(new_table->file->ha_table_flags() & HA_NO_COPY_ON_ALTER)) {
+    /*
+      Check if we can temporarily remove secondary indexes from the table
+      before copying the data and recreate them later to utilize InnoDB fast
+      index creation.
+      TODO: is there a better way to check for InnoDB?
+    */
+    const bool optimize_keys =
+        (alter_info->delayed_key_count > 0) &&
+        !my_strcasecmp(system_charset_info, new_table->file->table_type(),
+                       "InnoDB");
     new_table->next_number_field = new_table->found_next_number_field;
     THD_STAGE_INFO(thd, stage_copy_to_tmp_table);
     DBUG_EXECUTE_IF("abort_copy_table", {
@@ -18022,10 +18565,42 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
     });
 
-    if (copy_data_between_tables(thd, thd->m_stage_progress_psi, table,
-                                 new_table, alter_info->create_list, &copied,
-                                 &deleted, alter_info->keys_onoff, &alter_ctx))
+    /* List of dd::Indexes (secondary non-unique) in table_def that are marked
+    as hidden. These indexes are temporarily disabled */
+    std::vector<dd::Index *> dd_disabled_sec_keys;
+    bool err_remove_keys = false;
+
+    if (optimize_keys) new_table->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
+    if (optimize_keys) {
+      err_remove_keys = remove_secondary_keys(
+          thd, create_info, new_table, alter_info,
+          is_tmp_table ? table->s->tmp_table_def : old_table_def, table_def,
+          &dd_disabled_sec_keys);
+    }
+
+    bool err_copy = copy_data_between_tables(
+        thd, thd->m_stage_progress_psi, table, new_table,
+        alter_info->create_list, &copied, &deleted, alter_info->keys_onoff,
+        &alter_ctx, optimize_keys);
+
+    bool err_restore_keys = false;
+    if (optimize_keys && !err_remove_keys) {
+      // Use a clean diagnostic area so restore_secondary_keys can be executed
+      // whatever the previous results
+      auto da_man = thd->is_error()
+                        ? std::make_optional<Diagnostics_area_man>(thd)
+                        : std::nullopt;
+
+      err_restore_keys =
+          restore_secondary_keys(thd, create_info, new_table, alter_info,
+                                 table_def, &dd_disabled_sec_keys);
+    }
+
+    if (optimize_keys) new_table->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+
+    if (err_copy || err_restore_keys) {
       goto err_new_table_cleanup;
+    }
 
     DEBUG_SYNC(thd, "alter_after_copy_table");
   } else {
@@ -18279,6 +18854,22 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_with_mdl;
 
     if (thd->dd_client()->store(non_dd_table_def.get())) goto err_with_mdl;
+
+    const dd::Table *stored_table = nullptr;
+
+    if (thd->dd_client()->acquire(alter_ctx.new_db, alter_ctx.tmp_name,
+                                  &stored_table)) {
+      DBUG_LOG("zip_dict",
+               "Acquiring dictionary table object failed "
+               " for query "
+                   << thd->query().str << " table_db: " << alter_ctx.new_db
+                   << " table_name: " << alter_ctx.tmp_name);
+
+      goto err_with_mdl;
+    }
+
+    if (compression_dict::cols_table_insert(thd, *stored_table))
+      goto err_with_mdl;
 
     // Safety, in-memory dd::Table is no longer totally correct.
     non_dd_table_def.reset();
@@ -18707,6 +19298,7 @@ bool mysql_trans_prepare_alter_copy_data(THD *thd) {
 bool mysql_trans_commit_alter_copy_data(THD *thd) {
   bool error = false;
   DBUG_TRACE;
+
   /*
     Ensure that ha_commit_trans() which is implicitly called by
     ha_enable_transaction() doesn't update GTID and slave info states.
@@ -18730,7 +19322,8 @@ bool mysql_trans_commit_alter_copy_data(THD *thd) {
 static int copy_data_between_tables(
     THD *thd, PSI_stage_progress *psi [[maybe_unused]], TABLE *from, TABLE *to,
     List<Create_field> &create, ha_rows *copied, ha_rows *deleted,
-    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx) {
+    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx,
+    bool expand_fast_index_creation) {
   DBUG_TRACE;
 
   int error;
@@ -18903,8 +19496,9 @@ static int copy_data_between_tables(
 
   set_column_static_defaults(to, create);
 
-  to->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
-
+  if (!expand_fast_index_creation) {
+    to->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
+  }
   while (!(error = iterator->Read())) {
     if (thd->killed) {
       thd->send_kill_message();
@@ -18979,7 +19573,7 @@ static int copy_data_between_tables(
         /* Not a duplicate key error. */
         to->file->print_error(error, MYF(0));
         break;
-      } else {
+      } else if (!to->file->continue_partition_copying_on_error(error)) {
         /* Report duplicate key error. */
         const uint key_nr = to->file->get_dup_key(error);
         if ((int)key_nr >= 0) {
@@ -19004,16 +19598,34 @@ static int copy_data_between_tables(
   iterator.reset();
   free_io_cache(from);
 
+  DEBUG_SYNC(thd, "after_copy_data_between_tables");
+
   if (to->file->ha_end_bulk_insert() && error <= 0) {
     to->file->print_error(my_errno(), MYF(0));
     error = 1;
   }
 
-  to->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+  if (!expand_fast_index_creation) {
+    to->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+  }
 
   DBUG_EXECUTE_IF("crash_copy_before_commit", DBUG_SUICIDE(););
+
+  /* This code commits the entire transaction (both trans_commit_stmt()
+  and trans_commit_implicit()) for engines that don't support atomic DDL
+  and for all temporary tables(independent of engine type)
+
+  When expanded fast index creation is enabled, after copy data stage,
+  there are inplace alters to add removed secondary indexes. Thus we
+  need to commit the transaction again. A full commit here would make
+  all future trans_commit_stmt() and trans_commit_implicit() to be dummy
+  and we would leave transaction open.
+
+  With 8.0, this code looks irrevelant for temporary tables but we play
+  safe and disable intermediate commit only for temporary tables when
+  expanded fast index creation is enabled */
   if ((!(to->file->ht->flags & HTON_SUPPORTS_ATOMIC_DDL) ||
-       from->s->tmp_table) &&
+       (from->s->tmp_table && !expand_fast_index_creation)) &&
       mysql_trans_commit_alter_copy_data(thd))
     error = 1;
 
@@ -19243,10 +19855,42 @@ err:
   @retval true  Engine not available/supported, error has been reported.
   @retval false Engine available/supported.
 */
-static bool check_engine(const char *db_name, const char *table_name,
-                         HA_CREATE_INFO *create_info) {
+static bool check_engine(THD *thd, const char *db_name, const char *table_name,
+                         HA_CREATE_INFO *create_info,
+                         const Alter_info *alter_info) {
   DBUG_TRACE;
   handlerton **new_engine = &create_info->db_type;
+  handlerton *req_engine = *new_engine;
+
+  if (enforce_storage_engine && !opt_initialize && !opt_noacl) {
+    /*
+      Storage engine enforcement must be forbidden:
+      1. for "OPTIMIZE TABLE" statements.
+      2. for "ALTER TABLE" statements without explicit "... ENGINE=xxx" part
+      3. Transactional data dictionary (DD) tables
+    */
+    bool no_substitution = (!is_engine_substitution_allowed(thd));
+
+    bool enforcement_forbidden =
+        ((thd->lex->sql_command == SQLCOM_ALTER_TABLE) &&
+         (create_info->used_fields & HA_CREATE_USED_ENGINE) == 0) ||
+        (thd->lex->sql_command == SQLCOM_OPTIMIZE) ||
+        dd::get_dictionary()->is_dd_table_name(db_name, table_name)
+        // Allow creation of the new redo log table
+        || (strcmp(db_name, "performance_schema") == 0);
+
+    if (!enforcement_forbidden) {
+      handlerton *enf_engine = ha_enforce_handlerton(thd);
+      if (enf_engine) {
+        if (enf_engine != *new_engine && no_substitution) {
+          const char *engine_name = ha_resolve_storage_engine_name(req_engine);
+          my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name, engine_name);
+          return true;
+        }
+        *new_engine = enf_engine;
+      }
+    }
+  }
 
   /*
     Check, if the given table name is system table, and if the storage engine
@@ -19257,6 +19901,24 @@ static bool check_engine(const char *db_name, const char *table_name,
     my_error(ER_UNSUPPORTED_ENGINE, MYF(0),
              ha_resolve_storage_engine_name(*new_engine), db_name, table_name);
     *new_engine = nullptr;
+    return true;
+  }
+  /*
+    Check if the given table has compressed columns, and if the storage engine
+    does support it.
+  */
+  partition_info *part_info = thd->work_part_info;
+  bool check_compressed_columns =
+      part_info == 0 &&
+      !(create_info->db_type->partition_flags &&
+        (create_info->db_type->partition_flags() & HA_USE_AUTO_PARTITION));
+
+  if (check_compressed_columns && alter_info->has_compressed_columns() &&
+      !ha_check_storage_engine_flag(*new_engine,
+                                    HTON_SUPPORTS_COMPRESSED_COLUMNS)) {
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+             ha_resolve_storage_engine_name(*new_engine), "COMPRESSED COLUMNS");
+    *new_engine = 0;
     return true;
   }
 

@@ -1,0 +1,115 @@
+--source include/have_rocksdb.inc
+
+#
+# VARCHAR column types
+#
+
+--echo #
+--echo # A basic test whether endspace-aware variable length encoding 
+--echo # works when in PK
+--echo #
+create table t1 ( pk varchar(10) primary key, col1 int not null) engine=rocksdb;
+insert into t1 values ('a', 1);
+select * from t1;
+drop table t1;
+
+--let $extra_col_opts_ddl_err = 0
+--let $extra_col_opts_dml_err = 0
+--source suite/rocksdb/include/type_varchar.inc
+
+
+--echo #
+--echo # Endspace-comparison tests: 
+--echo #
+
+--let $character_set_collate=CHARACTER SET latin1 COLLATE latin1_bin
+--source suite/rocksdb/include/type_varchar_endspace.inc
+
+--let $character_set_collate=CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
+--source suite/rocksdb/include/type_varchar_endspace.inc
+
+--let $character_set_collate=CHARACTER SET ucs2 COLLATE ucs2_bin
+--source suite/rocksdb/include/type_varchar_endspace.inc
+
+--let $character_set_collate=CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+--source suite/rocksdb/include/type_varchar_endspace.inc
+
+--let $character_set_collate=CHARACTER SET utf16 COLLATE utf16_bin
+--source suite/rocksdb/include/type_varchar_endspace.inc
+
+create table t1 (
+  pk int primary key,
+  col1 varchar(10) collate utf8mb4_bin not null,
+  col2 varchar(20),
+  key(col1)
+) engine=rocksdb;
+
+insert into t1 values (1, 'ab','ab');
+insert into t1 values (2, 'ab\0','ab0');
+
+select pk, hex(col1), col2 from t1 force index(col1) order by col1;
+select pk, hex(col1), col2 from t1 ignore index(col1) order by col1;
+drop table t1;
+
+# Issue #306 - Do not store trailing spaces for prefixed keys.
+create table t (id int primary key, email varchar(100), KEY email_i (email(30))) engine=rocksdb;
+insert into t values (1, 'abcabcabcabcabcabcabcabcabcabcabc  ');
+--replace_column 10 # 11 #
+explain select 'email_i' as index_name, count(*) AS count from t force index(email_i);
+select 'email_i' as index_name, count(*) AS count from t force index(email_i);
+drop table t;
+
+set @save_rocksdb_checksums_pct = @@global.rocksdb_checksums_pct;
+set @save_rocksdb_verify_row_debug_checksums = @@session.rocksdb_verify_row_debug_checksums;
+set global rocksdb_checksums_pct = 100;
+set session rocksdb_verify_row_debug_checksums = on;
+create table t (id int primary key, email varchar(100), KEY email_i (email(30))) engine=rocksdb;
+insert into t values (1, 'a');
+--replace_column 10 # 11 #
+explain select 'email_i' as index_name, count(*) AS count from t force index(email_i);
+select 'email_i' as index_name, count(*) AS count from t force index(email_i);
+drop table t;
+set global rocksdb_checksums_pct = @save_rocksdb_checksums_pct;
+set session rocksdb_verify_row_debug_checksums = @save_rocksdb_verify_row_debug_checksums;
+
+# Issue #784 - Skip trailing space bytes for non-unpackable fields
+
+create table t (h varchar(31) character set utf8mb3 collate utf8mb3_bin not null, i varchar(19) collate latin1_bin not null, primary key(i), key(h)) engine=rocksdb;
+insert into t(i,h) values('a','b');
+check table t;
+alter table t modify h varchar(31) character set cp1257 collate cp1257_bin not null;
+check table t;
+drop table t;
+
+--echo # PS-4971 : Setting utf8mb4 as a key in MyRocks table could lead to a server crash
+# This sequence would overwrite memory, eventually assert at the end of
+# Rdb_key_def::pack_record and, if successful, would leave a badly malformed and
+# stored secondary key entry.
+create table t1 (
+  str varchar(255) character set utf8mb4,
+  key str (str(2))) default character set utf8mb4 engine=rocksdb;
+insert INTO t1 values("1111111111111111111111111111111111111111111111111111");
+drop table t1;
+
+# With a partial fix, this sequence would find the row in the secondary key but
+# would fail to unpack the t_vers value from the secondary key with a data
+# coruption error.
+create table t1(
+  t_vers varchar(4) not null,
+  key ix_5 (t_vers)
+) charset latin1 engine=rocksdb;
+insert into t1 values ('7.6 ');
+select t_vers from t1 where t_vers = '7.6';
+drop table t1;
+
+--echo # PS-7722: Multiple-Column Index using Column Prefix Key Parts fails with Index Condition Pushdown in MyRocks
+CREATE TABLE t1 (
+  f1 varchar(255) CHARSET utf8mb4 COLLATE utf8mb4_general_ci,
+  f2 date,
+  KEY idx (f2, f1(200))
+) ENGINE=ROCKSDB;
+INSERT INTO t1 VALUES ('63bab075', '2021-05-20');
+--let $assert_text = query should return an empty set
+--let $assert_cond = [SELECT COUNT(*) FROM t1 WHERE f1 = \'63bab075\' AND f2 < \'2021-05-19\'] = 0
+--source include/assert.inc
+DROP TABLE t1;

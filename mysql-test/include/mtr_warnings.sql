@@ -284,6 +284,11 @@ INSERT INTO global_suppressions VALUES
  ("Insecure configuration for --secure-file-priv:*"),
 
  /*
+   Warnings related to --secure-log-path
+ */
+ ("Insecure configuration for --secure-log-path:*"),
+
+ /*
    Bug#26585560, warning related to --pid-file
  */
  ("Insecure configuration for --pid-file:*"),
@@ -308,7 +313,7 @@ INSERT INTO global_suppressions VALUES
  ("\\[GCS\\] Error on opening a connection to .*"),
  ("\\[GCS\\] Error pushing message into group communication engine."),
  ("\\[GCS\\] Message cannot be sent because the member does not belong to a group."),
- ("\\[GCS\\] Automatically adding IPv4 localhost address to the allowlist. It is mandatory that it is added."),
+ ("\\[GCS\\] Automatically adding IPv. localhost address to the allowlist. It is mandatory that it is added."),
  ("\\[GCS\\] Unable to bind to INADDR_ANY:.*"),
  ("\\[GCS\\] Unable to announce tcp port .*. Port already in use\\?"),
  ("\\[GCS\\] Error joining the group while waiting for the network layer to become ready."),
