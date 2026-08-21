@@ -157,7 +157,38 @@ static bool handle_bootstrap_impl(handle_bootstrap_args *args) {
     const Disable_binlog_guard disable_binlog(thd);
     const Disable_sql_log_bin_guard disable_sql_log_bin(thd);
 
-    std::ignore = dd::execute_query(thd, "SET @is_mysql_encrypted = 'N'");
+    // Bug#39114059 hard-coded this to 'N' here, on the premise that "during
+    // initialize no check is performed as the mysql tablespace is known not to
+    // be encrypted". That premise does not hold for
+    // --initialize --default_table_encryption=ON with a keyring configured: the
+    // mysql shared tablespace is then created encrypted, and
+    // mysql_system_tables.sql goes on to create the TABLESPACE=mysql system
+    // tables with ENCRYPTION='N' inside it. InnoDB rejects the mismatch with
+    // ER_INVALID_ENCRYPTION_REQUEST and --initialize aborts, leaving an unusable
+    // datadir. So read the actual state rather than assuming it.
+    //
+    // This is the query that same commit already uses for the upgrade path in
+    // dd::upgrade::fix_mysql_tables(), and deliberately so: the point of
+    // Bug#39114059 was that I_S.INNODB_TABLESPACES does not scale with the
+    // number of tablespaces, and mysql.tablespaces has an index on name, so the
+    // performance fix is preserved. The magic number 8192 ==
+    // FSP_FLAGS_MASK_ENCRYPTION, whose defining header cannot be included here.
+    {
+      // Reading a DD table requires this, as it does on the upgrade path.
+      auto restore_dd_access = create_scope_guard(
+          [thd, saved = thd->parsing_system_view] {
+            thd->parsing_system_view = saved;
+          });
+      thd->parsing_system_view = true;
+
+      std::ignore = dd::execute_query(
+          thd,
+          "SET @is_mysql_encrypted = "
+          "(SELECT (IF((GET_DD_TABLESPACE_PRIVATE_DATA(se_private_data, "
+          "'flags') & 8192) <> 0, 'Y', 'N')) "
+          "FROM mysql.tablespaces WHERE name = 'mysql')");
+    }
+
     Compiled_in_command_iterator comp_iter;
     rc = process_iterator(thd, &comp_iter, true);
 
