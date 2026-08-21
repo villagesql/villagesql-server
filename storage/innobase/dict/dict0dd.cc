@@ -1977,6 +1977,13 @@ void dd_visit_keys_with_too_long_parts(
     if (!(key.flags & (HA_SPATIAL | HA_FULLTEXT))) {
       for (unsigned i = 0; i < key.user_defined_key_parts; i++) {
         const KEY_PART_INFO *key_part = &key.key_part[i];
+        // VillageSQL: an externally-stored column contributes only a small
+        // stable reference to the index key, not its value, so the
+        // column-length limit does not apply to it.
+        if (key_part->field != nullptr &&
+            key_part->field->has_external_storage()) {
+          continue;
+        }
         if (max_part_len < key_part->length) {
           visitor(key);
           continue;
