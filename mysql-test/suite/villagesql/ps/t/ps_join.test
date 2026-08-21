@@ -88,6 +88,10 @@ DEALLOCATE PREPARE stmt6;
 
 PREPARE stmt7 FROM 'SELECT t1.id, t1.val, t2.val, t3.val FROM t1 JOIN t2 ON t1.id = t2.t1_id JOIN t3 ON t1.val = t3.val WHERE t1.id = ?';
 SET @id = 1;
+# Two t2 rows match t1_id = 1 and the query has no ORDER BY, so row order is
+# plan-dependent. Sort in the harness rather than adding ORDER BY, which would
+# change both the plan under test and the recorded PREPARE text.
+--sorted_result
 EXECUTE stmt7 USING @id;
 DEALLOCATE PREPARE stmt7;
 

@@ -1,9 +1,9 @@
 SET SESSION debug='+d,skip_dd_table_access_check';
 call mtr.add_suppression("Server upgrade is required, but skipped");
-UPDATE villagesql.properties SET value = 'mysql-8.4_0.0.5' WHERE name = 'version';
+UPDATE villagesql.properties SET value = 'percona-8.4_0.0.5' WHERE name = 'version';
 SELECT value FROM villagesql.properties WHERE name = 'version';
 value
-mysql-8.4_0.0.5
+percona-8.4_0.0.5
 # restart: --upgrade=MINIMAL
 SET SESSION debug='+d,skip_dd_table_access_check';
 villagesql_upgrades_ran
