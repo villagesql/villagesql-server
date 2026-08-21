@@ -157,7 +157,36 @@ static bool handle_bootstrap_impl(handle_bootstrap_args *args) {
     const Disable_binlog_guard disable_binlog(thd);
     const Disable_sql_log_bin_guard disable_sql_log_bin(thd);
 
-    std::ignore = dd::execute_query(thd, "SET @is_mysql_encrypted = 'N'");
+    // Upstream (Bug#39114059) hard-coded this to 'N' here, on the premise that
+    // "during initialize the mysql tablespace is known not to be encrypted".
+    // That premise does not hold for --initialize --default_table_encryption=ON
+    // with a keyring configured: the mysql shared tablespace is created
+    // encrypted, and creating the TABLESPACE=mysql system tables with
+    // ENCRYPTION='N' inside it fails with ER_INVALID_ENCRYPTION_REQUEST, which
+    // aborts --initialize. So read the actual state instead of assuming it.
+    //
+    // This is the same query upstream uses for the upgrade path in
+    // dd::upgrade::fix_mysql_tables(), and deliberately so: it keeps that
+    // commit's point, which was to stop using I_S.INNODB_TABLESPACES because it
+    // does not scale with the number of tablespaces. mysql.tablespaces has an
+    // index on name. The magic number 8192 == FSP_FLAGS_MASK_ENCRYPTION, whose
+    // defining header cannot be included here.
+    {
+      // Temporarily grant access to reading dd tables
+      auto revoke_dd_access_guard =
+          create_scope_guard([&, save = thd->parsing_system_view]() {
+            thd->parsing_system_view = save;
+          });
+      thd->parsing_system_view = true;
+
+      std::ignore = dd::execute_query(
+          thd,
+          "SET @is_mysql_encrypted = "
+          "(SELECT (IF((GET_DD_TABLESPACE_PRIVATE_DATA(se_private_data, "
+          "'flags') & 8192) <> 0, 'Y', 'N')) "
+          "FROM mysql.tablespaces WHERE name = 'mysql')");
+    }
+
     Compiled_in_command_iterator comp_iter;
     rc = process_iterator(thd, &comp_iter, true);
 
