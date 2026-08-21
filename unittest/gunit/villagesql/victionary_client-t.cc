@@ -460,52 +460,6 @@ TEST_F(VictionaryClientTest, PrefixQueriesBasic) {
   client_->clear_all_tables();
 }
 
-// Test normalization functions with all lower_case_table_names settings
-TEST_F(VictionaryClientTest, NormalizationFunctionsAllSettings) {
-  int original_setting = lower_case_table_names;
-
-  // Column names should ALWAYS be case-insensitive regardless of setting
-  for (int setting : {0, 1, 2}) {
-    lower_case_table_names = setting;
-    EXPECT_EQ(normalize_column_name("MyColumn"), "mycolumn");
-    EXPECT_EQ(normalize_column_name("MYCOLUMN"), "mycolumn");
-    EXPECT_EQ(normalize_column_name("mycolumn"), "mycolumn");
-  }
-
-  // Extension names should ALWAYS be case-insensitive regardless of setting
-  for (int setting : {0, 1, 2}) {
-    lower_case_table_names = setting;
-    EXPECT_EQ(normalize_extension_name("MyExt"), "myext");
-    EXPECT_EQ(normalize_extension_name("MYEXT"), "myext");
-    EXPECT_EQ(normalize_extension_name("myext"), "myext");
-  }
-
-  // Type names should ALWAYS be case-insensitive regardless of setting
-  for (int setting : {0, 1, 2}) {
-    lower_case_table_names = setting;
-    EXPECT_EQ(normalize_type_name("COMPLEX"), "complex");
-    EXPECT_EQ(normalize_type_name("Complex"), "complex");
-    EXPECT_EQ(normalize_type_name("complex"), "complex");
-  }
-
-  // Setting 0: Case-sensitive (preserve case)
-  test_set_lower_case_table_names(0);
-  EXPECT_EQ(normalize_database_name("MyDB"), "MyDB");     // Preserved
-  EXPECT_EQ(normalize_table_name("MyTable"), "MyTable");  // Preserved
-
-  // Setting 1: Case-insensitive (convert to lowercase)
-  test_set_lower_case_table_names(1);
-  EXPECT_EQ(normalize_database_name("MyDB"), "mydb");     // Lowercased
-  EXPECT_EQ(normalize_table_name("MyTable"), "mytable");  // Lowercased
-
-  // Setting 2: Case-insensitive (convert to lowercase)
-  test_set_lower_case_table_names(2);
-  EXPECT_EQ(normalize_database_name("MyDB"), "mydb");     // Lowercased
-  EXPECT_EQ(normalize_table_name("MyTable"), "mytable");  // Lowercased
-
-  test_set_lower_case_table_names(original_setting);
-}
-
 // ===== Phase 1: Operation Tracking Tests =====
 
 // Test basic DELETE operation

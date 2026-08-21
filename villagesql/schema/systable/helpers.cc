@@ -26,7 +26,6 @@
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/statement/ed_connection.h"
-#include "sql/strfunc.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql {
@@ -155,55 +154,6 @@ bool execute_and_extract_single_value(THD *thd, const char *query,
   // Copy the string while the Ed_connection is still alive
   value->assign(result->str, result->length);
   return false;  // Success
-}
-
-// ===== Identifier normalization implementations =====
-
-const CHARSET_INFO *get_identifier_charset() {
-  // Use the same logic as MySQL DD's fs_name_collation()
-  if (::lower_case_table_names == 0) {
-    return &my_charset_utf8mb4_bin;  // Case-sensitive
-  }
-  return &my_charset_utf8mb4_0900_ai_ci;  // Case-insensitive
-}
-
-std::string normalize_database_name(const std::string &name) {
-  if (::lower_case_table_names == 0) {
-    return name;  // Case-sensitive, store as-is
-  }
-  // Case-insensitive: normalize to lowercase
-  return casedn(get_identifier_charset(), name);
-}
-
-std::string normalize_table_name(const std::string &name) {
-  if (::lower_case_table_names == 0) {
-    return name;  // Case-sensitive, store as-is
-  }
-  // Case-insensitive: normalize to lowercase
-  return casedn(get_identifier_charset(), name);
-}
-
-std::string normalize_column_name(const std::string &name) {
-  // Column names are always case-insensitive in MySQL
-  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
-}
-
-std::string normalize_extension_name(const std::string &name) {
-  // Extension names are in system character set.
-  // TODO(villagesql-beta): Check and replace all other hard coded
-  // my_charset_utf8mb4_0900_ai_ci in this file.
-  return casedn(system_charset_info, name);
-}
-
-std::string normalize_type_name(const std::string &name) {
-  // Type names should be case-insensitive (like SQL type names)
-  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
-}
-
-std::string normalize_index_name(const std::string &name) {
-  // Index names are always case-insensitive in MySQL, regardless of
-  // lower_case_table_names (which only governs table/database identifiers).
-  return casedn(&my_charset_utf8mb4_0900_ai_ci, name);
 }
 
 // ===== Test utilities =====
