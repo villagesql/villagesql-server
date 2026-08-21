@@ -319,6 +319,17 @@ IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
   ENDIF()
 ENDIF()
 
+# GCC 13 reports a false-positive -Wmaybe-uninitialized from lto1 for
+# libs/mysql/sets/throwing/map_boundary_storage.h, inlined into these tests via
+# mysql/containers/map_or_set_assign.h. That header suppresses the same warning
+# itself, but only under __GNUC__ <= 12, on the assumption that gcc 12.2 had
+# fixed the compiler bug; LTO on 13 reopens it. The diagnostic is emitted at
+# link time, not compile time, so the downgrade has to be a link flag -- see
+# sql/CMakeLists.txt, which downgrades other LTO-only diagnostics the same way.
+IF(MY_COMPILER_IS_GNU AND (WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO))
+  STRING_APPEND(CMAKE_EXE_LINKER_FLAGS " -Wno-error=maybe-uninitialized")
+ENDIF()
+
 IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
   ADD_COMPILE_FLAGS(regexp_engine-t.cc COMPILE_FLAGS "-Wno-restrict")
 ENDIF()
