@@ -1,6 +1,6 @@
 # VillageSQL 0.0.6
 
-Draft release notes through commit `baf7446683d`: upgrades: block cross-codebase upgrades (#1036).
+Draft release notes through commit `c05a40cb377`: Schema update - Rerecord mysql tests (#1031).
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
@@ -44,7 +44,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 
 ### Schema & Upgrades
 
-- **VillageSQL system tables moved to `utf8mb4_bin`** — All six VillageSQL system tables change from `utf8mb4_0900_ai_ci` to `utf8mb4_bin`, so identifiers that differ only in case or accents stay distinct. An in-place upgrade converts the tables and bumps the stored schema version to 0.0.6, startup validation catches a table left on the wrong collation, the `INFORMATION_SCHEMA.COLUMNS` view join casefolds explicitly, and the victionary checks for duplicate rows when it reloads at startup. (`41d6f86b943`, #987)
+- **VillageSQL system tables moved to `utf8mb4_bin`** — All six VillageSQL system tables change from `utf8mb4_0900_ai_ci` to `utf8mb4_bin`, so identifiers that differ only in case or accents stay distinct. An in-place upgrade converts the tables and bumps the stored schema version to 0.0.6, startup validation catches a table left on the wrong collation, the `INFORMATION_SCHEMA.COLUMNS` view join casefolds explicitly, and the victionary checks for duplicate rows when it reloads at startup. A follow-up aligns the affected `INFORMATION_SCHEMA` view collations with upstream: `DATA_TYPE` and `COLUMN_TYPE` in `INFORMATION_SCHEMA.COLUMNS` compare case-sensitively again (`utf8mb4_bin`, as upstream), while the new `EXTENSION_NAME` and `EXTENSION_VERSION` columns in `INFORMATION_SCHEMA.EXTENSIONS` stay case-insensitive, matching how `INSTALL EXTENSION` treats names. (`41d6f86b943`, #987; `c05a40cb377`, #1031)
 - **Upgrades now run under `--upgrade=MINIMAL`** — The VillageSQL upgrade was skipped whenever the server started with `--upgrade=MINIMAL`, which left the server running against an older schema than it was built for and could block startup. It now runs in that mode too. (`a2a952155b4`, #1004)
 - **Cross-codebase upgrades are blocked** — Each VillageSQL version carries a codebase identifier (`mysql-8.4` for this release), and version comparisons are only meaningful within one codebase. Starting the server against a data directory initialized by a build with a different codebase now fails with an error at startup instead of attempting an upgrade. (`baf7446683d`, #1036)
 
