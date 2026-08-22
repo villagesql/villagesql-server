@@ -129,7 +129,7 @@ where OBJECT_SCHEMA='db1' and OBJECT_NAME='t1';
 COUNT_STAR
 3
 select COUNT_STAR from performance_schema.table_io_waits_summary_by_index_usage
-where INDEX_NAME!='NULL' and OBJECT_SCHEMA <> 'villagesql';
+where INDEX_NAME!='NULL' and OBJECT_SCHEMA!='villagesql';
 COUNT_STAR
 1
 FLUSH TABLES;
@@ -138,7 +138,7 @@ where OBJECT_SCHEMA='db1' and OBJECT_NAME='t1';
 COUNT_STAR
 0
 select COUNT_STAR from performance_schema.table_io_waits_summary_by_index_usage
-where INDEX_NAME!='NULL' and OBJECT_SCHEMA <> 'villagesql';
+where INDEX_NAME!='NULL' and OBJECT_SCHEMA!='villagesql';
 COUNT_STAR
 select variable_value > 0 from performance_schema.global_status
 where variable_name like 'PERFORMANCE_SCHEMA_INDEX_STAT_LOST';

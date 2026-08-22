@@ -70,7 +70,7 @@ def	information_schema	COLUMNS	COLUMN_NAME	4	NULL	YES	varchar	64	192	NULL	NULL	N
 def	information_schema	COLUMNS	ORDINAL_POSITION	5	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int unsigned			select			NULL
 def	information_schema	COLUMNS	COLUMN_DEFAULT	6	NULL	YES	text	65535	65535	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	text			select			NULL
 def	information_schema	COLUMNS	IS_NULLABLE	7		NO	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
-def	information_schema	COLUMNS	DATA_TYPE	8	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	longtext			select			NULL
+def	information_schema	COLUMNS	DATA_TYPE	8	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	COLUMNS	CHARACTER_MAXIMUM_LENGTH	9	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select			NULL
 def	information_schema	COLUMNS	CHARACTER_OCTET_LENGTH	10	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select			NULL
 def	information_schema	COLUMNS	NUMERIC_PRECISION	11	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint unsigned			select			NULL
@@ -78,7 +78,7 @@ def	information_schema	COLUMNS	NUMERIC_SCALE	12	NULL	YES	bigint	NULL	NULL	20	0	N
 def	information_schema	COLUMNS	DATETIME_PRECISION	13	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int unsigned			select			NULL
 def	information_schema	COLUMNS	CHARACTER_SET_NAME	14	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	COLUMNS	COLLATION_NAME	15	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
-def	information_schema	COLUMNS	COLUMN_TYPE	16	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	longtext			select			NULL
+def	information_schema	COLUMNS	COLUMN_TYPE	16	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	COLUMNS	COLUMN_KEY	17	NULL	NO	enum	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	enum('','PRI','UNI','MUL')			select			NULL
 def	information_schema	COLUMNS	EXTRA	18	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(256)			select			NULL
 def	information_schema	COLUMNS	PRIVILEGES	19	NULL	YES	varchar	154	462	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(154)			select			NULL
@@ -143,8 +143,8 @@ def	information_schema	EVENTS	ORIGINATOR	21	NULL	NO	int	NULL	NULL	10	0	NULL	NULL
 def	information_schema	EVENTS	CHARACTER_SET_CLIENT	22	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	EVENTS	COLLATION_CONNECTION	23	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	EVENTS	DATABASE_COLLATION	24	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
-def	information_schema	EXTENSIONS	EXTENSION_NAME	1	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select	Extension name		NULL
-def	information_schema	EXTENSIONS	EXTENSION_VERSION	2	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select	Version of the extension		NULL
+def	information_schema	EXTENSIONS	EXTENSION_NAME	1	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	EXTENSIONS	EXTENSION_VERSION	2	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
 def	information_schema	EXTENSIONS	PENDING_VERSION	3	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	EXTENSIONS	PENDING_REQUESTED_AT	4	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	EXTENSIONS	PENDING_LAST_ERROR	5	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
@@ -402,7 +402,7 @@ def	information_schema	ST_GEOMETRY_COLUMNS	TABLE_NAME	3		NO	varchar	64	192	NULL	
 def	information_schema	ST_GEOMETRY_COLUMNS	COLUMN_NAME	4		NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	ST_GEOMETRY_COLUMNS	SRS_NAME	5	NULL	YES	varchar	80	240	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(80)			select			NULL
 def	information_schema	ST_GEOMETRY_COLUMNS	SRS_ID	6	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int unsigned			select			NULL
-def	information_schema	ST_GEOMETRY_COLUMNS	GEOMETRY_TYPE_NAME	7	NULL	NO	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	longtext			select			NULL
+def	information_schema	ST_GEOMETRY_COLUMNS	GEOMETRY_TYPE_NAME	7	NULL	NO	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	ST_SPATIAL_REFERENCE_SYSTEMS	SRS_NAME	1	NULL	NO	varchar	80	240	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(80)			select			NULL
 def	information_schema	ST_SPATIAL_REFERENCE_SYSTEMS	SRS_ID	2	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int unsigned			select			NULL
 def	information_schema	ST_SPATIAL_REFERENCE_SYSTEMS	ORGANIZATION	3	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(256)			select			NULL
@@ -590,7 +590,6 @@ COL_CML	DATA_TYPE	CHARACTER_SET_NAME	COLLATION_NAME
 1.0000	mediumtext	utf8mb3	utf8mb3_bin
 1.0000	text	utf8mb3	utf8mb3_bin
 1.0000	text	utf8mb3	utf8mb3_general_ci
-1.0000	longtext	utf8mb4	utf8mb4_0900_ai_ci
 1.0000	longtext	utf8mb4	utf8mb4_bin
 SELECT DISTINCT
 CHARACTER_OCTET_LENGTH / CHARACTER_MAXIMUM_LENGTH AS COL_CML,
@@ -721,7 +720,7 @@ NULL	information_schema	COLLATIONS	SORTLEN	int	NULL	NULL	NULL	NULL	int unsigned
 NULL	information_schema	COLUMNS	ORDINAL_POSITION	int	NULL	NULL	NULL	NULL	int unsigned
 1.0000	information_schema	COLUMNS	COLUMN_DEFAULT	text	65535	65535	utf8mb3	utf8mb3_bin	text
 3.0000	information_schema	COLUMNS	IS_NULLABLE	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
-1.0000	information_schema	COLUMNS	DATA_TYPE	longtext	4294967295	4294967295	utf8mb4	utf8mb4_0900_ai_ci	longtext
+1.0000	information_schema	COLUMNS	DATA_TYPE	longtext	4294967295	4294967295	utf8mb4	utf8mb4_bin	longtext
 NULL	information_schema	COLUMNS	CHARACTER_MAXIMUM_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint
 NULL	information_schema	COLUMNS	CHARACTER_OCTET_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint
 NULL	information_schema	COLUMNS	NUMERIC_PRECISION	bigint	NULL	NULL	NULL	NULL	bigint unsigned
@@ -729,7 +728,7 @@ NULL	information_schema	COLUMNS	NUMERIC_SCALE	bigint	NULL	NULL	NULL	NULL	bigint 
 NULL	information_schema	COLUMNS	DATETIME_PRECISION	int	NULL	NULL	NULL	NULL	int unsigned
 3.0000	information_schema	COLUMNS	CHARACTER_SET_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(64)
 3.0000	information_schema	COLUMNS	COLLATION_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(64)
-1.0000	information_schema	COLUMNS	COLUMN_TYPE	longtext	4294967295	4294967295	utf8mb4	utf8mb4_0900_ai_ci	longtext
+1.0000	information_schema	COLUMNS	COLUMN_TYPE	longtext	4294967295	4294967295	utf8mb4	utf8mb4_bin	longtext
 3.0000	information_schema	COLUMNS	COLUMN_KEY	enum	3	9	utf8mb3	utf8mb3_bin	enum('','PRI','UNI','MUL')
 3.0000	information_schema	COLUMNS	EXTRA	varchar	256	768	utf8mb3	utf8mb3_general_ci	varchar(256)
 3.0000	information_schema	COLUMNS	PRIVILEGES	varchar	154	462	utf8mb3	utf8mb3_general_ci	varchar(154)
@@ -1053,7 +1052,7 @@ NULL	information_schema	STATISTICS	PACKED	varbinary	0	0	NULL	NULL	varbinary(0)
 3.0000	information_schema	ST_GEOMETRY_COLUMNS	COLUMN_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	ST_GEOMETRY_COLUMNS	SRS_NAME	varchar	80	240	utf8mb3	utf8mb3_general_ci	varchar(80)
 NULL	information_schema	ST_GEOMETRY_COLUMNS	SRS_ID	int	NULL	NULL	NULL	NULL	int unsigned
-1.0000	information_schema	ST_GEOMETRY_COLUMNS	GEOMETRY_TYPE_NAME	longtext	4294967295	4294967295	utf8mb4	utf8mb4_0900_ai_ci	longtext
+1.0000	information_schema	ST_GEOMETRY_COLUMNS	GEOMETRY_TYPE_NAME	longtext	4294967295	4294967295	utf8mb4	utf8mb4_bin	longtext
 3.0000	information_schema	ST_SPATIAL_REFERENCE_SYSTEMS	SRS_NAME	varchar	80	240	utf8mb3	utf8mb3_general_ci	varchar(80)
 NULL	information_schema	ST_SPATIAL_REFERENCE_SYSTEMS	SRS_ID	int	NULL	NULL	NULL	NULL	int unsigned
 3.0000	information_schema	ST_SPATIAL_REFERENCE_SYSTEMS	ORGANIZATION	varchar	256	768	utf8mb3	utf8mb3_general_ci	varchar(256)
