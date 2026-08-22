@@ -140,9 +140,13 @@ BEGIN
     FROM INFORMATION_SCHEMA.TABLES
       WHERE table_schema='mysql' AND table_name != 'ndb_apply_status'
         ORDER BY tables_in_mysql;
-  -- Always use the old optimizer until bug#36553075 is fixed.
+  -- All three hints protect MTR's own state-check query from test server settings:
+  -- use_secondary_engine=OFF keeps it on the primary engine, sql_big_selects=1 keeps a
+  -- capped max_join_size from rejecting it, and hypergraph_optimizer=off pins the old
+  -- optimizer until bug#36553075 is fixed.
   SELECT /*+SET_VAR(use_secondary_engine=OFF)
-            SET_VAR(optimizer_switch='hypergraph_optimizer=off')*/
+            SET_VAR(optimizer_switch='hypergraph_optimizer=off')
+            SET_VAR(sql_big_selects=1)*/
          CONCAT(table_schema, '.', table_name) AS columns_in_mysql,
        column_name, ordinal_position, column_default, is_nullable,
        data_type, character_maximum_length, character_octet_length,
