@@ -4811,7 +4811,7 @@ class Item_null : public Item_basic_constant {
   bool get_time(MYSQL_TIME *) override { return true; }
   bool val_json(Json_wrapper *wr) override;
   bool send(Protocol *protocol, String *str) override;
-  Item_result result_type() const override { return INVALID_RESULT; }
+  Item_result result_type() const override { return STRING_RESULT; }
   Item *clone_item() const override { return new Item_null(item_name); }
   bool is_null() override { return true; }
 
