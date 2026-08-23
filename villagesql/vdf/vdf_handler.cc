@@ -237,6 +237,9 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
             case INT_RESULT:
               arg_types[i].id = VEF_TYPE_INT;
               break;
+            case INVALID_RESULT:
+              arg_types[i].id = VEF_TYPE_NULL;
+              break;
             default:
               arg_types[i].id = VEF_TYPE_STRING;
               break;
