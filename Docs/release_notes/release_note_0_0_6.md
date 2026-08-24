@@ -10,7 +10,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 
 ### New Codebases
 
-- **`mysql-9.7` and `percona-8.4` builds** — 0.0.6 ships three server codebases: `mysql-8.4` tracking MySQL 8.4.11, `mysql-9.7` tracking MySQL 9.7.2, and `percona-8.4` tracking Percona Server 8.4.10 plus the Oracle MySQL 8.4.11 changes. Release tarballs are named per codebase, and the server reports its codebase as a prefix on `villagesql_server_version` (for example `mysql-9.7_0.0.6`). The server refuses to start against a data directory initialized by a different server codebase. (built from the per-codebase branches, not a single main PR)
+- **`mysql-9.7` and `percona-8.4` builds** — 0.0.6 ships three server codebases: `mysql-8.4` tracking MySQL 8.4, `mysql-9.7` tracking MySQL 9.7, and `percona-8.4` tracking Percona Server 8.4. In this release, `mysql-8.4` is current with MySQL 8.4.11, `mysql-9.7` is current with MySQL 9.7.2, and `percona-8.4` combines the VillageSQL `mysql-8.4` codebase with Percona Server 8.4.10. Release tarballs are named per codebase, and the server reports its codebase as a prefix on `villagesql_server_version` (for example `mysql-9.7_0.0.6`). A data directory belongs to one codebase; the server refuses to start against a data directory initialized by a different one. (built from the per-codebase branches, not a single main PR)
 
 ### Authentication Extensions (preview)
 
