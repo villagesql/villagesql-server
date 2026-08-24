@@ -1,6 +1,7 @@
 # VillageSQL 0.0.6
 
-Draft release notes through commit `c05a40cb377`: Schema update - Rerecord mysql tests (#1031).
+
+Draft release notes through commit `01521a7eb90`: Update draft release notes for 0.0.6 (#1039)
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
