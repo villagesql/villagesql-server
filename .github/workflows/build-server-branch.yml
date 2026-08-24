@@ -138,6 +138,11 @@ jobs:
       # this env var; leave it unset and they fall back to VSQL_VERSION file's
       # 'dev' suffix regardless of release_build.
       VSQL_PRE_RELEASE_VERSION: ${{ !inputs.release_build && 'dev' || '' }}
+      # Resolved here for the same reason: the clone, build and package stages
+      # must agree on which extensions they are handling, or packaging fails on
+      # a VEB the build stage was never asked to produce. Pre-release builds
+      # carry the bundle=dev extensions; release builds do not.
+      BUNDLE_CHANNEL: ${{ !inputs.release_build && 'dev' || 'release' }}
 
     steps:
       - name: Report Parameters
@@ -150,6 +155,7 @@ jobs:
           echo "Run Unit Tests: $RUN_UNIT_TESTS (${{ inputs.run_unit_tests }})"
           echo "Run Integration Tests: $RUN_INTEGRATION_TESTS (${{ inputs.run_integration_tests }})"
           echo "Bundle Extension: $BUILD_BUNDLED_EXTENSIONS (${{ inputs.bundled_extensions }})"
+          echo "Bundle Channel: $BUNDLE_CHANNEL"
           echo "Upload SDK: $UPLOAD_SDK (${{ inputs.upload_sdk }})"
 
       - name: Checkout
@@ -177,7 +183,7 @@ jobs:
           rm -rf "$EXTS_ROOT"
           mkdir -p "$EXTS_ROOT/sources"
           source/villagesql/bld_tools/checkout_bundled_extensions.sh \
-            "$EXTS_ROOT/sources"
+            "$EXTS_ROOT/sources" "" "$BUNDLE_CHANNEL"
 
       # Bundled-extension build deps. Slated for separate revision; preserved
       # as inline steps so BUILD_BUNDLED_EXTENSIONS builds keep working.
@@ -214,7 +220,8 @@ jobs:
         run: |
           SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
           source/villagesql/bld_tools/build_bundled_extensions.sh \
-            "$EXTS_ROOT/sources" "${SDK_STAGING_DIR}" "${BUILD_DIR}/veb_output_directory"
+            "$EXTS_ROOT/sources" "${SDK_STAGING_DIR}" "${BUILD_DIR}/veb_output_directory" \
+            "" "$BUNDLE_CHANNEL"
 
       - name: Test bundled extensions
         if: env.BUILD_BUNDLED_EXTENSIONS == '1'
@@ -230,6 +237,7 @@ jobs:
           BUILD_DIR="$BUILD_DIR" \
           OUTPUT_DIR="$OUTPUT_DIR" \
           BUILD_BUNDLED_EXTENSIONS="${BUILD_BUNDLED_EXTENSIONS:-0}" \
+          BUNDLE_CHANNEL="$BUNDLE_CHANNEL" \
             source/villagesql/bld_tools/package_dev_server.sh
 
       - name: Run integration tests

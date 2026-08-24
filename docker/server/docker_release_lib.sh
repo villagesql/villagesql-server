@@ -24,6 +24,20 @@ DOCKER_REPO="villagesql/server"
 DOCKER_SHARED_TAGS="latest,stable"
 DEFAULT_PLATFORMS="linux/amd64,linux/arm64"
 
+# Google Artifact Registry. Only the pre-release images go here: Docker Hub
+# carries the releases, and an unreleased build has no business on a public
+# registry.
+#
+# These defaults name the villagesql-server-dev repository declared in the
+# vcloud-cell/dev-cluster Terraform (artifact-registry.tf), which also grants
+# this GitHub repo push access. Override them to publish somewhere else; empty
+# is an error rather than a half-formed path, which GAR would otherwise report
+# as an opaque permission denial.
+GAR_LOCATION="${GAR_LOCATION:-us-central1}"
+GAR_PROJECT="${GAR_PROJECT:-villagesql-vcloud-pelican-dev}"
+GAR_REPOSITORY="${GAR_REPOSITORY:-villagesql-server-dev}"
+GAR_IMAGE="${GAR_IMAGE:-server}"
+
 # Build args forwarded to docker build. Override via the environment, e.g.
 #   VSQL_PRE_RELEASE_VERSION="" VSQL_DEV_ABI=OFF publish_image.sh ...
 # Default to a release build (empty pre-release suffix).
@@ -47,6 +61,33 @@ run() {
 
 require_docker() {
     command -v docker >/dev/null 2>&1 || die "docker not found on PATH"
+}
+
+# The GAR host that docker pushes to and gcloud configures credentials for.
+gar_host() {
+    [ -n "$GAR_LOCATION" ] || die "GAR_LOCATION is not set"
+    echo "${GAR_LOCATION}-docker.pkg.dev"
+}
+
+# The full GAR repository path, which is what --repo wants. GAR nests an image
+# inside a named repository inside a project, so this is one segment longer
+# than a Docker Hub repo: us-central1-docker.pkg.dev/proj/villagesql-server-dev/server
+gar_repo() {
+    [ -n "$GAR_PROJECT" ] || die "GAR_PROJECT is not set"
+    [ -n "$GAR_REPOSITORY" ] || die "GAR_REPOSITORY is not set"
+    [ -n "$GAR_IMAGE" ] || die "GAR_IMAGE is not set"
+    echo "$(gar_host)/${GAR_PROJECT}/${GAR_REPOSITORY}/${GAR_IMAGE}"
+}
+
+# Resolve --repo for a registry: "dockerhub" keeps whatever the caller passed,
+# "gar" composes the path from the GAR_* variables above.
+resolve_repo() {
+    local registry="$1" fallback="$2"
+    case "$registry" in
+        gar)       gar_repo ;;
+        dockerhub) echo "$fallback" ;;
+        *)         die "Unknown registry: $registry (expected dockerhub or gar)" ;;
+    esac
 }
 
 # Map a docker platform to the arch suffix we tag with: linux/amd64 -> amd64,

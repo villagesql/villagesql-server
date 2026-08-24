@@ -20,7 +20,12 @@ without producing a package.
   `build_bundled_extensions.sh` builds each into a `.veb`, and
   `test_extension_vebs.sh` runs the MTR suite that each extension repo carries.
   All three are driven by the manifest at
-  [../dev_server/bundled_extensions.txt](../dev_server/bundled_extensions.txt).
+  [../dev_server/bundled_extensions.txt](../dev_server/bundled_extensions.txt),
+  and all three take a **build channel** saying how much of it to act on:
+  `release` (the `bundle=true` extensions), `dev` (those plus `bundle=dev`), or
+  `all` (plus `bundle=false`, which no artifact ships but the sanitizer and
+  compat suites still build). Which entries a channel selects is decided in one
+  place, [../bld_matrix/json_bundle_extensions.sh](../bld_matrix/json_bundle_extensions.sh).
 - **Test.** `test_ci.sh` runs the VillageSQL unit tests and the MTR
   integration suites.
 - **Package.** `package_dev_server.sh` produces the dev-server tarball.
@@ -33,6 +38,14 @@ Two ordering constraints are not evident from the script names:
 - `package_dev_server.sh` **packages, it does not build.** It runs `cpack`
   against a finished `BUILD_DIR`, and with `BUILD_BUNDLED_EXTENSIONS=1` it
   expects the VEBs to already be in `$BUILD_DIR/veb_output_directory`.
+
+A third constraint follows from the channel: **the clone, build and package
+stages must all be given the same one.** Packaging copies rather than builds, so
+a channel wider than the build stage's fails on a `.veb` that was never
+produced. `package_dev_server.sh` defaults its channel to `dev` when
+`VSQL_PRE_RELEASE_VERSION` is set and `release` otherwise, which is why CI
+resolves `BUNDLE_CHANNEL` once at job scope and passes the same value to each
+stage.
 
 ## The scripts
 
@@ -98,6 +111,21 @@ mkdir -p "$EXTS_DIR"
     "$BUILD_DIR/veb_output_directory"
 
 BUILD_BUNDLED_EXTENSIONS=1 "$TOOLS/package_dev_server.sh"
+```
+
+For a pre-release tarball that also carries the `bundle=dev` extensions, pass
+the `dev` channel to every stage. The extension filter is the argument before
+it, so pass `""` to keep them all:
+
+```bash
+"$TOOLS/checkout_bundled_extensions.sh" "$EXTS_DIR" "" dev
+"$TOOLS/build_bundled_extensions.sh" \
+    "$EXTS_DIR" \
+    "$("$TOOLS/get_sdk.sh" "$BUILD_DIR")" \
+    "$BUILD_DIR/veb_output_directory" \
+    "" dev
+
+BUILD_BUNDLED_EXTENSIONS=1 BUNDLE_CHANNEL=dev "$TOOLS/package_dev_server.sh"
 ```
 
 Extensions have their own build dependencies, installed by

@@ -11,7 +11,9 @@ docker build -f docker/server/Dockerfile -t villagesql/server:latest .
 The build compiles VillageSQL from source and bundles several extensions:
 - `vsql_complex` (in-tree example)
 Plus the bundled extensions defined by
-`villagesql/dev_server/bundled_extensions.txt`
+`villagesql/dev_server/bundled_extensions.txt`. Which of those the image
+actually ships depends on the build channel — see `BUNDLE_CHANNEL` under
+[Release Build Args](#release-build-args).
 
 The first build takes ~25 minutes (server compilation). Subsequent builds are fast
 (~35 seconds) as long as source files outside `docker/` haven't changed.
@@ -97,9 +99,52 @@ Images are tagged `REPO:TAG-ARCH` per platform (e.g. `villagesql/server:0.0.5-ar
 and the manifest list is published under `TAG` plus each shared tag (`latest` and
 `stable` by default).
 
+### Registries
+
+Both scripts take `--registry`, which decides where the image goes:
+
+| Registry | Carries | Repository |
+| --- | --- | --- |
+| `dockerhub` (default) | Released images | `--repo`, default `villagesql/server` |
+| `gar` | Pre-release images | Composed from the `GAR_*` variables below |
+
+Google Artifact Registry holds the pre-release images, so an unreleased build
+never lands on a public registry. The defaults name the `villagesql-server-dev`
+repository declared in the `vcloud-cell/dev-cluster` Terraform, so
+`--registry gar` needs no configuration to push to the usual place:
+
+| Variable | Meaning | Default |
+| --- | --- | --- |
+| `GAR_LOCATION` | GAR region | `us-central1` |
+| `GAR_PROJECT` | GCP project id | `villagesql-vcloud-pelican-dev` |
+| `GAR_REPOSITORY` | Artifact Registry repository | `villagesql-server-dev` |
+| `GAR_IMAGE` | Image name within it | `server` |
+
+Together those form
+`$GAR_LOCATION-docker.pkg.dev/$GAR_PROJECT/$GAR_REPOSITORY/$GAR_IMAGE`, i.e.
+`us-central1-docker.pkg.dev/villagesql-vcloud-pelican-dev/villagesql-server-dev/server`.
+Setting one empty is an error rather than a half-formed path, which GAR would
+otherwise report as an opaque permission denial.
+
+```bash
+VSQL_PRE_RELEASE_VERSION=dev \
+    docker/server/publish_image.sh \
+        --registry gar --tag 0.0.6-dev --platform linux/amd64 --push
+```
+
+Locally that needs `gcloud auth configure-docker us-central1-docker.pkg.dev`
+once. In CI nothing is configured by hand: the workflows use direct Workload
+Identity Federation, exchanging the job's OIDC token for a Google token tied to
+the pool that performed the exchange. No service account is impersonated and no
+key is stored — the repository's IAM policy grants
+`roles/artifactregistry.writer` to this GitHub repo's numeric ID within the
+pool, so only this repo's workflows can push. The pool, provider and policy are
+declared in `vcloud-cell/dev-cluster` (`wif.tf`, `artifact-registry.tf`); the
+`GAR_WIF_PROVIDER` repository variable overrides the provider if it ever moves.
+
 ## Release Build Args
 
-Both build args are read from the environment and forwarded to `docker build`:
+The build args are read from the environment and forwarded to `docker build`:
 
 ```bash
 VSQL_PRE_RELEASE_VERSION="" VSQL_DEV_ABI=OFF \
@@ -107,6 +152,11 @@ VSQL_PRE_RELEASE_VERSION="" VSQL_DEV_ABI=OFF \
 ```
 
 Defaults are an empty `VSQL_PRE_RELEASE_VERSION` (a release build) and `VSQL_DEV_ABI=ON`.
+
+`BUNDLE_CHANNEL` picks which extensions the image ships. Left unset it follows
+the build type — a pre-release image gets the `bundle=dev` extensions from the
+manifest, a release image does not — so it is worth setting only to break that
+pairing deliberately.
 
 ## Building Additional Extensions
 
