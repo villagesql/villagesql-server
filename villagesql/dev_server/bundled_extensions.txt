@@ -40,6 +40,7 @@ https://github.com/villagesql/vsql-oauth2 main abi=dev
 https://github.com/villagesql/vsql-rest main abi=dev
 https://github.com/villagesql/vsql-uuid main
 https://github.com/villagesql/vsql-vector main bundle=false
+https://github.com/villagesql/vsql-metrics-otel-exporter main bundle=dev
 https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=false
 https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_keyring abi=stable bundle=false
 https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_ping abi=stable bundle=false
