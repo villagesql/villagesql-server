@@ -1,12 +1,16 @@
 # VillageSQL 0.0.6
 
-Draft release notes through commit `25a7e3f32ff`: sdk: fix sys_var descriptor comment (#1021).
+Draft release notes through commit `c05a40cb377`: Schema update - Rerecord mysql tests (#1031).
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
 The Cargo release artifacts are available at https://crates.io/crates/villagesql.
 
 ## What's New
+
+### New Codebases
+
+- **`mysql-9.7` and `percona-8.4` builds** — 0.0.6 ships three server codebases: `mysql-8.4` tracking MySQL 8.4, `mysql-9.7` tracking MySQL 9.7, and `percona-8.4` tracking Percona Server 8.4. In this release, `mysql-8.4` is current with MySQL 8.4.11, `mysql-9.7` is current with MySQL 9.7.2, and `percona-8.4` combines the VillageSQL `mysql-8.4` codebase with Percona Server 8.4.10. Release tarballs are named per codebase, and the server reports its codebase as a prefix on `villagesql_server_version` (for example `mysql-9.7_0.0.6`). A data directory belongs to one codebase; the server refuses to start against a data directory initialized by a different one. (built from the per-codebase branches, not a single main PR)
 
 ### Authentication Extensions (preview)
 
@@ -21,6 +25,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 ### Extensions
 
 - **MySQL services capability** — Extensions can consume MySQL component services through a new capability. This release exposes the consumer side only; providing services is not yet supported. (`4c56f3f00e1`, #954)
+- **`vsql_oauth2` ships with the server** — The vsql-oauth2 authentication extension joins the bundled extensions list and is included in the server. (`5f98c2ba3f0`, #1018)
 - **Extension init and deinit hooks** — `on_init()` and `on_deinit()` on the extension builder register a function to run extension-side at load and unload, for local setup such as selecting CPU-specific implementations or allocating extension-owned state. (`95d5f59a9b3`, #947)
 - **Richer statement telemetry** — The statement-event capability now reports the performance-schema statement digest hash and the per-statement handler row-access counters (`read_key`, `read_next`, `read_rnd_next`, and the rest), which quantify the access method that the existing flags only flagged. (`de3d664cbae`, #921)
 - **`EXTENSION_ADMIN` privilege** — Extension management is now gated by its own dynamic privilege rather than `SUPER`. In-place upgrades grant it to existing `SUPER` holders. (`9854529cb56`, #752; `9e0577bd0b6`, #941)
@@ -43,15 +48,17 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 
 ### Schema & Upgrades
 
-- **VillageSQL system tables moved to `utf8mb4_bin`** — All six VillageSQL system tables change from `utf8mb4_0900_ai_ci` to `utf8mb4_bin`, so identifiers that differ only in case or accents stay distinct. An in-place upgrade converts the tables and bumps the stored schema version to 0.0.6, startup validation catches a table left on the wrong collation, the `INFORMATION_SCHEMA.COLUMNS` view join casefolds explicitly, and the victionary checks for duplicate rows when it reloads at startup. (`41d6f86b943`, #987)
+- **VillageSQL system tables moved to `utf8mb4_bin`** — All six VillageSQL system tables change from `utf8mb4_0900_ai_ci` to `utf8mb4_bin`, so identifiers that differ only in case or accents stay distinct. An in-place upgrade converts the tables and bumps the stored schema version to 0.0.6, startup validation catches a table left on the wrong collation, the `INFORMATION_SCHEMA.COLUMNS` view join casefolds explicitly, and the victionary checks for duplicate rows when it reloads at startup. A follow-up aligns the affected `INFORMATION_SCHEMA` view collations with upstream: `DATA_TYPE` and `COLUMN_TYPE` in `INFORMATION_SCHEMA.COLUMNS` compare case-sensitively again (`utf8mb4_bin`, as upstream), while the new `EXTENSION_NAME` and `EXTENSION_VERSION` columns in `INFORMATION_SCHEMA.EXTENSIONS` stay case-insensitive, matching how `INSTALL EXTENSION` treats names. (`41d6f86b943`, #987; `c05a40cb377`, #1031)
 - **Upgrades now run under `--upgrade=MINIMAL`** — The VillageSQL upgrade was skipped whenever the server started with `--upgrade=MINIMAL`, which left the server running against an older schema than it was built for and could block startup. It now runs in that mode too. (`a2a952155b4`, #1004)
+- **Cross-codebase upgrades are blocked** — Each VillageSQL version carries a codebase identifier (for example, `mysql-8.4`), and version comparisons are only meaningful within one codebase. Starting the server against a data directory initialized by a build with a different codebase now fails with an error at startup instead of attempting an upgrade. (`baf7446683d`, #1036)
 
 ### Stability
 
 The server and the bundled extensions now run under ASAN, UBSAN and LSAN every night. Several of the fixes below came out of those runs. (`c14c14040f1`, #956; `95044fa29b1`, #880; `81dd34a866d`, #959)
 
 - **Server deadlock on concurrent extension queries** — Concurrent queries calling an extension function over a custom-type table could deadlock the whole server, through a nested read lock on the victionary's writer-preference lock. (`4e599fe2a9c`, #913)
-- **Dotted identifiers in the victionary** — Renaming a custom-type column failed, and crashed debug builds, when the database, table, or column name contained a dot. Victionary update lookups split the dot-joined key instead of using the key components. (`4967b3ffba4`, #981)
+- **Dotted identifiers in the victionary** — Renaming a custom-type column failed, and crashed debug builds, when the database, table, or column name contained a dot. Victionary update lookups split the dot-joined key instead of using the key components. Distinct names could also still collide in the victionary's dot-joined map key — `my.db` + `tab.one` joins to the same key as `my.db.tab` + `one` — so one entry silently overwrote the other; dots inside each component are now escaped when the key is built. (`4967b3ffba4`, #981; `c07b9ae8295`, #1024)
+- **Startup deadlock on pending extension updates** — Applying a pending extension update at startup writes the VillageSQL system tables, which queued them for background statistics recalculation; the statistics thread's lock could race with startup's exclusive lock request and hang startup silently. The VillageSQL system tables now set `STATS_PERSISTENT=0`, as the `mysql.*` tables do. (`985e73c8ba3`, #1001)
 - **`deterministic` read on pre-protocol-3 extensions** — The flag only exists as of `VEF_PROTOCOL_3`, and older function descriptors leave that byte uninitialized. The read that drives custom-type inference is now guarded on the protocol version. (`87622ecb9cd`, #865)
 - **`UNINSTALL EXTENSION` commit failure** — The extension's shared object was unloaded before the transaction committed, so a failed commit rolled the metadata back but left the extension unusable. It is now unloaded only after the commit succeeds. (`3052598b8e3`, #872)
 - **`INSTALL EXTENSION` and `ALTER EXTENSION ... AT RESTART` commit failure** — OK status was set before the transaction committed, so a failed commit raised an error over an already-set OK and aborted debug builds. (`746edebe59c`, #896)
@@ -63,6 +70,7 @@ The server and the bundled extensions now run under ASAN, UBSAN and LSAN every n
 
 ### Build & Compatibility
 
+- **MySQL 8.4.11** — The mysql-8.4 codebase is now on upstream `mysql-8.4.11`. (`209da79328c`)
 - **Release Docker images** — Publishing Docker images is now part of the release process, built one architecture at a time on its own runner, and a release workflow orchestrates those builds and pushes the images to Docker Hub together. (`b6d70466949`, #818; `a13a537f01f`, #973; `50da376e7b1`, #1025)
 - **README corrections** — The stated build prerequisites were looser than what the build enforces (Clang 14 and CMake 3.19, not Clang 13 and CMake 3.16; Windows is not supported), two documented commands could not run as written, and two Known Limitations were broader than reality. The Rust SDK, its crate and build tool, and the Rust extension template are now named alongside the C++ ones. (`2e620ad5d7b`, #962; `927e57622c3`, #934)
 - **Release artifact naming** — Server tarballs are named per codebase and platform, SDK tarballs per release version. (`0e7e6d669ee`, #803)
@@ -74,6 +82,10 @@ The server and the bundled extensions now run under ASAN, UBSAN and LSAN every n
 - **Contributor Guide overhaul** — The first set of changes from a rewrite of the contributor guide. (`3d0c834cda4`, #760)
 - **Nightly and release CI reworked** — A nightly run now dispatches listener workflows, so one event can start several workflows with different inputs, and it drives the release-build Full Test Suite. Its run summary names the nightly tag it created rather than leaving `nightly.latest` ambiguous. Version and extension information moved into JSON for parsing, the CMake and Cargo extension builds share one framework, and the self-hosted jobs are consolidated onto Linux x86-64 runners. (`1055b3c761e`, #1005; `de2afc6adfc`, #1008; `f03c8298f8a`, #1009; `b0c08387ddf`, #1002; `29c178727b5`, #1006; `e6d077f0975`, #989; `87cd97def3c`, #986; `93d13d9d147`, #990)
 - **Pull request label and merge checks** — A pull request is now checked for an `area/` and a `kind/` label. One carrying both an LGTM and an approval merges automatically on an hourly pass, and the LGTM is withdrawn when new changes arrive. (`a946ab5d922`, #997)
+
+## Known Issues
+
+- **`--initialize` with `--default_table_encryption=ON` aborts** — Upstream MySQL 8.4.11 (the fix for Bug#39114059) assumes the `mysql` tablespace is unencrypted during initialization. With `--default_table_encryption=ON` that assumption is false, so `mysqld --initialize` aborts with `ERROR 3825 Request to create 'unencrypted' table while using an 'encrypted' tablespace` and leaves the new data directory unusable. A fix is in progress on `dbentley/fix-initialize-encryption`.
 
 ## Community
 
