@@ -15,6 +15,7 @@ span lines. Pipe through `jq .` to read it.
 | `json_docker.sh`     | The Docker images published, as an array of objects.           |
 | `json_build_matrix.sh` | The build-server matrix, one row per platform.                |
 | `json_test_extensions.sh` | The extension tests, one row per (platform, extension, abi). |
+| `json_bundle_extensions.sh` | The extensions one build channel ships.                      |
 
 Each script's header comment documents its arguments and environment
 variables, and is the source of truth for them.
@@ -28,6 +29,11 @@ and each prints its whole set.
 The rest select and combine. They call the tables they need and take filters
 as positional arguments; pass "" for a filter to keep everything.
 
+`json_bundle_extensions.sh` is the one to reach for when the question is "which
+extensions does this build ship?" — the answer depends on a build channel
+(release, dev, all), not on the manifest alone, and every consumer that copies
+that logic by hand is a chance for the image and the tarball to disagree.
+
 A `_matrix` suffix means the output is a GitHub Actions strategy matrix —
 `{"include": [...]}`, ready for `matrix: ${{ fromJson(...) }}`. Everything
 else prints a bare array, which a caller can wrap with `jq '{include: .}'`.
@@ -39,8 +45,16 @@ MATRIX="$PWD/villagesql/bld_matrix"
 
 "$MATRIX/json_extensions.sh" | jq .
 
-# The extensions shipped in the dev-server tarball.
-"$MATRIX/json_extensions.sh" | jq -r '.[] | select(.bundle) | .extension'
+# The extensions shipped in a release tarball, and in a pre-release one.
+"$MATRIX/json_bundle_extensions.sh" release | jq -r '.[].extension'
+"$MATRIX/json_bundle_extensions.sh" dev | jq -r '.[].extension'
+
+# Everything the sanitizer and compat suites build, bundle=false included.
+"$MATRIX/json_bundle_extensions.sh" all | jq -r '.[].extension'
+
+# What a channel adds over the release set.
+diff <("$MATRIX/json_bundle_extensions.sh" release | jq -r '.[].extension') \
+     <("$MATRIX/json_bundle_extensions.sh" dev | jq -r '.[].extension')
 
 # A manifest from somewhere else.
 EXTENSIONS_FILE=/tmp/exts.txt "$MATRIX/json_extensions.sh"

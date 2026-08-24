@@ -22,8 +22,9 @@
 # The extension name should be like "vsql-complex", "vsql-uuid", etc.
 #
 # For in-tree extensions (vsql-complex), the source is taken from
-# /source/villagesql/examples/<name>. For external extensions, the
-# repo is cloned from github.com/villagesql/<name>.
+# /source/villagesql/examples/<name>. For external extensions, the repo is
+# cloned from EXT_URL at EXT_BRANCH when build-bundled-extensions.sh supplies
+# them from the manifest, and from github.com/villagesql/<name> otherwise.
 
 set -eo pipefail
 
@@ -57,11 +58,13 @@ if [ -d "$IN_TREE_DIR" ]; then
     echo "==> Building in-tree extension: ${EXT_NAME}"
 else
     EXT_SRC="/ext-src-${EXT_NAME}"
-    echo "==> Cloning extension: ${EXT_NAME}"
+    CLONE_URL="${EXT_URL:-https://github.com/villagesql/${EXT_NAME}.git}"
+    echo "==> Cloning extension: ${EXT_NAME} (${CLONE_URL}${EXT_BRANCH:+ @ ${EXT_BRANCH}})"
     if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then
         apt-get update -qq && apt-get install -y -qq ca-certificates >/dev/null
     fi
-    git clone "https://github.com/villagesql/${EXT_NAME}.git" "$EXT_SRC"
+    git clone --depth=1 ${EXT_BRANCH:+--branch "$EXT_BRANCH"} \
+        "$CLONE_URL" "$EXT_SRC"
 fi
 
 EXT_BUILD="/ext-build-${EXT_NAME}"

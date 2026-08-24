@@ -67,7 +67,14 @@ RUN VSQL_DEV_ABI=ON build-bundled-extension.sh vsql-complex
 # and have additional dependencies
 COPY scripts/setup_linux_ext_deps.sh /tmp/
 RUN /tmp/setup_linux_ext_deps.sh && rm -rf /var/lib/apt/lists/*
-RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extensions.sh
+
+# Which extensions ship in the image. Left empty it follows the build type: a
+# pre-release image gets the bundle=dev extensions, a release image does not.
+# Set it explicitly to override that pairing.
+ARG BUNDLE_CHANNEL=
+RUN CHANNEL="${BUNDLE_CHANNEL:-$([ -n "$VSQL_PRE_RELEASE_VERSION" ] \
+        && echo dev || echo release)}" \
+    && VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extensions.sh "$CHANNEL"
 
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime image

@@ -9,8 +9,15 @@
 #   branch-or-tag: Branch to clone.
 #   abi=<abi>:     Optional. ABI to test against: "stable" or "dev".
 #                  Omit to test against both.
-#   bundle=false:  Optional. Omit (or bundle=true) to include in dev server.
-#                  Set bundle=false to run compat tests only — not shipped.
+#   bundle=<when>: Optional. Which artifacts ship the extension.
+#                  true (the default) — every artifact, release included.
+#                  dev  — pre-release artifacts only: the -dev tarball and the
+#                         dev Docker image. Held back from release builds, so
+#                         an extension can be shipped to early users before it
+#                         is ready to carry a release compatibility promise.
+#                  false — no artifact ships it; it is still cloned, built and
+#                         compat-tested. Use for work in progress.
+#                  Any other value is an error rather than a silent default.
 #   build=<tool>:  Optional. Build system: "cmake" or "cargo". Default "cmake".
 #   path=<subdir>: Optional. Extension lives in this subdir of the repo.
 #                  Default: repo root. Also used to derive the extension name

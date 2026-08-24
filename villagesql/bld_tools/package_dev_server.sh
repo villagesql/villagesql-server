@@ -14,6 +14,13 @@
 #   OUTPUT_DIR  Where the final tarball is written (default: $PWD)
 #   BUILD_BUNDLED_EXTENSIONS
 #               "1" to fold bundled extension VEBs into the package
+#   BUNDLE_CHANNEL
+#               Which extensions to fold in: "release" or "dev". Defaults to
+#               dev for a pre-release build (VSQL_PRE_RELEASE_VERSION set) and
+#               release otherwise, so a -dev tarball carries the bundle=dev
+#               extensions and a release tarball never does. Must match the
+#               channel build_bundled_extensions.sh was given, which is why CI
+#               resolves it once at job scope and passes it to both.
 
 set -e
 
@@ -40,6 +47,10 @@ source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
 vsql_parse_version "$SOURCE_DIR"
 vsql_platform_info
 
+# A pre-release tarball ships the bundle=dev extensions; a release one does not.
+BUNDLE_CHANNEL="${BUNDLE_CHANNEL:-$([[ -n "${VSQL_PRE_RELEASE_VERSION:-}" ]] \
+    && echo dev || echo release)}"
+
 PACKAGE_NAME="villagesql-dev-server-${VSQL_CODE_BASE}_${VSQL_VERSION}-${PLATFORM}-${ARCH}"
 TARBALL_NAME="${PACKAGE_NAME}.tar.gz"
 
@@ -51,7 +62,7 @@ log_info "Package includes:"
 log_info "  - Server and client binaries"
 log_info "  - Example VEB files (vsql_simple, vsql_complex)"
 if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
-    log_info "  - Bundled extensions (from villagesql/dev_server/bundled_extensions.txt)"
+    log_info "  - Bundled extensions ($BUNDLE_CHANNEL channel, from villagesql/dev_server/bundled_extensions.txt)"
 fi
 log_info "  - mysql-test framework (binaries only, no test/result files)"
 log_info "  - Support files and SQL scripts"
@@ -137,7 +148,8 @@ if [[ "${BUILD_BUNDLED_EXTENSIONS:-0}" == "1" ]]; then
 
     "$SOURCE_DIR/villagesql/bld_tools/include_bundled_extensions.sh" \
             "lib/veb" \
-            "$BUILD_DIR/veb_output_directory"
+            "$BUILD_DIR/veb_output_directory" \
+            "$BUNDLE_CHANNEL"
 
     log_info "Bundled extensions added to release"
 

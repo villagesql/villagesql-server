@@ -1,46 +1,56 @@
 #!/bin/bash
 # Copyright (c) 2026 VillageSQL Contributors
-# Build VEB files for bundled VillageSQL extensions.
+# Build every bundled VillageSQL extension during a Docker image build.
 #
-# Usage: include_bundled_extensions.sh <dst_dir> <veb_src_dir>
+# Usage: build-bundled-extensions.sh [channel]
 #
-# <veb_src_dir>: Directory where built .veb files were placed.
+# [channel]: Build channel to build for: release (default) or dev. "dev" adds
+#            the bundle=dev extensions, which ship only in pre-release images.
+#            Taken from BUNDLE_CHANNEL when the argument is omitted.
 #
-# The extension list is read from villagesql/dev_server/bundled_extensions.txt,
-# located relative to this script's source tree.
+# The extensions themselves are still defined by the manifest,
+# villagesql/dev_server/bundled_extensions.txt. This script no longer parses it
+# directly: villagesql/bld_matrix/json_bundle_extensions.sh does, so the image
+# and CI agree on what a manifest entry means. That matters for bundle=dev,
+# which the parser this replaced would have shipped in release images.
+#
+# Inputs (environment variables, all optional):
+#   SOURCE_DIR      — the source tree holding the scripts and the manifest
+#                     (default: /source, where the Dockerfile copies it)
+#   EXTENSIONS_FILE — a manifest somewhere other than the one in SOURCE_DIR.
+#                     Read by json_extensions.sh; passed straight through.
+#
+# jq comes from setup_linux_build_env.sh, run earlier in the builder stage.
+#
+# Each extension is handed to build-bundled-extension.sh, which does the clone
+# and the cmake build. The url and branch travel with it so a manifest entry
+# pointing at a fork or a pinned tag is honoured here, not just in CI.
 
 set -euo pipefail
 
-EXTENSIONS_LIST="source/villagesql/dev_server/bundled_extensions.txt"
+SOURCE_DIR="${SOURCE_DIR:-/source}"
+BUNDLE_CHANNEL="${1:-${BUNDLE_CHANNEL:-release}}"
 
-function log_info() { echo "$*"; }
+SELECT="$SOURCE_DIR/villagesql/bld_matrix/json_bundle_extensions.sh"
+[[ -x "$SELECT" ]] || { echo "error: not found: $SELECT" >&2; exit 1; }
 
-if [[ ! -f "$EXTENSIONS_LIST" ]]; then
-    log_info "Extensions list not found: $EXTENSIONS_LIST"
-    exit 1
-fi
+echo "==> Bundled extensions: $BUNDLE_CHANNEL channel"
 
-# Read and parse the list of extensions
-while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
+# Collected up front, rather than piped into the loop, so a manifest error
+# stops the script before anything is built.
+ENTRIES="$("$SELECT" "$BUNDLE_CHANNEL" \
+    | jq -r '.[] | [.extension, .url, .branch, .build] | @tsv')"
 
-    # Parse "url [branch-or-tag] [key=value ...]" — all fields after url are optional
-    read -ra FIELDS <<< "$line"
-    SOURCE="${FIELDS[0]%/}"
-    BRANCH="${FIELDS[1]:-}"
-    REPO_NAME="${SOURCE##*/}"
+while IFS=$'\t' read -r EXTENSION URL BRANCH BUILD_TOOL; do
+    [[ -z "$EXTENSION" ]] && continue
 
-    # Confirm the extension is bundled
-    BUNDLE=true
-    for FIELD in "${FIELDS[@]:2}"; do
-        [[ "$FIELD" == "bundle=false" || "$FIELD" == "bundle=no" ]] && BUNDLE=false
-    done
-    if [[ "$BUNDLE" == "false" ]]; then
-        log_info "Skipping $REPO_NAME (bundle=false)"
+    # This image builds with cmake. Skip entries that use another build tool
+    # such as cargo, matching villagesql/bld_tools/build_bundled_extensions.sh.
+    # TODO(villagesql-rust): support cargo extensions in the image too.
+    if [[ "$BUILD_TOOL" != "cmake" ]]; then
+        echo "Skipping $EXTENSION (build=$BUILD_TOOL not supported here)"
         continue
     fi
 
-    build-bundled-extension.sh "$REPO_NAME"
-
-done < "$EXTENSIONS_LIST"
+    EXT_URL="$URL" EXT_BRANCH="$BRANCH" build-bundled-extension.sh "$EXTENSION"
+done <<< "$ENTRIES"
