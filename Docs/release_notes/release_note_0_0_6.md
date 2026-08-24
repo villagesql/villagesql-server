@@ -10,7 +10,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 
 ### New Codebases
 
-- **`mysql-9.7` and `percona-8.4` builds** — 0.0.6 ships three server lines: `mysql-8.4` tracking MySQL 8.4.11, `mysql-9.7` tracking MySQL 9.7.2, and `percona-8.4` with Percona Server 8.4.10-10 merged in. Release tarballs are named per codebase, and the server reports its codebase as a prefix on `villagesql_server_version` (for example `mysql-9.7_0.0.6`). A data directory belongs to one codebase; the server refuses to start against a data directory initialized by a different one. (built from the per-codebase branches, not a single main PR)
+- **`mysql-9.7` and `percona-8.4` builds** — 0.0.6 ships three server codebases: `mysql-8.4` tracking MySQL 8.4.11, `mysql-9.7` tracking MySQL 9.7.2, and `percona-8.4` tracking Percona Server 8.4.10 plus the Oracle MySQL 8.4.11 changes. Release tarballs are named per codebase, and the server reports its codebase as a prefix on `villagesql_server_version` (for example `mysql-9.7_0.0.6`). The server refuses to start against a data directory initialized by a different server codebase. (built from the per-codebase branches, not a single main PR)
 
 ### Authentication Extensions (preview)
 
@@ -25,7 +25,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 ### Extensions
 
 - **MySQL services capability** — Extensions can consume MySQL component services through a new capability. This release exposes the consumer side only; providing services is not yet supported. (`4c56f3f00e1`, #954)
-- **`vsql_oauth2` ships with the server** — The vsql-oauth2 authentication extension joins the bundled extensions list, so its `.veb` is included in the server release artifacts. (`5f98c2ba3f0`, #1018)
+- **`vsql_oauth2` ships with the server** — The vsql-oauth2 authentication extension joins the bundled extensions list and is included in the server. (`5f98c2ba3f0`, #1018)
 - **Extension init and deinit hooks** — `on_init()` and `on_deinit()` on the extension builder register a function to run extension-side at load and unload, for local setup such as selecting CPU-specific implementations or allocating extension-owned state. (`95d5f59a9b3`, #947)
 - **Richer statement telemetry** — The statement-event capability now reports the performance-schema statement digest hash and the per-statement handler row-access counters (`read_key`, `read_next`, `read_rnd_next`, and the rest), which quantify the access method that the existing flags only flagged. (`de3d664cbae`, #921)
 - **`EXTENSION_ADMIN` privilege** — Extension management is now gated by its own dynamic privilege rather than `SUPER`. In-place upgrades grant it to existing `SUPER` holders. (`9854529cb56`, #752; `9e0577bd0b6`, #941)
