@@ -95,20 +95,29 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
                                              uint32_t key_pos, bool is_primary);
 
 // Resolve a column reference to column data.
-// The caller pre-allocates col_data; the server fills in its data pointer and
-// length to reference the stored column value.
+// key_pos is the 0-based index key column the reference belongs to; its column
+// must be held in extension-managed column storage.
+// The caller sets col_data->data to a buffer of col_data->length bytes, at
+// least the column's maximum key length as reported by
+// vef_index_max_key_len_fn. The server copies the stored value into that
+// buffer and sets col_data->length to the value length.
+// The server reads the value under a mini-transaction of its own, so the
+// extension must not call this while holding page latches in a mini-transaction
+// it started.
 // Returns false on success, true on error (writes to error_msg).
-typedef bool (*vef_index_col_ref_to_data_fn)(vef_index_ref_t index_ref,
-                                             vef_storage_col_ref_t col_ref,
-                                             vef_storage_col_data_t *col_data,
-                                             char *error_msg,
-                                             uint32_t error_msg_len);
+typedef bool (*vef_index_col_ref_to_data_fn)(
+    vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
+    vef_storage_col_data_t *col_data, char *error_msg, uint32_t error_msg_len);
 
 // Derive a stable column reference from column data.
+// key_pos is the 0-based index key column col_data holds a value of; its column
+// must be held in extension-managed column storage.
 // col_data must describe a value that was previously inserted into column
-// storage; the server computes the stable col_ref for that stored value.
+// storage; the server computes the stable col_ref for that stored value. This
+// call does not read the column storage.
 // Returns false on success, true on error (writes to error_msg).
 typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
+                                             uint32_t key_pos,
                                              vef_storage_col_data_t col_data,
                                              vef_storage_col_ref_t *col_ref,
                                              char *error_msg,
