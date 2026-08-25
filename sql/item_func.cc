@@ -4519,7 +4519,7 @@ bool udf_handler::is_vdf_returns_string() const {
 }
 
 void udf_handler::set_vdf_string_result_type(Item *item,
-                                             uint32 default_length) const {
+                                             uint32 default_length) {
   assert(is_vdf_returns_string());
   // Size the result field for a STRING-returning VDF, mirroring a classic
   // loadable UDF. Prefer the max output length the extension declared
@@ -4551,6 +4551,9 @@ void udf_handler::set_vdf_string_result_type(Item *item,
     len = MAX_BLOB_WIDTH;
   }
   item->set_data_type_string(static_cast<uint32>(len), &my_charset_utf8mb4_bin);
+  // Keep the runtime result charset in sync with the item's declared
+  // collation. 
+  m_return_value_extension.charset_info = &my_charset_utf8mb4_bin;
 }
 
 void udf_handler::cleanup() {
