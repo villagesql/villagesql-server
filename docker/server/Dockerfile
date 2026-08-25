@@ -39,6 +39,16 @@ COPY . /source
 # Build and install
 # VSQL_PRE_RELEASE_VERSION defaults to "dev"; set to "" for release builds
 ARG VSQL_PRE_RELEASE_VERSION=dev
+#
+# The three WITH_* disables below must stay in sync with the CMAKE_FLAGS in
+# villagesql/bld_tools/build_ci.sh, which explains why they are off: the Percona
+# merge brings Percona's .gitmodules, declaring storage/rocksdb/rocksdb,
+# extra/coredumper and extra/libkmip. We do not vendor them and no checkout
+# clones them, and all three default ON, so configure fails hunting for sources
+# that are not there. Leaving them off is a scope decision, not a build fix --
+# see build_ci.sh before changing either copy.
+#
+# TODO(villagesql-rebase): reenable in CI and here together.
 RUN mkdir /build && cd /build && \
     cmake /source \
         -DCMAKE_INSTALL_PREFIX=/usr \
@@ -47,6 +57,9 @@ RUN mkdir /build && cd /build && \
         -DINSTALL_MYSQLTESTDIR="" \
         -DWITH_ROUTER=OFF \
         -DWITH_NUMA=OFF \
+        -DWITH_ROCKSDB=0 \
+        -DWITH_COREDUMPER=OFF \
+        -DWITHOUT_COMPONENT_KEYRING_KMIP=ON \
         -DMYSQL_DATADIR=/var/lib/mysql \
         -DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
         -DMYSQLX_UNIX_ADDR=/var/run/mysqld/mysqlx.sock \
