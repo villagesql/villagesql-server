@@ -169,7 +169,7 @@ jobs:
 
     - name: Build VillageSQL
       working-directory: ./source
-      run: ./villagesql/bld_tools/build_server.sh
+      run: "$SOURCE_DIR/villagesql/bld_tools/build_server.sh"
 
     - name: Run standard tests (unit, integration with only suite village)
       uses: ./source/.github/actions/run-tests
