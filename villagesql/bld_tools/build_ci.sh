@@ -49,6 +49,26 @@ cd "$BUILD_DIR"
 
 CMAKE_FLAGS=(
     "-DWITH_SSL=system"
+    # Pin curl instead of letting it default. WITH_CURL_DEFAULT is "none" unless
+    # internal/CMakeLists.txt exists (CMakeLists.txt:958), and Percona's
+    # components/keyrings/keyring_vault/CMakeLists.txt:33 is a FATAL_ERROR when
+    # CURL is not found, so an unpinned build can fail configure outright:
+    #
+    #   -- WITH_CURL=none, not using any curl library.
+    #   CMake Error at components/keyrings/keyring_vault/CMakeLists.txt:33:
+    #     Not building Keyring Vault Component, could not find CURL library
+    #
+    # That is what killed the macos-arm64 job of run 32797951446 while the
+    # linux jobs of the same run passed on byte-identical flags. The macOS
+    # runner was self-hosted and reused its build dir, and this value is
+    # cache-sticky -- upstream says so itself at CMakeLists.txt:1941, "WITH_CURL
+    # may be set to 'none' in the cache". Pinning it makes the outcome the same
+    # on a warm workspace and a cold one.
+    #
+    # Not the same thing as `brew install curl`: brew's curl is keg-only on
+    # macOS, and the build that did work found the Xcode SDK's libcurl, not
+    # brew's.
+    "-DWITH_CURL=system"
     # The Percona 8.4.10 merge brings in Percona's .gitmodules, which declares
     # three submodules we do not vendor and CI does not clone:
     #
