@@ -4552,7 +4552,7 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   }
   item->set_data_type_string(static_cast<uint32>(len), &my_charset_utf8mb4_bin);
   // Keep the runtime result charset in sync with the item's declared
-  // collation. 
+  // collation.
   m_return_value_extension.charset_info = &my_charset_utf8mb4_bin;
 }
 
