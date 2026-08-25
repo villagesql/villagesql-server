@@ -3215,9 +3215,11 @@ index for FTS index */
 {
   for (ulint key_part = 0; key_part < key_info->user_defined_key_parts;
        key_part++) {
-    // VillageSQL: an externally-stored column contributes only a small stable
-    // reference to the index key, not its value, so the column-length limit
-    // does not apply to it.
+    // VillageSQL: custom indexes are not subject to the column-length limit.
+    // The custom index implementation is responsible for any key-size
+    // constraints it may need to impose. During ALTER the key's custom-index
+    // context is not yet attached, so detect the custom index by its
+    // externally-stored key column instead.
     const Field *field = key_info->key_part[key_part].field;
     if (field != nullptr && field->has_external_storage()) {
       continue;

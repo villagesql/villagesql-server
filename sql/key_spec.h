@@ -101,6 +101,10 @@ class KEY_CREATE_INFO {
 
   explicit KEY_CREATE_INFO(bool is_visible_arg) : is_visible(is_visible_arg) {}
 
+  // VillageSQL: true if this is an extension-defined (custom) index, specified
+  // via USING EXTENDED(...).
+  bool is_custom_index() const { return custom_index_type.str != nullptr; }
+
   LEX_CSTRING m_engine_attribute = EMPTY_CSTR;
   LEX_CSTRING m_secondary_engine_attribute = EMPTY_CSTR;
 };

@@ -125,6 +125,8 @@ extern uint ibuf_debug;
 #include "sync0sync.h"
 #include "trx0undo.h"
 #include "ut0new.h"
+
+#include "villagesql/custom_index.h"
 #endif /* !UNIV_HOTBACKUP */
 
 static_assert(DATA_ROW_ID == 0, "DATA_ROW_ID != 0");
@@ -2236,14 +2238,10 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
     return;
   }
 
-  // VillageSQL: an externally-stored column keeps only a fixed-size reference
-  // in the record; its value lives outside. Its record footprint is that
-  // reference even when the column is used for B-tree navigation, since the key
-  // is on the reference, not the value.
-  if (col->stored_by_extn()) {
-    rec_max_size += dfield_t::extended_ref_size();
-    return;
-  }
+  // TODO(villagesql-indexing): For custom types with column storage, use the
+  // reference length rather than the value length. We need a complete fix for
+  // accessing the appropriate length for a custom type with associated column
+  // storage.
 
   size_t field_max_size = col->get_max_size();
   size_t field_ext_max_size = DATA_BIG_COL(col) ? 2 : 1;
@@ -2644,7 +2642,12 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   if (index->rtr_srs.get() != nullptr)
     new_index->rtr_srs.reset(index->rtr_srs->clone());
 
-  if (dict_index_too_big_for_tree(table, new_index)) {
+  // VillageSQL: custom indexes are responsible for their own key representation
+  // and size constraints; InnoDB does not impose the maximum record-size limit.
+  // The custom-index context lives on the incoming index; new_index is a
+  // freshly built copy that has not been attached yet, so check index here.
+  if (!villagesql::innodb::Custom_index::is_custom(index) &&
+      dict_index_too_big_for_tree(table, new_index)) {
     if (strict) {
       dict_mem_index_free(new_index);
       dict_mem_index_free(index);

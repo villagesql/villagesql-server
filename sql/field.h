@@ -1912,8 +1912,9 @@ class Field {
   bool has_type_context() const { return nullptr != custom_type; }
 
   // VillageSQL: true if this column's value lives in external (columnar)
-  // storage, so only a small stable reference is kept inline. Column-length and
-  // key-length limits apply to that reference, not the value.
+  // storage, so only a small stable reference is kept inline. Used to detect a
+  // custom index by its key column during ALTER, before the key's custom-index
+  // context is attached.
   bool has_external_storage() const {
     return has_type_context() && custom_type->storage_intf().has_value();
   }

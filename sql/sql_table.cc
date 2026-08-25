@@ -5336,12 +5336,12 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
     return true;
   }
 
-  // VillageSQL: skip the key-length limit for an extension-defined index. Its
-  // key is a small stable reference, and whether it can be built is the
-  // extension's decision (its create hook).
+  // VillageSQL: custom indexes are not subject to the column-length limit.
+  // The custom index implementation is responsible for any key-size constraints
+  // it may need to impose.
   if (key_part_length > file->max_key_part_length(create_info) &&
       key->type != KEYTYPE_FULLTEXT &&
-      key->key_create_info.custom_index_type.str == nullptr) {
+      !key->key_create_info.is_custom_index()) {
     key_part_length = file->max_key_part_length(create_info);
     if (key->type == KEYTYPE_MULTIPLE) {
       /* not a critical problem */
@@ -7680,12 +7680,12 @@ static bool prepare_key(
   }
   key_info->actual_flags = key_info->flags;
 
-  // VillageSQL: skip the key-length limit for an extension-defined index. Its
-  // key is a small stable reference, and whether it can be built is the
-  // extension's decision (its create hook).
+  // VillageSQL: custom indexes are not subject to the column-length limit.
+  // The custom index implementation is responsible for any key-size constraints
+  // it may need to impose.
   if (key_info->key_length > file->max_key_length() &&
       key->type != KEYTYPE_FULLTEXT &&
-      key->key_create_info.custom_index_type.str == nullptr) {
+      !key->key_create_info.is_custom_index()) {
     my_error(ER_TOO_LONG_KEY, MYF(0), file->max_key_length());
     if (thd->is_error())  // May be silenced - see Bug#20629014
       return true;

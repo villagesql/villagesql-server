@@ -60,13 +60,14 @@ using vsql::preview_storage_builder::StorageCapability;
 // compare and to_string receive the full persisted field; to_string reports the
 // payload byte length so the value round-trips visibly in the test.
 //
-// The 4096-byte width is the whole point of this fixture: it is wider than the
-// 3072-byte B-tree key-length limit that trips ER_INDEX_COLUMN_TOO_LONG, but
-// well under the custom-column backing cap so INSTALL EXTENSION succeeds.
+// The 12K width is the whole point of this fixture: it is wider than the
+// 3072-byte B-tree key-length limit that trips ER_INDEX_COLUMN_TOO_LONG, and
+// wider than the 8K half-page boundary that trips the InnoDB record-size error,
+// but well under the custom-column backing cap so INSTALL EXTENSION succeeds.
 
-static constexpr size_t kRefSize = 8;         // sizeof(Column::Ref)
-static constexpr size_t kPayloadSize = 4088;  // opaque payload bytes
-static constexpr size_t kFieldSize = kRefSize + kPayloadSize;  // = 4096
+static constexpr size_t kRefSize = 8;          // sizeof(Column::Ref)
+static constexpr size_t kPayloadSize = 12280;  // opaque payload bytes
+static constexpr size_t kFieldSize = kRefSize + kPayloadSize;  // = 12288 (12K)
 
 // The payload width the storage layer round-trips as col_data.
 static constexpr uint32_t kColDataSize = static_cast<uint32_t>(kPayloadSize);

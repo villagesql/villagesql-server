@@ -2915,9 +2915,8 @@ dberr_t row_create_index_for_mysql(
     ut_ad(table->is_intrinsic());
   }
 
-  // VillageSQL: an extension-defined index keys on a small stable reference,
-  // not the column value, so the column-length limit does not apply; whether it
-  // can be built is the extension's decision (its create hook).
+  // VillageSQL: custom indexes are responsible for their own key representation
+  // and size constraints; InnoDB does not impose the column key-length limit.
   const bool custom_index = villagesql::innodb::Custom_index::is_custom(index);
 
   for (i = 0; i < index->n_def && !custom_index; i++) {

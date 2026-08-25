@@ -1977,9 +1977,11 @@ void dd_visit_keys_with_too_long_parts(
     if (!(key.flags & (HA_SPATIAL | HA_FULLTEXT))) {
       for (unsigned i = 0; i < key.user_defined_key_parts; i++) {
         const KEY_PART_INFO *key_part = &key.key_part[i];
-        // VillageSQL: an externally-stored column contributes only a small
-        // stable reference to the index key, not its value, so the
-        // column-length limit does not apply to it.
+        // VillageSQL: custom indexes are not subject to the column-length
+        // limit. The custom index implementation is responsible for any
+        // key-size constraints it may need to impose. During ALTER the key's
+        // custom-index context is not yet attached, so detect the custom index
+        // by its externally-stored key column instead.
         if (key_part->field != nullptr &&
             key_part->field->has_external_storage()) {
           continue;
