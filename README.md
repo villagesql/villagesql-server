@@ -255,16 +255,7 @@ VillageSQL provides a C++ SDK and a Rust SDK for building high-performance exten
 
 ## Roadmap
 
-Priority items are listed below. The full roadmap can be found at [villagesql.com/roadmap](https://villagesql.com/roadmap).
-
-- [ ] **Custom Index Types:** Support for extension-defined index types. Standard B-tree indexing of custom-typed columns already works. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
-- [ ] **Variable Length Custom Types:** Support for custom types with variable storage size. ([#13](https://github.com/villagesql/villagesql-server/issues/13))
-- [ ] **Extension Upgrades Without a Restart:** `ALTER EXTENSION <name> VERSION '<v>' AT RESTART` applies a version change at the next restart today; applying one to a running server does not. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
-- [ ] **Full Built-in Aggregate Support:** Investigating support for built-in aggregate functions (SUM, AVG, etc.) with custom types. COUNT(DISTINCT), MIN, and MAX work today. Extensions can implement custom aggregates via VDF Aggregates. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
-- [ ] **Startup Install Flag:** Automatic extension installation on server startup. ([#17](https://github.com/villagesql/villagesql-server/issues/17))
-- [ ] **Windows Support:** Native Windows compilation and .dll support. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
-- [ ] **Analytical Capabilities:** Embedded analytical engines (e.g., DuckDB integration).
-- [ ] **Fully-Managed Cloud Service:** VillageSQL as a managed database offering.
+The full, up-to-date roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
 ## Troubleshooting
 
