@@ -14,11 +14,14 @@
 #   extension  — last segment of path, or of url when path is ""
 #   abis       — ["stable","dev"] unless the entry pins one with abi=
 #   bundle     — the narrowest build channel that ships the extension:
-#                "release" (bundle=true, the default), "dev" (bundle=dev), or
-#                "none" (bundle=false). A "dev" extension ships in pre-release
-#                artifacts only — the -dev tarball and the dev Docker image —
-#                and is held back from release builds. Any other bundle= value
-#                is an error, so a typo cannot silently ship or withhold one.
+#                "release", "dev", or "none". A manifest entry says how widely
+#                it ships (bundle=all, the default; bundle=dev; bundle=none),
+#                and this names the channel that follows from it, so a "dev"
+#                extension reaches pre-release artifacts only — the -dev
+#                tarball and the dev Docker image — and is held back from
+#                release builds. true/yes and false/no are read as all and
+#                none. Any other bundle= value is an error, so a typo cannot
+#                silently ship or withhold an extension.
 #
 # There is no default branch. An entry that names none — whether it stops at
 # the url or goes straight to a key=value option — is an error. Unrecognized
@@ -63,7 +66,7 @@ jq -Rcn '
           as $path
       | ($opts | map(select(startswith("abi=")) | ltrimstr("abi=")) | .[0]) as $abi
       | ($opts | map(select(startswith("bundle=")) | ltrimstr("bundle=")) | .[0] //
-        "true" | ascii_downcase) as $bundle
+        "all" | ascii_downcase) as $bundle
       | {
           url:       ($f[0] | rtrimstr("/")),
           branch:    $f[1],
@@ -72,9 +75,9 @@ jq -Rcn '
           extension: (if $path != "" then ($path | split("/") | last)
                       else ($f[0] | rtrimstr("/") | split("/") | last) end),
           abis:      (if $abi then [$abi] else ["stable","dev"] end),
-          bundle:    (if   $bundle == "true"  or $bundle == "yes" then "release"
-                      elif $bundle == "dev"                       then "dev"
-                      elif $bundle == "false" or $bundle == "no"  then "none"
+          bundle:    (if   $bundle | IN("all", "true", "yes")  then "release"
+                      elif $bundle == "dev"                    then "dev"
+                      elif $bundle | IN("none", "false", "no") then "none"
                       else error("unknown bundle=\($bundle) in entry: \(.)")
                       end)
         }

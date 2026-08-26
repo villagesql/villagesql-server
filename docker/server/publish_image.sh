@@ -38,7 +38,6 @@ DOCKERFILE="$SCRIPT_DIR/Dockerfile"
 
 TAG=""
 REPO="$DOCKER_REPO"
-REGISTRY="dockerhub"
 PLATFORM=""
 PUSH=0
 
@@ -52,12 +51,10 @@ Usage:
 Options:
   -t, --tag TAG          Tag to build, e.g. a version (required)
   -p, --platform PLAT    Single docker platform, e.g. linux/arm64 (required)
-  -r, --repo REPO        Image repository (default: $DOCKER_REPO). Ignored
-                         when --registry is gar.
-      --registry NAME    Where to push: dockerhub (default) or gar. "gar"
-                         composes the repository from GAR_LOCATION,
-                         GAR_PROJECT, GAR_REPOSITORY and GAR_IMAGE, and is
-                         where the pre-release images go.
+  -r, --repo REPO        Image repository (default: $DOCKER_REPO). Pass a
+                         full path to publish elsewhere; the registry to log
+                         in to is read from it. Pre-release images go to
+                         \$GAR_DEV_REPO, defined in docker_release_lib.sh.
       --push             Publish the image to the registry. Without this the
                          image is only built, and loaded locally for testing.
   -n, --dry-run          Print the commands without running them
@@ -83,9 +80,9 @@ Examples:
   publish_image.sh --tag 0.0.5 --platform linux/arm64 --push
 
   # Publish a pre-release image to Artifact Registry
-  GAR_LOCATION=us-central1 GAR_PROJECT=my-project \\
   VSQL_PRE_RELEASE_VERSION=dev \\
-    publish_image.sh --registry gar --tag 0.0.6-dev --platform linux/amd64 --push
+    publish_image.sh --repo "\$GAR_DEV_REPO" --tag 0.0.6-dev \\
+                     --platform linux/amd64 --push
 EOF
 }
 
@@ -95,7 +92,6 @@ main() {
             -t|--tag)      TAG="$2"; shift 2 ;;
             -p|--platform) PLATFORM="$2"; shift 2 ;;
             -r|--repo)     REPO="$2"; shift 2 ;;
-            --registry)    REGISTRY="$2"; shift 2 ;;
             --push)        PUSH=1; shift ;;
             -n|--dry-run)  DRY_RUN=1; shift ;;
             -h|--help)     usage; exit 0 ;;
@@ -109,7 +105,6 @@ main() {
         *,*) echo "error: --platform takes a single platform; run once per arch" >&2; exit 2 ;;
     esac
     require_docker
-    REPO="$(resolve_repo "$REGISTRY" "$REPO")"
 
     local image_tag output
     image_tag="$(arch_tag "$REPO" "$TAG" "$PLATFORM")"

@@ -23,15 +23,10 @@ on:
         type: string
         default: ''
       repo:
-        description: 'Image repository to push to. Ignored when registry is "gar", which composes the path from the GAR_* repository variables.'
+        description: 'Image repository to push to. The registry to log in to is read from it, so a full path publishes anywhere.'
         required: false
         type: string
         default: 'villagesql/server'
-      registry:
-        description: 'Registry to publish to: "dockerhub" or "gar". GAR carries the pre-release images.'
-        required: false
-        type: string
-        default: 'dockerhub'
       pre_release_version:
         description: 'Pre-release suffix for the version. Empty (the default) is a release build; set e.g. dev or rc1 otherwise.'
         required: false
@@ -60,18 +55,10 @@ on:
         type: string
         default: ''
       repo:
-        description: 'Image repository to push to. Ignored when registry is "gar".'
+        description: 'Image repository to push to. Leave as-is for a Docker Hub release; for pre-release images paste the villagesql-server-dev path from docker/server/README.md.'
         required: false
         type: string
         default: 'villagesql/server'
-      registry:
-        description: 'Registry to publish to. GAR carries the pre-release images.'
-        required: true
-        type: choice
-        options:
-          - dockerhub
-          - gar
-        default: dockerhub
       pre_release_version:
         description: 'Pre-release suffix for the version. Leave blank for a release build; set e.g. dev or rc1 otherwise.'
         required: false
@@ -122,7 +109,6 @@ jobs:
           echo "Git SHA1: $(git rev-parse HEAD)"
           echo "Git Commit: $(git log -n1 --oneline)"
           echo "Image Tag: ${{ inputs.tag || inputs.ref }}"
-          echo "Registry: ${{ inputs.registry }}"
           echo "Repository: ${{ inputs.repo }}"
           echo "Pre-release Version: '${{ inputs.pre_release_version }}'"
           echo "Dev ABI: ${{ inputs.dev_abi }}"
@@ -168,7 +154,6 @@ jobs:
       platform: ${{ matrix.docker_platform }}
       runner: ${{ toJSON(matrix.runner) }}
       repo: ${{ inputs.repo }}
-      registry: ${{ inputs.registry }}
       pre_release_version: ${{ inputs.pre_release_version }}
       dev_abi: ${{ inputs.dev_abi }}
 
@@ -189,26 +174,17 @@ jobs:
           sparse-checkout: docker/server/
           ref: ${{ inputs.ref }}
 
-      # The same resolution build-docker-branch did, repeated here because the
-      # manifest job needs the identical path to find the arch tags it stitches.
-      - name: Resolve image repository
-        env:
-          GAR_LOCATION: ${{ vars.GAR_LOCATION }}
-          GAR_PROJECT: ${{ vars.GAR_PROJECT }}
-          GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
-          GAR_IMAGE: ${{ vars.GAR_IMAGE }}
+      # As in build-docker-branch: the registry follows from the repository,
+      # so the manifest job cannot log in somewhere the images are not.
+      - name: Detect registry
         run: |
           # shellcheck source=/dev/null
           source docker/server/docker_release_lib.sh
-          REPO="$(resolve_repo '${{ inputs.registry }}' '${{ inputs.repo }}')"
-          echo "IMAGE_REPO=$REPO" >> "$GITHUB_ENV"
-          echo "Publishing manifest for $REPO"
-          if [ '${{ inputs.registry }}' = 'gar' ]; then
-            echo "GAR_HOST=$(gar_host)" >> "$GITHUB_ENV"
-          fi
+          echo "REGISTRY_HOST=$(registry_host '${{ inputs.repo }}')" >> "$GITHUB_ENV"
+          echo "Publishing manifest for ${{ inputs.repo }}"
 
       - name: Log in to Docker Hub
-        if: inputs.registry == 'dockerhub'
+        if: env.REGISTRY_HOST == ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
@@ -218,16 +194,18 @@ jobs:
       # service account, and auth_token is the federated token IAM addresses.
       - name: Authenticate to Google Cloud
         id: gcp-auth
-        if: inputs.registry == 'gar'
+        if: env.REGISTRY_HOST != ''
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          workload_identity_provider: ${{ vars.GAR_WIF_PROVIDER || 'projects/161966695365/locations/global/workloadIdentityPools/github/providers/github-workflow' }}
+          # As in build-docker-branch: the one pool declared in
+          # vcloud-cell/dev-cluster/wif.tf, named outright.
+          workload_identity_provider: 'projects/161966695365/locations/global/workloadIdentityPools/github/providers/github-workflow'
 
       - name: Log in to Artifact Registry
-        if: inputs.registry == 'gar'
+        if: env.REGISTRY_HOST != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          registry: ${{ env.GAR_HOST }}
+          registry: ${{ env.REGISTRY_HOST }}
           username: oauth2accesstoken
           password: ${{ steps.gcp-auth.outputs.auth_token }}
 
@@ -237,6 +215,6 @@ jobs:
         run: |
           docker/server/publish_manifest.sh \
             --tag "${{ inputs.tag || inputs.ref }}" \
-            --repo "$IMAGE_REPO" \
+            --repo "${{ inputs.repo }}" \
             --platforms "${{ needs.report-parameters.outputs.platforms }}" \
             --shared-tags "${{ inputs.shared_tags }}"

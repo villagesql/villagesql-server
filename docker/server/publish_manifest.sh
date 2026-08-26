@@ -32,7 +32,6 @@ source "$SCRIPT_DIR/docker_release_lib.sh"
 
 TAG=""
 REPO="$DOCKER_REPO"
-REGISTRY="dockerhub"
 PLATFORMS="$DEFAULT_PLATFORMS"
 SHARED_TAGS="$DOCKER_SHARED_TAGS"
 
@@ -47,11 +46,8 @@ Usage:
 
 Options:
   -t, --tag TAG          Primary tag to publish, e.g. a version (required)
-  -r, --repo REPO        Image repository (default: $DOCKER_REPO). Ignored
-                         when --registry is gar.
-      --registry NAME    Where the arch images live: dockerhub (default) or
-                         gar. "gar" composes the repository from GAR_LOCATION,
-                         GAR_PROJECT, GAR_REPOSITORY and GAR_IMAGE.
+  -r, --repo REPO        Image repository (default: $DOCKER_REPO). Must match
+                         the one publish_image.sh pushed the arch images to.
   -p, --platforms LIST   Comma-separated platforms whose arch images make up
                          the manifest (default: $DEFAULT_PLATFORMS)
   -s, --shared-tags LIST       Comma-separated shared tags applied in addition to
@@ -114,7 +110,6 @@ main() {
         case "$1" in
             -t|--tag)          TAG="$2"; shift 2 ;;
             -r|--repo)      REPO="$2"; shift 2 ;;
-            --registry)     REGISTRY="$2"; shift 2 ;;
             -p|--platforms) PLATFORMS="$2"; shift 2 ;;
             -s|--shared-tags)      SHARED_TAGS="$2"; shift 2 ;;
             -n|--dry-run)   DRY_RUN=1; shift ;;
@@ -125,7 +120,6 @@ main() {
 
     [ -n "$TAG" ] || { echo "error: --tag is required" >&2; usage >&2; exit 2; }
     require_docker
-    REPO="$(resolve_repo "$REGISTRY" "$REPO")"
 
     local platform
     ARCH_TAGS=()

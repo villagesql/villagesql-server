@@ -101,45 +101,40 @@ and the manifest list is published under `TAG` plus each shared tag (`latest` an
 
 ### Registries
 
-Both scripts take `--registry`, which decides where the image goes:
+`--repo` is the only thing that decides where an image goes. The registry to
+authenticate against is read from it — the first path segment is a hostname
+when it carries a dot or a port, exactly as `docker` itself reads an image
+reference — so there is no second flag that can disagree with it.
 
-| Registry | Carries | Repository |
+| `--repo` | Registry | Carries |
 | --- | --- | --- |
-| `dockerhub` (default) | Released images | `--repo`, default `villagesql/server` |
-| `gar` | Pre-release images | Composed from the `GAR_*` variables below |
+| `villagesql/server` (default) | Docker Hub | Released images |
+| `$GAR_DEV_REPO` | Google Artifact Registry | Pre-release images |
 
-Google Artifact Registry holds the pre-release images, so an unreleased build
-never lands on a public registry. The defaults name the `villagesql-server-dev`
-repository declared in the `vcloud-cell/dev-cluster` Terraform, so
-`--registry gar` needs no configuration to push to the usual place:
-
-| Variable | Meaning | Default |
-| --- | --- | --- |
-| `GAR_LOCATION` | GAR region | `us-central1` |
-| `GAR_PROJECT` | GCP project id | `villagesql-vcloud-pelican-dev` |
-| `GAR_REPOSITORY` | Artifact Registry repository | `villagesql-server-dev` |
-| `GAR_IMAGE` | Image name within it | `server` |
-
-Together those form
-`$GAR_LOCATION-docker.pkg.dev/$GAR_PROJECT/$GAR_REPOSITORY/$GAR_IMAGE`, i.e.
-`us-central1-docker.pkg.dev/villagesql-vcloud-pelican-dev/villagesql-server-dev/server`.
-Setting one empty is an error rather than a half-formed path, which GAR would
-otherwise report as an opaque permission denial.
+Pre-release images go to Artifact Registry so an unreleased build never lands
+on a public registry. `GAR_DEV_REPO` is defined in `docker_release_lib.sh` and
+names the `villagesql-server-dev` repository declared in the
+`vcloud-cell/dev-cluster` Terraform:
 
 ```bash
 VSQL_PRE_RELEASE_VERSION=dev \
     docker/server/publish_image.sh \
-        --registry gar --tag 0.0.6-dev --platform linux/amd64 --push
+        --repo "$GAR_DEV_REPO" --tag 0.0.6-dev --platform linux/amd64 --push
 ```
 
-Locally that needs `gcloud auth configure-docker us-central1-docker.pkg.dev`
-once. In CI nothing is configured by hand: the workflows use direct Workload
-Identity Federation, exchanging the job's OIDC token for a Google token tied to
-the pool that performed the exchange. No service account is impersonated and no
-key is stored — the repository's IAM policy grants
-`roles/artifactregistry.writer` to this GitHub repo's numeric ID within the
-pool, so only this repo's workflows can push. The pool, provider and policy are
-declared in `vcloud-cell/dev-cluster` (`wif.tf`, `artifact-registry.tf`); the
+Publishing anywhere else — a scratch repository, a different project — means
+passing that path to `--repo` instead. Nothing needs reconfiguring, and the
+`repo` input on both workflows takes the same value, so a manual run can
+override it without a code change.
+
+Locally this needs `gcloud auth configure-docker` for the host once. In CI
+nothing is configured by hand: the workflows use direct Workload Identity
+Federation, exchanging the job's OIDC token for a Google token tied to the pool
+that performed the exchange. No service account is impersonated and no key is
+stored — the repository's IAM policy grants `roles/artifactregistry.writer` to
+this GitHub repo's numeric ID within the pool, so only this repo's workflows
+can push. The pool, provider and policy are declared in
+`vcloud-cell/dev-cluster` (`wif.tf`, `artifact-registry.tf`); the
 `GAR_WIF_PROVIDER` repository variable overrides the provider if it ever moves.
 
 ## Release Build Args

@@ -7,20 +7,24 @@
 # Usage: json_bundle_extensions.sh [channel] [extension]
 #
 # [channel]:   Which build channel to select for. Default "release".
-#                release — bundle=true only. What a release artifact ships.
-#                dev     — bundle=true and bundle=dev. What a pre-release
+#                release — bundle=all only. What a release artifact ships.
+#                dev     — bundle=all and bundle=dev. What a pre-release
 #                          artifact ships: the -dev tarball, the dev image.
-#                all     — every entry, bundle=false included. What the
+#                test    — every entry, bundle=none included. What the
 #                          sanitizer and compat suites build, since they test
 #                          extensions that no artifact ships.
-#              For compatibility with the include_unbundled argument these
-#              scripts used to take, "" and 0/no mean release, and 1/yes means
-#              all.
+#              A channel names who the build is for, which is why the widest
+#              one is "test" and not "all": bundle=all already means an
+#              extension ships in every artifact, and reusing the word for a
+#              set that also holds the extensions shipping nowhere would read
+#              as its opposite. For compatibility with the include_unbundled
+#              argument these scripts used to take, "" and 0/no mean release,
+#              and 1/yes/all mean test.
 # [extension]: Optional extension name to select just that one. Pass "" to
 #              keep every extension the channel allows.
 #
-# A channel is a widening sequence: release ⊂ dev ⊂ all. Nothing selects
-# bundle=dev without also selecting bundle=true, because an extension held
+# A channel is a widening sequence: release ⊂ dev ⊂ test. Nothing selects
+# bundle=dev without also selecting bundle=all, because an extension held
 # back from release still depends on the ones that are not.
 #
 # Inputs (environment variables, all optional):
@@ -28,7 +32,7 @@
 #
 # Testable locally:
 #   villagesql/bld_matrix/json_bundle_extensions.sh dev | jq .
-#   villagesql/bld_matrix/json_bundle_extensions.sh all vsql-ai | jq .
+#   villagesql/bld_matrix/json_bundle_extensions.sh test vsql-ai | jq .
 
 set -euo pipefail
 
@@ -40,10 +44,10 @@ CHANNEL="${1:-release}"
 EXTENSION_FILTER="${2:-}"
 
 case "$CHANNEL" in
-    release|0|no|"") CHANNEL=release ;;
-    dev)             CHANNEL=dev ;;
-    all|1|yes)       CHANNEL=all ;;
-    *) die "Invalid channel: $CHANNEL (expected release, dev, or all)" ;;
+    release|0|no|"")  CHANNEL=release ;;
+    dev)              CHANNEL=dev ;;
+    test|all|1|yes)   CHANNEL=test ;;
+    *) die "Invalid channel: $CHANNEL (expected release, dev, or test)" ;;
 esac
 
 "$MATRIX_DIR/json_extensions.sh" | jq -c \
@@ -51,6 +55,6 @@ esac
     --arg filter "$EXTENSION_FILTER" '
       [ { release: ["release"],
           dev:     ["release", "dev"],
-          all:     ["release", "dev", "none"] }[$channel] ] as $keep
+          test:    ["release", "dev", "none"] }[$channel] ] as $keep
       | map(select((.bundle | IN($keep[][]))
                    and ($filter == "" or .extension == $filter)))'

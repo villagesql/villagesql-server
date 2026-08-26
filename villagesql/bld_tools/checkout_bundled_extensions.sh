@@ -7,12 +7,12 @@
 # <ext_dir>:        Path for checked out extensions.  Should exist before calling.
 # [extension]:      Optional extension name to clone only one extension (e.g.
 #                   vsql-ai). Omit to clone every extension in the manifest.
-# [channel]:        Build channel to clone for: release (default), dev, or all.
+# [channel]:        Build channel to clone for: release (default), dev, or test.
 #                   "dev" adds the bundle=dev extensions, which ship only in
-#                   pre-release artifacts; "all" adds bundle=false too, which
+#                   pre-release artifacts; "test" adds bundle=none too, which
 #                   ship nowhere but are still built and tested (e.g. by the
 #                   sanitizer workflow). 0/no and 1/yes are accepted as the
-#                   old include_unbundled spellings of release and all.
+#                   old include_unbundled spellings of release and test.
 #
 # Which entries a channel selects is decided by
 # villagesql/bld_matrix/json_bundle_extensions.sh, which reads the manifest at

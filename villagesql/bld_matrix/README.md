@@ -49,8 +49,8 @@ MATRIX="$PWD/villagesql/bld_matrix"
 "$MATRIX/json_bundle_extensions.sh" release | jq -r '.[].extension'
 "$MATRIX/json_bundle_extensions.sh" dev | jq -r '.[].extension'
 
-# Everything the sanitizer and compat suites build, bundle=false included.
-"$MATRIX/json_bundle_extensions.sh" all | jq -r '.[].extension'
+# Everything the sanitizer and compat suites build, bundle=none included.
+"$MATRIX/json_bundle_extensions.sh" test | jq -r '.[].extension'
 
 # What a channel adds over the release set.
 diff <("$MATRIX/json_bundle_extensions.sh" release | jq -r '.[].extension') \

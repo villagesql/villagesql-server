@@ -22,8 +22,8 @@ without producing a package.
   All three are driven by the manifest at
   [../dev_server/bundled_extensions.txt](../dev_server/bundled_extensions.txt),
   and all three take a **build channel** saying how much of it to act on:
-  `release` (the `bundle=true` extensions), `dev` (those plus `bundle=dev`), or
-  `all` (plus `bundle=false`, which no artifact ships but the sanitizer and
+  `release` (the `bundle=all` extensions), `dev` (those plus `bundle=dev`), or
+  `test` (plus `bundle=none`, which no artifact ships but the sanitizer and
   compat suites still build). Which entries a channel selects is decided in one
   place, [../bld_matrix/json_bundle_extensions.sh](../bld_matrix/json_bundle_extensions.sh).
 - **Test.** `test_ci.sh` runs the VillageSQL unit tests and the MTR

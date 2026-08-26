@@ -10,14 +10,15 @@
 #   abi=<abi>:     Optional. ABI to test against: "stable" or "dev".
 #                  Omit to test against both.
 #   bundle=<when>: Optional. Which artifacts ship the extension.
-#                  true (the default) — every artifact, release included.
+#                  all  — every artifact, release included. The default.
 #                  dev  — pre-release artifacts only: the -dev tarball and the
 #                         dev Docker image. Held back from release builds, so
 #                         an extension can be shipped to early users before it
 #                         is ready to carry a release compatibility promise.
-#                  false — no artifact ships it; it is still cloned, built and
+#                  none — no artifact ships it; it is still cloned, built and
 #                         compat-tested. Use for work in progress.
-#                  Any other value is an error rather than a silent default.
+#                  true/yes and false/no are read as all and none. Any other
+#                  value is an error rather than a silent default.
 #   build=<tool>:  Optional. Build system: "cmake" or "cargo". Default "cmake".
 #   path=<subdir>: Optional. Extension lives in this subdir of the repo.
 #                  Default: repo root. Also used to derive the extension name
@@ -39,13 +40,13 @@ https://github.com/villagesql/vsql-network-address main
 https://github.com/villagesql/vsql-oauth2 main abi=dev
 https://github.com/villagesql/vsql-rest main abi=dev
 https://github.com/villagesql/vsql-uuid main
-https://github.com/villagesql/vsql-vector main bundle=false
+https://github.com/villagesql/vsql-vector main bundle=none
 https://github.com/villagesql/vsql-metrics-otel-exporter main bundle=dev
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_keyring abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_ping abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rational abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_status_var abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_sys_var abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_thread_worker abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=tests/sdk_coverage abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_keyring abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_ping abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rational abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_status_var abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_sys_var abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_thread_worker abi=stable bundle=none
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=tests/sdk_coverage abi=stable bundle=none
