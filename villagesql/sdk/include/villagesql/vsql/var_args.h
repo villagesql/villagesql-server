@@ -16,8 +16,6 @@
 #ifndef VILLAGESQL_VSQL_VAR_ARGS_H
 #define VILLAGESQL_VSQL_VAR_ARGS_H
 
-// Typed wrappers for varargs VDFs.
-//
 // A varargs VDF is declared at registration time with .varargs() on the
 // func builder and takes a vsql::VarArgs argument in place of the usual
 // fixed-arity IntArg/StringArg/CustomArg parameters. The body inspects

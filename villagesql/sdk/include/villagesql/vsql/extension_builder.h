@@ -31,10 +31,9 @@ namespace vsql {
 // call site.
 using namespace func_builder;
 
-// ExtensionBuilder is the vsql-API extension builder. It is a standalone type
-// (not a wrapper around villagesql::extension_builder::ExtensionBuilder) so it
-// can evolve independently. It satisfies the same duck-typed interface required
-// by VEF_GENERATE_ENTRY_POINTS.
+// ExtensionBuilder is used to define the functionality exported by and
+// capabilities required by a VillageSQL extension. The output of the builder
+// is passed to VEF_GENERATE_ENTRY_POINTS.
 template <typename FuncTuple, typename TypeTuple,
           typename RequiredCapabilityTuple = std::tuple<>,
           void (*InitFn)() = nullptr, void (*DeinitFn)() = nullptr>
