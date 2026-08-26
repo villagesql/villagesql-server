@@ -18,10 +18,9 @@ on:
         required: true
         type: string
       tag:
-        description: 'Image tag to publish, e.g. 0.0.5. Defaults to "ref". Use a distinguishable value (e.g. 0.0.5-test) for test pushes.'
-        required: false
+        description: 'Image tag to publish, e.g. mysql-8.4_0.0.6. Use a distinguishable value (e.g. mysql-8.4_0.0.6-test) for test pushes.'
+        required: true
         type: string
-        default: ''
       repo:
         description: 'Image repository to push to.'
         required: false
@@ -37,23 +36,22 @@ on:
         required: false
         type: string
         default: 'ON'
-      shared_tags:
-        description: 'Comma-separated tags the manifest is published under in addition to "tag". Empty publishes only "tag", which is what a test push wants.'
+      version_labels:
+        description: 'Comma-separated labels to add to tag as a version suffix. Empty publishes only "tag".'
         required: false
         type: string
-        default: 'latest,stable'
+        default: ''
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Git tag, branch, or SHA to build from (e.g. 0.0.5 or main).'
+        description: 'Git tag, branch, or SHA to build from (e.g. publish/mysql-8.4_0.0.6 or main).'
         required: true
         type: string
         default: 'main'
       tag:
-        description: 'Image tag to publish. Leave blank to use "ref". Use a distinguishable value (e.g. 0.0.5-test) for test pushes — the shared tags (latest, stable) move to whatever is published here.'
-        required: false
+        description: 'Image tag to publish, e.g. mysql-8.4_0.0.6. Use a distinguishable value (e.g. mysql-8.4_0.0.6-test) for test pushes.'
+        required: true
         type: string
-        default: ''
       repo:
         description: 'Image repository to push to.'
         required: false
@@ -72,11 +70,11 @@ on:
           - 'ON'
           - 'OFF'
         default: 'ON'
-      shared_tags:
-        description: 'Comma-separated tags the manifest is published under in addition to "tag". Clear this for a test push, so latest and stable do not move.'
+      version_labels:
+        description: 'Comma-separated labels to add to tag as version suffix. Clear this to publish only "tag".'
         required: false
         type: string
-        default: 'latest,stable'
+        default: ''
 
 permissions:
   contents: read
@@ -105,11 +103,11 @@ jobs:
           echo "Git Rev: ${{ inputs.ref }}"
           echo "Git SHA1: $(git rev-parse HEAD)"
           echo "Git Commit: $(git log -n1 --oneline)"
-          echo "Image Tag: ${{ inputs.tag || inputs.ref }}"
+          echo "Image Tag: ${{ inputs.tag }}"
           echo "Repository: ${{ inputs.repo }}"
           echo "Pre-release Version: '${{ inputs.pre_release_version }}'"
           echo "Dev ABI: ${{ inputs.dev_abi }}"
-          echo "Shared Tags: '${{ inputs.shared_tags }}'"
+          echo "Version Labels: '${{ inputs.version_labels }}'"
 
       # Matrix logic lives in villagesql/bld_matrix, so it can be run locally
       # exactly as it runs here:
@@ -147,7 +145,7 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
-      tag: ${{ inputs.tag || inputs.ref }}
+      tag: ${{ inputs.tag }}
       platform: ${{ matrix.docker_platform }}
       runner: ${{ toJSON(matrix.runner) }}
       repo: ${{ inputs.repo }}
@@ -177,12 +175,10 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # The shared tags move to this manifest. A test push clears them, so
-      # that a 'docker pull villagesql/server' cannot see the result.
       - name: Publish manifest
         run: |
           docker/server/publish_manifest.sh \
-            --tag "${{ inputs.tag || inputs.ref }}" \
+            --tag "${{ inputs.tag }}" \
             --repo "${{ inputs.repo }}" \
             --platforms "${{ needs.report-parameters.outputs.platforms }}" \
-            --shared-tags "${{ inputs.shared_tags }}"
+            --version-labels "${{ inputs.version_labels }}"

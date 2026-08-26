@@ -15,12 +15,12 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 # Stitch the per-arch VillageSQL Server images already in the registry into
-# one multi-arch manifest list, published under the primary tag plus every
-# shared tag (e.g. latest, stable), then verify the result.
+# one multi-arch manifest list, published under the primary tag plus tags
+# for any version suffix (e.g. latest) that are provided.
 #
 # Use --dry-run to see what would be published.
 # The arch images it references are verified before anything is written, which
-# catches an arch that was never pushed before the shared tags move.
+# catches an arch that was never pushed.
 #
 # Run publish_image.sh --push once per platform first.
 
@@ -33,7 +33,7 @@ source "$SCRIPT_DIR/docker_release_lib.sh"
 TAG=""
 REPO="$DOCKER_REPO"
 PLATFORMS="$DEFAULT_PLATFORMS"
-SHARED_TAGS="$DOCKER_SHARED_TAGS"
+VERSION_LABELS=""
 
 usage() {
     cat <<EOF
@@ -45,12 +45,14 @@ Usage:
   publish_manifest.sh --tag TAG [options]
 
 Options:
-  -t, --tag TAG          Primary tag to publish, e.g. a version (required)
+  -t, --tag TAG          Primary tag to publish.  For releases, use the full release
+                         identifier with codebase and version (required)
   -r, --repo REPO        Image repository (default: $DOCKER_REPO)
   -p, --platforms LIST   Comma-separated platforms whose arch images make up
                          the manifest (default: $DEFAULT_PLATFORMS)
-  -s, --shared-tags LIST       Comma-separated shared tags applied in addition to
-                         the primary tag (default: $DOCKER_SHARED_TAGS)
+  -v, --version-labels LIST
+                         Comma-separated version labels for version suffix tags
+                         in addition to the primary tag. Leave empty for none.
   -n, --dry-run          Print the commands without running them. The arch
                          images are still checked, and a missing one is a
                          warning rather than an error.
@@ -86,13 +88,15 @@ verify_arch_images() {
 }
 
 publish_manifest() {
-    local manifest_args=() shared_tag
+    local manifest_args=() version_label base_tag
     manifest_args+=(-t "$REPO:$TAG")
     # Guarded by the count: bash 3.2, and so macOS, treats "${arr[@]}" on an
     # empty array as an unbound variable under set -u.
-    if [ "${#SHARED_TAG_LIST[@]}" -gt 0 ]; then
-        for shared_tag in "${SHARED_TAG_LIST[@]}"; do
-            manifest_args+=(-t "$REPO:$shared_tag")
+    if [ "${#VERSION_LABELS_LIST[@]}" -gt 0 ]; then
+        # Strip the version to leave the codebase, or use as is for tests
+        base_tag=${TAG%_*}
+        for version_label in "${VERSION_LABELS_LIST[@]}"; do
+            manifest_args+=(-t "$REPO:${base_tag}_${version_label}")
         done
     fi
 
@@ -110,7 +114,7 @@ main() {
             -t|--tag)          TAG="$2"; shift 2 ;;
             -r|--repo)      REPO="$2"; shift 2 ;;
             -p|--platforms) PLATFORMS="$2"; shift 2 ;;
-            -s|--shared-tags)      SHARED_TAGS="$2"; shift 2 ;;
+            -v|--version-labels)      VERSION_LABELS="$2"; shift 2 ;;
             -n|--dry-run)   DRY_RUN=1; shift ;;
             -h|--help)      usage; exit 0 ;;
             *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -128,12 +132,13 @@ main() {
         ARCH_TAGS+=("$(arch_tag "$REPO" "$TAG" "$platform")")
     done
 
-    split_list "$SHARED_TAGS"
-    SHARED_TAG_LIST=("${SPLIT_RESULT[@]+"${SPLIT_RESULT[@]}"}")
+    split_list "$VERSION_LABELS"
+    VERSION_LABELS_LIST=("${SPLIT_RESULT[@]+"${SPLIT_RESULT[@]}"}")
 
-    echo "Repository  : $REPO"
-    echo "Arch images : ${ARCH_TAGS[*]}"
-    echo "Manifest as : $TAG ${SHARED_TAG_LIST[*]+${SHARED_TAG_LIST[*]}}"
+    echo "Repository     : $REPO"
+    echo "Arch images    : ${ARCH_TAGS[*]}"
+    echo "Image tag      : $TAG"
+    echo "Version labels : ${VERSION_LABELS_LIST[*]+${VERSION_LABELS_LIST[*]}}"
     [ "$DRY_RUN" -eq 1 ] && echo "(dry run: commands will be printed, not executed)"
     echo ""
 

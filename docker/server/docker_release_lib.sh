@@ -21,7 +21,6 @@
 # a use which shellcheck cannot see.
 # shellcheck disable=SC2034
 DOCKER_REPO="villagesql/server"
-DOCKER_SHARED_TAGS="latest,stable"
 DEFAULT_PLATFORMS="linux/amd64,linux/arm64"
 
 # Build args forwarded to docker build. Override via the environment, e.g.

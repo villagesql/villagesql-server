@@ -15,8 +15,8 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 # Build one platform-specific VillageSQL Server image under its arch-specific
-# tag (e.g. villagesql/server:0.0.5-arm64), and optionally publish it to a
-# registry (Docker Hub by default).
+# tag (e.g. villagesql/server:mysql-8.4_0.0.6-arm64), and optionally publish
+# it to a registry (Docker Hub by default).
 #
 # By default the image is built and loaded into the local docker image store,
 # where test-image.sh can smoke test it before anything is published. Pass
@@ -49,7 +49,8 @@ Usage:
   publish_image.sh --tag TAG --platform PLATFORM [options]
 
 Options:
-  -t, --tag TAG          Tag to build, e.g. a version (required)
+  -t, --tag TAG          Tag to build.  For releases, use the full release
+                         identifier with codebase and version (required)
   -p, --platform PLAT    Single docker platform, e.g. linux/arm64 (required)
   -r, --repo REPO        Image repository (default: $DOCKER_REPO)
       --push             Publish the image to the registry. Without this the
@@ -59,7 +60,7 @@ Options:
 
 The image is tagged REPO:TAG-ARCH, where ARCH is derived from the
 platform (linux/amd64 -> amd64). publish_manifest.sh stitches those
-arch tags into the shared multi-arch tags.
+arch tags into the multi-arch tags.
 
 Build args are taken from the environment:
   VSQL_PRE_RELEASE_VERSION  pre-release suffix (default: empty, a release)
@@ -67,11 +68,11 @@ Build args are taken from the environment:
 
 Examples:
   # Build the native arch and smoke test it before publishing anything
-  publish_image.sh --tag 0.0.5 --platform linux/arm64
-  ./test-image.sh villagesql/server:0.0.5-arm64
+  ./publish_image.sh --tag mysql-8.4_0.0.6 --platform linux/arm64
+  ./test-image.sh villagesql/server:mysql-8.4_0.0.6-arm64
 
   # Build and publish one arch
-  publish_image.sh --tag 0.0.5 --platform linux/arm64 --push
+  ./publish_image.sh --tag mysql-8.4_0.0.6 --platform linux/arm64 --push
 EOF
 }
 
