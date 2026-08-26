@@ -5721,6 +5721,13 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
       continue;
     }
 
+    // VillageSQL: custom indexes are not subject to the column-length limit.
+    // The custom index implementation is responsible for any key-size
+    // constraints it may need to impose.
+    if (key->custom_index_context != nullptr) {
+      continue;
+    }
+
     if (innobase_check_column_length(max_col_len, key)) {
       my_error(ER_INDEX_COLUMN_TOO_LONG, MYF(0), max_col_len);
       goto err_exit_no_heap;
