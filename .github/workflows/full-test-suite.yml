@@ -1,6 +1,6 @@
 name: Full Test Suite
 
-# Workflow to run the full test suite
+# Workflow to run the full test suite.
 
 on:
   workflow_call:
@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: 'full-test'
+      platform:
+        description: 'Platform to build and test on, per json_platforms.sh'
+        required: false
+        type: string
+        default: 'linux-x86_64'
   workflow_dispatch:
     inputs:
       ref:
@@ -37,11 +42,63 @@ on:
         required: false
         type: string
         default: 'full-test'
+      platform:
+        description: 'Platform to build and test on'
+        required: false
+        type: choice
+        options:
+          - linux-x86_64
+          - linux-aarch64
+          - macos-arm64
+        default: linux-x86_64
 
 jobs:
+  # Turn the platform name into a runs-on value.
+  resolve-platform:
+    name: Resolve Platform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      runner: ${{ steps.platform.outputs.runner }}
+
+    steps:
+    - name: Checkout platform registry
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        ref: ${{ inputs.ref }}
+        fetch-depth: 1
+        sparse-checkout: villagesql/bld_matrix/
+
+    - name: Resolve platform
+      id: platform
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        set -euo pipefail
+
+        # The registry is shared with the other multi-platform workflows, and
+        # is runnable locally:
+        #   villagesql/bld_matrix/json_platforms.sh | jq .
+        PLATFORMS="$(villagesql/bld_matrix/json_platforms.sh)"
+
+        ENTRY="$(jq -c --arg p "$PLATFORM" \
+          '.[] | select(.platform == $p)' <<<"$PLATFORMS")"
+        if [ -z "$ENTRY" ]; then
+          KNOWN="$(jq -r '[.[].platform] | join(", ")' <<<"$PLATFORMS")"
+          echo "::error::Unknown platform '$PLATFORM'. Known platforms: $KNOWN"
+          exit 1
+        fi
+        jq . <<<"$ENTRY"
+
+        # `runner` stays JSON: it is a label array for self-hosted runners and
+        # a plain string for GitHub-hosted ones, and the consumer fromJSON's it.
+        echo "runner=$(jq -c '.runner' <<<"$ENTRY")" >> "$GITHUB_OUTPUT"
+
   build-and-test:
-    name: Build and Run All Tests
-    runs-on: [self-hosted, linux, x86_64]
+    name: Build and Run All Tests (${{ inputs.platform }})
+    needs: resolve-platform
+    runs-on: ${{ fromJSON(needs.resolve-platform.outputs.runner) }}
     permissions:
       contents: read
 
@@ -58,6 +115,7 @@ jobs:
         echo "Trigger: $GITHUB_EVENT_NAME"
         echo "Git Rev: $REF"
         echo "Build type: $BUILD_TYPE"
+        echo "Platform: ${{ inputs.platform }}"
         echo "Artifact prefix: $ARTIFACT_PREFIX"
 
     - name: Checkout code
@@ -71,6 +129,13 @@ jobs:
       run: |
         echo "Git SHA1: $(git -C source rev-parse ${{ env.REF }})"
         echo "Git Commit: $(git -C source log -n1 --oneline)"
+
+    # Ahead of "Record run parameters" because that step needs jq, and on macOS
+    # this is what installs it.
+    - name: Setup VillageSQL build environment
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        setup-ccache: 'false'
 
     - name: Record run parameters
       run: |
@@ -102,15 +167,9 @@ jobs:
         if-no-files-found: warn
         retention-days: 7
 
-    - name: Setup VillageSQL build environment
-      uses: ./source/.github/actions/setup-villagesql-build
-      with:
-        setup-ccache: 'false'
-
     - name: Build VillageSQL
       working-directory: ./source
-      run: |
-        ./villagesql/bld_tools/build_ci.sh
+      run: "$SOURCE_DIR/villagesql/bld_tools/build_server.sh"
 
     - name: Run standard tests (unit, integration with only suite village)
       uses: ./source/.github/actions/run-tests

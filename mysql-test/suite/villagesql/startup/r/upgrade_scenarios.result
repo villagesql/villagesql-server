@@ -23,7 +23,7 @@ properties_table_exists
 1
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.6-dev
+version	mysql-8.4_0.0.7-dev
 # Check that 'created' timestamp is set after fresh installation
 SELECT COUNT(*) AS created_timestamp_exists
 FROM villagesql.properties
@@ -39,7 +39,7 @@ SET SESSION debug='+d,skip_dd_table_access_check';
 # Verify that 'created' timestamp was not updated during normal restart
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.6-dev
+version	mysql-8.4_0.0.7-dev
 # Test 3: Current version (should be no-op)
 # Force upgrade on already current installation
 # Add a small delay to ensure timestamp will be different
@@ -52,7 +52,7 @@ No-op Upgrade
 # Verify that 'created' timestamp was not updated during force update no-op
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.6-dev
+version	mysql-8.4_0.0.7-dev
 # Test 4: Simulate a partial install
 # Manually delete the version
 DELETE FROM villagesql.properties WHERE name = 'version';
@@ -70,7 +70,7 @@ test_case
 After Simulated Upgrade
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.6-dev
+version	mysql-8.4_0.0.7-dev
 # Verify that 'created' timestamp was updated after forced reinstall
 # Test 5: Partial installation recovery
 # Drop properties table and verify it gets recreated
@@ -103,7 +103,7 @@ properties_table_exists
 0
 SELECT name, value FROM villagesql.properties WHERE name = 'version';
 name	value
-version	mysql-8.4_0.0.6-dev
+version	mysql-8.4_0.0.7-dev
 # Verify that 'created' timestamp was updated after forced reinstall
 # Test 6: Check upgrade log for issues
 # Verify no warnings or errors occurred during upgrades
