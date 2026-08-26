@@ -16,8 +16,6 @@
 #ifndef VILLAGESQL_VSQL_FUNC_TYPES_H
 #define VILLAGESQL_VSQL_FUNC_TYPES_H
 
-// Typed wrappers for VDF function parameters and results.
-//
 // These types let extension authors write VDF functions in idiomatic C++
 // without accessing the raw ABI structs (vef_invalue_t, vef_vdf_result_t)
 // directly. The func_builder framework automatically converts to/from the
@@ -48,7 +46,7 @@
 //     out.set_length(src.size());
 //   }
 //
-// Result methods available on all result wrappers:
+// Result methods available on all result types:
 //   set / set_length / set_null  — produce the SQL output value
 //   warning(msg)  — emit a diagnostic note but still return a value
 //   error(msg)    — abort the current statement with an error; no value
@@ -77,7 +75,7 @@
 namespace vsql {
 
 // =============================================================================
-// Input argument wrappers
+// Input argument types
 // =============================================================================
 
 class IntArg {
@@ -110,8 +108,8 @@ class StringArg {
   const vef_invalue_t *v_;
 };
 
-// CustomArg: input wrapper for non-parameterized custom type arguments.
-// For parameterized types (e.g., TVECTOR(N)), use CustomArgWith<P> instead.
+// CustomArg: input type for non-parameterized custom type arguments.  For
+// parameterized types (e.g., TVECTOR(N)), use CustomArgWith<P> instead.
 class CustomArg {
  public:
   explicit CustomArg(const vef_invalue_t *v) : v_(v) {}
@@ -124,10 +122,10 @@ class CustomArg {
   const vef_invalue_t *v_;
 };
 
-// CustomArgWith<P>: input wrapper for parameterized custom type arguments.
-// Use instead of CustomArg when the VDF needs to access the type parameters
-// (e.g., the dimension of a TVECTOR(N) column). Requires the parse function
-// to be registered via .params<P, &parse_fn>() in the type builder.
+// CustomArgWith<P>: input type for parameterized custom type arguments.  Use
+// instead of CustomArg when the VDF needs to access the type parameters (e.g.,
+// the dimension of a TVECTOR(N) column). Requires the parse function to be
+// registered via .params<P, &parse_fn>() in the type builder.
 //
 // The parse result is memoized per unique canonical params string, so parsing
 // runs at most once per type instantiation.
@@ -152,7 +150,7 @@ class CustomArgWith {
 };
 
 // =============================================================================
-// Result wrappers
+// Result types
 // =============================================================================
 
 class IntResult {
@@ -251,7 +249,7 @@ class StringResult {
   vef_vdf_result_t *r_;
 };
 
-// CustomResult: result wrapper for non-parameterized custom type outputs.
+// CustomResult: result type for non-parameterized custom type outputs.
 // For parameterized types (e.g., TVECTOR(N)), use CustomResultWith<P> instead.
 class CustomResult {
  public:
@@ -282,7 +280,7 @@ class CustomResult {
   vef_vdf_result_t *r_;
 };
 
-// CustomResultWith<P>: result wrapper for parameterized custom type outputs.
+// CustomResultWith<P>: result type for parameterized custom type outputs.
 // Use instead of CustomResult when the VDF needs to access the type parameters
 // (e.g., the dimension of a TVECTOR(N) column). Requires the parse function
 // to be registered via .params<P, &parse_fn>() in the type builder.
