@@ -116,7 +116,7 @@ jobs:
 
   start-full-test-release:
     if: always()
-    name: Start full test suite (release)
+    name: Start full test suite (linux, release)
     needs: collect-info
     runs-on: ubuntu-latest
     permissions:
@@ -135,12 +135,13 @@ jobs:
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f build-type=release \
+            -f platform=linux-x86_64 \
             -f artifact-prefix=nightly-full-release
           echo "Started full-test-suite (release) on $REF" >> "$GITHUB_STEP_SUMMARY"
 
   start-full-test-debug:
     if: always()
-    name: Start full test suite (debug)
+    name: Start full test suite (linux, debug)
     needs: collect-info
     runs-on: ubuntu-latest
     permissions:
@@ -159,5 +160,32 @@ jobs:
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f build-type=debug \
+            -f platform=linux-x86_64 \
             -f artifact-prefix=nightly-full-debug
           echo "Started full-test-suite (debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  # macos uses a case-insensitive filesystem.
+  start-full-test-macos-debug:
+    if: always()
+    name: Start full test suite (macOS, debug)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start full-test-suite (macOS, debug)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run full-test-suite.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f build-type=debug \
+            -f platform=macos-arm64 \
+            -f artifact-prefix=nightly-full-macos-debug
+          echo "Started full-test-suite (macOS, debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
