@@ -20,6 +20,8 @@
 SET(VILLAGESQL_UNIT_TESTS
   abi_v1_check-t
   abi_v2_check-t
+  build_info-t
+  build_info_stamp-t
   custom_indexes-t
   identifier_names-t
   semver-t

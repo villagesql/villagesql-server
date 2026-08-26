@@ -19,14 +19,16 @@
 
 namespace villagesql {
 
-// Metadata describing how this server binary was built. The values are baked
-// in at build time by the generated build_info.cc (see common/build_info.cc.in
-// and cmake/gen_build_info.cmake).
+// Metadata describing how this server binary was built. The values live in a
+// magic-marked block (see build_info_raw.h) that a POST_BUILD stamper
+// rewrites in the linked mysqld; this header is hand-written, committed, and
+// stable, so callers never recompile when build state changes.
 //
-// This API header is hand-written, committed, and stable: it deliberately
-// contains no volatile values, so callers that include it do not recompile
-// when only the build timestamp or git state change. Only the generated
-// build_info.cc is rebuilt on each build.
+// Semantics: the values describe the git state, time, and host of the most
+// recent build that actually relinked the binary. A no-op build does not
+// refresh them (the binary did not change, so its provenance did not either).
+// Binaries that are never stamped (unit tests, tools) report the placeholder
+// defaults: git_sha "unknown", zero counts, empty strings.
 //
 // The git_sha pins the source revision; the three counts describe how far the
 // build tree diverged from that revision. A clean (unmodified) tree has
@@ -47,8 +49,9 @@ struct BuildInfo {
   bool is_dirty() const;
 };
 
-// Returns the build metadata baked into this binary. The reference is to a
-// constexpr instance with static storage duration; it is always valid.
+// Returns the build metadata parsed from the stamped block. The reference is
+// to a function-local static with process lifetime; it is always valid. The
+// block is parsed once, on first call.
 const BuildInfo &GetBuildInfo();
 
 }  // namespace villagesql

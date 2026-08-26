@@ -1216,6 +1216,35 @@ IF(FPROFILE_GENERATE)
     )
 ENDIF()
 
+# Stamp VillageSQL build info (git SHA, work-tree counts, timestamp, host)
+# into the linked binary, then re-sign on macOS (patching invalidates the
+# ad-hoc signature). POST_BUILD runs only when mysqld actually relinks, so
+# no-op builds do no work, and because the values never pass through a
+# compiled source, ccache never sees them. See villagesql/include/build_info.h
+# and villagesql/cmake/stamp_build_info.cmake.
+#
+# This command is added after MYSQL_ADD_EXECUTABLE(mysqld ...), so it runs
+# after the developer-entitlements codesign step that function may add; the
+# stamp script's own re-sign preserves those entitlements.
+IF(VSQL_HAS_PRE_RELEASE)
+  SET(VSQL_BUILD_INFO_PRODUCTION OFF)
+ELSE()
+  SET(VSQL_BUILD_INFO_PRODUCTION ON)
+ENDIF()
+ADD_CUSTOM_COMMAND(TARGET mysqld POST_BUILD
+  COMMAND ${CMAKE_COMMAND}
+    -DBINARY_FILE=$<TARGET_FILE:mysqld>
+    -DSTAMPER=$<TARGET_FILE:vsql_build_info_stamper>
+    -DSRC_DIR=${CMAKE_SOURCE_DIR}
+    -DBUILD_OS=${CMAKE_HOST_SYSTEM}
+    -DBUILD_ARCH=${CMAKE_HOST_SYSTEM_PROCESSOR}
+    -DPRODUCTION_BUILD=${VSQL_BUILD_INFO_PRODUCTION}
+    -DAPPLE_CODESIGN=${APPLE}
+    -P ${CMAKE_SOURCE_DIR}/villagesql/cmake/stamp_build_info.cmake
+  COMMENT "Stamping VillageSQL build info into mysqld"
+  VERBATIM)
+ADD_DEPENDENCIES(mysqld vsql_build_info_stamper)
+
 IF(MSVC)
   ADD_DEPENDENCIES(sql_main GenError)
   IF(MYSQLD_DEF_FILE)

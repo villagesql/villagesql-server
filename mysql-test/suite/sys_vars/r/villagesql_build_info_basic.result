@@ -7,6 +7,11 @@ villagesql_build_info	{"git_sha":"SHA","is_dirty":DIRTY,"files_added":N,"files_d
 SELECT @@GLOBAL.villagesql_build_info AS build_info;
 build_info
 {"git_sha":"SHA","is_dirty":DIRTY,"files_added":N,"files_deleted":N,"files_modified":N,"build_timestamp":"TS","build_host":"HOST","build_os":"OS","build_arch":"ARCH"}
+# Test 1b: Verify the block was actually stamped into the binary
+SELECT @@GLOBAL.villagesql_build_info
+REGEXP '"build_os":"[^"]+","build_arch":"[^"]+"' AS is_stamped;
+is_stamped
+1
 # Test 2: Verify the variable is READ_ONLY
 SET GLOBAL villagesql_build_info = '999';
 ERROR HY000: Variable 'villagesql_build_info' is a read only variable

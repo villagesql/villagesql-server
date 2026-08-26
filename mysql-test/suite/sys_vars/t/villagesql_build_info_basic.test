@@ -6,12 +6,24 @@
 --echo # Test 1: Check that the variable exists and is readable
 # The value is build/machine specific (git SHA, file counts, timestamp, host,
 # OS, arch), so redact every field to a placeholder and assert only the JSON
-# structure and keys.
---replace_regex /"git_sha":"[^"]*"/"git_sha":"SHA"/ /"is_dirty":(true|false)/"is_dirty":DIRTY/ /"files_added":[0-9]+/"files_added":N/ /"files_deleted":[0-9]+/"files_deleted":N/ /"files_modified":[0-9]+/"files_modified":N/ /"build_timestamp":"[^"]*"/"build_timestamp":"TS"/ /"build_host":"[^"]*"/"build_host":"HOST"/ /"build_os":"[^"]*"/"build_os":"OS"/ /"build_arch":"[^"]*"/"build_arch":"ARCH"/
+# structure and keys. git_sha is redacted only when it is a full 40-char SHA
+# or the documented no-git fallback, so a garbage value shows up as a diff
+# rather than being silently masked.
+--replace_regex /"git_sha":"([0-9a-f]{40}|unknown)"/"git_sha":"SHA"/ /"is_dirty":(true|false)/"is_dirty":DIRTY/ /"files_added":[0-9]+/"files_added":N/ /"files_deleted":[0-9]+/"files_deleted":N/ /"files_modified":[0-9]+/"files_modified":N/ /"build_timestamp":"[^"]*"/"build_timestamp":"TS"/ /"build_host":"[^"]*"/"build_host":"HOST"/ /"build_os":"[^"]*"/"build_os":"OS"/ /"build_arch":"[^"]*"/"build_arch":"ARCH"/
 SHOW VARIABLES LIKE 'villagesql_build_info';
 
---replace_regex /"git_sha":"[^"]*"/"git_sha":"SHA"/ /"is_dirty":(true|false)/"is_dirty":DIRTY/ /"files_added":[0-9]+/"files_added":N/ /"files_deleted":[0-9]+/"files_deleted":N/ /"files_modified":[0-9]+/"files_modified":N/ /"build_timestamp":"[^"]*"/"build_timestamp":"TS"/ /"build_host":"[^"]*"/"build_host":"HOST"/ /"build_os":"[^"]*"/"build_os":"OS"/ /"build_arch":"[^"]*"/"build_arch":"ARCH"/
+--replace_regex /"git_sha":"([0-9a-f]{40}|unknown)"/"git_sha":"SHA"/ /"is_dirty":(true|false)/"is_dirty":DIRTY/ /"files_added":[0-9]+/"files_added":N/ /"files_deleted":[0-9]+/"files_deleted":N/ /"files_modified":[0-9]+/"files_modified":N/ /"build_timestamp":"[^"]*"/"build_timestamp":"TS"/ /"build_host":"[^"]*"/"build_host":"HOST"/ /"build_os":"[^"]*"/"build_os":"OS"/ /"build_arch":"[^"]*"/"build_arch":"ARCH"/
 SELECT @@GLOBAL.villagesql_build_info AS build_info;
+
+--echo # Test 1b: Verify the block was actually stamped into the binary
+# Redacting every field above means an entirely unstamped mysqld would still
+# pass Test 1, so assert stamping directly. build_os and build_arch come from
+# CMake and are always non-empty once stamped; an unstamped binary carries the
+# placeholder empty strings. Unlike git_sha they do not depend on git being
+# available, and unlike build_timestamp/build_host they are not blanked for
+# production builds, so this holds in every build configuration.
+SELECT @@GLOBAL.villagesql_build_info
+       REGEXP '"build_os":"[^"]+","build_arch":"[^"]+"' AS is_stamped;
 
 --echo # Test 2: Verify the variable is READ_ONLY
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR

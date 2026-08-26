@@ -13,19 +13,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# Generates villagesql/common/build_info.cc from build_info.cc.in with fresh
-# build metadata. Run at build time via `cmake -P` (not at configure time) so
-# the git state and timestamp reflect the moment of the build.
+# Stamps build metadata into an already-linked binary and (on macOS) re-signs
+# it, since patching invalidates the linker's ad-hoc code signature. Run at
+# build time via `cmake -P` from a POST_BUILD step, so values reflect the
+# moment the binary was linked; a build that does not relink does not restamp.
 #
 # Volatile values (git SHA, work-tree file counts, timestamp, host) are
 # computed here. Stable values are passed in via -D by the caller:
-#   IN_FILE          - path to build_info.cc.in
-#   OUT_FILE         - path to the generated build_info.cc
+#   BINARY_FILE      - binary to stamp
+#   STAMPER          - path to the vsql_build_info_stamper tool
 #   SRC_DIR          - source tree to inspect with git
 #   BUILD_OS         - host OS string (CMAKE_HOST_SYSTEM)
 #   BUILD_ARCH       - host architecture (CMAKE_HOST_SYSTEM_PROCESSOR)
 #   PRODUCTION_BUILD - if true, blank the volatile, non-reproducible fields
 #                      (build timestamp and host) for reproducible releases
+#   APPLE_CODESIGN   - if true, re-sign the binary after stamping
 
 find_package(Git QUIET)
 
@@ -73,10 +75,9 @@ string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
 cmake_host_system_information(RESULT BUILD_HOST QUERY HOSTNAME)
 
 # Production releases blank the volatile, non-reproducible fields so identical
-# sources yield identical binaries (and incremental builds stop relinking just
-# to refresh the timestamp). The work-tree counts are forced to zero so a
-# release always reports clean (is_dirty() == false); git_sha, OS and arch stay
-# populated.
+# sources yield identical binaries. The work-tree counts are forced to zero so
+# a release always reports clean (is_dirty() == false); git_sha, OS and arch
+# stay populated.
 if(PRODUCTION_BUILD)
   set(GIT_FILES_ADDED 0)
   set(GIT_FILES_DELETED 0)
@@ -85,4 +86,24 @@ if(PRODUCTION_BUILD)
   set(BUILD_HOST "")
 endif()
 
-configure_file("${IN_FILE}" "${OUT_FILE}" @ONLY)
+execute_process(
+  COMMAND "${STAMPER}" "${BINARY_FILE}"
+    "${GIT_SHA}" "${GIT_FILES_ADDED}" "${GIT_FILES_DELETED}"
+    "${GIT_FILES_MODIFIED}" "${BUILD_TIMESTAMP}" "${BUILD_HOST}"
+    "${BUILD_OS}" "${BUILD_ARCH}"
+  RESULT_VARIABLE _stamp_rc)
+if(_stamp_rc)
+  message(FATAL_ERROR "build-info stamping failed for ${BINARY_FILE}")
+endif()
+
+if(APPLE_CODESIGN)
+  # Same ad-hoc identity and entitlement preservation as
+  # MACOS_ADD_DEVELOPER_ENTITLEMENTS in cmake/mysql_add_executable.cmake.
+  execute_process(
+    COMMAND codesign --force --preserve-metadata=entitlements --sign -
+      "${BINARY_FILE}"
+    RESULT_VARIABLE _sign_rc)
+  if(_sign_rc)
+    message(FATAL_ERROR "re-signing after stamp failed for ${BINARY_FILE}")
+  endif()
+endif()
