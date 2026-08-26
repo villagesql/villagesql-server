@@ -3215,15 +3215,6 @@ index for FTS index */
 {
   for (ulint key_part = 0; key_part < key_info->user_defined_key_parts;
        key_part++) {
-    // VillageSQL: custom indexes are not subject to the column-length limit.
-    // The custom index implementation is responsible for any key-size
-    // constraints it may need to impose. During ALTER the key's custom-index
-    // context is not yet attached, so detect the custom index by its
-    // externally-stored key column instead.
-    const Field *field = key_info->key_part[key_part].field;
-    if (field != nullptr && field->has_external_storage()) {
-      continue;
-    }
     if (key_info->key_part[key_part].length > max_col_len) {
       return (true);
     }
@@ -5680,6 +5671,13 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
       assert(!(key->flags & HA_KEYFLAG_MASK &
                ~(HA_FULLTEXT | HA_PACK_KEY | HA_BINARY_PACK_KEY)));
       add_fts_idx = true;
+      continue;
+    }
+
+    // VillageSQL: custom indexes are not subject to the column-length limit.
+    // The custom index implementation is responsible for any key-size
+    // constraints it may need to impose.
+    if (key->custom_index_context != nullptr) {
       continue;
     }
 

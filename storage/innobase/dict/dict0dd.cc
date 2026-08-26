@@ -1979,9 +1979,12 @@ void dd_visit_keys_with_too_long_parts(
         const KEY_PART_INFO *key_part = &key.key_part[i];
         // VillageSQL: custom indexes are not subject to the column-length
         // limit. The custom index implementation is responsible for any
-        // key-size constraints it may need to impose. During ALTER the key's
-        // custom-index context is not yet attached, so detect the custom index
-        // by its externally-stored key column instead.
+        // key-size constraints it may need to impose.
+        // TODO(villagesql-indexing): this runs against a table definition that
+        // is not fully initialized, so the key's custom-index context/profile
+        // is not yet attached. Detect the custom index by its externally-stored
+        // key column as a workaround; switch to the custom-index context once
+        // it is reliably available here.
         if (key_part->field != nullptr &&
             key_part->field->has_external_storage()) {
           continue;

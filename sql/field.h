@@ -1913,8 +1913,8 @@ class Field {
 
   // VillageSQL: true if this column's value lives in external (columnar)
   // storage, so only a small stable reference is kept inline. Used to detect a
-  // custom index by its key column during ALTER, before the key's custom-index
-  // context is attached.
+  // custom index by its key column when the key's custom-index context is not
+  // yet attached (see dd_visit_keys_with_too_long_parts).
   bool has_external_storage() const {
     return has_type_context() && custom_type->storage_intf().has_value();
   }
