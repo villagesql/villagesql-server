@@ -255,7 +255,7 @@ VillageSQL provides a C++ SDK and a Rust SDK for building high-performance exten
 
 ## Roadmap
 
-The full, up-to-date roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
+The full roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
 ## Troubleshooting
 
