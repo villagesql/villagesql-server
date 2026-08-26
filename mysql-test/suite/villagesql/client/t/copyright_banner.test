@@ -1,0 +1,58 @@
+# Verify the VillageSQL copyright line appears above Oracle's in the startup
+# banner and --help output of the shipped binaries.
+#
+# All of them get the text from ORACLE_WELCOME_COPYRIGHT_NOTICE in
+# include/welcome_copyright_notice.h. That macro is Oracle's, so a future
+# upstream merge can silently take theirs and drop our line; this test is what
+# notices. The binaries below are a spread across the call sites in client/,
+# sql/ and utilities/ rather than an exhaustive list.
+
+let $tmp = $MYSQLTEST_VARDIR/tmp;
+
+--exec $MYSQL --help > $tmp/copyright_mysql.txt 2>&1
+# mysqladmin exits 1 on --help because it also wants a command. That is
+# upstream behaviour, not a failure; it still prints the notice.
+--error 1
+--exec $MYSQLADMIN --help > $tmp/copyright_mysqladmin.txt 2>&1
+--exec $MYSQL_DUMP --help > $tmp/copyright_mysqldump.txt 2>&1
+--exec $MYSQL_BINLOG --help > $tmp/copyright_mysqlbinlog.txt 2>&1
+--exec $MYSQLD --no-defaults --help > $tmp/copyright_mysqld.txt 2>&1
+
+--perl
+use strict;
+use warnings;
+
+my $tmp = $ENV{'MYSQLTEST_VARDIR'} . "/tmp";
+my @tools = (["mysql",       "copyright_mysql.txt"],
+             ["mysqladmin",  "copyright_mysqladmin.txt"],
+             ["mysqldump",   "copyright_mysqldump.txt"],
+             ["mysqlbinlog", "copyright_mysqlbinlog.txt"],
+             ["mysqld",      "copyright_mysqld.txt"]);
+
+foreach my $tool (@tools) {
+  my ($label, $file) = @$tool;
+  open(my $fh, "<", "$tmp/$file") or die "cannot open $tmp/$file: $!";
+  my @copyright = grep { /^Copyright \(c\) / } <$fh>;
+  close($fh);
+
+  if (@copyright < 2) {
+    print "$label: expected 2 copyright lines, found " . scalar(@copyright) . "\n";
+    next;
+  }
+
+  # Print the first two copyright lines with years normalized, so this test
+  # survives the annual COPYRIGHT_NOTICE_CURRENT_YEAR bump. Order matters:
+  # VillageSQL is expected first, Oracle second.
+  foreach my $line (@copyright[0, 1]) {
+    $line =~ s/\d{4}/YEAR/g;
+    $line =~ s/\s+$//;
+    print "$label: $line\n";
+  }
+}
+EOF
+
+--remove_file $tmp/copyright_mysql.txt
+--remove_file $tmp/copyright_mysqladmin.txt
+--remove_file $tmp/copyright_mysqldump.txt
+--remove_file $tmp/copyright_mysqlbinlog.txt
+--remove_file $tmp/copyright_mysqld.txt

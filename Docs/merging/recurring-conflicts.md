@@ -125,6 +125,92 @@ being maintained across merges.
 Refreshing it is its own task, not merge work. But every merge should check whether it
 just made the gap wider.
 
+## `include/welcome_copyright_notice.h`
+
+**Conflicts because:** VillageSQL inserts its own copyright line into three of Oracle's
+notice macros, and Oracle edits this file at least annually to bump
+`COPYRIGHT_NOTICE_CURRENT_YEAR`.
+
+**Resolution: keep both copyright lines — ours above Oracle's — and take upstream's
+year.**
+
+*Predicted, not yet observed.* Recorded when the divergence was introduced rather than
+on the second conflict, against this file's usual rule, because the failure mode is
+silent: take-theirs compiles clean, passes everything except one test, and quietly
+removes our copyright from every shipped binary.
+
+What we add, and where:
+
+| Macro | Our line | Reaches |
+|---|---|---|
+| `ORACLE_WELCOME_COPYRIGHT_NOTICE` | `VILLAGESQL_WELCOME_COPYRIGHT_LINE`, first in both ternary arms | 38 call sites: the `mysql` startup banner, `--help` for every shipped client and utility, `mysqld`, and the four `mysqlrouter` binaries |
+| `ORACLE_GPL_COPYRIGHT_NOTICE` | `VILLAGESQL_SOURCE_COPYRIGHT_LINE`, below Oracle's line in both arms | copyright headers of generated sources — `mysqld_error.h`, `lex_hash.h`, `lex_token.h`, bootstrap SQL |
+| `ORACLE_GPL_FOSS_COPYRIGHT_NOTICE` | same | generated charset sources |
+
+`ORACLE_COPYRIGHT_NOTICE` has **no callers anywhere in the tree** and is deliberately
+left alone. Do not add our line to it for consistency — that buys a conflict and changes
+nothing.
+
+**One constraint that is easy to break while resolving:** the welcome notice must never
+contain a `%`. `client/mysql_secure_installation.cc` passes it to `fprintf` as the format
+string, so a stray `%` there is a format-string bug, not a typo.
+
+**This file is excluded from villint.** The commit that added our lines carries:
+
+```
+villint-ignore: include/welcome_copyright_notice.h
+```
+
+Oracle's macros are hand-aligned tables of string literals. clang-format reflows them
+(31 replacements as of this writing), which turns our two-line insertions into a rewrite
+of Oracle's text. The `villint-ignore` keeps upstream's lines byte-identical, so our diff
+against Oracle stays additive.
+
+**If you edit this file, re-apply the directive in your own commit message.**
+`villint-ignore:` is read from commit messages in the merge range — `scripts/villint.sh`
+resolves it via `jj log -r <base>..@` locally and `git log <merge-base>..HEAD` in CI — so
+it covers only the commits that carry it. Without it, villint silently reformats the file
+and the additive diff is gone.
+
+Because the ignore skips the file *entirely* — copyright header, trailing whitespace, EOF
+newline, and clang-format — those are maintained by hand here. In particular the
+`Copyright (c) <year> VillageSQL Contributors` line in the file's own header was written
+manually, in the form villint would have produced.
+
+**What a conflict will actually look like:**
+
+| Upstream change | Frequency | Effect here |
+|---|---|---|
+| Year bump (`COPYRIGHT_NOTICE_CURRENT_YEAR`) | most releases | **no conflict in the macros at all** — a one-line change to the `#define`, which we do not touch. Verified on `a72967be8350`. |
+| Edit to the notice text itself | once in six years — `de3c9855fb73`, Bug#32210815, dropping "All rights reserved" | real conflict in both ternary arms of all three macros. Take their text, keep our line, preserve their alignment. |
+
+**Step 2 for this file:** the year bump is usually the entire upstream diff — take it.
+Our line derives its year from `COPYRIGHT_NOTICE_CURRENT_YEAR`, so it follows along and
+needs no separate edit.
+
+**What catches a bad resolution:**
+`mysql-test/suite/villagesql/client/t/copyright_banner.test`, which asserts our line sits
+directly above Oracle's in five representative binaries. It normalizes years, so it does
+not need re-recording when upstream bumps the year.
+
+```bash
+./mysql-test/mysql-test-run.pl --suite=villagesql/client
+```
+
+**Upstream files this change also touches**, each carrying the same one-line insertion —
+expect these to conflict alongside the header, and resolve them the same way:
+
+| File | What we added |
+|---|---|
+| `mysql-test/r/mysql_config_editor.result` | our copyright line in the golden. Upstream hardcodes the year here, so this file already needed re-recording on the annual bump; we add no new burden. |
+| `mysql-test/suite/innodb_zip/{t,r}/innochecksum_2` | the golden line, **plus** a regex in the `.test` masking our year to `YEAR` |
+| `mysql-test/suite/x/{t,r}/mysqlxtest_help` | the golden line, **plus** a `replace_regex` clause masking our year to `DATE` |
+
+The two masking additions matter. Upstream's existing year regexes are anchored on the
+word `Oracle`, so they do not touch our line: without our additions those two tests stop
+being year-proof and start failing every January. That year-proofing is a property
+upstream deliberately built in — preserve it rather than re-recording annually.
+
 ## `CONTRIBUTING.md`
 
 **Conflicts because:** VillageSQL replaced Oracle's contribution process, and upstream
