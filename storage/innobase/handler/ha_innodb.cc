@@ -10244,6 +10244,19 @@ int ha_innobase::delete_row(
 
   ha_statistic_increment(&System_status_var::ha_delete_count);
 
+  // TODO(villagesql-indexing): DELETE on a table with a custom index not
+  // supported yet. Reject cleanly instead of crashing in the DML path below.
+  for (const dict_index_t *idx = UT_LIST_GET_FIRST(m_prebuilt->table->indexes);
+       idx != nullptr; idx = UT_LIST_GET_NEXT(indexes, idx)) {
+    if (villagesql::innodb::Custom_index::is_custom(idx)) {
+      villagesql_error(
+          "InnoDB: DELETE on a table with a custom index (USING EXTENDED) is "
+          "not supported yet.",
+          MYF(0));
+      return convert_error_code_to_mysql(DB_VILLAGESQL_ERROR, 0, m_user_thd);
+    }
+  }
+
   if (!m_prebuilt->upd_node) {
     row_get_prebuilt_update_vector(m_prebuilt);
   }
