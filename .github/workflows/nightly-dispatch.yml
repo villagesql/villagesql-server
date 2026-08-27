@@ -216,3 +216,28 @@ jobs:
             -f ref="$REF" \
             -f slack_notify=true
           echo "Started extension-compat on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  start-sanitizer:
+    if: always()
+    name: Start sanitizer tests (ASan+UBSan)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start sanitizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+
+          # no -f extension= value so sanitizer runs all extensions
+          gh workflow run sanitizer.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f slack_notify=true
+          echo "Started sanitizer tests on $REF" >> "$GITHUB_STEP_SUMMARY"
