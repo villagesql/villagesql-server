@@ -1,0 +1,27 @@
+# A STRING-returning VDF must produce a result String whose charset matches
+# the item's declared collation (utf8mb4). The JSON functions decide
+# text-vs-binary from the runtime String's charset, not the item metadata:
+# a binary-stamped result comes out as an opaque base64 scalar
+# ("base64:type15:...") instead of a JSON string.
+
+--source include/villagesql/binlog_check_begin.inc
+
+INSTALL EXTENSION vsql_simple;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, a BYTEARRAY, b BYTEARRAY);
+INSERT INTO t1 VALUES (1, 'hello', 'world123');
+
+--echo # Declared charset of a STRING-returning VDF
+SELECT CHARSET(vsql_simple.ba_concat(a, b)) AS cs FROM t1;
+
+--echo # JSON functions must treat the result as text, without CONVERT
+SELECT JSON_OBJECT('s', vsql_simple.ba_concat(a, b)) AS j FROM t1;
+SELECT JSON_ARRAY(vsql_simple.ba_concat(a, b)) AS j FROM t1;
+
+--echo # Varargs STRING VDF takes the same path
+SELECT JSON_OBJECT('s', vsql_simple.ba_concat_all(a, b)) AS j FROM t1;
+
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_simple;
+
+--source include/villagesql/binlog_check_end.inc
