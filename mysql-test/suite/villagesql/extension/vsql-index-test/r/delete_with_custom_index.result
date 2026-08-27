@@ -1,0 +1,22 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+# --- table with a (no-op) custom index, populated ---
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
+INDEX ix (a) USING EXTENDED(dummy_index_hnsw));
+INSERT INTO t VALUES (1,'[1,2,3,4]'),(2,'[5,6,7,8]'),(3,'[9,9,9,9]'),(4,'[0,0,0,0]');
+# --- DELETE rejected cleanly (not supported yet), no crash ---
+DELETE FROM t WHERE id IN (2, 3);
+ERROR HY000: InnoDB: DELETE on a table with a custom index (USING EXTENDED) is not supported yet.
+DELETE FROM t;
+ERROR HY000: InnoDB: DELETE on a table with a custom index (USING EXTENDED) is not supported yet.
+# --- server survived; all rows still intact ---
+SELECT id FROM t ORDER BY id;
+id
+1
+2
+3
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
