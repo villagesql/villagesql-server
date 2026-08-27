@@ -1,0 +1,36 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+# --- Empty table: standalone CREATE INDEX succeeds ---
+CREATE TABLE t_empty (id INT PRIMARY KEY, a dummy_type_vector);
+CREATE INDEX idx ON t_empty (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_empty;
+Table	Create Table
+t_empty	CREATE TABLE `t_empty` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_empty;
+# --- Populated table: standalone CREATE INDEX is rejected, not a crash ---
+CREATE TABLE t_full (id INT PRIMARY KEY, a dummy_type_vector);
+INSERT INTO t_full VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+CREATE INDEX idx ON t_full (a) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: InnoDB: Custom type operation failed. See server error log for details.
+# --- Server survived: t_full has no custom index (CREATE INDEX was
+#     rejected), so a plain scan still works and the rows are intact ---
+SELECT COUNT(*) FROM t_full;
+COUNT(*)
+2
+DROP TABLE t_full;
+# --- Supported path still works: index at CREATE TABLE, then load.
+#     (The successful INSERTs build the graph incrementally; no direct
+#     scan of the custom index here -- that needs the hypergraph
+#     optimizer and is covered by the scan/KNN tests.) ---
+CREATE TABLE t_ok (id INT PRIMARY KEY, a dummy_type_vector,
+INDEX idx (a) USING EXTENDED(dummy_index_hnsw));
+INSERT INTO t_ok VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+DROP TABLE t_ok;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
