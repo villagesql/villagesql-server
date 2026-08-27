@@ -1,0 +1,41 @@
+# DELETE from a table that has a custom index (USING EXTENDED), with rows.
+#
+# Discriminates WHERE a DELETE-on-custom-indexed-table crash lives:
+# vsql_index_test's dummy_index_hnsw is a NO-OP index (all 12 hooks registered,
+# codec stubs only). So if DELETE crashes HERE, the fault is in the server-side
+# custom-index DELETE plumbing (row removal / undo / purge for a custom-storage
+# column), NOT in any real index's graph-delete logic. If it works here but
+# crashes on the real vsql-vector HNSW index, the fault is in that extension.
+#
+# The debug flag lets the custom-index DDL path run in this build.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+--disable_query_log
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+--enable_query_log
+
+--echo # --- table with a (no-op) custom index, populated ---
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX ix (a) USING EXTENDED(dummy_index_hnsw));
+INSERT INTO t VALUES (1,'[1,2,3,4]'),(2,'[5,6,7,8]'),(3,'[9,9,9,9]'),(4,'[0,0,0,0]');
+
+--echo # --- DELETE rejected cleanly (not supported yet), no crash ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+DELETE FROM t WHERE id IN (2, 3);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+DELETE FROM t;
+
+--echo # --- server survived; all rows still intact ---
+SELECT id FROM t ORDER BY id;
+
+DROP TABLE t;
+
+--disable_query_log
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+--enable_query_log
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
