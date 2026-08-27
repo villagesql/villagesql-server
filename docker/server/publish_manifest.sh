@@ -34,6 +34,7 @@ TAG=""
 REPO="$DOCKER_REPO"
 PLATFORMS="$DEFAULT_PLATFORMS"
 VERSION_LABELS=""
+DEFINE_TAGS=""
 
 usage() {
     cat <<EOF
@@ -53,6 +54,9 @@ Options:
   -v, --version-labels LIST
                          Comma-separated version labels for version suffix tags
                          in addition to the primary tag. Leave empty for none.
+  -d, --define-tags LIST
+                         Comma-separated tags to publish as well, each used as
+                         given rather than combined with the codebase. Optional.
   -n, --dry-run          Print the commands without running them. The arch
                          images are still checked, and a missing one is a
                          warning rather than an error.
@@ -88,7 +92,7 @@ verify_arch_images() {
 }
 
 publish_manifest() {
-    local manifest_args=() version_label base_tag
+    local manifest_args=() version_label base_tag define_tag
     manifest_args+=(-t "$REPO:$TAG")
     # Guarded by the count: bash 3.2, and so macOS, treats "${arr[@]}" on an
     # empty array as an unbound variable under set -u.
@@ -97,6 +101,11 @@ publish_manifest() {
         base_tag=${TAG%_*}
         for version_label in "${VERSION_LABELS_LIST[@]}"; do
             manifest_args+=(-t "$REPO:${base_tag}_${version_label}")
+        done
+    fi
+    if [ "${#DEFINE_TAGS_LIST[@]}" -gt 0 ]; then
+        for define_tag in "${DEFINE_TAGS_LIST[@]}"; do
+            manifest_args+=(-t "$REPO:${define_tag}")
         done
     fi
 
@@ -115,6 +124,7 @@ main() {
             -r|--repo)      REPO="$2"; shift 2 ;;
             -p|--platforms) PLATFORMS="$2"; shift 2 ;;
             -v|--version-labels)      VERSION_LABELS="$2"; shift 2 ;;
+            -d|--define-tags)      DEFINE_TAGS="$2"; shift 2 ;;
             -n|--dry-run)   DRY_RUN=1; shift ;;
             -h|--help)      usage; exit 0 ;;
             *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -135,10 +145,14 @@ main() {
     split_list "$VERSION_LABELS"
     VERSION_LABELS_LIST=("${SPLIT_RESULT[@]+"${SPLIT_RESULT[@]}"}")
 
+    split_list "$DEFINE_TAGS"
+    DEFINE_TAGS_LIST=("${SPLIT_RESULT[@]+"${SPLIT_RESULT[@]}"}")
+
     echo "Repository     : $REPO"
     echo "Arch images    : ${ARCH_TAGS[*]}"
     echo "Image tag      : $TAG"
     echo "Version labels : ${VERSION_LABELS_LIST[*]+${VERSION_LABELS_LIST[*]}}"
+    echo "Defined tags   : ${DEFINE_TAGS_LIST[*]+${DEFINE_TAGS_LIST[*]}}"
     [ "$DRY_RUN" -eq 1 ] && echo "(dry run: commands will be printed, not executed)"
     echo ""
 

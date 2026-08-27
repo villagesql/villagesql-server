@@ -103,6 +103,10 @@ label, with the version replaced by the label. So `--version-labels latest,stabl
 on `mysql-8.4_0.0.6` also publishes `mysql-8.4_latest` and `mysql-8.4_stable`.
 An empty list publishes `TAG` alone.
 
+`--define-tags` adds tags that are published as given, with no codebase prefix,
+so `--define-tags latest,edge` publishes `REPO:latest` and `REPO:edge`. It is
+optional and defaults to none.
+
 ## Release Build Args
 
 Both build args are read from the environment and forwarded to `docker build`:
