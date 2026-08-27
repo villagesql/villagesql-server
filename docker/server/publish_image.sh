@@ -71,8 +71,8 @@ Examples:
   ./publish_image.sh --tag mysql-8.4_0.0.6 --platform linux/arm64
   ./test-image.sh villagesql/server:mysql-8.4_0.0.6-arm64
 
-  # Build and publish one arch
-  ./publish_image.sh --tag mysql-8.4_0.0.6 --platform linux/arm64 --push
+  # Build and publish a different codebase and arch
+  ./publish_image.sh --tag percona-8.4_0.0.6 --platform linux/amd64 --push
 EOF
 }
 

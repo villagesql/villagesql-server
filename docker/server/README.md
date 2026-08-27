@@ -2,7 +2,8 @@
 
 ## Building
 
-From the repository root:
+Build a Docker image for the VillageSQL server locally, tagging it as
+dev-server:
 
 ```bash
 docker build -f docker/server/Dockerfile -t villagesql/server:dev-server .
