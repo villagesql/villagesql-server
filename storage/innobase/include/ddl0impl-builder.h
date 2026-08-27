@@ -316,6 +316,13 @@ struct Builder {
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t batch_add_row(Row &row, size_t thread_id) noexcept;
 
+  /** Insert a scanned row into a custom (USING EXTENDED) index. Built row by
+  row through the extension's insert, not by the sort-merge path.
+  @param[in,out] row            Row to add.
+  @param[in] thread_id          ID of current thread.
+  @return DB_SUCCESS or error code. */
+  [[nodiscard]] dberr_t custom_add_row(Row &row, size_t thread_id) noexcept;
+
   /** Add a row to the merge buffer.
   @param[in,out]        cursor        Current scan cursor.
   @param[in,out] row            Row to add.
