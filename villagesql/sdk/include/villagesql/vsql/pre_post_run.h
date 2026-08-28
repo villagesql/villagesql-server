@@ -32,6 +32,12 @@
 // postrun is responsible for freeing it. PostrunArgs::delete_state<T>() is
 // the typed convenience for the common case of `new T{}` + `delete`.
 //
+// Prerun and postrun can be a cumbersome API. The func builder already handles
+// the simple cases (e.g. type checking for functions with fixed args and
+// allocating fixed buffer sizes), and we want to cover more. If you find you
+// need to reach for prerun or postrun, please come talk to us so we can
+// understand your use case.
+//
 // TODO(villagesql-beta): add a typed-state mechanism (working name
 // `.state<T>()` on FuncBuilder) so extensions can declare a per-statement
 // state type and have the SDK manage its lifetime automatically — no
