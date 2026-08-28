@@ -648,13 +648,80 @@ class AggFuncBuilder {
 
 // make_aggregate_func<State, &result_fn>("name")
 //
-// Entry point for aggregate VDFs. State is the per-group accumulation type.
-// The result function must be: void(const State&, TypedResult)
-// where TypedResult is one of IntResult, RealResult, StringResult,
-// CustomResult, or CustomResultWith<P>.
+// Entry point for aggregate VDFs. Aggregate VDFs (like SQL SUM, COUNT, etc.)
+// accumulate state across rows within each GROUP BY group, then return a
+// final result per group. State is the per-group accumulation type; it is
+// explicit, and all three callback signatures are validated against it at
+// compile time.
 //
-// prerun/postrun are auto-generated: prerun allocates State via
-// value-initialization, postrun deletes it.
+// The result function always uses an output parameter, consistent with normal
+// VDFs. All three callbacks follow the same pattern:
+//
+//   void my_clear(State &s)                     // reset state
+//   void my_acc(State &s, TypedArg v, ...)      // accumulate one row
+//   void my_result(const State &s, TypedResult out)  // produce final value
+//
+// The result function must be void(const State&, TypedResult) where
+// TypedResult is one of IntResult, RealResult, StringResult, CustomResult, or
+// CustomResultWith<P>. Use out.set_null() to return SQL NULL.
+//
+// How it works:
+//   - prerun/postrun are auto-generated: prerun allocates State via
+//     value-initialization, postrun deletes it.
+//   - .clear<&fn>()      void(State&)
+//   - .accumulate<&fn>() void(State&, TypedArgs...) — TypedArgs deduced from
+//     the function signature (IntArg, StringArg, CustomArg, etc.).
+//     Call .accumulate() after all .param(TYPE) calls.
+//
+// Example — nullable integer sum:
+//
+//   using SumState = std::optional<long long>;
+//
+//   void my_clear(SumState &s) { s = std::nullopt; }
+//   void my_acc(SumState &s, IntArg v) {
+//     if (!v.is_null()) s = s.value_or(0) + v.value();
+//   }
+//   void my_result(const SumState &s, IntResult out) {
+//     if (!s.has_value()) { out.set_null(); return; }
+//     out.set(s.value());
+//   }
+//
+//   make_aggregate_func<SumState, &my_result>("my_sum")
+//       .returns(INT)
+//       .param(INT)
+//       .clear<&my_clear>()
+//       .accumulate<&my_acc>()
+//       .build()
+//
+// Example — non-nullable count:
+//
+//   using CountState = long long;
+//   void count_clear(CountState &s) { s = 0; }
+//   void count_acc(CountState &s, IntArg v) { if (!v.is_null()) ++s; }
+//   void count_result(const CountState &s, IntResult out) { out.set(s); }
+//
+//   make_aggregate_func<CountState, &count_result>("my_count")
+//       .returns(INT).param(INT)
+//       .clear<&count_clear>().accumulate<&count_acc>()
+//       .build()
+//
+// Example — aggregate returning a custom (binary) type:
+//
+//   using SumState = std::optional<MyType>;
+//   void my_clear(SumState &s)            { s = std::nullopt; }
+//   void my_acc(SumState &s, CustomArg v) { /* update s */ }
+//   void my_result(const SumState &s, CustomResult out) {
+//     if (!s.has_value()) { out.set_null(); return; }
+//     store_mytype(out.buffer().data(), s.value());
+//     out.set_length(kMyTypeSize);
+//   }
+//
+//   make_aggregate_func<SumState, &my_result>("my_agg")
+//       .returns(MYTYPE).param(MYTYPE)
+//       .clear<&my_clear>().accumulate<&my_acc>()
+//       .build()
+//
+// See aggregate_vdf.cc in the test suite for complete examples.
 template <typename State, auto Func>
 constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
   using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
