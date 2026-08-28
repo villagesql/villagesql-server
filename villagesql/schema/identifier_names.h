@@ -68,6 +68,8 @@ std::string table_name_match_sql(const std::string &vsql_name,
                                  const std::string &dd_name);
 std::string column_name_match_sql(const std::string &vsql_name,
                                   const std::string &dd_name);
+std::string index_name_match_sql(const std::string &vsql_name,
+                                 const std::string &dd_name);
 
 // Collation canonicalizing custom-type parameter strings
 const CHARSET_INFO *type_parameter_collation();

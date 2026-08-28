@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -80,7 +81,13 @@ class Statistics : public Statistics_base {
     return s_view_name;
   }
 
-  const String_type &name() const override { return Statistics::view_name(); }
+  const String_type &name() const override {
+    // This version of I_S.STATISTICS is used only during initialization,
+    // After villagesql is initialized, it is replaced with the version
+    // in villagesql/system_views/statistics.*
+    static String_type s_view_name("STATISTICS.bootstrap");
+    return s_view_name;
+  }
 };
 
 /*
@@ -98,7 +105,11 @@ class Show_statistics : public Statistics {
   }
 
   const String_type &name() const override {
-    return Show_statistics::view_name();
+    // This version of SHOW_STATISTICS is used only during initialization,
+    // After villagesql is initialized, it is replaced with the version
+    // in villagesql/system_views/statistics.*
+    static String_type s_view_name("SHOW_STATISTICS.bootstrap");
+    return s_view_name;
   }
 
   // This view definition is hidden from user.

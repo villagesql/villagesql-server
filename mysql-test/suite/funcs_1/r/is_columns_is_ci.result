@@ -344,7 +344,7 @@ def	information_schema	STATISTICS	CARDINALITY	10	NULL	YES	bigint	NULL	NULL	19	0	
 def	information_schema	STATISTICS	SUB_PART	11	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select			NULL
 def	information_schema	STATISTICS	PACKED	12	NULL	YES	varbinary	0	0	NULL	NULL	NULL	NULL	NULL	varbinary(0)			select			NULL
 def	information_schema	STATISTICS	NULLABLE	13		NO	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
-def	information_schema	STATISTICS	INDEX_TYPE	14		NO	varchar	11	33	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(11)			select			NULL
+def	information_schema	STATISTICS	INDEX_TYPE	14		NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	varchar(64)			select			NULL
 def	information_schema	STATISTICS	COMMENT	15		NO	varchar	8	24	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(8)			select			NULL
 def	information_schema	STATISTICS	INDEX_COMMENT	16	NULL	NO	varchar	2048	6144	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(2048)			select			NULL
 def	information_schema	STATISTICS	IS_VISIBLE	17		NO	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
@@ -512,6 +512,7 @@ COL_CML	DATA_TYPE	CHARACTER_SET_NAME	COLLATION_NAME
 4.0000	varchar	utf8mb3	utf8mb3_general_ci
 3.0000	varchar	utf8mb3	utf8mb3_tolower_ci
 4.0000	varchar	utf8mb4	utf8mb4_0900_ai_ci
+4.0000	varchar	utf8mb4	utf8mb4_bin
 SELECT DISTINCT
 CHARACTER_OCTET_LENGTH / CHARACTER_MAXIMUM_LENGTH AS COL_CML,
 DATA_TYPE,
@@ -887,7 +888,7 @@ NULL	information_schema	STATISTICS	CARDINALITY	bigint	NULL	NULL	NULL	NULL	bigint
 NULL	information_schema	STATISTICS	SUB_PART	bigint	NULL	NULL	NULL	NULL	bigint
 NULL	information_schema	STATISTICS	PACKED	varbinary	0	0	NULL	NULL	varbinary(0)
 3.0000	information_schema	STATISTICS	NULLABLE	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
-3.0000	information_schema	STATISTICS	INDEX_TYPE	varchar	11	33	utf8mb3	utf8mb3_bin	varchar(11)
+4.0000	information_schema	STATISTICS	INDEX_TYPE	varchar	64	256	utf8mb4	utf8mb4_bin	varchar(64)
 3.0000	information_schema	STATISTICS	COMMENT	varchar	8	24	utf8mb3	utf8mb3_general_ci	varchar(8)
 3.0000	information_schema	STATISTICS	INDEX_COMMENT	varchar	2048	6144	utf8mb3	utf8mb3_bin	varchar(2048)
 3.0000	information_schema	STATISTICS	IS_VISIBLE	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
