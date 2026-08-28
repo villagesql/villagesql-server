@@ -2,10 +2,11 @@
 
 ## Building
 
-From the repository root:
+Build a Docker image for the VillageSQL server locally, tagging it as
+dev-server:
 
 ```bash
-docker build -f docker/server/Dockerfile -t villagesql/server:latest .
+docker build -f docker/server/Dockerfile -t villagesql/server:dev-server .
 ```
 
 The build compiles VillageSQL from source and bundles several extensions:
@@ -23,13 +24,13 @@ The first build takes ~25 minutes (server compilation). Subsequent builds are fa
   support the stable ABI.
 
 ```bash
-docker build -f docker/server/Dockerfile --build-arg VSQL_DEV_ABI=OFF -t villagesql/server:latest .
+docker build -f docker/server/Dockerfile --build-arg VSQL_DEV_ABI=OFF -t villagesql/server:dev-server .
 ```
 
 ## Running
 
 ```bash
-docker run -d --name vsql -e MYSQL_ALLOW_EMPTY_PASSWORD=1 -p 3306:3306 villagesql/server:latest
+docker run -d --name vsql -e MYSQL_ALLOW_EMPTY_PASSWORD=1 -p 3306:3306 villagesql/server:dev-server
 ```
 
 ### Environment Variables
@@ -77,7 +78,7 @@ INSTALL EXTENSION vsql_crypto;
 Smoke test an image to verify the server starts and all extensions install correctly:
 
 ```bash
-docker/server/test-image.sh villagesql/server:latest
+docker/server/test-image.sh villagesql/server:dev-server
 ```
 
 This starts a container, installs each extension, runs a basic CRUD test with the
@@ -91,11 +92,20 @@ The option `--dry-run` prints the docker commands without running them.
 | Script | Does |
 | --- | --- |
 | `publish_image.sh` | Builds one platform into one arch-specific tag. Local only unless given `--push`. |
-| `publish_manifest.sh` | Stitches the arch images already in the registry into the shared multi-arch tags. |
+| `publish_manifest.sh` | Stitches the arch images already in the registry into the multi-arch tags. |
 
-Images are tagged `REPO:TAG-ARCH` per platform (e.g. `villagesql/server:0.0.5-arm64`),
-and the manifest list is published under `TAG` plus each shared tag (`latest` and
-`stable` by default).
+A release is identified by `CODEBASE_VERSION` (e.g. `mysql-8.4_0.0.6`), and that
+is the `TAG` both scripts take. Per platform, images are tagged `REPO:TAG-ARCH`
+(e.g. `villagesql/server:mysql-8.4_0.0.6-arm64`).
+
+The manifest list is published under `TAG`, plus one tag per `--version-labels`
+label, with the version replaced by the label. So `--version-labels latest,stable`
+on `mysql-8.4_0.0.6` also publishes `mysql-8.4_latest` and `mysql-8.4_stable`.
+An empty list publishes `TAG` alone.
+
+`--define-tags` adds tags that are published as given, with no codebase prefix,
+so `--define-tags latest,edge` publishes `REPO:latest` and `REPO:edge`. It is
+optional and defaults to none.
 
 ## Release Build Args
 
@@ -103,7 +113,7 @@ Both build args are read from the environment and forwarded to `docker build`:
 
 ```bash
 VSQL_PRE_RELEASE_VERSION="" VSQL_DEV_ABI=OFF \
-    docker/server/publish_image.sh --tag 0.0.5 --platform linux/arm64 --push
+    docker/server/publish_image.sh --tag mysql-8.4_0.0.6 --platform linux/arm64 --push
 ```
 
 Defaults are an empty `VSQL_PRE_RELEASE_VERSION` (a release build) and `VSQL_DEV_ABI=ON`.
