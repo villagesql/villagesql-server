@@ -189,3 +189,30 @@ jobs:
             -f platform=macos-arm64 \
             -f artifact-prefix=nightly-full-macos-debug
           echo "Started full-test-suite (macOS, debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  # Unlike the suites above, this one is gated on the nightly having passed.
+  # extension-actions in every extension repo resolves the latest successful
+  # extension-compat run to fetch its devserver-*/sdk-* artifacts, so there is
+  # little value in producing a set off a red nightly.
+  start-extension-compat:
+    if: always() && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    name: Start extension SDK compatibility
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start extension-compat
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run extension-compat.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f slack_notify=true
+          echo "Started extension-compat on $REF" >> "$GITHUB_STEP_SUMMARY"
