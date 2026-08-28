@@ -1,0 +1,86 @@
+# Executing KNN test over the REAL InnoDB-resident custom-index surface.
+#
+# Unlike vsql-knn-mem-test (flat in-memory list, HAS_ROW_REF, returns the PK),
+# this extension stores the vector in a REAL external column store and declares
+# HAS_COLUMN_REF | REF_LOOKUP, so the SELECT exercises: InnoDB-resident insert
+# (row0ins -> Custom_index::insert), profile-helper distance dispatch,
+# col_ref_to_data_fn resolution, rowid_prefix persistence, and the server's
+# REF_LOOKUP col_ref -> row read path (handler::custom_index_ref_to_row). A
+# regression in any of those fails this test.
+#
+# villagesql_custom_index_proceed bypasses the parse-time "not yet implemented"
+# guard for USING EXTENDED indexes (debug builds only).
+--source include/have_debug.inc
+--source include/have_hypergraph.inc
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+INSTALL EXTENSION vsql_knn_store_test;
+
+# Reset the static scan/insert counters so their absolute values are
+# deterministic regardless of what ran earlier in this server session.
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_store_test.kvec_store_reset_counters();
+--enable_result_log
+--enable_query_log
+
+# Custom index created on an EMPTY table, then populated by INSERT (the
+# incremental build path). CREATE INDEX over a populated table is covered
+# separately by knn_create_index_populated.
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v KVECTOR
+);
+
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_store_test.kvec_store);
+
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo #
+--echo # EXPLAIN shows the custom distance scan for the KNN query (proves the
+--echo # optimizer chose the custom index, not a filesort).
+--echo #
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+--echo #
+--echo # Scan callbacks have not fired yet (EXPLAIN does not execute the scan).
+--echo #
+SELECT vsql_knn_store_test.kvec_store_scan_begin_count() AS scan_begins_before;
+SELECT vsql_knn_store_test.kvec_store_scan_fetch_count() AS scan_fetches_before;
+
+--echo #
+--echo # The 3 nearest neighbours of [1,0,0,0] by L2 distance, in order:
+--echo #   id=1 [1,0,0,0] (dist 0), id=4 [1,1,0,0] (dist 1), id=5 [2,0,0,0]
+--echo #   (dist 1) -- ids 2 and 3 are farther (dist sqrt(2)). These rows are
+--echo #   materialized via the REF_LOOKUP col_ref -> row path.
+--echo #
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+--echo #
+--echo # The scan callbacks fired: begin once, fetch once per returned row.
+--echo # Proves the custom index scan executed (a filesort fallback would leave
+--echo # both counts at 0).
+--echo #
+SELECT vsql_knn_store_test.kvec_store_scan_begin_count() AS scan_begins_after;
+SELECT vsql_knn_store_test.kvec_store_scan_fetch_count() AS scan_fetches_after;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_store_test;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';

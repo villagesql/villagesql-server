@@ -1,0 +1,39 @@
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+SET SESSION optimizer_switch='hypergraph_optimizer=off';
+INSTALL EXTENSION vsql_knn_store_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_store_test.kvec_store);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+#
+# KNN query under the classic optimizer. Before the fix this crashed the
+# server (buf_page_init_low assert) by scanning the page-less custom
+# index. Now the handler refuses to scan the custom index: the query
+# raises a warning explaining the hypergraph optimizer is required, then
+# fails cleanly with ER_ILLEGAL_HA (1031) instead of crashing.
+#
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+ERROR HY000: Table storage engine for 't' doesn't have this option
+#
+# The warning tells the user WHY the custom index could not be used and
+# how to enable the KNN scan (turn on the hypergraph optimizer).
+#
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1112	Custom index 'idx_v' cannot be scanned directly; a distance query over it requires the hypergraph optimizer (SET optimizer_switch='hypergraph_optimizer=on').
+Error	1031	Table storage engine for 't' doesn't have this option
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_store_test;
+SET SESSION debug='-d,villagesql_custom_index_proceed';

@@ -1042,18 +1042,16 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
 
   doc_id_t write_doc_id{};
 
+  /* VillageSQL: fetch_for_bulk_ddl resolves an extended column's stored ref to
+  its value by reading the source table's column store, so it needs the source
+  clustered index. For a clustered build that is the old table's first index;
+  for a custom (USING EXTENDED) secondary build over existing rows, the source
+  is the table being scanned -- also the old table's clustered index -- so the
+  vector col_refs in each scanned row resolve to their values. */
   const dict_index_t *old_index =
-      m_index->is_clustered() ? m_ctx.m_old_table->first_index() : nullptr;
-
-  /* TODO(villagesql-indexing): custom index (USING EXTENDED) on a populated
-  table not supported yet -- old_index is null for a secondary build. Reject
-  cleanly instead of asserting in fetch_for_bulk_ddl on the first row. */
-  if (m_index->custom_index != nullptr && old_index == nullptr) {
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: CREATE INDEX ... USING EXTENDED on a non-empty table is "
-           "not supported yet; create the index before loading data.";
-    return DB_VILLAGESQL_ERROR;
-  }
+      (m_index->is_clustered() || m_index->custom_index != nullptr)
+          ? m_ctx.m_old_table->first_index()
+          : nullptr;
 
   for (;;) {
     // clang-format off
@@ -1474,6 +1472,47 @@ dberr_t Builder::bulk_add_row(Cursor &cursor, Row &row, size_t thread_id,
       return enqueue_parsing(*row.m_ptr);
     }
     return DB_END_OF_INDEX;
+  }
+
+  /* VillageSQL: a custom (USING EXTENDED) index is not built by sort-merge (a
+  graph is not a sortable key stream); like an RTree it is built row-by-row
+  during the scan. copy_row builds the resolved index entry (with the vector
+  fetched from the column store) into the per-thread key buffer; hand that entry
+  to the extension's insert and drop it -- nothing goes to merge. The build may
+  run on multiple scan threads (each with its own key buffer), so the inserts
+  reach the extension index concurrently -- the extension must be
+  concurrency-safe, which it must be regardless since concurrent DML inserts hit
+  the same index. */
+  if (is_custom_index()) {
+    if (cursor.eof()) {
+      return DB_END_OF_INDEX;
+    }
+    /* copy_row builds this index entry's fields into the key buffer and (via
+    fetch_for_bulk_ddl) resolves the extended vector column to its value. Wrap
+    those resolved fields in a dtuple and hand it to the extension's insert. */
+    Copy_ctx ctx{row, m_ctx.m_eval_table, thread_id};
+    auto err = copy_row(ctx, mv_rows_added);
+    if (err != DB_SUCCESS) {
+      return err;
+    }
+    if (ctx.m_n_rows_added > 0) {
+      const uint16_t n_fields =
+          static_cast<uint16_t>(dict_index_get_n_fields(m_index));
+      dfield_t *fields = key_buffer->back();
+      dtuple_t *entry = dtuple_create(key_buffer->heap(), n_fields);
+      for (uint16_t i = 0; i < n_fields; ++i) {
+        entry->fields[i] = fields[i];
+      }
+      dtuple_set_n_fields_cmp(entry, n_fields);
+      err = villagesql::innodb::Custom_index::insert(
+          m_index, m_ctx.m_trx->id, entry, /*dup_chk_only=*/false);
+      key_buffer->clear();
+      if (err != DB_SUCCESS) {
+        set_error(err);
+        return get_error();
+      }
+    }
+    return DB_SUCCESS;
   }
 
   do {

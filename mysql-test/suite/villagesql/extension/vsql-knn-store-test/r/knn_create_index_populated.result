@@ -1,0 +1,75 @@
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+INSTALL EXTENSION vsql_knn_store_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v KVECTOR
+);
+#
+# Load rows FIRST -- no custom index yet, so these go only to the base
+# table / column store, not the graph.
+#
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+#
+# CREATE INDEX over the existing rows: the DDL scan inserts each into the
+# extension index. Succeeds (previously this was rejected as unsupported).
+#
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_store_test.kvec_store);
+#
+# EXPLAIN shows the custom distance scan for the KNN query (proves the
+# optimizer chose the custom index built over the pre-existing rows).
+#
+EXPLAIN FORMAT=tree
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+#
+# The 3 nearest neighbours of [1,0,0,0] by L2 distance, in order:
+#   id=1 [1,0,0,0] (dist 0), id=4 [1,1,0,0] (dist 1), id=5 [2,0,0,0]
+#   (dist 1). All five rows were indexed by the populated build, so the
+#   result is identical to the create-then-insert order.
+#
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+id
+1
+4
+5
+#
+# The scan callbacks fired, proving the custom index scan executed over
+# the index built from the pre-existing rows.
+#
+SELECT vsql_knn_store_test.kvec_store_scan_begin_count() AS scan_begins;
+scan_begins
+1
+#
+# A row INSERTed AFTER the populated build is indexed incrementally and
+# appears in results: id=6 [1,0,0,0] is now a second exact match at dist 0.
+#
+INSERT INTO t VALUES (6, '[1,0,0,0]');
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+id
+1
+6
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_store_test;
+SET SESSION debug='-d,villagesql_custom_index_proceed';

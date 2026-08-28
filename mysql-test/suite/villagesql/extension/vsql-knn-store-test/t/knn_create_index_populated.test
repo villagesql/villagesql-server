@@ -1,0 +1,95 @@
+# CREATE INDEX ... USING EXTENDED on a POPULATED table over the real
+# InnoDB-resident custom-index surface.
+#
+# The rows are INSERTed BEFORE the index exists, then CREATE INDEX builds the
+# index over the existing data: the DDL builder scans the clustered index and,
+# for the custom index, resolves each row's stored vector (fetch_for_bulk_ddl)
+# and calls Custom_index::insert row-by-row (the build is forced single-threaded
+# because the extension index is not concurrency-safe). The KNN query afterwards
+# must return the same neighbours as the create-index-then-insert order, proving
+# every pre-existing row was indexed.
+#
+# villagesql_custom_index_proceed bypasses the parse-time "not yet implemented"
+# guard for USING EXTENDED indexes (debug builds only).
+--source include/have_debug.inc
+--source include/have_hypergraph.inc
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+INSTALL EXTENSION vsql_knn_store_test;
+
+# Reset the static scan/insert counters so their absolute values are
+# deterministic regardless of what ran earlier in this server session.
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_store_test.kvec_store_reset_counters();
+--enable_result_log
+--enable_query_log
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v KVECTOR
+);
+
+--echo #
+--echo # Load rows FIRST -- no custom index yet, so these go only to the base
+--echo # table / column store, not the graph.
+--echo #
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo #
+--echo # CREATE INDEX over the existing rows: the DDL scan inserts each into the
+--echo # extension index. Succeeds (previously this was rejected as unsupported).
+--echo #
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_store_test.kvec_store);
+
+--echo #
+--echo # EXPLAIN shows the custom distance scan for the KNN query (proves the
+--echo # optimizer chose the custom index built over the pre-existing rows).
+--echo #
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+--echo #
+--echo # The 3 nearest neighbours of [1,0,0,0] by L2 distance, in order:
+--echo #   id=1 [1,0,0,0] (dist 0), id=4 [1,1,0,0] (dist 1), id=5 [2,0,0,0]
+--echo #   (dist 1). All five rows were indexed by the populated build, so the
+--echo #   result is identical to the create-then-insert order.
+--echo #
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+--echo #
+--echo # The scan callbacks fired, proving the custom index scan executed over
+--echo # the index built from the pre-existing rows.
+--echo #
+SELECT vsql_knn_store_test.kvec_store_scan_begin_count() AS scan_begins;
+
+--echo #
+--echo # A row INSERTed AFTER the populated build is indexed incrementally and
+--echo # appears in results: id=6 [1,0,0,0] is now a second exact match at dist 0.
+--echo #
+INSERT INTO t VALUES (6, '[1,0,0,0]');
+SELECT id
+FROM t
+ORDER BY vsql_knn_store_test.kvec_store_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_store_test;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';

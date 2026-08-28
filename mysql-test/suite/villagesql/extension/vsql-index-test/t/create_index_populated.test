@@ -1,24 +1,19 @@
 # CREATE INDEX ... USING EXTENDED on a table that already contains rows.
 #
-# Building a secondary custom index over existing data is not supported yet:
-# the bulk-DDL builder has no source (old) index to re-fetch the extended
-# column payload from. This must fail with a clean SQL error, NOT crash the
-# server on the ut_a(old_index != nullptr) in Custom_column::fetch_for_bulk_ddl.
+# A custom index cannot be built by the sort-merge path (a graph is not a
+# sortable key stream); like an RTree it is built row-by-row during the
+# clustered-index scan, inserting each existing row into the extension's index.
+# The build resolves each row's externally-stored column from the source table's
+# column store (fetch_for_bulk_ddl) and calls the extension insert. The build is
+# forced single-threaded because the extension index is not concurrency-safe.
 #
 # Covers:
-#   Empty table: standalone CREATE INDEX ... USING EXTENDED succeeds (the row
-#     loop reads nothing, so the unsupported fetch path is never reached).
-#   Populated table: the same CREATE INDEX is rejected cleanly.
-#   The server is still alive and usable afterwards (no crash).
+#   Empty table: standalone CREATE INDEX ... USING EXTENDED succeeds.
+#   Populated table: the same CREATE INDEX succeeds, building over existing rows.
+#   The server is alive and the rows are intact afterwards.
 #
 # The debug flag lets the custom-index DDL path run in this build.
 --source include/have_debug.inc
-
-# The rejection below logs a VillageSQL error to the server error log by design;
-# it is expected, so suppress it for MTR's error-log scan.
---disable_query_log
-call mtr.add_suppression("CREATE INDEX ... USING EXTENDED on a non-empty table is not supported yet");
---enable_query_log
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
@@ -32,22 +27,29 @@ CREATE INDEX idx ON t_empty (a) USING EXTENDED(dummy_index_hnsw);
 SHOW CREATE TABLE t_empty;
 DROP TABLE t_empty;
 
---echo # --- Populated table: standalone CREATE INDEX is rejected, not a crash ---
+--echo # --- Populated table: CREATE INDEX builds over existing rows ---
 CREATE TABLE t_full (id INT PRIMARY KEY, a dummy_type_vector);
 # Codec stubs store a fixed [0,0,0,0], so any value populates the column.
-INSERT INTO t_full VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
---error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_full VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]'), (3, '[9,1,2,3]');
 CREATE INDEX idx ON t_full (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_full;
 
---echo # --- Server survived: t_full has no custom index (CREATE INDEX was
---echo #     rejected), so a plain scan still works and the rows are intact ---
+--echo # --- Rows are intact and a plain scan still works after the build ---
+SELECT COUNT(*) FROM t_full;
+
+--echo # --- Rows inserted AFTER the populated build also index (incremental) ---
+INSERT INTO t_full VALUES (4, '[4,4,4,4]');
 SELECT COUNT(*) FROM t_full;
 DROP TABLE t_full;
 
---echo # --- Supported path still works: index at CREATE TABLE, then load.
---echo #     (The successful INSERTs build the graph incrementally; no direct
---echo #     scan of the custom index here -- that needs the hypergraph
---echo #     optimizer and is covered by the scan/KNN tests.) ---
+--echo # --- ALTER TABLE ADD INDEX on populated data takes the same build path ---
+CREATE TABLE t_alter (id INT PRIMARY KEY, a dummy_type_vector);
+INSERT INTO t_alter VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+ALTER TABLE t_alter ADD INDEX idx (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_alter;
+DROP TABLE t_alter;
+
+--echo # --- Index-at-CREATE-TABLE then load still works (incremental build) ---
 CREATE TABLE t_ok (id INT PRIMARY KEY, a dummy_type_vector,
   INDEX idx (a) USING EXTENDED(dummy_index_hnsw));
 INSERT INTO t_ok VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
