@@ -231,6 +231,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
           arg_types[i].custom_type = tc->type_name().c_str();
         } else if (m_args[i]->type() == Item::NULL_ITEM) {
           arg_types[i].id = VEF_TYPE_NULL;
+          arg_types[i].custom_type = nullptr;
         } else {
           switch (m_args[i]->result_type()) {
             case REAL_RESULT:
@@ -414,6 +415,7 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
         invalues[i].is_null = true;
         invalues[i].str_value = nullptr;
         invalues[i].str_len = 0;
+        break;
       }
       case VEF_TYPE_CUSTOM:
       default: {
