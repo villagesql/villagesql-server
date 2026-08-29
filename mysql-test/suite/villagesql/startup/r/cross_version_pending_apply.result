@@ -1,0 +1,45 @@
+call mtr.add_suppression("Upgrading from a development version.*--villagesql-allow-unsafe-dev-upgrade");
+call mtr.add_suppression("Setting lower_case_table_names=2 because file system for .* is case insensitive");
+call mtr.add_suppression("The server option 'lower_case_table_names'");
+# Stop the default MTR-provided server so we can start on a canned
+# datadir instead.
+# Extract the canned 0.0.5 datadir into MYSQL_TMP_DIR.
+# Boot the current mysqld against the 0.0.5 fixture. Point --veb-dir at
+# the fixture's captured VEBs so the restart-time sha check sees
+# the exact bytes the pending action was recorded against. The
+# fixture was created with --vsql_allow_preview_extensions=ON
+# (update_test exposes a preview sys var), so keep that flag on.
+# --lower_case_table_names=1 must match the fixture's DD setting
+# (also 1, forced by gen_cross_version_fixture.sh for portability).
+# --villagesql-allow-unsafe-dev-upgrade lets us upgrade from a
+# dev-tagged baseline (the fixture is built by a dev mysqld); this
+# would only be needed in real deployments if crossing dev versions.
+# restart: --datadir=VSQL_FIXTURE_DIR --veb-dir=VSQL_FIXTURE_DIR/veb --lower_case_table_names=1 --vsql_allow_preview_extensions=ON --villagesql-allow-unsafe-dev-upgrade
+# Villagesql schema was upgraded past 0.0.5 at startup. The full
+# version string carries the build tag (e.g. "mysql-8.4_0.0.5-dev"),
+# which varies by build type, so assert it is no longer the 0.0.5
+# value rather than matching a specific string.
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT value NOT LIKE '%\_0.0.5%' ESCAPE '\\' AS villagesql_upgraded_past_0_0_5
+FROM villagesql.properties WHERE name = 'version';
+villagesql_upgraded_past_0_0_5
+1
+# Pending apply succeeded: extension_version is now 2.0.0 and
+# pending fields are cleared.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	2.0.0	NULL	NULL
+# Existing data is readable through the v2 decoder (COUNTER::to_string
+# emits "v2:N" in 2.0.0, unchanged bytes on disk).
+SELECT id, val FROM test.t ORDER BY id;
+id	val
+1	v2:7
+2	v2:42
+# Cleanup.
+DROP TABLE test.t;
+UNINSTALL EXTENSION update_test;
+# Restart onto the default MTR datadir so subsequent tests see a
+# clean environment.
+# restart
