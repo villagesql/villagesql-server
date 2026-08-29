@@ -20,6 +20,7 @@
 #include "lex_string.h"
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"
+#include "sql/auth/sql_security_ctx.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"
 #include "sql/item.h"
@@ -31,6 +32,7 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/types/from_string_inference.h"
 #include "villagesql/types/util.h"
+#include "villagesql/vdf/session_context.h"
 
 namespace villagesql {
 namespace vdf {
@@ -63,7 +65,12 @@ static size_t RoundUpResultBuffer(size_t needed) {
   return (needed + (kResultBufferQuantum - 1)) & ~(kResultBufferQuantum - 1);
 }
 
-vdf_handler::vdf_handler(udf_func *u_d) : m_udf(u_d) {}
+vdf_handler::vdf_handler(udf_func *u_d)
+    : m_udf(u_d),
+      m_uses_session_context(u_d != nullptr &&
+                             u_d->vdf_protocol >= VEF_PROTOCOL_4 &&
+                             u_d->vdf_func_desc != nullptr &&
+                             u_d->vdf_func_desc->uses_session_context) {}
 
 bool vdf_handler::returns_string() const {
   return m_udf && m_udf->vdf_func_desc &&
@@ -80,13 +87,40 @@ bool vdf_handler::MaybeResizeBuffer(size_t needed) {
   return false;
 }
 
-bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
-                             Item_result_field *func [[maybe_unused]],
+void vdf_handler::initialize_session_context() {
+  if (m_thd == nullptr) {
+    m_context.schema = nullptr;
+    m_context.connection_id = 0;
+    m_context.priv_user = nullptr;
+    m_context.priv_host = nullptr;
+    m_session_context_initialized = true;
+    return;
+  }
+
+  const LEX_CSTRING db = m_thd->db();
+  m_context.schema = (db.str != nullptr && db.length > 0) ? db.str : nullptr;
+  m_context.connection_id = m_thd->thread_id();
+
+  const Security_context *sctx = m_thd->security_context();
+  m_context.priv_user = sctx->priv_user().str;
+  m_context.priv_host = sctx->priv_host().str;
+  m_session_context_initialized = true;
+}
+
+void vdf_handler::prepare_session_context() {
+  if (!m_session_context_initialized) initialize_session_context();
+  m_context.kill_status = m_thd == nullptr
+                              ? VEF_KILL_NOT_KILLED
+                              : vef_map_kill_status(m_thd->killed.load());
+}
+
+bool vdf_handler::fix_fields(THD *thd, Item_result_field *func [[maybe_unused]],
                              uint arg_count, Item **arguments,
                              String *buffers) {
   m_args = arguments;
   m_buffers = buffers;
   m_arg_count = arg_count;
+  m_thd = thd;
 
   // Allocate invalues array for argument marshaling
   if (arg_count > 0) {
@@ -254,6 +288,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     prerun_result.result_buffer_size = 0;
     prerun_result.user_data = nullptr;
 
+    if (m_uses_session_context) prepare_session_context();
     m_udf->vdf_func_desc->prerun(&m_context, &prerun_args, &prerun_result);
 
     if (prerun_result.type == VEF_RESULT_WARNING ||
@@ -304,6 +339,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
 }
 
 void vdf_handler::clear() {
+  if (m_uses_session_context) prepare_session_context();
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
@@ -313,6 +349,7 @@ void vdf_handler::accumulate(bool *null_value) {
   result.type = VEF_RESULT_VALUE;
   m_error_msg[0] = '\0';
   result.error_msg = m_error_msg;
+  if (m_uses_session_context) prepare_session_context();
   m_udf->vdf_func_desc->accumulate(&m_context, &m_vdf_args, &result);
   switch (result.type) {
     case VEF_RESULT_VALUE:
@@ -343,9 +380,11 @@ void vdf_handler::cleanup() {
     vef_postrun_args_t postrun_args{};
     postrun_args.user_data = m_vdf_args.user_data;
     vef_postrun_result_t postrun_result{};
+    if (m_uses_session_context) prepare_session_context();
     m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
   }
   m_active = false;
+  m_session_context_initialized = false;
 }
 
 template <typename InvalueType>
@@ -459,6 +498,7 @@ bool vdf_handler::invoke_numeric(T *out_value, bool *null_value) {
   result.error_msg = m_error_msg;
 
   // Call the VDF function
+  if (m_uses_session_context) prepare_session_context();
   m_udf->vdf_func_desc->vdf(&m_context, &m_vdf_args, &result);
 
   // Handle result
@@ -565,6 +605,7 @@ String *vdf_handler::val_str(String *str, String *save_str,
       result.alt_str_buf = nullptr;
     }
 
+    if (m_uses_session_context) prepare_session_context();
     m_udf->vdf_func_desc->vdf(&m_context, &m_vdf_args, &result);
 
     if (result.type != VEF_RESULT_VALUE ||

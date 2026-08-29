@@ -323,6 +323,15 @@ class FuncBuilder {
                   "make_func: C++ function must return void and set the SQL "
                   "result through the final typed result parameter");
 
+    constexpr bool has_session_param = []() constexpr {
+      if constexpr (std::tuple_size_v<AllParams> >= 1) {
+        return detail::is_session_param<
+            std::tuple_element_t<0, AllParams>>::value;
+      } else {
+        return false;
+      }
+    }();
+
     // Detect state-style signatures: first parameter is `void*` or any
     // lvalue reference (State& / const State&). Aggregate result-shape
     // functions also have a `const State&` first parameter but go through
@@ -341,6 +350,12 @@ class FuncBuilder {
     if constexpr (Mode == ParamMode::kVarargs) {
       meta.f = &detail::VarArgsWrapper<Func>::invoke;
       meta.is_varargs = true;
+    } else if constexpr (has_session_param) {
+      static_assert(std::tuple_size_v<AllParams> == NumParams + 2,
+                    "make_func: Session-style VDF must have one Session "
+                    "parameter, then the declared SQL parameters, then a "
+                    "typed result wrapper");
+      meta.f = &detail::WrapperWithSession<Func, NumParams>::invoke;
     } else if constexpr (has_state_param) {
       // Shapes:
       //   void(State&, TypedArgs..., TypedResult)     — typed state, mutable
@@ -408,6 +423,7 @@ class FuncBuilder {
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
     meta.max_result_length = max_result_length_;
+    meta.uses_session_context = has_session_param;
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);

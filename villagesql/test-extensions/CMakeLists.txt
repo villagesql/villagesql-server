@@ -58,6 +58,7 @@ vsql_add_test_extension(vsql-huge-var-test             vsql_huge_var_test)
 vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
 vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)
 vsql_add_test_extension(vsql-resolve-only-test         vsql_resolve_only_test)
+vsql_add_test_extension(vsql-session-test              vsql_session_test)
 
 # update_test installable + three target variants exercise the pre-checks
 # of the extension version-update path. The VEB filename is

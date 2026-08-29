@@ -286,6 +286,7 @@ struct FuncWithMetadata {
         num_params(0),
         buffer_size(0),
         max_result_length(0),
+        uses_session_context(false),
         deterministic(false),
         is_varargs(false),
         check_params_cache_bound(nullptr),
@@ -301,6 +302,7 @@ struct FuncWithMetadata {
   size_t num_params;
   size_t buffer_size;
   size_t max_result_length;
+  bool uses_session_context;
   bool deterministic;
   // When true, the function accepts a variable number of arguments. The
   // server skips argument validation and delegates to prerun. num_params
@@ -438,10 +440,16 @@ struct Wrapper {
                           vef_vdf_result_t *result,
                           std::index_sequence<Is...>) {
     using Params = typename FuncParamTypes<decltype(Func)>::type;
-    std::array<vef_invalue_t, NumParams> vals{
-        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
-    Func(make_arg<std::tuple_element_t<Is, Params>>(&vals[Is])...,
-         make_result<std::tuple_element_t<NumParams, Params>>(result));
+    if constexpr (NumParams == 0) {
+      (void)ctx;
+      (void)args;
+      Func(make_result<std::tuple_element_t<0, Params>>(result));
+    } else {
+      std::array<vef_invalue_t, NumParams> vals{
+          get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+      Func(make_arg<std::tuple_element_t<Is, Params>>(&vals[Is])...,
+           make_result<std::tuple_element_t<NumParams, Params>>(result));
+    }
   }
 
   template <typename T>
@@ -587,6 +595,48 @@ struct WrapperVoidStarRefState {
     Func(args->user_data,
          make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
          make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
+  }
+
+  template <typename T>
+  static T make_arg(vef_invalue_t *v) {
+    return T(v);
+  }
+  template <typename T>
+  static T make_result(vef_vdf_result_t *r) {
+    return T(r);
+  }
+};
+
+template <typename T>
+struct is_session_param : std::false_type {};
+template <>
+struct is_session_param<::vsql::Session> : std::true_type {};
+
+// Wrapper for VDFs with a leading Session parameter.
+template <auto Func, size_t NumParams>
+struct WrapperWithSession {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    invoke_impl(ctx, args, result, std::make_index_sequence<NumParams>{});
+  }
+
+ private:
+  template <size_t... Is>
+  static void invoke_impl(vef_context_t *ctx, vef_vdf_args_t *args,
+                          vef_vdf_result_t *result,
+                          std::index_sequence<Is...>) {
+    using Params = typename FuncParamTypes<decltype(Func)>::type;
+    if constexpr (NumParams == 0) {
+      (void)args;
+      Func(::vsql::Session(ctx),
+           make_result<std::tuple_element_t<1, Params>>(result));
+    } else {
+      std::array<vef_invalue_t, NumParams> vals{
+          get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
+      Func(::vsql::Session(ctx),
+           make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
+           make_result<std::tuple_element_t<NumParams + 1, Params>>(result));
+    }
   }
 
   template <typename T>
@@ -1093,6 +1143,7 @@ struct StaticFuncDesc {
   vef_vdf_accumulate_func_t accumulate_;
   size_t buffer_size_;
   size_t max_result_length_;
+  bool uses_session_context_;
   bool deterministic_;
   bool is_varargs_;
   bool (*check_params_cache_bound_)();
@@ -1110,11 +1161,12 @@ struct StaticFuncDesc {
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
   constexpr vef_protocol_t required_protocol() const {
-    if (max_result_length_ > 0) return VEF_PROTOCOL_4;
+    if (max_result_length_ > 0 || uses_session_context_) return VEF_PROTOCOL_4;
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr size_t max_result_length() const { return max_result_length_; }
+  constexpr bool uses_session_context() const { return uses_session_context_; }
   constexpr bool deterministic() const { return deterministic_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
     return check_params_cache_bound_;
@@ -1143,6 +1195,7 @@ struct StaticFuncDesc {
         accumulate_(meta.accumulate),
         buffer_size_(meta.buffer_size),
         max_result_length_(meta.max_result_length),
+        uses_session_context_(meta.uses_session_context),
         deterministic_(meta.deterministic),
         is_varargs_(meta.is_varargs),
         check_params_cache_bound_(meta.check_params_cache_bound),

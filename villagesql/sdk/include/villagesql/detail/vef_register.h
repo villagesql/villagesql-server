@@ -51,6 +51,13 @@ struct has_max_result_length<
     T, std::void_t<decltype(std::declval<const T &>().max_result_length())>>
     : std::true_type {};
 
+template <typename T, typename = void>
+struct has_uses_session_context : std::false_type {};
+template <typename T>
+struct has_uses_session_context<
+    T, std::void_t<decltype(std::declval<const T &>().uses_session_context())>>
+    : std::true_type {};
+
 template <typename FuncData, size_t Index>
 __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     const FuncData &func_data) {
@@ -81,6 +88,11 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     desc.max_result_length = func_data.max_result_length();
   } else {
     desc.max_result_length = 0;
+  }
+  if constexpr (has_uses_session_context<FuncData>::value) {
+    desc.uses_session_context = func_data.uses_session_context();
+  } else {
+    desc.uses_session_context = false;
   }
   desc.deterministic = func_data.deterministic();
   desc.clear = func_data.clear();

@@ -23,6 +23,7 @@ SET(VILLAGESQL_UNIT_TESTS
   custom_indexes-t
   identifier_names-t
   semver-t
+  session_context-t
   type_builder-t
   type_context-t
   type_descriptor-t

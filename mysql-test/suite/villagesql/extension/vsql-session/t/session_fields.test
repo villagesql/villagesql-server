@@ -1,0 +1,45 @@
+# Tier 1 session context fields, read via vsql::Session in a VDF.
+
+--echo # Install extension
+INSTALL EXTENSION vsql_session_test;
+
+--echo # connection_id matches CONNECTION_ID() of this session
+SELECT vsql_session_test.session_conn_id() = CONNECTION_ID() AS conn_id_matches;
+
+--echo # priv_user matches CURRENT_USER's user part
+SELECT vsql_session_test.session_priv_user() =
+       SUBSTRING_INDEX(CURRENT_USER(), '@', 1) AS priv_user_matches;
+
+--echo # priv_host matches CURRENT_USER's host part
+SELECT vsql_session_test.session_priv_host() =
+       SUBSTRING_INDEX(CURRENT_USER(), '@', -1) AS priv_host_matches;
+
+--echo # kill_status is NOT_KILLED (0) during normal execution
+SELECT vsql_session_test.session_kill_status() AS kill_status;
+
+--echo # schema reflects the current default database, fresh per call
+CREATE DATABASE sctx_db1;
+CREATE DATABASE sctx_db2;
+USE sctx_db1;
+SELECT vsql_session_test.session_schema() AS schema_db1;
+USE sctx_db2;
+SELECT vsql_session_test.session_schema() AS schema_db2;
+
+--echo # priv_user is captured at invocation: a SQL SECURITY DEFINER routine
+--echo # owned by a different account reports that account, not the caller.
+CREATE USER definer_acct@localhost;
+GRANT EXECUTE ON sctx_db2.* TO definer_acct@localhost;
+GRANT EXECUTE ON *.* TO definer_acct@localhost;
+CREATE DEFINER = definer_acct@localhost FUNCTION sctx_db2.who()
+  RETURNS VARCHAR(64) SQL SECURITY DEFINER
+  RETURN vsql_session_test.session_priv_user();
+--echo # Expect definer_acct, proving capture at invocation time
+SELECT sctx_db2.who() AS definer_priv_user;
+
+--echo # Cleanup
+DROP FUNCTION sctx_db2.who;
+DROP USER definer_acct@localhost;
+DROP DATABASE sctx_db1;
+DROP DATABASE sctx_db2;
+USE test;
+UNINSTALL EXTENSION vsql_session_test;

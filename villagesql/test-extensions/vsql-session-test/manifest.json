@@ -1,0 +1,7 @@
+{
+  "name": "vsql_session_test",
+  "version": "0.0.1",
+  "description": "VillageSQL extension exercising Tier 1 session context fields",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

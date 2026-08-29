@@ -319,6 +319,49 @@ class CustomResultWith {
   vef_vdf_result_t *r_;
 };
 
+enum class KillStatus {
+  NotKilled = VEF_KILL_NOT_KILLED,
+  Connection = VEF_KILL_CONNECTION,
+  Query = VEF_KILL_QUERY,
+  Timeout = VEF_KILL_TIMEOUT,
+  Unknown = VEF_KILL_UNKNOWN,
+};
+
+// Read-only session context for a VDF call. Use as the first parameter.
+// Returned string views are valid only for the call.
+class Session {
+ public:
+  explicit Session(const vef_context_t *ctx) : ctx_(ctx) {}
+
+  bool available() const { return ctx_->protocol >= VEF_PROTOCOL_4; }
+
+  std::string_view schema() const {
+    return (available() && ctx_->schema != nullptr)
+               ? std::string_view(ctx_->schema)
+               : std::string_view{};
+  }
+  std::string_view priv_user() const {
+    return (available() && ctx_->priv_user != nullptr)
+               ? std::string_view(ctx_->priv_user)
+               : std::string_view{};
+  }
+  std::string_view priv_host() const {
+    return (available() && ctx_->priv_host != nullptr)
+               ? std::string_view(ctx_->priv_host)
+               : std::string_view{};
+  }
+  uint64_t connection_id() const {
+    return available() ? ctx_->connection_id : 0;
+  }
+  KillStatus kill_status() const {
+    return available() ? static_cast<KillStatus>(ctx_->kill_status)
+                       : KillStatus::NotKilled;
+  }
+
+ private:
+  const vef_context_t *ctx_;
+};
+
 }  // namespace vsql
 
 #endif  // VILLAGESQL_VSQL_FUNC_TYPES_H

@@ -123,7 +123,8 @@ static vef_func_desc_t make_resolve_params_fd(const char *name,
           false,
           nullptr,
           nullptr,
-          0};
+          0,
+          false};
 }
 
 class TypeParametersTest : public ::testing::Test {

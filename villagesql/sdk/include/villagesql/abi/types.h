@@ -188,6 +188,10 @@ typedef enum : unsigned int {
                    //   declare the maximum length of a STRING result so the
                    //   result column is sized to hold the full value instead of
                    //   the argument width (fixes materialization truncation).
+                   // + Session context Tier 1 fields on vef_context_t
+                   //   (schema, connection_id, priv_user, priv_host,
+                   //   kill_status), vef_kill_status_t, and per-function
+                   //   opt-in.
 } vef_protocol_t;
 
 // =============================================================================
@@ -251,13 +255,26 @@ typedef struct {
   const char *extra;
 } vef_version_t;
 
-// Context passed to all function calls (prerun, vdf, postrun)
-//
+// Kill state of the session executing a callback.
+typedef enum : unsigned int {
+  VEF_KILL_NOT_KILLED = 0,
+  VEF_KILL_CONNECTION = 1,
+  VEF_KILL_QUERY = 2,
+  VEF_KILL_TIMEOUT = 3,
+  VEF_KILL_UNKNOWN = 255,
+} vef_kill_status_t;
+
+// Context passed to all function calls (prerun, vdf, postrun).
 typedef struct {
   // protocol version being used
   vef_protocol_t protocol;
 
-  // We foresee adding logger or distributed trace information in this context
+  // protocol >= VEF_PROTOCOL_4
+  const char *schema;
+  uint64_t connection_id;
+  const char *priv_user;
+  const char *priv_host;
+  vef_kill_status_t kill_status;
 } vef_context_t;
 
 typedef struct {
@@ -691,6 +708,9 @@ typedef struct {
   // Distinct from buffer_size, which is only the initial row-time output buffer
   // (it grows on demand); this bounds the column the result is stored into.
   size_t max_result_length;
+
+  // Populate vef_context_t session fields for this function.
+  bool uses_session_context;
 } vef_func_desc_t;
 
 // =============================================================================
