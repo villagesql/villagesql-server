@@ -26,6 +26,11 @@
 // Forward declarations
 struct TABLE;
 
+// Forward declarations for friend classes
+namespace villagesql_unittest {
+class PendingActionTest;
+}
+
 namespace villagesql {
 
 // Forward declaration for TableTraits
@@ -106,6 +111,9 @@ class PendingAction {
   std::string Serialize() const;
   static bool Deserialize(const std::string &raw, PendingAction &out,
                           std::string &error_message);
+
+  // Friend classes
+  friend class villagesql_unittest::PendingActionTest;
 
   // Internal layout is private. Field names and JSON shape may change
   // without breaking callers as long as the public getters keep returning
