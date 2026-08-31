@@ -185,17 +185,19 @@ get_clang_format_version() {
 # Whitelist of allowed TODO tags for VillageSQL code
 ALLOWED_TODO_TAGS=(
   "villagesql"
-  "villagesql-beta"
-  "villagesql-preview"
-  "villagesql-crash"
-  "villagesql-ga"
-  "villagesql-performance"
-  "villagesql-rebase"
-  "villagesql-windows"
-  "villagesql-blob"
-  "villagesql-indexing"
   "villagesql-back-to-mysql"
+  "villagesql-beta"
+  "villagesql-blob"
+  "villagesql-charset"
+  "villagesql-crash"
+  "villagesql-general"
+  "villagesql-indexing"
+  "villagesql-performance"
+  "villagesql-preview"
+  "villagesql-production"
+  "villagesql-rebase"
   "villagesql-rust"
+  "villagesql-windows"
 )
 
 INVALID_TODO_TAGS_FOUND=0

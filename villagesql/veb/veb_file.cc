@@ -389,7 +389,7 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
 
   std::string manifest_name = name_value.GetString();
 
-  // TODO(villagesql-beta): Consider relaxing this requirement to allow VEB
+  // TODO(villagesql-general): Consider relaxing this requirement to allow VEB
   // filename to differ from manifest name.
   // Validate manifest name matches expected extension name (VEB basename)
   if (manifest_name != name) {
@@ -935,11 +935,12 @@ bool load_installed_extensions(THD *thd) {
         // parent DA is never touched. This is MySQL's designed-for-purpose
         // mechanism for exactly this pattern.
         //
-        // TODO(villagesql-ga): consolidate internal helpers on structured
+        // TODO(villagesql-general): consolidate internal helpers on structured
         // error-string out-params and translate to villagesql_error only at
         // the SQL boundary (ALTER call site). That would remove the need
         // for this scratch DA entirely and align the internal call surface
-        // with the subprocess-precheck story.
+        // with the subprocess-precheck story. Remove the NOTE in
+        // sql_extension_update_precheck.cc mentioning this TODO.
         //
         // TODO(villagesql): load_installed_extensions has grown large;
         // break the per-extension work into a purpose-driven helper.
@@ -1159,7 +1160,7 @@ bool load_installed_extensions(THD *thd) {
           const std::string &from_version = pending.current_version;
           const std::string &to_version = pending.target_version;
 
-          // TODO(villagesql-ga): the set of extension-owned systables
+          // TODO(villagesql-general): the set of extension-owned systables
           // (columns, sp_params, custom_indexes, ...) is enumerated by
           // name at every caller that operates on an extension's rows:
           // UNINSTALL EXTENSION (delete sweep + use-count check),
@@ -1432,8 +1433,9 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
     return true;
   }
 
-  // TODO(villagesql-beta): Add more validation of the returned registration
-  // object (e.g. func/type descriptors, protocol version, null pointers).
+  // TODO(villagesql-production): Add more validation of the returned
+  // registration object (e.g. func/type descriptors, protocol version, null
+  // pointers).
 
   LogVSQL(INFORMATION_LEVEL,
           "Successfully loaded VEF extension '%s' (protocol %d, %d funcs, %d "

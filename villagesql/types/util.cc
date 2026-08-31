@@ -1833,8 +1833,9 @@ bool InjectCustomSpParams(
       // The Item_field delegates has_type_context() to its field pointer, but
       // set_type_context() on the Item base caches it for non-field items
       // (Item_sp_variable) that call get_type_context() on this_item().
-      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to
-      // its underlying Field, this call can be dropped for field-backed items.
+      // TODO(villagesql-general): Once Item_field delegates set_type_context()
+      // to its underlying Field, this call can be dropped for field-backed
+      // items.
       if (var_items.array() && var_items[m.field_idx]) {
         var_items[m.field_idx]->set_type_context(tc_ref.get());
       }

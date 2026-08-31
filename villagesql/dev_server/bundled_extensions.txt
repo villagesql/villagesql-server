@@ -1,7 +1,7 @@
 # Bundled extensions included in the dev server release tarball.
 # Also tested against the HEAD SDK in extension-compat-suite.yml.
 #
-# TODO(villagesql-ga): In the future, move this per-extension configuration into the
+# TODO(villagesql-general): In the future, move this per-extension configuration into the
 # extension repos themselves (each declaring its own build/abi/path).
 #
 # Format: <url> <branch-or-tag> [key=value ...]

@@ -914,7 +914,7 @@ struct IntrinsicDefaultWithCacheWrapper {
 inline bool serialize_type_params(
     const std::map<std::string, std::string> &params, const char *op_name,
     std::string &out, char *error_msg) {
-  // TODO(villagesql-beta): decide on a broader character set policy.
+  // TODO(villagesql-charset): decide on a broader character set policy.
   out.clear();
   for (const auto &[key, value] : params) {
     if (key.empty() || key.find_first_of(",=") != std::string::npos) {

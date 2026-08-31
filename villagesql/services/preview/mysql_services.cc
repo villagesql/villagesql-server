@@ -43,7 +43,7 @@ std::unordered_map<const vef_preview_mysql_services_t *, ServiceState> g_states;
 // Acquire every consumed service and write its pointer back into the extension.
 // On any failure, roll back what this call already did.
 //
-// TODO(villagesql-beta): consider whether to enforce a manifest allow-list —
+// TODO(villagesql-general): consider whether to enforce a manifest allow-list —
 // refusing any service the code consumes that is not listed in the extension's
 // manifest "required_mysql_services". This is an open design decision, not a
 // pending task: it's one way to constrain which services an extension may

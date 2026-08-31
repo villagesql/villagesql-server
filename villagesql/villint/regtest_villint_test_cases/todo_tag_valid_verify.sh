@@ -12,8 +12,8 @@ if [ ! -f "$FILE" ]; then
 fi
 
 # Verify the file contains our expected valid tags
-if ! grep -q "TODO(villagesql-ga):" "$FILE"; then
-    echo "FAIL: $FILE missing expected TODO(villagesql-ga) tag"
+if ! grep -q "TODO(villagesql-general):" "$FILE"; then
+    echo "FAIL: $FILE missing expected TODO(villagesql-general) tag"
     exit 1
 fi
 

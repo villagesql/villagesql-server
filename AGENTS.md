@@ -173,7 +173,7 @@ For additional options, see `./scripts/villint.sh --help`.
 
 ## Architecture Overview
 
-TODO(villagesql-ga): Add VillageSQL-specific architecture documentation covering:
+TODO(villagesql-general): Add VillageSQL-specific architecture documentation covering:
 - Extension framework architecture
 - Custom type system design
 - Victionary caching layer
@@ -212,16 +212,19 @@ When adding VillageSQL features:
 - For header guards, use `// HEADER_GUARD_NAME_H` at the `#endif`
 - All todos in the code that we add should look like `// TODO(villagesql): <thing to do>`
   - Use subareas for categorization:
+    - `TODO(villagesql-back-to-mysql):` - Required for downgrade safety / vanilla MySQL
     - `TODO(villagesql-beta):` - Must handle before Beta Release (0.1.0)
-    - `TODO(villagesql-preview):` - Related to preview capability system
-    - `TODO(villagesql-ga):` - Must handle before General Availability (1.0.0)
-    - `TODO(villagesql-performance):` - Performance optimization possibility
-    - `TODO(villagesql-rebase):` - Check during MySQL version rebases
+    - `TODO(villagesql-blob):` - Needed to support blobs as underlying storage for custom types
+    - `TODO(villagesql-charset):` - Potential CHARSET_INFO issues/inconsistencies
     - `TODO(villagesql-crash):` - Known crash
-    - `TODO(villagesql-windows):` - Known problems with supporting Windows
-    - `TODO(villagesql-indexing):` - Related to indexing work
-    - `TODO(villagesql-back-to-mysql):` - Required for downgrade safety / vanilla MySQL compatibility
+    - `TODO(villagesql-general):` - Must handle before General Availability (1.0.0)
+    - `TODO(villagesql-indexing):` - Related to custom indexing work
+    - `TODO(villagesql-performance):` - Performance optimization possibility
+    - `TODO(villagesql-preview):` - Related to preview capability system
+    - `TODO(villagesql-production):` - Must handle for "production readiness"
+    - `TODO(villagesql-rebase):` - Check during MySQL version rebases
     - `TODO(villagesql-rust):` - Related to the Rust SDK / Rust extension support
+    - `TODO(villagesql-windows):` - Known problems with supporting Windows
 - Avoid `/* */` style comments except for copyright headers
 - Do NOT use section separator comments (e.g., `// ===== Serialization =====`) - they're hard to maintain and add little value
 - Do NOT add explanatory comments on #include lines (e.g., `#include "my_sys.h" // my_ok, my_printf_error`) - they're hard to maintain

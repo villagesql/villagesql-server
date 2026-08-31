@@ -47,9 +47,9 @@ struct SpParamKeyPrefix {
                                  canonical_table_name(sp_name_)}) +
             ".") {}
 
-  // TODO(villagesql-beta): Add a db-only constructor (no sp_name) to support
-  // bulk deletion of all sp params for a given database, needed for DROP
-  // DATABASE cleanup.
+  // TODO(villagesql-production): Add a db-only constructor (no sp_name) to
+  // support bulk deletion of all sp params for a given database, needed for
+  // DROP DATABASE cleanup.
   const std::string &str() const { return normalized_prefix_; }
 
   const std::string &db() const { return db_; }

@@ -542,7 +542,7 @@ void lex_end(LEX *lex) {
   lex->sphead = nullptr;
 
   // Free custom-routine tracking; a view's transient LEX never runs ~LEX.
-  // TODO(villagesql-beta): merge view croutines_list into the parent in
+  // TODO(villagesql-general): merge view croutines_list into the parent in
   // handle_view() like sroutines, so view-referenced VDFs get extension MDLs.
   lex->croutines.reset();
   lex->croutines_list.clear();
