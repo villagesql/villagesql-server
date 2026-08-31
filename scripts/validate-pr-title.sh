@@ -27,8 +27,13 @@ errors=()
 # failing title is clear when both are checked.
 validate_title() {
   local label="$1" value="$2"
-  if [ ${#value} -gt 41 ]; then
-    errors+=("$label is ${#value} characters long (max 41 to allow growth to 50 with gh issue numbers)")
+  # 63 = 72 - 9, reserving room for the " (#XXXXX)" suffix GitHub appends on
+  # squash merge (5-digit PR number). 72 is where GitHub actually truncates a
+  # single-commit PR title with "..." and pushes the remainder into the
+  # description, so it is the point past which content is lost rather than
+  # merely clipped in narrow views.
+  if [ ${#value} -gt 63 ]; then
+    errors+=("$label is ${#value} characters long (max 63 to allow growth to 72 with gh issue numbers)")
   fi
   local last_char="${value: -1}"
   if [[ "$last_char" =~ [.,\;:!] ]]; then
