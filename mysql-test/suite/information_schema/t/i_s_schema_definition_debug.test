@@ -102,7 +102,8 @@ SET debug = '+d,skip_dd_table_access_check';
 let $expected_system_view_count = 51;
 #
 # I_S checksum (PART 3): VillageSQL's information_schema.EXTENSIONS view (plus the
-# COLUMNS override -- both in villagesql/system_views/) changes the I_S schema, so
+# COLUMNS and STATISTICS/SHOW_STATISTICS overrides -- all in
+# villagesql/system_views/) changes the I_S schema, so
 # its checksum differs from vanilla 9.7's. Following VillageSQL's 8.4 convention
 # (keep IS_DD_VERSION, override the published checksum rather than bump the DD
 # version), the 90500 rows in I_S_published_schema below hold VillageSQL's
@@ -111,12 +112,22 @@ let $expected_system_view_count = 51;
 # would force a DD upgrade (datadirs regenerate the I_S views) -- deliberately
 # not done.
 # The 90500 lctn=0 (case-sensitive FS) row is re-recorded on Linux and covers the
-# EXTENSIONS PENDING_* columns, the COLUMNS MYSQL_TYPE_VECTOR arms, and the
-# EXTENSION_NAME/EXTENSION_VERSION COLLATE utf8mb4_0900_ai_ci from #1031.
-# The 90500 lctn=1 (case-insensitive FS) row is re-recorded on macOS/APFS, where
-# lower_case_file_system is ON and mysqld raises lower_case_table_names to 2. A
-# case-sensitive APFS disk image gives the lctn=0 combination on the same host,
-# so either row can be re-recorded on macOS; Linux only reaches lctn=0.
+# EXTENSIONS PENDING_* columns, the COLUMNS MYSQL_TYPE_VECTOR arms, the
+# EXTENSION_NAME/EXTENSION_VERSION COLLATE utf8mb4_0900_ai_ci from #1031, and
+# the STATISTICS/SHOW_STATISTICS villagesql.custom_indexes join from #1076.
+# The 90500 lctn=1 (case-insensitive FS) row is normally re-recorded on
+# macOS/APFS, where lower_case_file_system is ON and mysqld raises
+# lower_case_table_names to 2. A case-sensitive APFS disk image gives the
+# lctn=0 combination on the same host, so either row can be re-recorded on
+# macOS. It can also be reproduced on Linux, because every lctn-dependent
+# part of the I_S schema keys off (lower_case_table_names != 0) rather than
+# off lower_case_file_system:
+#   mysql-test-run.pl --initialize=--lower-case-table-names=1 \
+#                     --mysqld=--lower-case-table-names=1 \
+#                     information_schema.i_s_schema_definition_debug
+# That run reports the lctn=1 checksum (the trailing asserts still fail there,
+# since they compare against @@global.lower_case_file_system, which is 0 on
+# Linux).
 
 --echo ########################################################################
 --echo # PART 1
@@ -376,10 +387,10 @@ INSERT INTO I_S_published_schema
         '027170b29c123596a675415c0e95542856cdd7bb837da87a74ce3c9bff8103fd');
 INSERT INTO I_S_published_schema
   VALUES ('90500', '90500', 0,
-        'f3177df73d1d1b5f8c621004be8dbbf8fa708efceb8dc8256eed33bb0d71d325');
+        'a88c77cb654cb741e418796ec72f080db48d264fb1cccca3c2f11d7d31bc33b4');
 INSERT INTO I_S_published_schema
   VALUES ('90500', '90500', 1,
-        '46f01408b01cbeb2d46cb163b6e5f4b7618bdda6d62618ac6fcfa968da1e298a');
+        'a0d8ea407eedbb37e32f80ef2bd81fcc135318f1fb7d06f3b4d44b176ac4837c');
 
 LET $checksum_version = `SELECT IF(ISNULL(mysqld_version), "0", i_s_version)
                   FROM I_S_published_schema i RIGHT OUTER JOIN whole_schema w

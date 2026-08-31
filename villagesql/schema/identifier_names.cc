@@ -125,6 +125,11 @@ std::string column_name_match_sql(const std::string &vsql_name,
   return folded_match_sql(vsql_name, dd_name);
 }
 
+std::string index_name_match_sql(const std::string &vsql_name,
+                                 const std::string &dd_name) {
+  return folded_match_sql(vsql_name, dd_name);
+}
+
 const CHARSET_INFO *type_parameter_collation() {
   return &my_charset_utf8mb4_0900_ai_ci;
 }
