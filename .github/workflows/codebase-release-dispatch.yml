@@ -1,0 +1,306 @@
+name: Codebase Release Dispatch
+
+# Build and publish the assets and artifacts for a release.
+# These include the dev-server packages (release-server-branch)
+# and the multi-arch Docker image (release-docker-branch).
+#
+# The children are started with `uses:`, not the `gh workflow run` that
+# nightly-dispatch uses. The nightly's reasons for separate runs — independent
+# suites, separate artifact namespaces, a suite that fails to start staying
+# visible on its own — do not apply to two halves of one release, which instead
+# wants a single run whose red/green is the release's red/green.
+#
+# Test executions are "rehearsals", not a mode: point `release_tag` and `image_tag`
+# somewhere harmless and the same path runs end to end. The Docker half always
+# pushes (publish_image.sh has no build-only mode), so a rehearsal must name a
+# tag it is willing to write.
+#
+# release-server-branch reads a blank `release_tag` as `ref`, so blank skips
+# the upload only while no Release is named after the ref. Name the rehearsal's
+# release tag rather than relying on that.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Codebase branch, tag, or SHA to build from (e.g. main or publish/mysql-8.4_0.0.7).'
+        required: true
+        type: string
+        default: 'main'
+      release_build:
+        description: 'Strip the -dev suffix from the version.'
+        required: true
+        type: boolean
+        default: false
+      release_tag:
+        description: 'GitHub Release to attach the server packages to, e.g. release/0.0.7. Blank skips the upload and the tarballs stay on the run page.'
+        required: false
+        type: string
+        default: ''
+      image_tag:
+        description: 'Docker tag to publish. For a rehearsal, use a test tag e.g. mysql-8.4_0.0.7-test.'
+        required: true
+        type: string
+      image_repo:
+        description: 'Docker repository to push to.'
+        required: true
+        type: string
+        default: 'villagesql/server'
+      dev_abi:
+        description: 'Expose the development ABI in the image.'
+        required: true
+        type: choice
+        options:
+          - 'ON'
+          - 'OFF'
+        default: 'ON'
+      version_labels:
+        description: 'Comma-separated labels published alongside the image tag, prefixed with the codebase (stable -> mysql-8.4_stable). Blank publishes none, which is what a build ahead of acceptance wants.'
+        required: false
+        type: string
+        default: ''
+      define_tags:
+        description: 'Comma-separated tags published as given, with no codebase prefix (e.g. latest). Blank publishes none.'
+        required: false
+        type: string
+        default: ''
+      slack_notify:
+        description: 'Post the result to Slack.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Names what is about to be published, and rejects a tag the registry cannot
+  # hold, before either half spends an hour building it. Both halves need it,
+  # so neither starts on inputs that cannot work.
+  resolve:
+    name: Resolve Release
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      code-base: ${{ steps.resolve.outputs.code_base }}
+      version: ${{ steps.resolve.outputs.version }}
+
+    steps:
+      # cone mode brings the root-level VSQL_VERSION along.
+      - name: Checkout resolve context
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+          sparse-checkout: |
+            villagesql/bld_matrix/
+            villagesql/bld_tools/
+            villagesql/scripts/
+
+      - name: Resolve release identity
+        id: resolve
+        env:
+          REF: ${{ inputs.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_REPO: ${{ inputs.image_repo }}
+          RELEASE_BUILD: ${{ inputs.release_build }}
+          DEV_ABI: ${{ inputs.dev_abi }}
+          VERSION_LABELS: ${{ inputs.version_labels }}
+          DEFINE_TAGS: ${{ inputs.define_tags }}
+        run: |
+          set -euo pipefail
+
+          # The version registry is runnable locally exactly as it runs here:
+          #   villagesql/bld_matrix/json_version.sh | jq .
+          VERSION_JSON="$(villagesql/bld_matrix/json_version.sh)"
+          jq . <<<"$VERSION_JSON"
+
+          CODE_BASE="$(jq -r '.code_base' <<<"$VERSION_JSON")"
+          VERSION="$(jq -r '"\(.major).\(.minor).\(.patch)"' <<<"$VERSION_JSON")"
+
+          # A Docker tag cannot hold a slash, and the labels and define tags
+          # become tags too. Catching a GitHub release tag pasted into the
+          # wrong box here saves an hour of building first.
+          IFS=',' read -ra TAG_PARTS <<<"$IMAGE_TAG,$VERSION_LABELS,$DEFINE_TAGS"
+          for PART in "${TAG_PARTS[@]}"; do
+            if [[ "$PART" == */* ]]; then
+              echo "::error::'$PART' contains '/', which Docker tags cannot hold."
+              exit 1
+            fi
+          done
+
+          SHA="$(git rev-parse $REF)"
+
+          {
+            echo "sha=$SHA"
+            echo "code_base=$CODE_BASE"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Codebase release: $CODE_BASE $VERSION"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Ref | \`$REF\` |"
+            echo "| Commit | \`$SHA\` ($(git log -n1 --format=%s)) |"
+            echo "| Release Build | $RELEASE_BUILD |"
+            echo "| GitHub Release | ${RELEASE_TAG:-_none — packages stay on the run page_} |"
+            echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
+            echo "| Dev ABI | $DEV_ABI |"
+            echo "| Version labels | ${VERSION_LABELS:-_none_} |"
+            echo "| Define tags | ${DEFINE_TAGS:-_none_} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release-server:
+    name: Release Server
+    needs: resolve
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-server-branch.yml
+    with:
+      ref: ${{ inputs.ref }}
+      release_tag: ${{ inputs.release_tag }}
+      release_build: ${{ inputs.release_build }}
+
+  release-docker:
+    name: Release Docker
+    needs: resolve
+    secrets: inherit
+    uses: ./.github/workflows/release-docker-branch.yml
+    with:
+      ref: ${{ inputs.ref }}
+      tag: ${{ inputs.image_tag }}
+      repo: ${{ inputs.image_repo }}
+      # The same expression build-server-branch uses for
+      # VSQL_PRE_RELEASE_VERSION, so both halves derive the suffix from
+      # release_build identically.
+      pre_release_version: ${{ !inputs.release_build && 'dev' || '' }}
+      dev_abi: ${{ inputs.dev_abi }}
+      version_labels: ${{ inputs.version_labels }}
+      define_tags: ${{ inputs.define_tags }}
+
+  notify:
+    name: Slack Notification
+    needs: [resolve, release-server, release-docker]
+    # Opt in, so iterating on this workflow does not spam the channel. Ask for
+    # it on anything anyone else is waiting on: what was pushed where is the
+    # thing worth knowing, and a release that never announced itself is
+    # indistinguishable from one that never ran.
+    if: always() && inputs.slack_notify
+    runs-on: ubuntu-latest
+    # Posts to a webhook; needs no repo access.
+    permissions: {}
+
+    steps:
+      - name: Build release summary
+        id: summary
+        env:
+          SERVER: ${{ needs.release-server.result }}
+          DOCKER: ${{ needs.release-docker.result }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          IMAGE: ${{ inputs.image_repo }}:${{ inputs.image_tag }}
+          RELEASE_BUILD: ${{ inputs.release_build }}
+          VERSION_LABELS: ${{ inputs.version_labels }}
+          DEFINE_TAGS: ${{ inputs.define_tags }}
+        run: |
+          line() {
+            local label="$1" outcome="$2" detail="$3" icon
+            case "$outcome" in
+              success) icon="✅" ;;
+              failure) icon="❌" ;;
+              "")      icon="⏭️"; outcome="did not run" ;;
+              *)       icon="⚠️" ;;
+            esac
+            printf '%s %-16s %s — %s\n' "$icon" "$label" "$outcome" "$detail"
+          }
+
+          SUMMARY=$(
+            line "Server packages" "$SERVER" \
+              "${RELEASE_TAG:-no upload; packages on the run page}"
+            line "Docker image" "$DOCKER" "$IMAGE"
+            echo "Release build: $RELEASE_BUILD"
+            # `if` rather than `[ ... ] && echo`, whose non-zero exit on the
+            # last line would fail the whole command substitution under -e.
+            if [ -n "$VERSION_LABELS" ]; then
+              echo "Version labels: $VERSION_LABELS"
+            fi
+            if [ -n "$DEFINE_TAGS" ]; then
+              echo "Define tags: $DEFINE_TAGS"
+            fi
+          )
+          echo "$SUMMARY"
+          # jq -Rs emits a JSON string (newlines escaped), so it stays one line
+          # in GITHUB_OUTPUT and drops into the payload below unquoted.
+          echo "text=$(jq -Rs . <<<"$SUMMARY")" >> "$GITHUB_OUTPUT"
+
+      - name: Compute overall status
+        id: status
+        env:
+          RESOLVE: ${{ needs.resolve.result }}
+          SERVER: ${{ needs.release-server.result }}
+          DOCKER: ${{ needs.release-docker.result }}
+        run: |
+          if [ "$RESOLVE" = success ] && [ "$SERVER" = success ] && \
+             [ "$DOCKER" = success ]; then
+            label=succeeded; emoji="✅"; color="#36a64f"
+          elif [ "$RESOLVE" = cancelled ] || [ "$SERVER" = cancelled ] || \
+               [ "$DOCKER" = cancelled ]; then
+            label=cancelled; emoji="⚠️"; color="#daa520"
+          else
+            label=failed;    emoji="❌"; color="#cc0000"
+          fi
+          {
+            echo "label=$label"
+            echo "emoji=$emoji"
+            echo "color=$color"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.emoji }} Codebase release ${{ needs.resolve.outputs.code-base || 'unknown' }} ${{ needs.resolve.outputs.version || '' }} ${{ steps.status.outputs.label }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "text":  ${{ steps.summary.outputs.text }},
+                  "fields": [
+                    {
+                      "title": "Codebase",
+                      "value": "${{ needs.resolve.outputs.code-base || 'unresolved' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Release",
+                      "value": "${{ needs.resolve.outputs.version || 'unresolved' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Ref",
+                      "value": "${{ inputs.ref }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ needs.resolve.outputs.sha || 'unknown' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Started by",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
