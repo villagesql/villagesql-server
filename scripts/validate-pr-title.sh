@@ -31,7 +31,7 @@ validate_title() {
   # squash merge (5-digit PR number). 72 is where GitHub actually truncates a
   # single-commit PR title with "..." and pushes the remainder into the
   # description, so it is the point past which content is lost rather than
-  # merely clipped in narrow views.
+  # clipped in narrow views.
   if [ ${#value} -gt 63 ]; then
     errors+=("$label is ${#value} characters long (max 63 to allow growth to 72 with gh issue numbers)")
   fi
