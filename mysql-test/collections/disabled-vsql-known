@@ -1,0 +1,28 @@
+##############################################################################
+#
+# List of test known to fail consistently on VillageSQL builds.
+#
+# Separate the test case name and the comment with ':'.
+#   <suite>.<test> [@platform|@!platform] : <BUG|WL>#<XXXX> [<comment>]
+#
+# Note:
+#   - Comment shows as status for test.
+#   - Do not use any TAB characters for whitespace.
+#   - Length of a comment section must not be more than 80 characters.
+#   - <disabled_file> could be the file name or a valid path. It should
+#     not be followed by a comment on that line.
+#
+##############################################################################
+
+# innodb stress tests
+innodb_stress.innodb_stress                          : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_blob                     : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_blob_nocompress          : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_crash                    : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_crash_blob               : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_crash_blob_nocompress    : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_crash_nocompress         : BUG#0 VillageSQL load_generator - no 'mysql' module
+innodb_stress.innodb_stress_nocompress               : BUG#0 VillageSQL load_generator - no 'mysql' module
+
+# Lock order hasn't worked
+lock_order.cycle                                     : BUG#0 VillageSQL Server abort - bad options

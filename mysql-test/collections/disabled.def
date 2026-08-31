@@ -147,3 +147,6 @@ engines/rr_trx.rr_sc_sum_total : BUG#0 Stress-only suite, not standalone MTR tes
 engines/rr_trx.rr_u_10-19 : BUG#0 Stress-only suite, not standalone MTR tests
 engines/rr_trx.rr_u_10-19_nolimit : BUG#0 Stress-only suite, not standalone MTR tests
 engines/rr_trx.rr_u_4 : BUG#0 Stress-only suite, not standalone MTR tests
+
+# Skip tests that VillageSQL knows never pass in regular builds
+@import disabled-vsql-known
