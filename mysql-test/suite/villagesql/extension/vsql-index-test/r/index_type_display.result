@@ -1,0 +1,47 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a dummy_type_vector,
+b INT,
+INDEX idx_custom (a) USING EXTENDED(dummy_index_hnsw),
+INDEX idx_btree (b)
+);
+# --- INFORMATION_SCHEMA.STATISTICS ---
+SELECT INDEX_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_TYPE
+idx_btree	BTREE
+idx_custom	DUMMY_INDEX_HNSW
+PRIMARY	BTREE
+# --- SHOW INDEX: same definition, via the hidden SHOW_STATISTICS view ---
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	#	#	#	#	BTREE			YES	NULL
+t1	1	idx_custom	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
+t1	1	idx_btree	1	b	A	#	#	#	#	BTREE			YES	NULL
+# --- SHOW KEYS and SHOW INDEXES are synonyms of SHOW INDEX ---
+SHOW KEYS FROM t1 WHERE Key_name = 'idx_custom';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	idx_custom	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
+SHOW INDEXES FROM t1 WHERE Key_name = 'idx_custom';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	idx_custom	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
+# --- Dropping the custom index reverts INDEX_TYPE to the engine default ---
+DROP INDEX idx_custom ON t1;
+SELECT INDEX_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_TYPE
+idx_btree	BTREE
+PRIMARY	BTREE
+# --- Cleanup ---
+DROP TABLE t1;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

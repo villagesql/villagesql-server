@@ -323,19 +323,30 @@ INSERT INTO I_S_published_schema
 INSERT INTO I_S_published_schema
   VALUES ('80200', '80200', 1,
         '043975d2bcbbf7eed996b8917c41b14363c2c2904658355a414d3ebbb96a8f2b');
-INSERT INTO I_S_published_schema
-  VALUES ('80400', '80400', 0,
 # The 80400 checksums cover the merged I_S schema, which has two views upstream
 # does not (COMPRESSION_DICTIONARY, COMPRESSION_DICTIONARY_TABLES), so they
 # differ from upstream's published values. IS_DD_VERSION is deliberately not
 # bumped -- the checksum for the current version is overridden in place. PART 3
 # prints the actual checksum on failure.
 #
-# lctn=1 recorded 2026-08-22 on a case-insensitive FS, after porting #1031.
-# lctn=0 is STILL upstream's value and is WRONG here. It needs a case-sensitive
-# filesystem, so it has to come from a Linux run -- the CI failure output prints
-# it.
-        '2f3bb6a6328931f023ead68c3cfdf3fcbc69c004ab30c5770229d6c4f1ebb4d6');
+# Both values moved again with the STATISTICS/SHOW_STATISTICS override added
+# for custom index types (#1076), which rewrites two view definitions.
+# Upstream's new values cannot be used here because this tree's I_S schema is
+# not upstream's.
+#
+# lctn=0 recorded 2026-09-24 on a case-sensitive FS (Linux debug build), after
+# porting #1076.
+# lctn=1 is STILL the value inherited from before #1076 and is WRONG here. It
+# needs a case-insensitive filesystem, so it has to come from a macOS run --
+# the CI failure output prints it.
+#
+# Keep this note outside the INSERT statements below: mysqltest scans the
+# statement text for the terminating delimiter and counts quotes while doing
+# so, so an apostrophe in a comment placed between VALUES and the closing
+# parenthesis silently swallows the rest of the statement.
+INSERT INTO I_S_published_schema
+  VALUES ('80400', '80400', 0,
+        'b6582caae4dbfe8e14f56c341f5e18d3f7a791619fdb3a35a69690771bd005ea');
 INSERT INTO I_S_published_schema
   VALUES ('80400', '80400', 1,
         'ae04b8cdd6081fad18d298fe1072e067a147992eb9efaa3fd53500de84e3deea');
