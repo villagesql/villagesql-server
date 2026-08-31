@@ -16,7 +16,6 @@
 
 // Argument validation in vef_storage_page_latch(), the preview storage ABI
 // entry point.
-//
 
 #include <gtest/gtest.h>
 

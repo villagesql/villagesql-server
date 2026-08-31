@@ -62,7 +62,7 @@ TEST_F(PendingActionTest, CreateVersionUpdatePopulatesFields) {
 
   EXPECT_EQ("2.0.0", a.target_version());
   EXPECT_EQ("abc123", a.target_veb_sha256());
-  // Stamped from the server clock; only its shape is predictable.
+  // Stamped from the server clock; only its format is predictable.
   EXPECT_THAT(a.requested_at(), ::testing::MatchesRegex(kTimestampPattern));
 
   // A freshly created action has not been attempted, so it carries no failure.
@@ -120,7 +120,7 @@ TEST_F(PendingActionTest, RoundTripWithFailure) {
   EXPECT_EQ(original.last_error_at(), parsed.last_error_at());
 }
 
-// An operator can edit this column by hand, so every malformed shape must be
+// An operator can edit this column by hand, so every malformed json must be
 // rejected with a message naming what is wrong.
 TEST_F(PendingActionTest, DeserializeRejectsMalformedInput) {
   struct {

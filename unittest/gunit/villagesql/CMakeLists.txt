@@ -22,8 +22,8 @@ SET(VILLAGESQL_UNIT_TESTS
   abi_v2_check-t
   custom_indexes-t
   identifier_names-t
-  semver-t
   pending_action-t
+  semver-t
   storage_page_latch-t
   type_builder-t
   type_context-t
