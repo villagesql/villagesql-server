@@ -693,6 +693,104 @@ TEST_F(SemverTest, ParseStoredVersion) {
   std::string error;
   EXPECT_FALSE(v5.parse_schema_version("invalid", &error));
   EXPECT_FALSE(error.empty());
+
+  // A legacy-layout version (starts with a digit, so no code base prefix) that
+  // fails body validation is rejected through the legacy branch.
+  Semver v6;
+  error.clear();
+  EXPECT_FALSE(v6.parse_schema_version("1.2.x", &error));
+  EXPECT_THAT(error, ::testing::HasSubstr("must be numeric"));
+}
+
+// Error messages quote the offending input, and anything unprintable in it is
+// rendered as a readable escape rather than emitted raw. These strings end up
+// in the error log and in client-visible errors, so a stray control character
+// must not travel with them.
+TEST_F(SemverTest, ErrorMessagesEscapeUnprintableInput) {
+  struct {
+    const char *version;
+    char raw;
+    const char *expected_escape;
+  } cases[] = {
+      {"mysql-8.4_1.2.\t3", '\t', "\\t"},
+      {"mysql-8.4_1.2.a\nb", '\n', "\\n"},
+      {"mysql-8.4_1.2.a\rb", '\r', "\\r"},
+      {"mysql-8.4_1.2.a\\b", '\\', "\\\\"},
+      // Not printable and not one of the named escapes: rendered as hex.
+      {"mysql-8.4_1.2.a\x01"
+       "b",
+       '\x01', "\\x01"},
+  };
+
+  for (const auto &c : cases) {
+    Semver v;
+    std::string error;
+    EXPECT_FALSE(v.parse(c.version, &error)) << "version: " << c.version;
+    EXPECT_THAT(error, ::testing::HasSubstr("must be numeric"));
+    EXPECT_THAT(error, ::testing::HasSubstr(c.expected_escape));
+    // The raw character must not survive into the message. Skipped for the
+    // backslash case, where the escape is itself made of backslashes.
+    if (c.raw != '\\') {
+      EXPECT_EQ(std::string::npos, error.find(c.raw))
+          << "raw character leaked for version: " << c.version;
+    }
+  }
+}
+
+// A core component that is numeric but too large for the target type is
+// reported as out of range, distinct from the "must be numeric" case.
+TEST_F(SemverTest, ParseRejectsOutOfRangeComponent) {
+  Semver v;
+  std::string error;
+  EXPECT_FALSE(v.parse("mysql-8.4_99999999999999999999999.0.0", &error));
+  EXPECT_THAT(error, ::testing::HasSubstr("is out of range"));
+  EXPECT_FALSE(v.is_valid());
+}
+
+// A code base prefix with nothing after the separator.
+TEST_F(SemverTest, ParseRejectsEmptyVersionBody) {
+  Semver v;
+  std::string error;
+  EXPECT_FALSE(v.parse("mysql-8.4_", &error));
+  EXPECT_EQ("Empty version string", error);
+  EXPECT_FALSE(v.is_valid());
+}
+
+// Every known code base maps to its canonical static spelling. Percona code
+// bases were previously only reached via parse_schema_version.
+TEST_F(SemverTest, ParseAcceptsAllKnownCodeBases) {
+  const std::string_view code_bases[] = {
+      Semver::kMysql84CodeBase, Semver::kMysql97CodeBase,
+      Semver::kPercona84CodeBase, Semver::kPercona97CodeBase};
+
+  for (const std::string_view cb : code_bases) {
+    Semver v;
+    const std::string version = std::string(cb) + "_1.2.3";
+    std::string error;
+    ASSERT_TRUE(v.parse(version, &error)) << version << ": " << error;
+    EXPECT_EQ(cb, v.code_base());
+    EXPECT_EQ(version, v.to_string());
+  }
+}
+
+TEST_F(SemverTest, PrereleasePrecedenceIsSymmetric) {
+  const Semver num_low = from_components(1, 0, 0, Semver::kMysql84CodeBase,
+                                         std::vector<std::string>{"1"});
+  const Semver num_high = from_components(1, 0, 0, Semver::kMysql84CodeBase,
+                                          std::vector<std::string>{"2"});
+  const Semver alpha = from_components(1, 0, 0, Semver::kMysql84CodeBase,
+                                       std::vector<std::string>{"alpha"});
+  const Semver beta = from_components(1, 0, 0, Semver::kMysql84CodeBase,
+                                      std::vector<std::string>{"beta"});
+
+  // Numeric identifiers compare numerically
+  EXPECT_TRUE(num_low < num_high);
+
+  // A numeric identifier has lower precedence than an alphanumeric one
+  EXPECT_TRUE(num_high < alpha);
+
+  // Alphanumeric identifiers compare lexically
+  EXPECT_TRUE(alpha < beta);
 }
 
 }  // namespace villagesql_unittest
