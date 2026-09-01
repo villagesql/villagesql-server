@@ -28,6 +28,7 @@ https://github.com/villagesql/vsql-fuzzystrmatch main
 https://github.com/villagesql/vsql-trgm main
 https://github.com/villagesql/vsql-cube main
 https://github.com/villagesql/vsql-http main
+https://github.com/villagesql/vsql-mcp main build=cargo abi=stable bundle=false
 https://github.com/villagesql/vsql-network-address main
 https://github.com/villagesql/vsql-oauth2 main abi=dev
 https://github.com/villagesql/vsql-rest main abi=dev
