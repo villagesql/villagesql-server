@@ -63,6 +63,14 @@ let $str = `$SELECT_CMD $WHERE_COND`;
 echo $str;
 eval INSERT INTO I_S_check_table(t) VALUES ("$str");
 
+let $WHERE_COND = AND TABLE_NAME='CUSTOM_INDEXES';
+replace_regex /(cat|sch|tbl).name COLLATE utf8mb3_tolower_ci/\1.name/
+              /LOWER\(vci.db_name\)=LOWER\(CONVERT\(sch.name USING utf8mb4\) COLLATE utf8mb4_bin\)/vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin/
+              /LOWER\(vci.table_name\)=LOWER\(CONVERT\(tbl.name USING utf8mb4\) COLLATE utf8mb4_bin\)/vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin/;
+let $str = `$SELECT_CMD $WHERE_COND`;
+echo $str;
+eval INSERT INTO I_S_check_table(t) VALUES ("$str");
+
 let $WHERE_COND = AND TABLE_NAME='EVENTS';
 replace_regex /(cat|sch).name COLLATE utf8mb3_tolower_ci/\1.name/;
 let $str = `$SELECT_CMD $WHERE_COND`;

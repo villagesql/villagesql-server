@@ -1,0 +1,136 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE t (
+id INT PRIMARY KEY,
+b dummy_type_vector,
+d dummy_type_vector,
+e dummy_type_vector,
+plain INT,
+INDEX idx_plain (plain)
+);
+CREATE INDEX idx_ext ON t (b) USING EXTENDED(dummy_index_hnsw)
+WITH (M = 16, ef_construction = 200);
+CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_hnsw);
+# --- CUSTOM_INDEXES: one row per index key column ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,
+EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME,
+INDEX_TYPE_PARAMETERS, PROFILE_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'test'
+ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	EXTENSION_NAME	EXTENSION_VERSION	INDEX_TYPE_NAME	INDEX_TYPE_PARAMETERS	PROFILE_NAME
+test	t	idx_ext	1	b	vsql_index_test	0.0.1	dummy_index_hnsw	{"M": "16", "ef_construction": "200"}	dummy_profile_hnsw_l2
+test	t	idx_multi	1	d	vsql_index_test	0.0.1	dummy_index_hnsw	{}	dummy_profile_hnsw_l2
+test	t	idx_multi	2	e	vsql_index_test	0.0.1	dummy_index_hnsw	{}	dummy_profile_hnsw_l2
+# --- Regular indexes are absent by construction ---
+SELECT COUNT(*) AS regular_index_rows
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'test' AND INDEX_NAME IN ('idx_plain', 'PRIMARY');
+regular_index_rows
+0
+# --- Parameters are JSON strings even when written as numbers ---
+SELECT INDEX_NAME, INDEX_TYPE_PARAMETERS->>'$.M' AS m_raw,
+CAST(INDEX_TYPE_PARAMETERS->>'$.M' AS UNSIGNED) < 32 AS m_below_32
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'test' AND INDEX_NAME = 'idx_ext';
+INDEX_NAME	m_raw	m_below_32
+idx_ext	16	1
+# --- SEQ_IN_INDEX aligns with STATISTICS, so the join is 1:1 ---
+SELECT s.INDEX_NAME, s.SEQ_IN_INDEX, s.COLUMN_NAME, s.INDEX_TYPE,
+c.INDEX_TYPE_PARAMETERS
+FROM INFORMATION_SCHEMA.STATISTICS s
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEXES c
+USING (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX)
+WHERE s.TABLE_SCHEMA = 'test' AND s.TABLE_NAME = 't'
+ORDER BY s.INDEX_NAME, s.SEQ_IN_INDEX;
+INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	INDEX_TYPE	INDEX_TYPE_PARAMETERS
+idx_ext	1	b	DUMMY_INDEX_HNSW	{"M": "16", "ef_construction": "200"}
+idx_multi	1	d	DUMMY_INDEX_HNSW	{}
+idx_multi	2	e	DUMMY_INDEX_HNSW	{}
+# --- EXTENSION_INDEX_TYPES: what an index of this type can actually do ---
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
+ORDER BY EXTENSION_NAME, INDEX_TYPE_NAME;
+EXTENSION_NAME	EXTENSION_VERSION	INDEX_TYPE_NAME	SUPPORTS_POINT_LOOKUP	SUPPORTS_RANGE_SCAN	SUPPORTS_REVERSE_SCAN	SUPPORTS_ORDER_BY	SUPPORTS_KNN	HAS_COLUMN_REF	HAS_ROW_REF	SUPPORTS_REF_LOOKUP	CAPABILITIES	STORAGE_PROPS
+vsql_index_test	0.0.1	dummy_index_hnsw	NO	NO	NO	NO	YES	YES	NO	YES	16	5
+# --- No capability or storage bit is left undecoded ---
+SELECT INDEX_TYPE_NAME,
+CAPABILITIES  & ~(1|2|4|8|16) AS undecoded_capability_bits,
+STORAGE_PROPS & ~(1|2|4)      AS undecoded_storage_bits
+FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
+ORDER BY INDEX_TYPE_NAME;
+INDEX_TYPE_NAME	undecoded_capability_bits	undecoded_storage_bits
+dummy_index_hnsw	0	0
+# --- Joining the two answers "can this index serve my ORDER BY?" ---
+SELECT c.INDEX_NAME, c.INDEX_TYPE_NAME,
+x.SUPPORTS_KNN, x.SUPPORTS_ORDER_BY, x.SUPPORTS_RANGE_SCAN
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES c
+JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES x
+USING (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME)
+WHERE c.TABLE_SCHEMA = 'test' AND c.SEQ_IN_INDEX = 1
+ORDER BY c.INDEX_NAME;
+INDEX_NAME	INDEX_TYPE_NAME	SUPPORTS_KNN	SUPPORTS_ORDER_BY	SUPPORTS_RANGE_SCAN
+idx_ext	dummy_index_hnsw	YES	NO	NO
+idx_multi	dummy_index_hnsw	YES	NO	NO
+#
+# Privilege filtering
+#
+CREATE DATABASE secretdb;
+CREATE TABLE secretdb.st (
+id INT PRIMARY KEY,
+a dummy_type_vector,
+INDEX idx_secret (a) USING EXTENDED(dummy_index_hnsw)
+);
+CREATE USER nobody@localhost;
+# --- Upstream STATISTICS hides secretdb from an unprivileged user ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA IN ('test', 'secretdb')
+ORDER BY TABLE_SCHEMA, INDEX_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME
+test	t	idx_ext
+test	t	idx_multi
+test	t	idx_multi
+test	t	idx_plain
+test	t	PRIMARY
+# --- CUSTOM_INDEXES must hide it identically ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA IN ('test', 'secretdb')
+ORDER BY TABLE_SCHEMA, INDEX_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME
+test	t	idx_ext
+test	t	idx_multi
+test	t	idx_multi
+# --- EXTENSION_INDEX_TYPES is visible to the same user, by design ---
+SELECT EXTENSION_NAME, INDEX_TYPE_NAME, SUPPORTS_KNN
+FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
+ORDER BY INDEX_TYPE_NAME;
+EXTENSION_NAME	INDEX_TYPE_NAME	SUPPORTS_KNN
+vsql_index_test	dummy_index_hnsw	YES
+DROP USER nobody@localhost;
+#
+# Lifecycle
+#
+# --- Dropping an index removes its rows ---
+DROP INDEX idx_multi ON t;
+SELECT INDEX_NAME, SEQ_IN_INDEX FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'test' ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+INDEX_NAME	SEQ_IN_INDEX
+idx_ext	1
+# --- Dropping the table removes the rest ---
+DROP TABLE t;
+SELECT COUNT(*) AS rows_for_test_db FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'test';
+rows_for_test_db
+0
+DROP DATABASE secretdb;
+# --- Uninstalling the extension empties the type catalogue ---
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SELECT COUNT(*) AS index_types_after_uninstall
+FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES;
+index_types_after_uninstall
+0
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

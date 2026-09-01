@@ -56,8 +56,24 @@ Statistics_base::Statistics_base() {
   m_target_def.add_field(
       FIELD_COLUMN_NAME, "COLUMN_NAME",
       "IF (col.hidden = 'SQL', NULL, col.name COLLATE utf8mb3_tolower_ci)");
+  // A custom index is recorded with icu.order = 'ASC' by the DDL path just as
+  // it is recorded with algorithm = BTREE, so reporting it verbatim claims the
+  // keys are stored in ascending column order -- meaningless for a KNN index.
+  // MySQL's convention is NULL where ordering does not apply, as for HASH and
+  // FULLTEXT, so report NULL for any index villagesql.custom_indexes knows of.
+  //
+  // Deliberately not taken from the index profile's ordering_asc(). That field
+  // defaults to VEF_INDEX_ORDERING_ASC
+  // (villagesql/schema/descriptor/index_profile_descriptor.h:185), so an
+  // extension whose author never considered ordering would report 'A' and
+  // reproduce this very bug. The trustworthy source is VEF_INDEX_CAP_ORDER_BY,
+  // which an extension must opt into, but capabilities are memory-only and
+  // unreachable from a view; they are exposed by
+  // I_S.EXTENSION_INDEX_TYPES instead. Reporting NULL here is coarser than
+  // that capability would allow, but it is never false.
   m_target_def.add_field(FIELD_COLLATION, "COLLATION",
-                         "CASE WHEN icu.order = 'DESC' THEN 'D' "
+                         "CASE WHEN vci.index_id IS NOT NULL THEN NULL "
+                         "WHEN icu.order = 'DESC' THEN 'D' "
                          "WHEN icu.order = 'ASC'  THEN 'A' "
                          "ELSE NULL END");
   m_target_def.add_field(FIELD_SUB_PART, "SUB_PART",

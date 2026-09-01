@@ -101,6 +101,7 @@
 #include "sql/dd/impl/tables/view_table_usage.h"        // View_table_usage
 #include "sql/table.h"                                  // MYSQL_SYSTEM_SCHEMA
 #include "villagesql/system_views/columns.h"
+#include "villagesql/system_views/custom_indexes.h"
 #include "villagesql/system_views/extensions.h"
 #include "villagesql/system_views/statistics.h"
 
@@ -272,6 +273,9 @@ void System_views::init() {
   register_view<dd::system_views::Administrable_role_authorizations>(
       non_dd_based_is);
   register_view<villagesql::system_views::Extensions>(non_dd_based_is);
+  // Joins villagesql.custom_indexes, so it cannot be created during bootstrap
+  // alongside the DD-based views: the villagesql schema does not exist yet.
+  register_view<villagesql::system_views::Custom_indexes>(non_dd_based_is);
   register_view<dd::system_views::Character_sets>(is);
   register_view<dd::system_views::Check_constraints>(is);
   register_view<dd::system_views::Collations>(is);

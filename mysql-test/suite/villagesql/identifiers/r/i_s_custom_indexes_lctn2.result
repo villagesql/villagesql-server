@@ -1,0 +1,55 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE DATABASE MixedDb;
+USE MixedDb;
+CREATE TABLE MixedTab (
+id INT PRIMARY KEY,
+a dummy_type_vector,
+b dummy_type_vector,
+INDEX MixedIdx (a) USING EXTENDED(dummy_index_hnsw)
+);
+# --- Stored rows: db and table names lower-cased, index name as entered ---
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+mixedtab	MixedIdx	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- CUSTOM_INDEXES reports the CREATE-time case, not the stored case ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,
+INDEX_TYPE_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	INDEX_TYPE_NAME
+MixedDb	MixedTab	MixedIdx	1	a	dummy_index_hnsw
+# --- and agrees with I_S.COLUMNS on the same table ---
+SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'mixeddb' AND COLUMN_NAME = 'a';
+TABLE_SCHEMA	TABLE_NAME
+MixedDb	MixedTab
+# --- so the documented join to STATISTICS still matches ---
+SELECT s.TABLE_SCHEMA, s.TABLE_NAME, s.INDEX_NAME, s.INDEX_TYPE,
+c.INDEX_TYPE_NAME
+FROM INFORMATION_SCHEMA.STATISTICS s
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEXES c
+USING (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX)
+WHERE s.TABLE_SCHEMA = 'mixeddb'
+ORDER BY s.INDEX_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	INDEX_TYPE	INDEX_TYPE_NAME
+MixedDb	MixedTab	MixedIdx	DUMMY_INDEX_HNSW	dummy_index_hnsw
+# --- Index added by a statement spelled in a different case ---
+ALTER TABLE mixeddb.mixedtab
+ADD INDEX MixedIdx2 (b) USING EXTENDED(dummy_index_hnsw);
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME
+MixedDb	mixedtab	MixedIdx
+MixedDb	mixedtab	MixedIdx2
+# --- Cleanup ---
+DROP DATABASE MixedDb;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

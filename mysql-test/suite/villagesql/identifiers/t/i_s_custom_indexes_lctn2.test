@@ -1,0 +1,71 @@
+# At lower_case_table_names=2 statements are lowercased while the data dictionary
+# keeps the CREATE-time case, so I_S.CUSTOM_INDEXES must join
+# villagesql.custom_indexes case-insensitively -- and must report the DD's case,
+# not the lower-cased form villagesql stores. Reporting the stored form would
+# disagree with I_S.COLUMNS and I_S.STATISTICS for the same table and would break
+# the documented join between them.
+#
+# Companion to i_s_columns_lctn2.test and i_s_statistics_lctn2.test.
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+--source include/have_case_insensitive_file_system.inc
+--source include/have_lowercase2.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE DATABASE MixedDb;
+USE MixedDb;
+
+CREATE TABLE MixedTab (
+  id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b dummy_type_vector,
+  INDEX MixedIdx (a) USING EXTENDED(dummy_index_hnsw)
+);
+
+--echo # --- Stored rows: db and table names lower-cased, index name as entered ---
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CUSTOM_INDEXES reports the CREATE-time case, not the stored case ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,
+       INDEX_TYPE_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+
+--echo # --- and agrees with I_S.COLUMNS on the same table ---
+SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'mixeddb' AND COLUMN_NAME = 'a';
+
+--echo # --- so the documented join to STATISTICS still matches ---
+SELECT s.TABLE_SCHEMA, s.TABLE_NAME, s.INDEX_NAME, s.INDEX_TYPE,
+       c.INDEX_TYPE_NAME
+FROM INFORMATION_SCHEMA.STATISTICS s
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEXES c
+  USING (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX)
+WHERE s.TABLE_SCHEMA = 'mixeddb'
+ORDER BY s.INDEX_NAME;
+
+--echo # --- Index added by a statement spelled in a different case ---
+# Note ALTER at lctn=2 rewrites the data dictionary's stored case for the table,
+# so TABLE_NAME below reads 'mixedtab'. That is upstream behaviour -- STATISTICS
+# reports the same -- and is pinned here rather than papered over.
+ALTER TABLE mixeddb.mixedtab
+  ADD INDEX MixedIdx2 (b) USING EXTENDED(dummy_index_hnsw);
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME;
+
+--echo # --- Cleanup ---
+DROP DATABASE MixedDb;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

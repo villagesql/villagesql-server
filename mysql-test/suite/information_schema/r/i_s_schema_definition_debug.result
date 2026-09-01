@@ -103,8 +103,8 @@ CREATE TABLE test.I_S_view_names (name VARCHAR(64) PRIMARY KEY);
 ########################################################################
 # The number of I_S system views must be as expected.
 ########################################################################
-include/assert.inc [There are 45 system views.]
-include/assert.inc [There are 45 I_S system views in total.]
+include/assert.inc [There are 46 system views.]
+include/assert.inc [There are 46 I_S system views in total.]
 ########################################################################
 # No unexpected I_S tables must be present.
 ########################################################################
@@ -314,6 +314,48 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   HISTOGRAM AS HISTOGRAM FROM 
   mysql.column_statistics WHERE 
   CAN_ACCESS_TABLE(SCHEMA_NAME, TABLE_NAME)
+");
+CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.CUSTOM_INDEXES AS SELECT 
+  cat.name AS TABLE_CATALOG,
+  sch.name AS TABLE_SCHEMA,
+  tbl.name AS TABLE_NAME,
+  idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
+  vcic.key_position + 1 AS SEQ_IN_INDEX,
+  vcic.column_name COLLATE utf8mb4_0900_ai_ci AS COLUMN_NAME,
+  vci.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
+  vci.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
+  vci.index_type_name COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_NAME,
+  vci.index_type_parameters AS INDEX_TYPE_PARAMETERS,
+  vcic.profile_name COLLATE utf8mb4_0900_ai_ci AS PROFILE_NAME FROM 
+  villagesql.custom_indexes vci
+  JOIN villagesql.custom_index_columns vcic ON vcic.index_id = vci.index_id
+  JOIN mysql.schemata sch ON vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin
+  JOIN mysql.tables tbl ON tbl.schema_id = sch.id AND vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin
+  JOIN mysql.indexes idx ON idx.table_id = tbl.id AND LOWER(vci.index_name)=LOWER(CONVERT(idx.name USING utf8mb4) COLLATE utf8mb4_bin)
+  JOIN mysql.catalogs cat ON cat.id = sch.catalog_id WHERE 
+  CAN_ACCESS_TABLE(sch.name, tbl.name)
+  AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden, idx.options)
+
+INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.CUSTOM_INDEXES AS SELECT 
+  cat.name AS TABLE_CATALOG,
+  sch.name AS TABLE_SCHEMA,
+  tbl.name AS TABLE_NAME,
+  idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
+  vcic.key_position + 1 AS SEQ_IN_INDEX,
+  vcic.column_name COLLATE utf8mb4_0900_ai_ci AS COLUMN_NAME,
+  vci.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
+  vci.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
+  vci.index_type_name COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_NAME,
+  vci.index_type_parameters AS INDEX_TYPE_PARAMETERS,
+  vcic.profile_name COLLATE utf8mb4_0900_ai_ci AS PROFILE_NAME FROM 
+  villagesql.custom_indexes vci
+  JOIN villagesql.custom_index_columns vcic ON vcic.index_id = vci.index_id
+  JOIN mysql.schemata sch ON vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin
+  JOIN mysql.tables tbl ON tbl.schema_id = sch.id AND vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin
+  JOIN mysql.indexes idx ON idx.table_id = tbl.id AND LOWER(vci.index_name)=LOWER(CONVERT(idx.name USING utf8mb4) COLLATE utf8mb4_bin)
+  JOIN mysql.catalogs cat ON cat.id = sch.catalog_id WHERE 
+  CAN_ACCESS_TABLE(sch.name, tbl.name)
+  AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden, idx.options)
 ");
 CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EVENTS AS SELECT 
   cat.name AS EVENT_CATALOG,
@@ -946,7 +988,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
   icu.ordinal_position AS SEQ_IN_INDEX,
   IF (col.hidden = 'SQL', NULL, col.name COLLATE utf8mb3_tolower_ci) AS COLUMN_NAME,
-  CASE WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
+  CASE WHEN vci.index_id IS NOT NULL THEN NULL WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
   INTERNAL_INDEX_COLUMN_CARDINALITY(sch.name, tbl.name, idx.name,col.name, idx.ordinal_position,icu.ordinal_position,IF(ISNULL(tbl.partition_type), tbl.engine, ''),tbl.se_private_id,tbl.hidden != 'Visible' OR idx.hidden OR icu.hidden,COALESCE(stat.cardinality, CAST(-1 AS UNSIGNED)),COALESCE(CAST(stat.cached_time as UNSIGNED), 0)) AS CARDINALITY,
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
@@ -979,7 +1021,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
   icu.ordinal_position AS SEQ_IN_INDEX,
   IF (col.hidden = 'SQL', NULL, col.name COLLATE utf8mb3_tolower_ci) AS COLUMN_NAME,
-  CASE WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
+  CASE WHEN vci.index_id IS NOT NULL THEN NULL WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
   INTERNAL_INDEX_COLUMN_CARDINALITY(sch.name, tbl.name, idx.name,col.name, idx.ordinal_position,icu.ordinal_position,IF(ISNULL(tbl.partition_type), tbl.engine, ''),tbl.se_private_id,tbl.hidden != 'Visible' OR idx.hidden OR icu.hidden,COALESCE(stat.cardinality, CAST(-1 AS UNSIGNED)),COALESCE(CAST(stat.cached_time as UNSIGNED), 0)) AS CARDINALITY,
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
@@ -1110,7 +1152,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
   icu.ordinal_position AS SEQ_IN_INDEX,
   IF (col.hidden = 'SQL', NULL, col.name COLLATE utf8mb3_tolower_ci) AS COLUMN_NAME,
-  CASE WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
+  CASE WHEN vci.index_id IS NOT NULL THEN NULL WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
   INTERNAL_INDEX_COLUMN_CARDINALITY(sch.name, tbl.name, idx.name,col.name, idx.ordinal_position,icu.ordinal_position,IF(ISNULL(tbl.partition_type), tbl.engine, ''),tbl.se_private_id,tbl.hidden != 'Visible' OR idx.hidden OR icu.hidden,COALESCE(stat.cardinality, CAST(-1 AS UNSIGNED)),COALESCE(CAST(stat.cached_time as UNSIGNED), 0)) AS CARDINALITY,
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
@@ -1141,7 +1183,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
   icu.ordinal_position AS SEQ_IN_INDEX,
   IF (col.hidden = 'SQL', NULL, col.name COLLATE utf8mb3_tolower_ci) AS COLUMN_NAME,
-  CASE WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
+  CASE WHEN vci.index_id IS NOT NULL THEN NULL WHEN icu.order = 'DESC' THEN 'D' WHEN icu.order = 'ASC'  THEN 'A' ELSE NULL END AS COLLATION,
   INTERNAL_INDEX_COLUMN_CARDINALITY(sch.name, tbl.name, idx.name,col.name, idx.ordinal_position,icu.ordinal_position,IF(ISNULL(tbl.partition_type), tbl.engine, ''),tbl.se_private_id,tbl.hidden != 'Visible' OR idx.hidden OR icu.hidden,COALESCE(stat.cardinality, CAST(-1 AS UNSIGNED)),COALESCE(CAST(stat.cached_time as UNSIGNED), 0)) AS CARDINALITY,
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,

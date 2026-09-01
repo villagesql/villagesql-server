@@ -80,6 +80,17 @@ def	information_schema	COLUMN_STATISTICS	SCHEMA_NAME	1	NULL	NO	varchar	64	192	NU
 def	information_schema	COLUMN_STATISTICS	TABLE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	COLUMN_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	HISTOGRAM	4	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select			NULL
+def	information_schema	CUSTOM_INDEXES	TABLE_CATALOG	1	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	TABLE_SCHEMA	2	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	TABLE_NAME	3	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_NAME	4	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	SEQ_IN_INDEX	5	0	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint unsigned			select			NULL
+def	information_schema	CUSTOM_INDEXES	COLUMN_NAME	6	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	EXTENSION_NAME	7	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	EXTENSION_VERSION	8	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_TYPE_NAME	9	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_TYPE_PARAMETERS	10	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select	Index type instantiation parameters as JSON		NULL
+def	information_schema	CUSTOM_INDEXES	PROFILE_NAME	11	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_NAME	1	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_HOST	2	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	IS_DEFAULT	3	NULL	YES	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
@@ -120,6 +131,19 @@ def	information_schema	EXTENSIONS	PENDING_VERSION	3	NULL	YES	longtext	4294967295
 def	information_schema	EXTENSIONS	PENDING_REQUESTED_AT	4	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	EXTENSIONS	PENDING_LAST_ERROR	5	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
 def	information_schema	EXTENSIONS	PENDING_LAST_ERROR_AT	6	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb4	utf8mb4_bin	longtext			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	EXTENSION_NAME	1		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	EXTENSION_VERSION	2		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	INDEX_TYPE_NAME	3		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_POINT_LOOKUP	4		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_RANGE_SCAN	5		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_REVERSE_SCAN	6		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_ORDER_BY	7		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_KNN	8		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	HAS_COLUMN_REF	9		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	HAS_ROW_REF	10		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_REF_LOOKUP	11		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	CAPABILITIES	12		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
+def	information_schema	EXTENSION_INDEX_TYPES	STORAGE_PROPS	13		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	EXTENSION_REGISTRATION	EXTENSION_NAME	1		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	EXTENSION_REGISTRATION	NEGOTIATED_PROTOCOL	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	EXTENSION_REGISTRATION	REGISTRATION_JSON	3		NO	varchar	21845	65535	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(65535)			select			NULL
@@ -624,6 +648,17 @@ NULL	information_schema	COLUMNS_EXTENSIONS	SECONDARY_ENGINE_ATTRIBUTE	json	NULL	
 3.0000	information_schema	COLUMN_STATISTICS	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	COLUMN_STATISTICS	COLUMN_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 NULL	information_schema	COLUMN_STATISTICS	HISTOGRAM	json	NULL	NULL	NULL	NULL	json
+3.0000	information_schema	CUSTOM_INDEXES	TABLE_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	CUSTOM_INDEXES	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	CUSTOM_INDEXES	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	CUSTOM_INDEXES	INDEX_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+NULL	information_schema	CUSTOM_INDEXES	SEQ_IN_INDEX	bigint	NULL	NULL	NULL	NULL	bigint unsigned
+4.0000	information_schema	CUSTOM_INDEXES	COLUMN_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	information_schema	CUSTOM_INDEXES	EXTENSION_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	information_schema	CUSTOM_INDEXES	EXTENSION_VERSION	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	information_schema	CUSTOM_INDEXES	INDEX_TYPE_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+NULL	information_schema	CUSTOM_INDEXES	INDEX_TYPE_PARAMETERS	json	NULL	NULL	NULL	NULL	json
+4.0000	information_schema	CUSTOM_INDEXES	PROFILE_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
 4.0000	information_schema	ENABLED_ROLES	ROLE_NAME	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 4.0000	information_schema	ENABLED_ROLES	ROLE_HOST	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 3.0000	information_schema	ENABLED_ROLES	IS_DEFAULT	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
@@ -664,6 +699,19 @@ NULL	information_schema	EVENTS	ORIGINATOR	int	NULL	NULL	NULL	NULL	int unsigned
 1.0000	information_schema	EXTENSIONS	PENDING_REQUESTED_AT	longtext	4294967295	4294967295	utf8mb4	utf8mb4_bin	longtext
 1.0000	information_schema	EXTENSIONS	PENDING_LAST_ERROR	longtext	4294967295	4294967295	utf8mb4	utf8mb4_bin	longtext
 1.0000	information_schema	EXTENSIONS	PENDING_LAST_ERROR_AT	longtext	4294967295	4294967295	utf8mb4	utf8mb4_bin	longtext
+3.0476	information_schema	EXTENSION_INDEX_TYPES	EXTENSION_NAME	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+3.0476	information_schema	EXTENSION_INDEX_TYPES	EXTENSION_VERSION	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+3.0476	information_schema	EXTENSION_INDEX_TYPES	INDEX_TYPE_NAME	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_POINT_LOOKUP	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_RANGE_SCAN	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_REVERSE_SCAN	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_ORDER_BY	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_KNN	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	HAS_COLUMN_REF	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	HAS_ROW_REF	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	EXTENSION_INDEX_TYPES	SUPPORTS_REF_LOOKUP	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+NULL	information_schema	EXTENSION_INDEX_TYPES	CAPABILITIES	bigint	NULL	NULL	NULL	NULL	bigint unsigned
+NULL	information_schema	EXTENSION_INDEX_TYPES	STORAGE_PROPS	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 3.0476	information_schema	EXTENSION_REGISTRATION	EXTENSION_NAME	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
 NULL	information_schema	EXTENSION_REGISTRATION	NEGOTIATED_PROTOCOL	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 3.0000	information_schema	EXTENSION_REGISTRATION	REGISTRATION_JSON	varchar	21845	65535	utf8mb3	utf8mb3_general_ci	varchar(65535)
