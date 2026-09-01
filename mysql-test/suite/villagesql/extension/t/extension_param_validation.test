@@ -1,0 +1,77 @@
+# Scenario: the server validates a type's parameter set before handing it to
+# the extension's resolve_params callback. A parameter given twice, a parameter
+# with no value, and a nameless parameter are all rejected at parse time, so
+# resolve_params can assume unique names each carrying a value.
+#
+# Fixture: vsql_test_only exposes STRICT_PARAM_TYPE (resolve_params rejects any
+# key other than 'length') and EXTRA_KEY_PARAM_TYPE (resolve_params ignores
+# extra keys). Both are rejected the same way below, which shows the check runs
+# before resolve_params rather than inside it.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # A parameter given twice is rejected.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,length=5'));
+SHOW WARNINGS;
+
+--echo # Parameter names are case-insensitive, so this is the same duplicate.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('LENGTH=4,length=5'));
+
+--echo # Repeating the same value is still a duplicate.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,length=4'));
+
+--echo # A resolve_params that ignores unrecognized keys gets the same
+--echo # treatment, because the check runs before the callback.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v EXTRA_KEY_PARAM_TYPE('length=4,length=5'));
+
+--echo # A parameter with no value is rejected.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length='));
+SHOW WARNINGS;
+
+--echo # Whitespace around a value is trimmed, so this value is empty too.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length= '));
+
+--echo # A name with no '=' supplies no value either.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,bogus'));
+SHOW WARNINGS;
+
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length'));
+
+--echo # A value with no name is rejected.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('=4'));
+SHOW WARNINGS;
+
+--echo # An empty pair between two commas is a nameless parameter as well.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,,mode=x'));
+
+--echo # So is a leading or trailing comma: all three are the same defect.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(',length=4'));
+
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,'));
+SHOW WARNINGS;
+
+--echo # Well-formed parameters are unaffected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t;
+DROP TABLE t;
+
+--echo # The (N) form routes through int_to_params and is equally unaffected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(4));
+SHOW CREATE TABLE t;
+INSERT INTO t VALUES (1, '(3)');
+SELECT id, v FROM t ORDER BY id;
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_test_only;

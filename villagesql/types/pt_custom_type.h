@@ -19,6 +19,7 @@
 
 #include <cinttypes>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "lex_string.h"
@@ -109,21 +110,81 @@ class PT_custom_type : public PT_type {
   // (extension_name.type_name), pass extension_name; for unqualified names,
   // pass empty LEX_STRING {} for extension_name.
 
+  // Reject parameter sets that an extension should not have to defend against:
+  // a nameless parameter, a parameter with no value, or the same name given
+  // twice. params must be in canonical form, so keys are lowercased and sorted
+  // and duplicates are adjacent. The offending statement is quoted alongside
+  // the message, which is what tells the reader whether the parameters came
+  // from their own SQL or from int_to_params / a resolve_params rewrite.
+  // Returns true with the error recorded at pos, false when the parameters are
+  // well formed.
+  static bool validate_params(const POS &pos, THD *thd,
+                              const TypeDescriptor *descriptor,
+                              const TypeParameters &params) {
+    for (unsigned int i = 0; i < params.count(); i++) {
+      const char *key = params.key_data()[i];
+      if (*key == '\0') {
+        thd->syntax_error_at(pos, "Type '%s': empty parameter name",
+                             descriptor->qualified_base_name().c_str());
+        return true;
+      }
+      if (*params.value_data()[i] == '\0') {
+        thd->syntax_error_at(pos, "Type '%s': parameter '%s' has no value",
+                             descriptor->qualified_base_name().c_str(), key);
+        return true;
+      }
+      if (i > 0 && strcmp(key, params.key_data()[i - 1]) == 0) {
+        thd->syntax_error_at(pos, "Type '%s': duplicate parameter '%s'",
+                             descriptor->qualified_base_name().c_str(), key);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // A mutating resolve_params may add parameters or change their values, but
+  // dropping one would silently discard what the user asked for. Returns true
+  // with the error recorded at pos if any key in before is missing from after.
+  static bool check_no_params_removed(const POS &pos, THD *thd,
+                                      const TypeDescriptor *descriptor,
+                                      const TypeParameters &before,
+                                      const TypeParameters &after) {
+    for (unsigned int i = 0; i < before.count(); i++) {
+      const char *key = before.key_data()[i];
+      bool found = false;
+      for (unsigned int j = 0; j < after.count() && !found; j++) {
+        found = strcmp(key, after.key_data()[j]) == 0;
+      }
+      if (!found) {
+        thd->syntax_error_at(pos,
+                             "Type '%s': resolve_params removed parameter "
+                             "'%s'; parameters may be added or changed but not "
+                             "removed",
+                             descriptor->qualified_base_name().c_str(), key);
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Resolve params via the resolve_params callback and acquire the concrete
-  // TypeContext for the given descriptor. Shared by both TYPE(N) and
-  // TYPE('key=value,...') paths. params_str must be in canonical form
-  // ("key=value,key=value,...").
+  // TypeContext for the given descriptor. Shared by the bare TYPE, TYPE(N) and
+  // TYPE('key=value,...') paths, and the single gate where parameters are
+  // validated before and after the callback sees them. params must be in
+  // canonical form.
   static bool resolve_params_and_context(const POS &pos, THD *thd,
                                          const TypeDescriptor *descriptor,
-                                         const std::string &params_str,
+                                         const TypeParameters &params,
                                          const TypeContext *&type_context) {
+    if (validate_params(pos, thd, descriptor, params)) return true;
+
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
     ResolvedTypeParams resolved = {};
     // A type using the mutating resolve_params overload can rewrite its params
     // (e.g. fill in defaults). When it does, the rewritten string becomes the
     // canonical parameters we key the context on and persist.
-    std::string canonical_params = params_str;
-    if (descriptor->resolve_params_fn()->invoke(params_str, &resolved,
+    std::string canonical_params = params.str();
+    if (descriptor->resolve_params_fn()->invoke(params.str(), &resolved,
                                                 error_msg, &canonical_params)) {
       thd->syntax_error_at(pos, "%s", error_msg);
       return true;
@@ -170,12 +231,18 @@ class PT_custom_type : public PT_type {
 
     // Re-canonicalize in case resolve_params rewrote the params. from_raw
     // normalizes ordering/case; a no-op when the params were left unchanged.
-    TypeParameters params = canonical_params == params_str
-                                ? TypeParameters(params_str)
-                                : TypeParameters::from_raw(canonical_params);
+    const bool was_rewritten = canonical_params != params.str();
+    TypeParameters resolved_params =
+        was_rewritten ? TypeParameters::from_raw(canonical_params) : params;
+    if (was_rewritten &&
+        (validate_params(pos, thd, descriptor, resolved_params) ||
+         check_no_params_removed(pos, thd, descriptor, params,
+                                 resolved_params))) {
+      return true;
+    }
 
     type_context = nullptr;
-    if (AcquireOrCreateTypeContext(descriptor, params, *thd->mem_root,
+    if (AcquireOrCreateTypeContext(descriptor, resolved_params, *thd->mem_root,
                                    type_context)) {
       return true;
     }
@@ -214,7 +281,7 @@ class PT_custom_type : public PT_type {
       // (fixed- or variable-length). Invoke it with empty parameters so the
       // type can either resolve its defaults or report that parameters are
       // required.
-      if (resolve_params_and_context(pos, thd, descriptor, std::string(),
+      if (resolve_params_and_context(pos, thd, descriptor, TypeParameters(),
                                      type_context))
         return nullptr;
     } else {
@@ -295,7 +362,7 @@ class PT_custom_type : public PT_type {
     // resolve_params_and_context will call AcquireOrCreateTypeContext after
     // resolving the parameters
     const TypeContext *type_context = nullptr;
-    if (resolve_params_and_context(pos, thd, descriptor, canonical.str(),
+    if (resolve_params_and_context(pos, thd, descriptor, canonical,
                                    type_context)) {
       return nullptr;
     }
@@ -347,7 +414,7 @@ class PT_custom_type : public PT_type {
     }
 
     const TypeContext *type_context = nullptr;
-    if (resolve_params_and_context(pos, thd, descriptor, canonical.str(),
+    if (resolve_params_and_context(pos, thd, descriptor, canonical,
                                    type_context)) {
       return nullptr;
     }
