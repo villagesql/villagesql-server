@@ -307,16 +307,20 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
   const CHARSET_INFO *cs = type_parameter_collation();
   std::vector<std::pair<std::string, std::string>> pairs;
   size_t start = 0;
-  while (start < raw.size()) {
+  // <= visits an empty token after a trailing comma, so it becomes a nameless
+  // parameter. This does not cause an out-of-bounds read: when start == size(),
+  // find() returns npos and substr() only errors out for pos > size().
+  while (start <= raw.size()) {
     size_t comma = raw.find(',', start);
     if (comma == std::string_view::npos) comma = raw.size();
     size_t eq = raw.find('=', start);
-    if (eq == std::string_view::npos || eq >= comma) {
-      start = comma + 1;
-      continue;
-    }
-    std::string_view key = raw.substr(start, eq - start);
-    std::string_view value = raw.substr(eq + 1, comma - eq - 1);
+    // A token with no '=' names a parameter but supplies no value. Keep it
+    // with an empty value.
+    const bool has_value = eq != std::string_view::npos && eq < comma;
+    std::string_view key = has_value ? raw.substr(start, eq - start)
+                                     : raw.substr(start, comma - start);
+    std::string_view value =
+        has_value ? raw.substr(eq + 1, comma - eq - 1) : std::string_view();
 
     // Trim whitespace
     auto trim = [](std::string_view &s) {
