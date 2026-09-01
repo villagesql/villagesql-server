@@ -111,6 +111,14 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql"
     "${SDK_STAGING_DIR}/include-dev/villagesql"
+  # copy_directory above sweeps in sdk_version.h.in (the configure_file()
+  # template, unsubstituted "@VSQL_MAJOR_VERSION@" tokens and all) along
+  # with the real headers, since it lives in the same source directory.
+  # Remove it: the real, substituted header is placed explicitly right
+  # below. The raw template is not usable as a C++ header outside the
+  # build (its @VSQL_MAJOR_VERSION@-style tokens are never substituted).
+  COMMAND ${CMAKE_COMMAND} -E remove -f
+    "${SDK_STAGING_DIR}/include-dev/villagesql/sdk_version.h.in"
   COMMAND ${CMAKE_COMMAND} -E copy
     "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/"
