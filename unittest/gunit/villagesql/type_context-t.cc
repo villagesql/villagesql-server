@@ -183,6 +183,51 @@ TEST_F(TypeParametersTest, FromRawTrimsWhitespace) {
   EXPECT_EQ(params.str(), "dimension=1536");
 }
 
+// A token with no '=' is kept with an empty value rather than dropped, so the
+// parser can reject the valueless parameter instead of silently ignoring it.
+TEST_F(TypeParametersTest, FromRawKeepsValuelessToken) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric");
+  EXPECT_EQ(params.str(), "dimension=1536,metric=");
+  ASSERT_EQ(params.count(), 2u);
+  EXPECT_STREQ(params.key_data()[1], "metric");
+  EXPECT_STREQ(params.value_data()[1], "");
+}
+
+TEST_F(TypeParametersTest, FromRawKeepsLoneValuelessToken) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw(" Metric ");
+  EXPECT_EQ(params.str(), "metric=");
+}
+
+TEST_F(TypeParametersTest, FromRawKeepsEmptyValue) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=");
+  EXPECT_EQ(params.str(), "dimension=");
+}
+
+// Duplicates survive canonicalization (sorted next to each other) so the parser
+// can see and reject them.
+TEST_F(TypeParametersTest, FromRawKeepsDuplicateKeys) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("Dimension=3,dimension=4");
+  ASSERT_EQ(params.count(), 2u);
+  EXPECT_STREQ(params.key_data()[0], "dimension");
+  EXPECT_STREQ(params.key_data()[1], "dimension");
+}
+
+// A leading, doubled or trailing comma all yield a nameless entry (sorting
+// first), which the parser rejects.
+TEST_F(TypeParametersTest, FromRawCommaHandling) {
+  EXPECT_EQ(villagesql::TypeParameters::from_raw("dimension=3,").str(),
+            "=,dimension=3");
+  EXPECT_EQ(villagesql::TypeParameters::from_raw(",dimension=3").str(),
+            "=,dimension=3");
+  EXPECT_EQ(
+      villagesql::TypeParameters::from_raw("dimension=3,,metric=l2").str(),
+      "=,dimension=3,metric=l2");
+}
+
 TEST_F(TypeParametersTest, Equality) {
   villagesql::TypeParameters a("dimension=1536");
   villagesql::TypeParameters b("dimension=1536");

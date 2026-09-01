@@ -68,6 +68,6 @@ DROP TABLE t_float;
 CREATE TABLE t_err (v TVECTOR('dimension=3,type=int'));
 ERROR 42000: TVECTOR: type must be 'float' or 'double', got 'int' near 'TVECTOR('dimension=3,type=int'))' at line 1
 CREATE TABLE t_err (v TVECTOR('dimension=3,type='));
-ERROR 42000: TVECTOR: type must be 'float' or 'double', got '' near 'TVECTOR('dimension=3,type='))' at line 1
+ERROR 42000: Type 'vsql_tvector.TVECTOR': parameter 'type' has no value near 'TVECTOR('dimension=3,type='))' at line 1
 DROP TABLE t, t_nulls;
 UNINSTALL EXTENSION vsql_tvector;

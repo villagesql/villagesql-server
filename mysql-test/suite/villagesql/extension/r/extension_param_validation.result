@@ -1,0 +1,76 @@
+INSTALL EXTENSION vsql_test_only;
+# A parameter given twice is rejected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,length=5'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': duplicate parameter 'length' near 'STRICT_PARAM_TYPE('length=4,length=5'))' at line 1
+SHOW WARNINGS;
+Level	Code	Message
+Error	1064	Type 'vsql_test_only.STRICT_PARAM_TYPE': duplicate parameter 'length' near 'STRICT_PARAM_TYPE('length=4,length=5'))' at line 1
+# Parameter names are case-insensitive, so this is the same duplicate.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('LENGTH=4,length=5'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': duplicate parameter 'length' near 'STRICT_PARAM_TYPE('LENGTH=4,length=5'))' at line 1
+# Repeating the same value is still a duplicate.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,length=4'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': duplicate parameter 'length' near 'STRICT_PARAM_TYPE('length=4,length=4'))' at line 1
+# A resolve_params that ignores unrecognized keys gets the same
+# treatment, because the check runs before the callback.
+CREATE TABLE t (id INT PRIMARY KEY, v EXTRA_KEY_PARAM_TYPE('length=4,length=5'));
+ERROR 42000: Type 'vsql_test_only.EXTRA_KEY_PARAM_TYPE': duplicate parameter 'length' near 'EXTRA_KEY_PARAM_TYPE('length=4,length=5'))' at line 1
+# A parameter with no value is rejected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length='));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': parameter 'length' has no value near 'STRICT_PARAM_TYPE('length='))' at line 1
+SHOW WARNINGS;
+Level	Code	Message
+Error	1064	Type 'vsql_test_only.STRICT_PARAM_TYPE': parameter 'length' has no value near 'STRICT_PARAM_TYPE('length='))' at line 1
+# Whitespace around a value is trimmed, so this value is empty too.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length= '));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': parameter 'length' has no value near 'STRICT_PARAM_TYPE('length= '))' at line 1
+# A name with no '=' supplies no value either.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,bogus'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': parameter 'bogus' has no value near 'STRICT_PARAM_TYPE('length=4,bogus'))' at line 1
+SHOW WARNINGS;
+Level	Code	Message
+Error	1064	Type 'vsql_test_only.STRICT_PARAM_TYPE': parameter 'bogus' has no value near 'STRICT_PARAM_TYPE('length=4,bogus'))' at line 1
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': parameter 'length' has no value near 'STRICT_PARAM_TYPE('length'))' at line 1
+# A value with no name is rejected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('=4'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': empty parameter name near 'STRICT_PARAM_TYPE('=4'))' at line 1
+SHOW WARNINGS;
+Level	Code	Message
+Error	1064	Type 'vsql_test_only.STRICT_PARAM_TYPE': empty parameter name near 'STRICT_PARAM_TYPE('=4'))' at line 1
+# An empty pair between two commas is a nameless parameter as well.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,,mode=x'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': empty parameter name near 'STRICT_PARAM_TYPE('length=4,,mode=x'))' at line 1
+# So is a leading or trailing comma: all three are the same defect.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(',length=4'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': empty parameter name near 'STRICT_PARAM_TYPE(',length=4'))' at line 1
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,'));
+ERROR 42000: Type 'vsql_test_only.STRICT_PARAM_TYPE': empty parameter name near 'STRICT_PARAM_TYPE('length=4,'))' at line 1
+SHOW WARNINGS;
+Level	Code	Message
+Error	1064	Type 'vsql_test_only.STRICT_PARAM_TYPE': empty parameter name near 'STRICT_PARAM_TYPE('length=4,'))' at line 1
+# Well-formed parameters are unaffected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.STRICT_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+# The (N) form routes through int_to_params and is equally unaffected.
+CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(4));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.STRICT_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t VALUES (1, '(3)');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	(3)
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_test_only;
