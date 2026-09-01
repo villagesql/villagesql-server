@@ -15,6 +15,12 @@ CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4'));
 SHOW CREATE TABLE t;
 DROP TABLE t;
 
+--echo # resolve_params fills in the missing 'mode' default and the server
+--echo # adopts the enlarged set. An int as parameter version.
+CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE(4));
+SHOW CREATE TABLE t;
+DROP TABLE t;
+
 --echo # An explicit 'mode' is left as written. These params are not what
 --echo # int_to_params(4) produces, so the long form is printed instead.
 CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4,mode=slow'));

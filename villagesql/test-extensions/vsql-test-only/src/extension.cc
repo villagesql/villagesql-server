@@ -1065,8 +1065,8 @@ constexpr auto BAD_DEFAULT_LEN_TYPE =
 //                             upper-bound check.
 //   ADD_PARAM_TYPE(N)       - uses the MUTATING resolve_params overload to fill
 //                             in a missing 'mode' default, so the server adopts
-//                             the enlarged set as canonical. The legal shape of
-//                             a rewrite.
+//                             the enlarged set as canonical. Adding keys is
+//                             accepted.
 //   DROP_PARAM_TYPE(N)      - uses the MUTATING overload to erase every key
 //                             other than 'length'. Removing a parameter is
 //                             rejected at DDL time, so this type only works

@@ -307,9 +307,7 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
   const CHARSET_INFO *cs = type_parameter_collation();
   std::vector<std::pair<std::string, std::string>> pairs;
   size_t start = 0;
-  while (start <= raw.size()) {
-    // <= so the token after a final comma is still examined: it parses as a
-    // nameless parameter
+  while (start < raw.size()) {
     size_t comma = raw.find(',', start);
     if (comma == std::string_view::npos) comma = raw.size();
     size_t eq = raw.find('=', start);
@@ -336,6 +334,11 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
     value_str = casedn(cs, std::move(value_str));
 
     pairs.emplace_back(std::move(key_str), std::move(value_str));
+    if (comma == raw.size()) break;  // no comma
+    if (comma + 1 >= raw.size()) {   // trailing comma
+      pairs.emplace_back(std::string(), std::string());
+      break;
+    }
     start = comma + 1;
   }
 

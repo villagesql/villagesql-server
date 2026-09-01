@@ -10,6 +10,17 @@ t	CREATE TABLE `t` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
+# resolve_params fills in the missing 'mode' default and the server
+# adopts the enlarged set. An int as parameter version.
+CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE(4));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.ADD_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
 # An explicit 'mode' is left as written. These params are not what
 # int_to_params(4) produces, so the long form is printed instead.
 CREATE TABLE t (id INT PRIMARY KEY, v ADD_PARAM_TYPE('length=4,mode=slow'));
