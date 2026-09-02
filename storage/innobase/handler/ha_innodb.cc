@@ -10754,8 +10754,9 @@ bool ha_innobase::get_custom_index_handle(uint keynr, CustomIndexHandle *out) {
 }
 
 bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
-                                          uchar *buf, char *error_msg,
-                                          uint error_msg_len) {
+                                          uchar *buf, bool *row_not_found,
+                                          char *error_msg, uint error_msg_len) {
+  if (row_not_found != nullptr) *row_not_found = false;
   dict_index_t *index = innobase_get_index(keynr);
   if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index)) {
     snprintf(error_msg, error_msg_len,
@@ -10806,6 +10807,19 @@ bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
   if (ret == DB_SUCCESS) {
     ret = row_search_mvcc(buf, PAGE_CUR_GE, m_prebuilt, ROW_SEL_EXACT, 0);
     innobase_srv_conc_exit_innodb(m_prebuilt);
+  }
+
+  if (ret == DB_RECORD_NOT_FOUND) {
+    // The reference resolved, but the row is not visible to this transaction's
+    // read view -- e.g. a KNN hit on a concurrently-inserted, uncommitted row
+    // (the HNSW graph is not yet MVCC-filtered, so the scan can surface such
+    // nodes). This is an expected MVCC outcome, NOT a hard error: signal
+    // not-found so the caller skips this hit and fetches the next candidate.
+    if (row_not_found != nullptr) {
+      *row_not_found = true;
+      return false;
+    }
+    // Caller does not distinguish -- fall through to the error path.
   }
 
   if (ret != DB_SUCCESS) {

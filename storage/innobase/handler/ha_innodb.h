@@ -611,7 +611,8 @@ class ha_innobase : public handler {
   clustered field-0 bytes via the indexed column's store, then does a clustered
   read. @return false on success; true if not a custom index or on error. */
   bool custom_index_ref_to_row(uint keynr, uint64_t key_ref, uchar *buf,
-                               char *error_msg, uint error_msg_len) override;
+                               bool *row_not_found, char *error_msg,
+                               uint error_msg_len) override;
 
   /** Builds a 'template' to the m_prebuilt struct. The template is used in fast
   retrieval of just those column values MySQL needs in its processing.
