@@ -12,7 +12,7 @@ name: Create Release
 # release, and fails if it has.
 #
 # For a rehearsal, point `branch` at a scratch branch carrying a draft release
-# note, use a rehearsal version, and arehearsal version labels (e.g. test).
+# note, use a rehearsal version, and a rehearsal version label (e.g. test).
 # Use values you are willing to overwrite.
 #
 # In a production run, branch is `main`, the next version is a chosen value,
@@ -180,6 +180,9 @@ jobs:
 
   # The one job that writes to the branch. Both commits are built locally and
   # pushed together, so the branch either gains both in order or gains neither.
+  # The priviledged release role is used to bypass branch protections when
+  # pushing the two commits that close the current release and open the next
+  # release.
   push:
     name: Push Release Commits
     needs: resolve
@@ -188,18 +191,13 @@ jobs:
       notes-sha: ${{ steps.commits.outputs.notes_sha }}
 
     steps:
-      # No sparse checkout: prepare_release_update.sh commits the test result
-      # files that carry the version string, which have to be on disk.
-      #
-      # The token is not for the clone, which the default token could do. It is
-      # persisted into .git/config as the credential the push below uses, and
-      # that push has to be the role that bypasses branch protection.
+      # The clone is all this step does, and the default token can do it.
       - name: Checkout branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 1
-          token: ${{ secrets.RELEASE_KEY }}
+          persist-credentials: false
 
       - name: Prepare release commits
         id: commits
@@ -236,8 +234,21 @@ jobs:
             echo "push_head=$PUSH_HEAD"
           } >> "$GITHUB_OUTPUT"
 
-      # Not forced: a rejected push means the branch moved, which is a reason
-      # to stop, not a reason to overwrite.
+      # Set up release credential to enable this job's last step to force
+      # push the two commits onto the branch (e.g. main).
+      - name: Log in as the release role
+        env:
+          RELEASE_KEY: ${{ secrets.RELEASE_KEY }}
+        run: |
+          set -euo pipefail
+          git remote set-url origin \
+            "https://x-access-token:${RELEASE_KEY}@github.com/${GITHUB_REPOSITORY}.git"
+
+      # A rejected push means the branch moved, which is a reason to stop,
+      # not a reason to overwrite.  The --force-with-lease=main: may not be
+      # essential but eliminates rare cases and documents the intent.
+      #
+      # This step requires the release credentials to bypass branch protection.
       - name: Push to branch
         env:
           BRANCH: ${{ inputs.branch }}
@@ -247,7 +258,7 @@ jobs:
           NEXT_VERSION: ${{ inputs.next_version }}
         run: |
           set -euo pipefail
-          git push origin "HEAD:refs/heads/$BRANCH"
+          git push origin "HEAD:refs/heads/$BRANCH" --force-with-lease=main:
 
           {
             echo "### Pushed to \`$BRANCH\`"
@@ -258,7 +269,7 @@ jobs:
 
   # The branch is usable again the moment the version bump lands, which is
   # sooner than the release finishes. Announce it here rather than at the end,
-  # so nobody waits on the tagging and drafting below.
+  # so nobody waits on the tagging and publishing that occurs next.
   announce:
     name: Announce Reopened Branch
     needs: [resolve, push]
