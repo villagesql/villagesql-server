@@ -31,6 +31,8 @@
 
 #include <memory>
 
+#include "villagesql/include/alloc.h"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 // TODO(villagesql-indexing): TypeParameters is shared between type_context.h
 // and index_context.h; consider moving it to its own header to avoid the
@@ -125,7 +127,15 @@ struct TableTraits<IndexContext> {
   static std::shared_ptr<IndexContext> create(
       const IndexContextKey &key, const IndexTypeDescriptor *descriptor) {
     if (!descriptor) return {};
-    return std::shared_ptr<IndexContext>(new IndexContext(key, descriptor));
+    // Use new directly: make_shared constructs via the allocator which doesn't
+    // have friend access to the private constructor.
+    std::shared_ptr<IndexContext> ic =
+        wrap_shared_nothrow(new (std::nothrow) IndexContext(key, descriptor));
+    if (should_assert_if_null(ic)) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(IndexContext));
+      return {};
+    }
+    return ic;
   }
 };
 

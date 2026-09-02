@@ -14,6 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql {
@@ -88,11 +89,16 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     // Use entry's key() method
     std::string key_str = entry.key().str();
 
+    auto entry_ptr = make_shared_nothrow<EntryType>(std::move(entry));
+    if (should_assert_if_null(entry_ptr)) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(EntryType));
+      return true;
+    }
+
     // Duplicate canonical keys are a datadir fault, not a code bug, so
     // fail without asserting. Keep scanning so one failed startup reports
     // every conflict.
-    auto inserted = m_committed.emplace(
-        key_str, std::make_shared<EntryType>(std::move(entry)));
+    auto inserted = m_committed.emplace(key_str, std::move(entry_ptr));
     if (!inserted.second) {
       LogVSQL(ERROR_LEVEL,
               "Duplicate canonical key '%s' while loading %s.%s; "

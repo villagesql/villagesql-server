@@ -22,6 +22,7 @@
 #include <cstdlib>
 
 #include "include/my_compiler.h"
+#include "include/my_sys.h"
 #include "include/mysqld_error.h"
 #include "mysql/components/services/log_builtins.h"
 

@@ -26,6 +26,7 @@
 #include "mysql/components/services/component_status_var_service.h"
 #include "mysql/service_plugin_registry.h"
 #include "mysql/status_var.h"
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/status_var.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -108,7 +109,16 @@ bool on_populate_status_var(const PopulateContext &ctx,
         continue;
     }
 
-    auto rsv = std::make_unique<RegisteredStatusVar>();
+    auto rsv = make_unique_nothrow<RegisteredStatusVar>();
+    if (should_assert_if_null(rsv)) {
+      error_message = "on_populate_status_var: out of memory";
+      LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
+      // Roll back any variables registered so far.
+      for (auto &already : entry.vars)
+        reg_svc->unregister_variable(already->show_var);
+      mysql_plugin_registry_release(registry);
+      return true;
+    }
     rsv->full_name = entry.extension_name + "." + v->name;
     rsv->show_var[0] = {rsv->full_name.c_str(), value_ptr, show_type,
                         SHOW_SCOPE_GLOBAL};

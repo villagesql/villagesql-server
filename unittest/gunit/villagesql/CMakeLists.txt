@@ -20,6 +20,7 @@
 SET(VILLAGESQL_UNIT_TESTS
   abi_v1_check-t
   abi_v2_check-t
+  alloc-t
   custom_indexes-t
   identifier_names-t
   pending_action-t

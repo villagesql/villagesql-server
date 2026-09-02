@@ -16,6 +16,8 @@
 
 #include "villagesql/schema/schema_manager.h"
 
+#include <optional>
+
 #include "lex_string.h"
 #include "my_byteorder.h"
 #include "my_inttypes.h"
@@ -83,7 +85,7 @@ class SchemaManagerStatus {
    * @return the version of VillageSQL installed.
    */
   static Semver get_version() {
-    assert(version);
+    assert(version.has_value());
     return *version;
   }
 
@@ -92,7 +94,7 @@ class SchemaManagerStatus {
    * preinit().
    */
   static bool get_upgrade_needed() {
-    assert(upgrade_needed);
+    assert(upgrade_needed.has_value());
     return *upgrade_needed;
   }
 
@@ -132,10 +134,8 @@ class SchemaManagerStatus {
    * Free resources allocated by SchemaManagerStatus. Called during shutdown.
    */
   static void deinit() {
-    delete version;
-    version = nullptr;
-    delete upgrade_needed;
-    upgrade_needed = nullptr;
+    version.reset();
+    upgrade_needed.reset();
   }
 
   // Track initialization state to prevent double-init and to know
@@ -145,18 +145,18 @@ class SchemaManagerStatus {
   // This is true during the initialzation process itself
   static std::atomic<bool> is_initializing;
   // This is the version of the schema currently applied to the database.
-  // The pointer is never null after pre_init(), and is not changed after
-  // init(). Memory is managed via set_version() which handles
-  // allocation/deallocation.
-  static Semver *version;
+  // It always has a value after pre_init(), and is not changed after init().
+  // Held by value: it is set once during single-threaded initialization, so
+  // there is nothing to gain from an allocation that could fail.
+  static std::optional<Semver> version;
   // Set during preinit() never changed after that.
-  static bool *upgrade_needed;
+  static std::optional<bool> upgrade_needed;
 };
 
 std::atomic<bool> SchemaManagerStatus::is_initialized = false;
 std::atomic<bool> SchemaManagerStatus::is_initializing = false;
-Semver *SchemaManagerStatus::version = nullptr;
-bool *SchemaManagerStatus::upgrade_needed = nullptr;
+std::optional<Semver> SchemaManagerStatus::version;
+std::optional<bool> SchemaManagerStatus::upgrade_needed;
 
 // Keep these table definitions in sync with
 // villagesql/schema/villagesql_schema.sql Any changes to the schema must be
@@ -826,18 +826,17 @@ void SchemaManagerStatus::set_version(const Semver &ver) {
           ver.to_string().c_str());
 
   // Safe because we only update during single-threaded initialization/upgrade
-  delete version;
-  version = new Semver(ver);
+  version = ver;
 
-  if (!upgrade_needed) {
+  if (!upgrade_needed.has_value()) {
     // Treat as an upgrade when the stored version is invalid, when its code
     // base differs from the build (including legacy stored versions that
     // predate code bases and were assigned the legacy code base), or when it
     // is numerically older than the build.
     const Semver build_version = GetBuildVersion();
-    upgrade_needed = new bool(!ver.is_valid() ||
-                              ver.code_base() != build_version.code_base() ||
-                              ver < build_version);
+    upgrade_needed = !ver.is_valid() ||
+                     ver.code_base() != build_version.code_base() ||
+                     ver < build_version;
   }
 }
 

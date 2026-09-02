@@ -33,6 +33,7 @@
 #include "sql/protocol_classic.h"
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 #include "villagesql/services/sys_var_access.h"
 
@@ -400,7 +401,11 @@ bool on_populate_thread_worker(const PopulateContext &ctx,
   auto *desc = static_cast<const vef_thread_worker_descriptor_t *>(
       ctx.capability_config);
 
-  auto state = std::make_unique<WorkerState>();
+  auto state = make_unique_nothrow<WorkerState>();
+  if (should_assert_if_null(state)) {
+    error_message = "thread_worker: out of memory";
+    return true;
+  }
   state->descriptor = desc;
   state->extension_name = ctx.extension_name;
 

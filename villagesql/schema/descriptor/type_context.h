@@ -25,6 +25,7 @@
 #include <string_view>
 #include <vector>
 
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/types/type_op.h"
@@ -391,7 +392,12 @@ struct TableTraits<TypeContext> {
     if (!descriptor) return std::shared_ptr<TypeContext>();
     // Use new directly: make_shared constructs via the allocator which doesn't
     // have friend access to the private constructor.
-    std::shared_ptr<TypeContext> tc(new TypeContext(key, descriptor));
+    std::shared_ptr<TypeContext> tc =
+        wrap_shared_nothrow(new (std::nothrow) TypeContext(key, descriptor));
+    if (should_assert_if_null(tc)) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
+      return std::shared_ptr<TypeContext>();
+    }
     std::string error;
     if (tc->init_intrinsic_default(error)) {
       if (!error.empty()) {

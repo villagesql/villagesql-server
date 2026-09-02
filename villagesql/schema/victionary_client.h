@@ -40,6 +40,7 @@
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
 #include "sql/table.h"
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/extension_descriptor.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
@@ -396,20 +397,16 @@ class SystemTableMap {
            op_type == OperationType::UPDATE);
 
     // Create shared_ptr for the entry
-    // TODO(villagesql-ga): what happens if the underlying allocation fails? It
-    // probably throws an exception and crashes, but we should validate that. If
-    // that's the behavior, we either need to wrap make_shared<> or else come up
-    // with a nothrow alternative that achieves the same result. This would help
-    // us more consistently handle OOM conditions.
-    auto entry_ptr = std::make_shared<EntryType>(std::move(entry));
+    auto entry_ptr = make_shared_nothrow<EntryType>(std::move(entry));
     if (should_assert_if_null(entry_ptr)) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(EntryType));
       return true;
     }
 
     // Allocate pending operation on heap - cleaned up in commit() or rollback()
-    PendingOperation<EntryType> *op = new PendingOperation<EntryType>(
-        op_type, std::move(entry_ptr), std::move(key));
+    PendingOperation<EntryType> *op =
+        new (std::nothrow) PendingOperation<EntryType>(
+            op_type, std::move(entry_ptr), std::move(key));
     if (should_assert_if_null(op)) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
                sizeof(PendingOperation<EntryType>));
@@ -428,8 +425,9 @@ class SystemTableMap {
 
     // Allocate pending operation on heap - cleaned up in commit() or rollback()
     // entry is nullptr for DELETE-by-key
-    PendingOperation<EntryType> *op = new PendingOperation<EntryType>(
-        OperationType::DELETE, nullptr, std::move(key));
+    PendingOperation<EntryType> *op =
+        new (std::nothrow) PendingOperation<EntryType>(OperationType::DELETE,
+                                                       nullptr, std::move(key));
     if (should_assert_if_null(op)) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
                sizeof(PendingOperation<EntryType>));

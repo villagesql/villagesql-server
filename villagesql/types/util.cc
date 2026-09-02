@@ -45,6 +45,7 @@
 #include "sql/table.h"
 #include "sql/visible_fields.h"
 #include "template_utils.h"
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
@@ -1386,7 +1387,11 @@ static bool insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
   }
   if (!thd) return false;
   if (!thd->villagesql_tmp_metadata) {
-    thd->villagesql_tmp_metadata = std::make_unique<TmpMetadata>();
+    thd->villagesql_tmp_metadata = make_unique_nothrow<TmpMetadata>();
+    if (should_assert_if_null(thd->villagesql_tmp_metadata)) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TmpMetadata));
+      return true;
+    }
   }
   thd->villagesql_tmp_metadata->insert(key, std::move(tc_owner));
   return false;

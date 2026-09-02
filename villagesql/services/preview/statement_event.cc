@@ -30,6 +30,7 @@
 #include "sql/sql_class.h"
 #include "sql/sql_digest.h"
 #include "sql/sql_lex.h"
+#include "villagesql/include/alloc.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql::services {
@@ -105,7 +106,11 @@ bool on_populate_statement_event(const PopulateContext &ctx,
 
   {
     std::lock_guard<std::mutex> lock(g_mu);
-    auto new_list = std::make_shared<HookList>(*g_hooks);
+    auto new_list = make_shared_nothrow<HookList>(*g_hooks);
+    if (should_assert_if_null(new_list)) {
+      error_message = "statement_event: out of memory";
+      return true;
+    }
     new_list->push_back({std::string(ctx.extension_name), cc});
     g_hooks = std::move(new_list);
   }
