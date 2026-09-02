@@ -1,0 +1,200 @@
+name: Codebase Acceptance Dispatch
+
+# Run the full set of acceptance test criteria a potential codebase release.
+# From one named ref: run the full test suite, and build the artifacts a real
+# release builds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to build from (e.g. main or publish/mysql-8.4_0.0.7). Not a SHA: this is also the copy of the child workflow definitions that runs.'
+        required: true
+        type: string
+        default: 'main'
+      image_tag:
+        description: 'Docker tag to publish, e.g. mysql-8.4_0.0.7-test. This is a rehearsal, so name a tag you are willing to overwrite.'
+        required: true
+        type: string
+      image_repo:
+        description: 'Docker repository to push to.'
+        required: true
+        type: string
+        default: 'villagesql/server'
+
+permissions:
+  contents: read
+
+jobs:
+  # Names what is about to be built, and checks for obvious mistakes.
+  resolve:
+    name: Resolve Rehearsal
+    runs-on: [self-hosted, vsql_build_worker]
+
+    steps:
+      # Cone mode brings the root-level VSQL_VERSION along, and
+      # json_version.sh sources villagesql/scripts/vsql_script_utils.sh.
+      - name: Checkout resolve context
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            villagesql/bld_matrix/
+            villagesql/scripts/
+
+      - name: Resolve rehearsal identity
+        env:
+          REF: ${{ inputs.ref }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_REPO: ${{ inputs.image_repo }}
+        run: |
+          set -euo pipefail
+
+          # A Docker tag cannot hold a slash, so a GitHub release tag pasted
+          # into the image box (release/0.0.7) can never work. Catching it here
+          # saves an hour of building first.
+          if [[ -z "$IMAGE_TAG" || "$IMAGE_TAG" == */* ]]; then
+            echo "::error::image_tag must be a Docker tag; '$IMAGE_TAG' is not one."
+            exit 1
+          fi
+
+          # The version registry is runnable locally exactly as it runs here:
+          #   villagesql/bld_matrix/json_version.sh | jq .
+          VERSION_JSON="$(villagesql/bld_matrix/json_version.sh)"
+          jq . <<<"$VERSION_JSON"
+
+          CODE_BASE="$(jq -r '.code_base' <<<"$VERSION_JSON")"
+          VERSION="$(jq -r '"\(.major).\(.minor).\(.patch)"' <<<"$VERSION_JSON")"
+
+          # The commit the children will build.
+          SHA="$(git rev-parse "$REF")"
+
+          {
+            echo "### Codebase acceptance: $CODE_BASE $VERSION"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Ref | \`$REF\` |"
+            echo "| Commit | \`$SHA\` ($(git log -n1 --format=%s)) |"
+            echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  start-full-test-release:
+    name: Start full test suite (linux, release)
+    needs: resolve
+    runs-on: [self-hosted, vsql_build_worker]
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start full-test-suite (release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          gh workflow run full-test-suite.yml \
+            --ref "$REF" \
+            -f ref="$REF" \
+            -f build-type=release \
+            -f platform=linux-x86_64 \
+            -f artifact-prefix=acceptance-full-release
+          echo "Started full-test-suite (release) on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  start-full-test-debug:
+    name: Start full test suite (linux, debug)
+    needs: resolve
+    runs-on: [self-hosted, vsql_build_worker]
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start full-test-suite (debug)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          gh workflow run full-test-suite.yml \
+            --ref "$REF" \
+            -f ref="$REF" \
+            -f build-type=debug \
+            -f platform=linux-x86_64 \
+            -f artifact-prefix=acceptance-full-debug
+          echo "Started full-test-suite (debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  start-release-server-dev:
+    name: Start server packages (dev)
+    needs: resolve
+    runs-on: [self-hosted, vsql_build_worker]
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start release-server-branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+
+          # No release tag, so assets built but never attached
+          gh workflow run release-server-branch.yml \
+            --ref "$REF" \
+            -f ref="$REF" \
+            -f release_build="false"
+          echo "Started release-server-branch on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  start-release-server-release:
+    name: Start server packages (release)
+    needs: resolve
+    runs-on: [self-hosted, vsql_build_worker]
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start release-server-branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+
+          # No release tag, so assets built but never attached
+          gh workflow run release-server-branch.yml \
+            --ref "$REF" \
+            -f ref="$REF" \
+            -f release_build="true"
+          echo "Started release-server-branch on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  start-release-docker:
+    name: Start Docker image
+    needs: resolve
+    runs-on: [self-hosted, vsql_build_worker]
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start release-docker-branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ inputs.ref }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_REPO: ${{ inputs.image_repo }}
+        run: |
+          set -euo pipefail
+
+          gh workflow run release-docker-branch.yml \
+            --ref "$REF" \
+            -f ref="$REF" \
+            -f tag="$IMAGE_TAG" \
+            -f repo="$IMAGE_REPO" \
+            -f pre_release_version="" \
+            -f dev_abi=ON
+          echo "Started release-docker-branch on $REF" >> "$GITHUB_STEP_SUMMARY"
