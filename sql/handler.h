@@ -5546,15 +5546,24 @@ class handler {
     @param keynr    key number of the custom index (table->key_info[]).
     @param key_ref  the extension's stable column reference (opaque uint64).
     @param[out] buf record buffer to receive the fetched row (table->record[0]).
+    @param[out] row_not_found  set true (and false returned) when the reference
+                  resolves but the row is NOT VISIBLE to the current
+                  transaction's read view (MVCC) -- e.g. a KNN hit on a
+                  concurrently-inserted, uncommitted row. This is an expected
+                  outcome, not a hard error: the caller should SKIP this hit and
+                  fetch the next candidate rather than fail the query. nullptr is
+                  allowed (callers that do not distinguish treat it as an error).
     @param error_msg      buffer for an error description on failure.
     @param error_msg_len  size of @p error_msg.
 
-    @retval false  the row was fetched into @p buf.
+    @retval false  the row was fetched into @p buf, OR (with row_not_found set)
+                   the row was not visible and should be skipped.
     @retval true   not a custom index, unsupported, or the fetch failed.
   */
   virtual bool custom_index_ref_to_row(uint keynr [[maybe_unused]],
                                        uint64_t key_ref [[maybe_unused]],
                                        uchar *buf [[maybe_unused]],
+                                       bool *row_not_found [[maybe_unused]],
                                        char *error_msg [[maybe_unused]],
                                        uint error_msg_len [[maybe_unused]]) {
     return true;
