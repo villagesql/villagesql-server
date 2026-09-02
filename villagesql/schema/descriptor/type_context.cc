@@ -332,9 +332,10 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
     trim(value);
     std::string key_str{key};
     std::string value_str{value};
-    // Lowercase
-    key_str = casedn(cs, std::move(key_str));
-    value_str = casedn(cs, std::move(value_str));
+    // Lowercase. casedn() dereferences &s.front(), so it must not be called on
+    // an empty string (e.g. a valueless token's empty value).
+    if (!key_str.empty()) key_str = casedn(cs, std::move(key_str));
+    if (!value_str.empty()) value_str = casedn(cs, std::move(value_str));
 
     pairs.emplace_back(std::move(key_str), std::move(value_str));
     start = comma + 1;
