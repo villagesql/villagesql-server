@@ -41,6 +41,11 @@ on:
         required: false
         type: string
         default: ''
+      define_tags:
+        description: 'Comma-separated tags published as given, without the codebase prefix that version_labels adds. Empty publishes none.'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       ref:
@@ -72,6 +77,11 @@ on:
         default: 'ON'
       version_labels:
         description: 'Comma-separated labels to add to tag as version suffix. Clear this to publish only "tag".'
+        required: false
+        type: string
+        default: ''
+      define_tags:
+        description: 'Comma-separated tags published as given, without the codebase prefix that version_labels adds. Clear this to publish none.'
         required: false
         type: string
         default: ''
@@ -108,6 +118,7 @@ jobs:
           echo "Pre-release Version: '${{ inputs.pre_release_version }}'"
           echo "Dev ABI: ${{ inputs.dev_abi }}"
           echo "Version Labels: '${{ inputs.version_labels }}'"
+          echo "Define Tags: '${{ inputs.define_tags }}'"
 
       # Matrix logic lives in villagesql/bld_matrix, so it can be run locally
       # exactly as it runs here:
@@ -181,4 +192,5 @@ jobs:
             --tag "${{ inputs.tag }}" \
             --repo "${{ inputs.repo }}" \
             --platforms "${{ needs.report-parameters.outputs.platforms }}" \
-            --version-labels "${{ inputs.version_labels }}"
+            --version-labels "${{ inputs.version_labels }}" \
+            --define-tags "${{ inputs.define_tags }}"
