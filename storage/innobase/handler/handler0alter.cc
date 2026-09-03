@@ -1106,8 +1106,8 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
         } else if (villagesql::innodb::Custom_column::
                        alter_add_drop_with_extended_storage(ha_alter_info,
                                                             table)) {
-          // TODO(villagesql-ga): Support INSTANT ALTER for custom columns with
-          // extended storage.
+          // TODO(villagesql-general): Support INSTANT ALTER for custom columns
+          // with extended storage.
           if (is_instant_requested) {
             villagesql_error(
                 "ALGORITHM=INSTANT is not supported for columns "

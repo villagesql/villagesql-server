@@ -174,7 +174,7 @@ static std::string registration_to_json(const vef_registration_t *r) {
   }
   w.EndArray();
 
-  // TODO(villagesql-beta): Serialize per-capability data (sys_vars,
+  // TODO(villagesql-preview): Serialize per-capability data (sys_vars,
   // status_vars, etc.) into the JSON by adding a to_json callback to
   // CapabilityRegistration. Each capability provides its own serializer;
   // extension_registration.cc iterates required_capabilities, looks up the

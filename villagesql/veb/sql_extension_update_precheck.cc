@@ -157,7 +157,7 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
 // NOTE: when adding a new extension-owned systable that participates in an
 // UPDATE (i.e. its rows carry an extension_name + extension_version), both
 // this function and the UNINSTALL EXTENSION code in sql_extension.cc need to
-// be updated to walk the new map. See the TODO(villagesql-ga) in
+// be updated to walk the new map. See the TODO in
 // veb_file.cc::load_installed_extensions for the planned centralization of
 // this enumeration on VictionaryClient.
 //

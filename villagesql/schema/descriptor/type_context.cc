@@ -127,7 +127,7 @@ bool TypeContext::init_intrinsic_default(std::string &error_out) {
     return true;
   }
 
-  // TODO(villagesql-beta): consolidate this encode call with TypeEncoder to
+  // TODO(villagesql-general): consolidate this encode call with TypeEncoder to
   // avoid duplicating the vdf/fn dispatch logic.
   const EncodeOp &op = encode_op_.value();
   if (op.vdf() != nullptr) {
@@ -245,7 +245,7 @@ void TypeContext::resolve_cached_values() {
       // This can happen if parameters stored on disk no longer validate
       // (e.g., extension upgraded). The type will be unusable until the
       // column is altered, but we won't crash.
-      // TODO(villagesql-beta): how should we actually handle this error?
+      // TODO(villagesql-production): how should we actually handle this error?
       LogVSQL(WARNING_LEVEL,
               "resolve_params failed for type '%s' (params: %s): %s. "
               "Falling back to descriptor defaults.",
@@ -303,7 +303,6 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
 
   // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
   // re-serialize. Use the same charset for both lowercasing and sort order.
-  // TODO(villagesql-beta): refactor parsing to use std::string_view.
   const CHARSET_INFO *cs = type_parameter_collation();
   std::vector<std::pair<std::string, std::string>> pairs;
   size_t start = 0;

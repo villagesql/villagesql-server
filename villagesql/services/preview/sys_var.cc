@@ -278,7 +278,7 @@ bool on_populate_sys_var(const PopulateContext &ctx,
         value_ptr = v->integer.value_ptr;
         break;
       case VEF_VAR_DOUBLE:
-        // TODO(villagesql-beta): component_sys_variable_register does not
+        // TODO(villagesql-general): component_sys_variable_register does not
         // support PLUGIN_VAR_DOUBLE; register_variable will fail with
         // "Unknown variable type code 0x8". Until MySQL adds support,
         // extensions should use VEF_VAR_INT (milliseconds) instead.

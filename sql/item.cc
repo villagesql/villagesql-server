@@ -3621,7 +3621,8 @@ void Item_string::print(const THD *, String *str,
     String decoded;
     if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
                                           &decoded)) {
-      // TODO(villagesql-beta): Should we print a placeholder in case of error?
+      // TODO(villagesql-general): Should we print a placeholder in case of
+      // error?
       str->append(decoded);
     }
     str->append('\'');
@@ -7104,7 +7105,7 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
     }
 
     // Now re-cache the new version.
-    // TODO(villagesql-beta): check on the collation settings.
+    // TODO(villagesql-charset): check on the collation settings.
     fixed = false;
     init(encoded->ptr(), encoded->length(), &my_charset_bin,
          collation.derivation, collation.repertoire);

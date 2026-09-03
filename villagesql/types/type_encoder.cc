@@ -65,7 +65,7 @@ String *TypeEncoder::encode(const String &from, bool &is_valid) {
     auto r =
         vdf_call_->invoke(from, pointer_cast<uchar *>(buffer_), buffer_size_);
     if (!r) {
-      // TODO(villagesql-beta): log warnings for errors
+      // TODO(villagesql-general): log warnings for errors
       is_valid = false;
       return nullptr;
     }

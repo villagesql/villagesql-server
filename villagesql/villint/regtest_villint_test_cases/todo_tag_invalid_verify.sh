@@ -13,8 +13,8 @@ if [ ! -f "$FILE" ]; then
 fi
 
 # Check if file contains the invalid tag
-if grep -q "TODO(villagesql-gaaaa)" "$FILE"; then
-    echo "FAIL: $FILE contains invalid TODO tag 'villagesql-gaaaa'"
+if grep -q "TODO(villagesql-generaltesttypo)" "$FILE"; then
+    echo "FAIL: $FILE contains invalid TODO tag 'villagesql-generaltesttypo'"
     exit 1
 fi
 

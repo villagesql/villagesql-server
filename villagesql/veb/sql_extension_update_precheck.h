@@ -53,7 +53,7 @@ namespace veb {
 // Docs/EXTENSION_UPDATE_AT_RESTART.md "Pre-Check API Shape" for the planned
 // hook contract.
 //
-// TODO(villagesql-beta): relocate the precheck out of the live server
+// TODO(villagesql-general): relocate the precheck out of the live server
 // process. Phase 1 (this file) runs the dlopen + vef_register harvest
 // in-process, which exposes the live server to static initializers and
 // any side effects in the target .so. Phase 2 is a subprocess: the parent
@@ -106,7 +106,7 @@ struct UpdatePreCheckInput {
   std::vector<DependentColumnSnapshot> dependent_columns;
   std::vector<DependentSpParamSnapshot> dependent_sp_params;
 
-  // TODO(villagesql-beta): the apply path rewrites custom_indexes rows
+  // TODO(villagesql-general): the apply path rewrites custom_indexes rows
   // to the target version unconditionally, but this precheck does not
   // verify that every in-use index_type / index_profile survives in the
   // target registration (analogous to the dropped-type check for
