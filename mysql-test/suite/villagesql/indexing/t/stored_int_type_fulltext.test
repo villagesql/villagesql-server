@@ -1,0 +1,60 @@
+# FULLTEXT indexes on tables that also have a custom-type (STORED_INT) column.
+#
+#   STORED_INT  - stored out of line through the preview column storage API,
+#                 so its fields are flagged as extended storage and the
+#                 rebuild has to fetch them separately.
+#
+# FTS build paths exercised for each: ALTER TABLE ADD FULLTEXT (rebuilds the
+# table to add FTS_DOC_ID), OPTIMIZE TABLE (recreate), and FULLTEXT declared at
+# CREATE TABLE.
+#
+# Each part also asserts that the custom-type column itself cannot be part of a
+# FULLTEXT index.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT, txt TEXT);
+INSERT INTO t1 VALUES (1, '42',   'hello fulltext world');
+INSERT INTO t1 VALUES (2, '-7',   'innodb custom column store');
+INSERT INTO t1 VALUES (3, '0',    'another fulltext custom row');
+INSERT INTO t1 VALUES (4, '-100', 'fulltext at the bottom');
+INSERT INTO t1 VALUES (5, '77',   'top custom entry');
+INSERT INTO t1 VALUES (6, '13',   'middle fulltext custom line');
+
+--echo # ALTER ADD FULLTEXT: rebuilds the table to add FTS_DOC_ID
+ALTER TABLE t1 ADD FULLTEXT(txt);
+SELECT id, n FROM t1 ORDER BY id;
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY id;
+SELECT * FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY n;
+SELECT n, id, txt FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY n;
+
+--echo # OPTIMIZE: recreate with both the FTS index and the custom column
+OPTIMIZE TABLE t1;
+SELECT id, n FROM t1 ORDER BY id;
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY id;
+SELECT * FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY n;
+SELECT n, id, txt FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY n;
+
+--echo # FULLTEXT declared at CREATE TABLE
+CREATE TABLE t2 (id INT PRIMARY KEY, n STORED_INT, txt TEXT, FULLTEXT(txt));
+INSERT INTO t2 SELECT * from t1;
+INSERT INTO t2 VALUES (7, '5', 'inline fulltext definition');
+SELECT id, n FROM t2 WHERE MATCH(txt) AGAINST ('inline');
+
+--echo # An out of line custom-type column is rejected the same way as an
+--echo # inline one: the tokenizer never sees an extended storage field
+--error ER_BAD_FT_COLUMN
+ALTER TABLE t1 ADD FULLTEXT(n);
+--error ER_BAD_FT_COLUMN
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, FULLTEXT(n));
+--error ER_BAD_FT_COLUMN
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, txt TEXT, FULLTEXT(txt, n));
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_storage_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
