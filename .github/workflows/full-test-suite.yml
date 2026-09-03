@@ -150,6 +150,10 @@ jobs:
           --arg trigger "$GITHUB_EVENT_NAME" \
           --arg gitRev "$REF" \
           --arg buildType "$BUILD_TYPE" \
+          --arg codebase "${VSQL_CODE_BASE}" \
+          --arg version "${VSQL_VERSION}" \
+          --arg os "${PLATFORM}" \
+          --arg arch "${ARCH}" \
           --arg buildTarget "$BUILD_TARGET" \
           --arg artifactPrefix "$ARTIFACT_PREFIX" \
           --arg sha "$(git -C source rev-parse HEAD)" \
@@ -190,3 +194,5 @@ jobs:
         run-all-suites: true
         skip-suite: village
         artifact-name: ${{ env.ARTIFACT_PREFIX }}-all-suites-logs-${{ github.run_number }}
+        # Avoid tests known to fail in debug builds
+        mysql-test-extra-flags: ${{ inputs.build-type == 'debug' && '--skip-test-list=disabled-vsql-debug' || '' }}

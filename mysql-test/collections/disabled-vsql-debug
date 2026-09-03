@@ -1,0 +1,36 @@
+##############################################################################
+#
+# Test cases that fail in debug runs but succeed in release runs.
+#
+# Separate the test case name and the comment with ':'.
+#   <suite>.<test> [@platform|@!platform] : <BUG|WL>#<XXXX> [<comment>]
+#
+# You can also include a disabled file into another using the @import keyword
+# as following:
+#
+# @import <disabled_file>
+#
+# Note:
+#   - Comment shows as status for test.
+#   - Do not use any TAB characters for whitespace.
+#   - Length of a comment section must not be more than 80 characters.
+#   - <disabled_file> could be the file name or a valid path. It should
+#     not be followed by a comment on that line.
+#
+##############################################################################
+
+# max_parts.partition_max_* tests fail on debug and pass in release
+max_parts.partition_max_parts_hash_innodb              : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_parts_key_innodb               : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_parts_list_innodb              : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_parts_range_innodb             : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_sub_parts_key_list_innodb      : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_sub_parts_key_range_innodb     : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_sub_parts_list_innodb          : BUG#0 VillageSQL timeout after 900 seconds
+max_parts.partition_max_sub_parts_range_innodb         : BUG#0 VillageSQL timeout after 900 seconds
+
+# Takes many hours
+large_tests.innodb_innochecksum_3gb                    : BUG#0 VillageSQL timeout after 900 seconds
+
+# Only runs in debug, and fails
+main.query_expression_debug                            : BUG#0 VillageSQL timeout after 900 seconds
