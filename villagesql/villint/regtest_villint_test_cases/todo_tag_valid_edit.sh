@@ -17,7 +17,7 @@ cat > "$FILE" << 'EOF'
  * of the License, or (at your option) any later version.
  */
 
-// TODO(villagesql-ga): Must handle before initial release
+// TODO(villagesql-general): Must handle before initial release
 // TODO(villagesql-performance): Performance optimization
 // TODO(villagesql-rebase): Check during MySQL rebases
 // TODO(villagesql-windows): Work to support Windows

@@ -17,7 +17,7 @@ cat > "$FILE" << 'EOF'
  * of the License, or (at your option) any later version.
  */
 
-// TODO(villagesql-gaaaa): This is a typo - should be villagesql-ga
+// TODO(villagesql-generaltesttypo): This is a typo - should be villagesql-general
 void test_function() {}
 EOF
 

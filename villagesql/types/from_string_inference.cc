@@ -85,7 +85,7 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
   inferred_workspace.max_buf_len = sizeof(stack_params_buf);
 
   // Build the single STRING input arg holding the constant literal.
-  // TODO(villagesql-beta): change this to use the encoding wrapper.
+  // TODO(villagesql): change this to use the encoding wrapper.
   vef_invalue_t arg{};
   arg.type = VEF_TYPE_STRING;
   arg.is_null = false;

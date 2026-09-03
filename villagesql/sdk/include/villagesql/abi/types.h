@@ -280,7 +280,7 @@ typedef enum : int {
   VEF_TYPE_INT = 2,
   VEF_TYPE_CUSTOM = 3
 
-  // TODO(villagesql-ga): Do we want to support DECIMAL?
+  // TODO(villagesql-production): Do we want to support DECIMAL?
 } vef_type_id;
 
 // Snapshot of vef_invalue_t as of VEF_PROTOCOL_1. Used as the element type of

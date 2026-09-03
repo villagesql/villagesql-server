@@ -1435,7 +1435,7 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
   // table's uncommitted map for this THD before touching any open TABLE*, so
   // other system tables (columns, properties, extensions) are skipped safely
   // because no entries were marked for them on this code path.
-  // TODO(villagesql-beta) Evaluate change the API in the future to allow
+  // TODO(villagesql-general) Evaluate change the API in the future to allow
   // committing only from a subset of tables and asserting the others have
   // nothing pending.
   Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,

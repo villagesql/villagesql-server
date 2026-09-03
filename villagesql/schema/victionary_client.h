@@ -396,11 +396,12 @@ class SystemTableMap {
            op_type == OperationType::UPDATE);
 
     // Create shared_ptr for the entry
-    // TODO(villagesql-ga): what happens if the underlying allocation fails? It
-    // probably throws an exception and crashes, but we should validate that. If
-    // that's the behavior, we either need to wrap make_shared<> or else come up
-    // with a nothrow alternative that achieves the same result. This would help
-    // us more consistently handle OOM conditions.
+    // TODO(villagesql-production): what happens if the underlying allocation
+    // fails? It probably throws an exception and crashes, but we should
+    // validate that. If that's the behavior, we either need to wrap
+    // make_shared<> or else come up with a nothrow alternative that achieves
+    // the same result. This would help us more consistently handle OOM
+    // conditions.
     auto entry_ptr = std::make_shared<EntryType>(std::move(entry));
     if (should_assert_if_null(entry_ptr)) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(EntryType));

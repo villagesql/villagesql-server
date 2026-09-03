@@ -727,7 +727,8 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
   // maybe_install_villagesql_schema_on_first_run(), which runs after this, so
   // there is nothing to check or upgrade here.
   //
-  // TODO(villagesql-ga): support upgrading a data directory across code bases.
+  // TODO(villagesql-production): support upgrading a data directory across code
+  // bases.
   if (current_villagesql_version.is_valid() &&
       current_villagesql_version.code_base() !=
           target_villagesql_version.code_base()) {

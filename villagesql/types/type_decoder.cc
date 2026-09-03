@@ -64,7 +64,7 @@ DecodeResult TypeDecoder::decode(const uchar *data, size_t len, String *out) {
     }
 
     if (vdf_call_->alt_str_buf() != nullptr) {
-      // TODO(villagesql-beta): support caller supplied buffers.
+      // TODO(villagesql-general): support caller supplied buffers.
       last_error_msg_ = "VDF provided unsupported alternate output buffer";
       return DecodeResult::kExtensionError;
     }

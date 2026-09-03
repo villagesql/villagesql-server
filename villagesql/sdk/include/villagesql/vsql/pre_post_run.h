@@ -38,7 +38,7 @@
 // need to reach for prerun or postrun, please come talk to us so we can
 // understand your use case.
 //
-// TODO(villagesql-beta): add a typed-state mechanism (working name
+// TODO(villagesql-general): add a typed-state mechanism (working name
 // `.state<T>()` on FuncBuilder) so extensions can declare a per-statement
 // state type and have the SDK manage its lifetime automatically — no
 // matched prerun/postrun pair required just to free state. Implementable
@@ -90,7 +90,7 @@ class PrerunArgs {
     return PrerunArgType(&a_->arg_types[i]);
   }
 
-  // TODO(villagesql-beta): expose const_at(i) returning the serialized
+  // TODO(villagesql-general): expose const_at(i) returning the serialized
   // literal bytes for constant arguments. Blocked on vdf_handler.cc
   // populating vef_prerun_args_t::const_values / const_lengths; today both
   // are unconditionally nullptr at the prerun call site.
