@@ -33,7 +33,6 @@
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"
 #include "string_with_len.h"
-#include "villagesql/include/build_info.h"
 #include "villagesql/include/error.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
@@ -94,54 +93,6 @@ const uchar *Sys_var_villagesql_server_version::global_value_ptr(
 
 static Sys_var_villagesql_server_version Sys_villagesql_server_version(
     "villagesql_server_version", "VillageSQL server version.");
-
-class Sys_var_villagesql_build_info : public Sys_var_charptr_func {
- public:
-  Sys_var_villagesql_build_info(const char *name_arg, const char *comment_arg)
-      : Sys_var_charptr_func(name_arg, comment_arg, GLOBAL) {}
-  const uchar *global_value_ptr(THD *thd, std::string_view) override;
-};
-
-const uchar *Sys_var_villagesql_build_info::global_value_ptr(THD *thd,
-                                                             std::string_view) {
-  const BuildInfo &info = villagesql::GetBuildInfo();
-
-  rapidjson::StringBuffer sb;
-  rapidjson::Writer<rapidjson::StringBuffer> w(sb);
-  w.StartObject();
-  w.Key("git_sha");
-  w.String(info.git_sha);
-  w.Key("is_dirty");
-  w.Bool(info.is_dirty());
-  w.Key("files_added");
-  w.Int(info.files_added);
-  w.Key("files_deleted");
-  w.Int(info.files_deleted);
-  w.Key("files_modified");
-  w.Int(info.files_modified);
-  w.Key("build_timestamp");
-  w.String(info.build_timestamp);
-  w.Key("build_host");
-  w.String(info.build_host);
-  w.Key("build_os");
-  w.String(info.build_os);
-  w.Key("build_arch");
-  w.String(info.build_arch);
-  w.EndObject();
-
-  size_t buf_size = sb.GetSize() + 1;
-  char *buf = (char *)thd->alloc(buf_size);
-  if (should_assert_if_null(buf))
-    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), buf_size);
-  else
-    std::copy(sb.GetString(), sb.GetString() + sb.GetSize() + 1, buf);
-  return (uchar *)buf;
-}
-
-static Sys_var_villagesql_build_info Sys_villagesql_build_info(
-    "villagesql_build_info",
-    "VillageSQL build metadata (JSON: git SHA, work-tree file counts, build "
-    "timestamp/host/OS/arch).");
 
 static Sys_var_uint Sys_villagesql_vef_server_protocol(
     "villagesql_vef_server_protocol",
