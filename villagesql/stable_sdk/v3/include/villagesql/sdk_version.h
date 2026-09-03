@@ -14,7 +14,15 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 // Frozen SDK version for the stable v3 ABI snapshot.
-//
+
+#ifndef VILLAGESQL_SDK_SDK_VERSION_H
+#define VILLAGESQL_SDK_SDK_VERSION_H
+
+#include <villagesql/abi/types.h>
+
+namespace villagesql {
+namespace detail {
+
 // This is the version reported by an extension built directly against the
 // frozen v3 headers (as the abi_v3 compatibility tests do), pinned to the
 // VillageSQL version at which protocol v3 was stabilized. It intentionally
@@ -25,18 +33,7 @@
 // header is overwritten with one generated from the current release version
 // (see villagesql/sdk/include/villagesql/sdk_version.h.in and the packaging in
 // villagesql/CMakeLists.txt), so extensions built against the SDK report the
-// release they were built from. See villagesql/sdk/COMPATIBILITY_TESTING.md.
-
-#ifndef VILLAGESQL_SDK_SDK_VERSION_H
-#define VILLAGESQL_SDK_SDK_VERSION_H
-
-#include <villagesql/abi/types.h>
-
-namespace villagesql {
-namespace detail {
-
-// SDK version reported to the server during vef_register(). Frozen at the
-// VillageSQL version when protocol v3 was stabilized.
+// release they were built from.
 constexpr vef_version_t kSdkVersion = {0, 0, 4, "only-for-tests"};
 
 }  // namespace detail
