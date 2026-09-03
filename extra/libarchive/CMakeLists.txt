@@ -74,6 +74,11 @@ IF(HAVE_C_UNUSED_VARIABLE)
   TARGET_COMPILE_OPTIONS(archive_static PRIVATE "-Wno-unused-variable")
 ENDIF()
 
+MY_CHECK_C_COMPILER_FLAG("-Wdiscarded-qualifiers" HAVE_C_DISCARDED_QUALIFIERS)
+IF(HAVE_C_DISCARDED_QUALIFIERS)
+  TARGET_COMPILE_OPTIONS(archive_static PRIVATE "-Wno-discarded-qualifiers")
+ENDIF()
+
 # Create an interface library for easier consumption
 ADD_LIBRARY(archive_interface INTERFACE)
 TARGET_LINK_LIBRARIES(archive_interface INTERFACE archive_static)
