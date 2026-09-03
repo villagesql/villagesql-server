@@ -1,0 +1,64 @@
+# CREATE INDEX ... USING EXTENDED on a table that already contains rows.
+#
+# A custom index cannot be built by the sort-merge path (a graph is not a
+# sortable key stream); like an RTree it is built row-by-row during the
+# clustered-index scan, inserting each existing row into the extension's index.
+# The build resolves each row's externally-stored column from the source table's
+# column store (fetch_for_bulk_ddl) and calls the extension insert. The scan may
+# run on multiple threads, so the inserts reach the extension index
+# concurrently, as concurrent DML inserts do at run time.
+#
+# Covers:
+#   Empty table: standalone CREATE INDEX ... USING EXTENDED succeeds.
+#   Populated table: the same CREATE INDEX succeeds, building over existing rows.
+#   The server is alive and the rows are intact afterwards.
+#
+# The debug flag lets the custom-index DDL path run in this build.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+--disable_query_log
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+--enable_query_log
+
+--echo # --- Empty table: standalone CREATE INDEX succeeds ---
+CREATE TABLE t_empty (id INT PRIMARY KEY, a dummy_type_vector);
+CREATE INDEX idx ON t_empty (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_empty;
+DROP TABLE t_empty;
+
+--echo # --- Populated table: CREATE INDEX builds over existing rows ---
+CREATE TABLE t_full (id INT PRIMARY KEY, a dummy_type_vector);
+# Codec stubs store a fixed [0,0,0,0], so any value populates the column.
+INSERT INTO t_full VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]'), (3, '[9,1,2,3]');
+CREATE INDEX idx ON t_full (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_full;
+
+--echo # --- Rows are intact and a plain scan still works after the build ---
+SELECT COUNT(*) FROM t_full;
+
+--echo # --- Rows inserted AFTER the populated build also index (incremental) ---
+INSERT INTO t_full VALUES (4, '[4,4,4,4]');
+SELECT COUNT(*) FROM t_full;
+DROP TABLE t_full;
+
+--echo # --- ALTER TABLE ADD INDEX on populated data takes the same build path ---
+CREATE TABLE t_alter (id INT PRIMARY KEY, a dummy_type_vector);
+INSERT INTO t_alter VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+ALTER TABLE t_alter ADD INDEX idx (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_alter;
+DROP TABLE t_alter;
+
+--echo # --- Index-at-CREATE-TABLE then load still works (incremental build) ---
+CREATE TABLE t_ok (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX idx (a) USING EXTENDED(dummy_index_hnsw));
+INSERT INTO t_ok VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+DROP TABLE t_ok;
+
+--disable_query_log
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+--enable_query_log
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
