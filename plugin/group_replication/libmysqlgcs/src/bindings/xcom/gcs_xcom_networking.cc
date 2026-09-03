@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -422,7 +423,7 @@ static bool sock_descriptor_to_sockaddr(int fd, struct sockaddr_storage *sa) {
   */
 static bool sock_descriptor_to_string(int fd, std::string &out) {
   struct sockaddr_storage sa;
-  socklen_t addr_size = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
+  socklen_t addr_size = static_cast<socklen_t>(INET6_ADDRSTRLEN);
   char saddr[INET6_ADDRSTRLEN];
 
   // get the sockaddr struct
