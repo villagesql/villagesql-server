@@ -1,0 +1,27 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+# con_set: park SET GLOBAL between the on_change lookup and the callback
+SET DEBUG_SYNC = 'vef_sys_var_before_on_change SIGNAL in_on_change WAIT_FOR release_on_change';
+SET GLOBAL vsql_range_clamp_test.min_setting = 200;
+# default: wait for the callback window to open
+SET DEBUG_SYNC = 'now WAIT_FOR in_on_change';
+# con_uninstall: UNINSTALL EXTENSION with the callback parked
+UNINSTALL EXTENSION vsql_range_clamp_test;
+# default: the UNINSTALL has started
+# default: and it cannot complete while the callback is parked
+SELECT COUNT(*) = 1 AS uninstall_still_running
+FROM performance_schema.threads
+WHERE PROCESSLIST_INFO LIKE 'UNINSTALL EXTENSION vsql_range_clamp_test%';
+uninstall_still_running
+1
+# default: release the callback
+SET DEBUG_SYNC = 'now SIGNAL release_on_change';
+# con_set: SET GLOBAL completes -- the callback ran against a loaded .so
+SET DEBUG_SYNC = 'RESET';
+# con_uninstall: UNINSTALL completes once the callback has returned
+# default: the extension's variables are gone
+SELECT @@global.vsql_range_clamp_test.min_setting;
+ERROR HY000: Unknown system variable 'vsql_range_clamp_test.min_setting'
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
