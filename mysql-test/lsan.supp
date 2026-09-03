@@ -88,3 +88,7 @@ leak:/usr/bin/curl
 # pipeline sets its exit status, so a benign one-time leak surfaces as exit 42
 leak:/usr/bin/tr
 leak:/usr/bin/grep
+# uutils coreutils (Rust) replaces GNU coreutils on newer Ubuntu, and does not
+# free process-lifetime allocations at exit. LSan reports the resolved
+# multi-call binary, so the /usr/bin/* paths above do not match it.
+leak:/usr/lib/cargo/bin/coreutils/
