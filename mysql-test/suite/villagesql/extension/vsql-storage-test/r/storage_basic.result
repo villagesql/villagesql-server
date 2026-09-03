@@ -57,6 +57,19 @@ id	a	b
 1	111	222
 2	-3	999
 3	NULL	7
+# Check updating a NULL column
+UPDATE t2 SET a = '55' WHERE a IS NULL;
+SELECT * FROM t2;
+id	a	b
+1	111	222
+2	-3	999
+3	55	7
+UPDATE t2 SET a = NULL WHERE a = '55';
+SELECT * FROM t2;
+id	a	b
+1	111	222
+2	-3	999
+3	NULL	7
 # Update a NULL column to a value, and a value back to NULL
 UPDATE t2 SET a = '55' WHERE id = 3;
 UPDATE t2 SET b = NULL WHERE id = 2;

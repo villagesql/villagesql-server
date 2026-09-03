@@ -279,14 +279,10 @@ bool stored_int_mark_delete(Ctx *ctx, storage::MtrCtx::Ref mctx,
                             char *err, uint32_t err_len) {
   auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
 
-  // The data page is loaded unlatched and upgraded, rather than loaded
-  // EXCLUSIVE outright, to cover the latch upgrade path. The SHARED_EXCLUSIVE
-  // step and the release before it are here only to cover those calls: a latch
-  // can be upgraded once, so acquiring X afterwards requires dropping the SX
-  // and re-loading the page unlatched. release() clears the mini-transaction's
-  // memo slot for the block, which is what makes the second upgrade legal.
-  // Nothing about mark_delete needs the SX pass; only the final X latch, which
-  // the writes below require.
+  // mark_delete only needs the final EXCLUSIVE latch below. The
+  // SHARED_EXCLUSIVE latch and release() are here only to exercise (test)
+  // those code paths. A page latch can be upgraded only once, so we take SX,
+  // release() it, and reload the page unlatched before taking X.
   storage::Page page;
   if (page.load(ctx->user()->space, page_num, storage::Page::Latch::NO_LATCH,
                 mctx) != storage::Error::SUCCESS) {

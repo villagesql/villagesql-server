@@ -53,6 +53,12 @@ SELECT id, a, b FROM t2 ORDER BY id;
 UPDATE t2 SET b = '999' WHERE id = 2;
 SELECT id, a, b FROM t2 ORDER BY id;
 
+--echo # Check updating a NULL column
+UPDATE t2 SET a = '55' WHERE a IS NULL;
+SELECT * FROM t2;
+UPDATE t2 SET a = NULL WHERE a = '55';
+SELECT * FROM t2;
+
 --echo # Update a NULL column to a value, and a value back to NULL
 UPDATE t2 SET a = '55' WHERE id = 3;
 UPDATE t2 SET b = NULL WHERE id = 2;
