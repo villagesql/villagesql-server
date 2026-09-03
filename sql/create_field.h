@@ -134,7 +134,8 @@ class Create_field {
   Field *field;  // For alter table
 
   // VillageSQL: Custom type context if this column uses a custom type.
-  // TODO(villagesql-ga): add a proper accessor instead of direct field access.
+  // TODO(villagesql-general): add a proper accessor instead of direct field
+  // access.
   const villagesql::TypeContext *custom_type_context{nullptr};
 
   uint offset;

@@ -510,9 +510,10 @@ TEST_F(TypeContextTest, VariableLengthTypeEncodesIntrinsicDefault) {
 // fatal: init reports an error and stores no buffer. Such a type must supply a
 // non-empty intrinsic_default_str/fn to be usable.
 
-// TODO(villagesql-beta): try to validate on install whether encode("") produces
-// valid default - in case no intrinsic_default_str/fn is provided. Or even
-// check if encode(instrinsic_default_str) produces a valid default.
+// TODO(villagesql-general): try to validate on install whether encode("")
+// produces valid default - in case no intrinsic_default_str/fn is provided. Or
+// even check if encode(instrinsic_default_str) produces a valid default. Note:
+// this can only be a valid install-time check for non-parameterized types.
 TEST_F(TypeContextTest, VariableLengthEmptyEncodeIsFatal) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("EMPTYVAR", "test_ext", "1.0.0"),

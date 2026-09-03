@@ -47,8 +47,8 @@ constexpr const char kPendingActionColumn[] = "pending_action";
 // Format the current UTC time as ISO-8601 with microseconds:
 // "YYYY-MM-DDTHH:MM:SS.uuuuuuZ".
 //
-// TODO(villagesql-ga): move to a shared time-formatting utility once a
-// second caller wants it.
+// TODO(villagesql): move to a shared time-formatting utility once a second
+// caller wants it.
 std::string CurrentTimestampUtc() {
   using clock = std::chrono::system_clock;
   const auto now = clock::now();
