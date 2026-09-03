@@ -6649,6 +6649,16 @@ ulong ha_innobase::index_flags(uint key, uint, bool) const {
     return (0);
   }
 
+  /* Report no access flags for a custom (USING EXTENDED) index, so the
+  optimizer does not build a range, ref, ordered-scan, or index-only access path
+  over it.
+  TODO(villagesql-indexing): the ABI has no way for a custom index to declare
+  which of these operations it supports, so we report none; return the
+  operations the index actually supports once the ABI can express them. */
+  if (table_share->key_info[key].custom_index_context != nullptr) {
+    return (0);
+  }
+
   ulong flags = HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER | HA_READ_RANGE |
                 HA_KEYREAD_ONLY | HA_DO_INDEX_COND_PUSHDOWN;
 

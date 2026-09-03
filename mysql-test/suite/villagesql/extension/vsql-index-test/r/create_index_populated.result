@@ -12,21 +12,42 @@ t_empty	CREATE TABLE `t_empty` (
   KEY `idx` (`a`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t_empty;
-# --- Populated table: standalone CREATE INDEX is rejected, not a crash ---
+# --- Populated table: CREATE INDEX builds over existing rows ---
 CREATE TABLE t_full (id INT PRIMARY KEY, a dummy_type_vector);
-INSERT INTO t_full VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+INSERT INTO t_full VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]'), (3, '[9,1,2,3]');
 CREATE INDEX idx ON t_full (a) USING EXTENDED(dummy_index_hnsw);
-ERROR HY000: InnoDB: Custom type operation failed. See server error log for details.
-# --- Server survived: t_full has no custom index (CREATE INDEX was
-#     rejected), so a plain scan still works and the rows are intact ---
+SHOW CREATE TABLE t_full;
+Table	Create Table
+t_full	CREATE TABLE `t_full` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Rows are intact and a plain scan still works after the build ---
 SELECT COUNT(*) FROM t_full;
 COUNT(*)
-2
+3
+# --- Rows inserted AFTER the populated build also index (incremental) ---
+INSERT INTO t_full VALUES (4, '[4,4,4,4]');
+SELECT COUNT(*) FROM t_full;
+COUNT(*)
+4
 DROP TABLE t_full;
-# --- Supported path still works: index at CREATE TABLE, then load.
-#     (The successful INSERTs build the graph incrementally; no direct
-#     scan of the custom index here -- that needs the hypergraph
-#     optimizer and is covered by the scan/KNN tests.) ---
+# --- ALTER TABLE ADD INDEX on populated data takes the same build path ---
+CREATE TABLE t_alter (id INT PRIMARY KEY, a dummy_type_vector);
+INSERT INTO t_alter VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+ALTER TABLE t_alter ADD INDEX idx (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t_alter;
+Table	Create Table
+t_alter	CREATE TABLE `t_alter` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_alter;
+# --- Index-at-CREATE-TABLE then load still works (incremental build) ---
 CREATE TABLE t_ok (id INT PRIMARY KEY, a dummy_type_vector,
 INDEX idx (a) USING EXTENDED(dummy_index_hnsw));
 INSERT INTO t_ok VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
