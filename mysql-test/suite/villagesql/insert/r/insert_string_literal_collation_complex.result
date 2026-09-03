@@ -1,0 +1,25 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+# Same literal under different session charsets stores identically.
+SET NAMES utf8mb4;
+INSERT INTO t1 VALUES (1, '(1.5,2.5)');
+SET NAMES latin1;
+INSERT INTO t1 VALUES (2, '(1.5,2.5)');
+SET NAMES binary;
+INSERT INTO t1 VALUES (3, '(1.5,2.5)');
+SET NAMES utf8mb4;
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	(1.5,2.5)
+2	(1.5,2.5)
+3	(1.5,2.5)
+# INSERT ... SELECT re-evaluates the same literal once per source row.
+CREATE TABLE seq (n INT);
+INSERT INTO seq VALUES (20), (21), (22);
+INSERT INTO t1 SELECT n, '(3.5,-4.5)' FROM seq ORDER BY n;
+SELECT id, val FROM t1 WHERE id >= 20 ORDER BY id;
+id	val
+20	(3.5,-4.5)
+21	(3.5,-4.5)
+22	(3.5,-4.5)
+DROP TABLE seq;
+DROP TABLE t1;

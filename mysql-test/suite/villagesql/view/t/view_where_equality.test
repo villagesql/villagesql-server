@@ -13,6 +13,7 @@ INSERT INTO t1 VALUES
 # View with WHERE clause comparing COMPLEX column to literal
 CREATE VIEW v_filtered AS
 SELECT id, val, name FROM t1 WHERE val = '(1,2)';
+SHOW CREATE VIEW v_filtered;
 
 # Should return only rows with matching COMPLEX value
 SELECT * FROM v_filtered ORDER BY id;

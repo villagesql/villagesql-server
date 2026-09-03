@@ -1,0 +1,27 @@
+# A string literal stored into a COMPLEX column round-trips the same across
+# session charsets and when re-evaluated per row by INSERT ... SELECT.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+
+--echo # Same literal under different session charsets stores identically.
+SET NAMES utf8mb4;
+INSERT INTO t1 VALUES (1, '(1.5,2.5)');
+SET NAMES latin1;
+INSERT INTO t1 VALUES (2, '(1.5,2.5)');
+SET NAMES binary;
+INSERT INTO t1 VALUES (3, '(1.5,2.5)');
+SET NAMES utf8mb4;
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo # INSERT ... SELECT re-evaluates the same literal once per source row.
+CREATE TABLE seq (n INT);
+INSERT INTO seq VALUES (20), (21), (22);
+INSERT INTO t1 SELECT n, '(3.5,-4.5)' FROM seq ORDER BY n;
+SELECT id, val FROM t1 WHERE id >= 20 ORDER BY id;
+
+DROP TABLE seq;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc
