@@ -1,0 +1,432 @@
+name: Create Release
+
+# Cut a release from the head of a branch that has passed acceptance.
+#
+# Two commits land on the branch, in this order and in one push:
+#
+#   1. Finalize <version> release notes      <- the release; tagged
+#   2. Advance the branch to Release <next>  <- reopens the branch for merges
+#
+# The branch is expected to be frozen against other merges for the duration.
+# This workflow only checks that the head has not moved since it resolved the
+# release, and fails if it has.
+#
+# For a rehearsal, point `branch` at a scratch branch carrying a draft release
+# note, use a rehearsal version, and a rehearsal version label (e.g. test).
+# Use values you are willing to overwrite.
+#
+# In a production run, branch is `main`, the next version is a chosen value,
+# the release note is `Docs/release_notes/release_note_<release>.md`.
+# The Docker values are the ones expected of a release, with image_repo as
+# `villagesql/server` and version_labels as `latest`.
+# Since the primary branch (e.g. main) provides the latest for Docker,
+# production runs should set define_tags to `latest` rather than the more
+# common leave it empty.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to release from, at its current head (e.g. main). Must be frozen against merges.'
+        required: true
+        type: string
+      next_version:
+        description: 'Version the branch advances to after the release, as <major>.<minor>.<patch> (e.g. 0.0.8).'
+        required: true
+        type: string
+      release_note:
+        description: 'Draft release note to finalize, relative to the top of the repo (e.g. Docs/release_notes/release_note_0_0_7.md).'
+        required: true
+        type: string
+      image_repo:
+        description: 'Docker repository the release image is published to.'
+        required: true
+        type: string
+        default: 'villagesql/server'
+      version_labels:
+        description: 'Comma-separated labels published alongside the image tag. Blank publishes no version labels.'
+        required: false
+        type: string
+        default: ''
+      define_tags:
+        description: 'Comma-separated tags published as given. Blank publishes none.'
+        required: false
+        type: string
+        default: ''
+      slack_notify:
+        description: 'Announce reopened branch and publications steps on Slack.'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# A released image carries the published ABI and nothing else, in a rehearsal
+# as much as in production, so this is not asked for.
+env:
+  DEV_ABI: 'OFF'
+
+jobs:
+  # Names the release and rejects what cannot work, before anything is written.
+  # Every later job takes its identity from here, so the version is read once,
+  # from the branch head, and never recomputed against a moving tree.
+  resolve:
+    name: Resolve Release
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      code-base: ${{ steps.resolve.outputs.code_base }}
+      version: ${{ steps.resolve.outputs.version }}
+      release-tag: ${{ steps.resolve.outputs.release_tag }}
+      publish-tag: ${{ steps.resolve.outputs.publish_tag }}
+      image-tag: ${{ steps.resolve.outputs.image_tag }}
+
+    steps:
+      # Cone mode brings the root-level VSQL_VERSION along. build_info.sh and
+      # json_version.sh both want villagesql/scripts/vsql_script_utils.sh.
+      - name: Checkout resolve context
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 1
+          sparse-checkout: |
+            Docs/release_notes/
+            villagesql/bld_matrix/
+            villagesql/bld_tools/
+            villagesql/scripts/
+
+      - name: Resolve release identity
+        id: resolve
+        env:
+          BRANCH: ${{ inputs.branch }}
+          NEXT_VERSION: ${{ inputs.next_version }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+          IMAGE_REPO: ${{ inputs.image_repo }}
+          VERSION_LABELS: ${{ inputs.version_labels }}
+          DEFINE_TAGS: ${{ inputs.define_tags }}
+        run: |
+          set -euo pipefail
+
+          # The version registry is runnable locally exactly as it runs here:
+          #   villagesql/bld_matrix/json_version.sh | jq .
+          VERSION_JSON="$(villagesql/bld_matrix/json_version.sh)"
+          jq . <<<"$VERSION_JSON"
+          CODE_BASE="$(jq -r '.code_base' <<<"$VERSION_JSON")"
+
+          # The empty pre-release argument strips the -dev the branch carries,
+          # the form a release build uses. The whole release is named from this
+          # one string, and it is assembled by the same helper the build uses.
+          source villagesql/scripts/vsql_script_utils.sh
+          source villagesql/bld_tools/build_info.sh
+          VERSION="$(vsql_json_version "$PWD" "")"
+
+          # prepare_release_update.sh takes the three numbers and nothing else;
+          # the pre-release suffix stays whatever the branch already carries.
+          if [[ ! "$NEXT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::next_version must be <major>.<minor>.<patch>; '$NEXT_VERSION' is not."
+            exit 1
+          fi
+
+          # Named, never inferred: which note a release finalizes is a decision,
+          # and a naming convention is the wrong place to make it.
+          if [[ ! -f "$RELEASE_NOTE" ]]; then
+            echo "::error::No draft release note at $RELEASE_NOTE; write one before cutting the release."
+            exit 1
+          fi
+
+          # The tag prefix 'release/' marks a VillageSQL releaes commit.
+          RELEASE_TAG="release/$VERSION"
+
+          # Each tag with the prefix 'publish/' marks a codebase publication commit.
+          PUBLISH_TAG="publish/${CODE_BASE}_${VERSION}"
+
+          # Docker image tag.
+          IMAGE_TAG="${CODE_BASE}_${VERSION}"
+
+          # A tag that already exists means this release was cut before. Say so
+          # now rather than half-way through, when the branch has already moved.
+          for TAG in "$RELEASE_TAG" "$PUBLISH_TAG"; do
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "::error::Tag $TAG already exists; $VERSION has been released."
+              exit 1
+            fi
+          done
+
+          # The head this release is cut from. The push job checks the branch
+          # is still here before it writes anything.
+          SHA="$(git rev-parse HEAD)"
+
+          {
+            echo "sha=$SHA"
+            echo "code_base=$CODE_BASE"
+            echo "version=$VERSION"
+            echo "release_tag=$RELEASE_TAG"
+            echo "publish_tag=$PUBLISH_TAG"
+            echo "image_tag=$IMAGE_TAG"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Release $CODE_BASE $VERSION"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Branch | \`$BRANCH\` |"
+            echo "| Head | \`$SHA\` ($(git log -n1 --format=%s)) |"
+            echo "| Release note | \`$RELEASE_NOTE\` |"
+            echo "| Release tag | \`$RELEASE_TAG\` |"
+            echo "| Publish tag | \`$PUBLISH_TAG\` |"
+            echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
+            echo "| Dev ABI | $DEV_ABI |"
+            echo "| Version labels | ${VERSION_LABELS:-_none_} |"
+            echo "| Define tags | ${DEFINE_TAGS:-_none_} |"
+            echo "| Branch reopens on | $NEXT_VERSION |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The one job that writes to the branch. Both commits are built locally and
+  # pushed together, so the branch either gains both in order or gains neither.
+  # The priviledged release role is used to bypass branch protections when
+  # pushing the two commits that close the current release and open the next
+  # release.
+  push:
+    name: Push Release Commits
+    needs: resolve
+    runs-on: ubuntu-latest
+    outputs:
+      notes-sha: ${{ steps.commits.outputs.notes_sha }}
+
+    steps:
+      # The clone is all this step does, and the default token can do it.
+      - name: Checkout branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare release commits
+        id: commits
+        env:
+          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+          NEXT_VERSION: ${{ inputs.next_version }}
+          RELEASE_ROLE: ${{ vars.RELEASE_ROLE }}
+        run: |
+          set -euo pipefail
+
+          # The branch is frozen for the duration, so a head that moved between
+          # resolve and now means the freeze did not hold and the release would
+          # be cut from something acceptance never saw.
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [[ "$HEAD_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Branch head moved from $EXPECTED_SHA to $HEAD_SHA; is the branch frozen?"
+            exit 1
+          fi
+
+          git config user.name "$RELEASE_ROLE"
+          git config user.email "release@villagesql.com"
+
+          villagesql/bld_tools/prepare_release_notes.sh "$RELEASE_NOTE"
+          NOTES_SHA="$(git rev-parse HEAD)"
+
+          villagesql/bld_tools/prepare_release_update.sh "$NEXT_VERSION"
+          PUSH_HEAD="$(git rev-parse HEAD)"
+
+          git log --oneline -2
+
+          {
+            echo "notes_sha=$NOTES_SHA"
+            echo "push_head=$PUSH_HEAD"
+          } >> "$GITHUB_OUTPUT"
+
+      # Set up release credential to enable this job's last step to force
+      # push the two commits onto the branch (e.g. main).
+      - name: Log in as the release role
+        env:
+          RELEASE_KEY: ${{ secrets.RELEASE_KEY }}
+        run: |
+          set -euo pipefail
+          git remote set-url origin \
+            "https://x-access-token:${RELEASE_KEY}@github.com/${GITHUB_REPOSITORY}.git"
+
+      # A rejected push means the branch moved, which is a reason to stop,
+      # not a reason to overwrite.  The --force-with-lease=main: may not be
+      # essential but eliminates rare cases and documents the intent.
+      #
+      # This step requires the release credentials to bypass branch protection.
+      - name: Push to branch
+        env:
+          BRANCH: ${{ inputs.branch }}
+          NOTES_SHA: ${{ steps.commits.outputs.notes_sha }}
+          PUSH_HEAD: ${{ steps.commits.outputs.push_head }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          NEXT_VERSION: ${{ inputs.next_version }}
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:refs/heads/$BRANCH" --force-with-lease=main:
+
+          {
+            echo "### Pushed to \`$BRANCH\`"
+            echo ""
+            echo "- \`$NOTES_SHA\` — release $VERSION, to be tagged"
+            echo "- \`$PUSH_HEAD\` — branch advanced to $NEXT_VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The branch is usable again the moment the version bump lands, which is
+  # sooner than the release finishes. Announce it here rather than at the end,
+  # so nobody waits on the tagging and publishing that occurs next.
+  announce:
+    name: Announce Reopened Branch
+    needs: [resolve, push]
+    if: inputs.slack_notify
+    runs-on: ubuntu-latest
+    # Posts to a webhook; needs no repo access.
+    permissions: {}
+
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "🚀 ${{ inputs.branch }} is open for merges — ${{ needs.resolve.outputs.code-base }} ${{ needs.resolve.outputs.version }} released, branch now on ${{ inputs.next_version }}",
+              "attachments": [
+                {
+                  "color": "#36a64f",
+                  "text": "Release ${{ needs.resolve.outputs.version }} is cut and ${{ inputs.branch }} has advanced to ${{ inputs.next_version }}. Merges can resume.",
+                  "fields": [
+                    {
+                      "title": "Branch",
+                      "value": "${{ inputs.branch }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Released",
+                      "value": "${{ needs.resolve.outputs.version }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Now building",
+                      "value": "${{ inputs.next_version }}-dev",
+                      "short": true
+                    },
+                    {
+                      "title": "Release commit",
+                      "value": "${{ needs.push.outputs.notes-sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Started by",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
+
+  # Tag the release, create the draft GitHub release, and publish the tag
+  # for the main / lastest release.
+  release:
+    name: Release and Publish
+    needs: [resolve, push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+
+    steps:
+      # Checked out at the commit being released, so the tag, the note, and the
+      # VSQL_VERSION prepare_github_release.sh reads all come from one tree.
+      # RELEASE credential for the tag push.
+      - name: Checkout release commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ needs.push.outputs.notes-sha }}
+          fetch-depth: 1
+          token: ${{ secrets.RELEASE_KEY }}
+
+      # Pushed before the release is drafted: prepare_github_release.sh passes
+      # --verify-tag, which requires the tag to be on the remote already.
+      - name: Push release tag
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.release-tag }}
+        run: |
+          set -euo pipefail
+          git tag "$RELEASE_TAG"
+          git push origin "refs/tags/$RELEASE_TAG"
+          echo "Tagged $(git rev-parse --short HEAD) as $RELEASE_TAG"
+
+      - name: Draft GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_KEY }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.release-tag }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+        run: |
+          set -euo pipefail
+          villagesql/bld_tools/prepare_github_release.sh \
+            "$RELEASE_TAG" "$RELEASE_NOTE"
+
+          {
+            echo "### Drafted $RELEASE_TAG"
+            echo ""
+            echo "The release is a draft.  Go live once all the assets are"
+            echo "attached and look right."
+            echo ""
+            echo "$GITHUB_SERVER_URL/$GH_REPO/releases/tag/${RELEASE_TAG//\//%2F}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Release Publication
+      # Effectivly a separate job, but that would take an extra checkout
+
+      # The tag prefix 'publish/' marks code base publication commits.
+      - name: Push publish tag
+        env:
+          PUBLISH_TAG: ${{ needs.resolve.outputs.publish-tag }}
+        run: |
+          set -euo pipefail
+          git tag "$PUBLISH_TAG"
+          git push origin "refs/tags/$PUBLISH_TAG"
+          echo "Tagged $(git rev-parse --short HEAD) as $PUBLISH_TAG"
+
+      # workflow_dispatch is exempt from the GITHUB_TOKEN recursion guard, so
+      # the default token starts this.
+      - name: Start codebase-release-dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISH_TAG: ${{ needs.resolve.outputs.publish-tag }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.release-tag }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image-tag }}
+          IMAGE_REPO: ${{ inputs.image_repo }}
+          VERSION_LABELS: ${{ inputs.version_labels }}
+          DEFINE_TAGS: ${{ inputs.define_tags }}
+          SLACK_NOTIFY: ${{ inputs.slack_notify }}
+        run: |
+          set -euo pipefail
+          gh workflow run codebase-release-dispatch.yml \
+            --ref "$PUBLISH_TAG" \
+            -f ref="$PUBLISH_TAG" \
+            -f release_build=true \
+            -f release_tag="$RELEASE_TAG" \
+            -f image_tag="$IMAGE_TAG" \
+            -f image_repo="$IMAGE_REPO" \
+            -f dev_abi="$DEV_ABI" \
+            -f version_labels="$VERSION_LABELS" \
+            -f define_tags="$DEFINE_TAGS" \
+            -f slack_notify="$SLACK_NOTIFY"
+
+          {
+            echo "### Publication started"
+            echo ""
+            echo "codebase-release-dispatch is building \`$PUBLISH_TAG\` and will"
+            echo "attach the packages to \`$RELEASE_TAG\`."
+          } >> "$GITHUB_STEP_SUMMARY"
