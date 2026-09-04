@@ -19,6 +19,19 @@ SET PERSIST vsql_allow_preview_extensions = ON;
 --echo # Simple load test
 INSTALL EXTENSION vsql_session_var_test;
 
+# Reset this connection's session values to the registered defaults right after
+# INSTALL. If a previous test in this same server installed then uninstalled this
+# extension, the reused THD-local slots are left stale (upstream bug#720: session
+# variable not reset at plugin/component reinstall -- a plain read is not
+# refreshed after reinstall, though an explicit SET recovers it). This makes the
+# subsequent reads order-independent. Test-only workaround; the reset bug is
+# generic to stock MySQL and tracked separately. Wrapped in disable_query_log so
+# it does not appear in the recorded output.
+--disable_query_log
+SET SESSION vsql_session_var_test.ef_search = DEFAULT;
+SET SESSION vsql_session_var_test.session_label = DEFAULT;
+--enable_query_log
+
 --echo # Testing integer session variable, @@session vs @@global
 SELECT @@global.vsql_session_var_test.ef_search;
 SELECT @@session.vsql_session_var_test.ef_search;
