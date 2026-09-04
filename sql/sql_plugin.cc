@@ -2041,6 +2041,7 @@ void cleanup_global_system_variables() {
   cleanup_variables(nullptr, &global_system_variables);
   cleanup_variables(nullptr, &max_system_variables);
 }
+
 /*
   Deinitialize and unload all the loaded plugins.
   Note: During valgrind testing, the shared objects (.dll/.so)
