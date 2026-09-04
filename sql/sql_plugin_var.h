@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -178,6 +179,21 @@ struct st_bookmark {
 };
 
 st_bookmark *find_bookmark(const char *plugin, const char *name, int flags);
+
+/*
+  returns a bookmark for thd-local variables, creating if necessary.
+  returns null for non thd-local variables.
+  Requires that a write lock is obtained on LOCK_system_variables_hash
+*/
+st_bookmark *register_var(const char *plugin, const char *name, int flags);
+
+bool *mysql_sys_var_bool(THD *thd, int offset);
+int *mysql_sys_var_int(THD *thd, int offset);
+unsigned int *mysql_sys_var_uint(THD *thd, int offset);
+unsigned long *mysql_sys_var_ulong(THD *thd, int offset);
+unsigned long long *mysql_sys_var_ulonglong(THD *thd, int offset);
+char **mysql_sys_var_str(THD *thd, int offset);
+double *mysql_sys_var_double(THD *thd, int offset);
 
 /*
   skeleton of a plugin variable - portion of structure common to all.
