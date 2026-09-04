@@ -190,3 +190,5 @@ jobs:
         run-all-suites: true
         skip-suite: village
         artifact-name: ${{ env.ARTIFACT_PREFIX }}-all-suites-logs-${{ github.run_number }}
+        mysql-test-extra-flags: '--report-unstable-tests'
+
