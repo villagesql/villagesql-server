@@ -28,6 +28,7 @@
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/mysqld.h"
+#include "sql/opt_costconstantcache.h"
 #include "sql/sd_notify.h"
 #include "sql/sys_vars.h"
 #include "sql/thd_raii.h"
@@ -39,6 +40,7 @@
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
+#include "villagesql/sql/sys_view_metadata.h"
 #include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
@@ -245,6 +247,14 @@ static bool do_init_extension_infrastructure(THD *thd) {
     return true;
   }
 
+  // Repair the sys view metadata that installing the VillageSQL
+  // INFORMATION_SCHEMA overrides rewrote.
+  if (refresh_sys_view_metadata(thd)) {
+    trans_rollback_stmt(thd);
+    trans_rollback(thd);
+    return true;
+  }
+
   // Load installed extensions from villagesql.extensions table
   // This validates manifests and cleans up orphaned expansion directories
   if (villagesql::veb::load_installed_extensions(thd)) {
@@ -288,9 +298,19 @@ bool init_extension_infrastructure() {
   // The initialization code may update table settings, in order to avoid
   // locking and avoid asserts in the locking code, run on a bootstrap dd system
   // thread.
-  if (bootstrap::run_bootstrap_thread(nullptr, nullptr,
-                                      &do_init_extension_infrastructure,
-                                      SYSTEM_THREAD_DD_INITIALIZE)) {
+  //
+  // The optimizer cost model is not initialized at this point in startup --
+  // init_server_components() tears it down after each bootstrap DDL phase and
+  // only brings it up for good later. refresh_sys_view_metadata() re-creates
+  // ALGORITHM=TEMPTABLE sys views, and create_tmp_table() reaches into the cost
+  // model, so bracket the thread the same way init_server_components().
+  init_optimizer_cost_module(true);
+  const bool init_failed = bootstrap::run_bootstrap_thread(
+      nullptr, nullptr, &do_init_extension_infrastructure,
+      SYSTEM_THREAD_DD_INITIALIZE);
+  delete_optimizer_cost_module();
+
+  if (init_failed) {
     LogVSQL(ERROR_LEVEL, "Failed to initialize");
     sysd::notify("STATUS=VillageSQL initialization unsuccessful\n");
     return true;

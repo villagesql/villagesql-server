@@ -1,0 +1,29 @@
+# Sentinel columns, one per overridden I_S view.
+# IS_NULLABLE must be YES, as on a vanilla server.
+SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'sys'
+     AND ((TABLE_NAME = 'x$schema_flattened_keys' AND COLUMN_NAME = 'index_name')
+OR (TABLE_NAME = 'schema_auto_increment_columns'
+           AND COLUMN_NAME = 'column_name'))
+ORDER BY TABLE_NAME;
+TABLE_NAME	COLUMN_NAME	IS_NULLABLE
+schema_auto_increment_columns	column_name	YES
+x$schema_flattened_keys	index_name	YES
+# The views still resolve and are queryable, not just well-typed.
+SELECT * FROM sys.x$schema_flattened_keys;
+SELECT * FROM sys.schema_redundant_indexes;
+SELECT * FROM sys.schema_object_overview;
+# The repair is idempotent: a restart must neither undo it nor, because
+# the guard short-circuits, redo it.
+# restart
+SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'sys'
+     AND ((TABLE_NAME = 'x$schema_flattened_keys' AND COLUMN_NAME = 'index_name')
+OR (TABLE_NAME = 'schema_auto_increment_columns'
+           AND COLUMN_NAME = 'column_name'))
+ORDER BY TABLE_NAME;
+TABLE_NAME	COLUMN_NAME	IS_NULLABLE
+schema_auto_increment_columns	column_name	YES
+x$schema_flattened_keys	index_name	YES
