@@ -153,6 +153,7 @@ if [ "$RUN_INTEGRATION_TESTS" = "true" ]; then
   XML_REPORT_FILE="${BUILD_DIR}/mysql-test-report.xml"
   MYSQL_TEST_CMD="./mysql-test/mysql-test-run.pl"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --mem"
+  MYSQL_TEST_CMD="$MYSQL_TEST_CMD --report-unstable-tests"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --parallel=auto"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --nounit-tests"
   MYSQL_TEST_CMD="$MYSQL_TEST_CMD --force"
