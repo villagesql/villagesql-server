@@ -15,8 +15,8 @@ SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_session_var_test;
 
 --echo # Touch the session-scoped string so its per-session slot is populated
-SET SESSION vsql_session_var_test.session_label = 'before_restart';
-SELECT @@session.vsql_session_var_test.session_label;
+SET SESSION vsql_session_var_test.session_str_var = 'before_restart';
+SELECT @@session.vsql_session_var_test.session_str_var;
 
 --echo # Restart WITHOUT uninstalling: shutdown must tear the variables down
 --echo # cleanly (extension is reinstated from villagesql.extensions on startup)
@@ -27,15 +27,15 @@ SELECT @@session.vsql_session_var_test.session_label;
 
 --echo # Extension is back after restart; variables exist with their defaults
 --echo # (session override did not survive the reconnect, as expected)
-SELECT @@global.vsql_session_var_test.session_label;
-SELECT @@session.vsql_session_var_test.session_label;
-SELECT vsql_session_var_test.read_session_label();
+SELECT @@global.vsql_session_var_test.session_str_var;
+SELECT @@session.vsql_session_var_test.session_str_var;
+SELECT vsql_session_var_test.read_session_str_var();
 
 --echo # Uninstall cleanly
 UNINSTALL EXTENSION vsql_session_var_test;
 
 --error ER_UNKNOWN_SYSTEM_VARIABLE
-SELECT @@global.vsql_session_var_test.session_label;
+SELECT @@global.vsql_session_var_test.session_str_var;
 
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

@@ -2,96 +2,96 @@ SET PERSIST vsql_allow_preview_extensions = ON;
 # Simple load test
 INSTALL EXTENSION vsql_session_var_test;
 # Testing integer session variable, @@session vs @@global
-SELECT @@global.vsql_session_var_test.ef_search;
-@@global.vsql_session_var_test.ef_search
+SELECT @@global.vsql_session_var_test.session_int_var;
+@@global.vsql_session_var_test.session_int_var
 20
-SELECT @@session.vsql_session_var_test.ef_search;
-@@session.vsql_session_var_test.ef_search
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
 20
-SET SESSION vsql_session_var_test.ef_search = 7;
-SELECT @@session.vsql_session_var_test.ef_search;
-@@session.vsql_session_var_test.ef_search
+SET SESSION vsql_session_var_test.session_int_var = 7;
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
 7
 # global is unaffected by the session SET
-SELECT @@global.vsql_session_var_test.ef_search;
-@@global.vsql_session_var_test.ef_search
+SELECT @@global.vsql_session_var_test.session_int_var;
+@@global.vsql_session_var_test.session_int_var
 20
 # Range clamping: max is 4096
-SET SESSION vsql_session_var_test.ef_search = 999999;
+SET SESSION vsql_session_var_test.session_int_var = 999999;
 Warnings:
-Warning	1292	Truncated incorrect vsql_session_var_test.ef_search value: '999999'
-SELECT @@session.vsql_session_var_test.ef_search;
-@@session.vsql_session_var_test.ef_search
+Warning	1292	Truncated incorrect vsql_session_var_test.session_int_var value: '999999'
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
 4096
 # Range clamping: min is 1
-SET SESSION vsql_session_var_test.ef_search = -1;
+SET SESSION vsql_session_var_test.session_int_var = -1;
 Warnings:
-Warning	1292	Truncated incorrect vsql_session_var_test.ef_search value: '-1'
-SELECT @@session.vsql_session_var_test.ef_search;
-@@session.vsql_session_var_test.ef_search
+Warning	1292	Truncated incorrect vsql_session_var_test.session_int_var value: '-1'
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
 1
 # Wrong-type assignments are rejected
-SET SESSION vsql_session_var_test.ef_search = "hello";
-ERROR 42000: Incorrect argument type to variable 'vsql_session_var_test.ef_search'
-SET SESSION vsql_session_var_test.ef_search = DEFAULT;
-SELECT @@session.vsql_session_var_test.ef_search;
-@@session.vsql_session_var_test.ef_search
+SET SESSION vsql_session_var_test.session_int_var = "hello";
+ERROR 42000: Incorrect argument type to variable 'vsql_session_var_test.session_int_var'
+SET SESSION vsql_session_var_test.session_int_var = DEFAULT;
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
 20
 #
 # Testing STRING session variable WITH a non-null default.
 # (This is the operation upstream commented out because it crashed.)
 #
-SELECT @@global.vsql_session_var_test.session_label;
-@@global.vsql_session_var_test.session_label
+SELECT @@global.vsql_session_var_test.session_str_var;
+@@global.vsql_session_var_test.session_str_var
 default_label
-SELECT @@session.vsql_session_var_test.session_label;
-@@session.vsql_session_var_test.session_label
+SELECT @@session.vsql_session_var_test.session_str_var;
+@@session.vsql_session_var_test.session_str_var
 default_label
-SET SESSION vsql_session_var_test.session_label = "dictionary.txt";
-SELECT @@session.vsql_session_var_test.session_label;
-@@session.vsql_session_var_test.session_label
+SET SESSION vsql_session_var_test.session_str_var = "dictionary.txt";
+SELECT @@session.vsql_session_var_test.session_str_var;
+@@session.vsql_session_var_test.session_str_var
 dictionary.txt
 # global default is unchanged by the session SET
-SELECT @@global.vsql_session_var_test.session_label;
-@@global.vsql_session_var_test.session_label
+SELECT @@global.vsql_session_var_test.session_str_var;
+@@global.vsql_session_var_test.session_str_var
 default_label
-SET SESSION vsql_session_var_test.session_label = "another_value";
-SELECT @@session.vsql_session_var_test.session_label;
-@@session.vsql_session_var_test.session_label
+SET SESSION vsql_session_var_test.session_str_var = "another_value";
+SELECT @@session.vsql_session_var_test.session_str_var;
+@@session.vsql_session_var_test.session_str_var
 another_value
 # Reset the session value back to the default
-SET SESSION vsql_session_var_test.session_label = DEFAULT;
-SELECT @@session.vsql_session_var_test.session_label;
-@@session.vsql_session_var_test.session_label
+SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
+SELECT @@session.vsql_session_var_test.session_str_var;
+@@session.vsql_session_var_test.session_str_var
 default_label
-# The VDF reads the caller's per-session values (get_session_int/str)
-SET SESSION vsql_session_var_test.ef_search = 321;
-SET SESSION vsql_session_var_test.session_label = "vdf_value";
-SELECT vsql_session_var_test.read_ef_search();
-vsql_session_var_test.read_ef_search()
+# The VDF reads the caller's per-session values (fast-path IntHandle / get_session_str)
+SET SESSION vsql_session_var_test.session_int_var = 321;
+SET SESSION vsql_session_var_test.session_str_var = "vdf_value";
+SELECT vsql_session_var_test.read_session_int_var();
+vsql_session_var_test.read_session_int_var()
 321
-SELECT vsql_session_var_test.read_session_label();
-vsql_session_var_test.read_session_label()
+SELECT vsql_session_var_test.read_session_str_var();
+vsql_session_var_test.read_session_str_var()
 vdf_value
 #
 # Stored-procedure paths (mirrors the upstream SP coverage): SET and
 # SELECT of the session string var from inside a procedure.
 #
 CREATE PROCEDURE set_label(x VARCHAR(64))
-SET @@SESSION.vsql_session_var_test.session_label = x;
-CREATE PROCEDURE get_label() SELECT @@vsql_session_var_test.session_label;
+SET @@SESSION.vsql_session_var_test.session_str_var = x;
+CREATE PROCEDURE get_label() SELECT @@vsql_session_var_test.session_str_var;
 CALL get_label();
-@@vsql_session_var_test.session_label
+@@vsql_session_var_test.session_str_var
 vdf_value
 CALL set_label('from_sp');
 CALL get_label();
-@@vsql_session_var_test.session_label
+@@vsql_session_var_test.session_str_var
 from_sp
 DROP PROCEDURE set_label;
 DROP PROCEDURE get_label;
 # Uninstall
 UNINSTALL EXTENSION vsql_session_var_test;
-SELECT @@global.vsql_session_var_test.session_label;
-ERROR HY000: Unknown system variable 'vsql_session_var_test.session_label'
+SELECT @@global.vsql_session_var_test.session_str_var;
+ERROR HY000: Unknown system variable 'vsql_session_var_test.session_str_var'
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;
