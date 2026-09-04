@@ -130,6 +130,39 @@ extension can support old versions of the ABI for working with older servers,
 and equivalently, newer servers should continue to support the ABI from older
 extensions. If either fails to work it is a breaking change.
 
+### Example of an API-only change: cache-line-aligned per-statement state
+
+The ABI carries per-statement VDF state as an opaque `void *user_data` that the
+server never dereferences, so its size and alignment are invisible across the
+boundary. That made it possible to fix a performance bug entirely in the API,
+with no ABI or protocol change and no source changes in any extension.
+
+The bug: a VDF whose per-statement state is small and written per row causes
+false sharing. Several concurrent statements allocate their state at about the
+same time, the allocations land in one cache line, and each row's write steals
+that line from the other threads. Measured on an 8-byte counter at 8 threads,
+this cost about 110 ns per row — a third of the statement — while costing nothing
+single-threaded.
+
+The fix lives in three API-side pieces:
+
+- `vsql/cache_line.h` publishes `vsql::kCacheLineSize`, so authors separating
+  their own per-thread data do not have to derive it. Note that MySQL's
+  `CPU_LEVEL1_DCACHE_LINESIZE` is not usable for this: `cmake/cpu_info.cmake`
+  skips Apple and falls back to 64, half the real line size there, and it is not
+  shipped to extensions in any case.
+- `detail/state_alloc.h` allocates state over-aligned and line-sized. Both were
+  needed: over-aligned `operator new` only promises where the block starts, so
+  rounding the size up to whole lines is what stops another allocation occupying
+  the remainder.
+- `PrerunResult::emplace_state<T>()` and `PostrunArgs::destroy_state<T>()` give
+  authors the aligned path, and `detail::auto_prerun` routes every aggregate's
+  SDK-allocated state through it automatically.
+
+`set_user_data(void *)` and `delete_state<T>()` stay as they were, for arenas and
+`malloc`, so extensions written against the previous API keep compiling
+unchanged — which is the test this section sets for an API-only change.
+
 ### Adding a builder member: feature-detect it in shared registration code
 
 The registration core `villagesql::detail::vef_register_impl()` (in

@@ -59,7 +59,7 @@ template <typename State>
 void auto_prerun(vef_context_t *ctx, vef_prerun_args_t *,
                  vef_prerun_result_t *result) {
   VDF_EXCEPTIONS_TRY {
-    result->user_data = new State{};
+    result->user_data = vsql::detail::alloc_state<State>();
     result->type = VEF_RESULT_VALUE;
   }
   VDF_EXCEPTIONS_CATCH(result);
@@ -69,7 +69,7 @@ void auto_prerun(vef_context_t *ctx, vef_prerun_args_t *,
 template <typename State>
 void auto_postrun(vef_context_t *ctx, vef_postrun_args_t *args,
                   vef_postrun_result_t *postrun_result) {
-  VDF_EXCEPTIONS_TRY { delete static_cast<State *>(args->user_data); }
+  VDF_EXCEPTIONS_TRY { vsql::detail::free_state<State>(args->user_data); }
   VDF_EXCEPTIONS_CATCH(postrun_result);
 }
 

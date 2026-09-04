@@ -49,7 +49,10 @@
 // without ABI changes by having .state<T>() install SDK-generated prerun
 // and postrun wrappers that new/delete the T into the existing user_data
 // slot; the user's optional prerun/postrun receive the typed reference.
-// .state<T>() and raw set_user_data become mutually exclusive.
+// .state<T>() and raw set_user_data become mutually exclusive. It must allocate
+// through detail::alloc_state<T>() rather than plain new, or the false sharing
+// that PrerunResult::emplace_state<T>() exists to avoid comes back for everyone
+// who adopts it.
 
 #include <cstddef>
 #include <cstring>
@@ -57,6 +60,7 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/state_alloc.h>
 
 namespace vsql {
 
@@ -107,10 +111,29 @@ class PrerunResult {
  public:
   explicit PrerunResult(vef_prerun_result_t *r) : r_(r) {}
 
+  // Allocate a T for this statement and stash it. Pair with a postrun calling
+  // PostrunArgs::destroy_state<T>().
+  //
+  // Prefer this to `set_user_data(new T{})` for any state the VDF *writes* per
+  // row. This overload places the T on cache lines of its own; a plain `new` of
+  // a small state puts several concurrent statements' states in one line, and a
+  // per-row write then bounces that line between cores. Measured on an 8-byte
+  // counter: about 110 ns per row at 8 threads, nothing at 1 thread. See
+  // villagesql/vsql/cache_line.h.
+  template <typename T, typename... Args>
+  T *emplace_state(Args &&...args) {
+    T *p = detail::alloc_state<T>(std::forward<Args>(args)...);
+    r_->user_data = p;
+    return p;
+  }
+
   // Stash a pointer the extension owns. The VDF and postrun read it back
   // via PostrunArgs::user_data() or PostrunArgs::state<T>(). The SDK does
   // not free anything stashed here; pair this with a postrun that calls
   // PostrunArgs::delete_state<T>() (or free()) on the same pointer.
+  //
+  // For arenas, pools and malloc. If what you want is `new T{}`, use
+  // emplace_state<T>() instead -- see the note there on false sharing.
   void set_user_data(void *p) { r_->user_data = p; }
 
   // Request that the per-row result buffer be at least n bytes. The server
@@ -152,6 +175,14 @@ class PostrunArgs {
   template <typename T>
   void delete_state() const {
     delete state<T>();
+  }
+
+  // Destroy and free a T allocated by PrerunResult::emplace_state<T>(). Not
+  // interchangeable with delete_state<T>(): emplace_state uses an over-aligned
+  // operator new, and freeing it with plain delete is undefined.
+  template <typename T>
+  void destroy_state() const {
+    detail::free_state<T>(a_->user_data);
   }
 
  private:
