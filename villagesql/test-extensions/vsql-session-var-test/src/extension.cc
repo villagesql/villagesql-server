@@ -18,12 +18,17 @@
 // functional equivalent of a plugin's MYSQL_THDVAR_*.
 //
 // Declares two session-scoped variables:
-//   ef_search (INT)     — an ef_search-style search-width knob
-//   session_label (STR)
+//   session_int_var (INT)
+//   session_str_var (STR)
 //
 // Each connection has its own value (SET SESSION), with the descriptor's
-// def_val as the global default. The VDFs read the caller's per-session value
-// via get_session_int / get_session_str, which resolve current_thd.
+// def_val as the global default.
+//
+// The INT VDF demonstrates the fast path: it resolves a reusable IntHandle
+// once and reads the caller's per-session value through it, which is lock-free
+// on the hot path (a per-thread base + offset load, no name lookup). The STR
+// VDF uses the name-keyed get_session_str. Both resolve current_thd, so they
+// must run on the connection thread.
 
 #include <string>
 
@@ -34,30 +39,34 @@ using namespace vsql;
 namespace sv = vsql::preview_session_var;
 
 static auto SESSION_VARS = sv::make_capability({
-    sv::make_int("ef_search",
-                 "Session-scoped search width (larger = slower but more "
-                 "accurate)",
-                 20, 1, 4096),
-    sv::make_str("session_label", "Session-scoped label string",
-                 "default_label"),
+    sv::make_int("session_int_var", "Session-scoped integer value")
+        .default_(20)
+        .min(1)
+        .max(4096),
+    sv::make_str("session_str_var", "Session-scoped label string")
+        .default_("default_label"),
 });
 
-// Reads the caller's per-session ef_search value via get_session_int — the
-// equivalent of a plugin's THDVAR(thd, ef_search). Returns NULL on error.
-void read_ef_search_impl(IntResult out) {
+// Bind the INT variable to a lazily-resolved IntVar. It resolves on first
+// read() (once the extension has loaded) and caches the handle, so each read is
+// lock-free — the equivalent of a plugin's THDVAR(thd, var). The read site is
+// name-free.
+static auto SESSION_INT = SESSION_VARS.int_var("session_int_var");
+
+// Reads the caller's per-session session_int_var value.
+void read_session_int_var_impl(IntResult out) {
   long long val = 0;
-  if (SESSION_VARS.get_session_int("vsql_session_var_test", "ef_search", val)) {
+  if (SESSION_INT.read(val)) {
     out.set_null();
     return;
   }
   out.set(val);
 }
 
-// Reads the caller's per-session session_label value via get_session_str.
-void read_session_label_impl(StringResult out) {
+// Reads the caller's per-session session_str_var value via get_session_str.
+void read_session_str_var_impl(StringResult out) {
   std::string val;
-  if (SESSION_VARS.get_session_str("vsql_session_var_test", "session_label",
-                                   val)) {
+  if (SESSION_VARS.get_session_str("session_str_var", val)) {
     out.set_null();
     return;
   }
@@ -67,11 +76,11 @@ void read_session_label_impl(StringResult out) {
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
         .with(SESSION_VARS)
-        .func(make_func<&read_ef_search_impl>("read_ef_search")
+        .func(make_func<&read_session_int_var_impl>("read_session_int_var")
                   .returns(INT)
                   .no_params()
                   .build())
-        .func(make_func<&read_session_label_impl>("read_session_label")
+        .func(make_func<&read_session_str_var_impl>("read_session_str_var")
                   .returns(STRING)
                   .no_params()
                   .build()))

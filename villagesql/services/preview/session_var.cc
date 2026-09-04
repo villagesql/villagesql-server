@@ -20,12 +20,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <new>
 #include <string>
 #include <vector>
 
 #include "my_sys.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
+#include "mysql/components/services/mysql_system_variable.h"
 #include "mysql/service_plugin_registry.h"
 #include "sql/current_thd.h"
 #include "sql/set_var.h"
@@ -34,19 +36,40 @@
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/session_var.h"
 
+// Definition of the ABI's opaque handle (forward-declared in
+// abi/preview/session_var.h at global scope). Holds only the per-session
+// storage offset, which is identical on every connection and stable for the
+// life of the registration, so session_var_read_int can resolve any connection
+// thread's value from it with a lock-free offset load.
+struct vef_session_var_handle {
+  int offset;
+};
+
 namespace villagesql::services {
 
-// Forward declarations: session readers for the vtable, defined below.
-static bool session_var_get_int(const char *component_name, const char *name,
+// Forward declarations: session readers for the vtable, defined below. The
+// `cap` argument is the calling extension's descriptor-list pointer (the
+// capability_config token), which the server maps to the extension name; the
+// extension never names itself.
+static bool session_var_get_int(const void *cap, const char *name,
                                 long long *out);
-static bool session_var_get_str(const char *component_name, const char *name,
-                                void **val, size_t *val_len);
+static bool session_var_get_str(const void *cap, const char *name, void **val,
+                                size_t *val_len);
+static bool session_var_resolve_int_handle(
+    const void *cap, const char *name, vef_session_var_handle_t **out_handle);
+static bool session_var_read_int(const vef_session_var_handle_t *handle,
+                                 long long *out);
+static void session_var_free_handle(vef_session_var_handle_t *handle);
 
 namespace {
 
 static vef_preview_session_var_t g_session_var_vtable{
-    VEF_PREVIEW_SESSION_VAR_ABI_VERSION, session_var_get_int,
-    session_var_get_str};
+    VEF_PREVIEW_SESSION_VAR_ABI_VERSION,
+    session_var_get_int,
+    session_var_get_str,
+    session_var_resolve_int_handle,
+    session_var_read_int,
+    session_var_free_handle};
 
 // A registered session variable and the extension it belongs to, so we can
 // unregister it on extension uninstall. capability_config is the depopulate
@@ -60,29 +83,73 @@ struct RegisteredSessionVar {
 std::mutex g_session_vars_mutex;
 std::vector<RegisteredSessionVar> g_session_vars;
 
-// Resolves the session (THD-local) value pointer for a component variable on
-// the current connection thread. Returns nullptr if there is no connection
-// thread, the variable does not exist, or it is not a THD-local variable. The
-// component_name/name pair is resolved the same way the component get_variable
-// service does: the implicit "mysql_server" component has no prefix, everything
-// else is prefixed by the component name.
-const uchar *session_value_ptr(const char *component_name, const char *name) {
+// Maps a capability_config token (the descriptor-list pointer the SDK passes as
+// `cap`) to the extension that registered its variables. The extension name is
+// bound here, server-side, at on_populate time; the extension never supplies
+// it. Returns empty if the token is unknown (e.g. the capability is not
+// currently loaded).
+std::string extension_name_for_cap(const void *cap) {
+  std::lock_guard<std::mutex> lock(g_session_vars_mutex);
+  for (const RegisteredSessionVar &v : g_session_vars) {
+    if (v.capability_config == cap) return v.extension_name;
+  }
+  return std::string();
+}
+
+// Reads the caller's session (THD-local) value of an extension variable as a
+// newly allocated null-terminated string; the caller must free() it. Returns
+// nullptr if there is no connection thread, the variable does not exist, or the
+// read otherwise fails. Uses the mysql_system_variable_reader service with the
+// current connection thread and "SESSION" scope, so the value returned is the
+// per-connection value (the equivalent of THDVAR(current_thd, var)). The
+// extension name is resolved from `cap` server-side and passed to the reader as
+// the component name.
+char *read_session_var_string(const void *cap, const char *name) {
   THD *thd = current_thd;
+  // The reader errors on a SESSION read with a null THD, so a value can only be
+  // resolved on a connection thread.
   if (thd == nullptr) return nullptr;
 
-  const char *prefix =
-      strcmp(component_name, "mysql_server") == 0 ? "" : component_name;
+  const std::string extension_name = extension_name_for_cap(cap);
+  if (extension_name.empty()) return nullptr;
 
-  const uchar *result = nullptr;
-  auto fn = [thd, &result](const System_variable_tracker &, sys_var *var) {
-    sys_var_pluginvar *pv = var->cast_pluginvar();
-    if (pv == nullptr) return;
-    // Only THD-local variables have a per-session value.
-    if (!(pv->plugin_var->flags & PLUGIN_VAR_THDLOCAL)) return;
-    result = pv->real_value_ptr(thd, OPT_SESSION);
-  };
-  System_variable_tracker::make_tracker(prefix, name)
-      .access_system_variable(thd, fn, Suppress_not_found_error::YES);
+  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
+  if (registry == nullptr) return nullptr;
+
+  char *result = nullptr;
+  {
+    my_service<SERVICE_TYPE(mysql_system_variable_reader)> reader(
+        "mysql_system_variable_reader", registry);
+    if (reader.is_valid()) {
+      // Two-try grow-and-retry: the reader fails and reports the required size
+      // in val_len when the buffer is too small.
+      char stack_buf[256];
+      char *buf = stack_buf;
+      size_t val_len = sizeof(stack_buf);
+      void *val = buf;
+      bool err = reader->get(thd, "SESSION", extension_name.c_str(), name, &val,
+                             &val_len);
+      char *heap_buf = nullptr;
+      if (err && val_len > sizeof(stack_buf)) {
+        heap_buf = static_cast<char *>(malloc(val_len));
+        if (heap_buf != nullptr) {
+          val = heap_buf;
+          err = reader->get(thd, "SESSION", extension_name.c_str(), name, &val,
+                            &val_len);
+        }
+      }
+      if (!err) {
+        result = static_cast<char *>(malloc(val_len + 1));
+        if (result != nullptr) {
+          memcpy(result, val, val_len);
+          result[val_len] = '\0';
+        }
+      }
+      free(heap_buf);
+    }
+  }
+
+  mysql_plugin_registry_release(registry);
   return result;
 }
 
@@ -118,31 +185,79 @@ vef_preview_session_var_t *preview_session_var_vtable() {
   return &g_session_var_vtable;
 }
 
-static bool session_var_get_int(const char *component_name, const char *name,
+static bool session_var_get_int(const void *cap, const char *name,
                                 long long *out) {
   if (out == nullptr) return true;
-  const uchar *p = session_value_ptr(component_name, name);
+  // The reader returns every value as a string; INT variables come back as
+  // their decimal representation.
+  char *s = read_session_var_string(cap, name);
+  if (s == nullptr) return true;
+  *out = strtoll(s, nullptr, 10);
+  free(s);
+  return false;
+}
+
+static bool session_var_get_str(const void *cap, const char *name, void **val,
+                                size_t *val_len) {
+  if (val == nullptr || val_len == nullptr) return true;
+  char *s = read_session_var_string(cap, name);
+  if (s == nullptr) return true;
+  *val = s;
+  *val_len = strlen(s);
+  return false;
+}
+
+static bool session_var_resolve_int_handle(
+    const void *cap, const char *name, vef_session_var_handle_t **out_handle) {
+  if (out_handle == nullptr) return true;
+  *out_handle = nullptr;
+
+  const std::string extension_name = extension_name_for_cap(cap);
+  if (extension_name.empty()) return true;
+  const char *prefix =
+      extension_name == "mysql_server" ? "" : extension_name.c_str();
+
+  // Resolve the variable by name once, under the server's lock, and capture its
+  // per-session storage offset. Only INT, THD-local variables have a longlong
+  // session slot that read_int can dereference.
+  int found_offset = -1;
+  auto fn = [&found_offset](const System_variable_tracker &, sys_var *var) {
+    sys_var_pluginvar *pv = var->cast_pluginvar();
+    if (pv == nullptr) return;
+    if (!(pv->plugin_var->flags & PLUGIN_VAR_THDLOCAL)) return;
+    if ((pv->plugin_var->flags & PLUGIN_VAR_TYPEMASK) != PLUGIN_VAR_LONGLONG)
+      return;
+    // The offset is stored immediately after the plugin_var header, the same
+    // location real_value_ptr reads for a THD-local variable.
+    found_offset = *reinterpret_cast<const int *>(pv->plugin_var + 1);
+  };
+  System_variable_tracker::make_tracker(prefix, name)
+      .access_system_variable(current_thd, fn, Suppress_not_found_error::YES);
+
+  if (found_offset < 0) return true;
+
+  auto *handle = new (std::nothrow) vef_session_var_handle{found_offset};
+  if (handle == nullptr) return true;
+  *out_handle = handle;
+  return false;
+}
+
+static bool session_var_read_int(const vef_session_var_handle_t *handle,
+                                 long long *out) {
+  if (handle == nullptr || out == nullptr) return true;
+  THD *thd = current_thd;
+  if (thd == nullptr) return true;
+  // Lock-free per-thread read: base pointer for this connection's session
+  // variable storage plus the captured offset. global_lock=false matches how
+  // the server reads THD-local variables on the connection thread (THDVAR).
+  const uchar *p = intern_sys_var_ptr(thd, handle->offset, false);
   if (p == nullptr) return true;
-  // Session INT variables are registered as PLUGIN_VAR_LONGLONG (see
-  // on_populate_session_var), so the per-THD storage holds a longlong.
   *out = *reinterpret_cast<const long long *>(p);
   return false;
 }
 
-static bool session_var_get_str(const char *component_name, const char *name,
-                                void **val, size_t *val_len) {
-  if (val == nullptr || val_len == nullptr) return true;
-  const uchar *p = session_value_ptr(component_name, name);
-  if (p == nullptr) return true;
-  const char *s = *reinterpret_cast<const char *const *>(p);
-  if (s == nullptr) return true;
-  const size_t len = strlen(s);
-  char *buf = static_cast<char *>(malloc(len + 1));
-  if (buf == nullptr) return true;
-  memcpy(buf, s, len + 1);
-  *val = buf;
-  *val_len = len;
-  return false;
+static void session_var_free_handle(vef_session_var_handle_t *handle) {
+  delete handle;
 }
 
 bool on_populate_session_var(const PopulateContext &ctx,
