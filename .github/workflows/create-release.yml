@@ -54,7 +54,7 @@ on:
         type: string
         default: ''
       slack_notify:
-        description: 'Announce the reopened branch on Slack.'
+        description: 'Announce reopened branch and publications steps on Slack.'
         required: false
         type: boolean
         default: true
@@ -135,8 +135,13 @@ jobs:
             exit 1
           fi
 
+          # The tag prefix 'release/' marks a VillageSQL releaes commit.
           RELEASE_TAG="release/$VERSION"
+
+          # Each tag with the prefix 'publish/' marks a codebase publication commit.
           PUBLISH_TAG="publish/${CODE_BASE}_${VERSION}"
+
+          # Docker image tag.
           IMAGE_TAG="${CODE_BASE}_${VERSION}"
 
           # A tag that already exists means this release was cut before. Say so
@@ -327,18 +332,20 @@ jobs:
               ]
             }
 
-  # Tag the release and draft its GitHub release. Both describe the release
-  # note commit, not the version bump that follows it.
+  # Tag the release, create the draft GitHub release, and publish the tag
+  # for the main / lastest release.
   release:
-    name: Tag and Draft Release
+    name: Release and Publish
     needs: [resolve, push]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
 
     steps:
       # Checked out at the commit being released, so the tag, the note, and the
       # VSQL_VERSION prepare_github_release.sh reads all come from one tree.
-      # As in the push job, the token is the credential the tag push carries,
-      # not something the clone needs.
+      # RELEASE credential for the tag push.
       - name: Checkout release commit
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -377,31 +384,18 @@ jobs:
             echo "$GITHUB_SERVER_URL/$GH_REPO/releases/tag/${RELEASE_TAG//\//%2F}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Start publication: name the commit as a publish tag and hand it to the
-  # workflow that builds and uploads the artifacts.
-  publish:
-    name: Start Publication
-    needs: [resolve, push, release]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: write  # Required to start a workflow run
+      # Release Publication
+      # Effectivly a separate job, but that would take an extra checkout
 
-    steps:
-      # A tag is one ref; creating it through the API costs less than checking
-      # out this repository to run `git tag`.
-      - name: Create publish tag
+      # The tag prefix 'publish/' marks code base publication commits.
+      - name: Push publish tag
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_KEY }}
-          GH_REPO: ${{ github.repository }}
           PUBLISH_TAG: ${{ needs.resolve.outputs.publish-tag }}
-          NOTES_SHA: ${{ needs.push.outputs.notes-sha }}
         run: |
           set -euo pipefail
-          gh api "repos/$GH_REPO/git/refs" \
-            -f ref="refs/tags/$PUBLISH_TAG" \
-            -f sha="$NOTES_SHA" >/dev/null
-          echo "Created $PUBLISH_TAG at $NOTES_SHA"
+          git tag "$PUBLISH_TAG"
+          git push origin "refs/tags/$PUBLISH_TAG"
+          echo "Tagged $(git rev-parse --short HEAD) as $PUBLISH_TAG"
 
       # workflow_dispatch is exempt from the GITHUB_TOKEN recursion guard, so
       # the default token starts this.
@@ -415,6 +409,7 @@ jobs:
           IMAGE_REPO: ${{ inputs.image_repo }}
           VERSION_LABELS: ${{ inputs.version_labels }}
           DEFINE_TAGS: ${{ inputs.define_tags }}
+          SLACK_NOTIFY: ${{ inputs.slack_notify }}
         run: |
           set -euo pipefail
           gh workflow run codebase-release-dispatch.yml \
@@ -427,7 +422,7 @@ jobs:
             -f dev_abi="$DEV_ABI" \
             -f version_labels="$VERSION_LABELS" \
             -f define_tags="$DEFINE_TAGS" \
-            -f slack_notify=true
+            -f slack_notify="$SLACK_NOTIFY"
 
           {
             echo "### Publication started"
