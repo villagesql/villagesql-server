@@ -1,4 +1,5 @@
 /* Copyright (c) 2005, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2041,6 +2042,7 @@ void cleanup_global_system_variables() {
   cleanup_variables(nullptr, &global_system_variables);
   cleanup_variables(nullptr, &max_system_variables);
 }
+
 /*
   Deinitialize and unload all the loaded plugins.
   Note: During valgrind testing, the shared objects (.dll/.so)
