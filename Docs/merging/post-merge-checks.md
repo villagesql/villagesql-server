@@ -80,3 +80,34 @@ legitimately differs from Oracle's at the same I_S version because of VEF, which
 our rows already diverge from upstream's. Confirm the diff is benign before recording —
 a checksum change with no corresponding upstream I_S change deserves an explanation, not
 a paste.
+
+## The `sys` view metadata repair
+
+`refresh_sys_view_metadata()` in `villagesql/sql/initialize.cc` replays the
+`CREATE OR REPLACE VIEW` statement of a handful of `sys` views on every startup that
+needs it, to undo the column metadata that installing our `INFORMATION_SCHEMA` overrides
+rewrites. It finds those statements by scanning the generated `mysql_sys_schema[]` array
+for `"VIEW <name>"`, using the view names in `kAffectedSysViews`.
+
+That couples us to upstream's sys schema in two ways a merge can break.
+
+**View names.** If upstream renames, splits or drops one of the listed views, the scan
+finds no statement for it. This is caught, not silent: the replay requires exactly one
+match per name and fails startup otherwise, so the `villagesql/information_schema`
+suite's `sys_view_metadata` test will fail loudly. Fix it by updating
+`kAffectedSysViews` to match `scripts/sys_schema/`.
+
+**Statement order.** The replay follows `mysql_sys_schema[]` order, which is the file
+order in `scripts/sys_schema/CMakeLists.txt`. That order is topological today, and
+upstream cannot easily change that — a child view listed before its parent would fail
+every fresh `--initialize` with `ER_NO_SUCH_TABLE`. The repair depends on it, because
+replaying a parent re-rewrites its children's metadata, so children must be replayed
+after their parents. If a merge ever does reorder that list, `sys_view_metadata` is the
+test that notices.
+
+**New sys views.** If upstream adds a `sys` view that reads `INFORMATION_SCHEMA.COLUMNS`
+or `INFORMATION_SCHEMA.STATISTICS`, it needs adding to `kAffectedSysViews`, and so does
+anything that reads *it*. Nothing detects that automatically — the symptom is a
+`sysschema` result diff where nullability flips `YES` to `NO`, and `sysschema` only runs
+in the weekly full suite. `grep -ril "information_schema.\(columns\|statistics\)"
+scripts/sys_schema/` lists the candidates.
