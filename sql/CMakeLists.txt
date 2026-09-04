@@ -1126,9 +1126,20 @@ ELSE()
   SET(MYSQLD_SOURCE main.cc)
 ENDIF()
 
+# VillageSQL build metadata is compiled into mysqld rather than sql_main, so
+# that regenerating it on every build relinks mysqld instead of every target
+# that links sql_main. See villagesql/cmake/build_info.cmake.
+INCLUDE(${CMAKE_SOURCE_DIR}/villagesql/cmake/build_info.cmake)
+VSQL_BUILD_INFO_SOURCES(VSQL_BUILD_INFO_SOURCES)
+LIST(APPEND MYSQLD_SOURCE ${VSQL_BUILD_INFO_SOURCES})
+
 MYSQL_ADD_EXECUTABLE(mysqld
   ${MYSQLD_SOURCE} DESTINATION ${INSTALL_SBINDIR} COMPONENT Server
   )
+ADD_DEPENDENCIES(mysqld villagesql_build_info_gen)
+# Plain signature to match the existing TARGET_LINK_LIBRARIES(mysqld ...)
+# calls in this file; mixing keyword and plain forms on one target is an error.
+TARGET_LINK_LIBRARIES(mysqld extra::rapidjson)
 
 # With Ninja, link huge executables one-by-one.
 IF(WIN32)
