@@ -180,14 +180,13 @@ struct st_bookmark {
 
 st_bookmark *find_bookmark(const char *plugin, const char *name, int flags);
 
-// TODO(villagesql-rebase): backport of MySQL 9.0+ (WL#15535), which needs these
-// exported so the component sysvar service can register THD-local variables.
-// In this fork the definitions stay in sql_plugin.cc (un-static'd in place); in
-// 9.x they were relocated to sql_plugin_var.cc but are declared here
-// identically (9.0.0 sql_plugin_var.h:194-202). On rebase onto a 9.x base, 9.x
-// already declares these here, so drop this block to avoid a duplicate
-// declaration.
+/*
+  returns a bookmark for thd-local variables, creating if necessary.
+  returns null for non thd-local variables.
+  Requires that a write lock is obtained on LOCK_system_variables_hash
+*/
 st_bookmark *register_var(const char *plugin, const char *name, int flags);
+
 bool *mysql_sys_var_bool(THD *thd, int offset);
 int *mysql_sys_var_int(THD *thd, int offset);
 unsigned int *mysql_sys_var_uint(THD *thd, int offset);

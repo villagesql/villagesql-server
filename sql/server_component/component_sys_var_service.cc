@@ -1,5 +1,4 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
-   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -139,12 +138,10 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
     char **argv_copy;
     void *mem;
     get_opt_arg_source *opts_arg_source;
-    // TODO(villagesql-rebase): `offset` supports the THD-local (session-scope)
-    // path backported from MySQL 9.0+ (WL#15535). Drop on rebase onto 9.x.
-    unsigned int offset = 0;
     THD *thd = current_thd;
     bool option_value_found_in_install = false;
     MEM_ROOT local_root{key_memory_comp_sys_var, 512};
+    unsigned int offset = 0;
 
     com_sys_var_len = strlen(component_name) + strlen(var_name) + 2;
     com_sys_var_name = new (&local_root) char[com_sys_var_len];
@@ -462,32 +459,18 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
                component_name);
         goto end;
     }
+
     unique_opt.reset(opt);
-
     plugin_opt_set_limits(opts, opt);
-
-    // TODO(villagesql-rebase): THD-local offset allocation backported from
-    // MySQL 9.0+ (WL#15535). register_var() reserves a per-THD bookmark and
-    // find_bookmark() returns its offset, which is stored in the variable
-    // header so sys_var_pluginvar::real_value_ptr can resolve the per-session
-    // value. Drop this block on rebase onto a 9.x base.
-    //
-    // TODO(villagesql-back-to-mysql): key the bookmark by the exact dynamic
-    // sys-var hash name (com_sys_var_name = lowercased "component.var") by
-    // passing it verbatim with a null plugin. Passing (component_name,
-    // var_name) would key it "component_var", which the malloced-string seed
-    // loop's intern_find_sys_var() would fail to resolve, leaving the session
-    // slot aliasing the global default pointer -> SET SESSION crash. Fixes an
-    // upstream MySQL bug (reported as mysql/mysql-server#721); drop once fixed
-    // upstream.
-    if ((flags & PLUGIN_VAR_THDLOCAL) &&
-        register_var(nullptr, com_sys_var_name, flags)) {
-      st_bookmark *var;
-      if ((var = find_bookmark(nullptr, com_sys_var_name, flags))) {
-        *(int *)(opt + 1) = offset = var->offset;
+    if ((flags & PLUGIN_VAR_NOSYSVAR) == 0) {
+      if ((flags & PLUGIN_VAR_THDLOCAL) &&
+          register_var(component_name, var_name, flags)) {
+        st_bookmark *var;
+        if ((var = find_bookmark(component_name, var_name, flags))) {
+          *(int *)(opt + 1) = offset = var->offset;
+        }
       }
     }
-
     if (flags & PLUGIN_VAR_THDLOCAL)
       opts->value = opts->u_max_value =
           (uchar **)(global_system_variables.dynamic_variables_ptr + offset);
@@ -570,62 +553,28 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
       }
     }
 
-    com_sys_var_name_copy =
-        my_strdup(key_memory_comp_sys_var, com_sys_var_name, MYF(0));
-    if (com_sys_var_name_copy == nullptr) {
-      LogErr(ERROR_LEVEL, ER_SYS_VAR_COMPONENT_OOM, var_name);
-      goto end;
-    }
-    sysvar = reinterpret_cast<sys_var *>(
-        new sys_var_pluginvar(&chain, com_sys_var_name_copy, opt));
+    if ((flags & PLUGIN_VAR_NOSYSVAR) == 0) {
+      com_sys_var_name_copy =
+          my_strdup(key_memory_comp_sys_var, com_sys_var_name, MYF(0));
+      if (com_sys_var_name_copy == nullptr) {
+        LogErr(ERROR_LEVEL, ER_SYS_VAR_COMPONENT_OOM, var_name);
+        goto end;
+      }
+      sysvar = reinterpret_cast<sys_var *>(
+          new sys_var_pluginvar(&chain, com_sys_var_name_copy, opt));
 
-    if (sysvar == nullptr) {
-      LogErr(ERROR_LEVEL, ER_SYS_VAR_COMPONENT_OOM, var_name);
-      goto end;
-    } else
-      unique_opt.release();
+      if (sysvar == nullptr) {
+        LogErr(ERROR_LEVEL, ER_SYS_VAR_COMPONENT_OOM, var_name);
+        goto end;
+      } else
+        unique_opt.release();
 
-    sysvar->set_arg_source(opts->arg_source);
-    sysvar->set_is_plugin(false);
+      sysvar->set_arg_source(opts->arg_source);
+      sysvar->set_is_plugin(false);
 
-    if (mysql_add_sysvar(chain.first)) {
-      FREE_RECORD(sysvar)
-      goto end;
-    }
-
-    // TODO(villagesql-back-to-mysql): seed the INSTALL session's own session
-    // slot for a THD-local MEMALLOC string with a non-null default. The shared
-    // malloced-string seed loop in alloc_and_copy_thd_dynamic_variables()
-    // version-gates on the thread's dynamic_variables_version, which the
-    // INSTALL session has already advanced past this just-registered var -- so
-    // it skips seeding and the session reads NULL instead of the default (every
-    // OTHER session, and the INT path, read the default correctly). Stock MySQL
-    // never reaches this: it crashes first (mysql/mysql-server#721, worked
-    // around in register_var()). Do the same strdup the seed loop /
-    // session_update() do, but forced for the current thread. Drop once fixed
-    // upstream.
-    if (thd != nullptr && (flags & PLUGIN_VAR_THDLOCAL) &&
-        (flags & PLUGIN_VAR_STR) && (flags & PLUGIN_VAR_MEMALLOC)) {
-      sys_var_pluginvar *pv = sysvar->cast_pluginvar();
-      if (pv != nullptr) {
-        mysql_mutex_lock(&LOCK_global_system_variables);
-        char **tgt =
-            reinterpret_cast<char **>(pv->real_value_ptr(thd, OPT_SESSION));
-        char *const *src = reinterpret_cast<char *const *>(
-            pv->real_value_ptr(thd, OPT_GLOBAL));
-        // Only seed if the session slot is unset or still aliases the global
-        // default pointer; a real per-session value must never be clobbered.
-        // Null the slot first (as the seed loop in alloc_and_copy_thd_dynamic_
-        // variables() does): when it aliases the global pointer, letting
-        // plugin_var_memalloc_session_update() treat it as an owned allocation
-        // would my_free() the global buffer. Nulling forces the fresh-alloc
-        // path so the global value is dropped, not freed.
-        if (tgt != nullptr && (*tgt == nullptr || *tgt == *src) &&
-            *src != nullptr) {
-          *tgt = nullptr;
-          plugin_var_memalloc_session_update(thd, nullptr, tgt, *src);
-        }
-        mysql_mutex_unlock(&LOCK_global_system_variables);
+      if (mysql_add_sysvar(chain.first)) {
+        FREE_RECORD(sysvar)
+        goto end;
       }
     }
 
@@ -676,8 +625,8 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
   return true;
 }
 
-const char *get_variable_value(sys_var *system_var, char *val_buf,
-                               size_t *val_length) {
+const char *get_variable_value(THD *thd, sys_var *system_var, char *val_buf,
+                               enum_var_type var_type, size_t *val_length) {
   char show_var_buffer[sizeof(SHOW_VAR)];
   SHOW_VAR *show = (SHOW_VAR *)show_var_buffer;
   const CHARSET_INFO *fromcs;
@@ -707,9 +656,9 @@ const char *get_variable_value(sys_var *system_var, char *val_buf,
   show->value = (char *)system_var;
 
   mysql_mutex_lock(&LOCK_global_system_variables);
-  const char *variable_value = get_one_variable(
-      current_thd, show, OPT_GLOBAL, show->type, nullptr, &fromcs,
-      variable_data_buffer, &out_variable_data_length);
+  const char *variable_value =
+      get_one_variable(thd, show, var_type, show->type, nullptr, &fromcs,
+                       variable_data_buffer, &out_variable_data_length);
 
   /*
      Allocate a buffer that can hold "worst" case byte-length of the value
@@ -757,8 +706,8 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::get_variable,
         strcmp(component_name, "mysql_server") == 0 ? "" : component_name;
     auto f = [val, out_length_of_val](const System_variable_tracker &,
                                       sys_var *var) -> bool {
-      return get_variable_value(var, (char *)*val, out_length_of_val) ==
-             nullptr;
+      return get_variable_value(current_thd, var, (char *)*val, OPT_GLOBAL,
+                                out_length_of_val) == nullptr;
     };
     return System_variable_tracker::make_tracker(prefix, var_name)
         .access_system_variable<bool>(current_thd, f,
@@ -816,12 +765,7 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::unregister_variable,
     const int var_flags = sv_pluginvar->plugin_var->flags;
     if (((var_flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
         (var_flags & PLUGIN_VAR_MEMALLOC)) {
-      // TODO(villagesql-rebase): resolve the global value slot via
-      // real_value_ptr() rather than treating *(plugin_var + 1) as a pointer
-      // to it. For a THD-local variable *(plugin_var + 1) is an int offset,
-      // not a pointer, so the old cast dereferenced the offset as an address
-      // and crashed on UNINSTALL. real_value_ptr(nullptr, OPT_GLOBAL) is
-      // THD-local-aware. Backported from MySQL 9.0+ (WL#15535); drop on rebase.
+      /* Free the string from global_system_variables. */
       char **valptr =
           (char **)sv_pluginvar->real_value_ptr(nullptr, OPT_GLOBAL);
       if (*valptr != nullptr) {

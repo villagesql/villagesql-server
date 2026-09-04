@@ -1,5 +1,4 @@
 /* Copyright (c) 2005, 2026, Oracle and/or its affiliates.
-   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -170,10 +169,7 @@ extern bool plugin_initialize_delayed_after_upgrade();
 
 extern bool is_builtin_and_core_se_initialized();
 extern void plugin_shutdown(void);
-// TODO(villagesql-rebase): backported from MySQL 9.0+ (WL#15535). Frees
-// global_system_variables; must run after component infrastructure deinit so
-// component THD-local string unregistration can still read it. Drop on rebase.
-extern void cleanup_global_system_variables();
+extern void cleanup_global_system_variables(void);
 void add_plugin_options(std::vector<my_option> *options, MEM_ROOT *mem_root);
 extern bool plugin_is_ready(const LEX_CSTRING &name, int type);
 #define my_plugin_lock_by_name(A, B, C) plugin_lock_by_name(A, B, C)
