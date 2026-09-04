@@ -11,6 +11,16 @@ db_name	table_name	index_name	extension_name	extension_version	index_type_name	i
 test	t	idx_inline	vsql_index_test	0.0.1	dummy_index_hnsw	{}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 t	idx_inline	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# Rendering: the unqualified dummy_index_hnsw comes back qualified, and
+# the profile appears although the DDL above never named one.
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_inline` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
@@ -73,6 +83,22 @@ t	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_multi	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_multi	1	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_prof	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_dummy_index_hnsw` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `idx_ext` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'primary', `m` = 16, `mode` = 'fast'),
+  KEY `idx_prof` (`c` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `idx_multi` (`d` `vsql_index_test`.`dummy_profile_hnsw_l2`,`e` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `idx_alt` (`e` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`m` = 8)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # --- DROP INDEX: removes metadata for that index ---
 DROP INDEX idx_dummy_index_hnsw ON t;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
@@ -146,6 +172,21 @@ t	idx_alt	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_alt_q	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_alt` (`e` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`m` = 8),
+  KEY `idx_qprof` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `idx_qq` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `idx_alt_q` (`c` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # --- ALTER TABLE DROP + re-ADD same column with custom index ---
 CREATE TABLE t_drop_readd (id INT PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t_drop_readd
@@ -207,6 +248,33 @@ t	idx_qprof	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 t	idx_qq	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- DROP TABLE: removes all remaining custom index metadata ---
 DROP TABLE t;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+# --- Rendered DDL round-trips ---
+CREATE TABLE t_roundtrip (id INT PRIMARY KEY, b dummy_type_vector,
+INDEX idx_ext (b) USING EXTENDED(dummy_index_hnsw)
+WITH (M = 16, ef_construction = 200, label = 'primary', mode = fast));
+DROP TABLE t_roundtrip;
+CREATE TABLE `t_roundtrip` (
+  `id` int NOT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ext` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'primary', `m` = 16, `mode` = 'fast')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+# Replayed rendering is identical to the original:
+SHOW CREATE TABLE t_roundtrip;
+Table	Create Table
+t_roundtrip	CREATE TABLE `t_roundtrip` (
+  `id` int NOT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ext` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'primary', `m` = 16, `mode` = 'fast')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t_roundtrip	idx_ext	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "mode": "fast", "label": "primary", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t_roundtrip	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+DROP TABLE t_roundtrip;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 SET SESSION debug='-d,villagesql_custom_index_proceed';

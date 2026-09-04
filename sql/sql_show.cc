@@ -2276,7 +2276,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         packet->append_parenthesized((long)key_part->length /
                                      key_part->field->charset()->mbmaxlen);
       }
-      villagesql::AppendCustomIndexProfile(key_part->custom_index_profile,
+      villagesql::AppendCustomIndexProfile(thd, key_part->custom_index_profile,
                                            packet);
       if (key_part->key_part_flag & HA_REVERSE_SORT)
         packet->append(STRING_WITH_LEN(" DESC"));

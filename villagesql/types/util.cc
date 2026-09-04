@@ -694,11 +694,13 @@ void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
   out->append(name.c_str(), name.length());
 }
 
-static void AppendQualifiedIndexName(const std::string &extension,
+// Appends "extension_name.name", quoting each half.
+static void AppendQualifiedIndexName(const THD *thd,
+                                     const std::string &extension,
                                      const std::string &name, String *out) {
-  out->append(extension.c_str(), extension.length());
+  append_identifier(thd, out, extension.c_str(), extension.length());
   out->append('.');
-  out->append(name.c_str(), name.length());
+  append_identifier(thd, out, name.c_str(), name.length());
 }
 
 static void AppendIndexParamValue(const char *value, String *out) {
@@ -716,13 +718,14 @@ static void AppendIndexParamValue(const char *value, String *out) {
     append_unescaped(out, value, len);
 }
 
-void AppendCustomIndexProfile(const IndexProfileDescriptor *profile,
+void AppendCustomIndexProfile(const THD *thd,
+                              const IndexProfileDescriptor *profile,
                               String *out) {
-  if (profile == nullptr || profile->default_for_type()) return;
+  if (profile == nullptr) return;
 
   out->append(' ');
-  AppendQualifiedIndexName(profile->extension_name(), profile->profile_name(),
-                           out);
+  AppendQualifiedIndexName(thd, profile->extension_name(),
+                           profile->profile_name(), out);
 }
 
 void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
@@ -730,7 +733,7 @@ void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
   if (index_ctx == nullptr) return;
 
   out->append(STRING_WITH_LEN(" USING EXTENDED("));
-  AppendQualifiedIndexName(index_ctx->extension_name(),
+  AppendQualifiedIndexName(thd, index_ctx->extension_name(),
                            index_ctx->index_type_name(), out);
   out->append(')');
 
