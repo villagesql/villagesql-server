@@ -17,12 +17,12 @@ jobs:
           uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
           with:
             prefix_mode: true
-            one_of: "area"
+            any_of: "area"
             repo_token: ${{ secrets.GITHUB_TOKEN }}
 
         - name: Validate Kind
           uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
           with:
             prefix_mode: true
-            one_of: "kind"
+            any_of: "kind"
             repo_token: ${{ secrets.GITHUB_TOKEN }}
