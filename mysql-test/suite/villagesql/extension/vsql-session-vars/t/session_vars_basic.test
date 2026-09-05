@@ -1,0 +1,81 @@
+# Test session-scoped (THD-local) system variables for the
+# vsql_session_var_test extension. Covers: global default, per-session
+# independence across connections, SET SESSION, @@session vs @@global,
+# reads via the get_session_int/get_session_str VDFs, and that the storage
+# global does NOT reflect a session override.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Install extension
+INSTALL EXTENSION vsql_session_var_test;
+
+# Reset this connection's session values to the registered defaults right after
+# INSTALL. If a previous test in this same server installed then uninstalled this
+# extension, the reused THD-local slots are left stale (upstream bug#720: session
+# variable not reset at plugin/component reinstall -- a plain read is not
+# refreshed after reinstall, though an explicit SET recovers it). This makes the
+# subsequent reads order-independent. Test-only workaround; the reset bug is
+# generic to stock MySQL and tracked separately. Wrapped in disable_query_log so
+# it does not appear in the recorded output.
+--disable_query_log
+SET SESSION vsql_session_var_test.ef_search = DEFAULT;
+SET SESSION vsql_session_var_test.session_label = DEFAULT;
+--enable_query_log
+
+--echo # Variables exist with SESSION scope and the declared defaults
+SELECT @@global.vsql_session_var_test.ef_search;
+SELECT @@session.vsql_session_var_test.ef_search;
+SELECT @@global.vsql_session_var_test.session_label;
+SELECT @@session.vsql_session_var_test.session_label;
+
+--echo # The VDF reads the caller's session value (default so far)
+SELECT vsql_session_var_test.read_ef_search();
+SELECT vsql_session_var_test.read_session_label();
+
+--echo # Change this session's ef_search; global is unchanged
+SET SESSION vsql_session_var_test.ef_search = 100;
+SET SESSION vsql_session_var_test.session_label = 'conn1';
+SELECT @@session.vsql_session_var_test.ef_search;
+SELECT @@global.vsql_session_var_test.ef_search;
+
+--echo # VDF observes this session's override via get_session_int/str
+SELECT vsql_session_var_test.read_ef_search();
+SELECT vsql_session_var_test.read_session_label();
+
+--echo # A second connection has its own independent session value
+connect (con2,localhost,root,,);
+connection con2;
+
+--echo # con2 sees the global default, not con1's override
+SELECT @@session.vsql_session_var_test.ef_search;
+SELECT vsql_session_var_test.read_ef_search();
+SELECT vsql_session_var_test.read_session_label();
+
+--echo # con2 sets its own value
+SET SESSION vsql_session_var_test.ef_search = 7;
+SELECT vsql_session_var_test.read_ef_search();
+
+--echo # Back on con1: its value is unaffected by con2
+connection default;
+SELECT @@session.vsql_session_var_test.ef_search;
+SELECT vsql_session_var_test.read_ef_search();
+
+--echo # Changing the global default affects sessions that have not overridden
+SET GLOBAL vsql_session_var_test.ef_search = 55;
+connection con2;
+SET SESSION vsql_session_var_test.ef_search = DEFAULT;
+--echo # con2 reset to DEFAULT now tracks the new global default
+SELECT vsql_session_var_test.read_ef_search();
+
+connection default;
+disconnect con2;
+
+--echo # Uninstall extension
+UNINSTALL EXTENSION vsql_session_var_test;
+
+--echo # Variable should no longer exist
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_session_var_test.ef_search;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
