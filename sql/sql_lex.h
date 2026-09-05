@@ -1528,6 +1528,9 @@ class Query_block : public Query_term {
 
   /// Setup the array containing references to base items
   bool setup_base_ref_items(THD *thd);
+  /// Expand "*" in the select list (public for RETURNING resolution reuse in
+  /// prepare_returning_fields()).
+  bool setup_wild(THD *thd);
   void print(const THD *thd, String *str, enum_query_type query_type);
 
   /**
@@ -2310,7 +2313,6 @@ class Query_block : public Query_term {
   Item *resolve_rollup_item(THD *thd, Item *item);
   bool resolve_rollup(THD *thd);
 
-  bool setup_wild(THD *thd);
   bool setup_order_final(THD *thd);
   bool setup_group(THD *thd);
   void fix_after_pullout(Query_block *parent_query_block,
@@ -3904,6 +3906,7 @@ struct LEX : public Query_tables_list {
   /// @return true if this is an EXPLAIN statement
   bool is_explain() const { return explain_format != nullptr; }
   bool is_explain_analyze = false;
+  bool has_returning_clause = false;
 
   /**
     Whether the currently-running statement should be prepared and executed

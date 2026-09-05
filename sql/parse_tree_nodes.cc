@@ -133,6 +133,26 @@ bool contextualize_safe(Context *pc, Node node, Nodes... nodes) {
   return contextualize_safe(pc, node) || contextualize_safe(pc, nodes...);
 }
 
+bool contextualize_returning_clause(
+    Parse_context *pc, PT_item_list *returning_clause,
+    mem_root_deque<Item *> **returning_fields = nullptr) {
+  if (returning_fields != nullptr) *returning_fields = nullptr;
+  if (returning_clause == nullptr) return false;
+
+  LEX *const lex = pc->thd->lex;
+  Query_block *const select = pc->select;
+
+  lex->has_returning_clause = true;
+  select->parsing_place = CTX_SELECT_LIST;
+  const bool returning_error = returning_clause->contextualize(pc);
+  assert(select->parsing_place == CTX_SELECT_LIST);
+  select->parsing_place = CTX_NONE;
+  if (returning_error) return true;
+
+  if (returning_fields != nullptr) *returning_fields = &returning_clause->value;
+  return false;
+}
+
 static void print_table_ident(const THD *thd, const Table_ident *ident,
                               String *s) {
   if (ident->db.length > 0) {
@@ -980,7 +1000,10 @@ Sql_cmd *PT_delete::make_cmd(THD *thd) {
 
   if (opt_hints != nullptr && opt_hints->contextualize(&pc)) return nullptr;
 
-  return new (thd->mem_root) Sql_cmd_delete(is_multitable(), &delete_tables);
+  if (contextualize_returning_clause(&pc, opt_returning_clause)) return nullptr;
+
+  return new (thd->mem_root) Sql_cmd_delete(is_multitable(), &delete_tables,
+                                            opt_returning_clause != nullptr);
 }
 
 Sql_cmd *PT_update::make_cmd(THD *thd) {
@@ -1035,7 +1058,16 @@ Sql_cmd *PT_update::make_cmd(THD *thd) {
 
   if (opt_hints != nullptr && opt_hints->contextualize(&pc)) return nullptr;
 
-  return new (thd->mem_root) Sql_cmd_update(is_multitable, &value_list->value);
+  mem_root_deque<Item *> *returning_fields = nullptr;
+  if (contextualize_returning_clause(&pc, opt_returning_clause,
+                                     &returning_fields))
+    return nullptr;
+  if (returning_fields != nullptr) {
+    select->fields = column_list->value;
+  }
+
+  return new (thd->mem_root)
+      Sql_cmd_update(is_multitable, &value_list->value, returning_fields);
 }
 
 bool PT_insert_values_list::do_contextualize(Parse_context *pc) {
@@ -1190,6 +1222,11 @@ Sql_cmd *PT_insert::make_cmd(THD *thd) {
 
   if (opt_hints != nullptr && opt_hints->contextualize(&pc)) return nullptr;
 
+  mem_root_deque<Item *> *returning_fields = nullptr;
+  if (contextualize_returning_clause(&pc, opt_returning_clause,
+                                     &returning_fields))
+    return nullptr;
+
   Sql_cmd_insert_base *sql_cmd;
   if (has_query_block())
     sql_cmd =
@@ -1206,6 +1243,7 @@ Sql_cmd *PT_insert::make_cmd(THD *thd) {
   }
 
   sql_cmd->insert_field_list = column_list->value;
+  sql_cmd->returning_fields = returning_fields;
   if (opt_on_duplicate_column_list != nullptr) {
     assert(!is_replace);
     sql_cmd->update_field_list = opt_on_duplicate_column_list->value;

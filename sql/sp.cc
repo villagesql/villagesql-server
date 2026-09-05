@@ -2444,6 +2444,7 @@ uint sp_get_flags_for_command(LEX *lex) {
       flags = lex->is_explain() ? sp_head::MULTI_RESULTS : 0;
       break;
   }
+  if (lex->has_returning_clause) flags |= sp_head::MULTI_RESULTS;
   return flags;
 }
 

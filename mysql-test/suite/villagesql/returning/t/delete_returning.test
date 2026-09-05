@@ -1,0 +1,186 @@
+#
+# Tests for DELETE FROM <table> ... RETURNING <expr>,...
+# Ported from MariaDB main.delete_returning.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t1c, t2, t2c;
+DROP VIEW IF EXISTS v1, v11;
+DROP PROCEDURE IF EXISTS p1;
+DROP FUNCTION IF EXISTS f;
+--enable_warnings
+
+CREATE TABLE t1 (a INT, b VARCHAR(32));
+INSERT INTO t1 VALUES
+  (7,'ggggggg'), (1,'a'), (3,'ccc'),
+  (4,'dddd'), (1,'A'), (2,'BB'), (4,'DDDD'),
+  (5,'EEEEE'), (7,'GGGGGGG'), (2,'bb');
+
+CREATE TABLE t1c SELECT * FROM t1;
+
+CREATE TABLE t2 (c INT);
+INSERT INTO t2 VALUES (4), (5), (7), (1);
+
+CREATE TABLE t2c SELECT * FROM t2;
+
+CREATE VIEW v1 AS SELECT a, UPPER(b) AS b_upper FROM t1;
+
+--echo # DELETE FROM <table> ... RETURNING *
+--sorted_result
+DELETE FROM t1 WHERE a=2 RETURNING *;
+--sorted_result
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES (2,'BB'), (2,'bb');
+
+--echo # DELETE FROM <table> ... RETURNING <col>
+--sorted_result
+DELETE FROM t1 WHERE a=2 RETURNING b;
+--sorted_result
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES (2,'BB'), (2,'bb');
+
+--echo # DELETE FROM <table> ... RETURNING <col>, <expr>
+--sorted_result
+DELETE FROM t1 WHERE a=2 RETURNING a, UPPER(b);
+--sorted_result
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES (2,'BB'), (2,'bb');
+
+--echo # DELETE FROM <table> ... RETURNING <col> with no rows to be deleted
+DELETE FROM t1 WHERE a=6 RETURNING b;
+--sorted_result
+SELECT * FROM t1;
+
+--echo # DELETE FROM <table> ... RETURNING <expr with subquery>
+--sorted_result
+DELETE FROM t1 WHERE a < 5
+  RETURNING a, (SELECT MIN(c) FROM t2 WHERE c=a+1);
+--sorted_result
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 SELECT * FROM t1c;
+
+--sorted_result
+DELETE FROM t2 WHERE c < 5
+  RETURNING (SELECT GROUP_CONCAT(b ORDER BY CAST(b AS BINARY))
+             FROM t1 GROUP BY a HAVING a=c);
+--sorted_result
+SELECT * FROM t2;
+
+DELETE FROM t2;
+INSERT INTO t2 SELECT * FROM t2c;
+
+--echo # DELETE FROM <table> ... RETURNING <expr with function invocation>
+DELIMITER |;
+
+CREATE FUNCTION f(arg INT) RETURNS TEXT
+BEGIN
+  RETURN (SELECT GROUP_CONCAT(b ORDER BY CAST(b AS BINARY)) FROM t1 WHERE a=arg);
+END|
+
+DELIMITER ;|
+
+--sorted_result
+DELETE FROM t2 WHERE c < 5 RETURNING f(c);
+--sorted_result
+SELECT * FROM t2;
+
+DELETE FROM t2;
+INSERT INTO t2 SELECT * FROM t2c;
+
+DROP FUNCTION f;
+
+--echo # DELETE FROM <view> ... RETURNING <col>, <col>
+--sorted_result
+DELETE FROM v1 WHERE a < 5 RETURNING *;
+--sorted_result
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 SELECT * FROM t1c;
+
+--echo # prepared DELETE FROM <table> ... RETURNING <expr>
+PREPARE stmt FROM
+  'DELETE FROM t1 WHERE a=2 ORDER BY b LIMIT 1 RETURNING a, UPPER(b)';
+EXECUTE stmt;
+--sorted_result
+SELECT * FROM t1;
+EXECUTE stmt;
+--sorted_result
+SELECT * FROM t1;
+DEALLOCATE PREPARE stmt;
+
+DROP VIEW v1;
+DROP TABLE t1, t2;
+DROP TABLE t1c, t2c;
+
+--echo #
+--echo # DELETE ... RETURNING subquery with more than 1 row
+--echo #
+
+CREATE TABLE t1 (i1 INT);
+INSERT INTO t1 VALUES (1), (2);
+
+CREATE TABLE t2 (i2 INT);
+INSERT INTO t2 VALUES (1), (2);
+
+--error ER_SUBQUERY_NO_1_ROW
+DELETE FROM t1 ORDER BY i1 RETURNING (SELECT i2 FROM t2);
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # SELECT after calling a procedure with DELETE ... RETURNING
+--echo #
+
+CREATE TABLE t1 (i INT);
+INSERT INTO t1 VALUES (1), (2);
+
+DELIMITER |;
+
+CREATE PROCEDURE p1(a INT)
+BEGIN
+  DELETE FROM t1 WHERE i = a RETURNING *;
+  INSERT INTO t1 VALUES (a);
+END|
+
+DELIMITER ;|
+
+CALL p1(1);
+--sorted_result
+SELECT * FROM t1;
+
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+--echo #
+--echo # DELETE ... RETURNING with sql_mode='ONLY_FULL_GROUP_BY'
+--echo #
+
+SET @sql_mode_save= @@sql_mode;
+SET sql_mode='ONLY_FULL_GROUP_BY';
+
+CREATE TABLE t1 (id INT);
+INSERT INTO t1 VALUES (1), (2), (3);
+
+DELETE FROM t1 WHERE id > 2 RETURNING *;
+
+SET sql_mode=@sql_mode_save;
+
+DROP TABLE t1;
+
+--echo #
+--echo # DELETE ... ORDER BY ... LIMIT ... RETURNING
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, KEY xid(id));
+INSERT INTO t1 VALUES (1), (10), (2), (9), (3), (8);
+
+DELETE FROM t1 ORDER BY id LIMIT 2 RETURNING id;
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
