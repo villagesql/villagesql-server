@@ -108,6 +108,10 @@ endfunction()
 macro(vsql_add_test_extension DIR_NAME VEB_NAME)
   cmake_parse_arguments(_ext "MYSQL_HEADERS" "ABI;VERSION" "" ${ARGN})
 
+  # v3 fixtures build against the frozen v3 ABI snapshot directly (its headers
+  # plus its frozen sdk_version.h), so they exercise the v3 ABI as a pinned
+  # extension sees it. Everything else builds against the current dev ABI
+  # (include-dev/ from the built SDK).
   if(_ext_ABI STREQUAL "v3")
     set(_vsql_test_ext_include "${CMAKE_SOURCE_DIR}/villagesql/stable_sdk/v3/include")
   else()

@@ -107,6 +107,16 @@ add_custom_command(
     "${STABLE_SDK_DIR}/include/villagesql"
     "${SDK_STAGING_DIR}/include/villagesql"
 
+  # Overwrite the snapshot's frozen sdk_version.h with one generated from the
+  # release version (like villagesql_config's @SDK_VERSION@), so an extension
+  # built against the shipped SDK reports the version it was actually built from
+  # rather than the value pinned in the frozen v3 snapshot. (The frozen value is
+  # only seen when building directly against stable_sdk/v3, as the abi_v3 tests
+  # do.)
+  COMMAND ${CMAKE_COMMAND} -E copy
+    "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
+    "${SDK_STAGING_DIR}/include/villagesql/"
+
   # Copy dev (unstable) SDK headers (all subdirectories picked up automatically)
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql"
