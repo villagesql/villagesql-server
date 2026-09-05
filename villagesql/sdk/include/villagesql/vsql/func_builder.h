@@ -141,6 +141,12 @@ using TypeHashFunc = size_t (*)(CustomArg in);
 template <typename P>
 using TypeHashWithParamsFunc = size_t (*)(CustomArgWith<P> in);
 
+// Real value: converts a custom value to REAL for numeric contexts.
+using TypeRealValueFunc = void (*)(CustomArg in, RealResult out);
+template <typename P>
+using TypeRealValueWithParamsFunc = void (*)(CustomArgWith<P> in,
+                                             RealResult out);
+
 // intrinsic_default: returns string representation of the default value.
 using IntrinsicDefaultFunc = std::string (*)(char *error_msg);
 template <typename P>
@@ -865,6 +871,35 @@ constexpr detail::StaticFuncDesc<1> make_type_hash(const char *name,
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = detail::to_vef_type(INT);
+  meta.param_types[0] = detail::to_vef_type(type_name);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
+  meta.deterministic = true;
+  return detail::StaticFuncDesc<1>(name, meta);
+}
+
+// make_type_real_value<&fn>("name", TYPE) — (CUSTOM(type)) -> REAL.
+//
+// Accepts two signatures:
+//   TypeRealValueFunc              (non-parameterized)
+//   TypeRealValueWithParamsFunc<P> (parameterized)
+template <auto Func>
+constexpr detail::StaticFuncDesc<1> make_type_real_value(
+    const char *name, const char *type_name) {
+  using F = decltype(Func);
+  detail::FuncWithMetadata meta{};
+  if constexpr (std::is_same_v<F, TypeRealValueFunc>) {
+    meta.f = &detail::TypeRealValueVdfWrapper<Func>::invoke;
+  } else {
+    using P = typename detail::TypeRealValueWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeRealValueWithParamsFunc<P>>,
+                  "make_type_real_value: function must match either "
+                  "TypeRealValueFunc or "
+                  "TypeRealValueWithParamsFunc<P>.");
+    meta.f = &detail::TypeRealValueWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
+  }
+  meta.return_type = detail::to_vef_type(REAL);
   meta.param_types[0] = detail::to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;

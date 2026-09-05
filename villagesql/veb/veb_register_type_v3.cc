@@ -415,7 +415,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v3(
       VEF_PROTOCOL_3, MYSQL_TYPE_VARCHAR, td->persisted_length,
       td->max_decode_buffer_length, td->max_persisted_length, LengthKind::Fixed,
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
-      std::move(hash_fn), std::move(int_to_params_fn),
+      std::move(hash_fn), std::nullopt, std::move(int_to_params_fn),
       std::move(resolve_params_fn));
 
   // 7. Set intrinsic default (VDF or string literal, mutually exclusive).
@@ -435,7 +435,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v3(
         std::string(td->intrinsic_default_str));
   }
 
-  return descriptor;
+  return std::optional<TypeDescriptor>(std::move(descriptor));
 }
 
 }  // namespace veb

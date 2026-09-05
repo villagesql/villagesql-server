@@ -141,6 +141,7 @@ class TypeDescriptor {
       int64_t max_persisted_len, LengthKind length_kind, EncodeFunction encode,
       DecodeFunction decode, CompareFunction compare,
       std::optional<HashFunction> hash = std::nullopt,
+      std::optional<RealValueFunction> real_value = std::nullopt,
       std::optional<IntToParamsFunction> int_to_params = std::nullopt,
       std::optional<ResolveParamsFunction> resolve_params = std::nullopt);
 
@@ -214,6 +215,9 @@ class TypeDescriptor {
     return *compare_fn_;
   }
   const std::optional<HashFunction> &hash_fn() const { return hash_fn_; }
+  const std::optional<RealValueFunction> &real_value_fn() const {
+    return real_value_fn_;
+  }
 
   const std::optional<IntToParamsFunction> &int_to_params_fn() const {
     return int_to_params_fn_;
@@ -278,6 +282,7 @@ class TypeDescriptor {
   std::optional<DecodeFunction> decode_fn_;
   std::optional<CompareFunction> compare_fn_;
   std::optional<HashFunction> hash_fn_;
+  std::optional<RealValueFunction> real_value_fn_;
 
   std::optional<IntToParamsFunction> int_to_params_fn_;
   std::optional<ResolveParamsFunction> resolve_params_fn_;

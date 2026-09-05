@@ -51,7 +51,8 @@ static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
 // Validate a type method VDF name that uses the "::" convention.
 // If the name contains "::", checks:
 //   - prefix (before "::") matches type_name (case-insensitive)
-//   - suffix (after "::") is one of: from_string, to_string, compare, hash
+//   - suffix (after "::") is one of: from_string, to_string, compare, hash,
+//     real_value
 // Returns false on success, true on validation error.
 // Names without "::" are always accepted (backward compatibility).
 static bool validate_type_method_vdf_name(const char *vdf_name,
@@ -89,12 +90,12 @@ static bool validate_type_method_vdf_name(const char *vdf_name,
   }
 
   if (suffix != "from_string" && suffix != "to_string" && suffix != "compare" &&
-      suffix != "hash") {
+      suffix != "hash" && suffix != "real_value") {
     LogVSQL(
         ERROR_LEVEL,
         "Type '%s' in extension '%s': %s '%s' uses '::' but suffix "
         "'%.*s' is not a valid type method (must be from_string, to_string, "
-        "compare, or hash)",
+        "compare, hash, or real_value)",
         type_name, extension_name.c_str(), field_name, vdf_name,
         static_cast<int>(suffix.size()), suffix.data());
     return true;
@@ -353,6 +354,24 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
       custom_id, custom_name, VEF_TYPE_INT, nullptr, &error);
   if (error) return std::nullopt;
 
+  const vef_func_desc_t *real_value_vdf = nullptr;
+  if (td->real_value_vdf_name != nullptr) {
+    real_value_vdf = find_vdf_by_name(reg, td->real_value_vdf_name);
+    if (real_value_vdf == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s': real_value_vdf_name "
+              "'%s' not found",
+              type_name.c_str(), extension_name.c_str(),
+              td->real_value_vdf_name);
+      return std::nullopt;
+    }
+    if (validate_type_vdf_signature(real_value_vdf, "real_value", td->name, 1,
+                                    custom_id, custom_name, VEF_TYPE_REAL,
+                                    nullptr, extension_name)) {
+      return std::nullopt;
+    }
+  }
+
   // 3. Resolve int_to_params / resolve_params (VDF only, no function pointer).
   const vef_func_desc_t *int_to_params_vdf = nullptr;
   if (td->int_to_params_vdf_name != nullptr) {
@@ -433,6 +452,9 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
   else if (td->hash_func != nullptr)
     hash_fn.emplace(td->hash_func);
 
+  std::optional<RealValueFunction> real_value_fn;
+  if (real_value_vdf != nullptr) real_value_fn.emplace(real_value_vdf);
+
   std::optional<IntToParamsFunction> int_to_params_fn;
   if (int_to_params_vdf != nullptr) int_to_params_fn.emplace(int_to_params_vdf);
 
@@ -447,7 +469,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
       td->max_decode_buffer_length, td->max_persisted_length,
       is_variable ? LengthKind::Variable : LengthKind::Fixed,
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
-      std::move(hash_fn), std::move(int_to_params_fn),
+      std::move(hash_fn), std::move(real_value_fn), std::move(int_to_params_fn),
       std::move(resolve_params_fn));
 
   // 7. Set intrinsic default (VDF or string literal, mutually exclusive).
@@ -467,7 +489,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
         std::string(td->intrinsic_default_str));
   }
 
-  return descriptor;
+  return std::optional<TypeDescriptor>(std::move(descriptor));
 }
 
 }  // namespace veb

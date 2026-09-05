@@ -48,6 +48,8 @@ TypeContext::TypeContext(const TypeContextKey &key,
     compare_op_.emplace(descriptor_->compare_fn(), key_.parameters());
   if (descriptor_->hash_fn().has_value())
     hash_op_.emplace(*descriptor_->hash_fn(), key_.parameters());
+  if (descriptor_->real_value_fn().has_value())
+    real_value_op_.emplace(*descriptor_->real_value_fn(), key_.parameters());
 
   resolve_cached_values();
 }

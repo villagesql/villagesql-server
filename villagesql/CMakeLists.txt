@@ -176,6 +176,15 @@ IF(NOT WITHOUT_SERVER)
     INSTALL_COMPONENT ExampleVebs
   )
   vsql_add_extension(
+    DIR_NAME    vsql-units
+    EXT_TARGET  vsql_units_extension
+    VEB_NAME    vsql_units
+    SOURCE_BASE ${CMAKE_CURRENT_SOURCE_DIR}/examples
+    BINARY_BASE ${CMAKE_CURRENT_BINARY_DIR}/examples
+    INSTALL_DEST      ${INSTALL_VEBDIR}
+    INSTALL_COMPONENT ExampleVebs
+  )
+  vsql_add_extension(
     DIR_NAME    vsql-tvector
     EXT_TARGET  vsql_tvector_extension
     VEB_NAME    vsql_tvector
