@@ -2782,7 +2782,6 @@ class Item : public Parse_tree_node {
   /// A processor to handle the select lex visitor framework.
   virtual bool visitor_processor(uchar *arg);
 
-
   /**
     Item::walk function. Set bit in table->cond_set for all fields of
     all tables that are referred to by the Item.
