@@ -1,0 +1,155 @@
+Source: villagesql
+Section: database
+Priority: optional
+Maintainer: VillageSQL Contributors <info@villagesql.com>
+Homepage: https://villagesql.com
+Standards-Version: 4.6.2
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.14.3),
+               g++,
+               bison,
+               libssl-dev,
+               libncurses-dev,
+               zlib1g-dev,
+               libtirpc-dev,
+               rpcsvc-proto,
+               libcurl4-openssl-dev,
+               libaio-dev,
+               libsystemd-dev,
+               systemd-dev | systemd,
+               pkg-config,
+               perl
+
+Package: villagesql-server
+Architecture: any
+Depends: villagesql-common (= ${binary:Version}),
+         villagesql-client (= ${binary:Version}),
+         adduser,
+         ${shlibs:Depends},
+         ${misc:Depends}
+# Drop-in replacement: anything depending on a MySQL server is satisfied.
+Provides: mysql-server, virtual-mysql-server, virtual-mysql-server-core,
+          mysql-server-8.4, default-mysql-server
+# VillageSQL ships /usr/sbin/mysqld, /var/lib/mysql and mysql.service under the
+# same names as MySQL, so it cannot be co-installed with any of these. Breaks +
+# Replaces (not just Conflicts) is what lets apt resolve this as a takeover
+# rather than refusing the transaction.
+Conflicts: mysql-server-5.7, mysql-server-8.0, mysql-server-8.4,
+           mysql-server-core-5.7, mysql-server-core-8.0, mysql-server-core-8.4,
+           mariadb-server, mariadb-server-10.6, mariadb-server-10.11,
+           mariadb-server-core-10.6, mariadb-server-core-10.11,
+           percona-server-server, default-mysql-server, default-mysql-server-core
+Breaks: mysql-server, mysql-community-server, mariadb-server, percona-server-server
+Replaces: mysql-server, mysql-server-5.7, mysql-server-8.0, mysql-server-8.4,
+          mysql-server-core-5.7, mysql-server-core-8.0, mysql-server-core-8.4,
+          mysql-community-server, mariadb-server,
+          mariadb-server-core-10.6, mariadb-server-core-10.11,
+          percona-server-server,
+          default-mysql-server, default-mysql-server-core
+Description: VillageSQL database server binary and configuration
+ VillageSQL is an open-source tracking fork of upstream @VSQL_CODE_BASE@ that
+ adds the VillageSQL Extension Framework (VEF), a runtime extension system for
+ custom SQL data types and functions. VillageSQL tracks several upstream code
+ bases; this package was built from @VSQL_CODE_BASE@.
+ .
+ This package provides the mysqld binary, the systemd unit and the server-side
+ utilities. It is wire-, protocol- and on-disk-compatible with upstream
+ @VSQL_CODE_BASE@ and installs the same paths and the same systemd unit
+ name, so it REPLACES an existing MySQL, MariaDB or Percona Server install
+ rather than sitting alongside it.
+ .
+ Extensions are packaged as .veb bundles, installed at runtime with
+ "INSTALL EXTENSION <name>", and loaded from /usr/lib/mysql/veb.
+
+Package: villagesql-client
+Architecture: any
+Depends: villagesql-common (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Provides: mysql-client, virtual-mysql-client, virtual-mysql-client-core,
+          mysql-client-8.4, default-mysql-client
+Conflicts: mysql-client-5.7, mysql-client-8.0, mysql-client-8.4,
+           mysql-client-core-5.7, mysql-client-core-8.0, mysql-client-core-8.4,
+           mariadb-client, mariadb-client-core-10.6, mariadb-client-core-10.11,
+           default-mysql-client, default-mysql-client-core
+Breaks: mysql-client, mariadb-client
+Replaces: mysql-client, mysql-client-5.7, mysql-client-8.0, mysql-client-8.4,
+          mysql-client-core-5.7, mysql-client-core-8.0, mysql-client-core-8.4,
+          mariadb-client, mariadb-client-core-10.6, mariadb-client-core-10.11,
+          default-mysql-client, default-mysql-client-core
+Description: VillageSQL command line client and administration tools
+ The mysql command line client plus mysqladmin, mysqldump, mysqlimport,
+ mysqlshow, mysqlslap, mysqlbinlog and related administration tools.
+
+Package: villagesql-common
+Architecture: any
+Depends: ${misc:Depends}
+Provides: mysql-common
+Conflicts: mysql-common, mariadb-common
+Replaces: mysql-common, mariadb-common
+Breaks: mysql-common, mariadb-common
+Description: VillageSQL shared configuration, character sets and error messages
+ Files shared by the VillageSQL server and client packages: /etc/mysql/my.cnf,
+ character set definitions and localized error messages.
+
+Package: libvillagesqlclient24
+Section: libs
+Architecture: any
+Depends: villagesql-common (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Provides: libmysqlclient24, mysql-libs
+Conflicts: libmysqlclient21, libmysqlclient24
+Replaces: libmysqlclient21, libmysqlclient24
+Description: VillageSQL client library
+ The libmysqlclient shared library, used by client applications to connect to
+ a VillageSQL or MySQL server.
+
+Package: libvillagesqlclient-dev
+Section: libdevel
+Architecture: any
+Depends: libvillagesqlclient24 (= ${binary:Version}), ${misc:Depends}
+Provides: libmysqlclient-dev, default-libmysqlclient-dev
+Conflicts: libmysqlclient-dev, libmariadb-dev
+Replaces: libmysqlclient-dev, libmariadb-dev, default-libmysqlclient-dev
+Description: VillageSQL client library development files
+ Headers, static libraries and mysql_config, for building client applications
+ against the VillageSQL client library.
+ .
+ This package is for CLIENT development. To build VillageSQL EXTENSIONS,
+ install villagesql-sdk instead.
+
+Package: villagesql-sdk
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}
+Description: VillageSQL Extension Framework SDK
+ Headers, CMake integration and a template project for building VillageSQL
+ extensions (.veb bundles) against the VillageSQL Extension Framework.
+ .
+ Two header trees are installed: the stable protocol under
+ /usr/include/mysql/villagesql and the in-development protocol under
+ /usr/include/mysql-dev/villagesql. Build against the stable tree unless you
+ are developing the framework itself.
+ .
+ This package does not depend on villagesql-server: extensions are commonly
+ cross-built on a machine that does not run the database.
+
+Package: villagesql-extension-examples
+Architecture: all
+Depends: villagesql-server (>= ${source:Version}), ${misc:Depends}
+Description: Example VillageSQL extension bundles
+ Reference extension bundles shipped with VillageSQL: vsql_simple (a minimal
+ custom type and function), vsql_complex (complex number arithmetic with custom
+ hash and serialization handlers) and vsql_tvector.
+ .
+ Installed into /usr/lib/mysql/veb and enabled per-database with, for example,
+ "INSTALL EXTENSION vsql_complex;".
+
+Package: villagesql-test
+Architecture: any
+Depends: villagesql-server (= ${binary:Version}),
+         villagesql-client (= ${binary:Version}),
+         perl, ${shlibs:Depends}, ${misc:Depends}
+Provides: mysql-testsuite
+Conflicts: mysql-testsuite, mysql-testsuite-8.0, mysql-testsuite-8.4
+Replaces: mysql-testsuite, mysql-testsuite-8.0, mysql-testsuite-8.4
+Description: VillageSQL test suite
+ The mysql-test-run.pl harness and the full regression suite, including the
+ VillageSQL-specific suites under mysql-test/suite/villagesql.

@@ -1,0 +1,49 @@
+#!/bin/sh
+# Copyright (c) 2026 VillageSQL Contributors
+set -e
+
+case "$1" in
+    configure)
+        # VillageSQL reuses the mysql user and group deliberately: it is a
+        # drop-in replacement and must be able to take ownership of an existing
+        # /var/lib/mysql created by MySQL or MariaDB.
+        if ! getent group mysql >/dev/null; then
+            addgroup --system --quiet mysql
+        fi
+        if ! getent passwd mysql >/dev/null; then
+            adduser --system --quiet --ingroup mysql --no-create-home \
+                    --home /nonexistent --disabled-login \
+                    --gecos "VillageSQL Server" mysql
+        fi
+
+        for d in /var/lib/mysql /var/lib/mysql-files /var/lib/mysql-keyring; do
+            if [ ! -d "$d" ]; then
+                install -d -o mysql -g mysql -m 0750 "$d"
+            fi
+        done
+        install -d -o mysql -g mysql -m 0755 /var/run/mysqld
+
+        if [ ! -e /var/log/mysql ]; then
+            install -d -o mysql -g mysql -m 0750 /var/log/mysql
+        fi
+        if [ ! -e /var/log/mysql/error.log ]; then
+            install -o mysql -g mysql -m 0640 /dev/null /var/log/mysql/error.log
+        fi
+
+        # The data dictionary and the VillageSQL victionary (villagesql.*
+        # system schema) are upgraded by the server itself on first start after
+        # a binary change; mysqld_pre_systemd drives that. Nothing to do here.
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,4 @@
+usr/bin/villagesql_config
+usr/include/mysql/villagesql
+usr/include/mysql-dev
+usr/lib/*/cmake/VillageSQLExtensionFramework
