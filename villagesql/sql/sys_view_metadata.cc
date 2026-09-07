@@ -179,17 +179,25 @@ class Sys_schema_ddl_context {
 //
 // Must run on a bootstrap thread. run_bootstrap_thread() sets the server
 // default sql_mode (strict_mode).
-bool refresh_sys_view_metadata(THD *thd) {
+// Every failure path below logs and returns without repairing the rest. The
+// metadata is display only, so a partial or skipped repair is not worth failing
+// startup over.
+void refresh_sys_view_metadata(THD *thd) {
   bool sys_schema_exists = false;
-  if (dd::schema_exists(thd, kSysSchemaName, &sys_schema_exists)) return true;
-  if (!sys_schema_exists) return false;
+  if (dd::schema_exists(thd, kSysSchemaName, &sys_schema_exists)) {
+    LogVSQL(ERROR_LEVEL,
+            "Could not determine whether the sys schema exists; leaving sys "
+            "view metadata untouched");
+    return;
+  }
+  if (!sys_schema_exists) return;
 
-  if (sys_view_metadata_is_vanilla(thd)) return false;
+  if (sys_view_metadata_is_vanilla(thd)) return;
 
   const Disable_binlog_guard binlog_guard(thd);
   const Disable_sql_log_bin_guard sql_log_bin_guard(thd);
   const Sys_schema_ddl_context ddl_context(thd);
-  if (ddl_context.error()) return true;
+  if (ddl_context.error()) return;
 
   std::array<size_t, kAffectedSysViews.size()> replayed{};
   for (const char **query = &mysql_sys_schema[0]; *query != nullptr; query++) {
@@ -200,7 +208,8 @@ bool refresh_sys_view_metadata(THD *thd) {
       // between two statements rather than mid-transaction. Disabling
       // autocommit does not suppress that: SQLCOM_CREATE_VIEW carries
       // CF_AUTO_COMMIT_TRANS.
-      if (villagesql::execute_statement(thd, *query)) return true;
+      // execute_statement() has already logged the failure.
+      if (villagesql::execute_statement(thd, *query)) return;
       break;
     }
   }
@@ -209,16 +218,15 @@ bool refresh_sys_view_metadata(THD *thd) {
     if (replayed[i] == 1) continue;
     // TODO(villagesql-rebase): upstream renamed, split or dropped this sys
     // view. Update kAffectedSysViews to match scripts/sys_schema/.
-    LogVSQL(ERROR_LEVEL,
+    LogVSQL(WARNING_LEVEL,
             "Expected exactly one CREATE VIEW statement for sys.%s in the sys "
-            "schema script, found %zu",
+            "schema script, found %zu; sys view metadata left as it is",
             kAffectedSysViews[i], replayed[i]);
-    return true;
+    return;
   }
 
   LogVSQL(INFORMATION_LEVEL, "Refreshed stored metadata of %zu sys views",
           kAffectedSysViews.size());
-  return false;
 }
 
 }  // namespace villagesql

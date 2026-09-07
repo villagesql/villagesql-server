@@ -44,10 +44,9 @@ namespace villagesql {
 //     tears the cost model down between bootstrap DDL phases, so the caller
 //     generally needs an init_optimizer_cost_module() / delete pair around it.
 //
-// Returns true on failure. Callers during startup should treat that as fatal:
-// it runs single-threaded with no concurrent DDL, so this replay should not
-// failed.
-bool refresh_sys_view_metadata(THD *thd);
+// The repair is best effort and never reports failure to the caller, which is
+// why this returns nothing.
+void refresh_sys_view_metadata(THD *thd);
 
 }  // namespace villagesql
 

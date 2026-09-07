@@ -248,12 +248,11 @@ static bool do_init_extension_infrastructure(THD *thd) {
   }
 
   // Repair the sys view metadata that installing the VillageSQL
-  // INFORMATION_SCHEMA overrides rewrote.
-  if (refresh_sys_view_metadata(thd)) {
-    trans_rollback_stmt(thd);
-    trans_rollback(thd);
-    return true;
-  }
+  // INFORMATION_SCHEMA overrides rewrote. Best effort by design: it logs its
+  // own failures and never fails startup, because the metadata is display only
+  // and the likeliest failure is upstream drift rather than a broken
+  // dictionary.
+  refresh_sys_view_metadata(thd);
 
   // Load installed extensions from villagesql.extensions table
   // This validates manifests and cleans up orphaned expansion directories
