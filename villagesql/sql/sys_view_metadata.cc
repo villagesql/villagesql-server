@@ -112,8 +112,7 @@ std::string_view skip_leading_dash_comments(std::string_view query) {
 //   VIEW x$schema_flattened_keys (
 //
 // so "CREATE OR REPLACE VIEW" never appears contiguously. Matching is case
-// sensitive and byte-wise; sys view names are ASCII, and a re-spelling upstream
-// would leave the view unmatched and be reported as drift.
+// sensitive and byte-wise; sys view names are ASCII.
 bool statement_creates_view(std::string_view query,
                             std::string_view view_name) {
   const std::string_view stmt = skip_leading_dash_comments(query);
