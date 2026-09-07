@@ -16,6 +16,7 @@
 #   CREATE INDEX and ALTER TABLE ADD INDEX (unqualified and qualified type/profile)
 #   DROP INDEX and ALTER TABLE DROP INDEX (single and multiple)
 #   DROP TABLE
+#   SHOW CREATE TABLE rendering of all of the above
 
 # TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
 # custom index execution is fully implemented and the guard in
@@ -33,6 +34,10 @@ SET SESSION debug='+d,villagesql_custom_index_proceed';
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
   INDEX idx_inline (a) USING EXTENDED(dummy_index_hnsw));
 --source include/villagesql/query_custom_indexes.inc
+
+--echo # Rendering: the unqualified dummy_index_hnsw comes back qualified, and
+--echo # the profile appears although the DDL above never named one.
+SHOW CREATE TABLE t;
 
 DROP TABLE t;
 --source include/villagesql/query_custom_indexes.inc
@@ -65,6 +70,8 @@ CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_hnsw);
 ALTER TABLE t ADD INDEX idx_alt (e) USING EXTENDED(dummy_index_hnsw) WITH (M = 8);
 --source include/villagesql/query_custom_indexes.inc
 
+SHOW CREATE TABLE t;
+
 --echo # --- DROP INDEX: removes metadata for that index ---
 DROP INDEX idx_dummy_index_hnsw ON t;
 --source include/villagesql/query_custom_indexes.inc
@@ -95,6 +102,8 @@ CREATE INDEX idx_qq ON t (b vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDE
 ALTER TABLE t ADD INDEX idx_alt_q (c) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
 --source include/villagesql/query_custom_indexes.inc
 
+SHOW CREATE TABLE t;
+
 --echo # --- ALTER TABLE DROP + re-ADD same column with custom index ---
 CREATE TABLE t_drop_readd (id INT PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t_drop_readd
@@ -116,6 +125,31 @@ DROP TABLE t_dedup;
 
 --echo # --- DROP TABLE: removes all remaining custom index metadata ---
 DROP TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- Rendered DDL round-trips ---
+# Rendering is only useful if it can be fed back, which is what makes a
+# mysqldump of a custom index restorable. Create with ordinary DDL, capture what
+# SHOW CREATE TABLE renders, drop, replay the captured text, and require the
+# second rendering to equal the first.
+CREATE TABLE t_roundtrip (id INT PRIMARY KEY, b dummy_type_vector,
+  INDEX idx_ext (b) USING EXTENDED(dummy_index_hnsw)
+    WITH (M = 16, ef_construction = 200, label = 'primary', mode = fast));
+--let $ddl_show_create_first = query_get_value(SHOW CREATE TABLE t_roundtrip, Create Table, 1)
+DROP TABLE t_roundtrip;
+
+--eval $ddl_show_create_first
+--let $ddl_show_create_second = query_get_value(SHOW CREATE TABLE t_roundtrip, Create Table, 1)
+
+if ($ddl_show_create_first != $ddl_show_create_second) {
+  --echo FIRST:  $ddl_show_create_first
+  --echo SECOND: $ddl_show_create_second
+  --die Rendered DDL did not survive a round-trip
+}
+--echo # Replayed rendering is identical to the original:
+SHOW CREATE TABLE t_roundtrip;
+--source include/villagesql/query_custom_indexes.inc
+DROP TABLE t_roundtrip;
 --source include/villagesql/query_custom_indexes.inc
 
 SET SESSION debug='-d,villagesql_custom_index_proceed';
