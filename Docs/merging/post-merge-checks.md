@@ -107,7 +107,18 @@ test that notices.
 
 **New sys views.** If upstream adds a `sys` view that reads `INFORMATION_SCHEMA.COLUMNS`
 or `INFORMATION_SCHEMA.STATISTICS`, it needs adding to `kAffectedSysViews`, and so does
-anything that reads *it*. Nothing detects that automatically — the symptom is a
-`sysschema` result diff where nullability flips `YES` to `NO`, and `sysschema` only runs
-in the weekly full suite. `grep -ril "information_schema.\(columns\|statistics\)"
-scripts/sys_schema/` lists the candidates.
+anything that reads *it*. This is what the `sys_view_metadata_dependents` test is for, and
+it needs no list of its own: it walks `INFORMATION_SCHEMA.VIEW_TABLE_USAGE` with a
+recursive CTE to find the transitive dependent set, then checks each view it finds.
+
+The check is that a view's stored metadata matches what a strict-mode `CREATE` of the
+same body records — which is exactly what the repair restores. It recreates each
+dependent's body in a scratch schema to produce that reference value on the spot.
+The practical consequence at merge time: **a new dependent view needs no action here.**
+If its metadata can be damaged the assert fails and names the offending `view.column`
+pairs, and the fix is to add those views to `kAffectedSysViews` with a sentinel column
+each, ordered after anything they read. If it cannot be damaged the test simply stays
+green — no list to update and no result to re-record. `schema_unused_indexes` is the
+existing example of that second case: it joins `information_schema.statistics` but
+projects all three of its columns from `performance_schema`, so nothing of its own can
+flip.

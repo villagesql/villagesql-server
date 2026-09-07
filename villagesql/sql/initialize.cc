@@ -248,12 +248,11 @@ static bool do_init_extension_infrastructure(THD *thd) {
   }
 
   // Repair the sys view metadata that installing the VillageSQL
-  // INFORMATION_SCHEMA overrides rewrote.
-  if (refresh_sys_view_metadata(thd)) {
-    trans_rollback_stmt(thd);
-    trans_rollback(thd);
-    return true;
-  }
+  // INFORMATION_SCHEMA overrides rewrote. Best effort by design: it logs its
+  // own failures and never fails startup, because the metadata is display only
+  // and the likeliest failure is upstream drift rather than a broken
+  // dictionary.
+  refresh_sys_view_metadata(thd);
 
   // Load installed extensions from villagesql.extensions table
   // This validates manifests and cleans up orphaned expansion directories
@@ -303,7 +302,7 @@ bool init_extension_infrastructure() {
   // init_server_components() tears it down after each bootstrap DDL phase and
   // only brings it up for good later. refresh_sys_view_metadata() re-creates
   // ALGORITHM=TEMPTABLE sys views, and create_tmp_table() reaches into the cost
-  // model, so bracket the thread the same way init_server_components().
+  // model, so bracket the thread the same way init_server_components() does.
   init_optimizer_cost_module(true);
   const bool init_failed = bootstrap::run_bootstrap_thread(
       nullptr, nullptr, &do_init_extension_infrastructure,
