@@ -71,9 +71,28 @@ constexpr auto kAffectedSysViews = std::to_array<AffectedSysView>({
 });
 
 // True when query is the CREATE OR REPLACE VIEW statement for view_name.
+//
+// The match is textual because the statements come from the generated
+// mysql_sys_schema[] array, and it has to cope with two quirks of that text.
+// comp_sql keeps each statement's leading "--" comment block inside the same
+// array element, so an element does not begin at its CREATE; and the sys views
+// are written as
+//
+//   CREATE OR REPLACE
+//     ALGORITHM = TEMPTABLE
+//     DEFINER = 'mysql.sys'@'localhost'
+//     SQL SECURITY INVOKER
+//   VIEW x$schema_flattened_keys (
+//
+// so "CREATE OR REPLACE VIEW" never appears contiguously and cannot be anchored
+// at the start. Hence: locate the CREATE OR REPLACE, then require
+// "VIEW <view_name>" after it.
 bool statement_creates_view(const char *query, const char *view_name) {
+  const char *create = strstr(query, "CREATE OR REPLACE");
+  if (create == nullptr) return false;
+
   const std::string needle = std::string("VIEW ") + view_name;
-  const char *hit = strstr(query, needle.c_str());
+  const char *hit = strstr(create, needle.c_str());
   if (hit == nullptr) return false;
 
   // hit[needle.length()] is the character just after the match, which must
