@@ -81,7 +81,7 @@ constexpr auto kAffectedSysViews = std::to_array<AffectedSysView>({
 // but no statement opens with either. Returned string_view will not be a
 // valid SQL statement.
 // Returning an empty view means "nothing left that could be a statement".
-std::string_view skip_leading_sql_comments(std::string_view query) {
+std::string_view skip_leading_dash_comments(std::string_view query) {
   for (;;) {
     const size_t token = query.find_first_not_of(" \t\n\r");
     if (token == std::string_view::npos) return {};
@@ -116,7 +116,7 @@ std::string_view skip_leading_sql_comments(std::string_view query) {
 // would leave the view unmatched and be reported as drift.
 bool statement_creates_view(std::string_view query,
                             std::string_view view_name) {
-  const std::string_view stmt = skip_leading_sql_comments(query);
+  const std::string_view stmt = skip_leading_dash_comments(query);
   if (!stmt.starts_with("CREATE OR REPLACE")) return false;
 
   const std::string needle = std::string("VIEW ").append(view_name);
