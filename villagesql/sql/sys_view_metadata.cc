@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 #include "my_sys.h"
 #include "sql/dd/cache/dictionary_client.h"
@@ -71,36 +72,26 @@ constexpr auto kAffectedSysViews = std::to_array<AffectedSysView>({
 });
 
 // Returns query advanced past leading blank and "--" comment lines, so the
-// result points at the statement's first real token. Needed because comp_sql
-// keeps each .sql file's comment block -- GPL header included -- in the same
+// result points at the statement's first real token. Needed because mysql_sys_schema
+// keeps each statement's comment block -- GPL header included -- in the same
 // mysql_sys_schema[] element as the statement, so an element begins
 // "-- Copyright (c) ..." rather than at its CREATE.
 //
 // Only "--" and blank lines are skipped. MySQL also accepts "#" and "/* */",
-// and the view bodies do use "/* */" internally, but no sys .sql file opens
-// with either. If one did, the prefix test below would fail and the count check
-// in refresh_sys_view_metadata() reports it as drift.
-// The string's NUL is the only sentinel available -- an element is one
-// NUL-terminated string whose lines are separated by '\n', not '\0' -- and each
-// step below stops on it: the whitespace skip because NUL is not whitespace,
-// and eol + 1 because a '\n' is never the terminator.
-//
-// The p[1] read is the delicate one, and it is safe only because || short
-// circuits: when p[0] is the NUL the first test already succeeds, so p[1] is
-// never evaluated. Do not reorder the two comparisons -- testing p[1] first
-// reads one byte past the end of a string ending at p[0].
-//
-// A last comment line with no closing newline returns the NUL position, i.e.
-// the empty string. The caller's prefix test then fails, the view goes
-// unmatched, and refresh_sys_view_metadata() reports it as drift.
-const char *skip_leading_sql_comments(const char *query) {
-  const char *p = query;
+// but no statement opens with either. Returned string_view will not be a
+// valid SQL statement.
+// Returning an empty view means "nothing left that could be a statement".
+std::string_view skip_leading_sql_comments(std::string_view query) {
   for (;;) {
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-    if (p[0] != '-' || p[1] != '-') return p;
-    const char *eol = strchr(p, '\n');
-    if (eol == nullptr) return p + strlen(p);
-    p = eol + 1;
+    const size_t token = query.find_first_not_of(" \t\n\r");
+    if (token == std::string_view::npos) return {};
+    query.remove_prefix(token);
+
+    if (!query.starts_with("--")) return query;
+
+    const size_t eol = query.find('\n');
+    if (eol == std::string_view::npos) return {};
+    query.remove_prefix(eol + 1);
   }
 }
 
@@ -123,21 +114,20 @@ const char *skip_leading_sql_comments(const char *query) {
 // so "CREATE OR REPLACE VIEW" never appears contiguously. Matching is case
 // sensitive and byte-wise; sys view names are ASCII, and a re-spelling upstream
 // would leave the view unmatched and be reported as drift.
-bool statement_creates_view(const char *query, const char *view_name) {
-  static constexpr char kCreateOrReplace[] = "CREATE OR REPLACE";
-  const char *stmt = skip_leading_sql_comments(query);
-  if (strncmp(stmt, kCreateOrReplace, sizeof(kCreateOrReplace) - 1) != 0)
-    return false;
+bool statement_creates_view(std::string_view query,
+                            std::string_view view_name) {
+  const std::string_view stmt = skip_leading_sql_comments(query);
+  if (!stmt.starts_with("CREATE OR REPLACE")) return false;
 
-  const std::string needle = std::string("VIEW ") + view_name;
-  const char *hit = strstr(stmt, needle.c_str());
-  if (hit == nullptr) return false;
+  const std::string needle = std::string("VIEW ").append(view_name);
+  const size_t pos = stmt.find(needle);
+  if (pos == std::string_view::npos) return false;
 
-  // hit[needle.length()] is the character just after the match, which must
-  // not be alphanumeric or '_' or '$' to be a whole-identifier match. Six sys
-  // view names are prefixes of others, so this matters.
-  // hit[needle.length()] is safe - it's null character in the worst case.
-  const unsigned char after = static_cast<unsigned char>(hit[needle.length()]);
+  // The character just after the name must not be alphanumeric or
+  // '_' or '$' to be a whole-identifier match. 
+  const size_t after_pos = pos + needle.size();
+  if (after_pos == stmt.size()) return true;
+  const unsigned char after = static_cast<unsigned char>(stmt[after_pos]);
   return !(std::isalnum(after) || after == '_' || after == '$');
 }
 
