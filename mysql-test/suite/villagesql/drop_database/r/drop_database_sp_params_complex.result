@@ -1,0 +1,47 @@
+CREATE DATABASE test_sp_params_db;
+USE test_sp_params_db;
+CREATE PROCEDURE p1(IN input_val COMPLEX, OUT output_val COMPLEX)
+BEGIN
+SET output_val = input_val;
+END//
+CREATE FUNCTION f1(input_val COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+RETURN input_val;
+END//
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT db_name, sp_name, param_name, type_name
+FROM villagesql.custom_sp_params
+WHERE db_name = 'test_sp_params_db'
+  ORDER BY sp_name, param_name;
+db_name	sp_name	param_name	type_name
+test_sp_params_db	f1	@returns	COMPLEX
+test_sp_params_db	f1	input_val	COMPLEX
+test_sp_params_db	p1	input_val	COMPLEX
+test_sp_params_db	p1	output_val	COMPLEX
+USE test;
+DROP DATABASE test_sp_params_db;
+SHOW DATABASES LIKE 'test_sp_params_db';
+Database (test_sp_params_db)
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT db_name, sp_name, param_name, type_name
+FROM villagesql.custom_sp_params
+WHERE db_name = 'test_sp_params_db'
+  ORDER BY sp_name, param_name;
+db_name	sp_name	param_name	type_name
+test_sp_params_db	f1	@returns	COMPLEX
+test_sp_params_db	f1	input_val	COMPLEX
+test_sp_params_db	p1	input_val	COMPLEX
+test_sp_params_db	p1	output_val	COMPLEX
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	CREATE DATABASE test_sp_params_db
+#	#	Query	#	#	use `test_sp_params_db`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(IN `input_val` vsql_complex.COMPLEX, OUT `output_val` vsql_complex.COMPLEX)
+BEGIN
+SET output_val = input_val;
+END
+#	#	Query	#	#	use `test_sp_params_db`; CREATE DEFINER=`root`@`localhost` FUNCTION `f1`(`input_val` vsql_complex.COMPLEX) RETURNS vsql_complex.COMPLEX
+    DETERMINISTIC
+BEGIN
+RETURN input_val;
+END
+#	#	Query	#	#	DROP DATABASE test_sp_params_db
