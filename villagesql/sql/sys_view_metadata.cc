@@ -42,28 +42,32 @@ namespace {
 
 constexpr const char *kSysSchemaName = "sys";
 
+struct AffectedSysView {
+  const char *view_name;
+  // A column whose nullability reveals whether this view's metadata was
+  // rewritten: any column the body renders through an Item_str_func, i.e. a
+  // COLLATE or CONCAT expression. Nullable means vanilla, NOT NULL means
+  // rewritten.
+  const char *sentinel_column;
+};
+
+// TODO(villagesql-rebase): upstream may add, rename or drop a sys view that
+// reads one of the overridden INFORMATION_SCHEMA views, in which case this list
+// needs updating. Docs/merging/post-merge-checks.md has the procedure, under
+// "The sys view metadata repair".
+//
 // This is a membership set, not an execution order: the replay follows
 // mysql_sys_schema[] order, which lists every view after the ones it reads.
 // It has to be this order as recreating a view implicitly recreates the
 // metadata of whatever reads it.
-constexpr auto kAffectedSysViews = std::to_array<const char *>({
-    "schema_object_overview",
-    "x$schema_flattened_keys",
-    "schema_auto_increment_columns",
-    "schema_redundant_indexes",
-});
-
-struct SysViewSentinel {
-  const char *view_name;
-  const char *column_name;
-};
-
-// One sentinel column per overridden INFORMATION_SCHEMA view, used to tell
-// whether the metadata still looks the way a vanilla server records it. A
-// healthy sentinel is nullable; a rewritten one is NOT NULL.
-constexpr auto kSysViewSentinels = std::to_array<SysViewSentinel>({
+//
+// Every entry carries its own sentinel so the detection and the repair cannot
+// drift apart.
+constexpr auto kAffectedSysViews = std::to_array<AffectedSysView>({
+    {"schema_object_overview", "object_type"},
     {"x$schema_flattened_keys", "index_name"},
     {"schema_auto_increment_columns", "column_name"},
+    {"schema_redundant_indexes", "redundant_index_name"},
 });
 
 // True when query is the CREATE OR REPLACE VIEW statement for view_name.
@@ -82,31 +86,30 @@ bool statement_creates_view(const char *query, const char *view_name) {
 // True when every sentinel column is still nullable, meaning nothing needs
 // repairing.
 bool sys_view_metadata_is_vanilla(THD *thd) {
-  for (const SysViewSentinel &sentinel : kSysViewSentinels) {
+  for (const AffectedSysView &affected : kAffectedSysViews) {
     const dd::Abstract_table *table = nullptr;
-    if (thd->dd_client()->acquire(kSysSchemaName, sentinel.view_name, &table)) {
+    if (thd->dd_client()->acquire(kSysSchemaName, affected.view_name, &table)) {
       LogVSQL(WARNING_LEVEL,
               "Could not read sys.%s from the data dictionary; refreshing sys "
               "view metadata anyway",
-              sentinel.view_name);
+              affected.view_name);
       return false;
     }
 
     const dd::View *view = dynamic_cast<const dd::View *>(table);
     if (view == nullptr) {
       // TODO(villagesql-rebase): upstream renamed or dropped this sys view.
-      // Update kSysViewSentinels and kAffectedSysViews to match
-      // scripts/sys_schema/.
+      // Update kAffectedSysViews to match scripts/sys_schema/.
       LogVSQL(WARNING_LEVEL,
               "sys.%s is not a view; refreshing sys view metadata anyway",
-              sentinel.view_name);
+              affected.view_name);
       return false;
     }
 
     const dd::Column *column = nullptr;
     for (const dd::Column *candidate : view->columns()) {
       if (my_strcasecmp(system_charset_info, candidate->name().c_str(),
-                        sentinel.column_name) == 0) {
+                        affected.sentinel_column) == 0) {
         column = candidate;
         break;
       }
@@ -115,7 +118,7 @@ bool sys_view_metadata_is_vanilla(THD *thd) {
       // TODO(villagesql-rebase): upstream renamed or dropped this column.
       LogVSQL(WARNING_LEVEL,
               "sys.%s has no column %s; refreshing sys view metadata anyway",
-              sentinel.view_name, sentinel.column_name);
+              affected.view_name, affected.sentinel_column);
       return false;
     }
 
@@ -202,7 +205,8 @@ void refresh_sys_view_metadata(THD *thd) {
   std::array<size_t, kAffectedSysViews.size()> replayed{};
   for (const char **query = &mysql_sys_schema[0]; *query != nullptr; query++) {
     for (size_t i = 0; i < kAffectedSysViews.size(); i++) {
-      if (!statement_creates_view(*query, kAffectedSysViews[i])) continue;
+      if (!statement_creates_view(*query, kAffectedSysViews[i].view_name))
+        continue;
       replayed[i]++;
       // A CREATE OR REPLACE VIEW implicitly commits, which is why this runs
       // between two statements rather than mid-transaction. Disabling
@@ -221,7 +225,7 @@ void refresh_sys_view_metadata(THD *thd) {
     LogVSQL(WARNING_LEVEL,
             "Expected exactly one CREATE VIEW statement for sys.%s in the sys "
             "schema script, found %zu; sys view metadata left as it is",
-            kAffectedSysViews[i], replayed[i]);
+            kAffectedSysViews[i].view_name, replayed[i]);
     return;
   }
 
