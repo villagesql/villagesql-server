@@ -291,6 +291,12 @@ extern bool PersistCustomSpParams(THD *thd, sp_head *sp);
 // Returns false on success, true on error.
 extern bool DeleteCustomSpParams(THD *thd, const sp_name *name);
 
+// Delete custom type metadata for all stored procedures/functions of a database
+// from villagesql.custom_sp_params. Called when the database is dropped, since
+// DROP DATABASE removes its routines without the per-routine DROP path.
+// Returns false on success, true on error.
+extern bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name);
+
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_SQL_METADATA_MODIFIER_H_

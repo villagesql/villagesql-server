@@ -42,4 +42,4 @@ SELECT db_name, sp_name, param_name, type_name
   ORDER BY sp_name, param_name;
 
 --source include/villagesql/binlog_check_end.inc
-#--source include/villagesql/uninstall_complex_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

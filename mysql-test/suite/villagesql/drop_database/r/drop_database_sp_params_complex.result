@@ -28,10 +28,6 @@ FROM villagesql.custom_sp_params
 WHERE db_name = 'test_sp_params_db'
   ORDER BY sp_name, param_name;
 db_name	sp_name	param_name	type_name
-test_sp_params_db	f1	@returns	COMPLEX
-test_sp_params_db	f1	input_val	COMPLEX
-test_sp_params_db	p1	input_val	COMPLEX
-test_sp_params_db	p1	output_val	COMPLEX
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	CREATE DATABASE test_sp_params_db
