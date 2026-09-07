@@ -189,6 +189,18 @@ extern bool DecodeStringForItem(Item *item, const String &from, String *out);
 // Appends "extension_name.type_name" to the given String.
 extern void AppendFullyQualifiedName(const TypeContext &tc, String *out);
 
+// Appends the custom index profile bound to a key part, as
+// " extension_name.profile_name", for SHOW CREATE TABLE.
+extern void AppendCustomIndexProfile(const THD *thd,
+                                     const IndexProfileDescriptor *profile,
+                                     String *out);
+
+// Appends " USING EXTENDED(extension_name.index_type_name)" for a custom
+// index, followed by " WITH (key = value, ...)" when it was instantiated with
+// parameters. Appends nothing when index_ctx is nullptr (a regular key).
+extern void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
+                                  String *out);
+
 // Compute hash for a custom type value. Returns nullopt if no custom hash is
 // registered for this type (binary hash is safe in that case).
 extern std::optional<size_t> TryComputeHash(const TypeContext &tc,

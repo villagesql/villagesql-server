@@ -13,7 +13,7 @@ t1	CREATE TABLE `t1` (
   `id` int NOT NULL,
   `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_inline` (`a`)
+  KEY `idx_inline` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # --- Case 2: standalone CREATE INDEX ... USING EXTENDED on the wide column ---
 CREATE TABLE t2 (
@@ -27,7 +27,7 @@ t2	CREATE TABLE `t2` (
   `id` int NOT NULL,
   `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_ext` (`a`)
+  KEY `idx_ext` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # --- Cleanup ---
 DROP TABLE t1;

@@ -16,6 +16,7 @@
 
 #include "villagesql/types/util.h"
 
+#include <cctype>
 #include <cinttypes>
 #include <map>
 #include <optional>
@@ -41,6 +42,7 @@
 #include "sql/sp_pcontext.h"
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
+#include "sql/sql_show.h"  // append_identifier
 #include "sql/sql_udf.h"
 #include "sql/table.h"
 #include "sql/visible_fields.h"
@@ -690,6 +692,63 @@ bool DecodeStringForItem(Item *item, const String &from, String *out) {
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
   const std::string &name = tc.qualified_name();
   out->append(name.c_str(), name.length());
+}
+
+// Appends "extension_name.name", quoting each half.
+static void AppendQualifiedIndexName(const THD *thd,
+                                     const std::string &extension,
+                                     const std::string &name, String *out) {
+  append_identifier(thd, out, extension.c_str(), extension.length());
+  out->append('.');
+  append_identifier(thd, out, name.c_str(), name.length());
+}
+
+static void AppendIndexParamValue(const char *value, String *out) {
+  const size_t len = strlen(value);
+  bool numeric = len > 0;
+  // std::isdigit() takes an int that must be representable as unsigned char;
+  // a plain char is signed here, so a non-ASCII byte would pass a negative
+  // value and the behavior would be undefined.
+  for (size_t i = 0; i < len && numeric; i++)
+    numeric = std::isdigit(static_cast<unsigned char>(value[i]));
+
+  if (numeric)
+    out->append(value, len);
+  else
+    append_unescaped(out, value, len);
+}
+
+void AppendCustomIndexProfile(const THD *thd,
+                              const IndexProfileDescriptor *profile,
+                              String *out) {
+  if (profile == nullptr) return;
+
+  out->append(' ');
+  AppendQualifiedIndexName(thd, profile->extension_name(),
+                           profile->profile_name(), out);
+}
+
+void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
+                           String *out) {
+  if (index_ctx == nullptr) return;
+
+  out->append(STRING_WITH_LEN(" USING EXTENDED("));
+  AppendQualifiedIndexName(thd, index_ctx->extension_name(),
+                           index_ctx->index_type_name(), out);
+  out->append(')');
+
+  const TypeParameters &params = index_ctx->parameters();
+  if (params.empty()) return;
+
+  out->append(STRING_WITH_LEN(" WITH ("));
+  for (unsigned int i = 0; i < params.count(); i++) {
+    if (i != 0) out->append(STRING_WITH_LEN(", "));
+    const char *key = params.key_data()[i];
+    append_identifier(thd, out, key, strlen(key));
+    out->append(STRING_WITH_LEN(" = "));
+    AppendIndexParamValue(params.value_data()[i], out);
+  }
+  out->append(')');
 }
 
 bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
