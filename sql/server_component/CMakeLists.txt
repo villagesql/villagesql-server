@@ -1,4 +1,5 @@
 # Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+#    Copyright (c) 2026 VillageSQL Contributors
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -61,6 +62,7 @@ SET(MYSQL_SERVER_COMPONENT_SOURCES
   audit_api_connection_service_imp.cc
   mysql_query_attributes_imp.cc
   mysql_server_keyring_lockable_imp.cc
+  mysql_system_variable_reader_imp.cc
   mysql_system_variable_update_imp.cc
   mysql_thd_attributes_imp.cc
   transaction_delegate_control_imp.cc
