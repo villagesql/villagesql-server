@@ -1,0 +1,83 @@
+# Clone validates that donor VillageSQL extensions are available on the
+# recipient before transferring any data, mirroring the plugin check.
+#
+# A donor's villagesql.extensions rows are copied as ordinary InnoDB data, but
+# the .veb bundles that back them live in the recipient's --veb-dir, outside the
+# data directory, and are NOT copied by clone. If a matching .veb is missing (or
+# a different version/sha256), the recipient would fail to start after clone.
+# Clone therefore rejects such a clone up front during the COM_INIT handshake
+# with ER_CLONE_EXTENSION_MATCH.
+#
+# Donor     = default instance (mysqld.1): installs vsql_complex.
+# Recipient = instance 2 (mysqld.2): runs CLONE against the donor.
+
+--source include/have_clone_plugin.inc
+--source include/have_log_bin.inc
+
+--disable_query_log
+call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Non innodb table: .* is not cloned and is empty.");
+--enable_query_log
+
+# Donor is the default server (instance 1). Install the clone plugin so it can
+# serve a clone, and install the vsql_complex extension so the donor advertises
+# it during clone parameter exchange.
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+INSTALL EXTENSION vsql_complex;
+--echo # Donor has the vsql_complex extension installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--let $DONOR_PORT = `SELECT @@port`
+
+# Connect to the recipient (instance 2) and install the clone plugin there.
+--connect (recipient, 127.0.0.1, root,, test, $SERVER_PORT_2)
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+# The recipient logs a warning describing why an extension failed validation.
+--disable_query_log
+call mtr.add_suppression("\\[Clone\\] Plugin Clone reported: 'Client: .*extension .*");
+--enable_query_log
+
+--let $RECIPIENT_VEB_DIR = `SELECT @@veb_dir`
+--let $HOST = 127.0.0.1
+--let $PORT = $DONOR_PORT
+--let $USER = root
+--let remote_clone = 1
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_ext_data
+
+--echo #
+--echo # Case 1: recipient is MISSING the donor's extension .veb -> clone fails
+--echo #         during COM_INIT with ER_CLONE_EXTENSION_MATCH, before any data
+--echo #         transfer.
+--echo #
+# Move the recipient's .veb aside so validation cannot find it.
+--copy_file $RECIPIENT_VEB_DIR/vsql_complex.veb $MYSQL_TMP_DIR/vsql_complex.veb.bak
+--remove_file $RECIPIENT_VEB_DIR/vsql_complex.veb
+
+--let $clone_remote_err = ER_CLONE_EXTENSION_MATCH
+--source ../../../clone/include/clone_command.inc
+--let $clone_remote_err =
+
+--echo #
+--echo # Case 2: restore the .veb on the recipient -> validation passes and the
+--echo #         clone completes.
+--echo #
+--copy_file $MYSQL_TMP_DIR/vsql_complex.veb.bak $RECIPIENT_VEB_DIR/vsql_complex.veb
+--remove_file $MYSQL_TMP_DIR/vsql_complex.veb.bak
+# Case 1 failed during COM_INIT before the recipient created $CLONE_DATADIR, so
+# there is nothing to remove here; the successful clone below creates it.
+
+--source ../../../clone/include/clone_command.inc
+
+--echo # Clone succeeded and left the cloned data directory in place.
+
+# Cleanup.
+UNINSTALL PLUGIN clone;
+--disconnect recipient
+--force-rmdir $CLONE_DATADIR
+
+--connection default
+UNINSTALL EXTENSION vsql_complex;
+UNINSTALL PLUGIN clone;

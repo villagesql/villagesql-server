@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -130,6 +131,19 @@ const uint32_t CLONE_PROTOCOL_VERSION_V3 = 0x0102;
 /**  Clone protocol latest version */
 const uint32_t CLONE_PROTOCOL_VERSION = CLONE_PROTOCOL_VERSION_V3;
 
+// TODO(villagesql-rebase): VillageSQL clone capabilities are negotiated as flag
+// bits high in the protocol-version word, kept away from upstream's version
+// numbers. As of the 8.4 base upstream uses only the low 16 bits for the
+// version (highest is 0x0103) and sets no high bit in this word (bit 31 is
+// NO_BACKUP_LOCK_FLAG, but on the separate ddl_timeout word); we use bit 24 and
+// leave 31 alone. The recipient advertises the bit, the donor strips it before
+// the version comparison and negotiates it separately (see
+// clone_server/client). This relies on upstream keeping the version in the low
+// bits — re-check on each rebase. If a second capability is added, clear it too
+// where the bit is stripped.
+/** Recipient/donor both support cloning VillageSQL extension validation. */
+const uint32_t VSQL_CLONE_CAP_EXTENSIONS = 1u << 24;
+
 /** Flag to indicate no backup lock for DDL. This is multiplexed with
 clone_ddl_timeout and sent to donor server. */
 const uint32_t NO_BACKUP_LOCK_FLAG = 1ULL << 31;
@@ -185,6 +199,19 @@ typedef enum Type_Command_Response : uchar {
 
   /** Additional configuration : introduced in version 0x0102 */
   COM_RES_CONFIG_V3,
+
+  // TODO(villagesql-rebase): VillageSQL response types use explicit values in a
+  // range well above upstream's, to reduce the chance of colliding with new
+  // upstream COM_RES_* values on a rebase. As of the 8.4 base upstream assigns
+  // these sequentially from 1 (highest is COM_RES_CONFIG_V4 = 9) with sentinels
+  // COM_RES_COMPLETE = 99 / COM_RES_ERROR = 100; 50 leaves a wide gap under 99.
+  // This is a heuristic, not a guarantee about upstream's numbering: on each
+  // rebase, re-check that no upstream value has reached this range and adjust
+  // if needed. Keep new VillageSQL response types here.
+  /** VillageSQL extension payload (opaque; produced/validated by
+  villagesql/veb). Gated by the VSQL_CLONE_CAP_EXTENSIONS capability, not the
+  protocol version. */
+  COM_RES_EXTENSION = 50,
 
   /** End of response data */
   COM_RES_COMPLETE = 99,

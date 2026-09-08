@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -117,6 +118,10 @@ class Server {
   @return error code */
   int send_configs(Command_Response rcmd);
 
+  /** Send the opaque VillageSQL extension payload for recipient validation.
+  @return error code */
+  int send_extensions();
+
   /** @return true iff need to send only plugin name for old clone version. */
   bool send_only_plugin_name() const {
     return m_protocol_version < CLONE_PROTOCOL_VERSION_V2;
@@ -125,6 +130,11 @@ class Server {
   /** @return true iff skip sending additional configurations. */
   bool skip_other_configs() const {
     return m_protocol_version < CLONE_PROTOCOL_VERSION_V3;
+  }
+
+  /** @return true iff the recipient negotiated VillageSQL extension cloning. */
+  bool send_vsql_extensions() const {
+    return (m_vsql_caps & VSQL_CLONE_CAP_EXTENSIONS) != 0;
   }
 
  private:
@@ -236,6 +246,10 @@ class Server {
 
   /** Negotiated protocol version */
   uint32_t m_protocol_version;
+
+  /** Negotiated VillageSQL clone capabilities (VSQL_CLONE_CAP_* bits), split
+  from the high bits of the protocol-version word. */
+  uint32_t m_vsql_caps{0};
 
   /** DDL timeout from client */
   uint32_t m_client_ddl_timeout;
