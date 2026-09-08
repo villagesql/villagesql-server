@@ -22,7 +22,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "Building VillageSQL development Docker image..."
+
+# Attempt to match the docker user to have the same uid, user-name, gid and
+# group-name as the host user. This is to make mysqld run as a non-root user
+# and to enable the docker user write back to the host without permission
+# mess. The machine on which the image was built has to be the machine on
+# which the corresponding container runs. For devs, that's a fair enough
+# assumption.
 docker build \
+  --build-arg USER_ID=$(id -u) \
+  --build-arg GROUP_ID=$(id -g) \
+  --build-arg USER_NAME=$(id -un) \
+  --build-arg GROUP_NAME=$(id -gn) \
   -t villagesql-dev:latest \
   -f "$SCRIPT_DIR/Dockerfile" \
   "$REPO_ROOT"

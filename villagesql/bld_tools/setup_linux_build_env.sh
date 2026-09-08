@@ -40,4 +40,7 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     pkg-config \
     unzip \
     valgrind \
-    zip
+    zip \
+    vim \
+    tmux \
+    mold
