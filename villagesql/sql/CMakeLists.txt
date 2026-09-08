@@ -18,6 +18,7 @@ SET(VILLAGESQL_SQL_SOURCES
   func_lookup.cc
   initialize.cc
   metadata_modifier.cc
+  optimizer.cc
   parse_tree_items.cc
   sys_view_metadata.cc
   util.cc
