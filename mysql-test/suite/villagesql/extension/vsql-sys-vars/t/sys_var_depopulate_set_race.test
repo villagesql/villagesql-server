@@ -1,0 +1,60 @@
+# A SET GLOBAL that happens between on_depopulate_sys_var erasing the g_sys_vars
+# entries and unregister_variable removing the variable from MySQL is still
+# dispatched to vef_sys_var_update_trampoline, which then finds no entry.
+#
+# The trampoline's typed write does not depend on that lookup, and must not:
+# for a MEMALLOC string, plugin_var_memalloc_global_update frees the old buffer
+# as soon as the update func returns. A skipped write would leave the
+# extension's storage pointing at that freed buffer, and the unregister_variable
+# that follows would free it a second time. This test verifies that this
+# situation can no longer happen (used to crash).
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+
+--echo # Give label a heap-allocated value, so there is an old buffer to free
+SET GLOBAL vsql_range_clamp_test.label = 'first';
+SELECT @@global.vsql_range_clamp_test.label;
+
+connect (con_set,localhost,root);
+connect (con_uninstall,localhost,root);
+
+connection con_uninstall;
+--echo # con_uninstall: park UNINSTALL just after the g_sys_vars entries go
+SET DEBUG_SYNC = 'vef_sys_var_after_depopulate_erase SIGNAL erased WAIT_FOR continue_uninstall';
+--send UNINSTALL EXTENSION vsql_range_clamp_test
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR erased';
+
+connection con_set;
+--echo # con_set: SET GLOBAL with the entry gone but the variable still
+--echo # registered; the trampoline runs and its lookup misses
+SET GLOBAL vsql_range_clamp_test.label = 'second';
+
+--echo # The new value must have been stored, not dropped
+SELECT @@global.vsql_range_clamp_test.label;
+
+connection default;
+--echo # Let UNINSTALL finish: it frees the string the storage points at
+SET DEBUG_SYNC = 'now SIGNAL continue_uninstall';
+
+connection con_uninstall;
+reap;
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+disconnect con_set;
+disconnect con_uninstall;
+
+--echo # The extension's variables are gone
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_range_clamp_test.label;
+
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--source include/wait_until_count_sessions.inc

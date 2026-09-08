@@ -1,0 +1,76 @@
+# A persisted value must reach an extension variable that declares on_change,
+# and its callback must fire, when the extension is installed at runtime.
+#
+# register_variable applies any already-persisted value for the variable inline
+# (component_sys_var_service.cc: set_persisted_options -> sql_set_variables),
+# but only once mysqld_server_started is true, so this is reachable on
+# INSTALL EXTENSION, not at startup. That inline apply calls the variable's
+# update func, which for an on_change variable is
+# vef_sys_var_update_trampoline, and it runs while register_variable is still
+# on the stack. This works because on_populate_sys_var records the variable in
+# g_sys_vars before calling register_variable, so the trampoline can find its
+# on_change, and the trampoline's typed write does not depend on that lookup
+# succeeding. Before either was in place, the persisted value was lost, and for
+# the label string the storage was left pointing at a buffer MySQL had already
+# freed, which UNINSTALL then freed a second time.
+#
+# Getting a persistent entry for an uninstalled extension: UNINSTALL EXTENSION
+# deletes persisted values on the way out, so the file is saved beforehand and
+# restored after, leaving the entry behind for the next INSTALL to apply.
+#
+# Two pieces of data for this test and their meaning:
+#   min_setting  the value reached the extension's storage. A 0 here means the
+#                trampoline's write depended on finding its g_sys_vars entry
+#   last_label   on_change fired. The handler copies into its own buffer,
+#                which no later registration writes over. Empty here means the
+#                variable was recorded after register_variable, not before
+#
+# max_setting is deliberately not checked: on_change raises it when min_setting
+# is applied, but max_setting registers afterwards and handle_options writes
+# its own default over that.
+
+CALL mtr.add_suppression("Currently unknown variable 'vsql_range_clamp_test.min_setting' was read from the persisted config file.");
+CALL mtr.add_suppression("Currently unknown variable 'vsql_range_clamp_test.label' was read from the persisted config file.");
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+
+--echo # Persist both variables so the server writes them to mysqld-auto.cnf
+SET PERSIST vsql_range_clamp_test.min_setting = 200;
+SET PERSIST vsql_range_clamp_test.label = 'persisted';
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.label;
+SELECT vsql_range_clamp_test.last_label();
+
+--let $datadir = `SELECT @@datadir`
+--copy_file $datadir/mysqld-auto.cnf $MYSQLTEST_VARDIR/tmp/auto_with_persist.cnf
+
+--echo # UNINSTALL deletes the persisted values; restore the saved file so the
+--echo # entries survive for an extension that is no longer installed
+UNINSTALL EXTENSION vsql_range_clamp_test;
+--remove_file $datadir/mysqld-auto.cnf
+--copy_file $MYSQLTEST_VARDIR/tmp/auto_with_persist.cnf $datadir/mysqld-auto.cnf
+--remove_file $MYSQLTEST_VARDIR/tmp/auto_with_persist.cnf
+
+--echo # Restart: the extension is not installed, so the persisted entries are
+--echo # parked as unknown variables
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # Install at runtime: register_variable applies the parked values
+INSTALL EXTENSION vsql_range_clamp_test;
+
+--echo # The persisted values must have reached the extension
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.label;
+
+--echo # ... and on_change must have fired for them
+SELECT vsql_range_clamp_test.last_label();
+
+RESET PERSIST vsql_range_clamp_test.min_setting;
+RESET PERSIST vsql_range_clamp_test.label;
+UNINSTALL EXTENSION vsql_range_clamp_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
