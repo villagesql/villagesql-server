@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Codebase branch, tag, or SHA to build from (e.g. main or publish/mysql-8.4_0.0.7).'
+        description: 'Codebase branch, tag, or SHA for build (e.g. main for rehearsal, publish/mysql-8.4_0.0.7 for release).'
         required: true
         type: string
         default: 'main'
@@ -31,7 +31,7 @@ on:
         description: 'Strip the -dev suffix from the version.'
         required: true
         type: boolean
-        default: false
+        default: true
       release_tag:
         description: 'GitHub Release to attach the server packages to, e.g. release/0.0.7. Blank skips the upload and the tarballs stay on the run page.'
         required: false
@@ -42,25 +42,17 @@ on:
         required: true
         type: string
       image_repo:
-        description: 'Docker repository to push to.'
+        description: 'Docker Hub repository to push to.'
         required: true
         type: string
         default: 'villagesql/server'
-      dev_abi:
-        description: 'Expose the development ABI in the image.'
-        required: true
-        type: choice
-        options:
-          - 'ON'
-          - 'OFF'
-        default: 'ON'
       version_labels:
-        description: 'Comma-separated labels published alongside the image tag, prefixed with the codebase (stable -> mysql-8.4_stable). Blank publishes none, which is what a build ahead of acceptance wants.'
+        description: 'Codebase version labels, e.g. latest. Comma-separated, prefixed with the codebase, replacing version, applied to manifest. Blank publishes none.'
         required: false
         type: string
         default: ''
       define_tags:
-        description: 'Comma-separated tags published as given, with no codebase prefix (e.g. latest). Blank publishes none.'
+        description: 'Define image tag, e.g. latest, Comma-separated, applied directly to manifest. Blank publishes none.'
         required: false
         type: string
         default: ''
@@ -105,7 +97,6 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag }}
           IMAGE_REPO: ${{ inputs.image_repo }}
           RELEASE_BUILD: ${{ inputs.release_build }}
-          DEV_ABI: ${{ inputs.dev_abi }}
           VERSION_LABELS: ${{ inputs.version_labels }}
           DEFINE_TAGS: ${{ inputs.define_tags }}
         run: |
@@ -148,7 +139,6 @@ jobs:
             echo "| Release Build | $RELEASE_BUILD |"
             echo "| GitHub Release | ${RELEASE_TAG:-_none — packages stay on the run page_} |"
             echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
-            echo "| Dev ABI | $DEV_ABI |"
             echo "| Version labels | ${VERSION_LABELS:-_none_} |"
             echo "| Define tags | ${DEFINE_TAGS:-_none_} |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -177,7 +167,7 @@ jobs:
       # VSQL_PRE_RELEASE_VERSION, so both halves derive the suffix from
       # release_build identically.
       pre_release_version: ${{ !inputs.release_build && 'dev' || '' }}
-      dev_abi: ${{ inputs.dev_abi }}
+      dev_abi: OFF
       version_labels: ${{ inputs.version_labels }}
       define_tags: ${{ inputs.define_tags }}
 
