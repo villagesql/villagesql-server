@@ -1,0 +1,18 @@
+# SDK Version Test
+Found SDK tarball
+# Extract SDK tarball
+# === Stable ABI (SDK include/) ===
+# Build the template against the stable ABI
+INSTALL EXTENSION my_extension;
+SELECT JSON_UNQUOTE(JSON_EXTRACT(REGISTRATION_JSON, '$.sdk_version')) INTO @reported_sdk_version
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION WHERE EXTENSION_NAME = 'my_extension';
+# OK (stable ABI): extension sdk_version matches the server release version
+UNINSTALL EXTENSION my_extension;
+# === Dev ABI (SDK include-dev/) ===
+# Build the template against the dev ABI
+INSTALL EXTENSION my_extension;
+SELECT JSON_UNQUOTE(JSON_EXTRACT(REGISTRATION_JSON, '$.sdk_version')) INTO @reported_sdk_version
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION WHERE EXTENSION_NAME = 'my_extension';
+# OK (dev ABI): extension sdk_version matches the server release version
+UNINSTALL EXTENSION my_extension;
+# Cleanup
