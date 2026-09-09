@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "db0err.h"
+#include "page0types.h"
 #include "trx0types.h"
 
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
@@ -30,6 +31,7 @@
 struct dict_index_t;
 struct dict_table_t;
 struct dtuple_t;
+struct row_prebuilt_t;
 namespace dd {
 class Index;
 }
@@ -66,6 +68,12 @@ class Custom_index {
 
   // Custom index extension interface.
   const vef_type_index_intf_t &interface() const;
+
+  // Maps the VEF_INDEX_CAP_* capabilities declared by meta's index type to the
+  // handler::index_flags() bitmask (HA_READ_*, HA_SUPPORT_KNN) the optimizer
+  // expects. Callable from a KEY's custom_index_context before any
+  // Custom_index instance exists for the index.
+  static ulong flags(const IndexContext *meta);
 
   // Get the index profile for key column type.
   const IndexProfileDescriptor *profile_for_key(uint32_t key_pos) const {
@@ -122,6 +130,9 @@ class Custom_index {
   // Returns true if index has Custom_index runtime state.
   static bool is_custom(const dict_index_t *index);
 
+  // Returns true if index is a KNN custom index.
+  static bool is_knn(const dict_index_t *index);
+
   // Creates the extension-managed storage for a custom index, invoking the
   // registered index-type create function.
   static dberr_t create(dict_index_t *index, trx_id_t trx_id);
@@ -132,6 +143,12 @@ class Custom_index {
   // Inserts a key into the extension-managed storage for a custom index.
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
                         const dtuple_t *entry, bool dup_chk_only);
+
+  // Entry point for row_search_mvcc()/row_search_no_mvcc() when the index
+  // being scanned is a custom index.
+  static dberr_t row_search(byte *buf, page_cur_mode_t mode,
+                            row_prebuilt_t *prebuilt, ulint match_mode,
+                            ulint direction, bool is_mvcc);
 
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.
