@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -583,6 +584,12 @@ struct row_prebuilt_t {
   REPLACE is done instead of regular INSERT, 0 otherwise */
   unsigned replace : 1;
 
+  /** 1 if the current index scan is a KNN scan, 0 otherwise. */
+  unsigned m_knn_query : 1;
+
+  /** 1 if the KNN limit is exact, 0 if more rows may be needed. */
+  unsigned m_knn_limit_is_exact : 1;
+
   /** template used to transform rows fast between MySQL and Innobase formats;
   memory for this template is not allocated from 'heap' */
   mysql_row_templ_t *mysql_template;
@@ -841,6 +848,35 @@ struct row_prebuilt_t {
 
   /** limit value to avoid fts result overflow */
   ulonglong m_fts_limit;
+
+  /** Set the limit value for a KNN query.
+  @param[in]  limit     the KNN result row limit
+  @param[in]  is_exact  true if limit is an exact row count, false if it is
+                        only an estimate */
+  void set_knn_limit(ulonglong limit, bool is_exact) {
+    // KNN scan is not used for FTS.
+    ut_ad(!in_fts_query);
+    m_fts_limit = limit;
+    m_knn_limit_is_exact = is_exact;
+  }
+
+  /** @return the limit value for a KNN query */
+  ulonglong get_knn_limit() const {
+    // KNN scan is not used for FTS.
+    ut_ad(!in_fts_query);
+    return m_fts_limit;
+  }
+
+  /** @return true if the KNN limit is an exact row count, false if it is
+  only an estimate */
+  bool knn_limit_is_exact() const {
+    // KNN scan is not used for FTS.
+    ut_ad(!in_fts_query);
+    return m_knn_limit_is_exact;
+  }
+
+  /** @return true if the current index scan is a KNN scan */
+  bool is_knn_query() const { return m_knn_query; }
 
   /** True if exceeded the end_range while filling the prefetch cache. */
   bool m_end_range;

@@ -84,6 +84,9 @@ typedef uint32_t vef_index_storage_t;
 // Opaque index descriptor reference from MySQL/InnoDB
 typedef void *vef_index_ref_t;
 
+// InnoDB ReadView reference for MVCC
+typedef void *vef_readview_ref_t;
+
 // Naming convention for function pointer typedefs in this header:
 //   _fn      - callback provided by the server and called by the extension
 //   _func_t  - function provided by the extension and called by the server
@@ -101,13 +104,17 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 // least the column's maximum key length as reported by
 // vef_index_max_key_len_fn. The server copies the stored value into that
 // buffer and sets col_data->length to the value length.
+// If trx_ref is not NULL, the server sets *trx_ref to the transaction
+// reference of the value read, e.g. for a column-only scan that needs
+// visibility information without a row lookup.
 // The server reads the value under a mini-transaction of its own, so the
 // extension must not call this while holding page latches in a mini-transaction
 // it started.
 // Returns false on success, true on error (writes to error_msg).
 typedef bool (*vef_index_col_ref_to_data_fn)(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
-    vef_storage_col_data_t *col_data, char *error_msg, uint32_t error_msg_len);
+    vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
+    char *error_msg, uint32_t error_msg_len);
 
 // Derive a stable column reference from column data.
 // key_pos is the 0-based index key column col_data holds a value of; its column
@@ -137,6 +144,10 @@ typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref,
                                      uint32_t key_pos, uint32_t fn_id,
                                      const void *const *args, uint32_t nargs,
                                      void *result);
+
+// Check whether a transaction's changes are visible under a read view.
+typedef bool (*vef_index_trx_is_visible_fn)(vef_readview_ref_t read_view,
+                                            vef_storage_trx_ref_t trx_ref);
 
 // Index context passed by the server to every extension function. The pointer
 // remains valid for the lifetime of the loaded index storage; the extension
@@ -170,6 +181,9 @@ typedef struct {
   // Derive a stable column reference from column data. Always non-NULL when
   // VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props; otherwise NULL.
   vef_index_col_data_to_ref_fn col_data_to_ref_fn;
+
+  // Check if a transaction is visible under a read view. Always non-NULL.
+  vef_index_trx_is_visible_fn trx_is_visible_fn;
 
   // Pointer to the options struct filled by parse() at CREATE INDEX time.
   // Valid only during the create() call; NULL for all other calls and when
@@ -257,6 +271,9 @@ typedef struct {
   // Ignored for VEF_INDEX_SCAN_TYPE_KNN.
   uint8_t reverse;
 
+  // 1 if the KNN limit is exact, 0 if more rows may be needed.
+  uint8_t knn_limit_is_exact;
+
   // Maximum number of rows the server will read from this scan; 0 means
   // unlimited. For VEF_INDEX_SCAN_TYPE_KNN this is K. For other scan types
   // it signals that the server will call scan_end after at most limit rows,
@@ -268,6 +285,10 @@ typedef struct {
   uint32_t num_keys;
   // Array of num_keys scan keys describing the bounds or query for this scan.
   vef_index_scan_key_t *keys;
+
+  // MVCC read view the scan must be consistent with. It remains valid during
+  // the entire duration of the scan.
+  vef_readview_ref_t readview;
 
 } vef_index_scan_desc_t;
 
