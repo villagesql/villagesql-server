@@ -1,0 +1,49 @@
+##############################################################################
+#
+# Test cases that fail running basic MySQL 8.4.10.
+#
+# Separate the test case name and the comment with ':'.
+#   <suite>.<test> [@platform|@!platform] : <BUG|WL>#<XXXX> [<comment>]
+#
+# Note:
+#   - Comment shows as status for test.
+#   - Do not use any TAB characters for whitespace.
+#   - Length of a comment section must not be more than 80 characters.
+#   - <disabled_file> could be the file name or a valid path. It should
+#     not be followed by a comment on that line.
+#
+##############################################################################
+
+# Transaction tests run with a separate test framework
+engines/rr_trx.init_innodb                   : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_c_count_not_zero           : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_c_stats                    : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_i_40-44                    : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_id_3                       : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_id_900                     : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_insert_select_2            : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_iud_rollback-multi-50      : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_replace_7-8                : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_s_select-uncommitted       : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_sc_select-limit-nolimit_4  : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_sc_select-same_2           : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_sc_sum_total               : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_u_10-19.                   : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_u_10-19_nolimit            : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_u_4                        : BUG#0 MySQL 8.4.10 Stress-only suite, not standalone MTR tests
+
+# InnoDB stress suite
+innodb_stress.innodb_stress                        : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_blob                   : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_blob_nocompress        : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_crash                  : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_crash_blob             : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_crash_blob_nocompress  : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_crash_nocompress       : BUG#0 MySQL 8.4.10 Innodb stress suite
+innodb_stress.innodb_stress_nocompress             : BUG#0 MySQL 8.4.10 Innodb stress suite
+
+# Various tests that fail in MySQL 8.4.10
+large_tests.innodb_innochecksum_3gb                  : BUG#0 MySQL 8.4.10 Known failure
+lock_order.cycle                                     : BUG#0 MySQL 8.4.10 Known failure
+perfschema.idx_compare_esms_by_thread_by_event_name  : BUG#0 MySQL 8.4.10 Known failure
+rpl_gtid.rpl_gtids_table_disable_binlog_on_slave     : BUG#0 MySQL 8.4.10 Known failure
