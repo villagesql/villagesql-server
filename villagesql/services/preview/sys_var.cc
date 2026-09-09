@@ -114,13 +114,20 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
   change.var_name = var_name_copy.c_str();
   if (change.type == VEF_VAR_STR && change.str_val != nullptr)
     change.str_val = str_val_copy.c_str();
-  // TODO(villagesql-crash): on_change points into extension code captured under
-  // g_sys_vars_mutex. If UNINSTALL EXTENSION races with a concurrent SET
-  // GLOBAL, on_depopulate_sys_var may erase the entry and return (allowing
-  // dlclose) while this thread holds the captured on_change pointer but has
-  // already released the lock. A drain mechanism analogous to statement_event's
-  // g_inflight counter is needed to close this window.
-  if (on_change != nullptr && change.var_name != nullptr) on_change(&change);
+
+  // on_change runs with g_sys_vars_mutex released (the callback may re-enter
+  // via SYS_VARS.set()). MySQL keeps the .so loaded across the call: a
+  // component variable update holds LOCK_system_variables_hash for read
+  // (visit_component_variable in set_var.cc), which the unregister_variable in
+  // on_depopulate_sys_var needs for write before the caller dlcloses. Hence
+  // there is no drain counter here, unlike other capabilities whose callbacks
+  // dispatch under no such lock. This assumption is validated in
+  // sys_var_uninstall_race.test and should fail if that assumption is ever
+  // broken.
+  if (on_change != nullptr && change.var_name != nullptr) {
+    DEBUG_SYNC_C("vef_sys_var_before_on_change");
+    on_change(&change);
+  }
 }
 
 }  // namespace
