@@ -41,6 +41,5 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     unzip \
     valgrind \
     zip \
-    vim \
-    tmux \
-    mold
+    mold \
+    sudo
