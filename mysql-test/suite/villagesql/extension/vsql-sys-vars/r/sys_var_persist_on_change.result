@@ -1,0 +1,31 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+# Defaults
+SELECT @@global.vsql_range_clamp_test.min_setting;
+@@global.vsql_range_clamp_test.min_setting
+0
+SELECT @@global.vsql_range_clamp_test.max_setting;
+@@global.vsql_range_clamp_test.max_setting
+100
+# SET PERSIST applies immediately: min_setting takes 200, on_change
+# raises max_setting to match
+SET PERSIST vsql_range_clamp_test.min_setting = 200;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+@@global.vsql_range_clamp_test.min_setting
+200
+SELECT @@global.vsql_range_clamp_test.max_setting;
+@@global.vsql_range_clamp_test.max_setting
+200
+# Restart with the extension still installed
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# The persisted value must be back
+SELECT @@global.vsql_range_clamp_test.min_setting;
+@@global.vsql_range_clamp_test.min_setting
+200
+SELECT @@global.vsql_range_clamp_test.max_setting;
+@@global.vsql_range_clamp_test.max_setting
+200
+RESET PERSIST vsql_range_clamp_test.min_setting;
+UNINSTALL EXTENSION vsql_range_clamp_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

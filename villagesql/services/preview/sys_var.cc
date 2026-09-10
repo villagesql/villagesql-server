@@ -29,6 +29,7 @@
 #include "mysql/components/services/mysql_system_variable.h"
 #include "mysql/service_plugin_registry.h"
 #include "sql/persisted_variable.h"
+#include "sql/sql_plugin_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
 #include "villagesql/services/sys_var_access.h"
@@ -67,53 +68,72 @@ std::vector<RegisteredSysVar> g_sys_vars;
 // Generic update trampoline used when on_change is non-null.
 // Performs the default typed update (mirroring MySQL's update_func_* family)
 // then calls the extension callback.
-static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
-                                          const void *save) {
-  vef_sys_var_on_change_func_t on_change = nullptr;
+static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *var,
+                                          void *val_ptr, const void *save) {
+  // MySQL hands us the new value in save and expects it stored in val_ptr. For
+  // a MEMALLOC string it frees the old buffer as soon as this returns
+  // (plugin_var_memalloc_global_update), so not storing the new one would leave
+  // val_ptr pointing at freed memory for UNINSTALL to free a second time. The
+  // write below is therefore unconditional, and takes its type from MySQL's
+  // descriptor rather than from a g_sys_vars lookup that can miss. Concurrent
+  // global updates are serialized by MySQL on LOCK_global_system_variables.
   vef_sys_var_change_t change{};
-  // These copies own the strings so change.var_name and change.str_val remain
-  // valid after the lock is released. A concurrent on_depopulate_sys_var may
-  // erase the g_sys_vars entry (invalidating var_name), and a concurrent SET
-  // may free the old string value (invalidating str_val).
+  switch (var->flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      change.type = VEF_VAR_BOOL;
+      change.bool_val = *static_cast<const bool *>(save);
+      *static_cast<bool *>(val_ptr) = change.bool_val;
+      break;
+    case PLUGIN_VAR_LONGLONG:
+      change.type = VEF_VAR_INT;
+      change.int_val = *static_cast<const long long *>(save);
+      *static_cast<long long *>(val_ptr) = change.int_val;
+      break;
+    case PLUGIN_VAR_DOUBLE:
+      change.type = VEF_VAR_DOUBLE;
+      change.dbl_val = *static_cast<const double *>(save);
+      *static_cast<double *>(val_ptr) = change.dbl_val;
+      break;
+    case PLUGIN_VAR_STR:
+      change.type = VEF_VAR_STR;
+      change.str_val = *static_cast<const char *const *>(save);
+      *static_cast<const char **>(val_ptr) = change.str_val;
+      break;
+    default:
+      // on_populate_sys_var registers no other types, and writing val_ptr
+      // would mean guessing its width.
+      LogVSQL(ERROR_LEVEL,
+              "System variable update trampoline: unexpected type 0x%x",
+              var->flags & PLUGIN_VAR_TYPEMASK);
+      return;
+  }
+
+  // on_change and the variable name do come from the registry. A miss means the
+  // variable is still registering or has already been depopulated: the write
+  // above stands either way, there is just no callback to run.
+  vef_sys_var_on_change_func_t on_change = nullptr;
   std::string var_name_copy;
-  std::string str_val_copy;
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
     for (const RegisteredSysVar &v : g_sys_vars) {
       if (v.value_ptr == val_ptr) {
         on_change = v.on_change;
         var_name_copy = v.var_name;
-        change.type = v.type;
-        // Perform the typed update (mirroring MySQL's update_func_* family)
-        // and capture the new value for the callback, all under the lock so
-        // a concurrent SET cannot overwrite val_ptr before we finish.
-        switch (v.type) {
-          case VEF_VAR_BOOL:
-            change.bool_val = *static_cast<const bool *>(save);
-            *static_cast<bool *>(val_ptr) = change.bool_val;
-            break;
-          case VEF_VAR_INT:
-            change.int_val = *static_cast<const long long *>(save);
-            *static_cast<long long *>(val_ptr) = change.int_val;
-            break;
-          case VEF_VAR_DOUBLE:
-            change.dbl_val = *static_cast<const double *>(save);
-            *static_cast<double *>(val_ptr) = change.dbl_val;
-            break;
-          case VEF_VAR_STR:
-            change.str_val = *static_cast<const char *const *>(save);
-            *static_cast<const char **>(val_ptr) = change.str_val;
-            if (change.str_val != nullptr) str_val_copy = change.str_val;
-            break;
-        }
         break;
       }
     }
   }
+  if (on_change == nullptr) return;
 
+  // These copies own the strings so change.var_name and change.str_val stay
+  // valid once the lock is released: a concurrent on_depopulate_sys_var may
+  // erase the entry, and the next SET frees this buffer as its old value.
+  std::string str_val_copy;
   change.var_name = var_name_copy.c_str();
-  if (change.type == VEF_VAR_STR && change.str_val != nullptr)
+  if (change.type == VEF_VAR_STR && change.str_val != nullptr) {
+    str_val_copy = change.str_val;
     change.str_val = str_val_copy.c_str();
+  }
 
   // on_change runs with g_sys_vars_mutex released (the callback may re-enter
   // via SYS_VARS.set()). MySQL keeps the .so loaded across the call: a
@@ -124,10 +144,8 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
   // dispatch under no such lock. This assumption is validated in
   // sys_var_uninstall_race.test and should fail if that assumption is ever
   // broken.
-  if (on_change != nullptr && change.var_name != nullptr) {
-    DEBUG_SYNC_C("vef_sys_var_before_on_change");
-    on_change(&change);
-  }
+  DEBUG_SYNC_C("vef_sys_var_before_on_change");
+  on_change(&change);
 }
 
 }  // namespace
@@ -310,9 +328,31 @@ bool on_populate_sys_var(const PopulateContext &ctx,
     mysql_sys_var_update_func update_fn =
         v->on_change != nullptr ? vef_sys_var_update_trampoline : nullptr;
 
+    // Record the variable before registering it: register_variable applies an
+    // already-persisted value inline, and the trampoline looks the variable up
+    // by storage pointer to find its on_change. Registering first would skip
+    // that callback for the persisted value.
+    {
+      std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+      g_sys_vars.push_back({extension_name, std::string(v->name), v->type,
+                            value_ptr, v->on_change, ctx.capability_config});
+    }
+
     if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
                                    v->comment ? v->comment : "", nullptr,
                                    update_fn, check_arg, value_ptr)) {
+      // This variable never registered, so drop its entry before the rollback
+      // below, which unregisters by name.
+      {
+        std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+        auto it = std::remove_if(g_sys_vars.begin(), g_sys_vars.end(),
+                                 [&](const RegisteredSysVar &rv) {
+                                   return rv.capability_config ==
+                                              ctx.capability_config &&
+                                          rv.value_ptr == value_ptr;
+                                 });
+        g_sys_vars.erase(it, g_sys_vars.end());
+      }
       LogVSQL(ERROR_LEVEL,
               "Failed to register system variable '%s' for extension '%s'",
               v->name, extension_name.c_str());
@@ -346,12 +386,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
       return true;
     }
 
-    {
-      std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-      g_sys_vars.push_back({extension_name, std::string(v->name), v->type,
-                            value_ptr, v->on_change, ctx.capability_config});
-    }
-
     LogVSQL(INFORMATION_LEVEL,
             "Registered system variable '%s' for extension '%s'", v->name,
             extension_name.c_str());
@@ -377,6 +411,12 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
         });
     g_sys_vars.erase(it, g_sys_vars.end());
   }
+
+  // The variables are out of g_sys_vars but stay registered with MySQL until
+  // unregister_variable below, so a concurrent SET still reaches the update
+  // trampoline and finds no entry for them. The sync point lets a test run that
+  // SET here; see sys_var_depopulate_set_race.test.
+  DEBUG_SYNC_C("vef_sys_var_after_depopulate_erase");
 
   if (var_names.empty()) return;
 
