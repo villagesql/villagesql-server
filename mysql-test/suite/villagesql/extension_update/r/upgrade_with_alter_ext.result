@@ -1,0 +1,21 @@
+# Extract the 0.0.5 datadir
+# Restart on it, which upgrades the VillageSQL schema and applies the
+# pending extension update
+# restart:--datadir=MYSQL_TMP_DIR/veb_upgrade_0.0.5_test --log-error=MYSQL_TMP_DIR/upgrade_with_alter_ext.log --log-error-verbosity=3
+# The schema was upgraded away from the 0.0.5 the fixture carries.
+villagesql_upgrades_ran	schema_version
+1	BUILD_VERSION
+# Installed version is now 2.0.0.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_test	2.0.0	NULL	NULL
+# Same on-disk bytes written by 0.0.5, where counter_double returned
+# N*2; it now resolves to v2 and returns N*3.
+SELECT id, update_test.counter_double(val) AS doubled FROM test.t ORDER BY id;
+id	doubled
+1	30
+2	60
+3	15
+# Shutdown and cleanup
+# Restart with the original datadir

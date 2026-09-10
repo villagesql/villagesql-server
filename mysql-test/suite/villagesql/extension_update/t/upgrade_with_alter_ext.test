@@ -1,0 +1,75 @@
+# A pending extension update staged on an older release applies when the
+# datadir is upgraded by a newer server.
+#
+# pending_apply_vdf_behavior covers the same VDF-lookup path within a single
+# build: ALTER EXTENSION ... AT RESTART, restart, and counter_double resolves
+# to the target version's implementation. This test stages the first half of
+# that scenario on a real 0.0.5 release and replays the second half here, so
+# the apply runs on a datadir that the VillageSQL schema upgrade has just
+# rewritten rather than one this build created.
+#
+# The fixture is a 0.0.5 datadir carrying update_test 1.0.0 installed,
+# test.t holding COUNTER values, and an ALTER EXTENSION ... VERSION '2.0.0'
+# AT RESTART still pending. See std_data/upgrade/ext_request_upgrade.sql for
+# the SQL it was built from, and prepare_update_zip.sh for how to rebuild it.
+
+--source include/big_test.inc
+
+# The fixture datadir was initialized with lower_case_table_names=2; a server
+# started with any other value refuses to open it.
+--source include/have_lowercase2.inc
+
+# The schema version a fresh install of this build reports, read before the
+# datadir is swapped. Comparing against it rather than a literal keeps the test
+# working across releases, and across a code base rename. The system variable is
+# used rather than villagesql.properties so the test does not need a debug build
+# for skip_dd_table_access_check.
+--let $build_version= `SELECT @@GLOBAL.villagesql_schema_version`
+
+let DDIR=$MYSQL_TMP_DIR/veb_upgrade_0.0.5_test;
+let MYSQLD_LOG=$MYSQL_TMP_DIR/upgrade_with_alter_ext.log;
+
+--echo # Extract the 0.0.5 datadir
+--copy_file $MYSQL_TEST_DIR/suite/villagesql/std_data/upgrade/veb_upgrade_0.0.5_lctn2.zip $MYSQL_TMP_DIR/veb_upgrade_0.0.5_lctn2.zip
+# unset LD_PRELOAD so unzip does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds; otherwise uninstrumented unzip trips LeakSanitizer on its
+# own allocations and fails with exitcode=42 (see
+# include/villagesql/create_extension_sdk.inc for the full explanation).
+--exec unset LD_PRELOAD && unzip -qo $MYSQL_TMP_DIR/veb_upgrade_0.0.5_lctn2.zip -d $MYSQL_TMP_DIR
+# The zip holds a single directory named data-dir; give it the name this test
+# uses so a leftover from another upgrade test cannot be picked up instead.
+--move_file $MYSQL_TMP_DIR/data-dir $DDIR
+--file_exists $DDIR
+
+--echo # Restart on it, which upgrades the VillageSQL schema and applies the
+--echo # pending extension update
+--let $wait_counter= 10000
+--let $restart_parameters= restart:--datadir=$DDIR --log-error=$MYSQLD_LOG --log-error-verbosity=3
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld.inc
+
+--echo # The schema was upgraded away from the 0.0.5 the fixture carries.
+--disable_query_log
+# The version reached is printed too: a bare 0 cannot distinguish "the upgrades
+# did not run" from "they ran but stamped a different code base".
+--replace_result $build_version BUILD_VERSION
+--eval SELECT @@GLOBAL.villagesql_schema_version = '$build_version' AS villagesql_upgrades_ran, @@GLOBAL.villagesql_schema_version AS schema_version
+--enable_query_log
+
+--echo # Installed version is now 2.0.0.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+--echo # Same on-disk bytes written by 0.0.5, where counter_double returned
+--echo # N*2; it now resolves to v2 and returns N*3.
+SELECT id, update_test.counter_double(val) AS doubled FROM test.t ORDER BY id;
+
+--echo # Shutdown and cleanup
+--source include/shutdown_mysqld.inc
+--remove_file $MYSQL_TMP_DIR/veb_upgrade_0.0.5_lctn2.zip
+--force-rmdir $DDIR
+--remove_file $MYSQLD_LOG
+
+--echo # Restart with the original datadir
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc

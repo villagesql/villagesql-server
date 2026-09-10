@@ -42,7 +42,7 @@ Required:
   --version <X.Y.Z>     Release to download (e.g. 0.0.6)
 
 Options:
-  --code_base <NAME>    Codebase of the package (default: this tree's
+  --codebase <NAME>     Codebase of the package (default: this tree's
                         VSQL_CODE_BASE, e.g. mysql-8.4)
   --platform <NAME>     Package platform, <os>-<arch> (default: this machine,
                         e.g. linux-x86_64, linux-aarch64, macos-arm64)
@@ -51,7 +51,7 @@ Options:
   --tag <TAG>           Release tag to download from. By default both
                         "<VERSION>" and "release/<VERSION>" are tried, since
                         both tagging schemes are in use.
-  --keep_tarball        Leave the downloaded tarball next to the package.
+  --keep-tarball        Leave the downloaded tarball next to the package.
   --help                Show this message.
 
 Environment:
@@ -66,7 +66,7 @@ while [[ $# -gt 0 ]]; do
       VERSION="$2"
       shift 2
       ;;
-    --code_base)
+    --codebase)
       CODE_BASE="$2"
       shift 2
       ;;
@@ -82,7 +82,7 @@ while [[ $# -gt 0 ]]; do
       TAG="$2"
       shift 2
       ;;
-    --keep_tarball)
+    --keep-tarball)
       KEEP_TARBALL=1
       shift
       ;;
@@ -187,7 +187,7 @@ done
 if [[ "$DOWNLOADED" -ne 1 ]]; then
   log_error "Could not download $TARBALL_NAME from $REPO"
   log_error "Tried tags: ${CANDIDATE_TAGS[*]}"
-  log_error "Check the version, --code_base and --platform against the"
+  log_error "Check the version, --codebase and --platform against the"
   log_error "assets listed at https://github.com/$REPO/releases"
   exit 1
 fi
