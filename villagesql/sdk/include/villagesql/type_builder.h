@@ -79,6 +79,7 @@ class TypeBuilder {
         hash_vdf_name_(nullptr),
         int_to_params_vdf_name_(nullptr),
         resolve_params_vdf_name_(nullptr),
+        real_value_vdf_name_(nullptr),
         intrinsic_default_vdf_name_(nullptr),
         intrinsic_default_str_(nullptr) {}
 
@@ -154,13 +155,21 @@ class TypeBuilder {
     return *this;
   }
 
+  constexpr TypeBuilder &real_value(const char *vdf_name) {
+    real_value_vdf_name_ = vdf_name;
+    return *this;
+  }
+
   constexpr TypeDescriptor build() const {
     TypeDescriptor desc{};
     const bool use_raw_ptrs = encode_func_ != nullptr ||
                               decode_func_ != nullptr ||
                               compare_func_ != nullptr;
+    const bool uses_protocol_4 = real_value_vdf_name_ != nullptr;
     desc.vef_desc = vef_type_desc_t{
-        use_raw_ptrs ? VEF_PROTOCOL_1 : VEF_PROTOCOL_3,
+        use_raw_ptrs      ? VEF_PROTOCOL_1
+        : uses_protocol_4 ? VEF_PROTOCOL_4
+                          : VEF_PROTOCOL_3,
         name_,
         persisted_length_,
         max_decode_buffer_length_,
@@ -178,6 +187,7 @@ class TypeBuilder {
         intrinsic_default_str_,
         0,      // max_persisted_length: only set via the v2+ API
         false,  // variable_length: only set via vsql's variable_length_type()
+        real_value_vdf_name_,
     };
     return desc;
   }
@@ -196,6 +206,7 @@ class TypeBuilder {
   const char *hash_vdf_name_;
   const char *int_to_params_vdf_name_;
   const char *resolve_params_vdf_name_;
+  const char *real_value_vdf_name_;
   const char *intrinsic_default_vdf_name_;
   const char *intrinsic_default_str_;
 };

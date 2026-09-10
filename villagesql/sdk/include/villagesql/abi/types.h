@@ -184,6 +184,9 @@ typedef enum : unsigned int {
                    //   (vef_required_capability_t, required_capabilities,
                    //   required_capability_count in vef_registration_t)
   VEF_PROTOCOL_4,  // Under development, not stable. Adds:
+                   // + variable_length on vef_type_desc_t.
+                   // + real_value_vdf_name on vef_type_desc_t for opt-in
+                   //   REAL promotion of custom types.
                    // + max_result_length on vef_func_desc_t: an extension may
                    //   declare the maximum length of a STRING result so the
                    //   result column is sized to hold the full value instead of
@@ -833,6 +836,14 @@ typedef struct {
   //
   // Read only when protocol >= VEF_PROTOCOL_4.
   bool variable_length;
+
+  // OPTIONAL: Name of a VDF (from this extension's funcs[]) that converts a
+  // custom value to REAL for numeric contexts such as SUM/AVG.
+  // The named VDF must have signature:
+  //   real_value_vdf_name: (CUSTOM(this type)) -> REAL
+  //
+  // Read only when protocol >= VEF_PROTOCOL_4.
+  const char *real_value_vdf_name;
 } vef_type_desc_t;
 
 // Forward declaration so vef_required_capability_t can reference it.

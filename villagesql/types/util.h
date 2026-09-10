@@ -205,6 +205,9 @@ extern void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
 // registered for this type (binary hash is safe in that case).
 extern std::optional<size_t> TryComputeHash(const TypeContext &tc,
                                             const uchar *data, size_t len);
+extern bool HasRealValue(const TypeContext &tc);
+extern std::optional<double> TryComputeRealValue(const TypeContext &tc,
+                                                 const uchar *data, size_t len);
 
 template <typename T>
 inline std::optional<size_t> TryComputeHash(const T &obj, const uchar *data,

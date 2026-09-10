@@ -99,6 +99,17 @@ class HashOp {
   const TypeParameters &params_;
 };
 
+class RealValueOp {
+ public:
+  RealValueOp(const RealValueFunction &func, const TypeParameters &params);
+
+  double invoke(const unsigned char *data, size_t len) const;
+
+ private:
+  const vef_func_desc_t *vdf_{nullptr};
+  const TypeParameters &params_;
+};
+
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_TYPES_TYPE_OP_H_

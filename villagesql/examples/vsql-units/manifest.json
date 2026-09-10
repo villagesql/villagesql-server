@@ -1,0 +1,7 @@
+{
+  "name": "vsql_units",
+  "version": "0.0.1",
+  "description": "Scalar unit types for VillageSQL",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

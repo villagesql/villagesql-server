@@ -107,6 +107,12 @@ protocol-1 fields at the same offsets, followed by new fields. This allows a
 server running protocol 2 to safely load an extension that only understands
 protocol 1.
 
+Protocol 4 adds `real_value_vdf_name` to `vef_type_desc_t`. When present, the
+named `(CUSTOM) -> REAL` VDF opts the custom type into real-valued numeric
+contexts such as `SUM`, `AVG`, standard deviation, and variance. The C++ API
+exposes this as `TypeBuilder::real_value`; extensions that do not register it
+retain the existing rejection of those numeric contexts.
+
 **Structs nested inline** (not accessed through a pointer) require special care
 as any changes to the size will impact the layout of the struct that contains
 it.

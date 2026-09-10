@@ -29,7 +29,7 @@ encoded
 DROP VIEW v_encode;
 # Test 6: Error — unknown method name
 SELECT COMPLEX::nonexistent('(1,2)') AS result;
-ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: from_string, to_string, compare, hash
+ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: from_string, to_string, compare, hash, real_value
 # Test 7: Error — unknown type name
 SELECT NOSUCHTYPE::encode('(1,2)') AS result;
 ERROR HY000: Unknown custom type 'NOSUCHTYPE'

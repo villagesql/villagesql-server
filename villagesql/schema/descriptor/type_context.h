@@ -314,6 +314,9 @@ class TypeContext {
     return *compare_op_;
   }
   const std::optional<HashOp> &hash_op() const { return hash_op_; }
+  const std::optional<RealValueOp> &real_value_op() const {
+    return real_value_op_;
+  }
 
   // Returns the storage interface for this type, or nullopt if the type uses
   // default InnoDB column storage.
@@ -369,6 +372,7 @@ class TypeContext {
   std::optional<DecodeOp> decode_op_;
   std::optional<CompareOp> compare_op_;
   std::optional<HashOp> hash_op_;
+  std::optional<RealValueOp> real_value_op_;
 
   // Cached intrinsic default value, pre-encoded during construction.
   // Empty if the type has no intrinsic_default_fn or encoding failed.
