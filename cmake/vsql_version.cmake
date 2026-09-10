@@ -72,21 +72,15 @@ MACRO(GET_VSQL_VERSION)
   # Construct the full semver string, including the code base prefix.
   SET(VSQL_VERSION_STRING "${VSQL_CODE_BASE}_${VSQL_ABBR_VERSION}")
 
-  # Set EXTRA_VERSION for mysql_version.cmake to use
-  # This becomes the suffix in the MySQL version string (e.g., 8.4.6-villagesql0.1.0-dev)
-  # Add the git hash if we have one
-  execute_process(
-    COMMAND git log -n1 --pretty=format:%h
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-  )
-  IF (GIT_HASH AND VSQL_PRE_RELEASE_VERSION)
-    SET(EXTRA_VERSION "-villagesql-${VSQL_ABBR_VERSION}-${GIT_HASH}")
-  ELSE()
-    SET(EXTRA_VERSION "-villagesql-${VSQL_ABBR_VERSION}")
-  ENDIF()
+  # Set EXTRA_VERSION for mysql_version.cmake to use. This becomes the suffix
+  # in the MySQL version string (e.g., 8.4.6-villagesql-0.1.0-dev).
+  #
+  # Deliberately no git hash here: EXTRA_VERSION lands in
+  # include/mysql_version.h, which nearly every TU includes, so a hash would
+  # rebuild the world on every HEAD move and miss in a ccache shared across
+  # checkouts sitting at different commits. The commit is available at runtime
+  # via @@villagesql_build_info instead.
+  SET(EXTRA_VERSION "-villagesql-${VSQL_ABBR_VERSION}")
 ENDMACRO()
 
 # Get VillageSQL version
