@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (c) 2026 VillageSQL Contributors
 #
-# Adds a non-root user to docker image.
+# Add a non-root user to docker image.
 # Env vars:
 # USER_ID    - uid for the user
 # USER_NAME  - username for the user
