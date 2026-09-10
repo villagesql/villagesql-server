@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +32,8 @@ Clone Plugin: Server implementation
 #include "plugin/clone/include/clone_status.h"
 
 #include "my_byteorder.h"
+
+#include "villagesql/veb/veb_file.h"
 
 /* Namespace for all clone data types */
 namespace myclone {
@@ -347,10 +350,22 @@ int Server::deserialize_init_buffer(const uchar *init_buf, size_t init_len) {
     goto err_end;
   }
 
-  /* Extract protocol version */
-  m_protocol_version = uint4korr(init_buf);
-  if (m_protocol_version > CLONE_PROTOCOL_VERSION) {
-    m_protocol_version = CLONE_PROTOCOL_VERSION;
+  // VillageSQL: the recipient multiplexes clone capabilities into the reserved
+  // high bits of the version word; negotiate those independently of the
+  // upstream version number so upstream can evolve its version without
+  // colliding (see VSQL_CLONE_CAP_EXTENSIONS in clone.h).
+  {
+    const uint32_t recipient_word = uint4korr(init_buf);
+
+    // Strip the VillageSQL capability bit(s) before the upstream version
+    // comparison so they never interfere with it.
+    m_protocol_version = recipient_word & ~VSQL_CLONE_CAP_EXTENSIONS;
+    if (m_protocol_version > CLONE_PROTOCOL_VERSION) {
+      m_protocol_version = CLONE_PROTOCOL_VERSION;
+    }
+
+    // A capability is enabled only if both sides support it.
+    m_vsql_caps = recipient_word & VSQL_CLONE_CAP_EXTENSIONS;
   }
   init_buf += 4;
   init_len -= 4;
@@ -511,7 +526,43 @@ int Server::send_params() {
   /* Send other configurations required by recipient. */
   err = send_configs(COM_RES_CONFIG_V3);
 
+  // VillageSQL: send installed extensions for recipient validation, if the
+  // recipient negotiated the capability.
+  if (err != 0 || !send_vsql_extensions()) {
+    return err;
+  }
+  err = send_extensions();
+
   return err;
+}
+
+// VillageSQL: send the opaque extension payload as one length-prefixed byte
+// string. The payload is produced and interpreted by villagesql/veb; clone
+// carries it verbatim.
+int Server::send_extensions() {
+  std::string payload = villagesql::veb::serialize_installed_extensions();
+  if (payload.empty()) {
+    return 0;
+  }
+
+  auto buf_len = 1 + 4 + payload.length();
+  auto err = m_res_buff.allocate(buf_len);
+  auto buf_ptr = m_res_buff.m_buffer;
+  if (err != 0) {
+    return (true);
+  }
+
+  // Store response command.
+  *buf_ptr = static_cast<uchar>(COM_RES_EXTENSION);
+  ++buf_ptr;
+
+  // Store the opaque payload as a length-prefixed string.
+  int4store(buf_ptr, payload.length());
+  buf_ptr += 4;
+  memcpy(buf_ptr, payload.c_str(), payload.length());
+
+  return mysql_service_clone_protocol->mysql_clone_send_response(
+      get_thd(), false, m_res_buff.m_buffer, buf_len);
 }
 
 int Server::send_configs(Command_Response rcmd) {

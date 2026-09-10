@@ -86,6 +86,37 @@ bool expand_veb_to_directory(const std::string &name,
                              std::string &expanded_path,
                              std::string &sha256_hash);
 
+// The structural version of the clone extension payload (see
+// serialize_installed_extensions). Bump if the JSON envelope changes shape.
+const int CLONE_EXTENSION_PAYLOAD_FORMAT = 1;
+
+// Serialize the currently installed extensions into an opaque, self-describing
+// payload for transport. Used by the clone donor: the clone plugin carries this
+// payload verbatim to the recipient without interpreting it. The encoding is
+// private to villagesql/veb. The envelope carries:
+//   - format: CLONE_EXTENSION_PAYLOAD_FORMAT (envelope structure version)
+//   - server_version: donor VillageSQL build version (GetBuildVersion())
+//   - schema_version: donor villagesql.* schema version
+//   - extensions: array of {name, version, veb_sha256}
+// Returns the empty string when nothing is installed. Taken under the
+// victionary read lock.
+std::string serialize_installed_extensions();
+
+// Validate that every extension described by a payload produced by
+// serialize_installed_extensions() is available on THIS server, applying the
+// same existence/version/sha256 bar as load_installed_extensions() at startup
+// (so "validation passes" <=> "startup will succeed"). Used by the clone
+// recipient during the handshake, before any data is transferred.
+//
+// Returns false on success (all extensions available). On the first failure
+// returns true and, if error_message is non-null, writes a human-readable
+// diagnostic to it. Any diagnostic-area error raised by the underlying VEB
+// helpers is suppressed so the caller can surface a single error of its own;
+// the reason is still reported via error_message. `thd` is used only for that
+// suppression. An empty payload is valid and returns false.
+bool validate_cloned_extensions(THD *thd, const std::string &payload,
+                                std::string *error_message);
+
 // Load all installed extensions from villagesql.extensions table
 // Called during server startup after VictionaryClient initialization
 // For each extension:
