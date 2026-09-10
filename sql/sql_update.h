@@ -42,6 +42,7 @@ class COPY_INFO;
 class Copy_field;
 class Item;
 class JOIN;
+class PT_select_var;
 class Query_block;
 class Query_expression;
 class RowIterator;
@@ -129,11 +130,13 @@ class Query_result_update final : public Query_result_interceptor {
 class Sql_cmd_update final : public Sql_cmd_dml {
  public:
   Sql_cmd_update(bool multitable_arg, mem_root_deque<Item *> *update_values,
-                 mem_root_deque<Item *> *returning_fields_arg = nullptr)
+                 mem_root_deque<Item *> *returning_fields_arg = nullptr,
+                 PT_select_var *returning_into_arg = nullptr)
       : multitable(multitable_arg),
         original_fields(*THR_MALLOC),
         update_value_list(update_values),
-        returning_fields(returning_fields_arg) {}
+        returning_fields(returning_fields_arg),
+        returning_into(returning_into_arg) {}
 
   enum_sql_command sql_command_code() const override {
     return multitable ? SQLCOM_UPDATE_MULTI : SQLCOM_UPDATE;
@@ -176,6 +179,9 @@ class Sql_cmd_update final : public Sql_cmd_dml {
   /// The values used to update fields
   mem_root_deque<Item *> *update_value_list;
   mem_root_deque<Item *> *returning_fields;
+  /// RETURNING ... INTO JSON target, or nullptr. Only meaningful when
+  /// returning_fields is non-null.
+  PT_select_var *returning_into;
 };
 
 /// Find out which of the target tables can be updated immediately while
