@@ -26,7 +26,9 @@
 # for skip_dd_table_access_check.
 --let $build_version= `SELECT @@GLOBAL.villagesql_schema_version`
 
-let DDIR=$MYSQL_TMP_DIR/veb_upgrade_0.0.5_test;
+# The zip holds a single directory named datadir, which is where it unpacks
+# under $MYSQL_TMP_DIR.
+let DDIR=$MYSQL_TMP_DIR/datadir;
 let MYSQLD_LOG=$MYSQL_TMP_DIR/upgrade_with_alter_ext.log;
 
 --echo # Extract the 0.0.5 datadir
@@ -36,9 +38,6 @@ let MYSQLD_LOG=$MYSQL_TMP_DIR/upgrade_with_alter_ext.log;
 # own allocations and fails with exitcode=42 (see
 # include/villagesql/create_extension_sdk.inc for the full explanation).
 --exec unset LD_PRELOAD && unzip -qo $MYSQL_TMP_DIR/veb_upgrade_0.0.5_lctn2.zip -d $MYSQL_TMP_DIR
-# The zip holds a single directory named data-dir; give it the name this test
-# uses so a leftover from another upgrade test cannot be picked up instead.
---move_file $MYSQL_TMP_DIR/data-dir $DDIR
 --file_exists $DDIR
 
 --echo # Restart on it, which upgrades the VillageSQL schema and applies the
