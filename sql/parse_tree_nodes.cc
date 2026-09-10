@@ -135,9 +135,14 @@ bool contextualize_safe(Context *pc, Node node, Nodes... nodes) {
 
 bool contextualize_returning_clause(
     Parse_context *pc, PT_item_list *returning_clause,
-    mem_root_deque<Item *> **returning_fields = nullptr) {
+    mem_root_deque<Item *> **returning_fields = nullptr,
+    PT_select_var *returning_into = nullptr) {
   if (returning_fields != nullptr) *returning_fields = nullptr;
-  if (returning_clause == nullptr) return false;
+  if (returning_clause == nullptr) {
+    // INTO without a RETURNING list is a grammar impossibility; guard anyway.
+    assert(returning_into == nullptr);
+    return false;
+  }
 
   LEX *const lex = pc->thd->lex;
   Query_block *const select = pc->select;
@@ -148,6 +153,16 @@ bool contextualize_returning_clause(
   assert(select->parsing_place == CTX_SELECT_LIST);
   select->parsing_place = CTX_NONE;
   if (returning_error) return true;
+
+  // Resolve the RETURNING ... INTO JSON target (an SP-local offset or a
+  // @user_var). Unlike SELECT ... INTO, we do not install a Query_dumpvar into
+  // lex->result: RETURNING drives its own Query_result_returning, which handles
+  // the JSON capture. We still mark the statement uncacheable because it writes
+  // a session/routine variable as a side effect.
+  if (returning_into != nullptr) {
+    if (returning_into->contextualize(pc)) return true;
+    lex->set_uncacheable(select, UNCACHEABLE_SIDEEFFECT);
+  }
 
   if (returning_fields != nullptr) *returning_fields = &returning_clause->value;
   return false;
@@ -1000,10 +1015,13 @@ Sql_cmd *PT_delete::make_cmd(THD *thd) {
 
   if (opt_hints != nullptr && opt_hints->contextualize(&pc)) return nullptr;
 
-  if (contextualize_returning_clause(&pc, opt_returning_clause)) return nullptr;
+  if (contextualize_returning_clause(&pc, opt_returning_clause, nullptr,
+                                     opt_returning_into))
+    return nullptr;
 
-  return new (thd->mem_root) Sql_cmd_delete(is_multitable(), &delete_tables,
-                                            opt_returning_clause != nullptr);
+  return new (thd->mem_root)
+      Sql_cmd_delete(is_multitable(), &delete_tables,
+                     opt_returning_clause != nullptr, opt_returning_into);
 }
 
 Sql_cmd *PT_update::make_cmd(THD *thd) {
@@ -1060,14 +1078,14 @@ Sql_cmd *PT_update::make_cmd(THD *thd) {
 
   mem_root_deque<Item *> *returning_fields = nullptr;
   if (contextualize_returning_clause(&pc, opt_returning_clause,
-                                     &returning_fields))
+                                     &returning_fields, opt_returning_into))
     return nullptr;
   if (returning_fields != nullptr) {
     select->fields = column_list->value;
   }
 
-  return new (thd->mem_root)
-      Sql_cmd_update(is_multitable, &value_list->value, returning_fields);
+  return new (thd->mem_root) Sql_cmd_update(
+      is_multitable, &value_list->value, returning_fields, opt_returning_into);
 }
 
 bool PT_insert_values_list::do_contextualize(Parse_context *pc) {

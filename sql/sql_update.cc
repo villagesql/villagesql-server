@@ -1824,7 +1824,7 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
   if (returning_fields != nullptr) {
     Query_result_returning *returning_result = nullptr;
     if (prepare_returning_fields(thd, select, returning_fields,
-                                 &returning_result))
+                                 &returning_result, returning_into))
       return true;
     result = returning_result;
   }
