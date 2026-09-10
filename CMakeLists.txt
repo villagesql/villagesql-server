@@ -2507,6 +2507,10 @@ IF(LINUX AND NOT WITHOUT_SERVER)
   IF(LINUX_SUSE)
     ADD_SUBDIRECTORY(packaging/rpm-sles)
   ENDIF()
+  # VillageSQL's own spec. Configured on every Linux platform, not gated on
+  # the build host's distro: the spec is an input to a container/CI build for
+  # any RPM target, so it must be generated even when building on Debian.
+  ADD_SUBDIRECTORY(packaging/villagesql-rpm)
 ENDIF()
 
 GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
