@@ -10,36 +10,37 @@ set -e
 # (and the CI action) don't have to special-case privilege per OS.
 SUDO=""
 if [[ "$(id -u)" -ne 0 ]]; then
-    SUDO="sudo"
+  SUDO="sudo"
 fi
 
 APT_OPTS=(-o Acquire::Retries=5)
 $SUDO apt-get "${APT_OPTS[@]}" update
-$SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
-    bash \
-    bison \
-    build-essential \
-    ccache \
-    cmake \
-    curl \
-    g++ \
-    git \
-    jq \
-    libaio-dev \
-    libdbd-mysql-perl \
-    libjson-perl \
-    libmecab-dev \
-    libncurses5-dev \
-    libnuma-dev \
-    libssl-dev \
-    libtirpc-dev \
-    libz-dev \
-    make \
-    openssl \
-    perl \
-    pkg-config \
-    unzip \
-    valgrind \
-    zip \
-    mold \
-    sudo
+$SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends
+# Add packages to the list lexicographically
+bash \
+  bison \
+  build-essential \
+  ccache \
+  cmake \
+  curl \
+  g++ \
+  git \
+  jq \
+  libaio-dev \
+  libdbd-mysql-perl \
+  libjson-perl \
+  libmecab-dev \
+  libncurses5-dev \
+  libnuma-dev \
+  libssl-dev \
+  libtirpc-dev \
+  libz-dev \
+  make \
+  mold \
+  openssl \
+  perl \
+  pkg-config \
+  sudo \
+  unzip \
+  valgrind \
+  zip

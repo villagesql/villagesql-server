@@ -35,6 +35,6 @@ docker run -it --rm \
   -v villagesql-build:/home/$USER/build/villagesql \
   -v villagesql-ccache:/home/$USER/build/villagesql/.ccache \
   -v villagesql-datadir:/home/$USER/mysql-data/data \
-  --cap-add CAP_SYS_NICE \
+  --cap-add SYS_NICE \
   -p 3306:3306 \
   villagesql-dev:latest

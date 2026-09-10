@@ -25,49 +25,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY villagesql/bld_tools/setup_linux_build_env.sh /tmp/
 RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/* && rm /tmp/setup_linux_build_env.sh
 
-# Use build-args when provided, default otherwise
+# Add a non-root user. Use build-args when provided, default otherwise
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG USER_NAME=dev_user
 ARG GROUP_NAME=dev_group
 
-RUN \
-    # Ubuntu images come prebuilt with user(ubuntu, 1000) and
-    # group(ubuntu, 1000). Delete existing user(if any) on USER_ID
-    if getent passwd ${USER_ID} >/dev/null; then \
-        userdel $(getent passwd ${USER_ID} | cut -d: -f1); \
-    fi && \
-    \
-    # Delete existing group(if any) on GROUP_ID
-    if getent group ${GROUP_ID} >/dev/null; then \
-        groupdel $(getent group ${GROUP_ID} | cut -d: -f1); \
-    fi && \
-    \
-    # USER_NAME might already exist on a different uid other than USER_ID
-    # Delete it if so
-    if getent passwd ${USER_NAME} >/dev/null; then \
-        userdel ${USER_NAME}; \
-    fi && \
-    \
-    # GROUP_NAME might already exist on a different gid other than GROUP_ID
-    # Delete it if so
-    if getent group ${GROUP_NAME} >/dev/null; then \
-        groupdel ${GROUP_NAME}; \
-    fi && \
-    \
-    # Add (GROUP_ID, GROUP_NAME)
-    echo "Case 5"; \
-    groupadd -g ${GROUP_ID} ${GROUP_NAME}; \
-    \
-    # Add (USER_ID, USER_NAME) within GROUP_ID
-    echo "Case 6"; \
-    useradd -l -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash ${USER_NAME}; \
-    \
-    # Grant sudo privileges to USER_NAME
-    usermod -a -G sudo ${USER_NAME}; \
-    \
-    # Enable all sudoers to use sudo without password
-    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers;
+COPY villagesql/bld_tools/add_non_root_docker_user.sh /tmp/
+RUN /tmp/add_non_root_docker_user.sh && rm /tmp/add_non_root_docker_user.sh
 
 # Switch to the custom user
 USER ${USER_NAME}
