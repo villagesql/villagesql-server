@@ -142,8 +142,7 @@ jobs:
         source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
         source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
         VSQL_VERSION=$(vsql_json_version "$SOURCE_DIR")
-        VSQL_CODEBASE=$("$SOURCE_DIR/villagesql/bld_matrix/json_version.sh" "$SOURCE_DIR" \
-          | jq '.code_base')
+        VSQL_CODEBASE=$(vsql_json_codebase "$SOURCE_DIR")
 
         vsql_platform_info
         BUILD_TARGET="${VSQL_CODEBASE}_${VSQL_VERSION}-${PLATFORM}-${ARCH}"
@@ -154,7 +153,7 @@ jobs:
           --arg gitRev "$REF" \
           --arg buildType "$BUILD_TYPE" \
           --arg codebase "$VSQL_CODEBASE" \
-          --arg version "$VSQL_VERSION}" \
+          --arg version "$VSQL_VERSION" \
           --arg os "$PLATFORM" \
           --arg arch "$ARCH" \
           --arg buildTarget "$BUILD_TARGET" \
