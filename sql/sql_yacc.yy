@@ -1932,7 +1932,7 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <into_destination> into_destination into_clause
 
-%type <select_var_ident> select_var_ident
+%type <select_var_ident> select_var_ident opt_returning_into
 
 %type <select_var_list> select_var_list
 
@@ -13545,9 +13545,10 @@ update_stmt:
           opt_order_clause      /* #8 */
           opt_simple_limit      /* #9 */
           opt_returning_clause  /* #10 */
+          opt_returning_into    /* #11 */
           {
             $$= NEW_PTN PT_update(@$, $1, $2, $3, $4, $5, $7.column_list, $7.value_list,
-                                  $8, $9, $10, $11);
+                                  $8, $9, $10, $11, $12);
           }
         ;
 
@@ -13616,9 +13617,10 @@ delete_stmt:
           opt_order_clause
           opt_simple_limit
           returning_clause
+          opt_returning_into
           {
             $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $6, $7, $8, $9, $10,
-                                   $11);
+                                   $11, $12);
           }
         | opt_with_clause
           DELETE_SYM
@@ -13650,6 +13652,15 @@ returning_clause:
 opt_returning_clause:
           %empty { $$= nullptr; }
         | returning_clause
+        ;
+
+// RETURNING ... INTO JSON <var>: capture the returned rows into a single
+// variable as a JSON array of row objects, rather than sending a result set.
+// The variable is a @user_var or a stored-procedure local (typically of type
+// JSON). Only meaningful together with a preceding returning_clause.
+opt_returning_into:
+          %empty { $$= nullptr; }
+        | INTO JSON_SYM select_var_ident { $$= $3; }
         ;
 
 opt_wild:

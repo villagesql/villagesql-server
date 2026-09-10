@@ -1,0 +1,162 @@
+#
+# RETURNING ... INTO JSON <var>
+#
+# Capture the rows produced by UPDATE/DELETE ... RETURNING into a single
+# variable as a JSON array of row objects, re-expandable with JSON_TABLE.
+#
+CREATE TABLE t1(id INT PRIMARY KEY, q INT, amt DECIMAL(6,2), note VARCHAR(20));
+INSERT INTO t1 VALUES
+(1, 10, 41.99, 'aa'),
+(2, 20, 123.45, 'bb'),
+(3, 30, 0.01, 'cc');
+# --- Multi-row DELETE RETURNING INTO JSON @var: array of objects, keys
+# --- are the RETURNING column aliases.
+DELETE FROM t1 WHERE id <= 2
+RETURNING id, q, note INTO JSON @rows;
+SELECT JSON_TYPE(@rows), JSON_LENGTH(@rows);
+JSON_TYPE(@rows)	JSON_LENGTH(@rows)
+ARRAY	2
+SELECT id, q, note
+FROM JSON_TABLE(@rows, '$[*]' COLUMNS(
+id   INT         PATH '$.id',
+q    INT         PATH '$.q',
+note VARCHAR(20) PATH '$.note')) jt
+ORDER BY id;
+id	q	note
+1	10	aa
+2	20	bb
+# --- Single matching row still yields a 1-element array, not a bare
+# --- object.
+INSERT INTO t1 VALUES (1, 10, 41.99, 'aa'), (2, 20, 123.45, 'bb');
+DELETE FROM t1 WHERE id = 3
+RETURNING id INTO JSON @one;
+SELECT JSON_TYPE(@one), JSON_LENGTH(@one), @one;
+JSON_TYPE(@one)	JSON_LENGTH(@one)	@one
+ARRAY	1	[{"id": 3}]
+# --- Zero matching rows yields an empty array (not NULL), so the
+# --- JSON_TABLE consumer needs no NULL guard.
+DELETE FROM t1 WHERE id = 999
+RETURNING id INTO JSON @none;
+SELECT JSON_TYPE(@none), JSON_LENGTH(@none), @none;
+JSON_TYPE(@none)	JSON_LENGTH(@none)	@none
+ARRAY	0	[]
+SELECT COUNT(*) AS expanded_rows
+FROM JSON_TABLE(@none, '$[*]' COLUMNS(id INT PATH '$.id')) jt;
+expanded_rows
+0
+# --- UPDATE RETURNING INTO JSON, including OLD_VALUE().
+UPDATE t1 SET q = q + 5 WHERE id = 1
+RETURNING id, q AS new_q, OLD_VALUE(q) AS old_q INTO JSON @upd;
+SELECT id, new_q, old_q
+FROM JSON_TABLE(@upd, '$[*]' COLUMNS(
+id    INT PATH '$.id',
+new_q INT PATH '$.new_q',
+old_q INT PATH '$.old_q')) jt;
+id	new_q	old_q
+1	15	10
+DROP TABLE t1;
+#
+# DECIMAL fidelity: a monetary value must round-trip exactly through the
+# @user_var text boundary (no blind cast to double / no +/-0.01 drift).
+#
+CREATE TABLE money(id INT PRIMARY KEY, amt DECIMAL(10,2));
+INSERT INTO money VALUES (1, 41.99), (2, 12345.67), (3, 0.01);
+DELETE FROM money
+RETURNING id, amt INTO JSON @m;
+SELECT id, amt
+FROM JSON_TABLE(@m, '$[*]' COLUMNS(
+id  INT           PATH '$.id',
+amt DECIMAL(10,2) PATH '$.amt')) jt
+ORDER BY id;
+id	amt
+1	41.99
+2	12345.67
+3	0.01
+DROP TABLE money;
+#
+# DATETIME fidelity: canonical string, round-trips via JSON_TABLE.
+#
+CREATE TABLE evt(id INT PRIMARY KEY, ts DATETIME);
+INSERT INTO evt VALUES (1, '2026-09-10 12:34:56'), (2, '2000-01-01 00:00:00');
+DELETE FROM evt
+RETURNING id, ts INTO JSON @e;
+SELECT id, ts
+FROM JSON_TABLE(@e, '$[*]' COLUMNS(
+id INT      PATH '$.id',
+ts DATETIME PATH '$.ts')) jt
+ORDER BY id;
+id	ts
+1	2026-09-10 12:34:56
+2	2000-01-01 00:00:00
+DROP TABLE evt;
+#
+# NULL column -> JSON null -> SQL NULL after JSON_TABLE.
+#
+CREATE TABLE nul(id INT PRIMARY KEY, v INT);
+INSERT INTO nul VALUES (1, NULL), (2, 7);
+DELETE FROM nul
+RETURNING id, v INTO JSON @n;
+SELECT id, v, v IS NULL AS v_is_null
+FROM JSON_TABLE(@n, '$[*]' COLUMNS(
+id INT PATH '$.id',
+v  INT PATH '$.v')) jt
+ORDER BY id;
+id	v	v_is_null
+1	NULL	1
+2	7	0
+DROP TABLE nul;
+#
+# Binary column -> hex string; UNHEX recovers the exact bytes.
+#
+CREATE TABLE bin(id INT PRIMARY KEY, b VARBINARY(8));
+INSERT INTO bin VALUES (1, 0x0011FF), (2, 0xDEADBEEF);
+DELETE FROM bin
+RETURNING id, b INTO JSON @b;
+SELECT id, HEX(UNHEX(b_hex)) AS roundtrip
+FROM JSON_TABLE(@b, '$[*]' COLUMNS(
+id    INT          PATH '$.id',
+b_hex VARCHAR(255) PATH '$.b')) jt
+ORDER BY id;
+id	roundtrip
+1	0011FF
+2	DEADBEEF
+DROP TABLE bin;
+#
+# Proc-local JSON variable target (the NEWORD consumer shape): the whole
+# producer/consumer round-trip happens inside one routine, and DECIMAL
+# stays exact.
+#
+CREATE TABLE stock(id INT PRIMARY KEY, qty INT, price DECIMAL(8,2));
+INSERT INTO stock VALUES (1, 100, 9.99), (2, 200, 5.55), (3, 300, 1.01);
+CREATE PROCEDURE drain_stock()
+BEGIN
+DECLARE lines_json JSON;
+DELETE FROM stock
+RETURNING id, qty, price INTO JSON lines_json;
+SELECT id, qty, price
+FROM JSON_TABLE(lines_json, '$[*]' COLUMNS(
+id    INT          PATH '$.id',
+qty   INT          PATH '$.qty',
+price DECIMAL(8,2) PATH '$.price')) jt
+ORDER BY id;
+END$$
+CALL drain_stock();
+id	qty	price
+1	100	9.99
+2	200	5.55
+3	300	1.01
+DROP PROCEDURE drain_stock;
+DROP TABLE stock;
+#
+# Rollback: the captured variable is session state and survives a table
+# rollback (which only undoes the row change).
+#
+CREATE TABLE t2(id INT PRIMARY KEY);
+INSERT INTO t2 VALUES (1), (2);
+START TRANSACTION;
+DELETE FROM t2 RETURNING id INTO JSON @tx;
+ROLLBACK;
+SELECT JSON_LENGTH(@tx) AS captured, (SELECT COUNT(*) FROM t2) AS still_present;
+captured	still_present
+2	2
+DROP TABLE t2;

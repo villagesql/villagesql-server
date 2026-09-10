@@ -846,7 +846,7 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
     // like INSERT/UPDATE so the alias and its special-case can be removed.
     Query_result_returning *returning_result = nullptr;
     if (prepare_returning_fields(thd, select, &select->fields,
-                                 &returning_result))
+                                 &returning_result, returning_into))
       return true;
     result = returning_result;
   }
