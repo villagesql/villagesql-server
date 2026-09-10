@@ -24,16 +24,15 @@
 
 #include "my_inttypes.h"
 
-// Return unsigned bytes pointed to by ptr in an ulonglong. Endianness
-// agnostic as the byte layout of memory pointed to by ptr should be the
-// same as the byte layout of ulonglong.
+// Return a native-endian ulonglong from bytes pointed to by ptr.
 inline ulonglong ulonglongget(const uchar *ptr) {
   ulonglong val;
   memcpy(&val, ptr, sizeof(val));
   return val;
 }
 
-// Return implicitly unsigned bytes pointed to by ptr in an ulonglong.
+// Return a native-endian ulonglong from bytes pointed to by ptr. The bytes are
+// treated as unsigned.
 inline ulonglong ulonglongget(const char *ptr) {
   return ulonglongget(
       static_cast<const uchar *>(static_cast<const void *>(ptr)));

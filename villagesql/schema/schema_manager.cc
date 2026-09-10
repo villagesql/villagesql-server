@@ -807,8 +807,7 @@ bool SchemaManagerStatus::read_villagesql_version(THD *thd, Semver *version) {
     return false;  // Success, but exists=false will trigger full initialization
   }
 
-  // The value is not text, it is an integer, so we need to read the raw
-  // binary..
+  // The value is not text, it is an integer, so we need to read the raw binary.
   if (schema_id_str.length() != sizeof(uint64_t)) {
     LogVSQL(ERROR_LEVEL, "Read unexpected sized value");
     return true;
