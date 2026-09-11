@@ -98,8 +98,37 @@ runs:
         echo "Running: $CMD"
         eval $CMD
 
+    # Unstable tests should be reported, but not cause the workflow to fail.
+    - name: Check for unstable tests
+      id: unstable
+      shell: bash
+      run: |
+        report="${BUILD_DIR}/mysql-test-report.xml"
+        if [ ! -f "$report" ]; then
+          echo "no MTR report at $report — nothing to check"
+          echo "count=0" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if ! count=$(xmllint --xpath 'count(//testcase[@status="unstable"])' "$report"); then
+          echo "::error::mysql-test-report.xml could not be parsed"
+          exit 1
+        fi
+        echo "unstable test cases: $count"
+        echo "count=$count" >> "$GITHUB_OUTPUT"
+
+    # Provide XML reportas a single artifact (<2MB) for easier download and inspection.
+    - name: Upload the MTR XML report
+      if: failure() || steps.unstable.outputs.count != '0'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.artifact-name }}-report
+        path: ${{ env.BUILD_DIR }}/mysql-test-report.xml
+        if-no-files-found: warn
+        retention-days: 7
+
+    # Preserve full test results (often >200MB) for detailed analysis.
     - name: Upload test results and logs on failure
-      if: failure()
+      if: failure() || steps.unstable.outputs.count != '0'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ${{ inputs.artifact-name }}
