@@ -1,0 +1,98 @@
+--echo #
+--echo # UPDATE ... RETURNING on the BUFFERED path (updated table is inner).
+--echo #
+--echo # When the optimizer drives the join from a small table (here JSON_TABLE)
+--echo # and reaches the large updated table (`stock`) on the inner side by PK,
+--echo # the update is buffered (two-pass). RETURNING is emitted from the
+--echo # collection pass, where the joined buffers and the pre-update image are
+--echo # live and the new image is built transiently. This is the NEWORD shape at
+--echo # production scale.
+--echo #
+
+CREATE TABLE stock(
+  s_w_id INT, s_i_id INT, s_quantity INT, s_dist_01 CHAR(8),
+  PRIMARY KEY (s_w_id, s_i_id)
+);
+CREATE TABLE item(i_id INT PRIMARY KEY, i_price DECIMAL(6,2));
+INSERT INTO item VALUES (1,9.99),(2,5.55),(3,1.01);
+
+--echo # Load enough stock rows that JSON_TABLE drives and stock is inner/buffered.
+--disable_query_log
+INSERT INTO stock VALUES (1,1,100,'d-01'),(1,2,200,'d-02'),(1,3,300,'d-03');
+BEGIN;
+--let $i = 4
+while ($i <= 5000)
+{
+  --eval INSERT INTO stock VALUES (1, $i, 500, 'd-xx')
+  --inc $i
+}
+COMMIT;
+--enable_query_log
+ANALYZE TABLE stock;
+
+SET @lines = '[{"i_id":1,"n":5},{"i_id":2,"n":3},{"i_id":3,"n":7}]';
+
+--echo # Confirm the plan is buffered (updated table inner, PK-probed).
+EXPLAIN FORMAT=TREE
+UPDATE stock
+  JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+         i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+    ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+  JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n;
+
+--echo # RETURNING on that buffered plan now EXECUTES (previously ER 1235).
+--sorted_result
+UPDATE stock
+  JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+         i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+    ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+  JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n
+RETURNING stock.s_i_id, stock.s_quantity AS new_qty,
+          OLD_VALUE(s_quantity) AS old_qty, ol.n AS ordered,
+          i.i_price, stock.s_dist_01;
+
+--echo # The writes actually landed (verify post-update quantities).
+SELECT s_i_id, s_quantity FROM stock WHERE s_w_id=1 AND s_i_id<=3 ORDER BY s_i_id;
+
+--echo # Same, INTO JSON, re-expanded (the full NEWORD producer/consumer round-trip).
+UPDATE stock
+  JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+         i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+    ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+  JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n
+RETURNING stock.s_i_id, ol.n AS ordered, i.i_price, stock.s_quantity AS nq
+INTO JSON @out;
+SELECT s_i_id, ordered, price, nq
+FROM JSON_TABLE(@out, '$[*]' COLUMNS(
+       s_i_id  INT          PATH '$.s_i_id',
+       ordered INT          PATH '$.ordered',
+       price   DECIMAL(6,2) PATH '$.i_price',
+       nq      INT          PATH '$.nq')) jt
+ORDER BY s_i_id;
+
+--echo # Guard: a buffered RETURNING on a table with UPDATE triggers is rejected
+--echo # (the transient collection-time image can't run the triggers, so RETURNING
+--echo # would observe pre-trigger values). The immediate path has no such limit.
+CREATE TRIGGER stock_bu BEFORE UPDATE ON stock
+FOR EACH ROW SET NEW.s_dist_01 = 'trg';
+--error ER_NOT_SUPPORTED_YET
+UPDATE stock
+  JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+         i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+    ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+  JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n
+RETURNING stock.s_i_id, stock.s_dist_01;
+--echo # Without RETURNING the same buffered update with the trigger runs fine.
+UPDATE stock
+  JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+         i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+    ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+  JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n;
+DROP TRIGGER stock_bu;
+
+DROP TABLE stock, item;
