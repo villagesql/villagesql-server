@@ -1,7 +1,7 @@
 # Extract the 0.0.5 datadir
 # Restart on it, which upgrades the VillageSQL schema and applies the
 # pending extension update
-# restart:--datadir=MYSQL_TMP_DIR/veb_upgrade_0.0.5_test --log-error=MYSQL_TMP_DIR/upgrade_with_alter_ext.log --log-error-verbosity=3
+# restart:--datadir=MYSQL_TMP_DIR/datadir --log-error=MYSQL_TMP_DIR/upgrade_with_alter_ext.log --log-error-verbosity=3
 # The schema was upgraded away from the 0.0.5 the fixture carries.
 villagesql_upgrades_ran	schema_version
 1	BUILD_VERSION
