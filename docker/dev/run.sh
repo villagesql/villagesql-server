@@ -27,14 +27,12 @@ if ! docker image inspect villagesql-dev:latest >/dev/null 2>&1; then
   "$SCRIPT_DIR/build.sh"
 fi
 
-# Should be the same user who built the image
-USER="$(id -un)"
 echo "Starting VillageSQL development container..."
 docker run -it --rm \
-  -v "$REPO_ROOT:/home/$USER/villagesql-server" \
-  -v villagesql-build:/home/$USER/build/villagesql \
-  -v villagesql-ccache:/home/$USER/build/villagesql/.ccache \
-  -v villagesql-datadir:/home/$USER/mysql-data/data \
+  -v "$REPO_ROOT:/source:ro" \
+  -v villagesql-build:/build \
+  -v villagesql-ccache:/ccache \
+  -v villagesql-datadir:/data \
   --cap-add SYS_NICE \
   -p 3306:3306 \
   villagesql-dev:latest
