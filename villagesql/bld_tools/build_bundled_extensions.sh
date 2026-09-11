@@ -6,8 +6,10 @@
 #            [extension] [include_unbundled]
 # <ext_dir>:        Path to a directory of extension git clones.
 # <sdk_dir>:        Path to an extracted villagesql-extension-sdk-* directory.
-#                   After 'make', this is $BUILD_DIR/villagesql-extension-sdk-<version>.
-# <veb_output_dir>: Directory where built .veb files are placed.
+#                   After 'make', this is
+#                   $BUILD_DIR/villagesql-extension-sdk-<version>.
+# <veb_output_dir>: Directory where built .veb files are placed. After 'make',
+#                   this is $BUILD_DIR/veb_output_directory.
 # [extension]:      Optional extension name to build only one extension (e.g.
 #                   vsql-ai). Omit to build every extension in the manifest.
 # [include_unbundled]: 0/no (default) to skip bundle=false extensions, 1/yes to
