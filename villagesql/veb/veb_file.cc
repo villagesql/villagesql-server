@@ -17,6 +17,7 @@
 #include "villagesql/veb/veb_file.h"
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -73,6 +74,94 @@ static std::string get_expansion_cache_base_path() {
   char path_buf[FN_REFLEN];
   fn_format(path_buf, ".veb_expansion_cache", mysql_real_data_home, "", 0);
   return std::string(path_buf);
+}
+
+// fsync a single directory so the entries created inside it are durable.
+// Opening the directory read-only and syncing the fd is the POSIX idiom for
+// this; Windows can neither open a directory as a file nor fsync one, so this
+// is a no-op there. Failures are logged and swallowed: some filesystems (tmpfs
+// and certain overlays, e.g. the ones mysql-test-run.pl --mem uses) reject
+// fsync on a directory, and that must not fail an install.
+static void sync_directory(const char *dir_path) {
+  // TODO(villagesql-windows): figured out how to sync using windows API
+#ifndef _WIN32
+  File fd = my_open(dir_path, O_RDONLY, MYF(0));
+  if (fd < 0) {
+    LogVSQL(WARNING_LEVEL, "Could not open directory to fsync: %s (errno %d)",
+            dir_path, my_errno());
+    return;
+  }
+  if (my_sync(fd, MYF(0)) != 0) {
+    LogVSQL(WARNING_LEVEL, "Could not fsync directory: %s (errno %d)", dir_path,
+            my_errno());
+  }
+  my_close(fd, MYF(0));
+#endif
+}
+
+// fsync one regular file by path so its data reaches stable storage.
+static void sync_file(const char *file_path) {
+  File fd = my_open(file_path, O_RDONLY, MYF(0));
+  if (fd < 0) {
+    LogVSQL(WARNING_LEVEL, "Could not open file to fsync: %s (errno %d)",
+            file_path, my_errno());
+    return;
+  }
+  if (my_sync(fd, MYF(0)) != 0) {
+    LogVSQL(WARNING_LEVEL, "Could not fsync file: %s (errno %d)", file_path,
+            my_errno());
+  }
+  my_close(fd, MYF(0));
+}
+
+// Force a freshly extracted VEB tree to stable storage. libarchive's
+// archive_write_disk backend has no fsync-on-extract option, so the extracted
+// files and the directory entries that name them live only in the page cache
+// until the kernel flushes them. This prevents an extenion install from
+// completing in the database, while the filesystem artifacts are lost. Sync
+// every regular file first, then every directory (a file is durable only once
+// both its data and its containing directory entry are synced), walking from
+// the expansion dir up through its ancestors to the datadir.
+static void sync_expanded_tree(const std::string &expanded_path,
+                               const std::string &name_dir,
+                               const std::string &base_path) {
+  std::error_code ec;
+  std::vector<std::string> dirs;
+  for (std::filesystem::recursive_directory_iterator
+           it(expanded_path, std::filesystem::directory_options::none, ec),
+       end;
+       !ec && it != end; it.increment(ec)) {
+    std::error_code sec;
+    std::filesystem::file_status status = it->symlink_status(sec);
+    if (sec) continue;
+    if (std::filesystem::is_directory(status)) {
+      dirs.push_back(it->path().string());
+    } else if (std::filesystem::is_regular_file(status)) {
+      sync_file(it->path().string().c_str());
+    }
+    // Symlinks and special files carry no data blocks of their own; the fsync
+    // of their parent directory persists the entry.
+  }
+  if (ec) {
+    LogVSQL(WARNING_LEVEL,
+            "Could not walk expansion tree to fsync: %s (error: %s)",
+            expanded_path.c_str(), ec.message().c_str());
+  }
+
+  // Sync directories bottom-up (leaf -> root). recursive_directory_iterator
+  // emits parents before children, so walk `dirs` in reverse to reach the
+  // deepest extracted subdirectory first, then the expansion dir and its
+  // ancestors up to the datadir. Each level's entry only becomes durable once
+  // its parent is synced, and syncing child-before-parent means a crash partway
+  // through this pass can never leave a parent entry pointing at a
+  // not-yet-durable child.
+  for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) {
+    sync_directory(it->c_str());
+  }
+  sync_directory(expanded_path.c_str());
+  sync_directory(name_dir.c_str());
+  sync_directory(base_path.c_str());
+  sync_directory(mysql_real_data_home);
 }
 
 std::string get_extension_so_path(const std::string &extension_name,
@@ -679,6 +768,11 @@ bool expand_veb_to_directory(const std::string &name,
 
     return true;
   }
+
+  // Extraction wrote everything through the page cache only; force it to stable
+  // storage before we report success, so the committed install metadata can
+  // never outlive the .so it points at.
+  sync_expanded_tree(expanded_path, name_dir, base_path);
 
   LogVSQL(INFORMATION_LEVEL, "Successfully expanded '%s' to %s", name.c_str(),
           expanded_path.c_str());
