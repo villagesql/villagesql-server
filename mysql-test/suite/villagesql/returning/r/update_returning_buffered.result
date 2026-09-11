@@ -1,0 +1,99 @@
+#
+# UPDATE ... RETURNING on the BUFFERED path (updated table is inner).
+#
+# When the optimizer drives the join from a small table (here JSON_TABLE)
+# and reaches the large updated table (`stock`) on the inner side by PK,
+# the update is buffered (two-pass). RETURNING is emitted from the
+# collection pass, where the joined buffers and the pre-update image are
+# live and the new image is built transiently. This is the NEWORD shape at
+# production scale.
+#
+CREATE TABLE stock(
+s_w_id INT, s_i_id INT, s_quantity INT, s_dist_01 CHAR(8),
+PRIMARY KEY (s_w_id, s_i_id)
+);
+CREATE TABLE item(i_id INT PRIMARY KEY, i_price DECIMAL(6,2));
+INSERT INTO item VALUES (1,9.99),(2,5.55),(3,1.01);
+# Load enough stock rows that JSON_TABLE drives and stock is inner/buffered.
+ANALYZE TABLE stock;
+Table	Op	Msg_type	Msg_text
+test.stock	analyze	status	OK
+SET @lines = '[{"i_id":1,"n":5},{"i_id":2,"n":3},{"i_id":3,"n":7}]';
+# Confirm the plan is buffered (updated table inner, PK-probed).
+EXPLAIN FORMAT=TREE
+UPDATE stock
+JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n;
+EXPLAIN
+-> Update stock (buffered)
+    -> Nested loop inner join  (cost=3.7 rows=6)
+        -> Nested loop inner join  (cost=1.6 rows=3)
+            -> Covering index scan on i using PRIMARY  (cost=0.55 rows=3)
+            -> Single-row index lookup on stock using PRIMARY (s_w_id=1, s_i_id=i.i_id)  (cost=0.283 rows=1)
+        -> Materialize table function  (cost=0.567 rows=2)
+
+# RETURNING on that buffered plan now EXECUTES (previously ER 1235).
+UPDATE stock
+JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n
+RETURNING stock.s_i_id, stock.s_quantity AS new_qty,
+OLD_VALUE(s_quantity) AS old_qty, ol.n AS ordered,
+i.i_price, stock.s_dist_01;
+s_i_id	new_qty	old_qty	ordered	i_price	s_dist_01
+1	95	100	5	9.99	d-01
+2	197	200	3	5.55	d-02
+3	293	300	7	1.01	d-03
+# The writes actually landed (verify post-update quantities).
+SELECT s_i_id, s_quantity FROM stock WHERE s_w_id=1 AND s_i_id<=3 ORDER BY s_i_id;
+s_i_id	s_quantity
+1	95
+2	197
+3	293
+# Same, INTO JSON, re-expanded (the full NEWORD producer/consumer round-trip).
+UPDATE stock
+JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n
+RETURNING stock.s_i_id, ol.n AS ordered, i.i_price, stock.s_quantity AS nq
+INTO JSON @out;
+SELECT s_i_id, ordered, price, nq
+FROM JSON_TABLE(@out, '$[*]' COLUMNS(
+s_i_id  INT          PATH '$.s_i_id',
+ordered INT          PATH '$.ordered',
+price   DECIMAL(6,2) PATH '$.i_price',
+nq      INT          PATH '$.nq')) jt
+ORDER BY s_i_id;
+s_i_id	ordered	price	nq
+1	5	9.99	90
+2	3	5.55	194
+3	7	1.01	286
+# Guard: a buffered RETURNING on a table with UPDATE triggers is rejected
+# (the transient collection-time image can't run the triggers, so RETURNING
+# would observe pre-trigger values). The immediate path has no such limit.
+CREATE TRIGGER stock_bu BEFORE UPDATE ON stock
+FOR EACH ROW SET NEW.s_dist_01 = 'trg';
+UPDATE stock
+JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n
+RETURNING stock.s_i_id, stock.s_dist_01;
+ERROR 42000: This version of MySQL doesn't yet support 'UPDATE ... RETURNING on a buffered update of a table with UPDATE triggers'
+# Without RETURNING the same buffered update with the trigger runs fine.
+UPDATE stock
+JOIN JSON_TABLE(@lines, '$[*]' COLUMNS(
+i_id INT PATH '$.i_id', n INT PATH '$.n')) ol
+ON ol.i_id = stock.s_i_id AND stock.s_w_id = 1
+JOIN item i ON i.i_id = stock.s_i_id
+SET stock.s_quantity = stock.s_quantity - ol.n;
+DROP TRIGGER stock_bu;
+DROP TABLE stock, item;

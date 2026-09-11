@@ -109,10 +109,20 @@ class Query_result_update final : public Query_result_interceptor {
   */
   COPY_INFO **update_operations{nullptr};
 
+  /// RETURNING sink for a single-target multi-table UPDATE ... RETURNING, or
+  /// nullptr. Set by Sql_cmd_update::prepare_inner. Rows are emitted from the
+  /// immediate-update path in UpdateRowsIterator; metadata and the terminator
+  /// are driven from start_execution()/send_eof() here.
+  Query_result_returning *m_returning{nullptr};
+
  public:
   Query_result_update(mem_root_deque<Item *> *field_list,
                       mem_root_deque<Item *> *value_list)
       : Query_result_interceptor(), fields(field_list), values(value_list) {}
+
+  void set_returning(Query_result_returning *returning) {
+    m_returning = returning;
+  }
   bool need_explain_interceptor() const override { return true; }
   bool prepare(THD *thd, const mem_root_deque<Item *> &list,
                Query_expression *u) override;
