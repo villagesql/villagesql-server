@@ -47,7 +47,7 @@ ENV PATH="/usr/lib/ccache:${PATH}"
 # Disable NUMA for Docker containers (NUMA syscalls not available)
 ENV CMAKE_EXTRA_FLAGS="-DHAVE_LIBNUMA=no"
 
-# Set working directory
+# Set working directory; creates BUILD_DIR if it doesn't exist
 WORKDIR ${BUILD_DIR}
 
 # Expose MySQL port
