@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2978,13 +2979,13 @@ void QEP_TAB::push_index_cond(const JOIN_TAB *join_tab, uint keyno,
   /*
     Fields of other non-const tables aren't allowed in following cases:
        type is:
-        (JT_ALL | JT_INDEX_SCAN | JT_RANGE | JT_INDEX_MERGE)
+        (JT_ALL | JT_INDEX_SCAN | JT_RANGE | JT_INDEX_MERGE | JT_KNN_SCAN)
        and BNL is used.
     and allowed otherwise.
   */
   const bool other_tbls_ok =
       !((type() == JT_ALL || type() == JT_INDEX_SCAN || type() == JT_RANGE ||
-         type() == JT_INDEX_MERGE) &&
+         type() == JT_INDEX_MERGE || type() == JT_KNN_SCAN) &&
         join_tab->use_join_cache() == JOIN_CACHE::ALG_BNL);
 
   /*
@@ -3373,6 +3374,7 @@ bool make_join_readinfo(JOIN *join, uint no_jbuf_after) {
         qep_tab->using_dynamic_range = (tab->use_quick == QS_DYNAMIC_RANGE);
         [[fallthrough]];
       case JT_INDEX_SCAN:
+      case JT_KNN_SCAN:
         if (tab->position()->filter_effect != COND_FILTER_STALE_NO_CONST &&
             !tab->sj_mat_exec()) {
           /*

@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -234,6 +235,7 @@ struct AccessPath {
     SAMPLE_SCAN,
     INDEX_SCAN,
     INDEX_DISTANCE_SCAN,
+    INDEX_KNN_SCAN,
     REF,
     REF_OR_NULL,
     EQ_REF,
@@ -550,6 +552,14 @@ struct AccessPath {
   const auto &index_distance_scan() const {
     assert(type == INDEX_DISTANCE_SCAN);
     return u.index_distance_scan;
+  }
+  auto &index_knn_scan() {
+    assert(type == INDEX_KNN_SCAN);
+    return u.index_knn_scan;
+  }
+  const auto &index_knn_scan() const {
+    assert(type == INDEX_KNN_SCAN);
+    return u.index_knn_scan;
   }
   auto &ref() {
     assert(type == REF);
@@ -953,6 +963,12 @@ struct AccessPath {
     } index_distance_scan;
     struct {
       TABLE *table;
+      int idx;
+      Item *query_point;
+      ha_rows limit;
+    } index_knn_scan;
+    struct {
+      TABLE *table;
       Index_lookup *ref;
       bool use_order;
       bool reverse;
@@ -1350,6 +1366,19 @@ inline AccessPath *NewIndexScanAccessPath(THD *thd, TABLE *table, int idx,
   path->index_scan().idx = idx;
   path->index_scan().use_order = use_order;
   path->index_scan().reverse = reverse;
+  return path;
+}
+
+inline AccessPath *NewIndexKnnScanAccessPath(THD *thd, TABLE *table, int idx,
+                                             Item *query_point, ha_rows limit,
+                                             bool count_examined_rows) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::INDEX_KNN_SCAN;
+  path->count_examined_rows = count_examined_rows;
+  path->index_knn_scan().table = table;
+  path->index_knn_scan().idx = idx;
+  path->index_knn_scan().query_point = query_point;
+  path->index_knn_scan().limit = limit;
   return path;
 }
 

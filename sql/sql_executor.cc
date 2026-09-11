@@ -3839,6 +3839,14 @@ AccessPath *QEP_TAB::access_path() {
                                     m_reversed_access,
                                     /*count_examined_rows=*/true);
       break;
+    case JT_KNN_SCAN: {
+      auto *knn_scan_info = this->knn_scan_info();
+      assert(knn_scan_info != nullptr);
+      path = NewIndexKnnScanAccessPath(
+          join()->thd, table(), index(), knn_scan_info->query_point,
+          knn_scan_info->limit, /*count_examined_rows=*/true);
+      break;
+    }
     case JT_ALL:
     case JT_RANGE:
     case JT_INDEX_MERGE:
