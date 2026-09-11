@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2092,6 +2093,12 @@ static bool safe_update_on_fly(const QEP_TAB *join_tab,
       return true;
     case JT_INDEX_SCAN:
       assert(false);  // cannot happen, due to "no_keyread" instruction.
+    case JT_KNN_SCAN:
+      // TODO(villagesql-indexing): UPDATE is not yet implemented/tested for
+      // KNN scans. Once it is, check that the KNN index fields are not in
+      // the write set, e.g.:
+      // return !is_key_used(table, join_tab->index(), table->write_set);
+      return false;
     default:
       break;  // Avoid compiler warning
   }

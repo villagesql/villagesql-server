@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -290,6 +291,7 @@ static void AssertSupportedPath(const AccessPath *path) {
     // of these access types.
     case AccessPath::INDEX_SCAN:
     case AccessPath::INDEX_DISTANCE_SCAN: /* purecov: deadcode */
+    case AccessPath::INDEX_KNN_SCAN:      /* purecov: deadcode */
     case AccessPath::REF:
     case AccessPath::REF_OR_NULL:
     case AccessPath::EQ_REF:

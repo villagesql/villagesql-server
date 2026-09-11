@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,7 +80,8 @@ static const char *traditional_extra_tags[ET_total] = {
     "Table function:",                  // ET_TABLE_FUNCTION
     "Index dive skipped due to FORCE",  // ET_SKIP_RECORDS_IN_RANGE
     "Using secondary engine",           // ET_USING_SECONDARY_ENGINE
-    "Rematerialize"                     // ET_REMATERIALIZE
+    "Rematerialize",                    // ET_REMATERIALIZE
+    "Knn_hints:"                        // ET_USING_KNN_SCAN
 };
 
 static const char *mod_type_name[] = {"NONE", "INSERT", "UPDATE", "DELETE",

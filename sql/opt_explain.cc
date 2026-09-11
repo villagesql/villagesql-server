@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -116,8 +117,8 @@ static bool mysql_explain_query_expression(THD *explain_thd,
                                            Query_expression *unit);
 
 const char *join_type_str[] = {
-    "UNKNOWN", "system", "const",    "eq_ref",      "ref",        "ALL",
-    "range",   "index",  "fulltext", "ref_or_null", "index_merge"};
+    "UNKNOWN", "system", "const",    "eq_ref",      "ref",         "ALL",
+    "range",   "index",  "fulltext", "ref_or_null", "index_merge", "knn_scan"};
 
 static const enum_query_type cond_print_flags =
     enum_query_type(QT_ORDINARY | QT_SHOW_SELECT_NUMBER);
@@ -1165,6 +1166,18 @@ bool Explain_table_base::explain_extra_common(int range_scan_type, uint keyno) {
     if (not_first) push_extra(ET_FT_HINTS, buff);
   }
 
+  if (type == JT_KNN_SCAN) {
+    // Print info about the KNN scan's row limit.
+    const KnnScanInfo *knn_scan_info = tab->knn_scan_info();
+    assert(knn_scan_info != nullptr);
+    StringBuffer<64> buff(cs);
+    char buf[64];
+    const size_t len = snprintf(buf, sizeof(buf) - 1, "limit = %llu",
+                                static_cast<ulonglong>(knn_scan_info->limit));
+    buff.append(buf, len, cs);
+    if (push_extra(ET_USING_KNN_SCAN, buff)) return true;
+  }
+
   /*
     EXPLAIN FORMAT=JSON FOR CONNECTION will mention clearly that index dive has
     been skipped.
@@ -1520,7 +1533,7 @@ bool Explain_join::explain_key_and_len() {
   if (tab->ref().key_parts)
     return explain_key_and_len_index(tab->ref().key, tab->ref().key_length,
                                      tab->ref().key_parts);
-  else if (type == JT_INDEX_SCAN || type == JT_FT)
+  else if (type == JT_INDEX_SCAN || type == JT_FT || type == JT_KNN_SCAN)
     return explain_key_and_len_index(tab->index());
   else if (type == JT_RANGE || type == JT_INDEX_MERGE ||
            ((type == JT_REF || type == JT_REF_OR_NULL) && range_scan_path))
