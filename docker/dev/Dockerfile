@@ -25,19 +25,29 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY villagesql/bld_tools/setup_linux_build_env.sh /tmp/
 RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/* && rm /tmp/setup_linux_build_env.sh
 
+# Add a non-root user. Use build-args when provided, default otherwise
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+ARG USER_NAME=dev_user
+ARG GROUP_NAME=dev_group
+
+COPY villagesql/bld_tools/add_non_root_docker_user.sh /tmp/
+RUN /tmp/add_non_root_docker_user.sh && rm /tmp/add_non_root_docker_user.sh
+
+# Switch to the non-root user
+USER ${USER_NAME}
+
 # Set environment variables
 ENV SOURCE_DIR=/source
 ENV BUILD_DIR=/build
+ENV DATA_DIR=/data
 ENV MYSQLTEST_VARDIR=${BUILD_DIR}/mysql-test/var
-ENV CCACHE_DIR=/root/.ccache
+ENV CCACHE_DIR=/ccache
 ENV PATH="/usr/lib/ccache:${PATH}"
 # Disable NUMA for Docker containers (NUMA syscalls not available)
 ENV CMAKE_EXTRA_FLAGS="-DHAVE_LIBNUMA=no"
 
-# Create build directory
-RUN mkdir -p ${BUILD_DIR}
-
-# Set working directory
+# Set working directory; creates BUILD_DIR if it doesn't exist
 WORKDIR ${BUILD_DIR}
 
 # Expose MySQL port

@@ -31,9 +31,8 @@ echo "Starting VillageSQL development container..."
 docker run -it --rm \
   -v "$REPO_ROOT:/source:ro" \
   -v villagesql-build:/build \
-  -v villagesql-ccache:/root/.ccache \
+  -v villagesql-ccache:/ccache \
+  -v villagesql-datadir:/data \
   --cap-add SYS_NICE \
-  -m 16g \
-  --cpus 8 \
   -p 3306:3306 \
   villagesql-dev:latest
