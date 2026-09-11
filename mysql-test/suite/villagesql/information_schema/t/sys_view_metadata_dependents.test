@@ -37,13 +37,9 @@ WITH RECURSIVE dependents (view_schema, view_name) AS (
 )
 SELECT view_name FROM dependents WHERE LOWER(view_schema) = 'sys';
 
---echo # Copy each one into a scratch schema, under the server default sql_mode.
---echo # That is deliberate and load bearing, not inherited: run_bootstrap_thread
---echo # gives the repair the server default, and the strict mode in it is what
---echo # makes Item_str_func columns nullable (THD::is_strict_mode() tests
---echo # STRICT_TRANS_TABLES | STRICT_ALL_TABLES). Created under a relaxed
---echo # sql_mode the copies would record the damaged form, match the damaged
---echo # original, and the check below would pass without testing anything.
+--echo # Copy each one into a scratch schema, under the server's default
+--echo # sql_mode, which is strict mode. The bootstrap thread runs in strict mode,
+--echo # and that is what makes Item_str_func columns nullable.
 SET @saved_sql_mode = @@SESSION.sql_mode;
 SET SESSION sql_mode = DEFAULT;
 

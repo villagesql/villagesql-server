@@ -19,13 +19,9 @@ ON LOWER(u.TABLE_SCHEMA) = LOWER(d.view_schema)
 AND LOWER(u.TABLE_NAME) = LOWER(d.view_name)
 )
 SELECT view_name FROM dependents WHERE LOWER(view_schema) = 'sys';
-# Copy each one into a scratch schema, under the server default sql_mode.
-# That is deliberate and load bearing, not inherited: run_bootstrap_thread
-# gives the repair the server default, and the strict mode in it is what
-# makes Item_str_func columns nullable (THD::is_strict_mode() tests
-# STRICT_TRANS_TABLES | STRICT_ALL_TABLES). Created under a relaxed
-# sql_mode the copies would record the damaged form, match the damaged
-# original, and the check below would pass without testing anything.
+# Copy each one into a scratch schema, under the server's default
+# sql_mode, which is strict mode. The bootstrap thread runs in strict mode,
+# and that is what makes Item_str_func columns nullable.
 SET @saved_sql_mode = @@SESSION.sql_mode;
 SET SESSION sql_mode = DEFAULT;
 include/assert.inc [The copies are created in strict mode, so a match below means repaired rather than equally damaged]
