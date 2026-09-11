@@ -2,6 +2,7 @@
 #define SQL_ITERATORS_UPDATE_ROWS_ITERATOR_H_
 
 /* Copyright (c) 2022, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +37,7 @@
 class COPY_INFO;
 class Copy_field;
 class Item;
+class Query_result_returning;
 class THD;
 struct TABLE;
 class Table_ref;
@@ -53,7 +55,8 @@ class UpdateRowsIterator final : public RowIterator {
                      COPY_INFO **update_operations,
                      mem_root_deque<Item *> **fields_for_table,
                      mem_root_deque<Item *> **values_for_table,
-                     table_map tables_with_rowid_in_buffer);
+                     table_map tables_with_rowid_in_buffer,
+                     Query_result_returning *returning);
   ~UpdateRowsIterator() override;
   bool Init() override;
   int Read() override;
@@ -107,6 +110,11 @@ class UpdateRowsIterator final : public RowIterator {
   /// handler::position() must be called to get the current row ID from the
   /// underlying scan.
   table_map m_hash_join_tables;
+  /// RETURNING sink, or nullptr when there is no RETURNING clause. Only the
+  /// immediate-update table can feed it: its updated row image and all joined
+  /// tables' buffers are live when the row is emitted. A single-target UPDATE
+  /// whose target is not updated on the fly is rejected at prepare time.
+  Query_result_returning *m_returning;
 
   /// Perform all the immediate updates for the current row returned by the
   /// join, and buffer row IDs for the non-immediate tables.
