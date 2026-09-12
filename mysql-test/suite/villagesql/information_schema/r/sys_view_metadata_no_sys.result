@@ -1,0 +1,8 @@
+DROP DATABASE sys;
+# Startup must survive the missing schema, not abort on it.
+# restart
+# And it must not have resurrected a partial sys schema on the way past.
+SELECT COUNT(*) AS sys_schemata FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME = 'sys';
+sys_schemata
+0
