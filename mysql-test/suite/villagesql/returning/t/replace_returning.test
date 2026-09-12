@@ -1,0 +1,26 @@
+--echo #
+--echo # REPLACE ... RETURNING
+--echo #
+
+CREATE TABLE t1(id INT PRIMARY KEY, v VARCHAR(10));
+INSERT INTO t1 VALUES(1, 'old'), (2, 'two'), (3, 'three');
+
+REPLACE INTO t1 VALUES(1, 'new') RETURNING id, v;
+REPLACE INTO t1 VALUES(4, 'four'), (5, 'five') RETURNING *;
+REPLACE INTO t1 SET id=2, v='replaced' RETURNING id AS replaced_id, v;
+
+CREATE TABLE t2 LIKE t1;
+REPLACE INTO t2 SELECT * FROM t1 WHERE id IN (1, 2) ORDER BY id
+RETURNING id, v;
+
+DELIMITER |;
+CREATE PROCEDURE p1()
+BEGIN
+  REPLACE INTO t1 VALUES(6, 'six') RETURNING id, v;
+END|
+DELIMITER ;|
+
+CALL p1();
+DROP PROCEDURE p1;
+
+DROP TABLE t2, t1;

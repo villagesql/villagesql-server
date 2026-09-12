@@ -464,6 +464,7 @@ void LEX::reset() {
   server_options.reset();
   explain_format = nullptr;
   is_explain_analyze = false;
+  has_returning_clause = false;
   set_using_hypergraph_optimizer(false);
   is_lex_started = true;
   reset_replica_info.all = false;
