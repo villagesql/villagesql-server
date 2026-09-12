@@ -19,6 +19,7 @@ SET(VILLAGESQL_SQL_SOURCES
   initialize.cc
   metadata_modifier.cc
   parse_tree_items.cc
+  sys_view_metadata.cc
   util.cc
 )
 

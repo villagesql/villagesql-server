@@ -1,0 +1,26 @@
+# Test that the server still starts when the sys schema does not exist.
+#
+# refresh_sys_view_metadata() repairs the sys views that installing the
+# VillageSQL INFORMATION_SCHEMA overrides re-derives the metadata of. sys is an
+# ordinary schema though, and an administrator is free to drop it -- at which
+# point there is nothing to repair, and replaying the sys DDL would fail on the
+# missing schema and take startup down with it.
+#
+# The check for that cannot be folded into the sentinel columns: a dropped
+# schema and a view upstream has renamed look identical from a sentinel's point
+# of view, and those opposite cases want opposite handling. A renamed view has
+# to be loud, because a repair that quietly stops repairing is how this class
+# of bug went unnoticed through two releases. A dropped schema has to be silent.
+
+# The dropped schema cannot be put back from SQL, so hand mtr a fresh datadir
+# for whatever runs next.
+--source include/force_restart.inc
+
+DROP DATABASE sys;
+
+--echo # Startup must survive the missing schema, not abort on it.
+--source include/restart_mysqld.inc
+
+--echo # And it must not have resurrected a partial sys schema on the way past.
+SELECT COUNT(*) AS sys_schemata FROM information_schema.SCHEMATA
+ WHERE SCHEMA_NAME = 'sys';
