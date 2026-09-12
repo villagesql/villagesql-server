@@ -1,0 +1,47 @@
+# Sentinel columns, one per overridden I_S view.
+# IS_NULLABLE must be YES, as on a vanilla server.
+SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'sys'
+     AND ((TABLE_NAME = 'schema_object_overview' AND COLUMN_NAME = 'object_type')
+OR (TABLE_NAME = 'x$schema_flattened_keys' AND COLUMN_NAME = 'index_name')
+OR (TABLE_NAME = 'schema_auto_increment_columns'
+           AND COLUMN_NAME = 'column_name')
+OR (TABLE_NAME = 'schema_redundant_indexes'
+           AND COLUMN_NAME = 'redundant_index_name'))
+ORDER BY TABLE_NAME;
+TABLE_NAME	COLUMN_NAME	IS_NULLABLE
+schema_auto_increment_columns	column_name	YES
+schema_object_overview	object_type	YES
+schema_redundant_indexes	redundant_index_name	YES
+x$schema_flattened_keys	index_name	YES
+# Check that all the sys views in I_S use the same charset and collation.
+# If they don't either the upstream changed some view(s) to different
+# charset/collation (highly unlikely), or we broke something (more
+# likely).
+SET @contexts = (SELECT COUNT(*) FROM
+(SELECT DISTINCT CHARACTER_SET_CLIENT, COLLATION_CONNECTION
+FROM information_schema.VIEWS WHERE TABLE_SCHEMA = 'sys') distinct_contexts);
+include/assert.inc [Every sys view records one client charset and connection collation, so the replay matched the sys schema DDL context]
+SELECT * FROM sys.x$schema_flattened_keys;
+SELECT * FROM sys.schema_redundant_indexes;
+SELECT * FROM sys.schema_object_overview;
+SELECT * FROM sys.schema_auto_increment_columns;
+# The repair is idempotent: a restart must neither undo it nor, because
+# the guard short-circuits, redo it.
+# restart
+SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'sys'
+     AND ((TABLE_NAME = 'schema_object_overview' AND COLUMN_NAME = 'object_type')
+OR (TABLE_NAME = 'x$schema_flattened_keys' AND COLUMN_NAME = 'index_name')
+OR (TABLE_NAME = 'schema_auto_increment_columns'
+           AND COLUMN_NAME = 'column_name')
+OR (TABLE_NAME = 'schema_redundant_indexes'
+           AND COLUMN_NAME = 'redundant_index_name'))
+ORDER BY TABLE_NAME;
+TABLE_NAME	COLUMN_NAME	IS_NULLABLE
+schema_auto_increment_columns	column_name	YES
+schema_object_overview	object_type	YES
+schema_redundant_indexes	redundant_index_name	YES
+x$schema_flattened_keys	index_name	YES
