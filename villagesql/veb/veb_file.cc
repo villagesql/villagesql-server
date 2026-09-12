@@ -76,6 +76,7 @@ static std::string get_expansion_cache_base_path() {
   return std::string(path_buf);
 }
 
+#ifndef _WIN32
 // fsync a single directory so the entries created inside it are durable.
 // Opening the directory read-only and syncing the fd is the POSIX idiom for
 // this. Failures are logged and swallowed: some filesystems (tmpfs and certain
@@ -117,8 +118,6 @@ static void sync_file(const char *file_path) {
 static void sync_expanded_tree(const std::string &expanded_path,
                                const std::string &name_dir,
                                const std::string &base_path) {
-  // TODO(villagesql-windows): Sync extension file contents to disk.
-#ifndef _WIN32
   std::error_code ec;
   std::vector<std::string> dirs;
   for (std::filesystem::recursive_directory_iterator
@@ -156,8 +155,12 @@ static void sync_expanded_tree(const std::string &expanded_path,
   sync_directory(name_dir.c_str());
   sync_directory(base_path.c_str());
   sync_directory(mysql_real_data_home);
-#endif
 }
+#else   // _WIN32
+// TODO(villagesql-windows): Sync extension file contents to disk.
+static void sync_expanded_tree(const std::string &, const std::string &,
+                               const std::string &) {}
+#endif  // _WIN32
 
 std::string get_extension_so_path(const std::string &extension_name,
                                   const std::string &sha256) {
