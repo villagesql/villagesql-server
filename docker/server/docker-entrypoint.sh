@@ -143,6 +143,12 @@ MYSQL_TEMP_SERVER_LOG=
 docker_temp_server_start() {
 	MYSQL_TEMP_SERVER_LOG="$(mktemp)"
 
+	# Background a tail instance that dumps the temporary mysqld error logs to stderr.
+	# Spawn `tail` before starting mysql so we automatically get all log
+	# messages as they're written and don't need to seek backwards.
+	tail -f "${MYSQL_TEMP_SERVER_LOG}" >&2 &
+	local tail_stderr_pid=$!
+
 	# Force the error log to a known file (regardless of any configured
 	# log-error) so we can watch it for readiness; a regular file also means
 	# mysqld never blocks on a full pipe. Disable the X plugin so the only
@@ -187,17 +193,14 @@ docker_temp_server_start() {
 	# Stop and reap both watcher jobs either way (grep may already have exited on
 	# the ready path; tail is still following). This is what keeps tail from
 	# lingering.
-	kill "${tail_pid}" "${watcher_pid}" 2>/dev/null || true
-	wait "${tail_pid}" "${watcher_pid}" 2>/dev/null || true
+	kill "${tail_pid}" "${tail_stderr_pid}" "${watcher_pid}" 2>/dev/null || true
+	wait "${tail_pid}" "${tail_stderr_pid}" "${watcher_pid}" 2>/dev/null || true
 
 	if ! kill -0 "${MYSQL_TEMP_SERVER_PID}" 2>/dev/null; then
 		# mysqld exited before becoming ready.
 		cat "${MYSQL_TEMP_SERVER_LOG}" >&2
 		mysql_error "Temporary server exited during startup before it became ready."
 	fi
-
-	# Surface the startup log in `docker logs`.
-	cat "${MYSQL_TEMP_SERVER_LOG}" >&2
 }
 
 # Stop the temporary server via signal + wait. SIGTERM triggers a clean mysqld
