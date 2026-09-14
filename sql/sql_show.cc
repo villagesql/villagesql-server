@@ -148,6 +148,7 @@
 #include "strmake.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "villagesql/system_views/extension_index_profiles.h"
 #include "villagesql/system_views/extension_index_types.h"
 #include "villagesql/system_views/extension_registration.h"
 #include "villagesql/types/util.h"
@@ -5135,6 +5136,8 @@ ST_SCHEMA_TABLE schema_tables[] = {
      fill_extension_registration, nullptr, nullptr, false},
     {"EXTENSION_INDEX_TYPES", villagesql_extension_index_types_fields,
      fill_extension_index_types, nullptr, nullptr, false},
+    {"EXTENSION_INDEX_PROFILES", villagesql_extension_index_profiles_fields,
+     fill_extension_index_profiles, nullptr, nullptr, false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {

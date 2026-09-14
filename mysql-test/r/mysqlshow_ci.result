@@ -94,6 +94,7 @@ Database: information_schema
 | ENABLED_ROLES                         |
 | ENGINES                               |
 | EVENTS                                |
+| EXTENSION_INDEX_PROFILES              |
 | EXTENSION_INDEX_TYPES                 |
 | EXTENSION_REGISTRATION                |
 | EXTENSIONS                            |
@@ -182,6 +183,7 @@ Database: INFORMATION_SCHEMA
 | ENABLED_ROLES                         |
 | ENGINES                               |
 | EVENTS                                |
+| EXTENSION_INDEX_PROFILES              |
 | EXTENSION_INDEX_TYPES                 |
 | EXTENSION_REGISTRATION                |
 | EXTENSIONS                            |

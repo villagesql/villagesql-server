@@ -7,6 +7,7 @@
 # CUSTOM_INDEXES       one row per index, mirroring villagesql.custom_indexes
 # CUSTOM_INDEX_COLUMNS one row per key column, mirroring custom_index_columns
 # EXTENSION_INDEX_TYPES one row per index type, from memory-only descriptors
+# EXTENSION_INDEX_PROFILES one row per profile, from memory-only descriptors
 #
 # The first two are privilege-filtered, because their rows name user objects,
 # and join each other on INDEX_ID. The third is
@@ -119,6 +120,57 @@ SELECT INDEX_TYPE_NAME,
 FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
 ORDER BY INDEX_TYPE_NAME;
 
+--echo # --- EXTENSION_INDEX_PROFILES: what a profile binds ---
+# A profile binds a data type to an index type, and three extensions can be
+# involved: the profile's own, the data type's, and the index type's. Every
+# in-tree extension supplies all three itself, so the columns below are
+# identical here -- the cross-extension case cannot be exercised without a
+# second test extension and is NOT covered by this test.
+#
+# ORDERING_ASC/DESC are as *declared*. The SDK cannot express "unordered" and
+# defaults to ASC, so a KNN profile still reports ORDERING_ASC = YES; see the
+# TODO(villagesql-indexing) in villagesql/system_views/statistics.cc.
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
+ORDER BY EXTENSION_NAME, PROFILE_NAME;
+
+--echo # --- PROFILE_NAME from CUSTOM_INDEX_COLUMNS now resolves ---
+# Before this table existed, CUSTOM_INDEX_COLUMNS published a complete
+# (EXTENSION_NAME, EXTENSION_VERSION, PROFILE_NAME) triple that joined to
+# nothing.
+#
+# EXTENSION_NAME means the profile's extension in CUSTOM_INDEX_COLUMNS and the
+# index type's in CUSTOM_INDEXES, so with both views in one FROM the name is
+# ambiguous and USING is unusable -- the hop to the profile catalogue must
+# qualify each side. Getting this wrong joins on the index type's extension,
+# which silently agrees for every in-tree extension.
+SELECT i.INDEX_NAME, c.SEQ_IN_INDEX, c.COLUMN_NAME,
+       p.DATA_TYPE_NAME, p.INDEX_TYPE_NAME, p.IS_DEFAULT_PROFILE
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c ON c.INDEX_ID = i.INDEX_ID
+JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES p
+  ON p.EXTENSION_NAME    = c.EXTENSION_NAME
+ AND p.EXTENSION_VERSION = c.EXTENSION_VERSION
+ AND p.PROFILE_NAME      = c.PROFILE_NAME
+WHERE i.TABLE_SCHEMA = 'test'
+ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
+
+--echo # --- The full chain: index -> key column -> profile -> index type ---
+# The profile's index type reference carries no version, so the last hop joins
+# on (extension, index type name) rather than the full three-column key.
+SELECT i.INDEX_NAME, c.COLUMN_NAME, p.PROFILE_NAME,
+       x.SUPPORTS_KNN, x.SUPPORTS_ORDER_BY
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c ON c.INDEX_ID = i.INDEX_ID
+JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES p
+  ON p.EXTENSION_NAME    = c.EXTENSION_NAME
+ AND p.EXTENSION_VERSION = c.EXTENSION_VERSION
+ AND p.PROFILE_NAME      = c.PROFILE_NAME
+JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES x
+  ON x.EXTENSION_NAME    = p.INDEX_TYPE_EXTENSION_NAME
+ AND x.INDEX_TYPE_NAME   = p.INDEX_TYPE_NAME
+WHERE i.TABLE_SCHEMA = 'test'
+ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
+
 --echo # --- Joining the two answers "can this index serve my ORDER BY?" ---
 SELECT c.INDEX_NAME, c.INDEX_TYPE_NAME,
        x.SUPPORTS_KNN, x.SUPPORTS_ORDER_BY, x.SUPPORTS_RANGE_SCAN
@@ -163,12 +215,15 @@ SELECT COUNT(*) AS secret_key_columns_visible
 FROM INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c
 WHERE c.COLUMN_NAME = 'a';
 
---echo # --- EXTENSION_INDEX_TYPES is visible to the same user, by design ---
-# Its rows name no user object. Pinned so that a later "make these consistent"
-# change cannot quietly start filtering it.
+--echo # --- The two catalogues are visible to the same user, by design ---
+# Their rows name no user object. Pinned so that a later "make these consistent"
+# change cannot quietly start filtering them.
 SELECT EXTENSION_NAME, INDEX_TYPE_NAME, SUPPORTS_KNN
 FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
 ORDER BY INDEX_TYPE_NAME;
+SELECT EXTENSION_NAME, PROFILE_NAME, INDEX_TYPE_NAME
+FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
+ORDER BY PROFILE_NAME;
 
 connection default;
 disconnect con1;
@@ -199,6 +254,8 @@ SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SELECT COUNT(*) AS index_types_after_uninstall
 FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES;
+SELECT COUNT(*) AS profiles_after_uninstall
+FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES;
 
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

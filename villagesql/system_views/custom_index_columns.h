@@ -46,6 +46,18 @@ namespace system_views {
   nothing requires it, and keeping the halves in separate views is what lets the
   name mean one thing in each.
 
+  The cost of that is at join time: with both views in one FROM the bare name
+  EXTENSION_NAME is ambiguous, so reaching I_S.EXTENSION_INDEX_PROFILES must
+  qualify each side rather than use USING:
+
+      JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES p
+        ON p.EXTENSION_NAME    = c.EXTENSION_NAME
+       AND p.EXTENSION_VERSION = c.EXTENSION_VERSION
+       AND p.PROFILE_NAME      = c.PROFILE_NAME
+
+  Joining i.EXTENSION_NAME there instead is wrong and silently agrees for every
+  in-tree extension, since each supplies its own profiles.
+
   SEQ_IN_INDEX is 1-based to match I_S.STATISTICS, while the underlying
   key_position is 0-based.
 
