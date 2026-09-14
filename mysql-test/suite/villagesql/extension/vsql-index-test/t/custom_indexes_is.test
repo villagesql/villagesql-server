@@ -1,13 +1,26 @@
-# INFORMATION_SCHEMA.CUSTOM_INDEXES and INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES.
+# The three I_S surfaces for custom indexes.
 #
 # villagesql.custom_indexes and villagesql.custom_index_columns are unreadable by
 # users -- is_dd_table_access_allowed() locks the whole villagesql schema down --
-# so these two I_S surfaces are the only way to see custom index metadata.
+# so these surfaces are the only way to see custom index metadata.
 #
-# CUSTOM_INDEXES is per index and privilege-filtered, because its rows name user
-# objects. EXTENSION_INDEX_TYPES is per index type and deliberately NOT filtered,
-# because its rows name only installed software. The two join on
-# (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME).
+# CUSTOM_INDEXES       one row per index, mirroring villagesql.custom_indexes
+# CUSTOM_INDEX_COLUMNS one row per key column, mirroring custom_index_columns
+# EXTENSION_INDEX_TYPES one row per index type, from memory-only descriptors
+#
+# The first two are privilege-filtered, because their rows name user objects,
+# and join each other on INDEX_ID. The third is
+# deliberately NOT filtered -- its rows name only installed software -- and
+# joins CUSTOM_INDEXES on (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME).
+#
+# The index/column split mirrors the villagesql tables, and follows upstream's
+# INNODB_INDEXES / INNODB_FIELDS pair down to the INDEX_ID join key. It also
+# keeps EXTENSION_NAME unambiguous: in CUSTOM_INDEXES it is the index type's
+# extension, in CUSTOM_INDEX_COLUMNS it is the profile's.
+#
+# INDEX_ID is a server-assigned surrogate and is not stable across runs, so it is
+# never printed -- the queries below select through the join instead of showing
+# raw ids.
 #
 # TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
 # custom index execution is fully implemented and the guard in
@@ -30,15 +43,41 @@ CREATE INDEX idx_ext ON t (b) USING EXTENDED(dummy_index_hnsw)
   WITH (M = 16, ef_construction = 200);
 CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_hnsw);
 
---echo # --- CUSTOM_INDEXES: one row per index key column ---
-# idx_multi spans two columns and so yields two rows. Its empty parameters are
-# not a gap: it was created without a WITH clause.
-SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME,
+--echo # --- CUSTOM_INDEXES: one row per custom index ---
+# A multi-column index is one row here, not one per column. Its empty
+# parameters are not a gap: it was created without a WITH clause, and defaults
+# are resolved into a memory-only struct rather than persisted.
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME,
        EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME,
-       INDEX_TYPE_PARAMETERS, PROFILE_NAME
+       INDEX_TYPE_PARAMETERS
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
 WHERE TABLE_SCHEMA = 'test'
-ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;
+ORDER BY TABLE_NAME, INDEX_NAME;
+
+--echo # --- CUSTOM_INDEX_COLUMNS: one row per key column, reached via INDEX_ID ---
+# idx_multi spans (d, e) and so yields two rows. EXTENSION_NAME here is the
+# extension providing the PROFILE, which villagesql records separately from the
+# index type's extension -- the two coincide for every in-tree extension but
+# nothing requires it, which is why they live in different views.
+#
+# This view carries no schema or table columns, so every per-table question goes
+# through CUSTOM_INDEXES.
+SELECT i.TABLE_SCHEMA, i.TABLE_NAME, i.INDEX_NAME,
+       c.SEQ_IN_INDEX, c.COLUMN_NAME,
+       c.EXTENSION_NAME, c.EXTENSION_VERSION, c.PROFILE_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
+WHERE i.TABLE_SCHEMA = 'test'
+ORDER BY i.TABLE_NAME, i.INDEX_NAME, c.SEQ_IN_INDEX;
+
+--echo # --- INDEX_ID joins the halves and matches row for row ---
+# The id itself is masked: it is assigned at CREATE INDEX time and is not stable
+# across runs. What matters is that the join finds every key column exactly once.
+SELECT COUNT(*) AS joined_rows,
+       COUNT(DISTINCT i.INDEX_NAME) AS distinct_indexes
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
+WHERE i.TABLE_SCHEMA = 'test';
 
 --echo # --- Regular indexes are absent by construction ---
 SELECT COUNT(*) AS regular_index_rows
@@ -53,12 +92,16 @@ SELECT INDEX_NAME, INDEX_TYPE_PARAMETERS->>'$.M' AS m_raw,
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
 WHERE TABLE_SCHEMA = 'test' AND INDEX_NAME = 'idx_ext';
 
---echo # --- SEQ_IN_INDEX aligns with STATISTICS, so the join is 1:1 ---
+--echo # --- Reaching STATISTICS now takes two hops, and stays 1:1 ---
+# STATISTICS to CUSTOM_INDEXES on the natural key, then to CUSTOM_INDEX_COLUMNS
+# on (INDEX_ID, SEQ_IN_INDEX).
 SELECT s.INDEX_NAME, s.SEQ_IN_INDEX, s.COLUMN_NAME, s.INDEX_TYPE,
-       c.INDEX_TYPE_PARAMETERS
+       c.PROFILE_NAME
 FROM INFORMATION_SCHEMA.STATISTICS s
-JOIN INFORMATION_SCHEMA.CUSTOM_INDEXES c
-  USING (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX)
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEXES i
+  USING (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME)
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c
+  ON c.INDEX_ID = i.INDEX_ID AND c.SEQ_IN_INDEX = s.SEQ_IN_INDEX
 WHERE s.TABLE_SCHEMA = 'test' AND s.TABLE_NAME = 't'
 ORDER BY s.INDEX_NAME, s.SEQ_IN_INDEX;
 
@@ -82,7 +125,7 @@ SELECT c.INDEX_NAME, c.INDEX_TYPE_NAME,
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES c
 JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES x
   USING (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME)
-WHERE c.TABLE_SCHEMA = 'test' AND c.SEQ_IN_INDEX = 1
+WHERE c.TABLE_SCHEMA = 'test'
 ORDER BY c.INDEX_NAME;
 
 --echo #
@@ -112,6 +155,14 @@ FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
 WHERE TABLE_SCHEMA IN ('test', 'secretdb')
 ORDER BY TABLE_SCHEMA, INDEX_NAME;
 
+--echo # --- CUSTOM_INDEX_COLUMNS must hide it too ---
+# This view names no schema or table, so its filter is the easiest to drop by
+# accident during a "it doesn't need the join" cleanup. COLUMN_NAME is still
+# user data, so the count below must exclude secretdb's key columns.
+SELECT COUNT(*) AS secret_key_columns_visible
+FROM INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c
+WHERE c.COLUMN_NAME = 'a';
+
 --echo # --- EXTENSION_INDEX_TYPES is visible to the same user, by design ---
 # Its rows name no user object. Pinned so that a later "make these consistent"
 # change cannot quietly start filtering it.
@@ -128,8 +179,12 @@ DROP USER nobody@localhost;
 --echo #
 --echo # --- Dropping an index removes its rows ---
 DROP INDEX idx_multi ON t;
-SELECT INDEX_NAME, SEQ_IN_INDEX FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
-WHERE TABLE_SCHEMA = 'test' ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'test' ORDER BY INDEX_NAME;
+SELECT i.INDEX_NAME, c.SEQ_IN_INDEX
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
+WHERE i.TABLE_SCHEMA = 'test' ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
 
 --echo # --- Dropping the table removes the rest ---
 DROP TABLE t;

@@ -28,32 +28,42 @@ namespace system_views {
   The class representing INFORMATION_SCHEMA.CUSTOM_INDEXES system view
   definition.
 
-  One row per (custom index, key column), matching I_S.STATISTICS granularity so
-  the two join 1:1 on (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX).
-  Regular indexes do not appear: the villagesql tables are the driving side of
-  an inner join, so only custom indexes are listed by construction.
+  One row per custom index, mirroring villagesql.custom_indexes. The per-key-
+  column half lives in I_S.CUSTOM_INDEX_COLUMNS, joined on INDEX_ID -- the same
+  split, and the same join key, that upstream uses for INNODB_INDEXES /
+  INNODB_FIELDS.
 
-  Joins the data dictionary rather than reporting the names villagesql stores,
-  because at lower_case_table_names = 2 the villagesql tables hold lower-cased
-  schema and table names while the DD keeps the CREATE-time case. Reporting the
-  stored form would disagree with every other I_S surface for the same table.
+  INDEX_ID is a server-assigned surrogate, stable for the life of the index on
+  this server but not across a dump and restore. It is published because it is
+  the join key; it carries no meaning of its own.
+
+  Keeping the two apart is what lets EXTENSION_NAME and EXTENSION_VERSION mean
+  one thing here: the extension providing the index *type*. The profile's
+  extension is a separate pair recorded per key column, and combining both into
+  one row would leave two same-named concepts side by side.
+
+  Regular indexes do not appear: the villagesql table is the driving side of an
+  inner join, so only custom indexes are listed by construction.
+
+  Names come from the data dictionary rather than from
+  villagesql.custom_indexes, because at lower_case_table_names = 2 the
+  villagesql tables hold lower-cased schema and table names while the DD keeps
+  the CREATE-time case.
 */
 class Custom_indexes
     : public dd::system_views::System_view_impl<
           dd::system_views::System_view_select_definition_impl> {
  public:
   enum enum_fields {
+    FIELD_INDEX_ID,
     FIELD_TABLE_CATALOG,
     FIELD_TABLE_SCHEMA,
     FIELD_TABLE_NAME,
     FIELD_INDEX_NAME,
-    FIELD_SEQ_IN_INDEX,
-    FIELD_COLUMN_NAME,
     FIELD_EXTENSION_NAME,
     FIELD_EXTENSION_VERSION,
     FIELD_INDEX_TYPE_NAME,
-    FIELD_INDEX_TYPE_PARAMETERS,
-    FIELD_PROFILE_NAME
+    FIELD_INDEX_TYPE_PARAMETERS
   };
 
   Custom_indexes();

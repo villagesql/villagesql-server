@@ -89,9 +89,12 @@ Database: information_schema
 | COLUMN_STATISTICS                     |
 | COLUMNS                               |
 | COLUMNS_EXTENSIONS                    |
+| CUSTOM_INDEX_COLUMNS                  |
+| CUSTOM_INDEXES                        |
 | ENABLED_ROLES                         |
 | ENGINES                               |
 | EVENTS                                |
+| EXTENSION_INDEX_TYPES                 |
 | EXTENSION_REGISTRATION                |
 | EXTENSIONS                            |
 | FILES                                 |
@@ -174,9 +177,12 @@ Database: INFORMATION_SCHEMA
 | COLUMN_STATISTICS                     |
 | COLUMNS                               |
 | COLUMNS_EXTENSIONS                    |
+| CUSTOM_INDEX_COLUMNS                  |
+| CUSTOM_INDEXES                        |
 | ENABLED_ROLES                         |
 | ENGINES                               |
 | EVENTS                                |
+| EXTENSION_INDEX_TYPES                 |
 | EXTENSION_REGISTRATION                |
 | EXTENSIONS                            |
 | FILES                                 |

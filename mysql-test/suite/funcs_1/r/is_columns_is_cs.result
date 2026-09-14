@@ -80,17 +80,21 @@ def	information_schema	COLUMN_STATISTICS	SCHEMA_NAME	1	NULL	NO	varchar	64	192	NU
 def	information_schema	COLUMN_STATISTICS	TABLE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	COLUMN_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	HISTOGRAM	4	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select			NULL
-def	information_schema	CUSTOM_INDEXES	TABLE_CATALOG	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	TABLE_SCHEMA	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	TABLE_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	INDEX_NAME	4	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	SEQ_IN_INDEX	5	0	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint unsigned			select			NULL
-def	information_schema	CUSTOM_INDEXES	COLUMN_NAME	6	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	EXTENSION_NAME	7	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	EXTENSION_VERSION	8	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	INDEX_TYPE_NAME	9	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
-def	information_schema	CUSTOM_INDEXES	INDEX_TYPE_PARAMETERS	10	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select	Index type instantiation parameters as JSON		NULL
-def	information_schema	CUSTOM_INDEXES	PROFILE_NAME	11	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_ID	1	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint unsigned			select	Server-assigned unique index identifier		NULL
+def	information_schema	CUSTOM_INDEXES	TABLE_CATALOG	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	TABLE_SCHEMA	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	TABLE_NAME	4	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_NAME	5	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	EXTENSION_NAME	6	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	EXTENSION_VERSION	7	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_TYPE_NAME	8	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEXES	INDEX_TYPE_PARAMETERS	9	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select	Index type instantiation parameters as JSON		NULL
+def	information_schema	CUSTOM_INDEX_COLUMNS	INDEX_ID	1	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint unsigned			select	FK to custom_indexes.index_id		NULL
+def	information_schema	CUSTOM_INDEX_COLUMNS	SEQ_IN_INDEX	2	0	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint unsigned			select			NULL
+def	information_schema	CUSTOM_INDEX_COLUMNS	COLUMN_NAME	3	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEX_COLUMNS	EXTENSION_NAME	4	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEX_COLUMNS	EXTENSION_VERSION	5	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
+def	information_schema	CUSTOM_INDEX_COLUMNS	PROFILE_NAME	6	NULL	YES	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_NAME	1	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_HOST	2	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	IS_DEFAULT	3	NULL	YES	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
@@ -648,17 +652,21 @@ NULL	information_schema	COLUMNS_EXTENSIONS	SECONDARY_ENGINE_ATTRIBUTE	json	NULL	
 3.0000	information_schema	COLUMN_STATISTICS	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	COLUMN_STATISTICS	COLUMN_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 NULL	information_schema	COLUMN_STATISTICS	HISTOGRAM	json	NULL	NULL	NULL	NULL	json
+NULL	information_schema	CUSTOM_INDEXES	INDEX_ID	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 3.0000	information_schema	CUSTOM_INDEXES	TABLE_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	CUSTOM_INDEXES	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	CUSTOM_INDEXES	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	CUSTOM_INDEXES	INDEX_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
-NULL	information_schema	CUSTOM_INDEXES	SEQ_IN_INDEX	bigint	NULL	NULL	NULL	NULL	bigint unsigned
-4.0000	information_schema	CUSTOM_INDEXES	COLUMN_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
 4.0000	information_schema	CUSTOM_INDEXES	EXTENSION_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
 4.0000	information_schema	CUSTOM_INDEXES	EXTENSION_VERSION	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
 4.0000	information_schema	CUSTOM_INDEXES	INDEX_TYPE_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
 NULL	information_schema	CUSTOM_INDEXES	INDEX_TYPE_PARAMETERS	json	NULL	NULL	NULL	NULL	json
-4.0000	information_schema	CUSTOM_INDEXES	PROFILE_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+NULL	information_schema	CUSTOM_INDEX_COLUMNS	INDEX_ID	bigint	NULL	NULL	NULL	NULL	bigint unsigned
+NULL	information_schema	CUSTOM_INDEX_COLUMNS	SEQ_IN_INDEX	bigint	NULL	NULL	NULL	NULL	bigint unsigned
+4.0000	information_schema	CUSTOM_INDEX_COLUMNS	COLUMN_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	information_schema	CUSTOM_INDEX_COLUMNS	EXTENSION_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	information_schema	CUSTOM_INDEX_COLUMNS	EXTENSION_VERSION	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	information_schema	CUSTOM_INDEX_COLUMNS	PROFILE_NAME	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
 4.0000	information_schema	ENABLED_ROLES	ROLE_NAME	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 4.0000	information_schema	ENABLED_ROLES	ROLE_HOST	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 3.0000	information_schema	ENABLED_ROLES	IS_DEFAULT	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)

@@ -70,7 +70,17 @@ Statistics_base::Statistics_base() {
   // which an extension must opt into, but capabilities are memory-only and
   // unreachable from a view; they are exposed by
   // I_S.EXTENSION_INDEX_TYPES instead. Reporting NULL here is coarser than
-  // that capability would allow, but it is never false.
+  // that capability would allow, but it is never false: NULL means "no ordering
+  // information", not "unordered".
+  //
+  // TODO(villagesql-indexing): This under-reports for an index type that does
+  // declare VEF_INDEX_CAP_ORDER_BY -- 'A' would be correct there, and this
+  // still says NULL. No in-tree extension declares it today (both test
+  // extensions declare KNN only), so the loss is currently theoretical, but it
+  // will be silent when it stops being. Closing it needs an INTERNAL_ function
+  // reading the capability bitmask from the Victionary, since a view cannot;
+  // until then I_S.EXTENSION_INDEX_TYPES.SUPPORTS_ORDER_BY is the answer, via a
+  // join on (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME).
   m_target_def.add_field(FIELD_COLLATION, "COLLATION",
                          "CASE WHEN vci.index_id IS NOT NULL THEN NULL "
                          "WHEN icu.order = 'DESC' THEN 'D' "
