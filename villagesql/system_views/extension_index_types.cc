@@ -21,6 +21,15 @@
 // can an index of this type actually do", which INDEX_TYPE in I_S.STATISTICS
 // names but cannot describe.
 //
+// Every VEF_INDEX_CAP_* and VEF_INDEX_STORAGE_* bit is decoded into its own
+// YES/NO column, and the raw bitmasks are deliberately NOT published alongside
+// them. Publishing the same fact twice would make the ABI's bit numbering part
+// of a stable SQL surface, so a bit ever renumbered or retired would change a
+// column's meaning silently -- and a user who sees an undecoded bit has no name
+// for it and can do nothing with it. I_S.ENGINES is the precedent: it decodes
+// SUPPORT, TRANSACTIONS, XA and SAVEPOINTS and exposes no mask. Adding a
+// capability bit therefore means adding its column here.
+//
 // Deliberately NOT privilege-filtered. Rows name no user object -- only
 // installed software -- which is the line MySQL draws: I_S.TABLES and
 // I_S.COLUMNS filter because their rows identify user schemas, while
@@ -51,9 +60,7 @@ enum {
   FIELD_SUPPORTS_KNN,
   FIELD_HAS_COLUMN_REF,
   FIELD_HAS_ROW_REF,
-  FIELD_SUPPORTS_REF_LOOKUP,
-  FIELD_CAPABILITIES,
-  FIELD_STORAGE_PROPS
+  FIELD_SUPPORTS_REF_LOOKUP
 };
 
 void store_yes_no(Field *field, bool value) {
@@ -75,13 +82,6 @@ ST_FIELD_INFO villagesql_extension_index_types_fields[] = {
     {"HAS_COLUMN_REF", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"HAS_ROW_REF", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"SUPPORTS_REF_LOOKUP", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
-    // The raw bitmasks are exposed alongside the decoded columns, as
-    // I_S.INNODB_TABLES exposes both FLAG and the derived ROW_FORMAT. If the
-    // SDK gains a VEF_INDEX_CAP_* or VEF_INDEX_STORAGE_* bit before this table
-    // learns its name, the bit is still visible here rather than silently
-    // dropped.
-    {"CAPABILITIES", 10, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, nullptr, 0},
-    {"STORAGE_PROPS", 10, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, nullptr, 0},
     {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
 
 int fill_extension_index_types(THD *thd, Table_ref *tables, Item *) {
@@ -127,11 +127,6 @@ int fill_extension_index_types(THD *thd, Table_ref *tables, Item *) {
                  (intf.storage_props & VEF_INDEX_STORAGE_HAS_ROW_REF) != 0);
     store_yes_no(table->field[FIELD_SUPPORTS_REF_LOOKUP],
                  (intf.storage_props & VEF_INDEX_STORAGE_REF_LOOKUP) != 0);
-
-    table->field[FIELD_CAPABILITIES]->store(
-        static_cast<longlong>(intf.capabilities), true);
-    table->field[FIELD_STORAGE_PROPS]->store(
-        static_cast<longlong>(intf.storage_props), true);
 
     if (schema_table_store_record(thd, table)) return 1;
   }
