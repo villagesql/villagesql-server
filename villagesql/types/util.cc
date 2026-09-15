@@ -338,8 +338,9 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
   if (should_assert_if_true(results.size() > 1)) {
     if (!current_thd->is_error()) {
       villagesql_error(
-          "Failed to resolve type %.*s; VictionaryClient not initialized",
-          MYF(0), static_cast<int>(type_name.size()), type_name.data());
+          "Failed to resolve type %.*s; it matches %zu registered types",
+          MYF(0), static_cast<int>(type_name.size()), type_name.data(),
+          results.size());
     }
     return true;
   }

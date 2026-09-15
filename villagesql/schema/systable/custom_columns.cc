@@ -80,6 +80,10 @@ bool TableTraits<ColumnEntry>::write_to_table(TABLE &table,
                   &my_charset_utf8mb4_bin);
 
   // type_parameters (field 6)
+  // TODO(villagesql-production): check store() returns, here and in the
+  // sibling systable TableTraits. It matters most for the JSON columns:
+  // Field_json::store raises ER_INVALID_JSON_TEXT on malformed input and we
+  // go on to write the row anyway.
   field[6]->store(entry.type_parameters.c_str(), entry.type_parameters.length(),
                   &my_charset_utf8mb4_bin);
 
