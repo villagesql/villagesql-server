@@ -33,25 +33,14 @@ namespace system_views {
   split, and the same join key, that upstream uses for INNODB_INDEXES /
   INNODB_FIELDS.
 
-  INDEX_ID is a server-assigned surrogate, stable for the life of the index on
-  this server but not across a dump and restore. It is published because it is
-  the join key; it carries no meaning of its own.
-
   Two extensions are involved in a custom index and they need not be the same
   one, so each column says which role it names. INDEX_TYPE_EXTENSION_NAME and
   INDEX_TYPE_EXTENSION_VERSION here are the extension providing the index
   *type*; the extension providing a key column's *profile* is a separate pair,
-  published as PROFILE_EXTENSION_* by I_S.CUSTOM_INDEX_COLUMNS. Prefixing by
-  role is what lets the pair of views be joined with USING without either
-  colliding or silently matching the wrong extension.
+  published as PROFILE_EXTENSION_* by I_S.CUSTOM_INDEX_COLUMNS.
 
   Regular indexes do not appear: the villagesql table is the driving side of an
   inner join, so only custom indexes are listed by construction.
-
-  Names come from the data dictionary rather than from
-  villagesql.custom_indexes, because at lower_case_table_names = 2 the
-  villagesql tables hold lower-cased schema and table names while the DD keeps
-  the CREATE-time case.
 */
 class Custom_indexes
     : public dd::system_views::System_view_impl<

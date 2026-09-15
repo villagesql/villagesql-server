@@ -22,19 +22,10 @@
 // names but cannot describe.
 //
 // Every VEF_INDEX_CAP_* and VEF_INDEX_STORAGE_* bit is decoded into its own
-// YES/NO column, and the raw bitmasks are deliberately NOT published alongside
-// them. Publishing the same fact twice would make the ABI's bit numbering part
-// of a stable SQL surface, so a bit ever renumbered or retired would change a
-// column's meaning silently -- and a user who sees an undecoded bit has no name
-// for it and can do nothing with it. I_S.ENGINES is the precedent: it decodes
-// SUPPORT, TRANSACTIONS, XA and SAVEPOINTS and exposes no mask. Adding a
-// capability bit therefore means adding its column here.
-//
+// YES/NO column.
+
 // Deliberately NOT privilege-filtered. Rows name no user object -- only
-// installed software -- which is the line MySQL draws: I_S.TABLES and
-// I_S.COLUMNS filter because their rows identify user schemas, while
-// I_S.CHARACTER_SETS, I_S.COLLATIONS and I_S.PLUGINS do not. The sibling table
-// I_S.CUSTOM_INDEXES does filter, because its rows do name user objects.
+// installed software
 
 #include "villagesql/system_views/extension_index_types.h"
 

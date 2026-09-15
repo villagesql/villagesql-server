@@ -23,11 +23,6 @@
 // own optional qualifier in the grammar, and the default-profile lookup in
 // villagesql/sql/metadata_modifier.cc searches every extension's profiles.
 //
-// This is what closes the (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION,
-// PROFILE_NAME) triple published by I_S.CUSTOM_INDEX_COLUMNS, which otherwise
-// joins to nothing. The names match on both sides, so that hop is a plain
-// natural join.
-//
 // Deliberately NOT privilege-filtered, like EXTENSION_INDEX_TYPES: rows name
 // installed software, never a user object.
 

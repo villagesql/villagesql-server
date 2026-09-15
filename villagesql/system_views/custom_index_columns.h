@@ -33,32 +33,10 @@ namespace system_views {
   I_S.CUSTOM_INDEXES, following upstream's INNODB_INDEXES / INNODB_FIELDS pair
   rather than repeating the schema, table and index names on every row.
 
-  Reaching a custom index's key columns therefore goes through CUSTOM_INDEXES:
-
-      SELECT i.TABLE_NAME, i.INDEX_NAME, c.SEQ_IN_INDEX, c.COLUMN_NAME
-      FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
-      JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
-
   PROFILE_EXTENSION_NAME and PROFILE_EXTENSION_VERSION are the extension
   providing the *profile* named by PROFILE_NAME -- a different pair from
   CUSTOM_INDEXES.INDEX_TYPE_EXTENSION_*, which names the extension providing the
-  index type. The two coincide for every in-tree extension but are recorded
-  separately because nothing requires it.
-
-  Both pairs are prefixed by role rather than left as a bare EXTENSION_NAME, so
-  a column of a given name means the same thing in every one of these views.
-  That is what makes the join to the profile catalogue a plain natural join:
-
-      JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
-        USING (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME)
-
-  and, more importantly, makes joining the wrong extension impossible to write
-  by accident -- the earlier bare naming let a query match CUSTOM_INDEXES'
-  extension instead of this one, which agrees for every in-tree extension and so
-  would only diverge once a real cross-extension profile existed.
-
-  SEQ_IN_INDEX is 1-based to match I_S.STATISTICS, while the underlying
-  key_position is 0-based.
+  index type.
 
   Although no column here names a schema or table, the rows still describe user
   objects -- COLUMN_NAME is a user column -- so the view keeps the same per-row

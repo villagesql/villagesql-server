@@ -52,7 +52,6 @@ Custom_index_columns::Custom_index_columns() {
                          "vcic.column_name COLLATE utf8mb4_0900_ai_ci");
   // The extension providing the *profile*, which villagesql records per key
   // column and separately from the index type's extension in CUSTOM_INDEXES.
-  // Named for that role so the two never collide in a single FROM.
   m_target_def.add_field(FIELD_PROFILE_EXTENSION_NAME, "PROFILE_EXTENSION_NAME",
                          "vcic.extension_name COLLATE utf8mb4_0900_ai_ci");
   m_target_def.add_field(FIELD_PROFILE_EXTENSION_VERSION,
@@ -65,11 +64,6 @@ Custom_index_columns::Custom_index_columns() {
   m_target_def.add_from(
       "JOIN villagesql.custom_indexes vci ON vci.index_id = vcic.index_id");
 
-  // These joins project nothing. They exist for the WHERE clause below:
-  // sch/tbl feed CAN_ACCESS_TABLE, and idx feeds IS_VISIBLE_DD_OBJECT while
-  // also dropping any villagesql row whose data-dictionary index has gone.
-  // mysql.catalogs is deliberately absent -- TABLE_CATALOG was its only
-  // consumer and does not appear in this view.
   const std::string sch_join =
       std::string("JOIN mysql.schemata sch ON ") +
       database_name_match_sql("vci.db_name", "sch.name");
@@ -85,8 +79,6 @@ Custom_index_columns::Custom_index_columns() {
       index_name_match_sql("vci.index_name", "idx.name");
   m_target_def.add_from(idx_join.c_str());
 
-  // COLUMN_NAME is a user column name, so these rows describe user objects even
-  // though no schema or table is projected. The filter must stay.
   m_target_def.add_where("CAN_ACCESS_TABLE(sch.name, tbl.name)");
   m_target_def.add_where(
       "AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden, idx.options)");

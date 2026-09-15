@@ -32,8 +32,6 @@ const Custom_indexes &Custom_indexes::instance() {
 Custom_indexes::Custom_indexes() {
   m_target_def.set_view_name(view_name());
 
-  // The join key for I_S.CUSTOM_INDEX_COLUMNS. A surrogate with no meaning
-  // beyond that, mirroring INNODB_INDEXES.INDEX_ID.
   m_target_def.add_field(FIELD_INDEX_ID, "INDEX_ID", "vci.index_id");
   m_target_def.add_field(FIELD_TABLE_CATALOG, "TABLE_CATALOG",
                          "cat.name" + m_target_def.fs_name_collation());
@@ -43,11 +41,6 @@ Custom_indexes::Custom_indexes() {
                          "tbl.name" + m_target_def.fs_name_collation());
   m_target_def.add_field(FIELD_INDEX_NAME, "INDEX_NAME",
                          "idx.name COLLATE utf8mb3_tolower_ci");
-  // The extension providing the index type. Named for that role rather than
-  // bare EXTENSION_NAME: the extension providing a key column's profile is a
-  // separate pair, published as PROFILE_EXTENSION_* by
-  // I_S.CUSTOM_INDEX_COLUMNS, and the two must not collide when both views
-  // appear in one FROM.
   m_target_def.add_field(FIELD_INDEX_TYPE_EXTENSION_NAME,
                          "INDEX_TYPE_EXTENSION_NAME",
                          "vci.extension_name COLLATE utf8mb4_0900_ai_ci");
@@ -61,21 +54,12 @@ Custom_indexes::Custom_indexes() {
   // literals as decimal strings), so a numeric predicate needs an explicit
   // CAST: CAST(INDEX_TYPE_PARAMETERS->>'$.M' AS UNSIGNED) < 16. Converting here
   // would mean guessing each parameter's type, which only the extension knows.
-  //
-  // Note this records what the user wrote, not the index's effective
-  // configuration: an index created without a WITH clause stores {}, because
-  // the extension's defaults are resolved into a memory-only options struct at
-  // load time and never persisted.
   m_target_def.add_field(FIELD_INDEX_TYPE_PARAMETERS, "INDEX_TYPE_PARAMETERS",
                          "vci.index_type_parameters");
 
   // villagesql.custom_indexes drives the join, so only custom indexes appear.
   m_target_def.add_from("villagesql.custom_indexes vci");
 
-  // Resolve the DD objects. The name predicates fold case exactly as the
-  // I_S.STATISTICS and I_S.COLUMNS overrides do; see identifier_names.h for why
-  // database and table names follow lower_case_table_names while index names do
-  // not.
   const std::string sch_join =
       std::string("JOIN mysql.schemata sch ON ") +
       database_name_match_sql("vci.db_name", "sch.name");
@@ -86,8 +70,6 @@ Custom_indexes::Custom_indexes() {
       table_name_match_sql("vci.table_name", "tbl.name");
   m_target_def.add_from(tbl_join.c_str());
 
-  // Also acts as a consistency guard: a villagesql row whose data-dictionary
-  // index has gone is not reported.
   const std::string idx_join =
       std::string("JOIN mysql.indexes idx ON idx.table_id = tbl.id AND ") +
       index_name_match_sql("vci.index_name", "idx.name");
