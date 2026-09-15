@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2011, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -3629,6 +3630,10 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
   dfield = dtuple_get_nth_field(tuple, 0);
   dfield->type.mtype = DATA_INT;
   dfield->type.prtype = DATA_NOT_NULL | DATA_UNSIGNED | DATA_BINARY_TYPE;
+  // The type is filled in member by member rather than through dtype_set(),
+  // so extended_storage has to be reset explicitly before dfield_get_len()
+  // reads it during the B-tree search below.
+  dfield->type.extended_storage = 0;
 
   mach_write_to_8((byte *)&temp_doc_id, doc_id);
   dfield_set_data(dfield, &temp_doc_id, sizeof(temp_doc_id));

@@ -3186,6 +3186,9 @@ index for FTS index */
     index_def->m_fields->m_prefix_len = 0;
     index_def->m_fields->m_is_ascending = true;
     index_def->m_fields->m_is_v_col = false;
+    // The field is allocated from the heap, so its member initializers never
+    // run; the FTS_DOC_ID index is never a custom index.
+    index_def->m_fields->m_custom_index_profile = nullptr;
     index_def->m_ind_type = DICT_UNIQUE;
     ut_ad(!rebuild || !add_fts_doc_id ||
           fts_doc_id_col <= altered_table->s->fields);
