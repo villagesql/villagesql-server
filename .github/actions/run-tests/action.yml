@@ -45,6 +45,10 @@ inputs:
     description: 'Additional flags to pass to mysql-test-run.pl'
     required: false
     default: ''
+  valgrind:
+    description: 'Run unit and integration tests under Valgrind memcheck (true/false)'
+    required: false
+    default: 'false'
   artifact-name:
     description: 'Name for the failure artifacts (if tests fail)'
     required: false
@@ -90,6 +94,11 @@ runs:
           CMD="$CMD --skip-suite=${{ inputs.skip-suite }}"
         fi
 
+        # Valgrind
+        if [ "${{ inputs.valgrind }}" = "true" ]; then
+          CMD="$CMD --valgrind"
+        fi
+
         # Extra flags
         if [ -n "${{ inputs.mysql-test-extra-flags }}" ]; then
           CMD="$CMD --mysql-test-extra-flags=\"${{ inputs.mysql-test-extra-flags }}\""
@@ -109,6 +118,7 @@ runs:
           ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
           ${{ env.BUILD_DIR }}/mysql-test/var/ctest.log
           ${{ env.BUILD_DIR }}/Testing/Temporary/LastTest.log
+          ${{ env.BUILD_DIR }}/Testing/Temporary/MemoryChecker.*.log
           ${{ env.BUILD_DIR }}/CMakeCache.txt
           ${{ env.BUILD_DIR }}/CMakeFiles/CMakeError.log
           ${{ env.BUILD_DIR }}/CMakeFiles/CMakeOutput.log
