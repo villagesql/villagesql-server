@@ -94,9 +94,13 @@ ORDER BY INDEX_TYPE_EXTENSION_NAME, INDEX_TYPE_NAME;
 # A profile binds a data type to an index type, and three extensions can be
 # involved: the profile's own, the data type's, and the index type's.
 #
-# ORDERING_ASC/DESC are as *declared*. The SDK cannot express "unordered" and
-# defaults to ASC, so a KNN profile still reports ORDERING_ASC = YES; see the
-# TODO(villagesql-indexing) in villagesql/system_views/statistics.cc.
+# ORDERING_ASC/DESC are as *declared* -- nothing verifies that a profile claiming
+# ASC returns rows in order. Both NO is a real answer, not a missing one: the SDK
+# has Index::Ordering::NONE and defaults to it. The ASC below is declared
+# explicitly by the test extension, not inherited from a default.
+#
+# STATISTICS.COLLATION reports NULL for custom indexes rather than reading these;
+# see the TODO(villagesql-indexing) in villagesql/system_views/statistics.cc.
 SELECT * FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
 ORDER BY PROFILE_EXTENSION_NAME, PROFILE_NAME;
 

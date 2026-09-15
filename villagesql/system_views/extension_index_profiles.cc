@@ -78,12 +78,20 @@ ST_FIELD_INFO villagesql_extension_index_profiles_fields[] = {
     // that table's three key columns.
     {"INDEX_TYPE_EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"INDEX_TYPE_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
-    // Scan ordering AS DECLARED, which is not the same as what the index can
-    // do. The SDK's IndexOrdering has only ASC and DESC, with no way to say
-    // "unordered", and the descriptor defaults to ASC -- so a profile whose
-    // author never considered ordering still reports ORDERING_ASC = YES. The
-    // TODO(villagesql-indexing) in statistics.cc records why
-    // STATISTICS.COLLATION deliberately does not trust this field.
+    // Scan ordering AS DECLARED by the extension. Nothing verifies that a
+    // profile claiming ASC actually returns rows in order, so this is the
+    // declaration, not a measurement.
+    //
+    // Both NO means the profile declared no ordering, which is a real answer
+    // rather than a missing one: Index::Ordering::NONE exists and is the SDK
+    // builder's default, so an author who never calls .ordering() lands here
+    // deliberately.
+    //
+    // STATISTICS.COLLATION reports NULL for every custom index rather than
+    // reading these, because a DD view cannot reach the Victionary -- see the
+    // TODO(villagesql-indexing) in villagesql/system_views/statistics.cc, which
+    // describes persisting the resolved ordering at CREATE INDEX time instead.
+    // Until that lands, these columns are how you answer the question.
     {"ORDERING_ASC", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"ORDERING_DESC", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     // Whether this profile is chosen when a key column names no profile.

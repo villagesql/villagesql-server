@@ -62,25 +62,32 @@ Statistics_base::Statistics_base() {
   // MySQL's convention is NULL where ordering does not apply, as for HASH and
   // FULLTEXT, so report NULL for any index villagesql.custom_indexes knows of.
   //
-  // Deliberately not taken from the index profile's ordering_asc(). That field
-  // defaults to VEF_INDEX_ORDERING_ASC
-  // (villagesql/schema/descriptor/index_profile_descriptor.h:185), so an
-  // extension whose author never considered ordering would report 'A' and
-  // reproduce this very bug. The trustworthy source is VEF_INDEX_CAP_ORDER_BY,
-  // which an extension must opt into, but capabilities are memory-only and
-  // unreachable from a view; they are exposed by
-  // I_S.EXTENSION_INDEX_TYPES instead. Reporting NULL here is coarser than
-  // that capability would allow, but it is never false: NULL means "no ordering
-  // information", not "unordered".
+  // The index profile's ordering would be the right source -- it is per key
+  // part and per direction, exactly the grain 'A'/'D'/NULL needs -- but it is
+  // memory-only, and a view cannot reach the Victionary. That, not any doubt
+  // about the value, is why this reports NULL. NULL is never false here: it
+  // means "no ordering information", not "unordered".
   //
-  // TODO(villagesql-indexing): This under-reports for an index type that does
-  // declare VEF_INDEX_CAP_ORDER_BY -- 'A' would be correct there, and this
-  // still says NULL. No in-tree extension declares it today (both test
-  // extensions declare KNN only), so the loss is currently theoretical, but it
-  // will be silent when it stops being. Closing it needs an INTERNAL_ function
-  // reading the capability bitmask from the Victionary, since a view cannot;
-  // until then I_S.EXTENSION_INDEX_TYPES.SUPPORTS_ORDER_BY is the answer, via a
-  // join on (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME).
+  // TODO(villagesql-indexing): This under-reports for a profile that does
+  // declare an ordering -- 'A' or 'D' would be correct there, and this still
+  // says NULL.
+  //
+  // The fix is at DDL time, not here. add_indexes() already holds the profile
+  // descriptor (villagesql/sql/metadata_modifier.cc:343-365), so it can persist
+  // the resolved ordering into villagesql.custom_index_columns beside the
+  // profile it already records:
+  //
+  //   effective = prof_desc->ordering() & (kp->is_ascending() ? ASC : DESC)
+  //
+  // This view then reads it with one more LEFT JOIN on
+  // (vci.index_id, icu.ordinal_position - 1), with no Victionary access at
+  // execution time.
+  //
+  // Until then the answer is I_S.EXTENSION_INDEX_PROFILES.ORDERING_ASC /
+  // ORDERING_DESC, reached from an index through I_S.CUSTOM_INDEX_COLUMNS on
+  // (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME). That
+  // path is complete today -- it is only STATISTICS reporting it inline that is
+  // missing.
   m_target_def.add_field(FIELD_COLLATION, "COLLATION",
                          "CASE WHEN vci.index_id IS NOT NULL THEN NULL "
                          "WHEN icu.order = 'DESC' THEN 'D' "
