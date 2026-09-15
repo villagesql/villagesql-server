@@ -86,6 +86,17 @@ struct TypeDescriptorKeyPrefix {
 // Format: "normalized_type_name.normalized_extension_name.normalized_version"
 // Stores original component values for display, plus normalized key for
 // lookups.
+// Components are joined with '.' and are not escaped, so distinct component
+// tuples can produce the same key. The version is last here, but TypeContextKey
+// appends parameters after it, which makes it an interior component there.
+//
+// TODO(villagesql-production): build these keys with join_key_components(),
+// which escapes '.' and '\' inside each component, the way ColumnKey, IndexKey
+// and SpParamKey already do (see "Fix dotted identifier collisions"). The same
+// applies to IndexTypeDescriptorKey, IndexProfileDescriptorKey, FuncKey,
+// ExtensionDescriptorKey, TypeContextKey and IndexContextKey. These keys are
+// in-memory victionary keys and are not persisted, so the format can change
+// without an upgrade path.
 struct TypeDescriptorKey {
  public:
   TypeDescriptorKey() = default;

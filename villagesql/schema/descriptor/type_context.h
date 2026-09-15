@@ -148,6 +148,12 @@ class TypeParameters {
 // TypeParameters to uniquely identify a concrete type instantiation.
 // For example: VECTOR(1536) and VECTOR(3) would have the same TypeDescriptorKey
 // but different parameters, thus different TypeContextKeys.
+// Format: "<descriptor key>.<parameters>", joined with '.' and not escaped, so
+// distinct pairs can produce the same key. The version sits between the
+// extension name and the parameters here, and neither it nor a parameter key
+// is prevented from containing a '.': version "1.0" with parameters "dim=3"
+// builds the same key as version "1.0.dim=3" with no parameters. See the TODO
+// on TypeDescriptorKey.
 struct TypeContextKey {
  public:
   TypeContextKey() = default;
@@ -222,10 +228,11 @@ class TypeContext {
   TypeContext(const TypeContext &) = delete;
   TypeContext &operator=(const TypeContext &) = delete;
 
-  // Allow move construction (needed for SystemTableMap storage).
-  // Move assignment is deleted because Op members hold references to our
-  // TypeParameters (which lives inside key_).
-  TypeContext(TypeContext &&) = default;
+  // Both move operations are deleted: the Op members hold references to our
+  // TypeParameters, which lives inside key_, so a moved-to TypeContext's Ops
+  // would still read the source's parameters. Entries are stored as
+  // shared_ptr (see TableTraits<TypeContext>::create), so nothing moves one.
+  TypeContext(TypeContext &&) = delete;
   TypeContext &operator=(TypeContext &&) = delete;
 
   ~TypeContext() = default;
