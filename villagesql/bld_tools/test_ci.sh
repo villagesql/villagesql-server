@@ -108,7 +108,7 @@ done
 TEST_SUITE="${TEST_SUITE:-village}"
 
 # Use SOURCE_DIR/BUILD_DIR from environment, or auto-detect
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 BUILD_DIR="${BUILD_DIR:-${SOURCE_DIR}/../build}"
 
 # Validate suite selection options
