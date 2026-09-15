@@ -10367,6 +10367,15 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
   return change_active_index(keynr);
 }
 
+// TODO(villagesql-indexing): Dispatch to the custom index type's KNN scan
+// (VEF_INDEX_SCAN_TYPE_KNN) instead of falling back to a regular index scan.
+int ha_innobase::knn_index_init(uint keynr, const uchar *, uint, ha_rows,
+                                bool) {
+  DBUG_TRACE;
+
+  return change_active_index(keynr);
+}
+
 /** Currently does nothing.
  @return 0 */
 

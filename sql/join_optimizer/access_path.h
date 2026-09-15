@@ -966,6 +966,7 @@ struct AccessPath {
       int idx;
       Item *query_point;
       ha_rows limit;
+      bool limit_is_exact;
     } index_knn_scan;
     struct {
       TABLE *table;
@@ -1371,6 +1372,7 @@ inline AccessPath *NewIndexScanAccessPath(THD *thd, TABLE *table, int idx,
 
 inline AccessPath *NewIndexKnnScanAccessPath(THD *thd, TABLE *table, int idx,
                                              Item *query_point, ha_rows limit,
+                                             bool limit_is_exact,
                                              bool count_examined_rows) {
   AccessPath *path = new (thd->mem_root) AccessPath;
   path->type = AccessPath::INDEX_KNN_SCAN;
@@ -1379,6 +1381,7 @@ inline AccessPath *NewIndexKnnScanAccessPath(THD *thd, TABLE *table, int idx,
   path->index_knn_scan().idx = idx;
   path->index_knn_scan().query_point = query_point;
   path->index_knn_scan().limit = limit;
+  path->index_knn_scan().limit_is_exact = limit_is_exact;
   return path;
 }
 
