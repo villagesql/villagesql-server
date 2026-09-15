@@ -1,4 +1,3 @@
-# This test covers the broader VDF-lookup path: a distinct VDF whose
 # This test covers downgrading an extension version.  The test uses a preview
 # extension VDF whose implementation changes across versions.  This mirrors
 # extension_update/pending_apply_vdf_behavior, but runs the version move
