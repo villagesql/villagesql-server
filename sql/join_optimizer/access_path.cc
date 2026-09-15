@@ -564,7 +564,8 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         const auto &param = path->index_knn_scan();
         iterator = NewIterator<villagesql::IndexKnnScanIterator>(
             thd, mem_root, param.table, param.idx, param.query_point,
-            param.limit, path->num_output_rows(), examined_rows);
+            param.limit, param.limit_is_exact, path->num_output_rows(),
+            examined_rows);
         break;
       }
       case AccessPath::REF: {

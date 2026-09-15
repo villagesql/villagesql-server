@@ -36,7 +36,7 @@ class IndexKnnScanIterator final : public TableRowIterator {
   // If zero or less, no record buffer will be set up.
   // "examined_rows", if not nullptr, is incremented for each successful Read().
   IndexKnnScanIterator(THD *thd, TABLE *table, int idx, Item *query_point,
-                       ha_rows limit, double expected_rows,
+                       ha_rows limit, bool limit_is_exact, double expected_rows,
                        ha_rows *examined_rows);
 
   bool Init() override;
@@ -47,8 +47,10 @@ class IndexKnnScanIterator final : public TableRowIterator {
   const int m_idx;
   Item *const m_query_point;
   const ha_rows m_limit;
+  const bool m_limit_is_exact;
   const double m_expected_rows;
   ha_rows *const m_examined_rows;
+  bool m_first = true;
 };
 
 }  // namespace villagesql

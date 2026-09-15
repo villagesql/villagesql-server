@@ -3844,7 +3844,8 @@ AccessPath *QEP_TAB::access_path() {
       assert(knn_scan_info != nullptr);
       path = NewIndexKnnScanAccessPath(
           join()->thd, table(), index(), knn_scan_info->query_point,
-          knn_scan_info->limit, /*count_examined_rows=*/true);
+          knn_scan_info->limit, knn_scan_info->limit_is_exact,
+          /*count_examined_rows=*/true);
       break;
     }
     case JT_ALL:

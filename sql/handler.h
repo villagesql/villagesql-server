@@ -4894,6 +4894,8 @@ class handler {
               const dd::Table *table_def);
   int ha_close(void);
   int ha_index_init(uint idx, bool sorted);
+  int ha_knn_index_init(uint idx, const uchar *key, uint length, ha_rows limit,
+                        bool limit_is_exact);
   int ha_index_end();
   int ha_rnd_init(bool scan);
   int ha_rnd_end();
@@ -6668,6 +6670,20 @@ class handler {
                    const dd::Table *table_def) = 0;
   virtual int close(void) = 0;
   virtual int index_init(uint idx, bool sorted [[maybe_unused]]) {
+    active_index = idx;
+    return 0;
+  }
+  // KNN variant of index_init(). "key"/"length" encode the KNN query
+  // point/vector; "limit" is K, the number of nearest neighbors requested.
+  // "limit_is_exact" is false if a condition or later joined table can
+  // filter out KNN-selected candidates before they reach the query block's
+  // LIMIT, meaning more than "limit" candidates may be needed.
+  // Storage engines that support HA_SUPPORT_KNN should override this
+  // instead of index_init().
+  virtual int knn_index_init(uint idx, const uchar *key [[maybe_unused]],
+                             uint length [[maybe_unused]],
+                             ha_rows limit [[maybe_unused]],
+                             bool limit_is_exact [[maybe_unused]]) {
     active_index = idx;
     return 0;
   }
