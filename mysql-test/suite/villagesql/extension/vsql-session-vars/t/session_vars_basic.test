@@ -1,22 +1,14 @@
-# Test session-scoped (THD-local) system variables for the
-# vsql_session_var_test extension. Covers: global default, per-session
-# independence across connections, SET SESSION, @@session vs @@global,
-# reads via the fast-path IntHandle / get_session_str VDFs, and that the storage
-# global does NOT reflect a session override.
+# Session-scoped system variables declared by an extension: global default,
+# per-session independence across connections, SET SESSION, @@session vs
+# @@global, and reads from a VDF.
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 
 --echo # Install extension
 INSTALL EXTENSION vsql_session_var_test;
 
-# Reset this connection's session values to the registered defaults right after
-# INSTALL. If a previous test in this same server installed then uninstalled this
-# extension, the reused THD-local slots are left stale (upstream bug#720: session
-# variable not reset at plugin/component reinstall -- a plain read is not
-# refreshed after reinstall, though an explicit SET recovers it). This makes the
-# subsequent reads order-independent. Test-only workaround; the reset bug is
-# generic to stock MySQL and tracked separately. Wrapped in disable_query_log so
-# it does not appear in the recorded output.
+# Reset this connection's session values to their defaults so the reads below
+# are independent of any earlier test in the same server.
 --disable_query_log
 SET SESSION vsql_session_var_test.session_int_var = DEFAULT;
 SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
@@ -38,9 +30,19 @@ SET SESSION vsql_session_var_test.session_str_var = 'conn1';
 SELECT @@session.vsql_session_var_test.session_int_var;
 SELECT @@global.vsql_session_var_test.session_int_var;
 
---echo # VDF observes this session's override (fast-path IntHandle / get_session_str)
+--echo # VDF observes this session's override
 SELECT vsql_session_var_test.read_session_int_var();
 SELECT vsql_session_var_test.read_session_str_var();
+
+--echo # A session var can also be set and read from inside a stored procedure
+CREATE PROCEDURE set_label(x VARCHAR(64))
+  SET @@SESSION.vsql_session_var_test.session_str_var = x;
+CREATE PROCEDURE get_label() SELECT @@vsql_session_var_test.session_str_var;
+CALL get_label();
+CALL set_label('from_sp');
+CALL get_label();
+DROP PROCEDURE set_label;
+DROP PROCEDURE get_label;
 
 --echo # A second connection has its own independent session value
 connect (con2,localhost,root,,);

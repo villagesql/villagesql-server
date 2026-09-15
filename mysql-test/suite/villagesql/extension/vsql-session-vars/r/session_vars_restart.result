@@ -1,16 +1,14 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 # Install extension
 INSTALL EXTENSION vsql_session_var_test;
-# Touch the session-scoped string so its per-session slot is populated
+# Set a session value before restarting
 SET SESSION vsql_session_var_test.session_str_var = 'before_restart';
 SELECT @@session.vsql_session_var_test.session_str_var;
 @@session.vsql_session_var_test.session_str_var
 before_restart
-# Restart WITHOUT uninstalling: shutdown must tear the variables down
-# cleanly (extension is reinstated from villagesql.extensions on startup)
+# Restart without uninstalling
 # restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
 # Extension is back after restart; variables exist with their defaults
-# (session override did not survive the reconnect, as expected)
 SELECT @@global.vsql_session_var_test.session_str_var;
 @@global.vsql_session_var_test.session_str_var
 default_label

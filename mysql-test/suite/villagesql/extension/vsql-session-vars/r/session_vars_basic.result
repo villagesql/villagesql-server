@@ -30,13 +30,26 @@ SELECT @@session.vsql_session_var_test.session_int_var;
 SELECT @@global.vsql_session_var_test.session_int_var;
 @@global.vsql_session_var_test.session_int_var
 20
-# VDF observes this session's override (fast-path IntHandle / get_session_str)
+# VDF observes this session's override
 SELECT vsql_session_var_test.read_session_int_var();
 vsql_session_var_test.read_session_int_var()
 100
 SELECT vsql_session_var_test.read_session_str_var();
 vsql_session_var_test.read_session_str_var()
 conn1
+# A session var can also be set and read from inside a stored procedure
+CREATE PROCEDURE set_label(x VARCHAR(64))
+SET @@SESSION.vsql_session_var_test.session_str_var = x;
+CREATE PROCEDURE get_label() SELECT @@vsql_session_var_test.session_str_var;
+CALL get_label();
+@@vsql_session_var_test.session_str_var
+conn1
+CALL set_label('from_sp');
+CALL get_label();
+@@vsql_session_var_test.session_str_var
+from_sp
+DROP PROCEDURE set_label;
+DROP PROCEDURE get_label;
 # A second connection has its own independent session value
 # con2 sees the global default, not con1's override
 SELECT @@session.vsql_session_var_test.session_int_var;
