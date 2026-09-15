@@ -159,7 +159,7 @@ is_ignored() {
 	for pattern in "${IGNORED_PATTERNS[@]}"; do
 		case "$file" in
 		# Try exact match, prefix match (for directories), and glob match
-		"$pattern" | "$pattern"/* | $pattern)
+		"$pattern" | "$pattern"/* | "$pattern")
 			return 0
 			;;
 		esac
@@ -169,8 +169,9 @@ is_ignored() {
 }
 
 get_villint_dir() {
-	local script_dir="$(dirname "${BASH_SOURCE[0]}")"
-	local source_dir="$(cd "$script_dir/.." && pwd)"
+	local script_dir source_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+	source_dir="$(cd "$script_dir/.." && pwd)"
 	echo "$source_dir/villagesql/villint"
 }
 
@@ -229,10 +230,12 @@ check_todo_tags() {
 		[ -z "$line" ] && continue
 
 		# Extract all TODOs
-		local todo_matches=$(echo "$line" | grep -oE 'TODO\([^)]+\)')
+		local todo_matches
+		todo_matches=$(echo "$line" | grep -oE 'TODO\([^)]+\)')
 		[ -z "$todo_matches" ] && continue
 
-		local todo_count=$(echo "$todo_matches" | wc -l)
+		local todo_count
+		todo_count=$(echo "$todo_matches" | wc -l)
 		if [ "$todo_count" -gt 1 ]; then
 			echo "  ERROR: $file has multiple TODOs on one line"
 			echo "    Line: $line"
@@ -241,7 +244,8 @@ check_todo_tags() {
 		fi
 
 		# Extract the tag from the match
-		local tag=$(echo "$todo_matches" | sed -E 's/TODO\(([^)]+)\)/\1/')
+		local tag
+		tag=$(echo "$todo_matches" | sed -E 's/TODO\(([^)]+)\)/\1/')
 
 		# Check if tag is in allowed list
 		local tag_valid=false
@@ -296,7 +300,8 @@ fix_copyright() {
 			echo "  Added VillageSQL Contributors to existing copyright"
 		else
 			# Non-standard copyright - check if it's in the allowlist
-			local allowlist=$(get_allowed_list)
+			local allowlist
+			allowlist=$(get_allowed_list)
 			# Check for exact match or prefix match (allows directory patterns)
 			if [ -f "$allowlist" ]; then
 				if grep -qxF "$file" "$allowlist"; then
@@ -369,7 +374,8 @@ fix_copyright_cmake() {
 			echo "  Added VillageSQL Contributors to existing copyright"
 		else
 			# Non-standard copyright - check if it's in the allowlist
-			local allowlist=$(get_allowed_list)
+			local allowlist
+			allowlist=$(get_allowed_list)
 			# Check for exact match or prefix match (allows directory patterns)
 			if [ -f "$allowlist" ]; then
 				if grep -qxF "$file" "$allowlist"; then
@@ -474,6 +480,20 @@ if [ "$CLANG_FORMAT_VERSION_PREFIX" != "$REQUIRED_CLANG_FORMAT_VERSION" ]; then
 	die_clang_format "clang-format version $CLANG_FORMAT_VERSION found, expected $REQUIRED_CLANG_FORMAT_VERSION"
 fi
 
+# Add check for presence of shfmt and shellcheck tools
+if ! command -v shfmt >/dev/null 2>&1; then
+	echo "shfmt is not installed or not in PATH." \
+		"Please refer to https://github.com/mvdan/sh for installation."
+	exit 1
+fi
+
+if ! command -v shellcheck >/dev/null 2>&1; then
+	echo "shellcheck is not installed or not in PATH." \
+		"Please refer to https://github.com/koalaman/shellcheck" \
+		"for installation."
+	exit 1
+fi
+
 # Determine comparison point if not specified
 if [ -z "$COMMIT_ISH" ]; then
 	# Check if we're in a jj workspace or git repo
@@ -551,6 +571,7 @@ fi
 # Separate files into C/C++, CMakeLists.txt, and others
 C_FILES=""
 CMAKE_FILES=""
+BASH_FILES=""
 OTHER_FILES=""
 
 for file in $ALL_FILES; do
@@ -565,6 +586,9 @@ for file in $ALL_FILES; do
 		;;
 	*/CMakeLists.txt | CMakeLists.txt)
 		CMAKE_FILES="$CMAKE_FILES $file"
+		;;
+	*.bash | *.sh)
+		BASH_FILES="$BASH_FILES $file"
 		;;
 	*)
 		OTHER_FILES="$OTHER_FILES $file"
@@ -679,6 +703,25 @@ for file in $CMAKE_FILES; do
 	apply_if_changed "$file" "$temp" "Fixed whitespace/newline in $file" || true
 
 	check_todo_tags "$file"
+done
+
+# --- Lint and format bash files ---
+for file in $BASH_FILES; do
+	if is_ignored "$file"; then
+		echo "Skipping ignored file: $file"
+		continue
+	fi
+
+	# shfmt respects .editorconfig(it's at the root of the repo)
+	if ! shfmt -d "$file" >/dev/null; then
+		echo "Please fix formatting for $file"
+		exit 1
+	fi
+
+	# Soft check as sometimes not all warnings could be fixable
+	if ! shellcheck "$file" >/dev/null; then
+		echo "Warning: Please try fixing shellcheck warnings for $file"
+	fi
 done
 
 # --- Lint Other Files ---
