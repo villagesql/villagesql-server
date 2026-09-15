@@ -1,0 +1,14 @@
+# EditorConfig is awesome: https://editorconfig.org
+
+# Top-most EditorConfig file
+# When opening a file, EditorConfig plugins look for a file named .editorconfig
+# (all lowercase) in the directory of the opened file and in every parent
+# directory. A search for .editorconfig files will stop if the root filepath is
+# reached or an EditorConfig file with root=true is found.
+root = true
+
+# For shfmt
+[*.sh]
+# like -i=4
+indent_style = tab
+indent_size = 4
