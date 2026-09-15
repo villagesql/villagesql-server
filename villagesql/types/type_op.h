@@ -27,6 +27,11 @@
 // EncodeOp and DecodeOp store the TypeFunction and TypeParameters for
 // TypeEncoder/TypeDecoder to pull from — those classes own additional per-call
 // state (buffers) that cannot be shared.
+//
+// Every Op borrows its TypeParameters by reference rather than copying them.
+// An Op must not outlive its owner, and the owner must not be moved: a
+// moved-to owner's Ops would still read the moved-from object's parameters.
+// This is why TypeContext deletes its move operations.
 
 #ifndef VILLAGESQL_TYPES_TYPE_OP_H_
 #define VILLAGESQL_TYPES_TYPE_OP_H_
