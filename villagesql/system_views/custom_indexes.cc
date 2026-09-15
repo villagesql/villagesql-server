@@ -43,11 +43,16 @@ Custom_indexes::Custom_indexes() {
                          "tbl.name" + m_target_def.fs_name_collation());
   m_target_def.add_field(FIELD_INDEX_NAME, "INDEX_NAME",
                          "idx.name COLLATE utf8mb3_tolower_ci");
-  // The extension providing the index type. The extension providing a key
-  // column's profile is a separate pair, reported by I_S.CUSTOM_INDEX_COLUMNS.
-  m_target_def.add_field(FIELD_EXTENSION_NAME, "EXTENSION_NAME",
+  // The extension providing the index type. Named for that role rather than
+  // bare EXTENSION_NAME: the extension providing a key column's profile is a
+  // separate pair, published as PROFILE_EXTENSION_* by
+  // I_S.CUSTOM_INDEX_COLUMNS, and the two must not collide when both views
+  // appear in one FROM.
+  m_target_def.add_field(FIELD_INDEX_TYPE_EXTENSION_NAME,
+                         "INDEX_TYPE_EXTENSION_NAME",
                          "vci.extension_name COLLATE utf8mb4_0900_ai_ci");
-  m_target_def.add_field(FIELD_EXTENSION_VERSION, "EXTENSION_VERSION",
+  m_target_def.add_field(FIELD_INDEX_TYPE_EXTENSION_VERSION,
+                         "INDEX_TYPE_EXTENSION_VERSION",
                          "vci.extension_version COLLATE utf8mb4_0900_ai_ci");
   m_target_def.add_field(FIELD_INDEX_TYPE_NAME, "INDEX_TYPE_NAME",
                          "vci.index_type_name COLLATE utf8mb4_0900_ai_ci");

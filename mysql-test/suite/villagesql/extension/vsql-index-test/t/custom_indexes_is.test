@@ -4,14 +4,19 @@
 # EXTENSION_INDEX_PROFILES one row per profile, from memory-only descriptors
 #
 # The first two are privilege-filtered, because their rows name user objects,
-# and join each other on INDEX_ID. The third is
-# deliberately NOT filtered -- its rows name only installed software -- and
-# joins CUSTOM_INDEXES on (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME).
+# and join each other on INDEX_ID. The last two are deliberately NOT filtered --
+# their rows name only installed software.
 #
 # The index/column split mirrors the villagesql tables, and follows upstream's
-# INNODB_INDEXES / INNODB_FIELDS pair down to the INDEX_ID join key. It also
-# keeps EXTENSION_NAME unambiguous: in CUSTOM_INDEXES it is the index type's
-# extension, in CUSTOM_INDEX_COLUMNS it is the profile's.
+# INNODB_INDEXES / INNODB_FIELDS pair down to the INDEX_ID join key.
+#
+# Two extensions are involved in a custom index and need not be the same one, so
+# every extension column is prefixed by the role it names: INDEX_TYPE_EXTENSION_*
+# in CUSTOM_INDEXES and EXTENSION_INDEX_TYPES, PROFILE_EXTENSION_* in
+# CUSTOM_INDEX_COLUMNS and EXTENSION_INDEX_PROFILES. A given name therefore means
+# one thing everywhere, which is what lets the joins below use USING -- and makes
+# joining the wrong extension impossible to write rather than silently right for
+# every in-tree extension.
 #
 # TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
 # custom index execution is fully implemented and the guard in
@@ -36,21 +41,22 @@ CREATE INDEX idx_multi ON t (d, e) USING EXTENDED(dummy_index_hnsw);
 
 --echo # --- CUSTOM_INDEXES: one row per custom index ---
 SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME,
-       EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME,
+       INDEX_TYPE_EXTENSION_NAME, INDEX_TYPE_EXTENSION_VERSION, INDEX_TYPE_NAME,
        INDEX_TYPE_PARAMETERS
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
 WHERE TABLE_SCHEMA = 'test'
 ORDER BY TABLE_NAME, INDEX_NAME;
 
 --echo # --- CUSTOM_INDEX_COLUMNS: one row per key column, reached via INDEX_ID ---
-# idx_multi spans (d, e) and so yields two rows. EXTENSION_NAME here is the
-# extension providing the PROFILE
+# idx_multi spans (d, e) and so yields two rows. The extension columns here name
+# the PROFILE's extension, which is why they are PROFILE_EXTENSION_* rather than
+# the INDEX_TYPE_EXTENSION_* pair CUSTOM_INDEXES publishes.
 #
 # This view carries no schema or table columns, so every per-table question goes
 # through CUSTOM_INDEXES.
 SELECT i.TABLE_SCHEMA, i.TABLE_NAME, i.INDEX_NAME,
        c.SEQ_IN_INDEX, c.COLUMN_NAME,
-       c.EXTENSION_NAME, c.EXTENSION_VERSION, c.PROFILE_NAME
+       c.PROFILE_EXTENSION_NAME, c.PROFILE_EXTENSION_VERSION, c.PROFILE_NAME
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
 JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
 WHERE i.TABLE_SCHEMA = 'test'
@@ -92,7 +98,7 @@ ORDER BY s.INDEX_NAME, s.SEQ_IN_INDEX;
 # Every VEF_INDEX_CAP_* and VEF_INDEX_STORAGE_* bit is decoded into its own
 # YES/NO column;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
-ORDER BY EXTENSION_NAME, INDEX_TYPE_NAME;
+ORDER BY INDEX_TYPE_EXTENSION_NAME, INDEX_TYPE_NAME;
 
 --echo # --- EXTENSION_INDEX_PROFILES: what a profile binds ---
 # A profile binds a data type to an index type, and three extensions can be
@@ -102,43 +108,47 @@ ORDER BY EXTENSION_NAME, INDEX_TYPE_NAME;
 # defaults to ASC, so a KNN profile still reports ORDERING_ASC = YES; see the
 # TODO(villagesql-indexing) in villagesql/system_views/statistics.cc.
 SELECT * FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
-ORDER BY EXTENSION_NAME, PROFILE_NAME;
+ORDER BY PROFILE_EXTENSION_NAME, PROFILE_NAME;
 
 --echo # --- PROFILE_NAME from CUSTOM_INDEX_COLUMNS now resolves ---
 # Before this table existed, CUSTOM_INDEX_COLUMNS published a complete
-# (EXTENSION_NAME, EXTENSION_VERSION, PROFILE_NAME) triple that joined to
-# nothing.
+# (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME) triple that
+# joined to nothing.
 #
-# EXTENSION_NAME means the profile's extension in CUSTOM_INDEX_COLUMNS and the
-# index type's in CUSTOM_INDEXES, so with both views in one FROM the name is
-# ambiguous and USING is unusable -- the hop to the profile catalogue must
-# qualify each side. Getting this wrong joins on the index type's extension,
-# which silently agrees for every in-tree extension.
+# The triple carries the same names on both sides, so this is a plain USING.
+# CUSTOM_INDEXES is in the same FROM and does not interfere: its extension
+# columns are INDEX_TYPE_EXTENSION_*, a different role and a different name.
 SELECT i.INDEX_NAME, c.SEQ_IN_INDEX, c.COLUMN_NAME,
        p.DATA_TYPE_NAME, p.INDEX_TYPE_NAME, p.IS_DEFAULT_PROFILE
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
-JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c ON c.INDEX_ID = i.INDEX_ID
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
 JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES p
-  ON p.EXTENSION_NAME    = c.EXTENSION_NAME
- AND p.EXTENSION_VERSION = c.EXTENSION_VERSION
- AND p.PROFILE_NAME      = c.PROFILE_NAME
+  USING (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME)
 WHERE i.TABLE_SCHEMA = 'test'
 ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
 
---echo # --- The full chain: index -> key column -> profile -> index type ---
-# The profile's index type reference carries no version, so the last hop joins
-# on (extension, index type name) rather than the full three-column key.
+--echo # --- The long way round: index -> key column -> profile -> index type ---
+# The four tables close a rectangle, not a chain: the query above reaches
+# EXTENSION_INDEX_TYPES from CUSTOM_INDEXES in one hop, and this one arrives at
+# the same table the long way, through each key part's profile.
+#
+# The last hop must be qualified, and that is the one place where qualifying is
+# still right. CUSTOM_INDEXES and EXTENSION_INDEX_PROFILES both expose
+# INDEX_TYPE_EXTENSION_NAME, and the two can genuinely disagree -- the
+# explicit-profile DDL path checks the profile's data type against the column but
+# never checks its index type against the index. USING would silently pick one.
+#
+# The profile's index type reference carries no version, so this hop is a
+# two-column join, not the three-column key EXTENSION_INDEX_TYPES publishes.
 SELECT i.INDEX_NAME, c.COLUMN_NAME, p.PROFILE_NAME,
        x.SUPPORTS_KNN, x.SUPPORTS_ORDER_BY
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
-JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c ON c.INDEX_ID = i.INDEX_ID
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
 JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES p
-  ON p.EXTENSION_NAME    = c.EXTENSION_NAME
- AND p.EXTENSION_VERSION = c.EXTENSION_VERSION
- AND p.PROFILE_NAME      = c.PROFILE_NAME
+  USING (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME)
 JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES x
-  ON x.EXTENSION_NAME    = p.INDEX_TYPE_EXTENSION_NAME
- AND x.INDEX_TYPE_NAME   = p.INDEX_TYPE_NAME
+  ON  x.INDEX_TYPE_EXTENSION_NAME = p.INDEX_TYPE_EXTENSION_NAME
+ AND  x.INDEX_TYPE_NAME           = p.INDEX_TYPE_NAME
 WHERE i.TABLE_SCHEMA = 'test'
 ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
 
@@ -147,7 +157,7 @@ SELECT c.INDEX_NAME, c.INDEX_TYPE_NAME,
        x.SUPPORTS_KNN, x.SUPPORTS_ORDER_BY, x.SUPPORTS_RANGE_SCAN
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES c
 JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES x
-  USING (EXTENSION_NAME, EXTENSION_VERSION, INDEX_TYPE_NAME)
+  USING (INDEX_TYPE_EXTENSION_NAME, INDEX_TYPE_EXTENSION_VERSION, INDEX_TYPE_NAME)
 WHERE c.TABLE_SCHEMA = 'test'
 ORDER BY c.INDEX_NAME;
 
@@ -189,10 +199,10 @@ WHERE c.COLUMN_NAME = 'a';
 --echo # --- The two catalogues are visible to the same user, by design ---
 # Their rows name no user object. Pinned so that a later "make these consistent"
 # change cannot quietly start filtering them.
-SELECT EXTENSION_NAME, INDEX_TYPE_NAME, SUPPORTS_KNN
+SELECT INDEX_TYPE_EXTENSION_NAME, INDEX_TYPE_NAME, SUPPORTS_KNN
 FROM INFORMATION_SCHEMA.EXTENSION_INDEX_TYPES
 ORDER BY INDEX_TYPE_NAME;
-SELECT EXTENSION_NAME, PROFILE_NAME, INDEX_TYPE_NAME
+SELECT PROFILE_EXTENSION_NAME, PROFILE_NAME, INDEX_TYPE_NAME
 FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
 ORDER BY PROFILE_NAME;
 

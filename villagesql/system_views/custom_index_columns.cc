@@ -52,9 +52,11 @@ Custom_index_columns::Custom_index_columns() {
                          "vcic.column_name COLLATE utf8mb4_0900_ai_ci");
   // The extension providing the *profile*, which villagesql records per key
   // column and separately from the index type's extension in CUSTOM_INDEXES.
-  m_target_def.add_field(FIELD_EXTENSION_NAME, "EXTENSION_NAME",
+  // Named for that role so the two never collide in a single FROM.
+  m_target_def.add_field(FIELD_PROFILE_EXTENSION_NAME, "PROFILE_EXTENSION_NAME",
                          "vcic.extension_name COLLATE utf8mb4_0900_ai_ci");
-  m_target_def.add_field(FIELD_EXTENSION_VERSION, "EXTENSION_VERSION",
+  m_target_def.add_field(FIELD_PROFILE_EXTENSION_VERSION,
+                         "PROFILE_EXTENSION_VERSION",
                          "vcic.extension_version COLLATE utf8mb4_0900_ai_ci");
   m_target_def.add_field(FIELD_PROFILE_NAME, "PROFILE_NAME",
                          "vcic.profile_name COLLATE utf8mb4_0900_ai_ci");

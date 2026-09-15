@@ -50,8 +50,8 @@ namespace {
 
 // Field indices matching the order in villagesql_extension_index_types_fields.
 enum {
-  FIELD_EXTENSION_NAME,
-  FIELD_EXTENSION_VERSION,
+  FIELD_INDEX_TYPE_EXTENSION_NAME,
+  FIELD_INDEX_TYPE_EXTENSION_VERSION,
   FIELD_INDEX_TYPE_NAME,
   FIELD_SUPPORTS_POINT_LOOKUP,
   FIELD_SUPPORTS_RANGE_SCAN,
@@ -71,8 +71,8 @@ void store_yes_no(Field *field, bool value) {
 }  // namespace
 
 ST_FIELD_INFO villagesql_extension_index_types_fields[] = {
-    {"EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
-    {"EXTENSION_VERSION", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"INDEX_TYPE_EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"INDEX_TYPE_EXTENSION_VERSION", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"INDEX_TYPE_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"SUPPORTS_POINT_LOOKUP", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"SUPPORTS_RANGE_SCAN", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
@@ -97,12 +97,12 @@ int fill_extension_index_types(THD *thd, Table_ref *tables, Item *) {
     restore_record(table, s->default_values);
 
     const std::string &ext_name = desc->extension_name();
-    table->field[FIELD_EXTENSION_NAME]->store(ext_name.c_str(),
-                                              ext_name.length(), cs);
+    table->field[FIELD_INDEX_TYPE_EXTENSION_NAME]->store(ext_name.c_str(),
+                                                         ext_name.length(), cs);
 
     const std::string &ext_version = desc->extension_version();
-    table->field[FIELD_EXTENSION_VERSION]->store(ext_version.c_str(),
-                                                 ext_version.length(), cs);
+    table->field[FIELD_INDEX_TYPE_EXTENSION_VERSION]->store(
+        ext_version.c_str(), ext_version.length(), cs);
 
     const std::string &type_name = desc->index_type_name();
     table->field[FIELD_INDEX_TYPE_NAME]->store(type_name.c_str(),

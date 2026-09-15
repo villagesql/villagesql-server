@@ -37,10 +37,13 @@ namespace system_views {
   this server but not across a dump and restore. It is published because it is
   the join key; it carries no meaning of its own.
 
-  Keeping the two apart is what lets EXTENSION_NAME and EXTENSION_VERSION mean
-  one thing here: the extension providing the index *type*. The profile's
-  extension is a separate pair recorded per key column, and combining both into
-  one row would leave two same-named concepts side by side.
+  Two extensions are involved in a custom index and they need not be the same
+  one, so each column says which role it names. INDEX_TYPE_EXTENSION_NAME and
+  INDEX_TYPE_EXTENSION_VERSION here are the extension providing the index
+  *type*; the extension providing a key column's *profile* is a separate pair,
+  published as PROFILE_EXTENSION_* by I_S.CUSTOM_INDEX_COLUMNS. Prefixing by
+  role is what lets the pair of views be joined with USING without either
+  colliding or silently matching the wrong extension.
 
   Regular indexes do not appear: the villagesql table is the driving side of an
   inner join, so only custom indexes are listed by construction.
@@ -60,8 +63,8 @@ class Custom_indexes
     FIELD_TABLE_SCHEMA,
     FIELD_TABLE_NAME,
     FIELD_INDEX_NAME,
-    FIELD_EXTENSION_NAME,
-    FIELD_EXTENSION_VERSION,
+    FIELD_INDEX_TYPE_EXTENSION_NAME,
+    FIELD_INDEX_TYPE_EXTENSION_VERSION,
     FIELD_INDEX_TYPE_NAME,
     FIELD_INDEX_TYPE_PARAMETERS
   };

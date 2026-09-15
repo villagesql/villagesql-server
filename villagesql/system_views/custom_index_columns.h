@@ -39,24 +39,23 @@ namespace system_views {
       FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
       JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
 
-  EXTENSION_NAME and EXTENSION_VERSION here are the extension providing the
-  *profile* named by PROFILE_NAME -- a different pair from the one in
-  CUSTOM_INDEXES, which names the extension providing the index type. The two
-  coincide for every in-tree extension but are recorded separately because
-  nothing requires it, and keeping the halves in separate views is what lets the
-  name mean one thing in each.
+  PROFILE_EXTENSION_NAME and PROFILE_EXTENSION_VERSION are the extension
+  providing the *profile* named by PROFILE_NAME -- a different pair from
+  CUSTOM_INDEXES.INDEX_TYPE_EXTENSION_*, which names the extension providing the
+  index type. The two coincide for every in-tree extension but are recorded
+  separately because nothing requires it.
 
-  The cost of that is at join time: with both views in one FROM the bare name
-  EXTENSION_NAME is ambiguous, so reaching I_S.EXTENSION_INDEX_PROFILES must
-  qualify each side rather than use USING:
+  Both pairs are prefixed by role rather than left as a bare EXTENSION_NAME, so
+  a column of a given name means the same thing in every one of these views.
+  That is what makes the join to the profile catalogue a plain natural join:
 
-      JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES p
-        ON p.EXTENSION_NAME    = c.EXTENSION_NAME
-       AND p.EXTENSION_VERSION = c.EXTENSION_VERSION
-       AND p.PROFILE_NAME      = c.PROFILE_NAME
+      JOIN INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
+        USING (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME)
 
-  Joining i.EXTENSION_NAME there instead is wrong and silently agrees for every
-  in-tree extension, since each supplies its own profiles.
+  and, more importantly, makes joining the wrong extension impossible to write
+  by accident -- the earlier bare naming let a query match CUSTOM_INDEXES'
+  extension instead of this one, which agrees for every in-tree extension and so
+  would only diverge once a real cross-extension profile existed.
 
   SEQ_IN_INDEX is 1-based to match I_S.STATISTICS, while the underlying
   key_position is 0-based.
@@ -74,8 +73,8 @@ class Custom_index_columns
     FIELD_INDEX_ID,
     FIELD_SEQ_IN_INDEX,
     FIELD_COLUMN_NAME,
-    FIELD_EXTENSION_NAME,
-    FIELD_EXTENSION_VERSION,
+    FIELD_PROFILE_EXTENSION_NAME,
+    FIELD_PROFILE_EXTENSION_VERSION,
     FIELD_PROFILE_NAME
   };
 

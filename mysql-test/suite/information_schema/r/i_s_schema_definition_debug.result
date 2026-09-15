@@ -319,8 +319,8 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   vcic.index_id AS INDEX_ID,
   vcic.key_position + 1 AS SEQ_IN_INDEX,
   vcic.column_name COLLATE utf8mb4_0900_ai_ci AS COLUMN_NAME,
-  vcic.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
-  vcic.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
+  vcic.extension_name COLLATE utf8mb4_0900_ai_ci AS PROFILE_EXTENSION_NAME,
+  vcic.extension_version COLLATE utf8mb4_0900_ai_ci AS PROFILE_EXTENSION_VERSION,
   vcic.profile_name COLLATE utf8mb4_0900_ai_ci AS PROFILE_NAME FROM 
   villagesql.custom_index_columns vcic
   JOIN villagesql.custom_indexes vci ON vci.index_id = vcic.index_id
@@ -334,8 +334,8 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   vcic.index_id AS INDEX_ID,
   vcic.key_position + 1 AS SEQ_IN_INDEX,
   vcic.column_name COLLATE utf8mb4_0900_ai_ci AS COLUMN_NAME,
-  vcic.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
-  vcic.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
+  vcic.extension_name COLLATE utf8mb4_0900_ai_ci AS PROFILE_EXTENSION_NAME,
+  vcic.extension_version COLLATE utf8mb4_0900_ai_ci AS PROFILE_EXTENSION_VERSION,
   vcic.profile_name COLLATE utf8mb4_0900_ai_ci AS PROFILE_NAME FROM 
   villagesql.custom_index_columns vcic
   JOIN villagesql.custom_indexes vci ON vci.index_id = vcic.index_id
@@ -351,8 +351,8 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   sch.name AS TABLE_SCHEMA,
   tbl.name AS TABLE_NAME,
   idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
-  vci.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
-  vci.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
+  vci.extension_name COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_EXTENSION_NAME,
+  vci.extension_version COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_EXTENSION_VERSION,
   vci.index_type_name COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_NAME,
   vci.index_type_parameters AS INDEX_TYPE_PARAMETERS FROM 
   villagesql.custom_indexes vci
@@ -369,8 +369,8 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   sch.name AS TABLE_SCHEMA,
   tbl.name AS TABLE_NAME,
   idx.name COLLATE utf8mb3_tolower_ci AS INDEX_NAME,
-  vci.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
-  vci.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
+  vci.extension_name COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_EXTENSION_NAME,
+  vci.extension_version COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_EXTENSION_VERSION,
   vci.index_type_name COLLATE utf8mb4_0900_ai_ci AS INDEX_TYPE_NAME,
   vci.index_type_parameters AS INDEX_TYPE_PARAMETERS FROM 
   villagesql.custom_indexes vci

@@ -23,9 +23,10 @@
 // own optional qualifier in the grammar, and the default-profile lookup in
 // villagesql/sql/metadata_modifier.cc searches every extension's profiles.
 //
-// This is what closes the (EXTENSION_NAME, EXTENSION_VERSION, PROFILE_NAME)
-// triple published by I_S.CUSTOM_INDEX_COLUMNS, which otherwise joins to
-// nothing.
+// This is what closes the (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION,
+// PROFILE_NAME) triple published by I_S.CUSTOM_INDEX_COLUMNS, which otherwise
+// joins to nothing. The names match on both sides, so that hop is a plain
+// natural join.
 //
 // Deliberately NOT privilege-filtered, like EXTENSION_INDEX_TYPES: rows name
 // installed software, never a user object.
@@ -45,8 +46,8 @@ namespace {
 // Field indices matching the order in
 // villagesql_extension_index_profiles_fields.
 enum {
-  FIELD_EXTENSION_NAME,
-  FIELD_EXTENSION_VERSION,
+  FIELD_PROFILE_EXTENSION_NAME,
+  FIELD_PROFILE_EXTENSION_VERSION,
   FIELD_PROFILE_NAME,
   FIELD_DATA_TYPE_EXTENSION_NAME,
   FIELD_DATA_TYPE_NAME,
@@ -70,8 +71,8 @@ void store_str(Field *field, const std::string &value) {
 
 ST_FIELD_INFO villagesql_extension_index_profiles_fields[] = {
     // The profile's own extension. Distinct from the two below.
-    {"EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
-    {"EXTENSION_VERSION", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"PROFILE_EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"PROFILE_EXTENSION_VERSION", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"PROFILE_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     // The data type this profile binds, and the extension providing it.
     {"DATA_TYPE_EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
@@ -82,15 +83,12 @@ ST_FIELD_INFO villagesql_extension_index_profiles_fields[] = {
     // that table's three key columns.
     {"INDEX_TYPE_EXTENSION_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"INDEX_TYPE_NAME", 64, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
-    // Scan ordering AS DECLARED by the extension, which is not the same as what
-    // the index can do. The SDK's IndexOrdering has only ASC and DESC, with no
-    // way to say "unordered", and the descriptor defaults to ASC -- so a
-    // profile
-    // whose author never considered ordering reports ORDERING_ASC = YES. See
-    // the
-    // TODO(villagesql-indexing) in villagesql/system_views/statistics.cc for
-    // why
-    // STATISTICS.COLLATION deliberately does not trust this.
+    // Scan ordering AS DECLARED, which is not the same as what the index can
+    // do. The SDK's IndexOrdering has only ASC and DESC, with no way to say
+    // "unordered", and the descriptor defaults to ASC -- so a profile whose
+    // author never considered ordering still reports ORDERING_ASC = YES. The
+    // TODO(villagesql-indexing) in statistics.cc records why
+    // STATISTICS.COLLATION deliberately does not trust this field.
     {"ORDERING_ASC", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     {"ORDERING_DESC", 3, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
     // Whether this profile is chosen when a key column names no profile.
@@ -108,8 +106,10 @@ int fill_extension_index_profiles(THD *thd, Table_ref *tables, Item *) {
        vclient.index_profile_descriptors().get_all_committed()) {
     restore_record(table, s->default_values);
 
-    store_str(table->field[FIELD_EXTENSION_NAME], desc->extension_name());
-    store_str(table->field[FIELD_EXTENSION_VERSION], desc->extension_version());
+    store_str(table->field[FIELD_PROFILE_EXTENSION_NAME],
+              desc->extension_name());
+    store_str(table->field[FIELD_PROFILE_EXTENSION_VERSION],
+              desc->extension_version());
     store_str(table->field[FIELD_PROFILE_NAME], desc->profile_name());
 
     store_str(table->field[FIELD_DATA_TYPE_EXTENSION_NAME],
