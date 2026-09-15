@@ -57,6 +57,48 @@ ORDER BY INDEX_NAME;
 TABLE_SCHEMA	TABLE_NAME	INDEX_NAME
 MixedDb	mixedtab	MixedIdx
 MixedDb	mixedtab	MixedIdx2
+#
+# Column names: the third convention
+#
+CREATE TABLE MixedCols (
+id INT PRIMARY KEY,
+VecOne dummy_type_vector,
+VecTwo dummy_type_vector,
+INDEX MixedColIdx (VecOne, VecTwo) USING EXTENDED(dummy_index_hnsw)
+);
+# --- Stored rows: column names keep their declared case, unlike db/table ---
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+mixeddb	mixedcols	MixedColIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+mixeddb	mixedtab	MixedIdx2	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+mixedcols	MixedColIdx	0	VecOne	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+mixedcols	MixedColIdx	1	VecTwo	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+mixedtab	MixedIdx	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+mixedtab	MixedIdx2	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- CUSTOM_INDEX_COLUMNS reports the declared case ---
+SELECT i.TABLE_NAME, i.INDEX_NAME, c.SEQ_IN_INDEX, c.COLUMN_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
+WHERE i.TABLE_SCHEMA = 'mixeddb' AND i.TABLE_NAME = 'MixedCols'
+ORDER BY c.SEQ_IN_INDEX;
+TABLE_NAME	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME
+MixedCols	MixedColIdx	1	VecOne
+MixedCols	MixedColIdx	2	VecTwo
+# --- and matches STATISTICS.COLUMN_NAME byte for byte ---
+SELECT s.COLUMN_NAME AS statistics_name, c.COLUMN_NAME AS custom_name,
+CAST(s.COLUMN_NAME AS BINARY) = CAST(c.COLUMN_NAME AS BINARY)
+AS exact_match
+FROM INFORMATION_SCHEMA.STATISTICS s
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEXES i
+USING (TABLE_SCHEMA, TABLE_NAME, INDEX_NAME)
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c
+ON c.INDEX_ID = i.INDEX_ID AND c.SEQ_IN_INDEX = s.SEQ_IN_INDEX
+WHERE s.TABLE_SCHEMA = 'mixeddb' AND s.TABLE_NAME = 'MixedCols'
+ORDER BY s.SEQ_IN_INDEX;
+statistics_name	custom_name	exact_match
+VecOne	VecOne	1
+VecTwo	VecTwo	1
 # --- Cleanup ---
 DROP DATABASE MixedDb;
 SET SESSION debug='-d,villagesql_custom_index_proceed';

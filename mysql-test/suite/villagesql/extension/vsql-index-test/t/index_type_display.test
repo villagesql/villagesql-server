@@ -1,12 +1,5 @@
 # INDEX_TYPE must name the extension's index type for a custom index.
 #
-# A custom index is created with the storage engine's default algorithm, so the
-# data dictionary records BTREE for it. Reporting that verbatim asserts the
-# index is ordered, range-scannable and usable for ORDER BY, none of which holds
-# for a custom index. INFORMATION_SCHEMA.STATISTICS and SHOW INDEX are driven by
-# the same view definition (STATISTICS and the hidden SHOW_STATISTICS), so both
-# are checked here. A plain B-tree on the same table must still report BTREE.
-#
 # TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
 # custom index execution is fully implemented and the guard in
 # PT_custom_index_type::do_contextualize() is removed.

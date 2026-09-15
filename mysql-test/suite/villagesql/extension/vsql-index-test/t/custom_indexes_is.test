@@ -10,14 +10,6 @@
 # The index/column split mirrors the villagesql tables, and follows upstream's
 # INNODB_INDEXES / INNODB_FIELDS pair down to the INDEX_ID join key.
 #
-# Two extensions are involved in a custom index and need not be the same one, so
-# every extension column is prefixed by the role it names: INDEX_TYPE_EXTENSION_*
-# in CUSTOM_INDEXES and EXTENSION_INDEX_TYPES, PROFILE_EXTENSION_* in
-# CUSTOM_INDEX_COLUMNS and EXTENSION_INDEX_PROFILES. A given name therefore means
-# one thing everywhere, which is what lets the joins below use USING -- and makes
-# joining the wrong extension impossible to write rather than silently right for
-# every in-tree extension.
-#
 # TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
 # custom index execution is fully implemented and the guard in
 # PT_custom_index_type::do_contextualize() is removed.
@@ -48,9 +40,7 @@ WHERE TABLE_SCHEMA = 'test'
 ORDER BY TABLE_NAME, INDEX_NAME;
 
 --echo # --- CUSTOM_INDEX_COLUMNS: one row per key column, reached via INDEX_ID ---
-# idx_multi spans (d, e) and so yields two rows. The extension columns here name
-# the PROFILE's extension, which is why they are PROFILE_EXTENSION_* rather than
-# the INDEX_TYPE_EXTENSION_* pair CUSTOM_INDEXES publishes.
+# idx_multi spans (d, e) and so yields two rows.
 #
 # This view carries no schema or table columns, so every per-table question goes
 # through CUSTOM_INDEXES.
@@ -110,14 +100,7 @@ ORDER BY INDEX_TYPE_EXTENSION_NAME, INDEX_TYPE_NAME;
 SELECT * FROM INFORMATION_SCHEMA.EXTENSION_INDEX_PROFILES
 ORDER BY PROFILE_EXTENSION_NAME, PROFILE_NAME;
 
---echo # --- PROFILE_NAME from CUSTOM_INDEX_COLUMNS now resolves ---
-# Before this table existed, CUSTOM_INDEX_COLUMNS published a complete
-# (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME) triple that
-# joined to nothing.
-#
-# The triple carries the same names on both sides, so this is a plain USING.
-# CUSTOM_INDEXES is in the same FROM and does not interfere: its extension
-# columns are INDEX_TYPE_EXTENSION_*, a different role and a different name.
+--echo # --- PROFILE_NAME from CUSTOM_INDEX_COLUMNS ---
 SELECT i.INDEX_NAME, c.SEQ_IN_INDEX, c.COLUMN_NAME,
        p.DATA_TYPE_NAME, p.INDEX_TYPE_NAME, p.IS_DEFAULT_PROFILE
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
@@ -128,18 +111,10 @@ WHERE i.TABLE_SCHEMA = 'test'
 ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
 
 --echo # --- The long way round: index -> key column -> profile -> index type ---
-# The four tables close a rectangle, not a chain: the query above reaches
-# EXTENSION_INDEX_TYPES from CUSTOM_INDEXES in one hop, and this one arrives at
-# the same table the long way, through each key part's profile.
-#
-# The last hop must be qualified, and that is the one place where qualifying is
-# still right. CUSTOM_INDEXES and EXTENSION_INDEX_PROFILES both expose
-# INDEX_TYPE_EXTENSION_NAME, and the two can genuinely disagree -- the
-# explicit-profile DDL path checks the profile's data type against the column but
-# never checks its index type against the index. USING would silently pick one.
-#
 # The profile's index type reference carries no version, so this hop is a
 # two-column join, not the three-column key EXTENSION_INDEX_TYPES publishes.
+# TODO(villagesql-indexing): Add INDEX_TYPE_EXTENSION_VERSION to
+# EXTENSION_INDEX_PROFILES.
 SELECT i.INDEX_NAME, c.COLUMN_NAME, p.PROFILE_NAME,
        x.SUPPORTS_KNN, x.SUPPORTS_ORDER_BY
 FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
