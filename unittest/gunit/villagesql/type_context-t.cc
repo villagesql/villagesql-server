@@ -257,20 +257,22 @@ static vef_func_desc_t make_intrinsic_default_fd(const char *name,
           0};
 }
 
-// from_string (encode) VDF writing two fixed bytes, the VDF-path counterpart
-// of two_byte_encode above.
-static void two_byte_encode_vdf(vef_context_t * /*ctx*/,
-                                vef_vdf_args_t * /*args*/,
+// from_string (encode) VDF counterpart of two_byte_encode. It delegates so the
+// two paths cannot drift: a test that runs both is then comparing dispatch,
+// not two hand-written encoders that happen to agree.
+static void two_byte_encode_vdf(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
                                 vef_vdf_result_t *result) {
-  if (result->max_bin_len < 2) {
+  const char *in = args->values[0]->str_value;
+  size_t in_len = args->values[0]->str_len;
+  size_t written = 0;
+  if (two_byte_encode(result->bin_buf, result->max_bin_len, in, in_len,
+                      &written)) {
     result->type = VEF_RESULT_ERROR;
-    snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "result buffer too small");
+    snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "encode failed");
     return;
   }
-  result->bin_buf[0] = 0xAB;
-  result->bin_buf[1] = 0xCD;
   result->type = VEF_RESULT_VALUE;
-  result->actual_len = 2;
+  result->actual_len = written;
 }
 
 // from_string (encode) VDF that reports an error.
@@ -548,15 +550,14 @@ TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
 }
 
 // A value the parser cannot read stops the parse, and everything after it is
-// dropped with no diagnostic. On the load path a dropped size-determining
-// parameter is caught downstream by CheckFieldLengthMatchesType, which fails
-// the table open. That check cannot see a parameter which leaves the storage
-// size unchanged, nor anything on a variable-length type, whose
-// field_buffer_length() is a per-type constant.
+// dropped with no diagnostic. Dropping one that determines storage size is
+// caught later by CheckFieldLengthMatchesType; dropping one that does not is
+// not caught at all.
 //
-// TODO(villagesql-general): report malformed input from from_json() rather
-// than returning a partial result, so those two cases are caught at the
-// source instead of loading a column with fewer parameters than it holds.
+// TODO(villagesql-general): from_json() should reject malformed input rather
+// than reading what it can and dropping the rest, so a column cannot load
+// with fewer parameters than it holds. It is lenient in the other direction
+// too, accepting input a JSON parser would refuse, such as a missing ':'.
 TEST_F(TypeParametersTest, FromJsonStopsAtUnquotedValue) {
   // Non-string value in the only pair: nothing is recovered.
   EXPECT_TRUE(
@@ -625,9 +626,14 @@ TEST_F(TypeParametersTest, CopyAssignmentRebuildsAbiPointers) {
   target = source;
 
   ASSERT_EQ(target.count(), 2u);
+  EXPECT_STREQ(target.key_data()[0], "dimension");
+  EXPECT_STREQ(target.value_data()[0], "1536");
   EXPECT_STREQ(target.key_data()[1], "metric");
   EXPECT_STREQ(target.value_data()[1], "cosine");
+
+  // Every entry points at the target's own strings, not the source's.
   EXPECT_NE(target.key_data()[0], source.key_data()[0]);
+  EXPECT_NE(target.key_data()[1], source.key_data()[1]);
 }
 
 TEST_F(TypeParametersTest, MoveConstructorRebuildsAbiPointers) {
