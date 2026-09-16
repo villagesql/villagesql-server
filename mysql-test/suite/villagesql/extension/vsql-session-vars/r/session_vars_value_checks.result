@@ -1,0 +1,22 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_session_var_test;
+# Range clamping: max is 4096
+SET SESSION vsql_session_var_test.session_int_var = 999999;
+Warnings:
+Warning	1292	Truncated incorrect vsql_session_var_test.session_int_var value: '999999'
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
+4096
+# Range clamping: min is 1
+SET SESSION vsql_session_var_test.session_int_var = -1;
+Warnings:
+Warning	1292	Truncated incorrect vsql_session_var_test.session_int_var value: '-1'
+SELECT @@session.vsql_session_var_test.session_int_var;
+@@session.vsql_session_var_test.session_int_var
+1
+# Wrong-type assignments are rejected
+SET SESSION vsql_session_var_test.session_int_var = "hello";
+ERROR 42000: Incorrect argument type to variable 'vsql_session_var_test.session_int_var'
+UNINSTALL EXTENSION vsql_session_var_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
