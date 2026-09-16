@@ -1,0 +1,5 @@
+# This test creates and locks 3000 tables, and regularly runs past the
+# default 15 minute testcase timeout.  When it does pass, the execution
+# times are close to the 900s cutoff - 780s and 870s.
+# Give it 15 minutes and 10 more for some headroom.
+--testcase-timeout=25
