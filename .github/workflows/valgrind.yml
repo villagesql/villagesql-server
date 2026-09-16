@@ -51,7 +51,7 @@ jobs:
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
-      REQUEST_REF: ${{ inputs.ref || github.ref }}
+      REQUEST_REF: ${{ inputs.ref }}
 
     steps:
     - name: Checkout code

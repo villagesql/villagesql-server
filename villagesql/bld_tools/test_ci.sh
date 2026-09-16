@@ -156,19 +156,10 @@ if [ "$RUN_VALGRIND" = "true" ]; then
     echo "ERROR: --valgrind requested but valgrind is not on PATH"
     exit 1
   fi
-  # SOURCE_DIR is the repo root under CI, but the auto-detect fallback above
-  # resolves to villagesql/, so check the script-relative root as well.
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-  VALGRIND_SUPP=""
-  for candidate in "${SOURCE_DIR}/mysql-test/valgrind.supp" \
-                   "${REPO_ROOT}/mysql-test/valgrind.supp"; do
-    if [ -f "$candidate" ]; then
-      VALGRIND_SUPP="$candidate"
-      break
-    fi
-  done
-  if [ -z "$VALGRIND_SUPP" ]; then
+  VALGRIND_SUPP="${SOURCE_DIR}/mysql-test/valgrind.supp"
+  if [ ! -f "$VALGRIND_SUPP" ]; then
     echo "WARNING: valgrind.supp not found; unit tests will run unsuppressed"
+    VALGRIND_SUPP=""
   fi
   echo "  VALGRIND_BIN: ${VALGRIND_BIN}"
   echo "  VALGRIND_SUPP: ${VALGRIND_SUPP:-<none>}"
