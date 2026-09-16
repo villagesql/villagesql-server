@@ -794,9 +794,9 @@ typedef struct {
 
   // OPTIONAL: Name of a VDF (from this extension's funcs[]) that produces the
   // intrinsic default binary value for this type. The named VDF must have
-  // signature (INT) -> STRING, where the INT argument is the resolved
-  // persisted_length in bytes (allowing variable-size types to produce the
-  // correct number of bytes). Mutually exclusive with intrinsic_default_str
+  // signature() -> STRING. The server supplies the resolved type
+  // parameters separately (see vef_type_params_t), so a variable-size type
+  // reads its length from there. Mutually exclusive with intrinsic_default_str
   // (see below). NULL means the type has no intrinsic default.
   const char *intrinsic_default_vdf_name;
 
