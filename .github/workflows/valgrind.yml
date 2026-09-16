@@ -2,14 +2,26 @@ name: Valgrind Tests
 
 # Build + test run under Valgrind memcheck, on Linux. Off one -DWITH_VALGRIND=1
 # build it runs:
-#   - the VillageSQL unit tests (via ctest -T memcheck), and
-#   - the VillageSQL mysql-test suite (via --valgrind).
+#   - the VillageSQL unit tests (via ctest -T memcheck),
+#   - the VillageSQL mysql-test suite (via --valgrind), and
+#   - every bundled extension: each VEB is rebuilt Debug (for symbolized stack
+#     traces) and its MTR suite is run under --valgrind.
+#
+# Each of the three is independently switchable, so a suppression-gathering run
+# can skip the slow server phases and exercise extensions alone.
 #
 # WITH_VALGRIND=1 is what enables the MEM_MALLOCLIKE_BLOCK / MEM_UNDEFINED /
 # MEM_NOACCESS client requests in include/memory_debugging.h and InnoDB's
 # UNIV_DEBUG_VALGRIND paths, so memcheck sees MEM_ROOT and buffer-pool
 # sub-allocations at the right granularity. That is why this needs its own
-# build and cannot share the normal nightly one.
+# build and cannot share the normal nightly one. That build is also the
+# expensive part of this workflow, which is why the extension phases live here
+# rather than in a workflow of their own: they reuse it.
+#
+# Unlike the server, extensions need no valgrind-specific build flags —
+# memcheck instruments unmodified binaries, and nothing under villagesql/sdk/
+# is conditional on WITH_VALGRIND. They are built Debug only so reports carry
+# symbols instead of bottoming out inside the .veb.
 #
 # Note on flags: this uses --valgrind (all executables), not
 # --valgrind-mysqld. mysql-test-run.pl escalates to all-executables as soon as
@@ -36,32 +48,49 @@ on:
         required: false
         type: boolean
         default: true
+      run-server-tests:
+        description: 'Run the server mysql-test suite under memcheck (slow; turn off to exercise extensions only)'
+        required: false
+        type: boolean
+        default: true
+      run-extension-tests:
+        description: 'Build the bundled extensions and run their MTR suites under memcheck'
+        required: false
+        type: boolean
+        default: true
+      extension:
+        description: 'Limit the extension phase to one extension (e.g. vsql-vector); empty for all'
+        required: false
+        default: ''
       valgrind-options:
-        description: 'Extra valgrind options, space separated (e.g. --show-reachable=no)'
+        description: 'Extra valgrind options, space separated (e.g. --gen-suppressions=all)'
         required: false
         default: ''
       max-parallel:
         description: 'Cap on mysql-test-run workers (each one runs mysqld and mysqltest under valgrind)'
         required: false
-        default: '8'
+        default: '16'
 
 jobs:
   valgrind-test:
     name: Build and Run Valgrind Tests
     runs-on: [self-hosted, linux, x86_64]
+    # The 360-minute default cancelled a full server run at 99% complete.
+    timeout-minutes: 600
     permissions:
       contents: read
 
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
+      EXTS_ROOT: ${{ github.workspace }}/exts
       REQUEST_REF: ${{ inputs.ref }}
-      # test_ci.sh passes --parallel=auto, which resolves to the runner's CPU
-      # count. That is far too many valgrind'd servers to run at once: they
-      # starve each other badly enough that shutdown_server exceeds its 60s
-      # timeout and tests fail for reasons unrelated to what they check.
-      # mysql-test-run caps 'auto' at MTR_MAX_PARALLEL.
-      MTR_MAX_PARALLEL: ${{ inputs.max-parallel || '8' }}
+      EXTENSION_FILTER: ${{ inputs.extension }}
+      # --parallel=auto resolves to the runner's CPU count; mysql-test-run caps
+      # it at MTR_MAX_PARALLEL, and test_extension_vebs.sh honors the same cap.
+      # Each worker runs mysqld and mysqltest under valgrind, so hold it near
+      # half the cores rather than letting auto take all of them.
+      MTR_MAX_PARALLEL: ${{ inputs.max-parallel || '16' }}
 
     steps:
     - name: Checkout code
@@ -71,12 +100,27 @@ jobs:
         fetch-depth: 50
         path: source
 
+    - name: Checkout bundled extensions
+      if: inputs.run-extension-tests
+      run: |
+        # Self-hosted runners reuse the workspace; wipe stale extension clones
+        rm -rf "$EXTS_ROOT"
+        mkdir -p "$EXTS_ROOT/sources"
+
+        source/villagesql/bld_tools/checkout_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$EXTENSION_FILTER" yes
+
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
       with:
         setup-ccache: 'false'
 
+    - name: Install bundled-extension dependencies
+      if: inputs.run-extension-tests
+      run: sudo source/scripts/setup_linux_ext_deps.sh
+
     - name: Build VillageSQL with Valgrind support
+      id: build
       working-directory: ./source
       run: ./villagesql/bld_tools/build_ci.sh
       env:
@@ -96,11 +140,90 @@ jobs:
         done
         echo "extra=$EXTRA" >> "$GITHUB_OUTPUT"
 
-    - name: Run Valgrind tests
+    # Each phase runs separately (continue-on-error plus a gate at the end) so
+    # they all run and one failure does not hide the others' results.
+    - name: Run VillageSQL unit tests (valgrind)
+      id: unit
+      if: inputs.run-unit-tests
+      continue-on-error: true
       uses: ./source/.github/actions/run-tests
       with:
-        run-unit-tests: ${{ inputs.run-unit-tests }}
+        run-integration-tests: false
+        valgrind: 'true'
+        artifact-name: valgrind-unit-logs-${{ github.run_number }}
+
+    - name: Run VillageSQL mtr suite (valgrind)
+      id: mtr
+      if: inputs.run-server-tests
+      continue-on-error: true
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-unit-tests: false
         test-suite: ${{ inputs.test-suite }}
         valgrind: 'true'
         mysql-test-extra-flags: ${{ steps.vg.outputs.extra }}
-        artifact-name: valgrind-logs-${{ github.run_number }}
+        artifact-name: valgrind-mtr-logs-${{ github.run_number }}
+
+    # No sanitizer-style flag mirroring here; Debug is only for symbol quality.
+    - name: Build bundled extensions
+      id: ext_build
+      if: inputs.run-extension-tests
+      continue-on-error: true
+      env:
+        CMAKE_EXTRA_FLAGS: -DCMAKE_BUILD_TYPE=Debug
+        # Lets an extension drop instructions memcheck cannot decode.
+        VSQL_VALGRIND: 1
+      run: |
+        SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
+        source/villagesql/bld_tools/build_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$SDK_STAGING_DIR" \
+          "$BUILD_DIR/veb_output_directory" "$EXTENSION_FILTER" yes
+
+    # MTR auto-copies *.veb from <bindir>/veb_output_directory into each test
+    # server, so the VEBs built above are picked up with no extra plumbing.
+    #
+    # --valgrind plus a --valgrind-option, matching test_ci.sh: the option is
+    # what makes MTR take the branch that scales the start/suite timeouts.
+    - name: Test bundled extensions (valgrind)
+      id: ext_test
+      # Runs even if some extension failed to build, so the ones that did build
+      # still get exercised; the build failure fails the job on its own.
+      if: always() && inputs.run-extension-tests
+      continue-on-error: true
+      env:
+        MTR_EXTRA_FLAGS: --valgrind --valgrind-option=--track-origins=yes ${{ steps.vg.outputs.extra }}
+      run: |
+        source/villagesql/bld_tools/test_extension_vebs.sh \
+          "$BUILD_DIR" "$EXTS_ROOT/sources"
+
+    # Not conditioned on failure: a --gen-suppressions run prints the stanzas
+    # into the error logs whether or not any test actually fails.
+    - name: Upload extension MTR logs
+      if: always() && inputs.run-extension-tests
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: valgrind-ext-mtr-logs-${{ github.run_number }}
+        # test_extension_vebs.sh with MTR_BINDIR=$BUILD_DIR puts output into
+        # $BUILD_DIR/mysql-test/var (not the source tree). Under --parallel
+        # each worker writes its mysqld.N.err to var/<N>/log/.
+        path: |
+          ${{ env.BUILD_DIR }}/mysql-test/var/log/
+          ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Fail if any valgrind phase failed
+      if: always()
+      run: |
+        echo "Unit tests:      ${{ steps.unit.outcome || 'skipped' }}"
+        echo "MTR suite:       ${{ steps.mtr.outcome || 'skipped' }}"
+        echo "Extension build: ${{ steps.ext_build.outcome || 'skipped' }}"
+        echo "Extension tests: ${{ steps.ext_test.outcome || 'skipped' }}"
+        if [ "${{ steps.unit.outcome }}" = "failure" ] || \
+           [ "${{ steps.mtr.outcome }}" = "failure" ] || \
+           [ "${{ steps.ext_build.outcome }}" = "failure" ] || \
+           [ "${{ steps.ext_test.outcome }}" = "failure" ]; then
+          echo "::error::One or more valgrind test phases failed; see the step logs and uploaded artifacts."
+          exit 1
+        fi
+        echo "All valgrind test phases passed."
