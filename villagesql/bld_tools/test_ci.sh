@@ -23,6 +23,9 @@ OPTIONS:
   --suite=SUITE             Specify test suite to run (default: village)
   --skip-suite=SUITE        Skip specific test suite (requires --all-suites)
   --mysql-test-extra-flags="FLAGS"  Additional flags for mysql-test-run.pl
+  --valgrind                Run unit and integration tests under Valgrind
+                            memcheck (default: false). Requires a build
+                            configured with -DWITH_VALGRIND=1.
   --help                    Show this help message
 
 ENVIRONMENT VARIABLES:
@@ -41,6 +44,9 @@ EXAMPLES:
 
   # Run specific suite with extra flags
   $0 --suite=innodb --mysql-test-extra-flags="--verbose"
+
+  # Run everything under Valgrind memcheck
+  $0 --valgrind
 EOF
 }
 
@@ -52,6 +58,7 @@ RUN_ALL_SUITES=false
 TEST_SUITE=""
 SKIP_SUITE=""
 MYSQL_TEST_EXTRA_FLAGS=""
+RUN_VALGRIND=false
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -90,6 +97,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --mysql-test-extra-flags=*)
       MYSQL_TEST_EXTRA_FLAGS="${1#*=}"
+      shift
+      ;;
+    --valgrind)
+      RUN_VALGRIND=true
       shift
       ;;
     --help)
@@ -136,13 +147,43 @@ echo "  RUN_ALL_SUITES: ${RUN_ALL_SUITES}"
 echo "  TEST_SUITE: ${TEST_SUITE}"
 echo "  SKIP_SUITE: ${SKIP_SUITE}"
 echo "  MYSQL_TEST_EXTRA_FLAGS: ${MYSQL_TEST_EXTRA_FLAGS}"
+echo "  RUN_VALGRIND: ${RUN_VALGRIND}"
+
+# Locate valgrind before running anything, so a missing binary fails fast.
+if [ "$RUN_VALGRIND" = "true" ]; then
+  VALGRIND_BIN="$(command -v valgrind || true)"
+  if [ -z "$VALGRIND_BIN" ]; then
+    echo "ERROR: --valgrind requested but valgrind is not on PATH"
+    exit 1
+  fi
+  VALGRIND_SUPP="${SOURCE_DIR}/mysql-test/valgrind.supp"
+  if [ ! -f "$VALGRIND_SUPP" ]; then
+    echo "WARNING: valgrind.supp not found; unit tests will run unsuppressed"
+    VALGRIND_SUPP=""
+  fi
+  echo "  VALGRIND_BIN: ${VALGRIND_BIN}"
+  echo "  VALGRIND_SUPP: ${VALGRIND_SUPP:-<none>}"
+fi
 
 cd "$BUILD_DIR"
 
 # Run VillageSQL unit tests
 if [ "$RUN_UNIT_TESTS" = "true" ]; then
   echo "=== Running VillageSQL Unit Tests ==="
-  ctest -L villagesql --output-on-failure
+  CTEST_ARGS=(-L villagesql --output-on-failure)
+
+  # --error-exitcode makes valgrind fail the test process itself, so ctest's
+  # exit code reflects memcheck defects. Its own defect counter does not.
+  if [ "$RUN_VALGRIND" = "true" ]; then
+    CTEST_ARGS+=(-T memcheck
+      --overwrite "MemoryCheckCommand=${VALGRIND_BIN}"
+      --overwrite "MemoryCheckCommandOptions=--tool=memcheck --leak-check=full --track-origins=yes --num-callers=16 --error-exitcode=1")
+    if [ -n "$VALGRIND_SUPP" ]; then
+      CTEST_ARGS+=(--overwrite "MemoryCheckSuppressionFile=${VALGRIND_SUPP}")
+    fi
+  fi
+
+  ctest "${CTEST_ARGS[@]}"
 fi
 
 # Run VillageSQL integration tests
@@ -175,6 +216,15 @@ if [ "$RUN_INTEGRATION_TESTS" = "true" ]; then
   # Add big test flag if requested
   if [ "$RUN_BIG_TESTS" = "true" ]; then
     MYSQL_TEST_CMD="$MYSQL_TEST_CMD --only-big-test"
+  fi
+
+  # Add valgrind flags if requested. This has to be --valgrind (all
+  # executables) rather than --valgrind-mysqld: mysql-test-run.pl escalates to
+  # all-executables as soon as any --valgrind-option is given, and only that
+  # branch scales the start/suite timeouts mysqld needs under memcheck.
+  if [ "$RUN_VALGRIND" = "true" ]; then
+    MYSQL_TEST_CMD="$MYSQL_TEST_CMD --valgrind"
+    MYSQL_TEST_CMD="$MYSQL_TEST_CMD --valgrind-option=--track-origins=yes"
   fi
 
   # Add any extra flags
