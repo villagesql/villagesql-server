@@ -8,10 +8,10 @@
 #                must be present at runtime_output_directory/mysqld within this
 #                directory.
 # <extension_clones_dir>: Directory of cloned extension repos (one subdir per
-#                         extension), produced by checkout_bundled_extensions.sh
-#                         . Before you run this script, make sure to run
-#                         build_bundled_extensions.sh, and have it copy the
-#                         built .veb files to <build_dir>/veb_output_directory.
+#                         extension), produced by checkout_bundled_extensions.sh.
+#
+# Before you run this script, make sure to run build_bundled_extensions.sh, and
+# have it copy the built .veb files to <build_dir>/veb_output_directory.
 #
 # Extension test convention: each extension repo must have a mysql-test/ directory
 # at its root, structured as a single MTR suite (t/ and r/ subdirectories). This
