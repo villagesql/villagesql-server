@@ -1356,8 +1356,8 @@ struct KnownEntry {
   uint arg_index;
 };
 
-// Pass 1: validate the argument count and each argument's base type, and
-// collect the type parameters observed per qualified base name.
+// Does pass 1 over arguments: validate the argument count and each argument's
+// base type, and collect the type parameters observed per qualified base name.
 //
 // out_known_params == nullptr means a bind_and_check_types hook decides the
 // parameters: nothing is collected and differing sibling params are not an
@@ -1369,10 +1369,9 @@ static bool ValidateVDFArguments(
     const char *func_name, std::string_view extension_name, uint arg_count,
     Item **args, const vef_signature_t *signature,
     std::map<std::string, KnownEntry> *out_known_params) {
-  // Asking for no params back is what marks a hook-owned call: nothing is
-  // collected, so TD1 has neither an agreement rule to enforce here nor
-  // anything for pass 2 to propagate.
-  const bool hook_owns_params = (out_known_params == nullptr);
+  // Asking for NO params back is what disabled TD1: nothing is
+  // collected for pass 2 and TD1 is not enforced.
+  const bool enable_TD1 = (out_known_params != nullptr);
 
   // Validate argument count matches signature
   if (arg_count != signature->param_count) {
@@ -1414,14 +1413,14 @@ static bool ValidateVDFArguments(
     }
 
     // If this arg has known (non-unknown) params, record them for TD1.
-    if (!tc->is_unknown()) {
+    if (!tc->is_unknown() && enable_TD1) {
       auto it = known_params.find(expected_qbn);
       if (it != known_params.end()) {
         // Another arg already provided params for this type. Under TD1 they
         // must match; when a bind_and_check_types hook owns parameter
         // resolution, differing sibling params are allowed (the hook decides
         // what they mean) and we keep the first-seen entry.
-        if (!hook_owns_params && !(tc->parameters() == *it->second.params)) {
+        if (!(tc->parameters() == *it->second.params)) {
           villagesql_error(
               "Cannot initialize function '%s': conflicting type parameters "
               "for %s in arguments %u and %u",
@@ -1574,11 +1573,10 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   }
 
   // A bind_and_check_types hook replaces both TD1 and TD2. Passing nullptr
-  // leaves known_params empty, which switches off TD1 in both halves: pass 1
-  // collects nothing and stops enforcing sibling agreement, and pass 2 has
-  // nothing to propagate. What pass 2 still does is not TD1 -- it encodes
-  // string literals and rejects arguments that are neither, which has to happen
-  // either way or unencoded text reaches the extension as if it were binary.
+  // leaves known_params empty, which switches off TD1 in ValidateVDFArguments
+  // (which does pass 1 over the arguments) and thus collects nothing and
+  // stops enforcing sibling agreement. What pass 2 (ConvertVDFArguments) still does is not TD1
+  // -- it encodes string literals.
   std::map<std::string, KnownEntry> known_params;
   if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
                            signature,
