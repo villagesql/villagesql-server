@@ -347,6 +347,14 @@ inline SysVarDescriptor make_double(const char *name, const char *comment,
   return d;
 }
 
+// The server owns the storage a STR variable points at and frees the old buffer
+// on SET, so dereferencing value_ptr races a concurrent SET. Read a string
+// variable with SysVarCapability::get(), which asks the server under its lock
+// and returns a copy. Scalars are written in place and can be read directly.
+//
+// TODO(villagesql-preview): give the capability a cached string accessor that
+// primes from get() at load and refreshes from on_change, so the safe read is
+// also the cheap one and extensions stop hand-rolling the same cache.
 inline SysVarDescriptor make_str(const char *name, const char *comment,
                                  char **value_ptr, const char *def_val) {
   SysVarDescriptor d;

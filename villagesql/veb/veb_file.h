@@ -171,6 +171,21 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
 void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
                           const ExtensionRegistration &registration);
 
+// Call the extension's own load / unload hooks (the builder's on_init() and
+// on_deinit()). Both are no-ops for an extension that declares no hook or was
+// built before the hooks existed.
+//
+// on_init runs after the extension's capabilities are populated and on_deinit
+// before they are depopulated, so an extension sees the same live capabilities
+// in both. load_vef_extension and unload_vef_extension already call these; the
+// shutdown path calls run_extension_on_deinit directly because it depopulates
+// capabilities and unloads the .so in two separate phases.
+//
+// The pair is symmetric: the unload hook runs only for a registration that
+// reached the load hook, and each call runs at most once per load.
+void run_extension_on_init(const vef_registration_t *reg);
+void run_extension_on_deinit(const vef_registration_t *reg);
+
 // Open the .so and call vef_register: dlopen, look up the entry-point
 // symbols, invoke vef_register, validate the returned protocol. Does NOT
 // run any capability populate hooks. The caller observes only what the

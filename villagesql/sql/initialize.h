@@ -68,6 +68,16 @@ bool init_extension_infrastructure();
 // corresponding point in the shutdown sequence, rather than re-deriving these
 // constraints by hand.
 
+// Run the on_init hook of every extension loaded at startup.
+//
+// Extensions load from init_server_components(), which is before the server
+// applies persisted system-variable values, so the startup load path defers
+// these hooks to here instead of running them as each extension loads. Call
+// this once, immediately after set_persisted_options(), so a hook reads the
+// values the server was configured with rather than declared defaults. The
+// INSTALL EXTENSION path has no such gap and runs its hook during the load.
+void run_extension_init_hooks();
+
 // Phase 1: depopulate the capabilities of all loaded extensions (deregister
 // sys/status variables, join capability background threads, drain in-flight
 // capability calls). Does NOT unload the .so files or destroy extension state;

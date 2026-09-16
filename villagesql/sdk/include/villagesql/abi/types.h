@@ -188,6 +188,10 @@ typedef enum : unsigned int {
                    //   declare the maximum length of a STRING result so the
                    //   result column is sized to hold the full value instead of
                    //   the argument width (fixes materialization truncation).
+                   // + on_init / on_deinit on vef_registration_t: the server
+                   //   calls the extension's load and unload hooks with its
+                   //   capabilities populated, rather than the extension
+                   //   running them itself inside vef_register/vef_unregister.
 } vef_protocol_t;
 
 // =============================================================================
@@ -840,6 +844,11 @@ typedef struct {
 // Forward declaration so vef_required_capability_t can reference it.
 typedef struct vef_registration_t vef_registration_t;
 
+// Extension-side hooks the server calls at load and unload. See on_init /
+// on_deinit in vef_registration_t.
+typedef void (*vef_extension_init_func_t)(void);
+typedef void (*vef_extension_deinit_func_t)(void);
+
 // A single capability request in vef_registration_t.required_capabilities.
 // The extension sets name, vtable_dest, vtable_hash, and (if the capability
 // has a capability_config) capability_config_hash.  If the capability is
@@ -909,6 +918,20 @@ typedef struct vef_registration_t {
   // mismatch, loading the extension fails with an error.
   unsigned int required_capability_count;
   const vef_required_capability_t *required_capabilities;
+
+  // protocol >= VEF_PROTOCOL_4
+
+  // Extension-side load / unload hooks, set from the builder's on_init() and
+  // on_deinit(). The server calls on_init after every required capability has
+  // been populated and on_deinit before depopulating them, so both run with
+  // the extension's capabilities live and its system variables registered.
+  // Neither runs for a registration the server rejects. NULL when the
+  // extension declares no hook. The two are a pair: the server rejects a
+  // registration that sets one without the other.
+  //
+  // Read only when protocol >= VEF_PROTOCOL_4.
+  vef_extension_init_func_t on_init;
+  vef_extension_deinit_func_t on_deinit;
 } vef_registration_t;
 
 // The returned objects can be freed when the registration is passed to the

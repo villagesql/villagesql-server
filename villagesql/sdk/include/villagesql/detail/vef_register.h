@@ -424,15 +424,22 @@ vef_registration_t *vef_register_impl(
   reg.required_capabilities =
       RequiredCapabilityCount > 0 ? required_capability_reqs : nullptr;
 
-  // Run the extension-side init callback now that the extension has passed all
-  // validation and is being accepted. Placed here (not at function entry) so it
-  // never runs for a rejected extension. It runs in the extension process with
-  // no server access — see ExtensionBuilder::on_init(). Guarded by has_init_fn
-  // so builders that predate these hooks still compile.
+  // Hand the extension-side init / deinit callbacks to the server rather than
+  // running them here. The server calls on_init once every required capability
+  // is populated, and on_deinit before it depopulates them, so both see live
+  // capabilities and registered system variables — none of which exist yet at
+  // this point. Guarded by has_init_fn so builders that predate these hooks
+  // still compile.
   if constexpr (has_init_fn<Ext>::value) {
-    if constexpr (Ext::kInitFn != nullptr) {
-      Ext::kInitFn();
-    }
+    // The hooks are registered as a pair. A lone on_deinit tears down setup
+    // that never happened, and a lone on_init is usually a forgotten teardown;
+    // an extension that genuinely needs no teardown can register an empty
+    // on_deinit and say so.
+    static_assert((Ext::kInitFn == nullptr) == (Ext::kDeinitFn == nullptr),
+                  "on_init() and on_deinit() must be registered together; "
+                  "register the missing one, empty if it has no work to do");
+    reg.on_init = Ext::kInitFn;
+    reg.on_deinit = Ext::kDeinitFn;
   }
 
   initialized = true;
