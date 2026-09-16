@@ -9,6 +9,6 @@ root = true
 
 # For shfmt
 [*.sh]
-# like -i=4
-indent_style = tab
-indent_size = 4
+# like -i=2
+indent_style = space
+indent_size = 2

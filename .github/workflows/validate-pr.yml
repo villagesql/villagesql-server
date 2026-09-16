@@ -85,6 +85,9 @@ jobs:
       # output and we must force everyone onto the same build.
       run: pip install "clang-format==$(./scripts/villint.sh --clang-format-version).*"
 
+    - name: Install shfmt
+      run: go install "mvdan.cc/sh/v3/cmd/shfmt@$(./scripts/villint.sh --shfmt-version)"
+
     - name: Run villint linter
       run: |
         ./scripts/villint.sh --commit "$VILLINT_COMMIT"
