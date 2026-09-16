@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -104,6 +105,7 @@
 #include "sql/sql_optimizer.h"  // substitute_gc
 #include "sql/sql_partition.h"  // partition_key_modified
 #include "sql/sql_resolver.h"   // setup_order
+#include "sql/sql_returning.h"
 #include "sql/sql_select.h"
 #include "sql/sql_tmp_table.h"  // create_tmp_table
 #include "sql/sql_view.h"       // check_key_in_view
@@ -129,7 +131,9 @@ bool Sql_cmd_update::precheck(THD *thd) {
   DBUG_TRACE;
 
   if (!multitable) {
-    if (check_one_table_access(thd, UPDATE_ACL, lex->query_tables)) return true;
+    ulong privilege = UPDATE_ACL;
+    if (returning_fields != nullptr) privilege |= SELECT_ACL;
+    if (check_one_table_access(thd, privilege, lex->query_tables)) return true;
   } else {
     /*
       Ensure that we have UPDATE or SELECT privilege for each table
@@ -215,6 +219,9 @@ bool Sql_cmd_update::check_privileges(THD *thd) {
   if (check_privileges_for_list(thd, original_fields, UPDATE_ACL)) return true;
 
   if (check_privileges_for_list(thd, *update_value_list, SELECT_ACL))
+    return true;
+  if (returning_fields != nullptr &&
+      check_privileges_for_list(thd, *returning_fields, SELECT_ACL))
     return true;
 
   for (ORDER *order = select->order_list.first; order; order = order->next) {
@@ -400,6 +407,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
 
   ha_rows limit = unit->select_limit_cnt;
   const bool using_limit = limit != HA_POS_ERROR;
+  Query_result_returning *returning = this->returning();
 
   if (limit == 0 && thd->lex->is_explain()) {
     Modification_plan plan(thd, MT_UPDATE, table, "LIMIT is zero", true, 0);
@@ -488,6 +496,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
             explain_single_table_modification(thd, thd, &plan, query_block);
         return err;
       }
+      if (returning != nullptr) return returning->send_empty(thd);
       my_ok(thd);
       return false;
     }
@@ -544,6 +553,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       char buff[MYSQL_ERRMSG_SIZE];
       snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), 0L, 0L,
                (long)thd->get_stmt_da()->current_statement_cond_count());
+      if (returning != nullptr) return returning->send_empty(thd);
       my_ok(thd, 0, 0, buff);
 
       DBUG_PRINT("info", ("0 records updated"));
@@ -644,6 +654,8 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           explain_single_table_modification(thd, thd, &plan, query_block);
       return err;
     }
+
+    if (returning != nullptr && returning->send_metadata(thd)) return true;
 
     if (thd->lex->is_ignore()) table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
 
@@ -852,7 +864,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     /// read_removal is only used by NDB storage engine
     bool read_removal = false;
 
-    if (has_after_triggers) {
+    if (has_after_triggers || returning_fields != nullptr) {
       /*
         The table has AFTER UPDATE triggers that might access to subject
         table and therefore might need update to be done immediately.
@@ -865,8 +877,9 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       will_batch = !table->file->start_bulk_update();
     }
     if ((table->file->ha_table_flags() & HA_READ_BEFORE_WRITE_REMOVAL) &&
-        !thd->lex->is_ignore() && !using_limit && !has_update_triggers &&
-        range_scan && ::used_index(range_scan) != MAX_KEY &&
+        returning_fields == nullptr && !thd->lex->is_ignore() && !using_limit &&
+        !has_update_triggers && range_scan &&
+        ::used_index(range_scan) != MAX_KEY &&
         check_constant_expressions(*update_value_list))
       read_removal = table->check_read_removal(::used_index(range_scan));
 
@@ -1011,6 +1024,13 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           // The error can have been downgraded to warning by IGNORE.
           if (thd->is_error()) break;
         }
+      }
+
+      // RETURNING: emit the updated row (this UPDATE path applies the change
+      // in place before this point).
+      if (!error && returning != nullptr && returning->send_row(thd)) {
+        error = 1;
+        break;
       }
 
       if (!error && has_after_triggers &&
@@ -1167,11 +1187,15 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+    if (returning != nullptr) {
+      if (returning->send_count_eof(thd, updated_rows)) return true;
+    } else {
+      my_ok(thd,
+            thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                ? found_rows
+                : updated_rows,
+            id, buff);
+    }
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -1554,15 +1578,33 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
   // enables it to perform optimizations like sort avoidance and semi-join
   // flattening even if features specific to single-table UPDATE (that is, ORDER
   // BY and LIMIT) are used.
-  if (lex->using_hypergraph_optimizer()) {
+  // TODO(villagesql): RETURNING is only wired into the single-table executor
+  // (update_single_table), so we pin RETURNING statements to it by suppressing
+  // this promotion. As a result UPDATE ... RETURNING silently runs on the
+  // legacy optimizer instead of hypergraph, with no warning. Wire RETURNING
+  // into Query_result_update so the hypergraph path can emit it, then drop the
+  // returning_fields guard here.
+  if (returning_fields == nullptr && lex->using_hypergraph_optimizer()) {
     multitable = true;
   }
 
-  if (!multitable && select->first_inner_query_expression() != nullptr &&
+  // TODO(villagesql): same as above, but for subquery-driven promotion: pinning
+  // RETURNING to the single-table path silently skips semi-join flattening for
+  // UPDATE ... RETURNING whose WHERE has an eligible IN/EXISTS subquery. Lift
+  // once RETURNING rides the multi-table path.
+  if (returning_fields == nullptr && !multitable &&
+      select->first_inner_query_expression() != nullptr &&
       should_switch_to_multi_table_if_subqueries(thd, select, table_list))
     multitable = true;
 
   if (multitable) select->set_sj_candidates(&sj_candidates_local);
+
+  // A multi-table UPDATE ... RETURNING is supported only when exactly one table
+  // is updated (the row image and joined buffers are then available on the
+  // immediate-update path; see the emit site in UpdateRowsIterator). The
+  // single-updated-table check needs tables_for_update, which is computed
+  // below, so the "more than one updated table" rejection lives there. Here we
+  // can only observe that RETURNING rides the multi-table executor.
 
   if (select->leaf_table_count >= 2 &&
       setup_natural_join_row_types(thd, select->m_current_table_nest,
@@ -1617,6 +1659,16 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
   const int update_table_count_local = std::popcount(tables_for_update);
 
   assert(update_table_count_local > 0);
+
+  // RETURNING is meaningful for a single updated table only: with more than one
+  // updated table the returned row would span tables and the deferred updates
+  // read joined buffers that are no longer populated. (Single-table UPDATEs run
+  // the non-multitable executor and never reach here.)
+  if (returning_fields != nullptr && update_table_count_local > 1) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "UPDATE ... RETURNING with multiple updated tables");
+    return true;
+  }
 
   /*
     Some tables may be marked for update, even though they have no columns
@@ -1780,11 +1832,36 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
 
   assert(select->having_cond() == nullptr && select->group_list.elements == 0);
 
+  Query_result_returning *returning_result = nullptr;
+  if (returning_fields != nullptr) {
+    if (prepare_returning_fields(thd, select, returning_fields,
+                                 &returning_result, returning_into))
+      return true;
+    if (multitable) {
+      // The multi-table executor keeps Query_result_update as its sink; the
+      // RETURNING result rides alongside it and is fed from the
+      // immediate-update path. Single-table UPDATE replaces the sink outright.
+      down_cast<Query_result_update *>(result)->set_returning(returning_result);
+    } else {
+      result = returning_result;
+    }
+  }
+
   if (select->has_ft_funcs() && setup_ftfuncs(thd, select))
     return true; /* purecov: inspected */
 
+  // The executor sink (single-table RETURNING result, or the
+  // Query_result_update for multi-table) is prepared over select->fields; a
+  // separate RETURNING result for multi-table is prepared over its own
+  // returning_fields deque.
   if (select->query_result() &&
       select->query_result()->prepare(thd, select->fields, lex->unit))
+    return true; /* purecov: inspected */
+  if (!multitable && returning_fields != nullptr &&
+      result->prepare(thd, *returning_fields, lex->unit))
+    return true; /* purecov: inspected */
+  if (multitable && returning_result != nullptr &&
+      returning_result->prepare(thd, *returning_fields, lex->unit))
     return true; /* purecov: inspected */
 
   Opt_trace_array trace_steps(trace, "steps");
@@ -1820,6 +1897,7 @@ bool Sql_cmd_update::execute_inner(THD *thd) {
       return explain_single_table_modification(thd, thd, &plan,
                                                lex->query_block);
     }
+    if (Query_result_returning *ret = returning()) return ret->send_empty(thd);
     my_ok(thd);
     return false;
   }
@@ -2242,6 +2320,26 @@ bool Query_result_update::optimize() {
     table_to_update = nullptr;
   }
 
+  // RETURNING with a buffered (not on-the-fly) update is emitted from the
+  // collection pass in DoImmediateUpdatesAndBufferRowIds(), where the joined
+  // buffers and the updated table's pre-image are still live and the new image
+  // is built transiently into record[0]. That transient fill cannot run the
+  // table's UPDATE triggers (the real update is deferred), so RETURNING would
+  // observe pre-trigger values. Reject that combination rather than return
+  // values inconsistent with the eventual row. The immediate path has no such
+  // restriction (it fills and fires triggers before emitting).
+  if (m_returning != nullptr && table_to_update == nullptr) {
+    for (Table_ref *tr = update_tables; tr != nullptr; tr = tr->next_local) {
+      if (tr->table != nullptr && tr->table->triggers != nullptr &&
+          tr->table->triggers->has_update_triggers()) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "UPDATE ... RETURNING on a buffered update of a table with "
+                 "UPDATE triggers");
+        return true;
+      }
+    }
+  }
+
   if (prepare_partial_update(&thd->opt_trace, *fields, *values))
     return true; /* purecov: inspected */
 
@@ -2385,6 +2483,9 @@ bool Query_result_update::optimize() {
 bool Query_result_update::start_execution(THD *thd) {
   thd->check_for_truncated_fields = CHECK_FIELD_WARN;
   thd->num_truncated_fields = 0L;
+  // Send the RETURNING result-set metadata before rows start flowing. In the
+  // INTO-JSON case send_metadata() is a no-op (there is no client result set).
+  if (m_returning != nullptr && m_returning->send_metadata(thd)) return true;
   return false;
 }
 
@@ -2535,6 +2636,12 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
           table->triggers->process_triggers(thd(), TRG_EVENT_UPDATE,
                                             TRG_ACTION_AFTER, true))
         return true;
+      // Emit the RETURNING row for the immediate (single-target) table. The
+      // updated image is live in record[0], the pre-update image in record[1]
+      // (for OLD_VALUE()), and every joined table's buffer is still populated
+      // because this runs inside the join's nested loop for the current row.
+      if (!error && m_returning != nullptr && m_returning->send_row(thd()))
+        return true;
     } else {
       int error;
       TABLE *tmp_table = m_tmp_tables[offset];
@@ -2571,6 +2678,29 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
       // check if a record exists with the same hash value
       if (!check_unique_fields(tmp_table))
         return false;  // skip adding duplicate record to the temp table
+
+      // Emit the RETURNING row for the buffered (inner) updated table. The
+      // update itself is deferred to DoDelayedUpdates(), but everything
+      // RETURNING needs is live right here: the joined tables' buffers (this
+      // runs inside the join's nested loop), the pre-update image of the
+      // updated table, and the computed new values. We transiently build the
+      // new image into record[0] to emit, then restore record[0] so the
+      // deferred apply pass -- which re-reads the row by rowid -- is
+      // unaffected. Buffered RETURNING is only reached for a single updated
+      // table with no UPDATE triggers (enforced at prepare), so a trigger-free
+      // fill is safe.
+      if (m_returning != nullptr) {
+        store_record(table, record[1]);  // pre-update image, for OLD_VALUE()
+        if (fill_record(thd(), table, *m_fields_for_table[offset],
+                        *m_values_for_table[offset], nullptr, nullptr,
+                        /*check_constraints=*/false)) {
+          restore_record(table, record[1]);
+          return true;
+        }
+        const bool emit_error = m_returning->send_row(thd());
+        restore_record(table, record[1]);  // undo the transient new image
+        if (emit_error) return true;
+      }
 
       /* Write row, ignoring duplicated updates to a row */
       error = tmp_table->file->ha_write_row(tmp_table->record[0]);
@@ -2956,6 +3086,12 @@ bool Query_result_update::send_eof(THD *thd) {
   const ha_rows found_rows = iterator->found_rows();
   const ha_rows updated_rows = iterator->updated_rows();
 
+  // RETURNING: close the result set (or, for INTO JSON, assign the captured
+  // array and send a plain OK) reporting the updated-row count, instead of the
+  // multi-table update-info OK packet.
+  if (m_returning != nullptr)
+    return finish_returning_or_ok(thd, m_returning, updated_rows);
+
   snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
            (long)updated_rows,
            (long)thd->get_stmt_da()->current_statement_cond_count());
@@ -3053,7 +3189,7 @@ UpdateRowsIterator::UpdateRowsIterator(
     List<TABLE> unupdated_check_opt_tables, COPY_INFO **update_operations,
     mem_root_deque<Item *> **fields_for_table,
     mem_root_deque<Item *> **values_for_table,
-    table_map tables_with_rowid_in_buffer)
+    table_map tables_with_rowid_in_buffer, Query_result_returning *returning)
     : RowIterator(thd),
       m_source(std::move(source)),
       m_outermost_table(outermost_table),
@@ -3065,7 +3201,8 @@ UpdateRowsIterator::UpdateRowsIterator(
       m_update_operations(update_operations),
       m_fields_for_table(fields_for_table),
       m_values_for_table(values_for_table),
-      m_hash_join_tables(tables_with_rowid_in_buffer) {}
+      m_hash_join_tables(tables_with_rowid_in_buffer),
+      m_returning(returning) {}
 
 unique_ptr_destroy_only<RowIterator> CreateUpdateRowsIterator(
     THD *thd, MEM_ROOT *mem_root, JOIN *join,
@@ -3083,5 +3220,6 @@ unique_ptr_destroy_only<RowIterator> Query_result_update::create_iterator(
       // The old optimizer does not use hash join in UPDATE statements.
       thd->lex->using_hypergraph_optimizer()
           ? GetHashJoinTables(unit->root_access_path())
-          : 0);
+          : 0,
+      m_returning);
 }
