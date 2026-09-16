@@ -33,6 +33,13 @@ SET(VILLAGESQL_UNIT_TESTS
   victionary_client-t
 )
 
+# Memcheck runs these 20-50x slower, well past the normal 300s budget.
+IF(WITH_VALGRIND)
+  SET(VILLAGESQL_TEST_TIMEOUT 3000)
+ELSE()
+  SET(VILLAGESQL_TEST_TIMEOUT 300)
+ENDIF()
+
 # Helper macro to add VillageSQL unit tests
 # Note: We use a custom villagesql_test_main.cc instead of gunit_small to avoid
 # duplicate symbol issues with system_charset_info on macOS. The macOS dynamic
@@ -70,7 +77,7 @@ MACRO(ADD_VILLAGESQL_TEST test_name)
 
   # Set test properties for CTest
   SET_TESTS_PROPERTIES(${test_name} PROPERTIES
-    TIMEOUT 300
+    TIMEOUT ${VILLAGESQL_TEST_TIMEOUT}
     LABELS "villagesql"
   )
 ENDMACRO()
