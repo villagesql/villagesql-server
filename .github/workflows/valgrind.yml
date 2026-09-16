@@ -40,6 +40,10 @@ on:
         description: 'Extra valgrind options, space separated (e.g. --show-reachable=no)'
         required: false
         default: ''
+      max-parallel:
+        description: 'Cap on mysql-test-run workers (each one runs mysqld and mysqltest under valgrind)'
+        required: false
+        default: '8'
 
 jobs:
   valgrind-test:
@@ -52,6 +56,12 @@ jobs:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
       REQUEST_REF: ${{ inputs.ref }}
+      # test_ci.sh passes --parallel=auto, which resolves to the runner's CPU
+      # count. That is far too many valgrind'd servers to run at once: they
+      # starve each other badly enough that shutdown_server exceeds its 60s
+      # timeout and tests fail for reasons unrelated to what they check.
+      # mysql-test-run caps 'auto' at MTR_MAX_PARALLEL.
+      MTR_MAX_PARALLEL: ${{ inputs.max-parallel || '8' }}
 
     steps:
     - name: Checkout code
