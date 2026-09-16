@@ -174,10 +174,12 @@ if [ "$RUN_UNIT_TESTS" = "true" ]; then
 
   # --error-exitcode makes valgrind fail the test process itself, so ctest's
   # exit code reflects memcheck defects. Its own defect counter does not.
+  # --errors-for-leak-kinds matches mysql-test-run.pl: "possibly lost" is
+  # normal for mysys interior pointers and the unflushed buffered log sink.
   if [ "$RUN_VALGRIND" = "true" ]; then
     CTEST_ARGS+=(-T memcheck
       --overwrite "MemoryCheckCommand=${VALGRIND_BIN}"
-      --overwrite "MemoryCheckCommandOptions=--tool=memcheck --leak-check=full --track-origins=yes --num-callers=16 --error-exitcode=1")
+      --overwrite "MemoryCheckCommandOptions=--tool=memcheck --leak-check=full --errors-for-leak-kinds=definite,indirect --track-origins=yes --num-callers=16 --error-exitcode=1")
     if [ -n "$VALGRIND_SUPP" ]; then
       CTEST_ARGS+=(--overwrite "MemoryCheckSuppressionFile=${VALGRIND_SUPP}")
     fi
