@@ -1786,9 +1786,8 @@
    Memcheck:Leak
    match-leak-kinds: possible
    fun:malloc
-   fun:_ZL13my_raw_mallocmi
-   fun:_Z9my_mallocjmi
-   fun:_ZL17my_openssl_mallocm
+   ...
+   fun:*my_openssl_malloc*
    fun:CRYPTO_malloc
    ...
 }
