@@ -1,6 +1,21 @@
 name: Valgrind Tests
 
-# Manual workflow for running tests with Valgrind memory checking
+# Build + test run under Valgrind memcheck, on Linux. Off one -DWITH_VALGRIND=1
+# build it runs:
+#   - the VillageSQL unit tests (via ctest -T memcheck), and
+#   - the VillageSQL mysql-test suite (via --valgrind).
+#
+# WITH_VALGRIND=1 is what enables the MEM_MALLOCLIKE_BLOCK / MEM_UNDEFINED /
+# MEM_NOACCESS client requests in include/memory_debugging.h and InnoDB's
+# UNIV_DEBUG_VALGRIND paths, so memcheck sees MEM_ROOT and buffer-pool
+# sub-allocations at the right granularity. That is why this needs its own
+# build and cannot share the normal nightly one.
+#
+# Note on flags: this uses --valgrind (all executables), not
+# --valgrind-mysqld. mysql-test-run.pl escalates to all-executables as soon as
+# any --valgrind-option is given, and only that branch scales the start and
+# suite timeouts that mysqld needs under memcheck.
+#
 # Trigger via:
 #   - Actions tab -> Run workflow
 #   - gh workflow run "Valgrind Tests"
@@ -13,11 +28,16 @@ on:
         required: false
         default: ''
       test-suite:
-        description: 'Test suite to run (e.g., villagesql/select, villagesql, innodb)'
+        description: 'Test suite to run (e.g., villagesql/select, village, innodb)'
         required: false
-        default: 'villagesql/select'
+        default: 'village'
+      run-unit-tests:
+        description: 'Run the VillageSQL unit tests under memcheck'
+        required: false
+        type: boolean
+        default: true
       valgrind-options:
-        description: 'Additional valgrind options (e.g., --leak-check=full)'
+        description: 'Extra valgrind options, space separated (e.g. --show-reachable=no)'
         required: false
         default: ''
 
@@ -31,12 +51,13 @@ jobs:
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
+      REQUEST_REF: ${{ inputs.ref }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
-        ref: ${{ inputs.ref || github.ref }}
+        ref: ${{ env.REQUEST_REF }}
         fetch-depth: 50
         path: source
 
@@ -52,10 +73,24 @@ jobs:
         BUILD_TYPE: debug
         CMAKE_EXTRA_FLAGS: -DWITH_VALGRIND=1
 
+    # Each option is handed to mysql-test-run.pl as --valgrind-option=<opt> so
+    # it reaches valgrind rather than being parsed as an MTR flag.
+    - name: Compose extra valgrind options
+      id: vg
+      env:
+        VG_OPTS: ${{ inputs.valgrind-options }}
+      run: |
+        EXTRA=""
+        for opt in $VG_OPTS; do
+          EXTRA="$EXTRA --valgrind-option=$opt"
+        done
+        echo "extra=$EXTRA" >> "$GITHUB_OUTPUT"
+
     - name: Run Valgrind tests
       uses: ./source/.github/actions/run-tests
       with:
-        run-unit-tests: false
+        run-unit-tests: ${{ inputs.run-unit-tests }}
         test-suite: ${{ inputs.test-suite }}
-        mysql-test-extra-flags: --valgrind ${{ inputs.valgrind-options }}
+        valgrind: 'true'
+        mysql-test-extra-flags: ${{ steps.vg.outputs.extra }}
         artifact-name: valgrind-logs-${{ github.run_number }}
