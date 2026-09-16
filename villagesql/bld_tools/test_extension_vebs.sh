@@ -18,8 +18,11 @@
 # source tree while tests run, then removed on exit.
 #
 # Env vars:
-#   MTR_EXTRA_FLAGS - additional mysql-test-run.pl flags appended verbatim
-#                     (e.g. --sanitize for a sanitized build).
+#   MTR_EXTRA_FLAGS  - additional mysql-test-run.pl flags appended verbatim
+#                      (e.g. --sanitize for a sanitized build, or
+#                      --valgrind for a WITH_VALGRIND=1 build).
+#   MTR_MAX_PARALLEL - cap on MTR workers. Read by mysql-test-run.pl itself;
+#                      set it when each worker is expensive (valgrind).
 
 set -e
 
@@ -71,12 +74,14 @@ if [[ -z "$SUITES" ]]; then
 fi
 
 log_step "Running extension MTR suites: $SUITES"
-NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
 
+# 'auto' rather than a literal core count: mysql-test-run.pl resolves auto to
+# the CPU count and only then applies the MTR_MAX_PARALLEL cap. A literal
+# bypasses that cap, which matters when every worker runs mysqld under valgrind.
 MTR_FLAGS=(
     "--suite=$SUITES"
     "--nounit-tests"
-    "--parallel=$NCORES"
+    "--parallel=auto"
     "--force"
     "--retry=0"
 )
