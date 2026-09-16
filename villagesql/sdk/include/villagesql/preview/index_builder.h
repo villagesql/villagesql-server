@@ -1190,6 +1190,8 @@ class IndexProfileBuilder {
   }
 
   // When true, this profile is used if no profile is named at CREATE INDEX.
+  // At most one profile may be the default for a given (data type, index type)
+  // pair; an extension that declares two is rejected at registration.
   IndexProfileBuilder &default_for_type(bool is_default) {
     desc_.default_for_type = is_default;
     return *this;
