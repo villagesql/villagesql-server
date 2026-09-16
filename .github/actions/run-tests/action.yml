@@ -116,7 +116,7 @@ runs:
         echo "unstable test cases: $count"
         echo "count=$count" >> "$GITHUB_OUTPUT"
 
-    # Provide XML reportas a single artifact (<2MB) for easier download and inspection.
+    # Provide XML report as a single artifact (<2MB) for easier download and inspection.
     - name: Upload the MTR XML report
       if: failure() || steps.unstable.outputs.count != '0'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
