@@ -170,19 +170,20 @@ cd "$BUILD_DIR"
 # Run VillageSQL unit tests
 if [ "$RUN_UNIT_TESTS" = "true" ]; then
   echo "=== Running VillageSQL Unit Tests ==="
+  CTEST_ARGS=(-L villagesql --output-on-failure)
+
+  # --error-exitcode makes valgrind fail the test process itself, so ctest's
+  # exit code reflects memcheck defects. Its own defect counter does not.
   if [ "$RUN_VALGRIND" = "true" ]; then
-    # --error-exitcode makes valgrind fail the test process itself, so ctest's
-    # exit code reflects memcheck defects. Its own defect counter does not.
-    CTEST_VG_ARGS=(-L villagesql --output-on-failure -T memcheck
+    CTEST_ARGS+=(-T memcheck
       --overwrite "MemoryCheckCommand=${VALGRIND_BIN}"
       --overwrite "MemoryCheckCommandOptions=--tool=memcheck --leak-check=full --track-origins=yes --num-callers=16 --error-exitcode=1")
     if [ -n "$VALGRIND_SUPP" ]; then
-      CTEST_VG_ARGS+=(--overwrite "MemoryCheckSuppressionFile=${VALGRIND_SUPP}")
+      CTEST_ARGS+=(--overwrite "MemoryCheckSuppressionFile=${VALGRIND_SUPP}")
     fi
-    ctest "${CTEST_VG_ARGS[@]}"
-  else
-    ctest -L villagesql --output-on-failure
   fi
+
+  ctest "${CTEST_ARGS[@]}"
 fi
 
 # Run VillageSQL integration tests
