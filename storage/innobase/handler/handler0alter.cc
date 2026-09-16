@@ -2762,6 +2762,7 @@ static void innobase_create_index_def(const TABLE *altered_table,
     index_def->m_fields[0].m_col_no = key->key_part[0].fieldnr - num_v;
     index_def->m_fields[0].m_prefix_len = 0;
     index_def->m_fields[0].m_is_v_col = false;
+    index_def->m_fields[0].m_custom_index_profile = nullptr;
 
     /* Currently only ascending order is supported in spatial
     index. */
@@ -3186,8 +3187,6 @@ index for FTS index */
     index_def->m_fields->m_prefix_len = 0;
     index_def->m_fields->m_is_ascending = true;
     index_def->m_fields->m_is_v_col = false;
-    // The field is allocated from the heap, so its member initializers never
-    // run; the FTS_DOC_ID index is never a custom index.
     index_def->m_fields->m_custom_index_profile = nullptr;
     index_def->m_ind_type = DICT_UNIQUE;
     ut_ad(!rebuild || !add_fts_doc_id ||

@@ -6150,8 +6150,6 @@ dberr_t row_count_rtree_recs(
 
       dfield->type.mtype = DATA_GEOMETRY;
       dfield->type.prtype |= DATA_GIS_MBR;
-      // Hand-built type, so extended_storage needs an explicit reset; an MBR
-      // is always inline.
       dfield->type.extended_storage = 0;
 
       /* Allocate memory for mbr field */

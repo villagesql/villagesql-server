@@ -713,8 +713,6 @@ void KEY_PART_INFO::init_from_field(Field *fld) {
   length = (uint16)field->key_length();
   store_length = length;
   key_part_flag = 0;
-  // Callers that build key parts in raw memory (multi_alloc_root in
-  // sql_tmp_table.cc) never run the member initializer, so reset it here.
   custom_index_profile = nullptr;
 
   if (field->is_nullable()) store_length += HA_KEY_NULL_LENGTH;
