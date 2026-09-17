@@ -147,3 +147,7 @@ engines/rr_trx.rr_sc_sum_total : BUG#0 Stress-only suite, not standalone MTR tes
 engines/rr_trx.rr_u_10-19 : BUG#0 Stress-only suite, not standalone MTR tests
 engines/rr_trx.rr_u_10-19_nolimit : BUG#0 Stress-only suite, not standalone MTR tests
 engines/rr_trx.rr_u_4 : BUG#0 Stress-only suite, not standalone MTR tests
+
+# Disable tests known to be unreliable to VillageSQL.
+# Drop these test exclusions and retry them on track branch merges and releases.
+@import disabled-vsql-mysql-8.4.10.def
