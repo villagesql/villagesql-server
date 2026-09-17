@@ -88,7 +88,7 @@ jobs:
     - name: Install shfmt
       run: |
         go install "mvdan.cc/sh/v3/cmd/shfmt@$(./scripts/villint.sh --shfmt-version)"
-        export PATH="$PATH:~/go/bin/"
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
     - name: Run villint linter
       run: |
