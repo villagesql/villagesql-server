@@ -98,10 +98,10 @@ below installs all of them.
 
    ```bash
    # Standard build
-   cmake "$HOME/villagesql-server" -DWITH_SSL=system
+   cmake "$HOME/villagesql-server"
 
    # Or for a debug build (recommended for development)
-   cmake "$HOME/villagesql-server" -DWITH_DEBUG=1 -DWITH_SSL=system
+   cmake "$HOME/villagesql-server" -DWITH_DEBUG=1
    ```
 
 5. **Build:**
@@ -142,7 +142,7 @@ below installs all of them.
    bin/mysqld --user=root --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
    ```
 
-   *Note: `--initialize-insecure` creates a root user with no password for development. The `--gdb` flag installs a signal handler that allows you to Ctrl-C to quit the server. For production, use `--initialize` instead (generates a temporary password) and refer to [MySQL 8.4 initialization documentation](https://dev.mysql.com/doc/refman/8.4/en/data-directory-initialization.html) for secure setup.*
+   *Note: `--initialize-insecure` creates a root user with no password for development. The `--gdb` flag unblocks `SIGINT` so you can Ctrl-C to quit the server; it also suppresses the crash backtrace and cancels `--core-file`. For production, use `--initialize` instead (generates a temporary password) and refer to [MySQL 8.4 initialization documentation](https://dev.mysql.com/doc/refman/8.4/en/data-directory-initialization.html) for secure setup.*
 
    **Setting up users and permissions:**
    ```sql
@@ -269,7 +269,7 @@ cmake "$HOME/villagesql-server" -DWITH_SSL=/opt/homebrew/opt/openssl@3
 
 # Linux (Ubuntu/Debian)
 sudo apt-get install libssl-dev
-cmake "$HOME/villagesql-server" -DWITH_SSL=system
+cmake "$HOME/villagesql-server"
 ```
 
 **Bison version too old:**

@@ -60,10 +60,6 @@ make -j14
 rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_DEBUG=1 -DWITH_SHOW_PARSE_TREE=1
 make -j14
 
-# Maintainer build (strict warnings)
-rm CMakeCache.txt; cmake $SOURCE_HOME -DMYSQL_MAINTAINER_MODE=ON
-make -j14
-
 # macOS with specific SSL
 rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_SSL=/opt/homebrew/opt/openssl@3
 make -j14
