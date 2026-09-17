@@ -86,7 +86,9 @@ jobs:
       run: pip install "clang-format==$(./scripts/villint.sh --clang-format-version).*"
 
     - name: Install shfmt
-      run: go install "mvdan.cc/sh/v3/cmd/shfmt@$(./scripts/villint.sh --shfmt-version)"
+      run: |
+        go install "mvdan.cc/sh/v3/cmd/shfmt@$(./scripts/villint.sh --shfmt-version)"
+        export PATH="$PATH:~/go/bin/"
 
     - name: Run villint linter
       run: |
