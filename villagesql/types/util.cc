@@ -1447,7 +1447,18 @@ static bool ValidateVDFArguments(
 static bool ConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
     uint arg_count, Item **args, const vef_signature_t *signature,
-    const std::map<std::string, KnownEntry> &known_params) {
+    const std::map<std::string, KnownEntry> &known_params,
+    const std::vector<TypeParameters> &hook_arg_params) {
+  // Params a bind_and_check_types hook decided for one argument, if any. These
+  // win over TD1's collected params: the hook was asked about this exact
+  // argument, whereas known_params is only ever a sibling's answer.
+  auto params_for_arg = [&](uint i) -> const TypeParameters * {
+    if (i < hook_arg_params.size() && !hook_arg_params[i].empty()) {
+      return &hook_arg_params[i];
+    }
+    return nullptr;
+  };
+
   for (uint i = 0; i < arg_count; i++) {
     const vef_type_t &expected_type = signature->params[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
@@ -1464,21 +1475,24 @@ static bool ConvertVDFArguments(
 
     // Case 2: Arg has a TypeContext but with unknown params (e.g., from an
     // inner VDF that returned an unknown-params type). Re-acquire with the
-    // known params if available via TD1.
+    // params the hook decided for it, or failing that the ones TD1 collected.
     if (tc != nullptr && tc->is_unknown()) {
-      auto it = known_params.find(expected_qbn);
-      if (it != known_params.end()) {
+      const TypeParameters *params = params_for_arg(i);
+      if (params == nullptr) {
+        auto it = known_params.find(expected_qbn);
+        if (it != known_params.end()) params = it->second.params;
+      }
+      if (params != nullptr) {
         const TypeContext *resolved_tc = nullptr;
         if (ResolveTypeToContext(extension_name, expected_type.custom_type,
-                                 *it->second.params, *thd->mem_root,
-                                 resolved_tc)) {
+                                 *params, *thd->mem_root, resolved_tc)) {
           return true;
         }
         if (resolved_tc != nullptr) {
           args[i]->set_type_context(resolved_tc);
         }
       } else {
-        // No known params available for this type. Error.
+        // Neither the hook nor TD1 could supply params for this type.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -1491,12 +1505,17 @@ static bool ConvertVDFArguments(
     // Case 3: Arg is a constant string — implicit conversion.
     if (args[i]->type() == Item::STRING_ITEM &&
         args[i]->const_for_execution()) {
-      // Use known params from TD1 if available, otherwise empty (correct for
-      // non-parameterized types).
+      // Prefer params the hook decided for this argument; otherwise TD1's, if
+      // it collected any; otherwise empty, which is the complete and correct
+      // answer for a non-parameterized type.
       TypeParameters resolved_params;
-      auto it = known_params.find(expected_qbn);
-      if (it != known_params.end()) {
-        resolved_params = *it->second.params;
+      if (const TypeParameters *hook_params = params_for_arg(i)) {
+        resolved_params = *hook_params;
+      } else {
+        auto it = known_params.find(expected_qbn);
+        if (it != known_params.end()) {
+          resolved_params = *it->second.params;
+        }
       }
 
       const TypeContext *type_ctx = nullptr;
@@ -1558,12 +1577,147 @@ static void InferVDFReturnParams(
   }
 }
 
+// Default buffer for one canonical "k=v,k=v" params string. Real params strings
+// are far shorter (TVECTOR's "dimension=4096,type=double" is ~33 bytes); the
+// overflow flag catches anything longer rather than truncating silently.
+static constexpr size_t kBindParamsBufLen = 256;
+
+// Invokes a function's bind_and_check_types hook. Runs between the two argument
+// passes so the params it decides are what pass 2 applies.
+//
+// Fills out_arg_params[i] for each argument the hook resolved (left empty where
+// it had nothing to say) and *out_return_params for the return type. Returns
+// true on error (error already raised).
+static bool CallBindTypesHook(const vef_func_desc_t *func_desc,
+                              vef_context_t *ctx, const char *func_name,
+                              uint arg_count, Item **args,
+                              std::vector<TypeParameters> *out_arg_params,
+                              TypeParameters *out_return_params) {
+  std::vector<vef_type_t> arg_types(arg_count);
+  std::vector<char *> const_values(arg_count, nullptr);
+  std::vector<size_t> const_lengths(arg_count, 0);
+  std::vector<const char *> arg_params(arg_count, nullptr);
+  std::vector<size_t> arg_param_lengths(arg_count, 0);
+  std::vector<String> const_store(arg_count);
+
+  for (uint i = 0; i < arg_count; i++) {
+    const auto *tc = args[i]->get_type_context();
+    if (tc != nullptr) {
+      arg_types[i].id = VEF_TYPE_CUSTOM;
+      arg_types[i].custom_type = tc->type_name().c_str();
+      // Expose this argument's resolved params (canonical "k=v") so the hook
+      // can implement its own TD1/TD2 logic. The string lives on the
+      // TypeContext and stays valid for this fix_fields call.
+      if (!tc->is_unknown()) {
+        const std::string &ps = tc->parameters().str();
+        if (!ps.empty()) {
+          arg_params[i] = ps.c_str();
+          arg_param_lengths[i] = ps.size();
+        }
+      }
+    } else {
+      switch (args[i]->result_type()) {
+        case REAL_RESULT:
+          arg_types[i].id = VEF_TYPE_REAL;
+          break;
+        case INT_RESULT:
+          arg_types[i].id = VEF_TYPE_INT;
+          break;
+        default:
+          arg_types[i].id = VEF_TYPE_STRING;
+          break;
+      }
+      arg_types[i].custom_type = nullptr;
+    }
+    // Provide constant string values where available; analysis-time parameter
+    // derivation (the common case) reads them.
+    if (args[i]->const_for_execution() &&
+        arg_types[i].id == VEF_TYPE_STRING) {
+      String *v = args[i]->val_str(&const_store[i]);
+      if (v != nullptr && !args[i]->null_value) {
+        const_values[i] = const_cast<char *>(v->ptr());
+        const_lengths[i] = v->length();
+      }
+    }
+  }
+
+  // One output slot per argument, plus one for the return type.
+  std::vector<vef_inferred_type_params_t> out_args(arg_count);
+  std::vector<char> arg_bufs(arg_count * kBindParamsBufLen);
+  for (uint i = 0; i < arg_count; i++) {
+    out_args[i] = {};
+    out_args[i].buf = arg_bufs.data() + i * kBindParamsBufLen;
+    out_args[i].max_buf_len = kBindParamsBufLen;
+  }
+
+  char return_buf[kBindParamsBufLen];
+  char err_msg[VEF_MAX_ERROR_LEN] = {0};
+
+  vef_bind_types_args_t bt_args{};
+  bt_args.arg_count = arg_count;
+  bt_args.arg_types = arg_types.data();
+  bt_args.const_values = const_values.data();
+  bt_args.const_lengths = const_lengths.data();
+  bt_args.arg_params = arg_params.data();
+  bt_args.arg_param_lengths = arg_param_lengths.data();
+
+  vef_bind_types_result_t bt_result{};
+  bt_result.type = VEF_RESULT_VALUE;
+  bt_result.error_msg = err_msg;
+  bt_result.out_return_params.buf = return_buf;
+  bt_result.out_return_params.max_buf_len = sizeof(return_buf);
+  bt_result.out_arg_params = arg_count > 0 ? out_args.data() : nullptr;
+
+  func_desc->bind_and_check_types(ctx, &bt_args, &bt_result);
+
+  // Only VEF_RESULT_VALUE is success. NULL and WARNING carry no meaning when
+  // deciding a type -- there is no row to skip and no value to null out -- so
+  // reject them rather than continuing with unresolved params, which would
+  // surface far later as a failed return-type resolution.
+  // Report through ER_CANT_INITIALIZE_UDF, the same class prerun uses: both are
+  // a function's setup callback rejecting the call.
+  if (bt_result.type != VEF_RESULT_VALUE) {
+    my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name,
+             err_msg[0] ? err_msg : "bind_and_check_types failed");
+    return true;
+  }
+  if (bt_result.out_return_params.overflow) {
+    my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name,
+             "bind_and_check_types: return params buffer overflow");
+    return true;
+  }
+  if (bt_result.out_return_params.actual_len > 0 &&
+      out_return_params != nullptr) {
+    *out_return_params = TypeParameters(
+        std::string(return_buf, bt_result.out_return_params.actual_len));
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if (out_args[i].overflow) {
+      // ER_CANT_INITIALIZE_UDF takes a fixed reason string, so format the
+      // argument position into it first.
+      char reason[VEF_MAX_ERROR_LEN];
+      snprintf(reason, sizeof(reason),
+               "bind_and_check_types: params buffer overflow for argument %u",
+               i + 1);
+      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name, reason);
+      return true;
+    }
+    if (out_args[i].actual_len > 0) {
+      (*out_arg_params)[i] =
+          TypeParameters(std::string(out_args[i].buf, out_args[i].actual_len));
+    }
+  }
+  return false;
+}
+
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     std::string_view extension_name,
                                     uint arg_count, Item **args,
                                     const vef_signature_t *signature,
                                     TypeParameters *out_return_params,
-                                    bool bind_hook_owns_params) {
+                                    const vef_func_desc_t *func_desc,
+                                    vef_context_t *ctx) {
   // Varargs: skip both arg-count and per-arg type validation. The function's
   // prerun hook is responsible for inspecting arg_count and arg_types and
   // rejecting calls it does not accept. signature->params is null for a varargs
@@ -1572,25 +1726,44 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return false;
   }
 
+  // bind_and_check_types is a VEF_PROTOCOL_4 field. Gate on the descriptor's
+  // protocol (its first member, present in every protocol version) before
+  // touching the field, so extensions built against an older, smaller
+  // vef_func_desc_t are never read out of bounds.
+  const bool has_bind_hook = func_desc != nullptr &&
+                             func_desc->protocol >= VEF_PROTOCOL_4 &&
+                             func_desc->bind_and_check_types != nullptr;
+
   // A bind_and_check_types hook replaces both TD1 and TD2. Passing nullptr
-  // leaves known_params empty, which switches off TD1 in ValidateVDFArguments
-  // (which does pass 1 over the arguments) and thus collects nothing and
-  // stops enforcing sibling agreement. What pass 2 (ConvertVDFArguments) still does is not TD1
-  // -- it encodes string literals.
+  // leaves known_params empty, which is what switches TD1 off: pass 1 collects
+  // nothing and stops enforcing sibling agreement, and pass 2 has nothing of
+  // TD1's to propagate. Pass 2 still runs for its non-TD1 half -- encoding
+  // string literals and rejecting arguments that are neither a custom value nor
+  // a literal -- and for applying whatever the hook decided below.
   std::map<std::string, KnownEntry> known_params;
-  if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
-                           signature,
-                           bind_hook_owns_params ? nullptr : &known_params)) {
+  if (ValidateVDFArguments(func_name, extension_name, arg_count, args, signature,
+                           has_bind_hook ? nullptr : &known_params)) {
     return true;
+  }
+
+  // The hook sits between the passes: it sees what pass 1 resolved, and the
+  // params it decides are what pass 2 applies.
+  std::vector<TypeParameters> hook_arg_params;
+  if (has_bind_hook) {
+    hook_arg_params.resize(arg_count);
+    if (CallBindTypesHook(func_desc, ctx, func_name, arg_count, args,
+                          &hook_arg_params, out_return_params)) {
+      return true;
+    }
   }
 
   if (ConvertVDFArguments(thd, func_name, extension_name, arg_count, args,
-                          signature, known_params)) {
+                          signature, known_params, hook_arg_params)) {
     return true;
   }
 
-  // TD2's replacement: the hook computes the return type's params itself.
-  if (bind_hook_owns_params) return false;
+  // TD2's replacement: the hook already supplied the return type's params.
+  if (has_bind_hook) return false;
 
   if (out_return_params != nullptr) {
     InferVDFReturnParams(extension_name, signature, known_params,

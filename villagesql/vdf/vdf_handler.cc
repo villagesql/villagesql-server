@@ -127,26 +127,18 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     m_vdf_args.values_v1 = m_invalues_v1;
   }
 
-  // A bind_and_check_types hook (VEF_PROTOCOL_4) takes over parameter
-  // resolution for this call. Gate on the func desc's protocol (its first
-  // member, present in every protocol version) before touching the field so
-  // that extensions built against an older, smaller vef_func_desc_t are never
-  // read out of bounds.
-  const bool has_bind_hook =
-      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4 &&
-      m_udf->vdf_func_desc->bind_and_check_types != nullptr;
-
   // Validate and convert VDF arguments (custom type handling).
-  // We resolve unknown type params from sibling args by default; we then infer
-  // return type params from the args, as written into return_params. When a
-  // bind hook owns parameter resolution, the built-in TD1 sibling-agreement
-  // check and TD2 return inference are skipped (the hook does that work).
+  // We resolve unknown type params from sibling args by default, then infer
+  // return type params from the args, as written into return_params. If the
+  // function carries a bind_and_check_types hook, that call invokes it between
+  // its two argument passes and the hook supplies those params instead.
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
   villagesql::TypeParameters return_params;
   if (signature != nullptr &&
       villagesql::ValidateAndConvertVDFArguments(
           thd, m_udf->name.str, to_string_view(m_udf->extension_name),
-          arg_count, m_args, signature, &return_params, has_bind_hook)) {
+          arg_count, m_args, signature, &return_params, m_udf->vdf_func_desc,
+          &m_context)) {
     return true;
   }
 
@@ -197,100 +189,6 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
         // will receive an empty return_params, and downstream code will
         // surface the existing ambiguity error if needed.
       }
-    }
-  }
-
-  // bind_and_check_types.
-  //
-  // When the function supplies a bind_and_check_types hook it fully owns
-  // parameter resolution: TD1/TD2 were skipped above. We hand it each
-  // argument's declared type, resolved params, and any constant value, then
-  // read back the canonical "k=v,k=v" params it computes for the return type
-  // and feed them to SetVDFReturnTypeContext below. This lets the return params
-  // be a function of differing argument params -- e.g. pvec_concat(PVEC(M),
-  // PVEC(N)) -> PVEC(M+N), which TD1 (siblings must agree) and TD2 (return
-  // mirrors an arg) cannot express -- or be derived from a constant argument
-  // value -- e.g. TYPEID('user') -> typeid(prefix=user).
-  if (signature != nullptr && has_bind_hook) {
-    std::vector<vef_type_t> bt_arg_types(arg_count);
-    std::vector<char *> bt_const_values(arg_count, nullptr);
-    std::vector<size_t> bt_const_lengths(arg_count, 0);
-    std::vector<const char *> bt_arg_params(arg_count, nullptr);
-    std::vector<size_t> bt_arg_param_lengths(arg_count, 0);
-    std::vector<String> bt_const_store(arg_count);
-    for (uint i = 0; i < arg_count; i++) {
-      const auto *tc = m_args[i]->get_type_context();
-      if (tc != nullptr) {
-        bt_arg_types[i].id = VEF_TYPE_CUSTOM;
-        bt_arg_types[i].custom_type = tc->type_name().c_str();
-        // Expose this argument's resolved params (canonical "k=v") so the hook
-        // can implement its own TD1/TD2 logic. The string lives on the
-        // TypeContext and stays valid for this fix_fields call.
-        if (!tc->is_unknown()) {
-          const std::string &ps = tc->parameters().str();
-          if (!ps.empty()) {
-            bt_arg_params[i] = ps.c_str();
-            bt_arg_param_lengths[i] = ps.size();
-          }
-        }
-      } else {
-        switch (m_args[i]->result_type()) {
-          case REAL_RESULT:
-            bt_arg_types[i].id = VEF_TYPE_REAL;
-            break;
-          case INT_RESULT:
-            bt_arg_types[i].id = VEF_TYPE_INT;
-            break;
-          default:
-            bt_arg_types[i].id = VEF_TYPE_STRING;
-            break;
-        }
-        bt_arg_types[i].custom_type = nullptr;
-      }
-      // Provide constant string values where available; analysis-time
-      // parameter derivation (the common case) reads them.
-      if (m_args[i]->const_for_execution() &&
-          bt_arg_types[i].id == VEF_TYPE_STRING) {
-        String *v = m_args[i]->val_str(&bt_const_store[i]);
-        if (v != nullptr && !m_args[i]->null_value) {
-          bt_const_values[i] = const_cast<char *>(v->ptr());
-          bt_const_lengths[i] = v->length();
-        }
-      }
-    }
-
-    char params_buf[256];
-    char err_msg[VEF_MAX_ERROR_LEN] = {0};
-    vef_bind_types_args_t bt_args{};
-    bt_args.arg_count = arg_count;
-    bt_args.arg_types = bt_arg_types.data();
-    bt_args.const_values = bt_const_values.data();
-    bt_args.const_lengths = bt_const_lengths.data();
-    bt_args.arg_params = bt_arg_params.data();
-    bt_args.arg_param_lengths = bt_arg_param_lengths.data();
-
-    vef_bind_types_result_t bt_result{};
-    bt_result.type = VEF_RESULT_VALUE;
-    bt_result.error_msg = err_msg;
-    bt_result.out_return_params.buf = params_buf;
-    bt_result.out_return_params.max_buf_len = sizeof(params_buf);
-
-    m_udf->vdf_func_desc->bind_and_check_types(&m_context, &bt_args,
-                                               &bt_result);
-
-    if (bt_result.type == VEF_RESULT_ERROR) {
-      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
-               err_msg[0] ? err_msg : "bind_and_check_types failed");
-      return true;
-    }
-    if (bt_result.out_return_params.overflow) {
-      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
-               "bind_and_check_types: return params buffer overflow");
-      return true;
-    }
-    if (bt_result.out_return_params.actual_len > 0) {
-      return_params = villagesql::TypeParameters(
-          std::string(params_buf, bt_result.out_return_params.actual_len));
     }
   }
 

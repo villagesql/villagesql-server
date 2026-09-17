@@ -629,6 +629,18 @@ typedef struct {
   // sets overflow when the buffer is too small). actual_len == 0 means the
   // function leaves the return-type parameters to the default rules.
   vef_inferred_type_params_t out_return_params;
+
+  // OPTIONAL OUTPUT: per-argument type parameters, one entry per argument,
+  // following the same contract as out_return_params. The caller supplies each
+  // entry's buf/max_buf_len; the hook writes the canonical "k=v,k=v" params for
+  // any argument it wants to resolve and leaves actual_len == 0 for the rest.
+  //
+  // This is how a hook resolves an argument the server cannot -- typically a
+  // string literal bound for a parameterized type, which has no sibling to
+  // borrow parameters from once TD1 is switched off. Arguments left at 0 keep
+  // whatever the server worked out on its own, so a hook only has to fill in
+  // the ones it cares about. NULL if the server did not offer the channel.
+  vef_inferred_type_params_t *out_arg_params;
 } vef_bind_types_result_t;
 
 typedef void (*vef_bind_types_func_t)(vef_context_t *ctx,

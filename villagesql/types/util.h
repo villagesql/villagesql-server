@@ -382,18 +382,22 @@ extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 // return type (inferred from args via the rule that the return parameters are
 // the same as those matching arguements of the same abstract type).
 //
-// When bind_hook_owns_params is true the function has a bind_and_check_types
-// hook that owns parameter resolution: the built-in TD1 sibling-agreement check
-// (differing params for the same custom type) and the TD2 return-type inference
-// are skipped, leaving those to the hook. Base-type validation and constant
-// string-to-custom conversion still run. Returns false on success, true on
-// error.
+// func_desc is the calling function's descriptor (may be null). When it carries
+// a bind_and_check_types hook, that hook replaces TD1 and TD2: the sibling
+// agreement check and the return-type inference are both skipped, and the hook
+// is invoked between the two argument passes so the parameters it decides --
+// for the return type and, optionally, for individual arguments -- are what the
+// second pass applies. ctx is the VEF context passed to that hook.
+//
+// Base-type validation, constant string-to-custom conversion, and argument
+// shape checks run either way. Returns false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                            std::string_view extension_name,
                                            uint arg_count, Item **args,
                                            const vef_signature_t *signature,
                                            TypeParameters *out_return_params,
-                                           bool bind_hook_owns_params);
+                                           const vef_func_desc_t *func_desc,
+                                           vef_context_t *ctx);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.
