@@ -17,6 +17,7 @@
 #include "villagesql/veb/validate.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -73,20 +74,22 @@ std::optional<ValidatedRegistration> parse_extension_registration(
   ValidatedRegistration result;
   const vef_registration_t *reg = ext_reg.registration;
 
+  // check_vef_registration() has already established that the counts match the
+  // arrays and that every descriptor is non-NULL, named and structurally
+  // complete, so the loops below index and dereference them directly. Assert
+  // the array half of that here.
+  assert(reg == nullptr || reg->func_count == 0 || reg->funcs != nullptr);
+  assert(reg == nullptr || reg->type_count == 0 || reg->types != nullptr);
+
   if (reg != nullptr && reg->type_count > 0) {
     LogVSQL(INFORMATION_LEVEL,
             "Validating %d types from extension '%s' version '%s'",
             reg->type_count, extension_name.c_str(), extension_version.c_str());
 
     for (unsigned int i = 0; i < reg->type_count; i++) {
+      // Non-NULL, named, and with a usable max_decode_buffer_length: see the
+      // precondition in validate.h.
       const vef_type_desc_t *td = reg->types[i];
-      if (td == nullptr || td->name == nullptr) {
-        error_out = "NULL type descriptor at index " + std::to_string(i);
-        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                error_out.c_str());
-        return std::nullopt;
-      }
-
       std::string type_name(td->name);
 
       // TODO(villagesql-production): validate the characters in names coming
@@ -98,14 +101,6 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // '.' (see the TODO on TypeDescriptorKey, which tracks the escaping fix
       // separately. That is needed regardless, since the version component is
       // not validated either).
-
-      if (td->max_decode_buffer_length <= 0) {
-        error_out =
-            "type '" + type_name + "' must set max_decode_buffer_length";
-        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                error_out.c_str());
-        return std::nullopt;
-      }
 
       bool is_v4 = td->protocol >= VEF_PROTOCOL_4 &&
                    ext_reg.negotiated_protocol >= VEF_PROTOCOL_4;
@@ -152,19 +147,19 @@ std::optional<ValidatedRegistration> parse_extension_registration(
             reg->func_count, extension_name.c_str());
 
     for (unsigned int i = 0; i < reg->func_count; i++) {
+      // Non-NULL, named, and carrying a signature: see the precondition in
+      // validate.h.
       const vef_func_desc_t *func_desc = reg->funcs[i];
-      if (func_desc == nullptr || func_desc->name == nullptr) {
-        error_out = "NULL VDF descriptor at index " + std::to_string(i);
-        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                error_out.c_str());
-        return std::nullopt;
-      }
-
       std::string func_name(func_desc->name);
 
-      // clear/accumulate fields were added in PROTOCOL_3; older extensions
-      // don't initialize them so we must not read them.
-      if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
+      // clear/accumulate were added in PROTOCOL_3. Read them only when the
+      // descriptor itself declares v3+ as well as the negotiated protocol --
+      // the same logic applied above to choose a builder. A descriptor
+      // declaring an older protocol was built against a struct that ends
+      // before these fields, so reading them would read past what the
+      // extension allocated.
+      if (func_desc->protocol >= VEF_PROTOCOL_3 &&
+          ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
         bool has_clear = (func_desc->clear != nullptr);
         bool has_accumulate = (func_desc->accumulate != nullptr);
         if (has_clear != has_accumulate) {
