@@ -193,8 +193,9 @@ class VillintTestRunner:
         # "too many active changes" popups. Shared clones reference the same objects
         # but are independent repos, so VSCode doesn't see them.
         run_command(
-            ["git", "clone", "--shared", "--no-checkout", str(self.source_dir), str(self.temp_dir)],
-            cwd="/tmp",
+            ["git", "clone", "--shared", "--no-checkout", "--config", "user.name='test_user'",
+            "--config", "user.email='test_user@villagesql.com'", str(self.source_dir),
+            str(self.temp_dir)], cwd="/tmp",
         )
 
         # Checkout the resolved commit (not the ref name, see comment above)
