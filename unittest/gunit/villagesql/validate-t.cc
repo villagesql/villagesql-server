@@ -159,27 +159,13 @@ TEST_F(ValidateExtensionRegistrationTest, NullRegistrationPointer) {
   EXPECT_TRUE(result->funcs.empty());
 }
 
-// A null pointer in the types array fails with a descriptive error.
-TEST_F(ValidateExtensionRegistrationTest, NullTypeDescriptor) {
-  vef_type_desc_t *types[] = {nullptr};
-
-  vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_1;
-  reg.deprecated_extension_name = "my_ext";
-  reg.type_count = 1;
-  reg.types = types;
-
-  std::string error;
-  auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
-
-  EXPECT_FALSE(result.has_value());
-  EXPECT_NE(error.find("NULL"), std::string::npos);
-}
-
-// A type with max_decode_buffer_length <= 0 fails with a descriptive error.
-TEST_F(ValidateExtensionRegistrationTest, ZeroMaxDecodeBufferLength) {
-  vef_type_desc_t td = make_v1_type("MYTYPE", 0);
+// A protocol-1 type has no way to declare a non-fixed footprint, so a
+// persisted_length that is not positive is invalid. Downstream (the encode
+// buffer, the generated column length) only asserts this, which is nothing in
+// a release build.
+TEST_F(ValidateExtensionRegistrationTest, V1TypeWithZeroPersistedLength) {
+  vef_type_desc_t td = make_v1_type("bad_len");
+  td.persisted_length = 0;
   vef_type_desc_t *types[] = {&td};
 
   vef_registration_t reg = {};
@@ -193,8 +179,28 @@ TEST_F(ValidateExtensionRegistrationTest, ZeroMaxDecodeBufferLength) {
       make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
-  EXPECT_NE(error.find("max_decode_buffer_length"), std::string::npos);
-  EXPECT_NE(error.find("MYTYPE"), std::string::npos);
+  EXPECT_NE(error.find("bad_len"), std::string::npos) << error;
+}
+
+// -1 means "resolved later" only from protocol 3 on; a v1 type cannot resolve
+// anything, and the negative would be cast to a size_t buffer size.
+TEST_F(ValidateExtensionRegistrationTest, V1TypeWithNegativePersistedLength) {
+  vef_type_desc_t td = make_v1_type("bad_len");
+  td.persisted_length = -1;
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_1;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("bad_len"), std::string::npos) << error;
 }
 
 // The widest storage footprint a custom type may declare. A custom column is
@@ -274,24 +280,6 @@ TEST_F(ValidateExtensionRegistrationTest, PersistedLengthAtDeclaredLengthCap) {
   EXPECT_EQ(result->types.size(), 1U);
 }
 
-// A null pointer in the funcs array fails with a descriptive error.
-TEST_F(ValidateExtensionRegistrationTest, NullFuncDescriptor) {
-  vef_func_desc_t *funcs[] = {nullptr};
-
-  vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_1;
-  reg.deprecated_extension_name = "my_ext";
-  reg.func_count = 1;
-  reg.funcs = funcs;
-
-  std::string error;
-  auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
-
-  EXPECT_FALSE(result.has_value());
-  EXPECT_NE(error.find("NULL"), std::string::npos);
-}
-
 // Setting clear without accumulate (protocol 2) fails.
 TEST_F(ValidateExtensionRegistrationTest, ClearWithoutAccumulate) {
   vef_type_t ret = {VEF_TYPE_INT, nullptr};
@@ -365,6 +353,174 @@ TEST_F(ValidateExtensionRegistrationTest,
 
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->funcs.size(), 1u);
+}
+
+// A descriptor that declares protocol 1 has no clear/accumulate fields of its
+// own, even inside a protocol-3 registration, so the pairing rule must not be
+// applied to it -- the fields would be read past the struct the extension
+// built.
+TEST_F(ValidateExtensionRegistrationTest,
+       ClearWithoutAccumulateIgnoredForV1Descriptor) {
+  vef_type_t ret = {VEF_TYPE_INT, nullptr};
+  vef_signature_t sig = {0, nullptr, ret};
+  vef_func_desc_t fd = make_scalar_func("my_func", &sig);
+  ASSERT_EQ(fd.protocol, VEF_PROTOCOL_1);
+  fd.clear = stub_clear;
+  fd.accumulate = nullptr;
+  vef_func_desc_t *funcs[] = {&fd};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_3;
+  reg.deprecated_extension_name = "my_ext";
+  reg.func_count = 1;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  EXPECT_EQ(result->funcs.size(), 1u);
+}
+
+// The other half of the rule: both callbacks set is a well-formed aggregate.
+TEST_F(ValidateExtensionRegistrationTest, ClearWithAccumulateIsAccepted) {
+  vef_type_t ret = {VEF_TYPE_INT, nullptr};
+  vef_signature_t sig = {0, nullptr, ret};
+  vef_func_desc_t fd = make_scalar_func("good_agg", &sig);
+  fd.protocol = VEF_PROTOCOL_3;
+  fd.clear = stub_clear;
+  fd.accumulate = stub_accumulate;
+  vef_func_desc_t *funcs[] = {&fd};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_3;
+  reg.deprecated_extension_name = "my_ext";
+  reg.func_count = 1;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  EXPECT_EQ(result->funcs.size(), 1u);
+}
+
+// encode/decode/compare are required. Protocol 1 has no VDF-name alternative,
+// so a NULL pointer leaves the operation with no implementation; the wrappers
+// in type_function.h only assert on it, and TypeEncoder calls straight
+// through. hash stays optional.
+TEST_F(ValidateExtensionRegistrationTest, V1TypeMissingRequiredFunction) {
+  struct TestCase {
+    const char *label;
+    bool drop_encode;
+    bool drop_decode;
+    bool drop_compare;
+  };
+  const TestCase cases[] = {
+      {"encode", true, false, false},
+      {"decode", false, true, false},
+      {"compare", false, false, true},
+  };
+
+  for (const auto &tc : cases) {
+    SCOPED_TRACE(tc.label);
+
+    vef_type_desc_t td = make_v1_type("MYTYPE");
+    if (tc.drop_encode) td.encode_func = nullptr;
+    if (tc.drop_decode) td.decode_func = nullptr;
+    if (tc.drop_compare) td.compare_func = nullptr;
+    vef_type_desc_t *types[] = {&td};
+
+    vef_registration_t reg = {};
+    reg.protocol = VEF_PROTOCOL_1;
+    reg.deprecated_extension_name = "my_ext";
+    reg.type_count = 1;
+    reg.types = types;
+
+    std::string error;
+    auto result = villagesql::veb::parse_extension_registration(
+        make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+    EXPECT_FALSE(result.has_value());
+    EXPECT_NE(error.find("MYTYPE"), std::string::npos) << error;
+  }
+}
+
+// A v1 type that provides all three is unaffected; hash may stay NULL.
+TEST_F(ValidateExtensionRegistrationTest, V1TypeWithoutHashIsAccepted) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  ASSERT_EQ(td.hash_func, nullptr);
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_1;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  EXPECT_EQ(result->types.size(), 1u);
+}
+
+// From protocol 3 a required operation may come from either the function
+// pointer or a named VDF -- exactly one. Setting both was already rejected;
+// setting neither must be too.
+TEST_F(ValidateExtensionRegistrationTest, V3TypeWithNoCompareImplementation) {
+  vef_type_desc_t td = {};
+  td.protocol = VEF_PROTOCOL_3;
+  td.name = "MYTYPE";
+  td.persisted_length = 16;
+  td.max_decode_buffer_length = 256;
+  td.encode_func = stub_encode;
+  td.decode_func = stub_decode;
+  // compare_func and compare_vdf_name both left NULL.
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_3;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("MYTYPE"), std::string::npos) << error;
+}
+
+// The same type with all three pointers present still registers, and its
+// optional hash may come from neither source.
+TEST_F(ValidateExtensionRegistrationTest, V3TypeWithRawPointersIsAccepted) {
+  vef_type_desc_t td = {};
+  td.protocol = VEF_PROTOCOL_3;
+  td.name = "MYTYPE";
+  td.persisted_length = 16;
+  td.max_decode_buffer_length = 256;
+  td.encode_func = stub_encode;
+  td.decode_func = stub_decode;
+  td.compare_func = stub_compare;
+  vef_type_desc_t *types[] = {&td};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_3;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  EXPECT_EQ(result->types.size(), 1u);
 }
 
 // A v2 type whose encode_vdf_name is malformed fails validation.
