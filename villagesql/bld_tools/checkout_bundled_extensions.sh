@@ -6,7 +6,7 @@
 #
 # <ext_dir>:        Path for checked out extensions.  Should exist before calling.
 # [extension]:      Optional extension name to clone only one extension (e.g.
-#                   vsql-ai). Omit to clone every extension in the manifest.
+#                   vsql-ai). Specify "" to clone every extension in the manifest.
 # [include_unbundled]: 0/no (default) to skip bundle=false extensions, 1/yes to
 #                   clone them too. They ship with no dev server, but are still
 #                   built and tested (e.g. by the sanitizer workflow).
