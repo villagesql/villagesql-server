@@ -135,7 +135,7 @@ jobs:
             exit 1
           fi
 
-          # The tag prefix 'release/' marks a VillageSQL releaes commit.
+          # The tag prefix 'release/' marks a VillageSQL release commit.
           RELEASE_TAG="release/$VERSION"
 
           # Each tag with the prefix 'publish/' marks a codebase publication commit.
@@ -185,7 +185,7 @@ jobs:
 
   # The one job that writes to the branch. Both commits are built locally and
   # pushed together, so the branch either gains both in order or gains neither.
-  # The priviledged release role is used to bypass branch protections when
+  # The privileged release role is used to bypass branch protections when
   # pushing the two commits that close the current release and open the next
   # release.
   push:
@@ -250,20 +250,25 @@ jobs:
             "https://x-access-token:${RELEASE_KEY}@github.com/${GITHUB_REPOSITORY}.git"
 
       # A rejected push means the branch moved, which is a reason to stop,
-      # not a reason to overwrite.  The --force-with-lease=main: may not be
-      # essential but eliminates rare cases and documents the intent.
+      # not a reason to overwrite.  The lease names the head resolve read, so
+      # the push is refused unless the branch is still exactly where the
+      # release was cut from.  It may not be essential, since the two commits
+      # fast-forward that same head, but it eliminates rare cases and
+      # documents the intent.
       #
       # This step requires the release credentials to bypass branch protection.
       - name: Push to branch
         env:
           BRANCH: ${{ inputs.branch }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
           NOTES_SHA: ${{ steps.commits.outputs.notes_sha }}
           PUSH_HEAD: ${{ steps.commits.outputs.push_head }}
           VERSION: ${{ needs.resolve.outputs.version }}
           NEXT_VERSION: ${{ inputs.next_version }}
         run: |
           set -euo pipefail
-          git push origin "HEAD:refs/heads/$BRANCH" --force-with-lease=main:
+          git push origin "HEAD:refs/heads/$BRANCH" \
+            --force-with-lease="$BRANCH:$EXPECTED_SHA"
 
           {
             echo "### Pushed to \`$BRANCH\`"
@@ -332,15 +337,14 @@ jobs:
               ]
             }
 
-  # Tag the release, create the draft GitHub release, and publish the tag
-  # for the main / lastest release.
+  # Tag the release, create the draft GitHub release, and tag the commit
+  # for publication.
   release:
     name: Release and Publish
     needs: [resolve, push]
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: write  # Required to start a workflow run
 
     steps:
       # Checked out at the commit being released, so the tag, the note, and the
@@ -384,9 +388,6 @@ jobs:
             echo "$GITHUB_SERVER_URL/$GH_REPO/releases/tag/${RELEASE_TAG//\//%2F}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Release Publication
-      # Effectivly a separate job, but that would take an extra checkout
-
       # The tag prefix 'publish/' marks code base publication commits.
       - name: Push publish tag
         env:
@@ -397,6 +398,16 @@ jobs:
           git push origin "refs/tags/$PUBLISH_TAG"
           echo "Tagged $(git rev-parse --short HEAD) as $PUBLISH_TAG"
 
+  # Publish the assets from the branch used to create the release (e.g main).
+  # Uses the tag "publish/${CODE_BASE}_${VERSION}" constructed in the resolve job.
+  publish:
+    name: Publish Main Branch Assets
+    needs: [resolve, release]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # Required to start a workflow run
+
+    steps:
       # workflow_dispatch is exempt from the GITHUB_TOKEN recursion guard, so
       # the default token starts this.
       - name: Start codebase-release-dispatch
