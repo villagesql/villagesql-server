@@ -90,7 +90,7 @@ jobs:
       # it at MTR_MAX_PARALLEL, and test_extension_vebs.sh honors the same cap.
       # Each worker runs mysqld and mysqltest under valgrind, so hold it near
       # half the cores rather than letting auto take all of them.
-      MTR_MAX_PARALLEL: ${{ inputs.max-parallel || '16' }}
+      MTR_MAX_PARALLEL: ${{ inputs.max-parallel }}
 
     steps:
     - name: Checkout code
@@ -153,7 +153,7 @@ jobs:
         artifact-name: valgrind-unit-logs-${{ github.run_number }}
 
     - name: Run VillageSQL mtr suite (valgrind)
-      id: mtr
+      id: valgrind
       if: inputs.run-server-tests
       continue-on-error: true
       uses: ./source/.github/actions/run-tests
@@ -216,11 +216,11 @@ jobs:
       if: always()
       run: |
         echo "Unit tests:      ${{ steps.unit.outcome || 'skipped' }}"
-        echo "MTR suite:       ${{ steps.mtr.outcome || 'skipped' }}"
+        echo "MTR suite:       ${{ steps.valgrind.outcome || 'skipped' }}"
         echo "Extension build: ${{ steps.ext_build.outcome || 'skipped' }}"
         echo "Extension tests: ${{ steps.ext_test.outcome || 'skipped' }}"
         if [ "${{ steps.unit.outcome }}" = "failure" ] || \
-           [ "${{ steps.mtr.outcome }}" = "failure" ] || \
+           [ "${{ steps.valgrind.outcome }}" = "failure" ] || \
            [ "${{ steps.ext_build.outcome }}" = "failure" ] || \
            [ "${{ steps.ext_test.outcome }}" = "failure" ]; then
           echo "::error::One or more valgrind test phases failed; see the step logs and uploaded artifacts."
