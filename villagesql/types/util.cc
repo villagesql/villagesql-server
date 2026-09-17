@@ -1449,9 +1449,17 @@ static bool ConvertVDFArguments(
     uint arg_count, Item **args, const vef_signature_t *signature,
     const std::map<std::string, KnownEntry> &known_params,
     const std::vector<TypeParameters> &hook_arg_params) {
-  // Params a bind_and_check_types hook decided for one argument, if any. These
-  // win over TD1's collected params: the hook was asked about this exact
-  // argument, whereas known_params is only ever a sibling's answer.
+  // The two sources are alternatives, not a priority order: TD1 fills
+  // known_params when the server resolves the parameters, a bind_and_check_types
+  // hook fills hook_arg_params when it does, and the caller only ever runs one
+  // of them. They are keyed differently because of how each is decided --
+  // known_params by type name, since TD1 shares one answer across every
+  // argument of that type; hook_arg_params by argument index, since the hook is
+  // asked about each argument separately.
+  assert(known_params.empty() || hook_arg_params.empty());
+
+  // The hook's answer for one argument, or null if the hook did not supply one
+  // (either because there is no hook, or because it left this argument alone).
   auto params_for_arg = [&](uint i) -> const TypeParameters * {
     if (i < hook_arg_params.size() && !hook_arg_params[i].empty()) {
       return &hook_arg_params[i];
@@ -1474,8 +1482,9 @@ static bool ConvertVDFArguments(
     if (tc != nullptr && !tc->is_unknown()) continue;
 
     // Case 2: Arg has a TypeContext but with unknown params (e.g., from an
-    // inner VDF that returned an unknown-params type). Re-acquire with the
-    // params the hook decided for it, or failing that the ones TD1 collected.
+    // inner VDF that returned an unknown-params type). Re-acquire using
+    // whichever source is in play -- the hook's answer for this argument, or
+    // TD1's for its type.
     if (tc != nullptr && tc->is_unknown()) {
       const TypeParameters *params = params_for_arg(i);
       if (params == nullptr) {
@@ -1505,9 +1514,10 @@ static bool ConvertVDFArguments(
     // Case 3: Arg is a constant string — implicit conversion.
     if (args[i]->type() == Item::STRING_ITEM &&
         args[i]->const_for_execution()) {
-      // Prefer params the hook decided for this argument; otherwise TD1's, if
-      // it collected any; otherwise empty, which is the complete and correct
-      // answer for a non-parameterized type.
+      // Take the params from whichever source is in play -- the hook's answer
+      // for this argument, or TD1's for its type. Neither supplying any leaves
+      // them empty, which is the complete and correct answer for a
+      // non-parameterized type.
       TypeParameters resolved_params;
       if (const TypeParameters *hook_params = params_for_arg(i)) {
         resolved_params = *hook_params;
