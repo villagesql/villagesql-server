@@ -5013,7 +5013,7 @@ my_decimal *udf_handler::val_decimal(bool *null_value, my_decimal *dec_buf) {
 
   assert(is_initialized());
 
-  // TODO(villagesql-ga): Handle decimal
+  // TODO(villagesql-production): Handle decimal
 
   if (get_arguments()) {
     *null_value = true;

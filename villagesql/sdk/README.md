@@ -93,6 +93,20 @@ diff as the reference for the full set of edit sites.
 **1. Freeze the snapshot.** Stop changing `villagesql/sdk/` and copy its current
    contents to `villagesql/stable_sdk/v{M+1}/` (the new odd/stable snapshot).
    Even versions are never snapshotted, which is why there is no `stable_sdk/v2`.
+   Give the snapshot a frozen `sdk_version.h` pinned to the version at which the
+   protocol was stabilized (the same way `stable_sdk/v1` hard-codes its version
+   in the `VEF_GENERATE_ENTRY_POINTS` macro). This is the value an extension
+   sees when it builds directly against the frozen snapshot — which is exactly
+   what the `abi_v{N}` compliance tests do, so they exercise the ABI as a pinned
+   extension would. Do **not** copy the dev `sdk_version.h.in` template into the
+   snapshot.
+
+   The shipped SDK does not use that frozen value: when the SDK package is
+   built, packaging overwrites `sdk_version.h` in both `include/` and
+   `include-dev/` with one generated from the current release version (like
+   `villagesql_config`'s `@SDK_VERSION@`), so an extension built against the SDK
+   reports the release it was actually built from. The `sdk` test suite verifies
+   this by building against the freshly-built SDK package.
 
 **2. Add both enum values** to `vef_protocol_t` in
    `villagesql/sdk/include/villagesql/abi/types.h`: `VEF_PROTOCOL_{M+1}` (now

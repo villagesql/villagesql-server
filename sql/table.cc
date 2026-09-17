@@ -713,6 +713,7 @@ void KEY_PART_INFO::init_from_field(Field *fld) {
   length = (uint16)field->key_length();
   store_length = length;
   key_part_flag = 0;
+  custom_index_profile = nullptr;
 
   if (field->is_nullable()) store_length += HA_KEY_NULL_LENGTH;
   if (field->type() == MYSQL_TYPE_BLOB ||

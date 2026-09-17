@@ -14,14 +14,14 @@ jobs:
 
         # Requires area and kind labels
         - name: Validate Area
-          uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
+          uses: agilepathway/label-checker@c324842522fbd012e4f590afe3b4e591301322ed
           with:
             prefix_mode: true
             any_of: "area"
             repo_token: ${{ secrets.GITHUB_TOKEN }}
 
         - name: Validate Kind
-          uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
+          uses: agilepathway/label-checker@c324842522fbd012e4f590afe3b4e591301322ed
           with:
             prefix_mode: true
             any_of: "kind"

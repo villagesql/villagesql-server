@@ -1,0 +1,40 @@
+CALL mtr.add_suppression("Currently unknown variable 'vsql_range_clamp_test.min_setting' was read from the persisted config file.");
+CALL mtr.add_suppression("Currently unknown variable 'vsql_range_clamp_test.label' was read from the persisted config file.");
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+# Persist both variables so the server writes them to mysqld-auto.cnf
+SET PERSIST vsql_range_clamp_test.min_setting = 200;
+SET PERSIST vsql_range_clamp_test.label = 'persisted';
+SELECT @@global.vsql_range_clamp_test.min_setting;
+@@global.vsql_range_clamp_test.min_setting
+200
+SELECT @@global.vsql_range_clamp_test.label;
+@@global.vsql_range_clamp_test.label
+persisted
+SELECT vsql_range_clamp_test.last_label();
+vsql_range_clamp_test.last_label()
+persisted
+# UNINSTALL deletes the persisted values; restore the saved file so the
+# entries survive for an extension that is no longer installed
+UNINSTALL EXTENSION vsql_range_clamp_test;
+# Restart: the extension is not installed, so the persisted entries are
+# parked as unknown variables
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# Install at runtime: register_variable applies the parked values
+INSTALL EXTENSION vsql_range_clamp_test;
+# The persisted values must have reached the extension
+SELECT @@global.vsql_range_clamp_test.min_setting;
+@@global.vsql_range_clamp_test.min_setting
+200
+SELECT @@global.vsql_range_clamp_test.label;
+@@global.vsql_range_clamp_test.label
+persisted
+# ... and on_change must have fired for them
+SELECT vsql_range_clamp_test.last_label();
+vsql_range_clamp_test.last_label()
+persisted
+RESET PERSIST vsql_range_clamp_test.min_setting;
+RESET PERSIST vsql_range_clamp_test.label;
+UNINSTALL EXTENSION vsql_range_clamp_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

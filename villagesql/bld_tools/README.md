@@ -42,6 +42,7 @@ concerns helps avoid ambiguity and confusion.
 | `include_bundled_extensions.sh`  | Copy built `.veb` files into a package tree.                                                                       |
 | `package_dev_server.sh`          | Package a completed build as a dev-server tarball.                                                                 |
 | `prepare_github_release.sh`      | Create the draft GitHub release for a tag from the release note committed at it.                                   |
+| `prepare_release_notes.sh`       | Finalize a draft release note against the current HEAD and commit it.                                              |
 | `setup_build_env.sh`             | Install the build host's toolchain by dispatching to the matching per-OS script.                     |
 | `setup_linux_build_env.sh`       | Install the required apt packages on Debian/Ubuntu.                                                                |
 | `setup_macos_build_env.sh`       | Install the required Homebrew packages on macOS.                                                                   |

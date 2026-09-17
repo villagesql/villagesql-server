@@ -6150,6 +6150,7 @@ dberr_t row_count_rtree_recs(
 
       dfield->type.mtype = DATA_GEOMETRY;
       dfield->type.prtype |= DATA_GIS_MBR;
+      dfield->type.extended_storage = 0;
 
       /* Allocate memory for mbr field */
       mbr = static_cast<double *>(mem_heap_alloc(heap, DATA_MBR_LEN));
@@ -6167,6 +6168,7 @@ dberr_t row_count_rtree_recs(
 
     dfield->type.mtype = col->mtype;
     dfield->type.prtype = col->prtype;
+    dfield->type.extended_storage = col->stored_by_extn();
   }
 
   prebuilt->search_tuple = entry;

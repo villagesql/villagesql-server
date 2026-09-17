@@ -45,6 +45,10 @@ inputs:
     description: 'Additional flags to pass to mysql-test-run.pl'
     required: false
     default: ''
+  valgrind:
+    description: 'Run unit and integration tests under Valgrind memcheck (true/false)'
+    required: false
+    default: 'false'
   artifact-name:
     description: 'Name for the failure artifacts (if tests fail)'
     required: false
@@ -90,6 +94,11 @@ runs:
           CMD="$CMD --skip-suite=${{ inputs.skip-suite }}"
         fi
 
+        # Valgrind
+        if [ "${{ inputs.valgrind }}" = "true" ]; then
+          CMD="$CMD --valgrind"
+        fi
+
         # Extra flags
         if [ -n "${{ inputs.mysql-test-extra-flags }}" ]; then
           CMD="$CMD --mysql-test-extra-flags=\"${{ inputs.mysql-test-extra-flags }}\""
@@ -98,8 +107,37 @@ runs:
         echo "Running: $CMD"
         eval $CMD
 
+    # Unstable tests should be reported, but not cause the workflow to fail.
+    - name: Check for unstable tests
+      id: unstable
+      shell: bash
+      run: |
+        report="${BUILD_DIR}/mysql-test-report.xml"
+        if [ ! -f "$report" ]; then
+          echo "no MTR report at $report — nothing to check"
+          echo "count=0" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if ! count=$(xmllint --xpath 'count(//testcase[@status="unstable"])' "$report"); then
+          echo "::error::mysql-test-report.xml could not be parsed"
+          exit 1
+        fi
+        echo "unstable test cases: $count"
+        echo "count=$count" >> "$GITHUB_OUTPUT"
+
+    # Provide XML report as a single artifact (<2MB) for easier download and inspection.
+    - name: Upload the MTR XML report
+      if: failure() || steps.unstable.outputs.count != '0'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.artifact-name }}-report
+        path: ${{ env.BUILD_DIR }}/mysql-test-report.xml
+        if-no-files-found: warn
+        retention-days: 7
+
+    # Preserve full test results (often >200MB) for detailed analysis.
     - name: Upload test results and logs on failure
-      if: failure()
+      if: failure() || steps.unstable.outputs.count != '0'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ${{ inputs.artifact-name }}
@@ -109,6 +147,7 @@ runs:
           ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
           ${{ env.BUILD_DIR }}/mysql-test/var/ctest.log
           ${{ env.BUILD_DIR }}/Testing/Temporary/LastTest.log
+          ${{ env.BUILD_DIR }}/Testing/Temporary/MemoryChecker.*.log
           ${{ env.BUILD_DIR }}/CMakeCache.txt
           ${{ env.BUILD_DIR }}/CMakeFiles/CMakeError.log
           ${{ env.BUILD_DIR }}/CMakeFiles/CMakeOutput.log
