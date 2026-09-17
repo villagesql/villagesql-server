@@ -31,7 +31,7 @@ ARG GROUP_ID=1000
 ARG USER_NAME=dev_user
 ARG GROUP_NAME=dev_group
 
-COPY villagesql/bld_tools/add_non_root_docker_user.sh /tmp/
+COPY docker/dev/add_non_root_docker_user.sh /tmp/
 RUN /tmp/add_non_root_docker_user.sh && rm /tmp/add_non_root_docker_user.sh
 
 # Switch to the non-root user
