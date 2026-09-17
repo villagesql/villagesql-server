@@ -1,24 +1,2 @@
 # The lock_order.cycle test requires a server built with -DWITH_LOCK_ORDER=ON.
-#
-# The lock order tool is compile-time gated. With WITH_LOCK_ORDER=OFF (the
-# CMake default) the lock_order_* system variables in sql/sys_vars.cc are not
-# compiled in, so mysqld rejects the --lock-order-* options these tests pass
-# through their -master.opt file and aborts during startup:
-#
-#   [ERROR] [MY-000068] [Server] unknown option '--lock-order-print-txt'.
-#   [ERROR] [MY-010119] [Server] Aborting
-#
-# The test then fails with "Failed to start mysqld.1" rather than skipping,
-# and no runtime switch avoids it.
-#
-# The VillageSQL script test_ci.sh uses "--suite=all" (vs @DEFAULT_SUITES),
-# so the lock_order test gets pulled in as a candidate.
-#
-# To run these tests, configure a dedicated build and re-enable them:
-#
-#   cmake $SOURCE_HOME -DWITH_LOCK_ORDER=ON
-#   make -j$(getconf _NPROCESSORS_ONLN)
-#   ./mysql-test/mysql-test-run.pl --suite=lock_order --enable-disabled
-
-# lock_order suite tests
 lock_order.cycle : BUG#0 VillageSQL - Needs a server built with -DWITH_LOCK_ORDER=ON
