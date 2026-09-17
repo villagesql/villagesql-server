@@ -1606,8 +1606,7 @@ static bool CallBindTypesHook(const vef_func_desc_t *func_desc,
   std::vector<vef_type_t> arg_types(arg_count);
   std::vector<char *> const_values(arg_count, nullptr);
   std::vector<size_t> const_lengths(arg_count, 0);
-  std::vector<const char *> arg_params(arg_count, nullptr);
-  std::vector<size_t> arg_param_lengths(arg_count, 0);
+  std::vector<vef_type_params_t> arg_params(arg_count, vef_type_params_t{});
   std::vector<String> const_store(arg_count);
 
   for (uint i = 0; i < arg_count; i++) {
@@ -1615,15 +1614,13 @@ static bool CallBindTypesHook(const vef_func_desc_t *func_desc,
     if (tc != nullptr) {
       arg_types[i].id = VEF_TYPE_CUSTOM;
       arg_types[i].custom_type = tc->type_name().c_str();
-      // Expose this argument's resolved params (canonical "k=v") so the hook
-      // can implement its own TD1/TD2 logic. The string lives on the
-      // TypeContext and stays valid for this fix_fields call.
+      // Expose this argument's resolved params so the hook can implement its
+      // own TD1/TD2 logic. Same key/value form the row-time marshaller uses;
+      // the arrays live on the TypeContext and stay valid for this call.
       if (!tc->is_unknown()) {
-        const std::string &ps = tc->parameters().str();
-        if (!ps.empty()) {
-          arg_params[i] = ps.c_str();
-          arg_param_lengths[i] = ps.size();
-        }
+        const auto &params = tc->parameters();
+        arg_params[i] = {params.count(), params.key_data(),
+                         params.value_data()};
       }
     } else {
       switch (args[i]->result_type()) {
@@ -1669,7 +1666,6 @@ static bool CallBindTypesHook(const vef_func_desc_t *func_desc,
   bt_args.const_values = const_values.data();
   bt_args.const_lengths = const_lengths.data();
   bt_args.arg_params = arg_params.data();
-  bt_args.arg_param_lengths = arg_param_lengths.data();
 
   vef_bind_types_result_t bt_result{};
   bt_result.type = VEF_RESULT_VALUE;

@@ -447,8 +447,16 @@ void pvec_concat_bind(vef_context_t * /*ctx*/, vef_bind_types_args_t *args,
   }
   long long dims[2] = {0, 0};
   for (int i = 0; i < 2; i++) {
-    if (args->arg_params[i] == nullptr ||
-        sscanf(args->arg_params[i], "dimension=%lld", &dims[i]) != 1) {
+    const vef_type_params_t &p = args->arg_params[i];
+    bool found = false;
+    for (unsigned int k = 0; k < p.count; k++) {
+      if (strcmp(p.keys[k], "dimension") == 0) {
+        dims[i] = atoll(p.values[k]);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
       result->type = VEF_RESULT_ERROR;
       snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
                "pvec_concat: argument %d has no known dimension", i + 1);

@@ -602,17 +602,16 @@ typedef struct {
   // Array has arg_count elements.
   size_t *const_lengths;
 
-  // For each argument: the resolved type parameters as a NUL-terminated
-  // canonical "k=v,k=v" string, or NULL when the argument has no resolved
-  // params (a non-custom argument, or a custom argument whose params are not
-  // yet known). Array has arg_count elements. This is how a hook implements
-  // its own TD1/TD2 logic: it reads each custom argument's params here and
-  // derives the return type's params (e.g. concat dimension = sum of inputs).
-  const char **arg_params;
-
-  // Length of each arg_params string (excluding the NUL). Only valid where
-  // arg_params[i] != NULL. Array has arg_count elements.
-  size_t *arg_param_lengths;
+  // For each argument: its resolved type parameters, in the same key/value
+  // form used everywhere else params are passed in (see vef_invalue_t).
+  // Array has arg_count elements; an argument with no resolved params -- a
+  // non-custom argument, or a custom one whose params are not yet known --
+  // has count == 0.
+  //
+  // This is how a hook implements its own TD1/TD2 logic: it reads each custom
+  // argument's params here and derives the return type's params (e.g. concat
+  // dimension = sum of the inputs).
+  const vef_type_params_t *arg_params;
 } vef_bind_types_args_t;
 
 typedef struct {
