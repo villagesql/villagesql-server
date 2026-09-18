@@ -199,6 +199,17 @@ typedef struct {
   uint64_t read_prev;      // backward index-order walks (reverse scan)
   uint64_t read_rnd;       // reads by position (post-filesort row fetch)
   uint64_t read_rnd_next;  // next-row in a full scan (high = table scan)
+
+  // --- Added in "ver-3" ---
+
+  // Client-supplied connection attributes (session_connect_attrs), sent once by
+  // the client at handshake and constant for the connection. Each is NULL when
+  // the client did not send that attribute. Lifetime: copy before return.
+  const char *client_pid;    // client OS process id (the "_pid" attribute)
+  const char *client_name;   // connector/driver library ("_client_name"),
+                             // e.g. "libmysql", "mysql-connector-j"
+  const char *program_name;  // application name, if the client set it
+                             // ("program_name"), e.g. "mysql", "mysqldump"
 } vef_statement_event_args_t;
 
 // Writable result. For POSTEXECUTE error_msg is advisory: the server logs it
