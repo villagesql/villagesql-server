@@ -165,3 +165,6 @@ rpl_nogtid.rpl_nogtid_rollback_on_anonymous_gtid : Bug#37582501 Replication test
 
 #Daily test failures
 rpl.rpl_row_idempotency : WL#11249 old error - timeout
+
+# lock_order suite requires custom server build.  See file for the more details.
+@import disabled-lock_order.def
