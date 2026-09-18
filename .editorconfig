@@ -1,4 +1,4 @@
-# EditorConfig is awesome: https://editorconfig.org
+# https://editorconfig.org
 
 # Top-most EditorConfig file
 # When opening a file, EditorConfig plugins look for a file named .editorconfig
@@ -12,3 +12,4 @@ root = true
 # like -i=2
 indent_style = space
 indent_size = 2
+binary_next_line = true

@@ -140,21 +140,21 @@ get_ignored_patterns() {
     # silently swallowed by `2>/dev/null`, leaving no ignore directives
     # visible locally.
     local jj_range="${commit_range/..HEAD/..@}"
-    jj log -r "$jj_range" --no-graph -T description 2>/dev/null |
-      grep -i "^villint-ignore:" |
-      sed 's/^villint-ignore://i' |
-      tr ',' '\n' |
-      sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
-      grep -v '^$' |
-      sort -u
+    jj log -r "$jj_range" --no-graph -T description 2>/dev/null \
+      | grep -i "^villint-ignore:" \
+      | sed 's/^villint-ignore://i' \
+      | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+      | grep -v '^$' \
+      | sort -u
   else
-    git log "$commit_range" --format="%B" 2>/dev/null |
-      grep -i "^villint-ignore:" |
-      sed 's/^villint-ignore://i' |
-      tr ',' '\n' |
-      sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
-      grep -v '^$' |
-      sort -u
+    git log "$commit_range" --format="%B" 2>/dev/null \
+      | grep -i "^villint-ignore:" \
+      | sed 's/^villint-ignore://i' \
+      | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+      | grep -v '^$' \
+      | sort -u
   fi
 }
 
@@ -816,10 +816,10 @@ fi
 COMPACT_INDEX_ERRORS=0
 
 # Extract VSQL command names from the enum (between SQLCOM_VSQL_FIRST and SQLCOM_END)
-VSQL_COMMANDS=$(sed -n '/SQLCOM_VSQL_FIRST/,/SQLCOM_END/p' include/my_sqlcommand.h |
-  grep -oE 'SQLCOM_[A-Z_]+' |
-  grep -v 'SQLCOM_VSQL_FIRST\|SQLCOM_END\|SQLCOM_MYSQL_COUNT\|SQLCOM_COMPACT_COUNT' |
-  sort -u)
+VSQL_COMMANDS=$(sed -n '/SQLCOM_VSQL_FIRST/,/SQLCOM_END/p' include/my_sqlcommand.h \
+  | grep -oE 'SQLCOM_[A-Z_]+' \
+  | grep -v 'SQLCOM_VSQL_FIRST\|SQLCOM_END\|SQLCOM_MYSQL_COUNT\|SQLCOM_COMPACT_COUNT' \
+  | sort -u)
 
 if [ -n "$VSQL_COMMANDS" ]; then
   for file in $C_FILES; do
