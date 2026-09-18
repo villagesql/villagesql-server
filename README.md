@@ -262,14 +262,24 @@ The full roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 ### Build Failures
 
 **OpenSSL not found:**
+
+Install the OpenSSL development package. cmake locates it without any further
+configuration.
+
 ```bash
 # macOS with Homebrew
 brew install openssl@3
-cmake "$HOME/villagesql-server" -DWITH_SSL=/opt/homebrew/opt/openssl@3
 
 # Linux (Ubuntu/Debian)
 sudo apt-get install libssl-dev
-cmake "$HOME/villagesql-server"
+```
+
+On macOS you can instead name the OpenSSL directory. That builds a server which
+carries its own copy of the OpenSSL libraries, so it keeps working when Homebrew
+upgrades OpenSSL:
+
+```bash
+cmake "$HOME/villagesql-server" -DWITH_SSL="$(brew --prefix openssl@3)"
 ```
 
 **Bison version too old:**
