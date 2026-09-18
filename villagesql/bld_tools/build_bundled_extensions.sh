@@ -22,6 +22,9 @@
 #
 # Env vars:
 #   CMAKE_EXTRA_FLAGS  - additional per-extension cmake flags appended verbatim
+#   VSQL_VALGRIND      - set non-empty when the VEBs will be run under valgrind,
+#                        so an extension can drop instructions memcheck cannot
+#                        decode. Extensions that do not care simply ignore it.
 
 set -euo pipefail
 
@@ -57,6 +60,10 @@ CMAKE_FLAGS=(
     "-DCMAKE_PREFIX_PATH=$SDK_DIR"
     "-DCMAKE_BUILD_TYPE=Release"
 )
+
+if [[ -n "${VSQL_VALGRIND:-}" ]]; then
+    CMAKE_FLAGS+=("-DVSQL_VALGRIND=ON")
+fi
 
 if [[ -n "${CMAKE_EXTRA_FLAGS:-}" ]]; then
     CMAKE_FLAGS+=($CMAKE_EXTRA_FLAGS)
