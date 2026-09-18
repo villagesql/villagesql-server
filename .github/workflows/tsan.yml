@@ -1,0 +1,329 @@
+name: TSan Tests
+
+# Build + test run under ThreadSanitizer, on Linux. Off one -DWITH_TSAN=1 build
+# it runs:
+#   - the VillageSQL unit tests (instrumented at compile time),
+#   - the VillageSQL mysql-test suite (via --sanitize), and
+#   - every bundled extension: each VEB is rebuilt with -fsanitize=thread and
+#     its MTR suite is run under --sanitize.
+#
+# Each of the three is independently switchable.
+#
+# TSan instruments at compile time, so unlike the valgrind workflow the
+# extensions must be rebuilt with matching flags rather than run as shipped.
+# TSan cannot be combined with ASan, which is why this is its own build rather
+# than another phase of sanitizer.yml.
+#
+# Coverage note: mysql-test/tsan.supp (loaded automatically by --sanitize)
+# suppresses `race:innobase` and `race:perfschema` wholesale, plus a handful of
+# named server races. Upstream MySQL is not TSan-clean; those subsystems are
+# muted rather than fixed. Races in villagesql/, sql/ and the extensions do
+# report, which is the coverage this workflow exists for.
+#
+# Results are posted to Slack; see the notify job at the bottom.
+#
+# Trigger via: Actions tab -> Run workflow, or `gh workflow run tsan.yml`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to test'
+        required: false
+        default: ''
+      test-suite:
+        description: 'Test suite to run (e.g., villagesql/select, village, innodb)'
+        required: false
+        default: 'village'
+      run-unit-tests:
+        description: 'Run the VillageSQL unit tests under TSan'
+        required: false
+        type: boolean
+        default: true
+      run-server-tests:
+        description: 'Run the server mysql-test suite under TSan'
+        required: false
+        type: boolean
+        default: true
+      run-extension-tests:
+        description: 'Build the bundled extensions and run their MTR suites under TSan'
+        required: false
+        type: boolean
+        default: true
+      extension:
+        description: 'Limit the extension phase to one extension (e.g. vsql-vector); empty for all'
+        required: false
+        default: ''
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: tsan-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tsan-test:
+    name: Build and Run TSan Tests
+    runs-on: [self-hosted, linux, x86_64]
+    timeout-minutes: 600
+    permissions:
+      contents: read
+
+    # Per-phase outcomes for the notify job. A phase that never ran reports as
+    # empty; notify renders that as "did not run".
+    outputs:
+      sha: ${{ steps.checkout_report.outputs.sha }}
+      build: ${{ steps.build.outcome }}
+      unit: ${{ steps.unit.outcome }}
+      mtr: ${{ steps.mtr.outcome }}
+      mtr_unstable: ${{ steps.mtr.outputs.unstable }}
+      ext_build: ${{ steps.ext_build.outcome }}
+      ext_test: ${{ steps.ext_test.outcome }}
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+      EXTS_ROOT: ${{ github.workspace }}/exts
+      REQUEST_REF: ${{ inputs.ref || github.ref }}
+      EXTENSION_FILTER: ${{ inputs.extension }}
+      # halt_on_error=0 so a run reports every race rather than stopping at the
+      # first -- this is a census, and MTR fails the phase on its own by finding
+      # "WARNING: ThreadSanitizer:" in the server logs. history_size widens the
+      # recorded history so the *other* thread's stack is usually available.
+      # mysql-test-run.pl appends its suppressions= to whatever is set here.
+      TSAN_OPTIONS: halt_on_error=0,history_size=7
+      SERVER_SAN_FLAGS: -DWITH_TSAN=1
+      # The extension links the sanitizer runtime already loaded by the
+      # instrumented server.
+      SAN_CFLAGS: -fsanitize=thread -fno-omit-frame-pointer
+      SAN_LDFLAGS: -fsanitize=thread
+
+    steps:
+    - name: Report Parameters
+      run: |
+        echo "Requested ref: $REQUEST_REF"
+        echo "Extension filter: ${EXTENSION_FILTER:-<all>}"
+        echo "Server sanitizer flags: $SERVER_SAN_FLAGS"
+        echo "Extension CFLAGS:  $SAN_CFLAGS"
+        echo "Extension LDFLAGS: $SAN_LDFLAGS"
+        echo "TSAN_OPTIONS: $TSAN_OPTIONS"
+
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        ref: ${{ env.REQUEST_REF }}
+        fetch-depth: 50
+        path: source
+
+    - name: Report Checkout
+      id: checkout_report
+      run: |
+        echo "Git SHA1: $(git -C source rev-parse HEAD)"
+        echo "Git Commit: $(git -C source log -n1 --oneline)"
+        echo "sha=$(git -C source rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout bundled extensions
+      if: inputs.run-extension-tests
+      run: |
+        # Self-hosted runners reuse the workspace; wipe stale extension clones
+        rm -rf "$EXTS_ROOT"
+        mkdir -p "$EXTS_ROOT/sources"
+
+        source/villagesql/bld_tools/checkout_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$EXTENSION_FILTER" yes
+
+    - name: Setup VillageSQL build environment
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        # Skip the shared ccache: a periodic sanitizer build would evict the
+        # regular/nightly entries. Matches sanitizer.yml / valgrind.yml.
+        setup-ccache: 'false'
+
+    - name: Install bundled-extension dependencies
+      if: inputs.run-extension-tests
+      run: sudo source/scripts/setup_linux_ext_deps.sh
+
+    - name: Build VillageSQL with TSan
+      id: build
+      env:
+        BUILD_TYPE: debug
+        CMAKE_EXTRA_FLAGS: ${{ env.SERVER_SAN_FLAGS }}
+      run: source/villagesql/bld_tools/build_ci.sh
+
+    # Each phase runs separately (continue-on-error plus a gate at the end) so
+    # they all run and one failure does not hide the others' results.
+    - name: Run VillageSQL unit tests (TSan)
+      id: unit
+      if: inputs.run-unit-tests
+      continue-on-error: true
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-integration-tests: false
+        artifact-name: tsan-unit-logs-${{ github.run_number }}
+
+    - name: Run VillageSQL mtr suite (TSan)
+      id: mtr
+      if: inputs.run-server-tests
+      continue-on-error: true
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-unit-tests: false
+        test-suite: ${{ inputs.test-suite }}
+        mysql-test-extra-flags: --sanitize
+        artifact-name: tsan-mtr-logs-${{ github.run_number }}
+
+    - name: Build bundled extensions (TSan)
+      id: ext_build
+      if: inputs.run-extension-tests
+      continue-on-error: true
+      env:
+        CMAKE_EXTRA_FLAGS: -DCMAKE_BUILD_TYPE=Debug
+        CFLAGS: ${{ env.SAN_CFLAGS }}
+        CXXFLAGS: ${{ env.SAN_CFLAGS }}
+        LDFLAGS: ${{ env.SAN_LDFLAGS }}
+      run: |
+        SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
+        source/villagesql/bld_tools/build_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$SDK_STAGING_DIR" \
+          "$BUILD_DIR/veb_output_directory" "$EXTENSION_FILTER" yes
+
+    # MTR auto-copies *.veb from <bindir>/veb_output_directory into each test
+    # server, so the VEBs built above are picked up with no extra plumbing.
+    - name: Test bundled extensions (TSan)
+      id: ext_test
+      # Runs even if some extension failed to build, so the ones that did build
+      # still get exercised; the build failure fails the job on its own.
+      if: always() && inputs.run-extension-tests
+      continue-on-error: true
+      env:
+        MTR_EXTRA_FLAGS: --sanitize
+      run: |
+        source/villagesql/bld_tools/test_extension_vebs.sh \
+          "$BUILD_DIR" "$EXTS_ROOT/sources"
+
+    - name: Upload extension MTR logs
+      if: always() && inputs.run-extension-tests
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: tsan-ext-mtr-logs-${{ github.run_number }}
+        path: |
+          ${{ env.BUILD_DIR }}/mysql-test/var/log/
+          ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Fail if any TSan phase failed
+      if: always()
+      run: |
+        echo "Unit tests:      ${{ steps.unit.outcome || 'skipped' }}"
+        echo "MTR suite:       ${{ steps.mtr.outcome || 'skipped' }}"
+        echo "Extension build: ${{ steps.ext_build.outcome || 'skipped' }}"
+        echo "Extension tests: ${{ steps.ext_test.outcome || 'skipped' }}"
+        if [ "${{ steps.unit.outcome }}" = "failure" ] || \
+           [ "${{ steps.mtr.outcome }}" = "failure" ] || \
+           [ "${{ steps.ext_build.outcome }}" = "failure" ] || \
+           [ "${{ steps.ext_test.outcome }}" = "failure" ]; then
+          echo "::error::One or more TSan test phases failed; see the step logs and uploaded artifacts."
+          exit 1
+        fi
+        echo "All TSan test phases passed."
+
+  # Posts a per-phase summary after the run.
+  notify:
+    name: Slack Notification
+    needs: tsan-test
+    # Even if tsan-test fails, but only if slack notify requested.
+    if: always() && inputs.slack_notify
+    runs-on: ubuntu-latest
+    # Posts to a webhook; needs no repo access.
+    permissions: {}
+    steps:
+      - name: Build phase summary
+        id: summary
+        env:
+          BUILD: ${{ needs.tsan-test.outputs.build }}
+          UNIT: ${{ needs.tsan-test.outputs.unit }}
+          MTR: ${{ needs.tsan-test.outputs.mtr }}
+          MTR_UNSTABLE: ${{ needs.tsan-test.outputs.mtr_unstable }}
+          EXT_BUILD: ${{ needs.tsan-test.outputs.ext_build }}
+          EXT_TEST: ${{ needs.tsan-test.outputs.ext_test }}
+        run: |
+          line() {
+            local label="$1" outcome="$2" note="${3:-}" icon
+            case "$outcome" in
+              success) icon="✅" ;;
+              failure) icon="❌" ;;
+              "")      icon="⏭️"; outcome="did not run" ;;
+              *)       icon="⚠️" ;;
+            esac
+            printf '%s %s: %s%s\n' "$icon" "$label" "$outcome" "$note"
+          }
+          # Unstable tests (failed, then passed on retry) do not fail the run,
+          # so without this the report is green and the flake is invisible.
+          MTR_NOTE=""
+          if [ -n "$MTR_UNSTABLE" ] && [ "$MTR_UNSTABLE" != "0" ]; then
+            MTR_NOTE=" ($MTR_UNSTABLE unstable)"
+          fi
+          SUMMARY=$(
+            line "Server build"    "$BUILD"
+            line "Unit tests"      "$UNIT"
+            line "MTR suite"       "$MTR" "$MTR_NOTE"
+            line "Extension build" "$EXT_BUILD"
+            line "Extension tests" "$EXT_TEST"
+          )
+          echo "$SUMMARY"
+          # jq -Rs emits a JSON string (newlines escaped), so it stays one line
+          # in GITHUB_OUTPUT and drops into the payload below unquoted.
+          echo "text=$(jq -Rs . <<<"$SUMMARY")" >> "$GITHUB_OUTPUT"
+
+      - name: Compute overall status
+        id: status
+        env:
+          RESULT: ${{ needs.tsan-test.result }}
+        run: |
+          case "$RESULT" in
+            success)   label=passed;    emoji="✅"; color="#36a64f" ;;
+            cancelled) label=cancelled; emoji="⚠️"; color="#daa520" ;;
+            *)         label=failed;    emoji="❌"; color="#cc0000" ;;
+          esac
+          {
+            echo "label=$label"
+            echo "emoji=$emoji"
+            echo "color=$color"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.emoji }} TSan Tests ${{ steps.status.outputs.label }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "text":  ${{ steps.summary.outputs.text }},
+                  "fields": [
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ needs.tsan-test.outputs.sha || 'unknown' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Triggered by",
+                      "value": "${{ github.event_name }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
