@@ -402,6 +402,23 @@ void typed_postrun_wrapper(vef_context_t *, vef_postrun_args_t *args,
 // matches the typed shape for its slot.
 
 template <auto Hook>
+void typed_bind_wrapper(vef_context_t *, vef_bind_types_args_t *args,
+                        vef_bind_types_result_t *result) {
+  Hook(BindArgs(args), BindResult(result));
+}
+
+template <auto Hook>
+constexpr bool is_typed_bind() {
+  using Params = typename FuncParamTypes<decltype(Hook)>::type;
+  if constexpr (std::tuple_size_v<Params> != 2) {
+    return false;
+  } else {
+    return std::is_same_v<std::tuple_element_t<0, Params>, BindArgs> &&
+           std::is_same_v<std::tuple_element_t<1, Params>, BindResult>;
+  }
+}
+
+template <auto Hook>
 constexpr bool is_typed_prerun() {
   using Params = typename FuncParamTypes<decltype(Hook)>::type;
   if constexpr (std::tuple_size_v<Params> != 2) {
@@ -776,33 +793,7 @@ struct TypeEncodeWithCacheVdfWrapper {
       std::map<std::string, std::string> m;
       type_params_cache_for<P>().to_strings(maybe_params.value(), m);
 
-      // Single-pass greedy write into the caller's buffer. If a pair (with
-      // its leading comma if not first) won't fit, stop writing but keep
-      // iterating to accumulate `needed` for the snprintf-style overflow
-      // signal. Caller retries with a larger buffer.
-      char *const buf_begin = result->out_type_params->buf;
-      const size_t cap = result->out_type_params->max_buf_len;
-      char *p = buf_begin;
-      size_t needed = 0;
-      bool ok = true;
-      bool first = true;
-      for (const auto &[k, v] : m) {
-        const size_t pair_size = (first ? 0u : 1u) + k.size() + 1u + v.size();
-        if (ok && static_cast<size_t>(p - buf_begin) + pair_size <= cap) {
-          if (!first) *p++ = ',';
-          std::memcpy(p, k.data(), k.size());
-          p += k.size();
-          *p++ = '=';
-          std::memcpy(p, v.data(), v.size());
-          p += v.size();
-        } else {
-          ok = false;
-        }
-        needed += pair_size;
-        first = false;
-      }
-      result->out_type_params->actual_len = needed;
-      result->out_type_params->overflow = !ok;
+      write_params_to(result->out_type_params, m);
     }
   }
 };

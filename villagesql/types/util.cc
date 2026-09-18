@@ -1450,12 +1450,12 @@ static bool ConvertVDFArguments(
     const std::map<std::string, KnownEntry> &known_params,
     const std::vector<TypeParameters> &hook_arg_params) {
   // The two sources are alternatives, not a priority order: TD1 fills
-  // known_params when the server resolves the parameters, a bind_and_check_types
-  // hook fills hook_arg_params when it does, and the caller only ever runs one
-  // of them. They are keyed differently because of how each is decided --
-  // known_params by type name, since TD1 shares one answer across every
-  // argument of that type; hook_arg_params by argument index, since the hook is
-  // asked about each argument separately.
+  // known_params when the server resolves the parameters, a
+  // bind_and_check_types hook fills hook_arg_params when it does, and the
+  // caller only ever runs one of them. They are keyed differently because of
+  // how each is decided -- known_params by type name, since TD1 shares one
+  // answer across every argument of that type; hook_arg_params by argument
+  // index, since the hook is asked about each argument separately.
   assert(known_params.empty() || hook_arg_params.empty());
 
   // The hook's answer for one argument, or null if the hook did not supply one
@@ -1638,8 +1638,7 @@ static bool CallBindTypesHook(const vef_func_desc_t *func_desc,
     }
     // Provide constant string values where available; analysis-time parameter
     // derivation (the common case) reads them.
-    if (args[i]->const_for_execution() &&
-        arg_types[i].id == VEF_TYPE_STRING) {
+    if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
       String *v = args[i]->val_str(&const_store[i]);
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
@@ -1747,7 +1746,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   // string literals and rejecting arguments that are neither a custom value nor
   // a literal -- and for applying whatever the hook decided below.
   std::map<std::string, KnownEntry> known_params;
-  if (ValidateVDFArguments(func_name, extension_name, arg_count, args, signature,
+  if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
+                           signature,
                            has_bind_hook ? nullptr : &known_params)) {
     return true;
   }

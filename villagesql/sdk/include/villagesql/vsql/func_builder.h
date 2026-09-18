@@ -240,20 +240,23 @@ class FuncBuilder {
     return *this;
   }
 
-  // Install an author-supplied type binding/checking hook. Called once at
-  // analysis time (fix_fields) to validate argument type parameters and
-  // compute the return type's parameters, fully replacing the built-in TD1/TD2
-  // rules. Use it when the parameter relationship between arguments and the
-  // return type cannot be expressed by the default rules (e.g.
-  // pvec_concat(PVEC(M), PVEC(N)) -> PVEC(M+N)) or when the return type's
-  // parameters come from a constant argument value (e.g.
-  // TYPEID('user') -> typeid(prefix=user)). See vef_bind_types_func_t.
+  // Install a type binding/checking hook. Called once at resolution time,
+  // before any row is read, to work out the return type's parameters -- and,
+  // where needed, individual arguments' -- when the built-in rules cannot.
   //
-  // TODO(villagesql): add a typed C++ wrapper (BindArgs/BindResult) so authors
-  // need not drop to the raw ABI signature.
-  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &bind_and_check_types(
-      vef_bind_types_func_t fn) {
-    bind_ = fn;
+  // Use it when the relationship between argument and return parameters is
+  // something the defaults cannot express (e.g. pvec_concat(PVEC(M), PVEC(N))
+  // -> PVEC(M+N)), or when the return parameters come from a constant argument
+  // value (e.g. TYPEID('user') -> typeid(prefix=user)).
+  //
+  //   void my_hook(vsql::BindArgs args, vsql::BindResult out);
+  template <auto Hook>
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &
+  bind_and_check_types() {
+    static_assert(detail::is_typed_bind<Hook>(),
+                  "bind_and_check_types<Hook>(): Hook must be void(BindArgs, "
+                  "BindResult). Raw ABI signatures are not accepted.");
+    bind_ = &detail::typed_bind_wrapper<Hook>;
     return *this;
   }
 

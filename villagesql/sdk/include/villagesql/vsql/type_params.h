@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -257,6 +258,41 @@ type_params_cache_for() {
 template <typename T>
 __attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
   return type_params_cache_for<T>().is_bound();
+}
+
+// Serializes a params map into a caller-supplied buffer, following the
+// vef_inferred_type_params_t contract: the canonical "k=v,k=v" form is written
+// if it fits; actual_len is always set to the length that *would* have been
+// written; and overflow is set when it did not fit, in which case the buffer
+// contents are undefined and the caller should retry with a larger one.
+//
+// Shared by the from_string inference write-back and by BindResult, so the
+// overflow bookkeeping exists in exactly one place.
+inline void write_params_to(vef_inferred_type_params_t *out,
+                            const std::map<std::string, std::string> &m) {
+  char *const buf_begin = out->buf;
+  const size_t cap = out->max_buf_len;
+  char *p = buf_begin;
+  size_t needed = 0;
+  bool ok = true;
+  bool first = true;
+  for (const auto &[k, v] : m) {
+    const size_t pair_size = (first ? 0u : 1u) + k.size() + 1u + v.size();
+    if (ok && static_cast<size_t>(p - buf_begin) + pair_size <= cap) {
+      if (!first) *p++ = ',';
+      std::memcpy(p, k.data(), k.size());
+      p += k.size();
+      *p++ = '=';
+      std::memcpy(p, v.data(), v.size());
+      p += v.size();
+    } else {
+      ok = false;
+    }
+    needed += pair_size;
+    first = false;
+  }
+  out->actual_len = needed;
+  out->overflow = !ok;
 }
 
 }  // namespace vsql

@@ -1,0 +1,82 @@
+# Install the bind-hook fixture.
+INSTALL EXTENSION vsql_bindcheck_test;
+#
+# tag_make: the return type's label is the VALUE of the constant first
+# argument, read through BindArgType::const_value().
+#
+SELECT vsql_bindcheck_test.tag_make('user', 42) AS t;
+t
+user#42
+SELECT vsql_bindcheck_test.tag_label(vsql_bindcheck_test.tag_make('user', 42))
+AS label,
+vsql_bindcheck_test.tag_counter(vsql_bindcheck_test.tag_make('user', 42))
+AS n;
+label	n
+user	42
+# A user variable is constant for execution, so the hook sees it too.
+SET @l = 'order';
+SELECT vsql_bindcheck_test.tag_label(vsql_bindcheck_test.tag_make(@l, 7))
+AS label;
+label
+order
+# The label is validated at resolution time, before any row is read.
+SELECT vsql_bindcheck_test.tag_make('Bad Label', 1);
+ERROR HY000: Can't initialize function 'tag_make'; tag_make: invalid label 'Bad Label' (lowercase [a-z] and '_', 1..16 chars)
+#
+# has_const_value() is false for a column reference: the hook has no
+# value to derive the label from and rejects the call.
+#
+CREATE TABLE labels (l VARCHAR(16));
+INSERT INTO labels VALUES ('user');
+SELECT vsql_bindcheck_test.tag_make(l, 1) FROM labels;
+ERROR HY000: Can't initialize function 'tag_make'; tag_make: the label must be a constant string
+#
+# A TAG column declares its label, which the text form is checked
+# against.
+#
+CREATE TABLE tags (id INT PRIMARY KEY,
+t vsql_bindcheck_test.TAG('label=user'));
+INSERT INTO tags VALUES (1, 'user#100'), (2, 'user#5');
+SELECT id, t, vsql_bindcheck_test.tag_label(t) AS label
+FROM tags ORDER BY id;
+id	t	label
+1	user#100	user
+2	user#5	user
+SHOW CREATE TABLE tags;
+Table	Create Table
+tags	CREATE TABLE `tags` (
+  `id` int NOT NULL,
+  `t` vsql_bindcheck_test.TAG('label=user') DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Big-endian storage makes the byte order the numeric order.
+SELECT id FROM tags WHERE t > 'user#50' ORDER BY id;
+id
+1
+# A value whose label disagrees with the column's is rejected.
+INSERT INTO tags VALUES (3, 'order#1');
+ERROR HY000: Incorrect TAG value: 'order#1' for column 't' at row 1
+#
+# tag_relabel: the hook combines the first argument's already resolved
+# parameters (params<P>()) with a constant (const_value()).
+#
+SELECT id,
+vsql_bindcheck_test.tag_relabel(t, 'archived') AS relabelled,
+vsql_bindcheck_test.tag_label(
+vsql_bindcheck_test.tag_relabel(t, 'archived')) AS label
+FROM tags ORDER BY id;
+id	relabelled	label
+1	archived#100	archived
+2	archived#5	archived
+# Having read both, the hook can reject a no-op relabel.
+SELECT vsql_bindcheck_test.tag_relabel(t, 'user') FROM tags;
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label matches the old one
+# The new label must be constant here as well.
+SELECT vsql_bindcheck_test.tag_relabel(tags.t, labels.l) FROM tags, labels;
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label must be a constant string
+#
+# Cleanup
+#
+DROP TABLE tags;
+DROP TABLE labels;
+UNINSTALL EXTENSION vsql_bindcheck_test;
