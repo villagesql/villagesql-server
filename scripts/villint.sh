@@ -6,11 +6,12 @@ set -e
 # --- Option Parsing ---
 LINT_C_FULL=false
 LINT_OTHER_FULL=false
-FIX_EOF=true  # Default to fixing EOF newlines
-FIX_COPYRIGHT=true  # Default to fixing copyrights
-COMMIT_ISH=""  # Will be computed if not specified
-CMDLINE_IGNORE_PATTERNS=()  # Array to store command-line ignore patterns
-PRINT_CLANG_FORMAT_VERSION=false  # Print the pinned clang-format version and exit
+FIX_EOF=true                     # Default to fixing EOF newlines
+FIX_COPYRIGHT=true               # Default to fixing copyrights
+COMMIT_ISH=""                    # Will be computed if not specified
+CMDLINE_IGNORE_PATTERNS=()       # Array to store command-line ignore patterns
+PRINT_CLANG_FORMAT_VERSION=false # Print the pinned clang-format version and exit
+PRINT_SHFMT_VERSION=false        # Print the pinned shfmt version and exit
 
 usage() {
   echo "Usage: $(basename "$0") [-c] [-o] [--fixeof|--no-fixeof] [--fixcopyright|--no-fixcopyright] [--commit <commit-ish>] [--ignore <pattern>]"
@@ -31,6 +32,7 @@ usage() {
   echo "                      Supports exact paths, directory recursion, and glob patterns."
   echo "  --clang-format-version:"
   echo "                      Print the pinned clang-format version and exit."
+  echo "  --shfmt-version:    Print the pinned shfmt version and exit."
   echo "  -h, --help:         Show this help message."
   exit 1
 }
@@ -39,59 +41,63 @@ usage() {
 while [[ $# -gt 0 ]]; do
   key="$1"
   case $key in
-    -c)
-      LINT_C_FULL=true
-      shift # past argument
-      ;;
-    -o)
-      LINT_OTHER_FULL=true
-      shift # past argument
-      ;;
-    --fixeof)
-      FIX_EOF=true
-      shift # past argument
-      ;;
-    --no-fixeof)
-      FIX_EOF=false
-      shift # past argument
-      ;;
-    --fixcopyright)
-      FIX_COPYRIGHT=true
-      shift # past argument
-      ;;
-    --no-fixcopyright)
-      FIX_COPYRIGHT=false
-      shift # past argument
-      ;;
-    --commit)
-      if [[ -z "$2" || "$2" == -* ]]; then
-        echo "Error: --commit option requires an argument." >&2
-        usage
-      fi
-      COMMIT_ISH="$2"
-      shift # past argument
-      shift # past value
-      ;;
-    --ignore)
-      if [[ -z "$2" || "$2" == -* ]]; then
-        echo "Error: --ignore option requires an argument." >&2
-        usage
-      fi
-      CMDLINE_IGNORE_PATTERNS+=("$2")
-      shift # past argument
-      shift # past value
-      ;;
-    --clang-format-version)
-      PRINT_CLANG_FORMAT_VERSION=true
-      shift # past argument
-      ;;
-    -h|--help)
+  -c)
+    LINT_C_FULL=true
+    shift # past argument
+    ;;
+  -o)
+    LINT_OTHER_FULL=true
+    shift # past argument
+    ;;
+  --fixeof)
+    FIX_EOF=true
+    shift # past argument
+    ;;
+  --no-fixeof)
+    FIX_EOF=false
+    shift # past argument
+    ;;
+  --fixcopyright)
+    FIX_COPYRIGHT=true
+    shift # past argument
+    ;;
+  --no-fixcopyright)
+    FIX_COPYRIGHT=false
+    shift # past argument
+    ;;
+  --commit)
+    if [[ -z "$2" || "$2" == -* ]]; then
+      echo "Error: --commit option requires an argument." >&2
       usage
-      ;;
-    *)
-      echo "Unknown option: $1"
+    fi
+    COMMIT_ISH="$2"
+    shift # past argument
+    shift # past value
+    ;;
+  --ignore)
+    if [[ -z "$2" || "$2" == -* ]]; then
+      echo "Error: --ignore option requires an argument." >&2
       usage
-      ;;
+    fi
+    CMDLINE_IGNORE_PATTERNS+=("$2")
+    shift # past argument
+    shift # past value
+    ;;
+  --clang-format-version)
+    PRINT_CLANG_FORMAT_VERSION=true
+    shift # past argument
+    ;;
+  --shfmt-version)
+    PRINT_SHFMT_VERSION=true
+    shift # past argument
+    ;;
+  -h | --help)
+    usage
+    ;;
+  *)
+    echo "Unknown option: $1"
+    usage
+    ;;
   esac
 done
 
@@ -107,12 +113,12 @@ apply_if_changed() {
   if cmp -s "$original" "$modified"; then
     # Files are identical - no changes needed
     rm "$modified"
-    return 1  # Return 1 to indicate "no change"
+    return 1 # Return 1 to indicate "no change"
   else
     # Files differ - apply changes
     mv "$modified" "$original"
     echo "  $message"
-    return 0  # Return 0 to indicate "changed"
+    return 0 # Return 0 to indicate "changed"
   fi
 }
 
@@ -134,21 +140,21 @@ get_ignored_patterns() {
     # silently swallowed by `2>/dev/null`, leaving no ignore directives
     # visible locally.
     local jj_range="${commit_range/..HEAD/..@}"
-    jj log -r "$jj_range" --no-graph -T description 2>/dev/null | \
-      grep -i "^villint-ignore:" | \
-      sed 's/^villint-ignore://i' | \
-      tr ',' '\n' | \
-      sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | \
-      grep -v '^$' | \
-      sort -u
+    jj log -r "$jj_range" --no-graph -T description 2>/dev/null \
+      | grep -i "^villint-ignore:" \
+      | sed 's/^villint-ignore://i' \
+      | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+      | grep -v '^$' \
+      | sort -u
   else
-    git log "$commit_range" --format="%B" 2>/dev/null | \
-      grep -i "^villint-ignore:" | \
-      sed 's/^villint-ignore://i' | \
-      tr ',' '\n' | \
-      sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | \
-      grep -v '^$' | \
-      sort -u
+    git log "$commit_range" --format="%B" 2>/dev/null \
+      | grep -i "^villint-ignore:" \
+      | sed 's/^villint-ignore://i' \
+      | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+      | grep -v '^$' \
+      | sort -u
   fi
 }
 
@@ -158,10 +164,10 @@ is_ignored() {
 
   for pattern in "${IGNORED_PATTERNS[@]}"; do
     case "$file" in
-      # Try exact match, prefix match (for directories), and glob match
-      "$pattern"|"$pattern"/*|$pattern)
-        return 0
-        ;;
+    # Try exact match, prefix match (for directories), and glob match
+    "$pattern" | "$pattern"/* | $pattern)
+      return 0
+      ;;
     esac
   done
 
@@ -257,7 +263,7 @@ check_todo_tags() {
       echo "    Line: $line"
       INVALID_TODO_TAGS_FOUND=$((INVALID_TODO_TAGS_FOUND + 1))
     fi
-  done <<< "$added_lines"
+  done <<<"$added_lines"
 }
 
 # Fix copyright block in a C/C++ file
@@ -312,7 +318,7 @@ fix_copyright() {
             echo "  Non-standard copyright (allowlisted by prefix): $file"
             return 0
           fi
-        done < "$allowlist"
+        done <"$allowlist"
       fi
       # Not in allowlist
       echo "ERROR: Non-standard copyright in $file" >&2
@@ -323,7 +329,7 @@ fix_copyright() {
     fi
   else
     # No copyright block - add full VillageSQL copyright
-    cat > /tmp/villagesql_copyright.txt << 'EOF'
+    cat >/tmp/villagesql_copyright.txt <<'EOF'
 /* Copyright (c) 2026 VillageSQL Contributors
  *
  * This program is free software; you can redistribute it and/or
@@ -341,7 +347,7 @@ fix_copyright() {
  */
 
 EOF
-    cat /tmp/villagesql_copyright.txt "$file" > /tmp/villint_tmp && mv /tmp/villint_tmp "$file"
+    cat /tmp/villagesql_copyright.txt "$file" >/tmp/villint_tmp && mv /tmp/villint_tmp "$file"
     echo "  Added full VillageSQL copyright block"
   fi
 }
@@ -385,7 +391,7 @@ fix_copyright_cmake() {
             echo "  Non-standard copyright (allowlisted by prefix): $file"
             return 0
           fi
-        done < "$allowlist"
+        done <"$allowlist"
       fi
       # Not in allowlist
       echo "ERROR: Non-standard copyright in $file" >&2
@@ -396,7 +402,7 @@ fix_copyright_cmake() {
     fi
   else
     # No copyright block - add full VillageSQL copyright
-    cat > /tmp/villagesql_copyright_cmake.txt << 'EOF'
+    cat >/tmp/villagesql_copyright_cmake.txt <<'EOF'
 # Copyright (c) 2026 VillageSQL Contributors
 #
 # This program is free software; you can redistribute it and/or
@@ -413,7 +419,7 @@ fix_copyright_cmake() {
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 EOF
-    cat /tmp/villagesql_copyright_cmake.txt "$file" > /tmp/villint_tmp && mv /tmp/villint_tmp "$file"
+    cat /tmp/villagesql_copyright_cmake.txt "$file" >/tmp/villint_tmp && mv /tmp/villint_tmp "$file"
     echo "  Added full VillageSQL copyright block"
   fi
 }
@@ -422,10 +428,16 @@ EOF
 
 # Check for required tools
 REQUIRED_CLANG_FORMAT_VERSION=$(get_clang_format_version)
+REQUIRED_SHFMT_VERSION="v3.14.1"
 
 # Handle introspection requests first
 if [ "$PRINT_CLANG_FORMAT_VERSION" = true ]; then
   echo "$REQUIRED_CLANG_FORMAT_VERSION"
+  exit 0
+fi
+
+if [ "$PRINT_SHFMT_VERSION" = true ]; then
+  echo "$REQUIRED_SHFMT_VERSION"
   exit 0
 fi
 
@@ -472,6 +484,21 @@ num_components=$(printf '%s' "$REQUIRED_CLANG_FORMAT_VERSION" | awk -F. '{print 
 CLANG_FORMAT_VERSION_PREFIX=$(printf '%s' "$CLANG_FORMAT_VERSION" | cut -d. -f1-"$num_components")
 if [ "$CLANG_FORMAT_VERSION_PREFIX" != "$REQUIRED_CLANG_FORMAT_VERSION" ]; then
   die_clang_format "clang-format version $CLANG_FORMAT_VERSION found, expected $REQUIRED_CLANG_FORMAT_VERSION"
+fi
+
+# Check for presence of shfmt
+if ! command -v shfmt >/dev/null 2>&1; then
+  echo "shfmt is not installed or not in PATH."
+  echo "Please install shfmt $REQUIRED_SHFMT_VERSION:" \
+    "go install mvdan.cc/sh/v3/cmd/shfmt@$REQUIRED_SHFMT_VERSION"
+  exit 1
+fi
+
+# Check if shfmt is pinned at REQUIRED_SHFMT_VERSION
+SHFMT_VERSION=$(shfmt --version)
+if [[ "$SHFMT_VERSION" != "$REQUIRED_SHFMT_VERSION" ]]; then
+  echo "shfmt version $SHFMT_VERSION found, expected $REQUIRED_SHFMT_VERSION"
+  exit 1
 fi
 
 # Determine comparison point if not specified
@@ -551,6 +578,7 @@ fi
 # Separate files into C/C++, CMakeLists.txt, and others
 C_FILES=""
 CMAKE_FILES=""
+BASH_FILES=""
 OTHER_FILES=""
 
 for file in $ALL_FILES; do
@@ -560,15 +588,18 @@ for file in $ALL_FILES; do
   fi
 
   case "$file" in
-    *.c|*.cc|*.h|*.cpp|*.hpp)
-      C_FILES="$C_FILES $file"
-      ;;
-    */CMakeLists.txt|CMakeLists.txt)
-      CMAKE_FILES="$CMAKE_FILES $file"
-      ;;
-    *)
-      OTHER_FILES="$OTHER_FILES $file"
-      ;;
+  *.c | *.cc | *.h | *.cpp | *.hpp)
+    C_FILES="$C_FILES $file"
+    ;;
+  */CMakeLists.txt | CMakeLists.txt)
+    CMAKE_FILES="$CMAKE_FILES $file"
+    ;;
+  *.bash | *.sh)
+    BASH_FILES="$BASH_FILES $file"
+    ;;
+  *)
+    OTHER_FILES="$OTHER_FILES $file"
+    ;;
   esac
 done
 
@@ -588,7 +619,7 @@ for file in $C_FILES; do
   if [ "$FIX_EOF" = true ]; then
     # Ensure there is a single newline at the end of the file.
     if [ -n "$(tail -c1 "$file")" ]; then
-      echo "" >> "$file"
+      echo "" >>"$file"
     fi
   fi
 
@@ -635,7 +666,7 @@ for file in $C_FILES; do
           end=$((start + len - 1))
           cf_ranges+=("--lines=$start:$end")
         fi
-      done <<< "$ranges_str"
+      done <<<"$ranges_str"
     fi
 
     if [ ${#cf_ranges[@]} -gt 0 ]; then
@@ -673,12 +704,29 @@ for file in $CMAKE_FILES; do
 
   # Ensure there is a single newline at the end of the file.
   if [ -n "$(tail -c1 "$temp")" ]; then
-    echo "" >> "$temp"
+    echo "" >>"$temp"
   fi
 
   apply_if_changed "$file" "$temp" "Fixed whitespace/newline in $file" || true
 
   check_todo_tags "$file"
+done
+
+# --- Lint and format bash files ---
+for file in $BASH_FILES; do
+  if is_ignored "$file"; then
+    echo "Skipping ignored file: $file"
+    continue
+  fi
+
+  # Run for villagesql files only: villagesql/*, scripts/*, and docker/*
+  # shfmt respects .editorconfig(it's at the root of the repo)
+  if [[ "$file" == villagesql/* ||
+    "$file" == scripts/* ||
+    "$file" == docker/* ]]; then
+    echo "Formatting bash file: $file"
+    shfmt -w "$file"
+  fi
 done
 
 # --- Lint Other Files ---
@@ -693,14 +741,14 @@ for file in $OTHER_FILES; do
   # whitespace may be intentional/required for test matching
   # Skip binary files - text operations don't apply to them
   case "$file" in
-    *.result)
-      echo "Skipping .result file (auto-generated): $file"
-      continue
-      ;;
-    *.zip|*.veb)
-      echo "Skipping binary file: $file"
-      continue
-      ;;
+  *.result)
+    echo "Skipping .result file (auto-generated): $file"
+    continue
+    ;;
+  *.zip | *.veb)
+    echo "Skipping binary file: $file"
+    continue
+    ;;
   esac
 
   echo "Linting other (whitespace/newline): $file"
@@ -714,7 +762,7 @@ for file in $OTHER_FILES; do
 
   # Ensure there is a single newline at the end of the file.
   if [ -n "$(tail -c1 "$temp")" ]; then
-    echo "" >> "$temp"
+    echo "" >>"$temp"
   fi
 
   apply_if_changed "$file" "$temp" "Fixed whitespace/newline in $file" || true
@@ -738,9 +786,9 @@ for file in $ALL_FILES; do
     continue
   fi
   case "$file" in
-    mysql-test/suite/villagesql/*)
-      VILLAGESQL_TEST_FILES="$VILLAGESQL_TEST_FILES $file"
-      ;;
+  mysql-test/suite/villagesql/*)
+    VILLAGESQL_TEST_FILES="$VILLAGESQL_TEST_FILES $file"
+    ;;
   esac
 done
 
@@ -768,10 +816,10 @@ fi
 COMPACT_INDEX_ERRORS=0
 
 # Extract VSQL command names from the enum (between SQLCOM_VSQL_FIRST and SQLCOM_END)
-VSQL_COMMANDS=$(sed -n '/SQLCOM_VSQL_FIRST/,/SQLCOM_END/p' include/my_sqlcommand.h | \
-  grep -oE 'SQLCOM_[A-Z_]+' | \
-  grep -v 'SQLCOM_VSQL_FIRST\|SQLCOM_END\|SQLCOM_MYSQL_COUNT\|SQLCOM_COMPACT_COUNT' | \
-  sort -u)
+VSQL_COMMANDS=$(sed -n '/SQLCOM_VSQL_FIRST/,/SQLCOM_END/p' include/my_sqlcommand.h \
+  | grep -oE 'SQLCOM_[A-Z_]+' \
+  | grep -v 'SQLCOM_VSQL_FIRST\|SQLCOM_END\|SQLCOM_MYSQL_COUNT\|SQLCOM_COMPACT_COUNT' \
+  | sort -u)
 
 if [ -n "$VSQL_COMMANDS" ]; then
   for file in $C_FILES; do
@@ -780,7 +828,7 @@ if [ -n "$VSQL_COMMANDS" ]; then
     fi
     # Skip the header that defines the enum itself
     case "$file" in
-      include/my_sqlcommand.h|include/mysql/plugin_audit.h.pp) continue ;;
+    include/my_sqlcommand.h | include/mysql/plugin_audit.h.pp) continue ;;
     esac
     for vsql_cmd in $VSQL_COMMANDS; do
       # Find lines with com_stat[...VSQL_CMD...] but NOT sqlcom_compact_index
