@@ -83,8 +83,64 @@ SELECT vsql_bindcheck_test.tag_relabel(t, 'user') FROM tags;
 SELECT vsql_bindcheck_test.tag_relabel(tags.t, labels.l) FROM tags, labels;
 
 --echo #
+--echo # A bare literal in TAG position reaches the hook as a STRING -- it has
+--echo # no type context yet. The hook recovers the label from its text and
+--echo # hands it back with set_arg(), which is how the server learns to encode
+--echo # the literal as TAG('label=user').
+--echo #
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived') AS from_literal;
+
+SELECT vsql_bindcheck_test.tag_label(
+         vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS new_label,
+       vsql_bindcheck_test.tag_counter(
+         vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS n;
+
+--echo # The literal's own label still decides the no-op check.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'user');
+
+--echo # Text that is not a TAG literal has no label to recover.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_bindcheck_test.tag_relabel('nope', 'archived');
+
+--echo #
+--echo # TAGLIST: an argument whose parameters are a function of a
+--echo # DIFFERENTLY-typed argument's. This is the case set_arg() alone can
+--echo # serve -- a TAGLIST's text form never names its label, and TD1 only
+--echo # donates between arguments of the same type, so a TAG can never hand
+--echo # its label to a TAGLIST.
+--echo #
+--echo # Written explicitly it cannot be resolved either -- the text is silent:
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TAGLIST::from_string('[1,2,3]') AS ctor;
+
+--echo # Through the hook, the TAG argument supplies it.
+SELECT vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]') AS lst,
+       vsql_bindcheck_test.taglist_label(
+         vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]')) AS lbl,
+       vsql_bindcheck_test.taglist_size(
+         vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]')) AS n
+FROM tags WHERE id = 2;
+
+--echo # An already resolved TAGLIST column needs no set_arg, only agreement.
+CREATE TABLE lists (v vsql_bindcheck_test.TAGLIST('label=user'));
+INSERT INTO lists VALUES ('[4,5]');
+SELECT vsql_bindcheck_test.taglist_prepend(tags.t, lists.v) AS lst
+FROM tags, lists WHERE tags.id = 2;
+
+CREATE TABLE other_lists (v vsql_bindcheck_test.TAGLIST('label=order'));
+INSERT INTO other_lists VALUES ('[9]');
+
+--echo # Disagreement is the hook's to reject; TD1 never sees these as siblings.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_bindcheck_test.taglist_prepend(tags.t, other_lists.v)
+FROM tags, other_lists;
+
+--echo #
 --echo # Cleanup
 --echo #
+DROP TABLE other_lists;
+DROP TABLE lists;
 DROP TABLE tags;
 DROP TABLE labels;
 UNINSTALL EXTENSION vsql_bindcheck_test;

@@ -267,21 +267,51 @@ void tag_relabel(vsql::CustomArgWith<TagParams> in, vsql::StringArg label,
 
 // Reads the incoming argument's resolved parameters and a constant, which is
 // the second thing a bind hook needs and the built-in rules cannot combine.
+//
+// The first argument is declared TAG, but a bare string literal written there
+// reaches the hook as a STRING: it has no type context yet, so the server has
+// nothing to report but its result type. Recovering the label from the
+// literal's text and answering with set_arg() is what makes
+// tag_relabel('user#5', 'archived') work -- the server then encodes the
+// literal as a TAG under that label, exactly as if a sibling argument had
+// donated it.
 void tag_relabel_bind(vsql::BindArgs args, vsql::BindResult out) {
   if (args.size() != 2) {
     out.error("tag_relabel expects 2 arguments");
     return;
   }
   const vsql::BindArgType source = args.at(0);
-  if (!source.is_custom() || source.custom_type() != "TAG") {
+  std::string source_label;
+  if (source.is_custom()) {
+    if (source.custom_type() != "TAG") {
+      out.error("tag_relabel: the first argument must be a TAG");
+      return;
+    }
+    const TagParams *source_params = source.params<TagParams>();
+    if (source_params == nullptr) {
+      out.error("tag_relabel: the source TAG's label is not known here");
+      return;
+    }
+    source_label = source_params->label;
+  } else if (source.has_const_value()) {
+    // A literal in TAG position: its label is whatever its text says.
+    const std::string_view source_text = source.const_value();
+    const size_t hash = source_text.find('#');
+    if (hash == std::string_view::npos ||
+        !valid_label(source_text.substr(0, hash))) {
+      out.error("tag_relabel: '" + std::string(source_text) +
+                "' is not a TAG literal (expected <label>#<number>)");
+      return;
+    }
+    source_label = std::string(source_text.substr(0, hash));
+    // Tell the server how to encode that literal. Without this it has no
+    // parameters to encode it under and the call cannot be resolved.
+    out.set_arg(0, TagParams{source_label});
+  } else {
     out.error("tag_relabel: the first argument must be a TAG");
     return;
   }
-  const TagParams *source_params = source.params<TagParams>();
-  if (source_params == nullptr) {
-    out.error("tag_relabel: the source TAG's label is not known here");
-    return;
-  }
+
   const vsql::BindArgType label = args.at(1);
   if (!label.has_const_value()) {
     out.error("tag_relabel: the new label must be a constant string");
@@ -292,7 +322,7 @@ void tag_relabel_bind(vsql::BindArgs args, vsql::BindResult out) {
     out.error("tag_relabel: invalid label '" + std::string(text) + "'");
     return;
   }
-  if (source_params->label == text) {
+  if (source_label == text) {
     out.error("tag_relabel: the new label matches the old one");
     return;
   }
@@ -316,6 +346,219 @@ void tag_counter(vsql::CustomArgWith<TagParams> in, vsql::IntResult out) {
   out.set(static_cast<long long>(load_be64(in.value().data())));
 }
 
+// ---------------------------------------------------------------------------
+// TAGLIST: the case that only set_arg() can serve.
+// ---------------------------------------------------------------------------
+//
+// A TAGLIST is a variable-length run of counters that all share one label. The
+// label is a type parameter, exactly as for TAG -- but unlike TAG, a TAGLIST's
+// text form "[1,2,3]" does not mention it. That single difference is what
+// makes this type interesting:
+//
+//   * its own text cannot supply the label, so the constant-string inference
+//     path cannot resolve a TAGLIST literal;
+//   * TD1 donates only between arguments of the SAME type, so a TAG argument
+//     can never hand its label to a TAGLIST one;
+//   * writing TAGLIST::from_string('[1,2,3]') explicitly does not help either,
+//     for the first reason.
+//
+// So in taglist_prepend(TAG, TAGLIST) the second argument's parameters are a
+// function of the FIRST argument's -- a different type -- and the only channel
+// that can express that is BindResult::set_arg().
+
+// At most this many counters in one TAGLIST value.
+constexpr int64_t kTagListMaxElems = 8;
+constexpr int64_t kTagListMaxBytes = kTagListMaxElems * kTagBytes;
+// "[" + 8 * (20 digits + comma) + "]" + terminator.
+constexpr int64_t kTagListMaxDecodedLen = 1 + kTagListMaxElems * 21 + 2;
+
+// Deliberately a distinct C++ type from TagParams, so the two types have
+// separate parameter caches and nothing can be shared by accident.
+struct TagListParams {
+  std::string label;
+
+  static TagListParams parse(const std::map<std::string, std::string> &params) {
+    TagListParams p;
+    auto it = params.find("label");
+    if (it != params.end()) p.label = it->second;
+    return p;
+  }
+
+  static void to_strings(const TagListParams &p,
+                         std::map<std::string, std::string> &out) {
+    out["label"] = p.label;
+  }
+};
+
+bool taglist_resolve_params(const std::map<std::string, std::string> &params,
+                            vsql::ResolvedTypeParams *result, char *error_msg) {
+  auto it = params.find("label");
+  if (it == params.end() || !valid_label(it->second)) {
+    snprintf(
+        error_msg, VEF_MAX_ERROR_LEN,
+        "taglist_resolve_params: TAGLIST requires a valid label parameter");
+    return true;
+  }
+  result->max_decode_buffer_length = kTagListMaxDecodedLen;
+  return false;
+}
+
+// STRING -> binary: "[n,n,n]". Note what is missing -- nothing in the text
+// names the label, so an unparameterized call cannot be resolved from it.
+void taglist_from_string(vsql::MaybeParams<TagListParams> &p,
+                         std::string_view from, vsql::CustomResult out) {
+  if (from.empty()) {
+    out.set_length(0);
+    return;
+  }
+  if (!p.is_known()) {
+    out.warning(
+        "taglist_from_string: a TAGLIST literal cannot say which label it "
+        "belongs to");
+    return;
+  }
+  std::string input(from);
+  const char *s = input.c_str();
+  while (*s == ' ') s++;
+  if (*s != '[') {
+    out.warning("taglist_from_string: expected '['");
+    return;
+  }
+  s++;
+  auto buf = out.buffer();
+  size_t count = 0;
+  while (*s != '\0') {
+    while (*s == ' ') s++;
+    if (*s == ']') break;
+    if (count >= static_cast<size_t>(kTagListMaxElems)) {
+      out.warning("taglist_from_string: too many elements");
+      return;
+    }
+    char *endptr = nullptr;
+    const unsigned long long v = strtoull(s, &endptr, 10);
+    if (endptr == s) {
+      out.warning("taglist_from_string: parse error");
+      return;
+    }
+    store_be64(buf.data() + count * static_cast<size_t>(kTagBytes), v);
+    count++;
+    s = endptr;
+    while (*s == ' ') s++;
+    if (*s == ',') s++;
+  }
+  if (*s != ']') {
+    out.warning("taglist_from_string: missing ']'");
+    return;
+  }
+  out.set_length(count * static_cast<size_t>(kTagBytes));
+}
+
+void taglist_to_string(vsql::CustomArgWith<TagListParams> in,
+                       vsql::StringResult out) {
+  auto data = in.value();
+  const size_t count = data.size() / static_cast<size_t>(kTagBytes);
+  auto buf = out.buffer();
+  size_t pos = 0;
+  if (pos >= buf.size()) return;
+  buf[pos++] = '[';
+  for (size_t i = 0; i < count; i++) {
+    if (i > 0) {
+      if (pos >= buf.size()) return;
+      buf[pos++] = ',';
+    }
+    const int written = snprintf(
+        buf.data() + pos, buf.size() - pos, "%llu",
+        static_cast<unsigned long long>(
+            load_be64(data.data() + i * static_cast<size_t>(kTagBytes))));
+    if (written <= 0 || pos + static_cast<size_t>(written) >= buf.size())
+      return;
+    pos += static_cast<size_t>(written);
+  }
+  if (pos >= buf.size()) return;
+  buf[pos++] = ']';
+  out.set_length(pos);
+}
+
+int taglist_compare(vsql::CustomArgWith<TagListParams> a,
+                    vsql::CustomArgWith<TagListParams> b) {
+  auto va = a.value();
+  auto vb = b.value();
+  const size_t n = va.size() < vb.size() ? va.size() : vb.size();
+  const int c = memcmp(va.data(), vb.data(), n);
+  if (c != 0) return c;
+  if (va.size() == vb.size()) return 0;
+  return va.size() < vb.size() ? -1 : 1;
+}
+
+// taglist_prepend(tag, rest) -> TAGLIST. Puts the tag's counter at the front
+// of the list.
+void taglist_prepend(vsql::CustomArgWith<TagParams> head,
+                     vsql::CustomArgWith<TagListParams> rest,
+                     vsql::CustomResultWith<TagListParams> out) {
+  if (head.is_null() || rest.is_null()) {
+    out.set_null();
+    return;
+  }
+  auto tail = rest.value();
+  auto buf = out.buffer();
+  if (buf.size() < tail.size() + static_cast<size_t>(kTagBytes)) {
+    out.error("taglist_prepend: result would exceed the maximum list length");
+    return;
+  }
+  memcpy(buf.data(), head.value().data(), static_cast<size_t>(kTagBytes));
+  if (tail.size() > 0) {
+    memcpy(buf.data() + kTagBytes, tail.data(), tail.size());
+  }
+  out.set_length(tail.size() + static_cast<size_t>(kTagBytes));
+}
+
+// The whole point of this fixture. Argument 2 is a TAGLIST whose label is a
+// function of argument 1's parameters -- a TAG. Nothing else in the system can
+// make that connection: the literal's text is silent about the label and TD1
+// only donates between arguments of the same type.
+void taglist_prepend_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() != 2) {
+    out.error("taglist_prepend expects 2 arguments");
+    return;
+  }
+  const TagParams *head = args.at(0).params<TagParams>();
+  if (head == nullptr) {
+    out.error("taglist_prepend: the tag's label is not known here");
+    return;
+  }
+  // If the list argument already arrived resolved (a column), its label must
+  // agree; if it arrived bare (a literal), this is where it gets one.
+  const vsql::BindArgType rest = args.at(1);
+  if (rest.has_params()) {
+    const TagListParams *rp = rest.params<TagListParams>();
+    if (rp != nullptr && rp->label != head->label) {
+      out.error("taglist_prepend: cannot prepend a '" + head->label +
+                "' tag to a '" + rp->label + "' list");
+      return;
+    }
+  } else {
+    out.set_arg(1, TagListParams{head->label});
+  }
+  out.set_return(TagListParams{head->label});
+}
+
+void taglist_label(vsql::CustomArgWith<TagListParams> in,
+                   vsql::StringResult out) {
+  if (in.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(in.params().label);
+}
+
+void taglist_size(vsql::CustomArgWith<TagListParams> in, vsql::IntResult out) {
+  if (in.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(static_cast<long long>(in.value().size() / kTagBytes));
+}
+
 static constexpr const char kTagTypeName[] = "TAG";
 
 constexpr auto TAG =
@@ -330,11 +573,44 @@ constexpr auto TAG =
         .compare<&tag_compare>()
         .build();
 
+static constexpr const char kTagListTypeName[] = "TAGLIST";
+
+constexpr auto TAGLIST = vsql::make_type<kTagListTypeName>()
+                             .variable_length_type()
+                             .max_persisted_length(kTagListMaxBytes)
+                             .max_decode_buffer_length(kTagListMaxDecodedLen)
+                             .params<TagListParams, &TagListParams::parse,
+                                     &TagListParams::to_strings>()
+                             .resolve_params<&taglist_resolve_params>()
+                             .from_string<&taglist_from_string>()
+                             .to_string<&taglist_to_string>()
+                             .compare<&taglist_compare>()
+                             .build();
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
         .type(TAG)
+        .type(TAGLIST)
+        .func(make_func<&taglist_prepend>("taglist_prepend")
+                  .returns(TAGLIST)
+                  .param(TAG)
+                  .param(TAGLIST)
+                  .bind_and_check_types<&taglist_prepend_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&taglist_label>("taglist_label")
+                  .returns(STRING)
+                  .param(TAGLIST)
+                  .buffer_size(kMaxLabelLen + 1)
+                  .deterministic()
+                  .build())
+        .func(make_func<&taglist_size>("taglist_size")
+                  .returns(INT)
+                  .param(TAGLIST)
+                  .deterministic()
+                  .build())
         .func(make_func<&tag_make>("tag_make")
                   .returns(TAG)
                   .param(STRING)

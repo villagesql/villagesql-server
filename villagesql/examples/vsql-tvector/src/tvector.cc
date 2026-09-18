@@ -409,6 +409,172 @@ void tvector_add(vsql::CustomArgWith<TVectorParams> a,
   out.set_length(byte_size);
 }
 
+// Counts the elements in a vector literal like "[1,2,3]", or returns -1 when
+// the text is not a well-formed vector literal. The bind hook below uses it to
+// learn a constant argument's dimension at resolution time -- the same count
+// tvector_from_string would arrive at when it encodes the same text.
+int64_t count_vector_elements(std::string_view text) {
+  std::string input(text);
+  const char *s = input.c_str();
+  while (*s == ' ') s++;
+  if (*s != '[') return -1;
+  s++;
+  int64_t count = 0;
+  while (*s != '\0') {
+    while (*s == ' ') s++;
+    if (*s == ']') break;
+    char *endptr = nullptr;
+    strtod(s, &endptr);
+    if (endptr == s) return -1;
+    count++;
+    s = endptr;
+    while (*s == ' ') s++;
+    if (*s == ',') s++;
+  }
+  if (*s != ']') return -1;
+  s++;
+  while (*s == ' ') s++;
+  return (*s == '\0') ? count : -1;
+}
+
+// Concatenate: (TVECTOR(M), TVECTOR(N)) -> TVECTOR(M+N)
+//
+// Unlike every other TVECTOR function, the arguments are allowed to disagree
+// on dimension -- that disagreement is the input. The built-in rules cannot
+// express this: TD1 rejects same-typed arguments whose params differ, and TD2
+// can only copy an argument's params to the return, never add them. So the
+// dimensions are worked out by tvector_concat_bind below.
+void tvector_concat(vsql::CustomArgWith<TVectorParams> a,
+                    vsql::CustomArgWith<TVectorParams> b,
+                    vsql::CustomResultWith<TVectorParams> out) {
+  if (a.is_null() || b.is_null()) {
+    out.set_null();
+    return;
+  }
+  if (a.params().bytes_per_elem != b.params().bytes_per_elem) {
+    out.error("tvector_concat: vectors must have the same element type");
+    return;
+  }
+  const auto da = a.value();
+  const auto db = b.value();
+  auto buf = out.buffer();
+  if (buf.size() < da.size() + db.size()) {
+    out.error("tvector_concat: output buffer too small");
+    return;
+  }
+  memcpy(buf.data(), da.data(), da.size());
+  memcpy(buf.data() + da.size(), db.data(), db.size());
+  out.set_length(da.size() + db.size());
+}
+
+// The element width both tvector_concat arguments will use. A constant has no
+// element type of its own, so it takes whichever side the server resolved;
+// when both sides are resolved they must agree. This is the one question that
+// needs to look at both arguments at once.
+//
+// Returns true and fills error_msg on failure.
+bool common_element_width(vsql::BindArgs args, size_t &bpe,
+                          std::string &error_msg) {
+  const TVectorParams *a = args.at(0).params<TVectorParams>();
+  const TVectorParams *b = args.at(1).params<TVectorParams>();
+  if (a != nullptr && b != nullptr &&
+      a->bytes_per_elem != b->bytes_per_elem) {
+    error_msg = "tvector_concat: vectors must have the same element type";
+    return true;
+  }
+  bpe = (a != nullptr)   ? a->bytes_per_elem
+        : (b != nullptr) ? b->bytes_per_elem
+                         : 4;
+  return false;
+}
+
+// Works out the params of one tvector_concat argument, whether the server
+// already resolved it or it arrived as a bare constant whose elements have to
+// be counted. Sets needs_publish when it was the latter -- the server holds no
+// params for that argument, so the caller has to hand these back with
+// set_arg() before the constant can be encoded.
+//
+// Returns true and fills error_msg on failure.
+bool bind_params_for_vector(vsql::BindArgs args, size_t index, size_t bpe,
+                            TVectorParams &params, bool &needs_publish,
+                            std::string &error_msg) {
+  const vsql::BindArgType arg = args.at(index);
+  needs_publish = false;
+  if (const TVectorParams *known = arg.params<TVectorParams>()) {
+    params = *known;
+    return false;
+  }
+
+  const std::string which = std::to_string(index + 1);
+  if (!arg.has_const_value()) {
+    error_msg = "tvector_concat: argument " + which +
+                " must be a TVECTOR or a constant vector literal";
+    return true;
+  }
+  const int64_t n = count_vector_elements(arg.const_value());
+  if (n < 0) {
+    error_msg = "tvector_concat: argument " + which + " is not a vector literal";
+    return true;
+  }
+  if (n == 0) {
+    error_msg = "tvector_concat: argument " + which +
+                " is empty; a TVECTOR must have at least one element";
+    return true;
+  }
+  params = TVectorParams{.dimension = n, .bytes_per_elem = bpe};
+  needs_publish = true;
+  return false;
+}
+
+// bind_and_check_types for tvector_concat.
+//
+// Two jobs the built-in rules cannot do:
+//   1. permit arguments whose dimensions differ (TD1 would reject the call);
+//   2. compute the return dimension as M+N (TD2 could only copy M or N).
+//
+// A third job appears when an argument is a constant: a bare '[1,2,3]' has no
+// type context, and with a hook installed nothing donates params to it, so the
+// hook counts the elements itself and answers with set_arg(). The element type
+// comes from whichever side the server already resolved, which is what TD1
+// would have donated.
+void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() != 2) {
+    out.error("tvector_concat expects 2 arguments");
+    return;
+  }
+
+  std::string error_msg;
+  size_t bpe = 0;
+  if (common_element_width(args, bpe, error_msg)) {
+    out.error(error_msg);
+    return;
+  }
+
+  TVectorParams first{}, second{};
+  bool publish_first = false, publish_second = false;
+
+  if (bind_params_for_vector(args, 0, bpe, first, publish_first, error_msg) ||
+      bind_params_for_vector(args, 1, bpe, second, publish_second, error_msg)) {
+    out.error(error_msg);
+    return;
+  }
+
+  // Hand back the params of whichever side the server could not resolve.
+  // Without this a constant has nothing to be encoded under and the statement
+  // cannot be resolved -- a hook switches TD1's donation off.
+  if (publish_first) out.set_arg(0, first);
+  if (publish_second) out.set_arg(1, second);
+
+  const int64_t total = first.dimension + second.dimension;
+  if (total > kTVectorMaxDimension) {
+    out.error("tvector_concat: combined dimension " + std::to_string(total) +
+              " exceeds the maximum of " +
+              std::to_string(kTVectorMaxDimension));
+    return;
+  }
+  out.set_return(TVectorParams{.dimension = total, .bytes_per_elem = bpe});
+}
+
 // Scalar multiply: (TVECTOR, REAL) -> TVECTOR
 void tvector_scale(vsql::CustomArgWith<TVectorParams> a, vsql::RealArg scalar,
                    vsql::CustomResultWith<TVectorParams> out) {
@@ -477,6 +643,13 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(TVECTOR)
                   .param(TVECTOR)
                   .param(TVECTOR)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_concat>("tvector_concat")
+                  .returns(TVECTOR)
+                  .param(TVECTOR)
+                  .param(TVECTOR)
+                  .bind_and_check_types<&tvector_concat_bind>()
                   .deterministic()
                   .build())
         .func(make_func<&tvector_scale>("tvector_scale")

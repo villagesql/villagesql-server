@@ -75,8 +75,63 @@ ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label
 SELECT vsql_bindcheck_test.tag_relabel(tags.t, labels.l) FROM tags, labels;
 ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label must be a constant string
 #
+# A bare literal in TAG position reaches the hook as a STRING -- it has
+# no type context yet. The hook recovers the label from its text and
+# hands it back with set_arg(), which is how the server learns to encode
+# the literal as TAG('label=user').
+#
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived') AS from_literal;
+from_literal
+archived#5
+SELECT vsql_bindcheck_test.tag_label(
+vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS new_label,
+vsql_bindcheck_test.tag_counter(
+vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS n;
+new_label	n
+archived	5
+# The literal's own label still decides the no-op check.
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'user');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label matches the old one
+# Text that is not a TAG literal has no label to recover.
+SELECT vsql_bindcheck_test.tag_relabel('nope', 'archived');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: 'nope' is not a TAG literal (expected <label>#<number>)
+#
+# TAGLIST: an argument whose parameters are a function of a
+# DIFFERENTLY-typed argument's. This is the case set_arg() alone can
+# serve -- a TAGLIST's text form never names its label, and TD1 only
+# donates between arguments of the same type, so a TAG can never hand
+# its label to a TAGLIST.
+#
+# Written explicitly it cannot be resolved either -- the text is silent:
+SELECT TAGLIST::from_string('[1,2,3]') AS ctor;
+ERROR HY000: error encountered during TAGLIST::from_string inference: taglist_from_string: a TAGLIST literal cannot say which label it belongs to
+# Through the hook, the TAG argument supplies it.
+SELECT vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]') AS lst,
+vsql_bindcheck_test.taglist_label(
+vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]')) AS lbl,
+vsql_bindcheck_test.taglist_size(
+vsql_bindcheck_test.taglist_prepend(t, '[1,2,3]')) AS n
+FROM tags WHERE id = 2;
+lst	lbl	n
+[5,1,2,3]	user	4
+# An already resolved TAGLIST column needs no set_arg, only agreement.
+CREATE TABLE lists (v vsql_bindcheck_test.TAGLIST('label=user'));
+INSERT INTO lists VALUES ('[4,5]');
+SELECT vsql_bindcheck_test.taglist_prepend(tags.t, lists.v) AS lst
+FROM tags, lists WHERE tags.id = 2;
+lst
+[5,4,5]
+CREATE TABLE other_lists (v vsql_bindcheck_test.TAGLIST('label=order'));
+INSERT INTO other_lists VALUES ('[9]');
+# Disagreement is the hook's to reject; TD1 never sees these as siblings.
+SELECT vsql_bindcheck_test.taglist_prepend(tags.t, other_lists.v)
+FROM tags, other_lists;
+ERROR HY000: Can't initialize function 'taglist_prepend'; taglist_prepend: cannot prepend a 'user' tag to a 'order' list
+#
 # Cleanup
 #
+DROP TABLE other_lists;
+DROP TABLE lists;
 DROP TABLE tags;
 DROP TABLE labels;
 UNINSTALL EXTENSION vsql_bindcheck_test;
