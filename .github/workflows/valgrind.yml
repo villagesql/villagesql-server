@@ -28,9 +28,12 @@ name: Valgrind Tests
 # any --valgrind-option is given, and only that branch scales the start and
 # suite timeouts that mysqld needs under memcheck.
 #
+# Results are posted to Slack; see the notify job at the bottom.
+#
 # Trigger via:
 #   - Actions tab -> Run workflow
 #   - gh workflow run "Valgrind Tests"
+# nightly-dispatch.yml starts one run this way after every nightly build.
 
 on:
   workflow_dispatch:
@@ -70,6 +73,15 @@ on:
         description: 'Cap on mysql-test-run workers (each one runs mysqld and mysqltest under valgrind)'
         required: false
         default: '16'
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: valgrind-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   valgrind-test:
@@ -79,6 +91,17 @@ jobs:
     timeout-minutes: 600
     permissions:
       contents: read
+
+    # Per-phase outcomes for the notify job. A phase that never ran reports as
+    # empty; notify renders that as "did not run".
+    outputs:
+      sha: ${{ steps.checkout_report.outputs.sha }}
+      build: ${{ steps.build.outcome }}
+      unit: ${{ steps.unit.outcome }}
+      mtr: ${{ steps.valgrind.outcome }}
+      mtr_unstable: ${{ steps.valgrind.outputs.unstable }}
+      ext_build: ${{ steps.ext_build.outcome }}
+      ext_test: ${{ steps.ext_test.outcome }}
 
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
@@ -99,6 +122,13 @@ jobs:
         ref: ${{ env.REQUEST_REF }}
         fetch-depth: 50
         path: source
+
+    - name: Report Checkout
+      id: checkout_report
+      run: |
+        echo "Git SHA1: $(git -C source rev-parse HEAD)"
+        echo "Git Commit: $(git -C source log -n1 --oneline)"
+        echo "sha=$(git -C source rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Checkout bundled extensions
       if: inputs.run-extension-tests
@@ -227,3 +257,100 @@ jobs:
           exit 1
         fi
         echo "All valgrind test phases passed."
+
+  # Posts a per-phase summary after the run.
+  notify:
+    name: Slack Notification
+    needs: valgrind-test
+    # Even if valgrind-test fails, but only if slack notify requested.
+    if: always() && inputs.slack_notify
+    runs-on: ubuntu-latest
+    # Posts to a webhook; needs no repo access.
+    permissions: {}
+    steps:
+      - name: Build phase summary
+        id: summary
+        env:
+          BUILD: ${{ needs.valgrind-test.outputs.build }}
+          UNIT: ${{ needs.valgrind-test.outputs.unit }}
+          MTR: ${{ needs.valgrind-test.outputs.mtr }}
+          MTR_UNSTABLE: ${{ needs.valgrind-test.outputs.mtr_unstable }}
+          EXT_BUILD: ${{ needs.valgrind-test.outputs.ext_build }}
+          EXT_TEST: ${{ needs.valgrind-test.outputs.ext_test }}
+        run: |
+          line() {
+            local label="$1" outcome="$2" note="${3:-}" icon
+            case "$outcome" in
+              success) icon="✅" ;;
+              failure) icon="❌" ;;
+              "")      icon="⏭️"; outcome="did not run" ;;
+              *)       icon="⚠️" ;;
+            esac
+            printf '%s %s: %s%s\n' "$icon" "$label" "$outcome" "$note"
+          }
+          # Unstable tests (failed, then passed on retry) do not fail the run,
+          # so without this the report is green and the flake is invisible.
+          MTR_NOTE=""
+          if [ -n "$MTR_UNSTABLE" ] && [ "$MTR_UNSTABLE" != "0" ]; then
+            MTR_NOTE=" ($MTR_UNSTABLE unstable)"
+          fi
+          SUMMARY=$(
+            line "Server build"    "$BUILD"
+            line "Unit tests"      "$UNIT"
+            line "MTR suite"       "$MTR" "$MTR_NOTE"
+            line "Extension build" "$EXT_BUILD"
+            line "Extension tests" "$EXT_TEST"
+          )
+          echo "$SUMMARY"
+          # jq -Rs emits a JSON string (newlines escaped), so it stays one line
+          # in GITHUB_OUTPUT and drops into the payload below unquoted.
+          echo "text=$(jq -Rs . <<<"$SUMMARY")" >> "$GITHUB_OUTPUT"
+
+      - name: Compute overall status
+        id: status
+        env:
+          RESULT: ${{ needs.valgrind-test.result }}
+        run: |
+          case "$RESULT" in
+            success)   label=passed;    emoji="✅"; color="#36a64f" ;;
+            cancelled) label=cancelled; emoji="⚠️"; color="#daa520" ;;
+            *)         label=failed;    emoji="❌"; color="#cc0000" ;;
+          esac
+          {
+            echo "label=$label"
+            echo "emoji=$emoji"
+            echo "color=$color"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.emoji }} Valgrind Tests ${{ steps.status.outputs.label }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "text":  ${{ steps.summary.outputs.text }},
+                  "fields": [
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ needs.valgrind-test.outputs.sha || 'unknown' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Triggered by",
+                      "value": "${{ github.event_name }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
