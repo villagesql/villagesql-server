@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +37,8 @@ Clone Plugin: Client implementation
 #include "sql/sql_plugin.h"  // For check_valid_path() only.
 #include "sql/sql_thd_internal_api.h"
 #include "sql_string.h"
+
+#include "villagesql/veb/veb_file.h"
 
 /* Namespace for all clone data types */
 namespace myclone {
@@ -1083,6 +1086,16 @@ int Client::validate_remote_params() {
     last_error = ER_CLONE_PLUGIN_MATCH;
   }
 
+  // VillageSQL: validate that donor extensions are available on the recipient.
+  // The payload is opaque to clone; villagesql/veb interprets it and reports
+  // the reason for any mismatch.
+  std::string ext_error;
+  if (villagesql::veb::validate_cloned_extensions(
+          get_thd(), m_parameters.m_extensions, &ext_error)) {
+    my_error(ER_CLONE_EXTENSION_MATCH, MYF(0), ext_error.c_str());
+    last_error = ER_CLONE_EXTENSION_MATCH;
+  }
+
   /* Validate character sets */
   auto err = mysql_service_clone_protocol->mysql_clone_validate_charsets(
       get_thd(), m_parameters.m_charsets);
@@ -1180,6 +1193,12 @@ int Client::add_charset(const uchar *packet, size_t length) {
     m_parameters.m_charsets.push_back(charset_name);
   }
   return (err);
+}
+
+// VillageSQL: store the opaque extension payload verbatim; it is interpreted by
+// villagesql/veb, not by clone.
+int Client::add_extensions(const uchar *packet, size_t length) {
+  return extract_string(packet, length, m_parameters.m_extensions);
 }
 
 void Client::use_other_configs() {
@@ -1376,7 +1395,9 @@ int Client::serialize_init_cmd(size_t &buf_len) {
   }
 
   /* Store version */
-  int4store(buf_ptr, m_share->m_protocol_version);
+  // VillageSQL: advertise clone capabilities in the reserved high bits of the
+  // version word (see VSQL_CLONE_CAP_EXTENSIONS in clone.h).
+  int4store(buf_ptr, m_share->m_protocol_version | VSQL_CLONE_CAP_EXTENSIONS);
   buf_ptr += 4;
 
   /* Store DDL timeout value. Default is no lock. */
@@ -1531,6 +1552,10 @@ int Client::handle_response(const uchar *packet, size_t length, int in_err,
 
     case COM_RES_COLLATION:
       err = add_charset(packet, length);
+      break;
+
+    case COM_RES_EXTENSION:
+      err = add_extensions(packet, length);
       break;
 
     case COM_RES_LOCS:
