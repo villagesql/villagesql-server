@@ -18,7 +18,8 @@
 // "vsql_auth_test" that authenticates iff the client sends one of the fixed
 // tokens below. The connecting account "auth_user" proxies to
 // "vsql_auth_test_user"; any other account authenticates as itself. The
-// auto_create / auto_grant opt-ins are exposed as sysvars (default OFF) so
+// auto_create opt-in (a bool sysvar, default OFF) and auto_grant role-reconcile
+// mode (an OFF/ON/SYNC enum sysvar, default OFF) are exposed as sysvars so
 // tests toggle each independently, and accept_client_plugin (a sysvar) selects
 // one extra client plugin the method accepts as-is during negotiation.
 //
@@ -72,14 +73,26 @@ bool token_matches(const unsigned char *pkt, size_t token_len,
          std::memcmp(pkt, expected, token_len) == 0;
 }
 
-// The two auto-* opt-ins, each backed by its own sysvar (default OFF) so tests
-// can toggle them independently: auto_create routes unknown accounts here for
-// provisioning; auto_grant has the server grant staged roles to existing
-// accounts. Queried live by the auth capability's callbacks below.
+// The opt-ins, backed by sysvars so tests can toggle them independently.
+// auto_create (bool, default OFF) routes unknown accounts here for
+// provisioning. Queried live by the auth capability's callbacks below.
 bool g_auto_create = false;
-bool g_auto_grant = false;
 bool auto_create_enabled() { return g_auto_create; }
-bool auto_grant_enabled() { return g_auto_grant; }
+
+// auto_grant governs how the server reconciles staged roles with an existing
+// account's grants. It is an enum whose first two values are the historical
+// OFF/ON booleans, so every legacy spelling still works: OFF/ON as names, 0/1
+// as ordinals, and bare FALSE/TRUE (which the parser turns into 0/1). The third
+// value SYNC is new. The index order matches vef_auth_roles_mode_t exactly, so
+// the callback returns the stored index verbatim:
+//   OFF (0) = ACTIVATE  activate-only, grant nothing
+//   ON  (1) = GRANT     also grant a claimed role the account lacks
+//   SYNC(2) = SYNC      grant missing AND revoke every unclaimed granted role
+const char *const kAutoGrantNames[] = {"OFF", "ON", "SYNC"};
+unsigned long g_auto_grant = 0;  // default OFF (activate-only)
+vef_auth_roles_mode_t roles_mode_cb() {
+  return static_cast<vef_auth_roles_mode_t>(g_auto_grant);
+}
 
 // One extra client plugin (besides kClientPlugin) this method accepts as-is,
 // selected by a test via SET GLOBAL vsql_auth_test.accept_client_plugin. Empty
@@ -162,20 +175,24 @@ constexpr auto AUTH_METHOD =
     vsql::preview_auth::make_auth<&authenticate>("vsql_auth_test")
         .client_plugin(kClientPlugin)
         .auto_create(&auto_create_enabled)
-        .auto_grant(&auto_grant_enabled)
+        .roles_mode(&roles_mode_cb)
         .accepts_client_plugin(&accepts_client_plugin)
         .build();
 vsql::preview_auth::AuthCapability g_auth{AUTH_METHOD};
 
-// Sysvars backing the opt-ins. auto_create / auto_grant default OFF; SET GLOBAL
-// vsql_auth_test.auto_create / .auto_grant toggles each feature.
-// accept_client_plugin defaults empty (accept only kClientPlugin); set it to
-// another plugin name to have the method accept that offer as-is.
+// Sysvars backing the opt-ins. auto_create defaults OFF; auto_grant defaults
+// OFF (activate-only). SET GLOBAL vsql_auth_test.auto_create toggles the first;
+// SET GLOBAL vsql_auth_test.auto_grant = OFF|ON|SYNC selects the role-reconcile
+// mode. accept_client_plugin defaults empty (accept only kClientPlugin); set it
+// to another plugin name to have the method accept that offer as-is.
 auto SYS_VARS = sv::make_capability({
     sv::make_bool("auto_create", "Route unknown accounts here for provisioning",
                   &g_auto_create, false),
-    sv::make_bool("auto_grant", "Grant token-staged roles to existing accounts",
-                  &g_auto_grant, false),
+    sv::make_enum("auto_grant",
+                  "Role reconcile for existing accounts: OFF (activate only), "
+                  "ON (also grant claimed roles), SYNC (grant claimed and "
+                  "revoke unclaimed)",
+                  &g_auto_grant, kAutoGrantNames, /*def_val=*/0),
     sv::make_str("accept_client_plugin",
                  "One extra client plugin to also accept as-is",
                  &g_accept_client_plugin, ""),
