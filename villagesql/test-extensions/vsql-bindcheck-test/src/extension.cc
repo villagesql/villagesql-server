@@ -536,9 +536,10 @@ void taglist_max_bind(vsql::BindArgs args, vsql::BindResult out) {
   if (list == nullptr) {
     // A TAGLIST literal cannot name its own label, and there is no sibling of
     // that type to take one from, so there is nothing to derive here.
-    out.error("taglist_max: the list's label is not known here. Put this"
-              " taglist in a column and run taglist_max() on that column,"
-              " or use taglist_prepend() to build a list from a TAG.");
+    out.error(
+        "taglist_max: the list's label is not known here. Put this"
+        " taglist in a column and run taglist_max() on that column,"
+        " or use taglist_prepend() to build a list from a TAG.");
     return;
   }
   out.set_return(TagParams{list->label});

@@ -487,16 +487,19 @@ bool common_element_width(vsql::BindArgs args, size_t &bpe,
   return false;
 }
 
-// Works out the params of one tvector_concat argument, whether the server
-// already resolved it or it arrived as a bare constant whose elements have to
-// be counted. Sets needs_publish when it was the latter -- the server holds no
+// Works out the params of one TVECTOR argument, whether the server already
+// resolved it or it arrived as a bare constant whose elements have to be
+// counted. Sets needs_publish when it was the latter -- the server holds no
 // params for that argument, so the caller has to hand these back with
 // set_arg() before the constant can be encoded.
 //
+// func_name only appears in error messages; the logic is the same for every
+// hook that accepts a TVECTOR argument.
+//
 // Returns true and fills error_msg on failure.
-bool bind_params_for_vector(vsql::BindArgs args, size_t index, size_t bpe,
-                            TVectorParams &params, bool &needs_publish,
-                            std::string &error_msg) {
+bool bind_params_for_vector(const char *func_name, vsql::BindArgs args,
+                            size_t index, size_t bpe, TVectorParams &params,
+                            bool &needs_publish, std::string &error_msg) {
   const vsql::BindArgType arg = args.at(index);
   needs_publish = false;
   if (const TVectorParams *known = arg.params<TVectorParams>()) {
@@ -504,21 +507,21 @@ bool bind_params_for_vector(vsql::BindArgs args, size_t index, size_t bpe,
     return false;
   }
 
+  const std::string prefix = std::string(func_name) + ": argument ";
   const std::string which = std::to_string(index + 1);
   if (!arg.has_const_value()) {
-    error_msg = "tvector_concat: argument " + which +
-                " must be a TVECTOR or a constant vector literal";
+    error_msg =
+        prefix + which + " must be a TVECTOR or a constant vector literal";
     return true;
   }
   const int64_t n = count_vector_elements(arg.const_value());
   if (n < 0) {
-    error_msg =
-        "tvector_concat: argument " + which + " is not a vector literal";
+    error_msg = prefix + which + " is not a vector literal";
     return true;
   }
   if (n == 0) {
-    error_msg = "tvector_concat: argument " + which +
-                " is empty; a TVECTOR must have at least one element";
+    error_msg =
+        prefix + which + " is empty; a TVECTOR must have at least one element";
     return true;
   }
   params = TVectorParams{.dimension = n, .bytes_per_elem = bpe};
@@ -553,8 +556,10 @@ void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams first{}, second{};
   bool publish_first = false, publish_second = false;
 
-  if (bind_params_for_vector(args, 0, bpe, first, publish_first, error_msg) ||
-      bind_params_for_vector(args, 1, bpe, second, publish_second, error_msg)) {
+  if (bind_params_for_vector("tvector_concat", args, 0, bpe, first,
+                             publish_first, error_msg) ||
+      bind_params_for_vector("tvector_concat", args, 1, bpe, second,
+                             publish_second, error_msg)) {
     out.error(error_msg);
     return;
   }
@@ -573,6 +578,55 @@ void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
     return;
   }
   out.set_return(TVectorParams{.dimension = total, .bytes_per_elem = bpe});
+}
+
+// Largest element: (TVECTOR) -> REAL
+void tvector_max_element(vsql::CustomArgWith<TVectorParams> v,
+                         vsql::RealResult out) {
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  const TVectorParams &p = v.params();
+  const unsigned char *d = v.value().data();
+  double best = (p.bytes_per_elem == 8) ? load_double(d)
+                                        : static_cast<double>(load_float(d));
+  for (int64_t i = 1; i < p.dimension; i++) {
+    const double e = (p.bytes_per_elem == 8)
+                         ? load_double(d + i * 8)
+                         : static_cast<double>(load_float(d + i * 4));
+    if (e > best) best = e;
+  }
+  out.set(best);
+}
+
+// bind_and_check_types for tvector_max_element.
+//
+// Unlike every other hook here this one never calls set_return(): the result
+// is a REAL, which has no parameters to decide. Its only job is the argument.
+//
+// The function works without a hook for a TVECTOR column, and for an
+// explicitly converted TVECTOR::from_string('[1,2,3]'). What the hook adds is
+// the bare literal: with a single argument there is no sibling for TD1 to
+// donate a dimension from, so without this the call cannot be resolved at all.
+// The dimension is counted from the literal's own text -- which TVECTOR's text
+// form does determine -- and handed back with set_arg().
+void tvector_max_element_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() != 1) {
+    out.error("tvector_max_element expects 1 argument");
+    return;
+  }
+  // A lone constant has no other side to take an element type from, so it
+  // falls back to float, matching what tvector_from_string infers for one.
+  TVectorParams p{};
+  bool needs_publish = false;
+  std::string error_msg;
+  if (bind_params_for_vector("tvector_max_element", args, 0, 4, p,
+                             needs_publish, error_msg)) {
+    out.error(error_msg);
+    return;
+  }
+  if (needs_publish) out.set_arg(0, p);
 }
 
 // Scalar multiply: (TVECTOR, REAL) -> TVECTOR
@@ -650,6 +704,12 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(TVECTOR)
                   .param(TVECTOR)
                   .bind_and_check_types<&tvector_concat_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_max_element>("tvector_max_element")
+                  .returns(REAL)
+                  .param(TVECTOR)
+                  .bind_and_check_types<&tvector_max_element_bind>()
                   .deterministic()
                   .build())
         .func(make_func<&tvector_scale>("tvector_scale")
