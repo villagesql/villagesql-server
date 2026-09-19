@@ -16,25 +16,40 @@
 // Coverage fixture for the typed bind_and_check_types API
 // (vsql::BindArgs / vsql::BindResult).
 //
-// TAG is a custom type carrying an 8-byte big-endian counter, parameterized by
-// a 'label' that is type metadata only -- it is not part of the stored value.
-// Its text form is "<label>#<number>".
+// Two custom types, both parameterized by a 'label' that is type metadata
+// only -- it is never part of a stored value:
 //
-// Two functions install bind hooks, between them covering every BindArgType
-// accessor:
+//   TAG      a fixed 8-byte big-endian counter. Text form "<label>#<number>",
+//            which does name its own label.
+//   TAGLIST  a variable-length run of those counters. Text form "[1,2,3]",
+//            which does NOT name a label.
 //
-//   tag_make(label, n)      the return type's label comes from the VALUE of a
-//                           constant argument, which no built-in rule can do.
-//                           Exercises has_const_value() / const_value().
+// Four functions install bind hooks, between them covering every BindArgType
+// and BindResult method, and each one is a shape the built-in rules cannot
+// express -- TD1 only propagates parameters between arguments of the SAME
+// type, and TD2 only copies an argument's parameters onto a return of that
+// same type.
 //
-//   tag_relabel(tag, label) the hook reads the incoming argument's already
-//                           resolved parameters and combines them with a
-//                           constant. Exercises is_custom(), custom_type(),
-//                           has_params() and params<P>().
+//   tag_make(label, n) -> TAG
+//       The return's label is the VALUE of a constant argument. No custom
+//       argument exists at all, so TD1 and TD2 have nothing to work from.
+//       Exercises has_const_value() / const_value() / set_return().
 //
-// Both are the shape the built-in rules cannot express: TD1 only propagates
-// parameters between same-typed arguments, and TD2 only copies an argument's
-// parameters to a same-typed return.
+//   tag_relabel(tag, label) -> TAG
+//       Combines an argument's resolved parameters with a constant. Also
+//       shows a hook TIGHTENING the contract: a bare string in TAG position
+//       is refused, so converting one has to be written as TAG::from_string.
+//       Exercises is_custom() / custom_type() / params<P>().
+//
+//   taglist_prepend(tag, list) -> TAGLIST
+//       The list argument's parameters come from the TAG argument -- a
+//       DIFFERENT type, which TD1 can never bridge, and a TAGLIST literal
+//       cannot supply them itself. The one shape only set_arg() can serve.
+//
+//   taglist_max(list) -> TAG
+//       Variable-length argument in, fixed-size parameterized value out, with
+//       the label crossing from TAGLIST to TAG. TD2 searches the arguments
+//       for the RETURN type's name and finds none.
 
 #include <villagesql/vsql.h>
 
@@ -268,49 +283,32 @@ void tag_relabel(vsql::CustomArgWith<TagParams> in, vsql::StringArg label,
 // Reads the incoming argument's resolved parameters and a constant, which is
 // the second thing a bind hook needs and the built-in rules cannot combine.
 //
-// The first argument is declared TAG, but a bare string literal written there
-// reaches the hook as a STRING: it has no type context yet, so the server has
-// nothing to report but its result type. Recovering the label from the
-// literal's text and answering with set_arg() is what makes
-// tag_relabel('user#5', 'archived') work -- the server then encodes the
-// literal as a TAG under that label, exactly as if a sibling argument had
-// donated it.
+// It also tightens the contract, which is a capability in its own right: the
+// first argument must arrive as a TAG that already carries a label, so a bare
+// string is refused rather than converted. The hook could accept one -- a
+// TAG's text form names its own label, so it could be read out of '<label>#N'
+// and published with set_arg() -- but then the value's own characters would be
+// deciding its type. Requiring TAG::from_string('user#5') instead keeps that
+// conversion something the query states rather than something the argument
+// position implies.
 void tag_relabel_bind(vsql::BindArgs args, vsql::BindResult out) {
   if (args.size() != 2) {
     out.error("tag_relabel expects 2 arguments");
     return;
   }
   const vsql::BindArgType source = args.at(0);
-  std::string source_label;
-  if (source.is_custom()) {
-    if (source.custom_type() != "TAG") {
-      out.error("tag_relabel: the first argument must be a TAG");
-      return;
-    }
-    const TagParams *source_params = source.params<TagParams>();
-    if (source_params == nullptr) {
-      out.error("tag_relabel: the source TAG's label is not known here");
-      return;
-    }
-    source_label = source_params->label;
-  } else if (source.has_const_value()) {
-    // A literal in TAG position: its label is whatever its text says.
-    const std::string_view source_text = source.const_value();
-    const size_t hash = source_text.find('#');
-    if (hash == std::string_view::npos ||
-        !valid_label(source_text.substr(0, hash))) {
-      out.error("tag_relabel: '" + std::string(source_text) +
-                "' is not a TAG literal (expected <label>#<number>)");
-      return;
-    }
-    source_label = std::string(source_text.substr(0, hash));
-    // Tell the server how to encode that literal. Without this it has no
-    // parameters to encode it under and the call cannot be resolved.
-    out.set_arg(0, TagParams{source_label});
-  } else {
-    out.error("tag_relabel: the first argument must be a TAG");
+  if (!source.is_custom() || source.custom_type() != "TAG") {
+    out.error(
+        "tag_relabel: the first argument must be a TAG value; write "
+        "TAG::from_string(...) to convert a string");
     return;
   }
+  const TagParams *source_params = source.params<TagParams>();
+  if (source_params == nullptr) {
+    out.error("tag_relabel: the source TAG's label is not known here");
+    return;
+  }
+  const std::string &source_label = source_params->label;
 
   const vsql::BindArgType label = args.at(1);
   if (!label.has_const_value()) {
@@ -538,7 +536,9 @@ void taglist_max_bind(vsql::BindArgs args, vsql::BindResult out) {
   if (list == nullptr) {
     // A TAGLIST literal cannot name its own label, and there is no sibling of
     // that type to take one from, so there is nothing to derive here.
-    out.error("taglist_max: the list's label is not known here");
+    out.error("taglist_max: the list's label is not known here. Put this"
+              " taglist in a column and run taglist_max() on that column,"
+              " or use taglist_prepend() to build a list from a TAG.");
     return;
   }
   out.set_return(TagParams{list->label});

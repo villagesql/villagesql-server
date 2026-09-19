@@ -83,25 +83,33 @@ SELECT vsql_bindcheck_test.tag_relabel(t, 'user') FROM tags;
 SELECT vsql_bindcheck_test.tag_relabel(tags.t, labels.l) FROM tags, labels;
 
 --echo #
---echo # A bare literal in TAG position reaches the hook as a STRING -- it has
---echo # no type context yet. The hook recovers the label from its text and
---echo # hands it back with set_arg(), which is how the server learns to encode
---echo # the literal as TAG('label=user').
+--echo # A hook can also tighten the contract. A bare string in TAG position
+--echo # reaches the hook as a STRING with no type context, and this hook
+--echo # refuses it rather than reading a label out of the value's own
+--echo # characters -- even though a TAG's text form would allow that.
 --echo #
-SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived') AS from_literal;
-
-SELECT vsql_bindcheck_test.tag_label(
-         vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS new_label,
-       vsql_bindcheck_test.tag_counter(
-         vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS n;
-
---echo # The literal's own label still decides the no-op check.
 --error ER_CANT_INITIALIZE_UDF
-SELECT vsql_bindcheck_test.tag_relabel('user#5', 'user');
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived');
 
---echo # Text that is not a TAG literal has no label to recover.
 --error ER_CANT_INITIALIZE_UDF
 SELECT vsql_bindcheck_test.tag_relabel('nope', 'archived');
+
+--echo # The conversion has to be written, and then it works. TAG::from_string
+--echo # resolves the literal to TAG('label=user') on its own, so the argument
+--echo # reaches the hook already carrying parameters and needs no set_arg.
+SELECT vsql_bindcheck_test.tag_relabel(TAG::from_string('user#5'), 'archived')
+         AS from_ctor;
+
+SELECT vsql_bindcheck_test.tag_label(
+         vsql_bindcheck_test.tag_relabel(
+           TAG::from_string('user#5'), 'archived')) AS new_label,
+       vsql_bindcheck_test.tag_counter(
+         vsql_bindcheck_test.tag_relabel(
+           TAG::from_string('user#5'), 'archived')) AS n;
+
+--echo # The no-op check still reads the source's real label.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_bindcheck_test.tag_relabel(TAG::from_string('user#5'), 'user');
 
 --echo #
 --echo # TAGLIST: an argument whose parameters are a function of a

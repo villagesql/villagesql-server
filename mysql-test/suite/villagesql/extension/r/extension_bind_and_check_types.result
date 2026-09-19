@@ -75,26 +75,33 @@ ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label
 SELECT vsql_bindcheck_test.tag_relabel(tags.t, labels.l) FROM tags, labels;
 ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label must be a constant string
 #
-# A bare literal in TAG position reaches the hook as a STRING -- it has
-# no type context yet. The hook recovers the label from its text and
-# hands it back with set_arg(), which is how the server learns to encode
-# the literal as TAG('label=user').
+# A hook can also tighten the contract. A bare string in TAG position
+# reaches the hook as a STRING with no type context, and this hook
+# refuses it rather than reading a label out of the value's own
+# characters -- even though a TAG's text form would allow that.
 #
-SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived') AS from_literal;
-from_literal
+SELECT vsql_bindcheck_test.tag_relabel('user#5', 'archived');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the first argument must be a TAG value; write TAG::from_string(...) to convert a string
+SELECT vsql_bindcheck_test.tag_relabel('nope', 'archived');
+ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the first argument must be a TAG value; write TAG::from_string(...) to convert a string
+# The conversion has to be written, and then it works. TAG::from_string
+# resolves the literal to TAG('label=user') on its own, so the argument
+# reaches the hook already carrying parameters and needs no set_arg.
+SELECT vsql_bindcheck_test.tag_relabel(TAG::from_string('user#5'), 'archived')
+AS from_ctor;
+from_ctor
 archived#5
 SELECT vsql_bindcheck_test.tag_label(
-vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS new_label,
+vsql_bindcheck_test.tag_relabel(
+TAG::from_string('user#5'), 'archived')) AS new_label,
 vsql_bindcheck_test.tag_counter(
-vsql_bindcheck_test.tag_relabel('user#5', 'archived')) AS n;
+vsql_bindcheck_test.tag_relabel(
+TAG::from_string('user#5'), 'archived')) AS n;
 new_label	n
 archived	5
-# The literal's own label still decides the no-op check.
-SELECT vsql_bindcheck_test.tag_relabel('user#5', 'user');
+# The no-op check still reads the source's real label.
+SELECT vsql_bindcheck_test.tag_relabel(TAG::from_string('user#5'), 'user');
 ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: the new label matches the old one
-# Text that is not a TAG literal has no label to recover.
-SELECT vsql_bindcheck_test.tag_relabel('nope', 'archived');
-ERROR HY000: Can't initialize function 'tag_relabel'; tag_relabel: 'nope' is not a TAG literal (expected <label>#<number>)
 #
 # TAGLIST: an argument whose parameters are a function of a
 # DIFFERENTLY-typed argument's. This is the case set_arg() alone can
