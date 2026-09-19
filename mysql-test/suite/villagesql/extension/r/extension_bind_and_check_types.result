@@ -128,8 +128,37 @@ SELECT vsql_bindcheck_test.taglist_prepend(tags.t, other_lists.v)
 FROM tags, other_lists;
 ERROR HY000: Can't initialize function 'taglist_prepend'; taglist_prepend: cannot prepend a 'user' tag to a 'order' list
 #
+# taglist_max: variable-length argument in, fixed-size parameterized
+# value out. The return's label crosses from TAGLIST to TAG -- two
+# different type names -- which TD2 cannot do, because it looks up only
+# the return type's own name among the arguments and would find none.
+#
+SELECT v AS list,
+vsql_bindcheck_test.taglist_max(v) AS largest,
+vsql_bindcheck_test.tag_label(vsql_bindcheck_test.taglist_max(v)) AS lbl,
+vsql_bindcheck_test.tag_counter(vsql_bindcheck_test.taglist_max(v)) AS n
+FROM lists;
+list	largest	lbl	n
+[4,5]	user#5	user	5
+# The result really is TAG('label=user'): it stores into a matching
+# column and is refused by one whose label differs.
+CREATE TABLE winners (t vsql_bindcheck_test.TAG('label=user'));
+INSERT INTO winners SELECT vsql_bindcheck_test.taglist_max(v) FROM lists;
+SELECT t FROM winners;
+t
+user#5
+CREATE TABLE wrong_winners (t vsql_bindcheck_test.TAG('label=order'));
+INSERT INTO wrong_winners SELECT vsql_bindcheck_test.taglist_max(v) FROM lists;
+ERROR HY000: Cannot implicitly cast from vsql_bindcheck_test.TAG('label=user') to vsql_bindcheck_test.TAG('label=order') for column 't' at row 1
+# A TAGLIST literal has no label of its own and no sibling to take one
+# from, so there is nothing for the hook to derive.
+SELECT vsql_bindcheck_test.taglist_max('[1,2,3]');
+ERROR HY000: Can't initialize function 'taglist_max'; taglist_max: the list's label is not known here
+#
 # Cleanup
 #
+DROP TABLE wrong_winners;
+DROP TABLE winners;
 DROP TABLE other_lists;
 DROP TABLE lists;
 DROP TABLE tags;

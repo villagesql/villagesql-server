@@ -137,8 +137,37 @@ SELECT vsql_bindcheck_test.taglist_prepend(tags.t, other_lists.v)
 FROM tags, other_lists;
 
 --echo #
+--echo # taglist_max: variable-length argument in, fixed-size parameterized
+--echo # value out. The return's label crosses from TAGLIST to TAG -- two
+--echo # different type names -- which TD2 cannot do, because it looks up only
+--echo # the return type's own name among the arguments and would find none.
+--echo #
+SELECT v AS list,
+       vsql_bindcheck_test.taglist_max(v) AS largest,
+       vsql_bindcheck_test.tag_label(vsql_bindcheck_test.taglist_max(v)) AS lbl,
+       vsql_bindcheck_test.tag_counter(vsql_bindcheck_test.taglist_max(v)) AS n
+FROM lists;
+
+--echo # The result really is TAG('label=user'): it stores into a matching
+--echo # column and is refused by one whose label differs.
+CREATE TABLE winners (t vsql_bindcheck_test.TAG('label=user'));
+INSERT INTO winners SELECT vsql_bindcheck_test.taglist_max(v) FROM lists;
+SELECT t FROM winners;
+
+CREATE TABLE wrong_winners (t vsql_bindcheck_test.TAG('label=order'));
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO wrong_winners SELECT vsql_bindcheck_test.taglist_max(v) FROM lists;
+
+--echo # A TAGLIST literal has no label of its own and no sibling to take one
+--echo # from, so there is nothing for the hook to derive.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_bindcheck_test.taglist_max('[1,2,3]');
+
+--echo #
 --echo # Cleanup
 --echo #
+DROP TABLE wrong_winners;
+DROP TABLE winners;
 DROP TABLE other_lists;
 DROP TABLE lists;
 DROP TABLE tags;

@@ -477,8 +477,7 @@ bool common_element_width(vsql::BindArgs args, size_t &bpe,
                           std::string &error_msg) {
   const TVectorParams *a = args.at(0).params<TVectorParams>();
   const TVectorParams *b = args.at(1).params<TVectorParams>();
-  if (a != nullptr && b != nullptr &&
-      a->bytes_per_elem != b->bytes_per_elem) {
+  if (a != nullptr && b != nullptr && a->bytes_per_elem != b->bytes_per_elem) {
     error_msg = "tvector_concat: vectors must have the same element type";
     return true;
   }
@@ -513,7 +512,8 @@ bool bind_params_for_vector(vsql::BindArgs args, size_t index, size_t bpe,
   }
   const int64_t n = count_vector_elements(arg.const_value());
   if (n < 0) {
-    error_msg = "tvector_concat: argument " + which + " is not a vector literal";
+    error_msg =
+        "tvector_concat: argument " + which + " is not a vector literal";
     return true;
   }
   if (n == 0) {

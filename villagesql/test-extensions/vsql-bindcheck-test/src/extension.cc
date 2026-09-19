@@ -490,6 +490,60 @@ int taglist_compare(vsql::CustomArgWith<TagListParams> a,
   return va.size() < vb.size() ? -1 : 1;
 }
 
+// taglist_max(list) -> TAG. Reduces a variable-length TAGLIST to the single
+// largest counter in it, as a fixed-size TAG under the same label.
+//
+// This shape was not expressible before bind_and_check_types. The return type
+// differs from the argument type, and TD2 only looks up the RETURN type's own
+// name among the arguments -- here it would search known_params for TAG and
+// find only TAGLIST, leaving the return with no parameters at all. The
+// constant-string inference path cannot stand in either: it answers about a
+// single string-constant argument, not about a column.
+void taglist_max(vsql::CustomArgWith<TagListParams> in,
+                 vsql::CustomResultWith<TagParams> out) {
+  if (in.is_null()) {
+    out.set_null();
+    return;
+  }
+  const auto data = in.value();
+  const size_t count = data.size() / static_cast<size_t>(kTagBytes);
+  if (count == 0) {
+    // An empty list has no largest element.
+    out.set_null();
+    return;
+  }
+  uint64_t best = 0;
+  for (size_t i = 0; i < count; i++) {
+    const uint64_t v =
+        load_be64(data.data() + i * static_cast<size_t>(kTagBytes));
+    if (v > best) best = v;
+  }
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kTagBytes)) {
+    out.error("taglist_max: output buffer too small");
+    return;
+  }
+  store_be64(buf.data(), best);
+  out.set_length(static_cast<size_t>(kTagBytes));
+}
+
+// The return's label is the argument's label -- carried across two different
+// type names, which is the step nothing but a hook can take.
+void taglist_max_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() != 1) {
+    out.error("taglist_max expects 1 argument");
+    return;
+  }
+  const TagListParams *list = args.at(0).params<TagListParams>();
+  if (list == nullptr) {
+    // A TAGLIST literal cannot name its own label, and there is no sibling of
+    // that type to take one from, so there is nothing to derive here.
+    out.error("taglist_max: the list's label is not known here");
+    return;
+  }
+  out.set_return(TagParams{list->label});
+}
+
 // taglist_prepend(tag, rest) -> TAGLIST. Puts the tag's counter at the front
 // of the list.
 void taglist_prepend(vsql::CustomArgWith<TagParams> head,
@@ -598,6 +652,12 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(TAG)
                   .param(TAGLIST)
                   .bind_and_check_types<&taglist_prepend_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&taglist_max>("taglist_max")
+                  .returns(TAG)
+                  .param(TAGLIST)
+                  .bind_and_check_types<&taglist_max_bind>()
                   .deterministic()
                   .build())
         .func(make_func<&taglist_label>("taglist_label")
