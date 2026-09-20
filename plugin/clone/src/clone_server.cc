@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +32,8 @@ Clone Plugin: Server implementation
 #include "plugin/clone/include/clone_status.h"
 
 #include "my_byteorder.h"
+
+#include "villagesql/clone/vsql_clone_protocol.h"
 
 /* Namespace for all clone data types */
 namespace myclone {
@@ -348,10 +351,10 @@ int Server::deserialize_init_buffer(const uchar *init_buf, size_t init_len) {
   }
 
   /* Extract protocol version */
-  m_protocol_version = uint4korr(init_buf);
-  if (m_protocol_version > CLONE_PROTOCOL_VERSION) {
-    m_protocol_version = CLONE_PROTOCOL_VERSION;
-  }
+  // VillageSQL: also decode the negotiated VillageSQL clone version.
+  villagesql::clone::negotiate_version_word(
+      uint4korr(init_buf), CLONE_PROTOCOL_VERSION, &m_protocol_version,
+      &m_vsql_version);
   init_buf += 4;
   init_len -= 4;
 
@@ -511,7 +514,49 @@ int Server::send_params() {
   /* Send other configurations required by recipient. */
   err = send_configs(COM_RES_CONFIG_V3);
 
+  // VillageSQL: send installed extensions if the recipient negotiated it.
+  if (err != 0 || !send_vsql_extensions()) {
+    return err;
+  }
+  err = send_extensions();
+
   return err;
+}
+
+// VillageSQL: send the opaque extension payload as one length-prefixed string.
+int Server::send_extensions() {
+  uchar *payload = nullptr;
+  size_t payload_len = 0;
+  auto err = mysql_service_vsql_clone_protocol->mysql_vsql_clone_get_extensions(
+      get_thd(), &payload, &payload_len);
+  if (err != 0) {
+    return err;
+  }
+  if (payload_len == 0) {
+    return 0;
+  }
+
+  auto buf_len = 1 + 4 + payload_len;
+  err = m_res_buff.allocate(buf_len);
+  if (err != 0) {
+    mysql_service_vsql_clone_protocol->mysql_vsql_clone_free_payload(payload);
+    return (true);
+  }
+  auto buf_ptr = m_res_buff.m_buffer;
+
+  // Store response command.
+  *buf_ptr = static_cast<uchar>(COM_RES_EXTENSION);
+  ++buf_ptr;
+
+  // Store the opaque payload as a length-prefixed string.
+  int4store(buf_ptr, payload_len);
+  buf_ptr += 4;
+  memcpy(buf_ptr, payload, payload_len);
+
+  mysql_service_vsql_clone_protocol->mysql_vsql_clone_free_payload(payload);
+
+  return mysql_service_clone_protocol->mysql_clone_send_response(
+      get_thd(), false, m_res_buff.m_buffer, buf_len);
 }
 
 int Server::send_configs(Command_Response rcmd) {

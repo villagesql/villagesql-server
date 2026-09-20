@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +34,8 @@ Clone Plugin: Server interface
 #include "plugin/clone/include/clone.h"
 #include "plugin/clone/include/clone_hton.h"
 #include "plugin/clone/include/clone_os.h"
+
+#include "villagesql/clone/vsql_clone_protocol.h"
 
 /* Namespace for all clone data types */
 namespace myclone {
@@ -117,6 +120,10 @@ class Server {
   @return error code */
   int send_configs(Command_Response rcmd);
 
+  /** Send the opaque VillageSQL extension payload for recipient validation.
+  @return error code */
+  int send_extensions();
+
   /** @return true iff need to send only plugin name for old clone version. */
   bool send_only_plugin_name() const {
     return m_protocol_version < CLONE_PROTOCOL_VERSION_V2;
@@ -125,6 +132,12 @@ class Server {
   /** @return true iff skip sending additional configurations. */
   bool skip_other_configs() const {
     return m_protocol_version < CLONE_PROTOCOL_VERSION_V3;
+  }
+
+  /** @return true iff the negotiated VillageSQL clone version supports sending
+  installed extensions for recipient validation. */
+  bool send_vsql_extensions() const {
+    return m_vsql_version >= villagesql::clone::VSQL_CLONE_VERSION_V1;
   }
 
  private:
@@ -236,6 +249,11 @@ class Server {
 
   /** Negotiated protocol version */
   uint32_t m_protocol_version;
+
+  /** Negotiated VillageSQL clone protocol version (min of the two sides),
+  decoded from the reserved high bits of the protocol-version word. 0 when the
+  recipient is not a VillageSQL clone. */
+  uint32_t m_vsql_version{0};
 
   /** DDL timeout from client */
   uint32_t m_client_ddl_timeout;

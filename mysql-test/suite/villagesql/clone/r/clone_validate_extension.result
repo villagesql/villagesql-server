@@ -1,0 +1,46 @@
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+INSTALL EXTENSION vsql_complex;
+# Donor has the vsql_complex extension installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_complex	0.0.1
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+#
+# Case 1: recipient is MISSING the donor's extension .veb -> clone fails
+#         during COM_INIT with ER_CLONE_EXTENSION_MATCH, before any data
+#         transfer.
+#
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
+CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Clone Donor extension error: VEB file for extension 'vsql_complex' not found
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+1	Failed	6141
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+#
+# Case 2: restore the .veb on the recipient -> validation passes and the
+#         clone completes.
+#
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
+CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATADIR';
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+1	Completed	0
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+# Clone succeeded and left the cloned data directory in place.
+UNINSTALL PLUGIN clone;
+UNINSTALL EXTENSION vsql_complex;
+UNINSTALL PLUGIN clone;
