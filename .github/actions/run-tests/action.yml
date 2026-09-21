@@ -54,6 +54,11 @@ inputs:
     required: false
     default: 'test-logs'
 
+outputs:
+  unstable:
+    description: 'Count of MTR test cases that failed and then passed on retry'
+    value: ${{ steps.unstable.outputs.count }}
+
 runs:
   using: "composite"
   steps:
