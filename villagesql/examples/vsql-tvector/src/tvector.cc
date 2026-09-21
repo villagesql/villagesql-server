@@ -589,12 +589,8 @@ void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
 // Templated on the comparator so std::greater/std::less can be passed
 // directly and inlined; they are functors, not function pointers.
 template <typename Better>
-void tvector_reduce_element(vsql::CustomArgWith<TVectorParams> v, Better better,
-                            vsql::RealResult out) {
-  if (v.is_null()) {
-    out.set_null();
-    return;
-  }
+double tvector_best_element(vsql::CustomArgWith<TVectorParams> v,
+                            Better better) {
   const TVectorParams &p = v.params();
   const unsigned char *d = v.value().data();
   const bool wide = (p.bytes_per_elem == 8);
@@ -604,26 +600,115 @@ void tvector_reduce_element(vsql::CustomArgWith<TVectorParams> v, Better better,
                           : static_cast<double>(load_float(d + i * 4));
     if (better(e, kept)) kept = e;
   }
-  out.set(kept);
+  return kept;
 }
 
 // Largest element: (TVECTOR) -> REAL
 void tvector_max_element(vsql::CustomArgWith<TVectorParams> v,
                          vsql::RealResult out) {
-  tvector_reduce_element(v, std::greater<double>{}, out);
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(tvector_best_element(v, std::greater<double>{}));
 }
 
 // Smallest element: (TVECTOR) -> REAL
 void tvector_min_element(vsql::CustomArgWith<TVectorParams> v,
                          vsql::RealResult out) {
-  tvector_reduce_element(v, std::less<double>{}, out);
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(tvector_best_element(v, std::less<double>{}));
 }
 
-// Shared bind_and_check_types for the functions taking one TVECTOR and
-// returning a scalar.
+// Writes one element, at the argument's width, as a whole TVECTOR(1). Shared
+// by the _as_vector reductions below.
+void tvector_store_single(double value, const TVectorParams &p,
+                          vsql::CustomResultWith<TVectorParams> out) {
+  auto buf = out.buffer();
+  if (buf.size() < p.bytes_per_elem) {
+    out.error("tvector: output buffer too small for a one-element vector");
+    return;
+  }
+  if (p.bytes_per_elem == 8) {
+    store_double(buf.data(), value);
+  } else {
+    store_float(buf.data(), static_cast<float>(value));
+  }
+  out.set_length(p.bytes_per_elem);
+}
+
+// Largest element as a vector: (TVECTOR(N)) -> TVECTOR(1)
 //
-// Unlike every other hook here it never calls set_return(): the result is a
-// REAL, which has no parameters to decide. Its only job is the argument.
+// The REAL-returning form above cannot be stored in a TVECTOR column -- a
+// numeric has no implicit conversion to a custom type -- so this exists for
+// INSERT ... SELECT into a TVECTOR(1) column.
+void tvector_max_as_vector(vsql::CustomArgWith<TVectorParams> v,
+                           vsql::CustomResultWith<TVectorParams> out) {
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  tvector_store_single(tvector_best_element(v, std::greater<double>{}),
+                       v.params(), out);
+}
+
+// Smallest element as a vector: (TVECTOR(N)) -> TVECTOR(1)
+void tvector_min_as_vector(vsql::CustomArgWith<TVectorParams> v,
+                           vsql::CustomResultWith<TVectorParams> out) {
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  tvector_store_single(tvector_best_element(v, std::less<double>{}), v.params(),
+                       out);
+}
+
+// Element count: (TVECTOR) -> INT
+//
+// The answer is the type parameter itself, so for a bare literal the hook has
+// already worked it out at resolution time and the body just reads it back.
+void tvector_dim(vsql::CustomArgWith<TVectorParams> v, vsql::IntResult out) {
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(static_cast<long long>(v.params().dimension));
+}
+
+// Widen to double: (TVECTOR('dimension=N,type=float')) -> TVECTOR(
+//                   'dimension=N,type=double')
+//
+// The mirror of the _as_vector functions: dimension is inherited from the
+// argument, the element type is fixed. A double input is already the target
+// type and passes through unchanged.
+void tvector_as_double(vsql::CustomArgWith<TVectorParams> v,
+                       vsql::CustomResultWith<TVectorParams> out) {
+  if (v.is_null()) {
+    out.set_null();
+    return;
+  }
+  const TVectorParams &p = v.params();
+  const unsigned char *d = v.value().data();
+  auto buf = out.buffer();
+  const size_t needed = static_cast<size_t>(p.dimension) * 8;
+  if (buf.size() < needed) {
+    out.error("tvector_as_double: output buffer too small");
+    return;
+  }
+  for (int64_t i = 0; i < p.dimension; i++) {
+    const double e = (p.bytes_per_elem == 8)
+                         ? load_double(d + i * 8)
+                         : static_cast<double>(load_float(d + i * 4));
+    store_double(buf.data() + i * 8, e);
+  }
+  out.set_length(needed);
+}
+
+// Shared argument half of bind_and_check_types for every function here taking
+// exactly one TVECTOR.
 //
 // These functions work without a hook for a TVECTOR column, and for an
 // explicitly converted TVECTOR::from_string('[1,2,3]'). What the hook adds is
@@ -632,32 +717,76 @@ void tvector_min_element(vsql::CustomArgWith<TVectorParams> v,
 // The dimension is counted from the literal's own text -- which TVECTOR's text
 // form does determine -- and handed back with set_arg().
 //
-// func_name is the bare function name; each message adds its own punctuation.
-void tvector_one_element_bind(vsql::BindArgs args, vsql::BindResult out,
-                              const std::string &func_name) {
+// The argument's resolved params come back in `resolved` so callers whose
+// return type is a TVECTOR can derive it. Returns true if it reported an
+// error. func_name is the bare function name; each message adds its own
+// punctuation.
+bool tvector_one_element_bind(vsql::BindArgs args, vsql::BindResult out,
+                              const std::string &func_name,
+                              TVectorParams &resolved) {
   if (args.size() != 1) {
     out.error(func_name + ": expects 1 argument");
-    return;
+    return true;
   }
   // A lone constant has no other side to take an element type from, so it
   // falls back to float, matching what tvector_from_string infers for one.
-  TVectorParams p{};
   bool needs_publish = false;
   std::string error_msg;
-  if (bind_params_for_vector(func_name, args, 0, 4, p, needs_publish,
+  if (bind_params_for_vector(func_name, args, 0, 4, resolved, needs_publish,
                              error_msg)) {
     out.error(error_msg);
-    return;
+    return true;
   }
-  if (needs_publish) out.set_arg(0, p);
+  if (needs_publish) out.set_arg(0, resolved);
+  return false;
 }
 
+// The scalar-returning reductions and tvector_dim need no set_return at all:
+// REAL and INT have no parameters to decide. The argument is the whole job.
 void tvector_max_element_bind(vsql::BindArgs args, vsql::BindResult out) {
-  tvector_one_element_bind(args, out, "tvector_max_element");
+  TVectorParams resolved{};
+  tvector_one_element_bind(args, out, "tvector_max_element", resolved);
 }
 
 void tvector_min_element_bind(vsql::BindArgs args, vsql::BindResult out) {
-  tvector_one_element_bind(args, out, "tvector_min_element");
+  TVectorParams resolved{};
+  tvector_one_element_bind(args, out, "tvector_min_element", resolved);
+}
+
+void tvector_dim_bind(vsql::BindArgs args, vsql::BindResult out) {
+  TVectorParams resolved{};
+  tvector_one_element_bind(args, out, "tvector_dim", resolved);
+}
+
+// The _as_vector reductions keep the argument's element type and fix the
+// dimension at 1. TD2 could only copy both parameters, giving TVECTOR(N).
+void tvector_max_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
+  TVectorParams resolved{};
+  if (tvector_one_element_bind(args, out, "tvector_max_as_vector", resolved)) {
+    return;
+  }
+  out.set_return(
+      TVectorParams{.dimension = 1, .bytes_per_elem = resolved.bytes_per_elem});
+}
+
+void tvector_min_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
+  TVectorParams resolved{};
+  if (tvector_one_element_bind(args, out, "tvector_min_as_vector", resolved)) {
+    return;
+  }
+  out.set_return(
+      TVectorParams{.dimension = 1, .bytes_per_elem = resolved.bytes_per_elem});
+}
+
+// The mirror: dimension inherited, element type fixed. TD2 could only copy
+// both, leaving the result claiming to be float.
+void tvector_as_double_bind(vsql::BindArgs args, vsql::BindResult out) {
+  TVectorParams resolved{};
+  if (tvector_one_element_bind(args, out, "tvector_as_double", resolved)) {
+    return;
+  }
+  out.set_return(
+      TVectorParams{.dimension = resolved.dimension, .bytes_per_elem = 8});
 }
 
 // Scalar multiply: (TVECTOR, REAL) -> TVECTOR
@@ -747,6 +876,30 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(REAL)
                   .param(TVECTOR)
                   .bind_and_check_types<&tvector_min_element_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_max_as_vector>("tvector_max_as_vector")
+                  .returns(TVECTOR)
+                  .param(TVECTOR)
+                  .bind_and_check_types<&tvector_max_as_vector_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_min_as_vector>("tvector_min_as_vector")
+                  .returns(TVECTOR)
+                  .param(TVECTOR)
+                  .bind_and_check_types<&tvector_min_as_vector_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_dim>("tvector_dim")
+                  .returns(INT)
+                  .param(TVECTOR)
+                  .bind_and_check_types<&tvector_dim_bind>()
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_as_double>("tvector_as_double")
+                  .returns(TVECTOR)
+                  .param(TVECTOR)
+                  .bind_and_check_types<&tvector_as_double_bind>()
                   .deterministic()
                   .build())
         .func(make_func<&tvector_scale>("tvector_scale")
