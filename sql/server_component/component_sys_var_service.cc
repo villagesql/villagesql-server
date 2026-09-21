@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -588,8 +589,11 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
       if (pv != nullptr) {
         assert(thd != nullptr);
 
+        // set_persisted_options() calls sys_var::update(), which acquires
+        // LOCK_global_system_variables. plugin_thdvar_init() acquires those
+        // two in the opposite order, so LOCK_plugin must not be held here.
+        mysql_mutex_assert_not_owner(&LOCK_plugin);
         mysql_rwlock_wrlock(&LOCK_system_variables_hash);
-        mysql_mutex_lock(&LOCK_plugin);
         // ignore the SET PERSIST errors, as they're reported into the log
         class Error_to_warning_error_handler : public Internal_error_handler {
          public:
@@ -605,7 +609,6 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
         const bool error =
             pv->set_persisted_options(true, com_sys_var_name, com_sys_var_len);
         thd->pop_internal_handler();
-        mysql_mutex_unlock(&LOCK_plugin);
         mysql_rwlock_unlock(&LOCK_system_variables_hash);
         if (error)
           LogErr(ERROR_LEVEL,
