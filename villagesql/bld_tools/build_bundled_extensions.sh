@@ -6,8 +6,10 @@
 #            [extension] [include_unbundled]
 # <ext_dir>:        Path to a directory of extension git clones.
 # <sdk_dir>:        Path to an extracted villagesql-extension-sdk-* directory.
-#                   After 'make', this is $BUILD_DIR/villagesql-extension-sdk-<version>.
-# <veb_output_dir>: Directory where built .veb files are placed.
+#                   After 'make', this is
+#                   $BUILD_DIR/villagesql-extension-sdk-<version>.
+# <veb_output_dir>: Directory where built .veb files are placed. After 'make',
+#                   this is $BUILD_DIR/veb_output_directory.
 # [extension]:      Optional extension name to build only one extension (e.g.
 #                   vsql-ai). Omit to build every extension in the manifest.
 # [include_unbundled]: 0/no (default) to skip bundle=false extensions, 1/yes to
@@ -20,6 +22,9 @@
 #
 # Env vars:
 #   CMAKE_EXTRA_FLAGS  - additional per-extension cmake flags appended verbatim
+#   VSQL_VALGRIND      - set non-empty when the VEBs will be run under valgrind,
+#                        so an extension can drop instructions memcheck cannot
+#                        decode. Extensions that do not care simply ignore it.
 
 set -euo pipefail
 
@@ -55,6 +60,10 @@ CMAKE_FLAGS=(
     "-DCMAKE_PREFIX_PATH=$SDK_DIR"
     "-DCMAKE_BUILD_TYPE=Release"
 )
+
+if [[ -n "${VSQL_VALGRIND:-}" ]]; then
+    CMAKE_FLAGS+=("-DVSQL_VALGRIND=ON")
+fi
 
 if [[ -n "${CMAKE_EXTRA_FLAGS:-}" ]]; then
     CMAKE_FLAGS+=($CMAKE_EXTRA_FLAGS)

@@ -15,6 +15,7 @@ fi
 
 APT_OPTS=(-o Acquire::Retries=5)
 $SUDO apt-get "${APT_OPTS[@]}" update
+# Add packages to the list lexicographically
 $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     bash \
     bison \
@@ -35,9 +36,11 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     libtirpc-dev \
     libz-dev \
     make \
+    mold \
     openssl \
     perl \
     pkg-config \
+    sudo \
     unzip \
     valgrind \
     zip

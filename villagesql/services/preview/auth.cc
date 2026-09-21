@@ -490,7 +490,7 @@ void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
   // GRANT each staged role additively -- never revoke. Roles must pre-exist as
   // DB roles; an ungrantable one is skipped.
   //
-  // TODO(villagesql-ga): authoritative reconcile (revoke roles no longer
+  // TODO(villagesql-general): authoritative reconcile (revoke roles no longer
   // claimed) is a separate, deferred task.
   for (const char *staged : state->roles) grant_staged_role(staged, account_id);
 }

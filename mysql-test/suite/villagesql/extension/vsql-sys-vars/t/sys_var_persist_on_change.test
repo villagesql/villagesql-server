@@ -1,0 +1,44 @@
+# A persisted value must reach an extension variable that declares on_change,
+# and its callback must fire, across a restart with the extension installed.
+#
+# At startup, extensions load from init_server_components() before
+# mysqld_server_started is set, so register_variable skips its inline
+# persisted-value apply (component_sys_var_service.cc). The value is applied
+# later by the main startup pass, once on_populate_sys_var has recorded the
+# variable, so the update trampoline finds it.
+# sys_var_persist_runtime_install.test covers the INSTALL EXTENSION path,
+# where that ordering does not hold.
+#
+# min_setting = 200 trips the extension's on_change, which raises max_setting
+# to match, so max_setting is the witness that the callback ran. It survives
+# here because the persisted apply happens after all three variables are
+# registered, unlike the runtime-install case, where max_setting registers
+# afterwards and handle_options writes its own default over it.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+
+--echo # Defaults
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+--echo # SET PERSIST applies immediately: min_setting takes 200, on_change
+--echo # raises max_setting to match
+SET PERSIST vsql_range_clamp_test.min_setting = 200;
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+--echo # Restart with the extension still installed
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # The persisted value must be back
+SELECT @@global.vsql_range_clamp_test.min_setting;
+SELECT @@global.vsql_range_clamp_test.max_setting;
+
+RESET PERSIST vsql_range_clamp_test.min_setting;
+UNINSTALL EXTENSION vsql_range_clamp_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

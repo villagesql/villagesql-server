@@ -1446,11 +1446,12 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
   return vclient.write_all_uncommitted_entries(thd);
 }
 
-bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+// Delete every custom_sp_params row matching prefix and persist the removals.
+static bool DeleteCustomSpParamsByPrefix(THD *thd,
+                                         const SpParamKeyPrefix &prefix) {
   auto &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) return false;
 
-  SpParamKeyPrefix prefix(name->m_db.str, name->m_name.str);
   std::vector<SpParamKey> keys_to_delete;
   {
     auto guard = vclient.get_read_lock();
@@ -1474,6 +1475,15 @@ bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
   if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
     return true;
   return vclient.write_all_uncommitted_entries(thd);
+}
+
+bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+  return DeleteCustomSpParamsByPrefix(
+      thd, SpParamKeyPrefix(name->m_db.str, name->m_name.str));
+}
+
+bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name) {
+  return DeleteCustomSpParamsByPrefix(thd, SpParamKeyPrefix(db_name));
 }
 
 }  // namespace villagesql

@@ -1,0 +1,77 @@
+# UNINSTALL EXTENSION must not unload an extension's .so while one of that
+# extension's sys-var on_change callbacks is running.
+#
+# The update trampoline captures the on_change pointer under g_sys_vars_mutex,
+# releases the mutex, then calls into the extension. The
+# vef_sys_var_before_on_change sync point sits in exactly that window. If
+# UNINSTALL EXTENSION could run to completion there, the callback would jump
+# into a dlclosed .so.
+#
+# What prevents that is MySQL's own locking, not anything VillageSQL does: a
+# component variable update holds a read lock on LOCK_system_variables_hash for
+# its whole duration, and the unregister_variable call in on_depopulate_sys_var
+# needs that lock exclusively before the caller dlcloses the .so. The hash lock
+# is the one that matters: LOCK_global_system_variables is held too, but a
+# handler may drop it around blocking work, the way thread_worker's
+# on_enabled_change does. That guarantee lives in vendored MySQL internals, so
+# this test is what notices if a future merge changes them.
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+
+# Both sessions are opened before the SET GLOBAL parks: a parked SET GLOBAL
+# holds LOCK_global_system_variables, which a new connection needs to copy the
+# global variable defaults.
+connect (con_set,localhost,root);
+connect (con_uninstall,localhost,root);
+
+connection con_set;
+--echo # con_set: park SET GLOBAL between the on_change lookup and the callback
+SET DEBUG_SYNC = 'vef_sys_var_before_on_change SIGNAL in_on_change WAIT_FOR release_on_change';
+--send SET GLOBAL vsql_range_clamp_test.min_setting = 200
+
+connection default;
+--echo # default: wait for the callback window to open
+SET DEBUG_SYNC = 'now WAIT_FOR in_on_change';
+
+connection con_uninstall;
+--echo # con_uninstall: UNINSTALL EXTENSION with the callback parked
+--send UNINSTALL EXTENSION vsql_range_clamp_test
+
+connection default;
+--echo # default: the UNINSTALL has started
+--let $wait_condition = SELECT COUNT(*) = 1 FROM performance_schema.threads WHERE PROCESSLIST_INFO LIKE 'UNINSTALL EXTENSION vsql_range_clamp_test%'
+--source include/wait_condition.inc
+
+--echo # default: and it cannot complete while the callback is parked
+SELECT COUNT(*) = 1 AS uninstall_still_running
+FROM performance_schema.threads
+WHERE PROCESSLIST_INFO LIKE 'UNINSTALL EXTENSION vsql_range_clamp_test%';
+
+--echo # default: release the callback
+SET DEBUG_SYNC = 'now SIGNAL release_on_change';
+
+connection con_set;
+--echo # con_set: SET GLOBAL completes -- the callback ran against a loaded .so
+reap;
+SET DEBUG_SYNC = 'RESET';
+
+connection con_uninstall;
+--echo # con_uninstall: UNINSTALL completes once the callback has returned
+reap;
+
+connection default;
+disconnect con_set;
+disconnect con_uninstall;
+
+--echo # default: the extension's variables are gone
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_range_clamp_test.min_setting;
+
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--source include/wait_until_count_sessions.inc

@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -29,6 +30,7 @@
 #include "mysql/components/services/mysql_system_variable.h"
 #include "mysql/service_plugin_registry.h"
 #include "sql/persisted_variable.h"
+#include "sql/sql_plugin_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
 #include "villagesql/services/sys_var_access.h"
@@ -59,6 +61,19 @@ struct RegisteredSysVar {
   // Back-pointer to the descriptor list this var came from, used as the
   // depopulate key.
   const void *capability_config;
+  // For VEF_VAR_ENUM only: the TYPE_LIB and its fully server-owned backing
+  // arrays. register_variable stores the TYPE_LIB pointer (it does not
+  // deep-copy), so it must outlive the registered variable. Everything the
+  // TYPE_LIB points at is copied here -- the name strings included -- so
+  // nothing references the extension's memory, which is unmapped when the
+  // extension unloads. Held on the heap (unique_ptr) so a g_sys_vars
+  // reallocation cannot move the TYPE_LIB while the registered SYS_VAR points
+  // at it; freed when this entry is erased on depopulate, after the variable
+  // has been unregistered. Empty for non-enum variables.
+  std::vector<std::string> enum_names;       // owned copies of the name strings
+  std::vector<const char *> enum_name_ptrs;  // -> enum_names, NULL-terminated
+  std::vector<unsigned int> enum_name_lengths;
+  std::unique_ptr<TYPE_LIB> enum_typelib;
 };
 
 std::mutex g_sys_vars_mutex;
@@ -67,60 +82,93 @@ std::vector<RegisteredSysVar> g_sys_vars;
 // Generic update trampoline used when on_change is non-null.
 // Performs the default typed update (mirroring MySQL's update_func_* family)
 // then calls the extension callback.
-static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
-                                          const void *save) {
-  vef_sys_var_on_change_func_t on_change = nullptr;
+static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *var,
+                                          void *val_ptr, const void *save) {
+  // MySQL hands us the new value in save and expects it stored in val_ptr. For
+  // a MEMALLOC string it frees the old buffer as soon as this returns
+  // (plugin_var_memalloc_global_update), so not storing the new one would leave
+  // val_ptr pointing at freed memory for UNINSTALL to free a second time. The
+  // write below is therefore unconditional, and takes its type from MySQL's
+  // descriptor rather than from a g_sys_vars lookup that can miss. Concurrent
+  // global updates are serialized by MySQL on LOCK_global_system_variables.
   vef_sys_var_change_t change{};
-  // These copies own the strings so change.var_name and change.str_val remain
-  // valid after the lock is released. A concurrent on_depopulate_sys_var may
-  // erase the g_sys_vars entry (invalidating var_name), and a concurrent SET
-  // may free the old string value (invalidating str_val).
+  switch (var->flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      change.type = VEF_VAR_BOOL;
+      change.bool_val = *static_cast<const bool *>(save);
+      *static_cast<bool *>(val_ptr) = change.bool_val;
+      break;
+    case PLUGIN_VAR_LONGLONG:
+      change.type = VEF_VAR_INT;
+      change.int_val = *static_cast<const long long *>(save);
+      *static_cast<long long *>(val_ptr) = change.int_val;
+      break;
+    case PLUGIN_VAR_DOUBLE:
+      change.type = VEF_VAR_DOUBLE;
+      change.dbl_val = *static_cast<const double *>(save);
+      *static_cast<double *>(val_ptr) = change.dbl_val;
+      break;
+    case PLUGIN_VAR_STR:
+      change.type = VEF_VAR_STR;
+      change.str_val = *static_cast<const char *const *>(save);
+      *static_cast<const char **>(val_ptr) = change.str_val;
+      break;
+    case PLUGIN_VAR_ENUM:
+      // An enum's value is its zero-based index into the TYPE_LIB, stored as an
+      // unsigned long (MySQL's TYPE_LIB backing width). The server already
+      // validated the name against the list before calling us, so the index is
+      // in range.
+      change.type = VEF_VAR_ENUM;
+      change.enum_val = *static_cast<const unsigned long *>(save);
+      *static_cast<unsigned long *>(val_ptr) = change.enum_val;
+      break;
+    default:
+      // on_populate_sys_var registers no other types, and writing val_ptr
+      // would mean guessing its width.
+      LogVSQL(ERROR_LEVEL,
+              "System variable update trampoline: unexpected type 0x%x",
+              var->flags & PLUGIN_VAR_TYPEMASK);
+      return;
+  }
+
+  // on_change and the variable name do come from the registry. A miss means the
+  // variable is still registering or has already been depopulated: the write
+  // above stands either way, there is just no callback to run.
+  vef_sys_var_on_change_func_t on_change = nullptr;
   std::string var_name_copy;
-  std::string str_val_copy;
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
     for (const RegisteredSysVar &v : g_sys_vars) {
       if (v.value_ptr == val_ptr) {
         on_change = v.on_change;
         var_name_copy = v.var_name;
-        change.type = v.type;
-        // Perform the typed update (mirroring MySQL's update_func_* family)
-        // and capture the new value for the callback, all under the lock so
-        // a concurrent SET cannot overwrite val_ptr before we finish.
-        switch (v.type) {
-          case VEF_VAR_BOOL:
-            change.bool_val = *static_cast<const bool *>(save);
-            *static_cast<bool *>(val_ptr) = change.bool_val;
-            break;
-          case VEF_VAR_INT:
-            change.int_val = *static_cast<const long long *>(save);
-            *static_cast<long long *>(val_ptr) = change.int_val;
-            break;
-          case VEF_VAR_DOUBLE:
-            change.dbl_val = *static_cast<const double *>(save);
-            *static_cast<double *>(val_ptr) = change.dbl_val;
-            break;
-          case VEF_VAR_STR:
-            change.str_val = *static_cast<const char *const *>(save);
-            *static_cast<const char **>(val_ptr) = change.str_val;
-            if (change.str_val != nullptr) str_val_copy = change.str_val;
-            break;
-        }
         break;
       }
     }
   }
+  if (on_change == nullptr) return;
 
+  // These copies own the strings so change.var_name and change.str_val stay
+  // valid once the lock is released: a concurrent on_depopulate_sys_var may
+  // erase the entry, and the next SET frees this buffer as its old value.
+  std::string str_val_copy;
   change.var_name = var_name_copy.c_str();
-  if (change.type == VEF_VAR_STR && change.str_val != nullptr)
+  if (change.type == VEF_VAR_STR && change.str_val != nullptr) {
+    str_val_copy = change.str_val;
     change.str_val = str_val_copy.c_str();
-  // TODO(villagesql-crash): on_change points into extension code captured under
-  // g_sys_vars_mutex. If UNINSTALL EXTENSION races with a concurrent SET
-  // GLOBAL, on_depopulate_sys_var may erase the entry and return (allowing
-  // dlclose) while this thread holds the captured on_change pointer but has
-  // already released the lock. A drain mechanism analogous to statement_event's
-  // g_inflight counter is needed to close this window.
-  if (on_change != nullptr && change.var_name != nullptr) on_change(&change);
+  }
+
+  // on_change runs with g_sys_vars_mutex released (the callback may re-enter
+  // via SYS_VARS.set()). MySQL keeps the .so loaded across the call: a
+  // component variable update holds LOCK_system_variables_hash for read
+  // (visit_component_variable in set_var.cc), which the unregister_variable in
+  // on_depopulate_sys_var needs for write before the caller dlcloses. Hence
+  // there is no drain counter here, unlike other capabilities whose callbacks
+  // dispatch under no such lock. This assumption is validated in
+  // sys_var_uninstall_race.test and should fail if that assumption is ever
+  // broken.
+  DEBUG_SYNC_C("vef_sys_var_before_on_change");
+  on_change(&change);
 }
 
 }  // namespace
@@ -180,7 +228,9 @@ static bool sys_var_set(const char *component_name, const char *name,
       if (h_name) str_factory->destroy(h_name);
     }
   } else {
-    // VEF_VAR_STR, VEF_VAR_BOOL, VEF_VAR_DOUBLE all go through string update.
+    // VEF_VAR_STR, VEF_VAR_BOOL, VEF_VAR_DOUBLE and VEF_VAR_ENUM all go through
+    // string update (an enum is set by its name, which the server maps to the
+    // TYPE_LIB index).
     my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
         "mysql_string_factory", registry);
     my_service<SERVICE_TYPE(mysql_string_converter)> str_conv(
@@ -256,10 +306,12 @@ bool on_populate_sys_var(const PopulateContext &ctx,
     INTEGRAL_CHECK_ARG(longlong) int_arg;
     INTEGRAL_CHECK_ARG(double) dbl_arg;
     STR_CHECK_ARG(str) str_arg;
+    ENUM_CHECK_ARG(enum) enum_arg;
     memset(&bool_arg, 0, sizeof(bool_arg));
     memset(&int_arg, 0, sizeof(int_arg));
     memset(&dbl_arg, 0, sizeof(dbl_arg));
     memset(&str_arg, 0, sizeof(str_arg));
+    memset(&enum_arg, 0, sizeof(enum_arg));
 
     switch (v->type) {
       case VEF_VAR_BOOL:
@@ -298,14 +350,82 @@ bool on_populate_sys_var(const PopulateContext &ctx,
         check_arg = &str_arg;
         value_ptr = v->str.value_ptr;
         break;
+      case VEF_VAR_ENUM:
+        // check_arg.typelib is filled in after the g_sys_vars entry is created
+        // below, because the TYPE_LIB must live in that (durable) entry:
+        // register_variable stores the pointer without copying. def_val (an
+        // index) is safe to set here.
+        flags |= PLUGIN_VAR_ENUM;
+        enum_arg.def_val = v->enumeration.def_val;
+        check_arg = &enum_arg;
+        value_ptr = v->enumeration.value_ptr;
+        break;
     }
 
     mysql_sys_var_update_func update_fn =
         v->on_change != nullptr ? vef_sys_var_update_trampoline : nullptr;
 
+    // Record the variable before registering it: register_variable applies an
+    // already-persisted value inline, and the trampoline looks the variable up
+    // by storage pointer to find its on_change. Registering first would skip
+    // that callback for the persisted value.
+    {
+      std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+      g_sys_vars.push_back({extension_name, std::string(v->name), v->type,
+                            value_ptr, v->on_change, ctx.capability_config,
+                            /*enum_names=*/{},
+                            /*enum_name_ptrs=*/{},
+                            /*enum_name_lengths=*/{},
+                            /*enum_typelib=*/nullptr});
+
+      // For an enum, build the TYPE_LIB into the just-pushed (durable) entry
+      // and point check_arg at it. Everything is copied onto server-owned
+      // storage: register_variable keeps the TYPE_LIB pointer without copying,
+      // and the extension's memory is gone once it unloads.
+      // unique_ptr<TYPE_LIB> and the vectors keep stable heap addresses across
+      // a later push_back's reallocation of g_sys_vars, so the registered
+      // variable's typelib pointer stays valid for the variable's whole
+      // lifetime.
+      if (v->type == VEF_VAR_ENUM) {
+        RegisteredSysVar &entry = g_sys_vars.back();
+        const uint32_t n = v->enumeration.name_count;
+        entry.enum_names.reserve(n);
+        entry.enum_name_ptrs.reserve(n + 1);
+        entry.enum_name_lengths.reserve(n);
+        for (uint32_t j = 0; j < n; ++j)
+          entry.enum_names.emplace_back(v->enumeration.names[j] != nullptr
+                                            ? v->enumeration.names[j]
+                                            : "");
+        for (const std::string &s : entry.enum_names) {
+          entry.enum_name_ptrs.push_back(s.c_str());
+          entry.enum_name_lengths.push_back(
+              static_cast<unsigned int>(s.length()));
+        }
+        entry.enum_name_ptrs.push_back(nullptr);  // TYPE_LIB expects NULL-term
+        entry.enum_typelib = std::make_unique<TYPE_LIB>();
+        entry.enum_typelib->count = n;
+        entry.enum_typelib->name = "";
+        entry.enum_typelib->type_names = entry.enum_name_ptrs.data();
+        entry.enum_typelib->type_lengths = entry.enum_name_lengths.data();
+        enum_arg.typelib = entry.enum_typelib.get();
+      }
+    }
+
     if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
                                    v->comment ? v->comment : "", nullptr,
                                    update_fn, check_arg, value_ptr)) {
+      // This variable never registered, so drop its entry before the rollback
+      // below, which unregisters by name.
+      {
+        std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+        auto it = std::remove_if(g_sys_vars.begin(), g_sys_vars.end(),
+                                 [&](const RegisteredSysVar &rv) {
+                                   return rv.capability_config ==
+                                              ctx.capability_config &&
+                                          rv.value_ptr == value_ptr;
+                                 });
+        g_sys_vars.erase(it, g_sys_vars.end());
+      }
       LogVSQL(ERROR_LEVEL,
               "Failed to register system variable '%s' for extension '%s'",
               v->name, extension_name.c_str());
@@ -339,12 +459,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
       return true;
     }
 
-    {
-      std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-      g_sys_vars.push_back({extension_name, std::string(v->name), v->type,
-                            value_ptr, v->on_change, ctx.capability_config});
-    }
-
     LogVSQL(INFORMATION_LEVEL,
             "Registered system variable '%s' for extension '%s'", v->name,
             extension_name.c_str());
@@ -357,19 +471,32 @@ bool on_populate_sys_var(const PopulateContext &ctx,
 void on_depopulate_sys_var(const DepopulateContext &ctx) {
   std::vector<std::string> var_names;
   std::string extension_name;
+  // Entries moved out of g_sys_vars, kept alive until after unregister_variable
+  // below. An enum entry owns the TYPE_LIB the registered variable still points
+  // at, so freeing it at erase time -- before unregister -- would leave the
+  // variable (still resolvable to a concurrent SET, see the sync point below)
+  // dereferencing a freed TYPE_LIB in its check function. Destroyed at end of
+  // scope, after the variables are unregistered.
+  std::vector<RegisteredSysVar> retired;
   {
     std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-    auto it = std::remove_if(
+    auto it = std::stable_partition(
         g_sys_vars.begin(), g_sys_vars.end(), [&](const RegisteredSysVar &v) {
-          if (v.capability_config == ctx.capability_config) {
-            if (extension_name.empty()) extension_name = v.extension_name;
-            var_names.push_back(v.var_name);
-            return true;
-          }
-          return false;
+          return v.capability_config != ctx.capability_config;
         });
+    for (auto rv = it; rv != g_sys_vars.end(); ++rv) {
+      if (extension_name.empty()) extension_name = rv->extension_name;
+      var_names.push_back(rv->var_name);
+      retired.push_back(std::move(*rv));
+    }
     g_sys_vars.erase(it, g_sys_vars.end());
   }
+
+  // The variables are out of g_sys_vars but stay registered with MySQL until
+  // unregister_variable below, so a concurrent SET still reaches the update
+  // trampoline and finds no entry for them. The sync point lets a test run that
+  // SET here; see sys_var_depopulate_set_race.test.
+  DEBUG_SYNC_C("vef_sys_var_after_depopulate_erase");
 
   if (var_names.empty()) return;
 

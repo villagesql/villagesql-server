@@ -1,9 +1,39 @@
 name: Valgrind Tests
 
-# Manual workflow for running tests with Valgrind memory checking
+# Build + test run under Valgrind memcheck, on Linux. Off one -DWITH_VALGRIND=1
+# build it runs:
+#   - the VillageSQL unit tests (via ctest -T memcheck),
+#   - the VillageSQL mysql-test suite (via --valgrind), and
+#   - every bundled extension: each VEB is rebuilt Debug (for symbolized stack
+#     traces) and its MTR suite is run under --valgrind.
+#
+# Each of the three is independently switchable, so a suppression-gathering run
+# can skip the slow server phases and exercise extensions alone.
+#
+# WITH_VALGRIND=1 is what enables the MEM_MALLOCLIKE_BLOCK / MEM_UNDEFINED /
+# MEM_NOACCESS client requests in include/memory_debugging.h and InnoDB's
+# UNIV_DEBUG_VALGRIND paths, so memcheck sees MEM_ROOT and buffer-pool
+# sub-allocations at the right granularity. That is why this needs its own
+# build and cannot share the normal nightly one. That build is also the
+# expensive part of this workflow, which is why the extension phases live here
+# rather than in a workflow of their own: they reuse it.
+#
+# Unlike the server, extensions need no valgrind-specific build flags —
+# memcheck instruments unmodified binaries, and nothing under villagesql/sdk/
+# is conditional on WITH_VALGRIND. They are built Debug only so reports carry
+# symbols instead of bottoming out inside the .veb.
+#
+# Note on flags: this uses --valgrind (all executables), not
+# --valgrind-mysqld. mysql-test-run.pl escalates to all-executables as soon as
+# any --valgrind-option is given, and only that branch scales the start and
+# suite timeouts that mysqld needs under memcheck.
+#
+# Results are posted to Slack; see the notify job at the bottom.
+#
 # Trigger via:
 #   - Actions tab -> Run workflow
 #   - gh workflow run "Valgrind Tests"
+# nightly-dispatch.yml starts one run this way after every nightly build.
 
 on:
   workflow_dispatch:
@@ -13,49 +43,314 @@ on:
         required: false
         default: ''
       test-suite:
-        description: 'Test suite to run (e.g., villagesql/select, villagesql, innodb)'
+        description: 'Test suite to run (e.g., villagesql/select, village, innodb)'
         required: false
-        default: 'villagesql/select'
-      valgrind-options:
-        description: 'Additional valgrind options (e.g., --leak-check=full)'
+        default: 'village'
+      run-unit-tests:
+        description: 'Run the VillageSQL unit tests under memcheck'
+        required: false
+        type: boolean
+        default: true
+      run-server-tests:
+        description: 'Run the server mysql-test suite under memcheck (slow; turn off to exercise extensions only)'
+        required: false
+        type: boolean
+        default: true
+      run-extension-tests:
+        description: 'Build the bundled extensions and run their MTR suites under memcheck'
+        required: false
+        type: boolean
+        default: true
+      extension:
+        description: 'Limit the extension phase to one extension (e.g. vsql-vector); empty for all'
         required: false
         default: ''
+      valgrind-options:
+        description: 'Extra valgrind options, space separated (e.g. --gen-suppressions=all)'
+        required: false
+        default: ''
+      max-parallel:
+        description: 'Cap on mysql-test-run workers (each one runs mysqld and mysqltest under valgrind)'
+        required: false
+        default: '16'
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: valgrind-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   valgrind-test:
     name: Build and Run Valgrind Tests
     runs-on: [self-hosted, linux, x86_64]
+    # The 360-minute default cancelled a full server run at 99% complete.
+    timeout-minutes: 600
     permissions:
       contents: read
+
+    # Per-phase outcomes for the notify job. A phase that never ran reports as
+    # empty; notify renders that as "did not run".
+    outputs:
+      sha: ${{ steps.checkout_report.outputs.sha }}
+      build: ${{ steps.build.outcome }}
+      unit: ${{ steps.unit.outcome }}
+      mtr: ${{ steps.valgrind.outcome }}
+      mtr_unstable: ${{ steps.valgrind.outputs.unstable }}
+      ext_build: ${{ steps.ext_build.outcome }}
+      ext_test: ${{ steps.ext_test.outcome }}
 
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
+      EXTS_ROOT: ${{ github.workspace }}/exts
+      REQUEST_REF: ${{ inputs.ref }}
+      EXTENSION_FILTER: ${{ inputs.extension }}
+      # --parallel=auto resolves to the runner's CPU count; mysql-test-run caps
+      # it at MTR_MAX_PARALLEL, and test_extension_vebs.sh honors the same cap.
+      # Each worker runs mysqld and mysqltest under valgrind, so hold it near
+      # half the cores rather than letting auto take all of them.
+      MTR_MAX_PARALLEL: ${{ inputs.max-parallel }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
-        ref: ${{ inputs.ref || github.ref }}
+        ref: ${{ env.REQUEST_REF }}
         fetch-depth: 50
         path: source
+
+    - name: Report Checkout
+      id: checkout_report
+      run: |
+        echo "Git SHA1: $(git -C source rev-parse HEAD)"
+        echo "Git Commit: $(git -C source log -n1 --oneline)"
+        echo "sha=$(git -C source rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout bundled extensions
+      if: inputs.run-extension-tests
+      run: |
+        # Self-hosted runners reuse the workspace; wipe stale extension clones
+        rm -rf "$EXTS_ROOT"
+        mkdir -p "$EXTS_ROOT/sources"
+
+        source/villagesql/bld_tools/checkout_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$EXTENSION_FILTER" yes
 
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
       with:
         setup-ccache: 'false'
 
+    - name: Install bundled-extension dependencies
+      if: inputs.run-extension-tests
+      run: sudo source/scripts/setup_linux_ext_deps.sh
+
     - name: Build VillageSQL with Valgrind support
+      id: build
       working-directory: ./source
       run: ./villagesql/bld_tools/build_ci.sh
       env:
         BUILD_TYPE: debug
         CMAKE_EXTRA_FLAGS: -DWITH_VALGRIND=1
 
-    - name: Run Valgrind tests
+    # Each option is handed to mysql-test-run.pl as --valgrind-option=<opt> so
+    # it reaches valgrind rather than being parsed as an MTR flag.
+    - name: Compose extra valgrind options
+      id: vg
+      env:
+        VG_OPTS: ${{ inputs.valgrind-options }}
+      run: |
+        EXTRA=""
+        for opt in $VG_OPTS; do
+          EXTRA="$EXTRA --valgrind-option=$opt"
+        done
+        echo "extra=$EXTRA" >> "$GITHUB_OUTPUT"
+
+    # Each phase runs separately (continue-on-error plus a gate at the end) so
+    # they all run and one failure does not hide the others' results.
+    - name: Run VillageSQL unit tests (valgrind)
+      id: unit
+      if: inputs.run-unit-tests
+      continue-on-error: true
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-integration-tests: false
+        valgrind: 'true'
+        artifact-name: valgrind-unit-logs-${{ github.run_number }}
+
+    - name: Run VillageSQL mtr suite (valgrind)
+      id: valgrind
+      if: inputs.run-server-tests
+      continue-on-error: true
       uses: ./source/.github/actions/run-tests
       with:
         run-unit-tests: false
         test-suite: ${{ inputs.test-suite }}
-        mysql-test-extra-flags: --valgrind ${{ inputs.valgrind-options }}
-        artifact-name: valgrind-logs-${{ github.run_number }}
+        valgrind: 'true'
+        mysql-test-extra-flags: ${{ steps.vg.outputs.extra }}
+        artifact-name: valgrind-mtr-logs-${{ github.run_number }}
+
+    # No sanitizer-style flag mirroring here; Debug is only for symbol quality.
+    - name: Build bundled extensions
+      id: ext_build
+      if: inputs.run-extension-tests
+      continue-on-error: true
+      env:
+        CMAKE_EXTRA_FLAGS: -DCMAKE_BUILD_TYPE=Debug
+        # Lets an extension drop instructions memcheck cannot decode.
+        VSQL_VALGRIND: 1
+      run: |
+        SDK_STAGING_DIR="$(source/villagesql/bld_tools/get_sdk.sh "$BUILD_DIR")"
+        source/villagesql/bld_tools/build_bundled_extensions.sh \
+          "$EXTS_ROOT/sources" "$SDK_STAGING_DIR" \
+          "$BUILD_DIR/veb_output_directory" "$EXTENSION_FILTER" yes
+
+    # MTR auto-copies *.veb from <bindir>/veb_output_directory into each test
+    # server, so the VEBs built above are picked up with no extra plumbing.
+    #
+    # --valgrind plus a --valgrind-option, matching test_ci.sh: the option is
+    # what makes MTR take the branch that scales the start/suite timeouts.
+    - name: Test bundled extensions (valgrind)
+      id: ext_test
+      # Runs even if some extension failed to build, so the ones that did build
+      # still get exercised; the build failure fails the job on its own.
+      if: always() && inputs.run-extension-tests
+      continue-on-error: true
+      env:
+        MTR_EXTRA_FLAGS: --valgrind --valgrind-option=--track-origins=yes ${{ steps.vg.outputs.extra }}
+      run: |
+        source/villagesql/bld_tools/test_extension_vebs.sh \
+          "$BUILD_DIR" "$EXTS_ROOT/sources"
+
+    # Not conditioned on failure: a --gen-suppressions run prints the stanzas
+    # into the error logs whether or not any test actually fails.
+    - name: Upload extension MTR logs
+      if: always() && inputs.run-extension-tests
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: valgrind-ext-mtr-logs-${{ github.run_number }}
+        # test_extension_vebs.sh with MTR_BINDIR=$BUILD_DIR puts output into
+        # $BUILD_DIR/mysql-test/var (not the source tree). Under --parallel
+        # each worker writes its mysqld.N.err to var/<N>/log/.
+        path: |
+          ${{ env.BUILD_DIR }}/mysql-test/var/log/
+          ${{ env.BUILD_DIR }}/mysql-test/var/*/log/
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Fail if any valgrind phase failed
+      if: always()
+      run: |
+        echo "Unit tests:      ${{ steps.unit.outcome || 'skipped' }}"
+        echo "MTR suite:       ${{ steps.valgrind.outcome || 'skipped' }}"
+        echo "Extension build: ${{ steps.ext_build.outcome || 'skipped' }}"
+        echo "Extension tests: ${{ steps.ext_test.outcome || 'skipped' }}"
+        if [ "${{ steps.unit.outcome }}" = "failure" ] || \
+           [ "${{ steps.valgrind.outcome }}" = "failure" ] || \
+           [ "${{ steps.ext_build.outcome }}" = "failure" ] || \
+           [ "${{ steps.ext_test.outcome }}" = "failure" ]; then
+          echo "::error::One or more valgrind test phases failed; see the step logs and uploaded artifacts."
+          exit 1
+        fi
+        echo "All valgrind test phases passed."
+
+  # Posts a per-phase summary after the run.
+  notify:
+    name: Slack Notification
+    needs: valgrind-test
+    # Even if valgrind-test fails, but only if slack notify requested.
+    if: always() && inputs.slack_notify
+    runs-on: ubuntu-latest
+    # Posts to a webhook; needs no repo access.
+    permissions: {}
+    steps:
+      - name: Build phase summary
+        id: summary
+        env:
+          BUILD: ${{ needs.valgrind-test.outputs.build }}
+          UNIT: ${{ needs.valgrind-test.outputs.unit }}
+          MTR: ${{ needs.valgrind-test.outputs.mtr }}
+          MTR_UNSTABLE: ${{ needs.valgrind-test.outputs.mtr_unstable }}
+          EXT_BUILD: ${{ needs.valgrind-test.outputs.ext_build }}
+          EXT_TEST: ${{ needs.valgrind-test.outputs.ext_test }}
+        run: |
+          line() {
+            local label="$1" outcome="$2" note="${3:-}" icon
+            case "$outcome" in
+              success) icon="✅" ;;
+              failure) icon="❌" ;;
+              "")      icon="⏭️"; outcome="did not run" ;;
+              *)       icon="⚠️" ;;
+            esac
+            printf '%s %s: %s%s\n' "$icon" "$label" "$outcome" "$note"
+          }
+          # Unstable tests (failed, then passed on retry) do not fail the run,
+          # so without this the report is green and the flake is invisible.
+          MTR_NOTE=""
+          if [ -n "$MTR_UNSTABLE" ] && [ "$MTR_UNSTABLE" != "0" ]; then
+            MTR_NOTE=" ($MTR_UNSTABLE unstable)"
+          fi
+          SUMMARY=$(
+            line "Server build"    "$BUILD"
+            line "Unit tests"      "$UNIT"
+            line "MTR suite"       "$MTR" "$MTR_NOTE"
+            line "Extension build" "$EXT_BUILD"
+            line "Extension tests" "$EXT_TEST"
+          )
+          echo "$SUMMARY"
+          # jq -Rs emits a JSON string (newlines escaped), so it stays one line
+          # in GITHUB_OUTPUT and drops into the payload below unquoted.
+          echo "text=$(jq -Rs . <<<"$SUMMARY")" >> "$GITHUB_OUTPUT"
+
+      - name: Compute overall status
+        id: status
+        env:
+          RESULT: ${{ needs.valgrind-test.result }}
+        run: |
+          case "$RESULT" in
+            success)   label=passed;    emoji="✅"; color="#36a64f" ;;
+            cancelled) label=cancelled; emoji="⚠️"; color="#daa520" ;;
+            *)         label=failed;    emoji="❌"; color="#cc0000" ;;
+          esac
+          {
+            echo "label=$label"
+            echo "emoji=$emoji"
+            echo "color=$color"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.emoji }} Valgrind Tests ${{ steps.status.outputs.label }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "text":  ${{ steps.summary.outputs.text }},
+                  "fields": [
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ needs.valgrind-test.outputs.sha || 'unknown' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Triggered by",
+                      "value": "${{ github.event_name }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }

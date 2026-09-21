@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -91,6 +92,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql_status_variable_reader_imp.h"
 #include "mysql_stored_program_imp.h"
 #include "mysql_string_service_imp.h"
+// TODO(villagesql-rebase): drop on rebase, verbatim 9.7 has it
+#include "mysql_system_variable_reader_imp.h"
 #include "mysql_system_variable_update_imp.h"
 #include "mysql_thd_attributes_imp.h"
 #include "mysql_thd_store_imp.h"
@@ -468,6 +471,14 @@ Keyring_load_service_impl::load END_SERVICE_IMPLEMENTATION();
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, keyring_writer)
 Keyring_writer_service_impl::store,
     Keyring_writer_service_impl::remove END_SERVICE_IMPLEMENTATION();
+
+// TODO(villagesql-rebase): this file was edited to register the
+// mysql_system_variable_reader service backported from 9.7 -- only these lines
+// were added, the rest of the file is unchanged. On the 8.4->9.x rebase
+// upstream already registers this service, so drop this hunk (and the include
+// and PROVIDES_SERVICE entries added for it) and restore verbatim 9.7.
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_system_variable_reader)
+mysql_system_variable_reader_imp::get END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_system_variable_update_string)
 mysql_system_variable_update_imp::set_string END_SERVICE_IMPLEMENTATION();
@@ -1000,6 +1011,8 @@ PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(mysql_server, keyring_reader_with_status),
     PROVIDES_SERVICE(mysql_server, keyring_load),
     PROVIDES_SERVICE(mysql_server, keyring_writer),
+    // TODO(villagesql-rebase): drop on rebase, verbatim 9.7 has it
+    PROVIDES_SERVICE(mysql_server, mysql_system_variable_reader),
     PROVIDES_SERVICE(mysql_server, mysql_system_variable_update_string),
     PROVIDES_SERVICE(mysql_server, mysql_system_variable_update_integer),
     PROVIDES_SERVICE(mysql_server, mysql_system_variable_update_default),
