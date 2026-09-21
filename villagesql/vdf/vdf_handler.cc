@@ -15,9 +15,7 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
-#include <string>
 #include <type_traits>
-#include <vector>
 
 #include "lex_string.h"
 #include "my_sys.h"
@@ -133,11 +131,14 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   // function carries a bind_and_check_types hook, the hooks resolve those
   // params and returned params instead. 
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
+  const vef_bind_types_func_t bind_and_check = m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4
+                                                ? m_udf->vdf_func_desc->bind_and_check_types
+                                                : nullptr;
   villagesql::TypeParameters return_params;
   if (signature != nullptr &&
       villagesql::ValidateAndConvertVDFArguments(
           thd, m_udf->name.str, to_string_view(m_udf->extension_name),
-          arg_count, m_args, signature, &return_params, m_udf->vdf_func_desc,
+          arg_count, m_args, signature, &return_params, bind_and_check,
           &m_context)) {
     return true;
   }
