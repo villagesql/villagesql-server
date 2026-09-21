@@ -1592,14 +1592,10 @@ static void InferVDFReturnParams(
   }
 }
 
-// Default buffer for one canonical "k=v,k=v" params string. Real params strings
-// are far shorter (TVECTOR's "dimension=4096,type=double" is ~33 bytes); the
-// overflow flag catches anything longer rather than truncating silently.
-static constexpr size_t kBindParamsBufLen = 256;
+// Buffer for one canonical "k=v,k=v" params string. 
+static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 
-// Invokes a function's bind_and_check_types hook. Runs between the two argument
-// passes so the params it decides are what pass 2 applies.
-//
+// Invokes a function's bind_and_check_types hook.
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
 // true on error (error already raised).
@@ -1620,8 +1616,8 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
       arg_types[i].id = VEF_TYPE_CUSTOM;
       arg_types[i].custom_type = tc->type_name().c_str();
       // Expose this argument's resolved params so the hook can implement its
-      // own TD1/TD2 logic. Same key/value form the row-time marshaller uses;
-      // the arrays live on the TypeContext and stay valid for this call.
+      // own params/return type disambiguation logic. The arrays live on the
+      // TypeContext and stay valid for this call.
       if (!tc->is_unknown()) {
         const auto &params = tc->parameters();
         arg_params[i] = {params.count(), params.key_data(),
@@ -1641,8 +1637,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
       }
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available; analysis-time parameter
-    // derivation (the common case) reads them.
+    // Provide constant string values where available
     if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
       String *v = args[i]->val_str(&const_store[i]);
       if (v != nullptr && !args[i]->null_value) {
@@ -1680,12 +1675,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
 
   bind_and_check(ctx, &bt_args, &bt_result);
 
-  // Only VEF_RESULT_VALUE is success. NULL and WARNING carry no meaning when
-  // deciding a type -- there is no row to skip and no value to null out -- so
-  // reject them rather than continuing with unresolved params, which would
-  // surface far later as a failed return-type resolution.
-  // Report through ER_CANT_INITIALIZE_UDF, the same class prerun uses: both are
-  // a function's setup callback rejecting the call.
+  // Only VEF_RESULT_VALUE is success.
   if (bt_result.type != VEF_RESULT_VALUE) {
     my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name,
              err_msg[0] ? err_msg : "bind_and_check_types failed");
