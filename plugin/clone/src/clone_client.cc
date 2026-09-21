@@ -1093,8 +1093,8 @@ int Client::validate_remote_params() {
   if (mysql_service_vsql_clone_protocol->mysql_vsql_clone_validate_extensions(
           get_thd(), reinterpret_cast<const uchar *>(ext_payload.data()),
           ext_payload.length(), ext_error, sizeof(ext_error))) {
-    my_error(ER_CLONE_EXTENSION_MATCH, MYF(0), ext_error);
-    last_error = ER_CLONE_EXTENSION_MATCH;
+    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0), ext_error);
+    last_error = ER_VILLAGESQL_GENERIC_ERROR;
   }
 
   /* Validate character sets */

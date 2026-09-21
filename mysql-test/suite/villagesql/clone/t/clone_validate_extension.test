@@ -6,7 +6,7 @@
 # data directory, and are NOT copied by clone. If a matching .veb is missing (or
 # a different version/sha256), the recipient would fail to start after clone.
 # Clone therefore rejects such a clone up front during the COM_INIT handshake
-# with ER_CLONE_EXTENSION_MATCH.
+# with a VillageSQL error.
 #
 # Donor     = default instance (mysqld.1): installs vsql_complex.
 # Recipient = instance 2 (mysqld.2): runs CLONE against the donor.
@@ -49,14 +49,14 @@ call mtr.add_suppression("\\[Clone\\] Plugin Clone reported: 'Client: .*extensio
 
 --echo #
 --echo # Case 1: recipient is MISSING the donor's extension .veb -> clone fails
---echo #         during COM_INIT with ER_CLONE_EXTENSION_MATCH, before any data
+--echo #         during COM_INIT with a VillageSQL error, before any data
 --echo #         transfer.
 --echo #
 # Move the recipient's .veb aside so validation cannot find it.
 --copy_file $RECIPIENT_VEB_DIR/vsql_complex.veb $MYSQL_TMP_DIR/vsql_complex.veb.bak
 --remove_file $RECIPIENT_VEB_DIR/vsql_complex.veb
 
---let $clone_remote_err = ER_CLONE_EXTENSION_MATCH
+--let $clone_remote_err = ER_VILLAGESQL_GENERIC_ERROR
 --source ../../../clone/include/clone_command.inc
 --let $clone_remote_err =
 

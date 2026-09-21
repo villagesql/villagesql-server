@@ -137,7 +137,7 @@ class Server {
   /** @return true iff the negotiated VillageSQL clone version supports sending
   installed extensions for recipient validation. */
   bool send_vsql_extensions() const {
-    return m_vsql_version >= villagesql::clone::VSQL_CLONE_VERSION_V1;
+    return m_vsql_protocol_version >= villagesql::clone::VSQL_CLONE_VERSION_V1;
   }
 
  private:
@@ -253,7 +253,7 @@ class Server {
   /** Negotiated VillageSQL clone protocol version (min of the two sides),
   decoded from the reserved high bits of the protocol-version word. 0 when the
   recipient is not a VillageSQL clone. */
-  uint32_t m_vsql_version{0};
+  uint32_t m_vsql_protocol_version{0};
 
   /** DDL timeout from client */
   uint32_t m_client_ddl_timeout;

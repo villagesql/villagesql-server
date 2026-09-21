@@ -7,17 +7,17 @@ vsql_complex	0.0.1
 INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
 #
 # Case 1: recipient is MISSING the donor's extension .veb -> clone fails
-#         during COM_INIT with ER_CLONE_EXTENSION_MATCH, before any data
+#         during COM_INIT with a VillageSQL error, before any data
 #         transfer.
 #
 SET GLOBAL clone_autotune_concurrency = OFF;
 SET GLOBAL clone_max_concurrency = 8;
 SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
 CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATADIR';
-ERROR HY000: Clone Donor extension error: VEB file for extension 'vsql_complex' not found
+ERROR HY000: VillageSQL: VEB file for extension 'vsql_complex' not found
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	6141
+1	Failed	3219
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
 #

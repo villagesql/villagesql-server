@@ -31,6 +31,8 @@ Clone Plugin: Server implementation
 #include "plugin/clone/include/clone_server.h"
 #include "plugin/clone/include/clone_status.h"
 
+#include <memory>
+
 #include "my_byteorder.h"
 
 #include "villagesql/clone/vsql_clone_protocol.h"
@@ -354,7 +356,7 @@ int Server::deserialize_init_buffer(const uchar *init_buf, size_t init_len) {
   // VillageSQL: also decode the negotiated VillageSQL clone version.
   villagesql::clone::negotiate_version_word(
       uint4korr(init_buf), CLONE_PROTOCOL_VERSION, &m_protocol_version,
-      &m_vsql_version);
+      &m_vsql_protocol_version);
   init_buf += 4;
   init_len -= 4;
 
@@ -532,6 +534,15 @@ int Server::send_extensions() {
   if (err != 0) {
     return err;
   }
+
+  // Free the service-allocated payload on every return path.
+  auto deleter = [](uchar *p) {
+    if (p != nullptr) {
+      mysql_service_vsql_clone_protocol->mysql_vsql_clone_free_payload(p);
+    }
+  };
+  std::unique_ptr<uchar, decltype(deleter)> payload_guard(payload, deleter);
+
   if (payload_len == 0) {
     return 0;
   }
@@ -539,7 +550,6 @@ int Server::send_extensions() {
   auto buf_len = 1 + 4 + payload_len;
   err = m_res_buff.allocate(buf_len);
   if (err != 0) {
-    mysql_service_vsql_clone_protocol->mysql_vsql_clone_free_payload(payload);
     return (true);
   }
   auto buf_ptr = m_res_buff.m_buffer;
@@ -552,8 +562,6 @@ int Server::send_extensions() {
   int4store(buf_ptr, payload_len);
   buf_ptr += 4;
   memcpy(buf_ptr, payload, payload_len);
-
-  mysql_service_vsql_clone_protocol->mysql_vsql_clone_free_payload(payload);
 
   return mysql_service_clone_protocol->mysql_clone_send_response(
       get_thd(), false, m_res_buff.m_buffer, buf_len);

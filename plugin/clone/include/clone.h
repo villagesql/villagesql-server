@@ -194,9 +194,12 @@ typedef enum Type_Command_Response : uchar {
   // upstream COM_RES_* values on a rebase. As of the 8.4 base upstream assigns
   // these sequentially from 1 (highest is COM_RES_CONFIG_V4 = 9) with sentinels
   // COM_RES_COMPLETE = 99 / COM_RES_ERROR = 100; 50 leaves a wide gap under 99.
-  // This is a heuristic, not a guarantee about upstream's numbering: on each
-  // rebase, re-check that no upstream value has reached this range and adjust
-  // if needed. Keep new VillageSQL response types here.
+  // This is a heuristic, not a guarantee against future collisions. The
+  // assigned value must remain stable once released; adjusting it would break
+  // the protocol. If upstream later claims this value, use the negotiated
+  // VillageSQL protocol version (which tells us the peer speaks VillageSQL) to
+  // translate the response type on both client and server sides via a
+  // translation table. Keep new VillageSQL response types here.
   /** VillageSQL extension payload (opaque; produced/validated by
   villagesql/veb). Sent when the negotiated VillageSQL clone version supports it
   (see villagesql/clone/vsql_clone_protocol.h); independent of the upstream
