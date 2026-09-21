@@ -28,16 +28,13 @@ IFS='.' read -r NEW_MAJOR NEW_MINOR NEW_PATCH <<<"$NEW_VERSION"
 
 VERSION_FILE="$SOURCE_DIR/VSQL_VERSION"
 
-# The version as it appears in a test result, e.g. "mysql-8.4_0.0.7": the code
-# base, then the version with no pre-release suffix.  Any suffix in the file
-# trails this and is left alone.  Matching on the code base as well keeps the
+# The version as it appears in a test result, e.g. "mysql-8.4_0.0.7": the
+# codebase, then the version with no pre-release suffix.  Any suffix in the file
+# trails this and is left alone.  Matching on the codebase as well keeps the
 # replacement away from the extension versions that also appear in these files.
-#
-# The code base is the one field build_info.sh has no accessor for, as the
-# version strings it computes leave it out.
-VSQL_CODE_BASE="$("$SOURCE_DIR/villagesql/bld_matrix/json_version.sh" \
-    | jq -r '.code_base')"
-OLD_PATTERN="${VSQL_CODE_BASE}_$(vsql_json_version "$SOURCE_DIR" "")"
+OLD_VERSION="$(vsql_json_version "$SOURCE_DIR" "")"
+VSQL_CODEBASE="$(vsql_json_codebase "$SOURCE_DIR")"
+OLD_PATTERN="${VSQL_CODEBASE}_${OLD_VERSION}"
 
 # Replace every occurrence of $1 with $2 in the file $3, and print the number of
 # lines that changed.  A temp file and mv keeps this portable, as the -i flag of
@@ -81,7 +78,7 @@ replace_in_file "^VSQL_PATCH_VERSION=.*" "VSQL_PATCH_VERSION=$NEW_PATCH" \
 # way the rest of the build names it.  It serves both the test results and the
 # commit message.
 COMMIT_VERSION="$(vsql_json_version "$SOURCE_DIR" "")"
-NEW_PATTERN="${VSQL_CODE_BASE}_${COMMIT_VERSION}"
+NEW_PATTERN="${VSQL_CODEBASE}_${COMMIT_VERSION}"
 log_info "VSQL_VERSION: $OLD_PATTERN -> $NEW_PATTERN"
 
 for result in "${RESULT_FILES[@]}"; do
