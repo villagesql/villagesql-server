@@ -274,8 +274,7 @@ struct StaticFuncDesc {
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr vef_vdf_clear_func_t clear() const { return clear_; }
   constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
-  // The legacy (V1-style) builder does not support bind_and_check_types; it
-  // always reports no hook so the shared materialize_func_desc compiles.
+  // The legacy (V1-style) builder does not support bind_and_check_types
   constexpr vef_bind_types_func_t bind() const { return nullptr; }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr bool deterministic() const { return deterministic_; }

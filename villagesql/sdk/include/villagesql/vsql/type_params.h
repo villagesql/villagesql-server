@@ -265,9 +265,6 @@ __attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
 // if it fits; actual_len is always set to the length that *would* have been
 // written; and overflow is set when it did not fit, in which case the buffer
 // contents are undefined and the caller should retry with a larger one.
-//
-// Shared by the from_string inference write-back and by BindResult, so the
-// overflow bookkeeping exists in exactly one place.
 inline void write_params_to(vef_inferred_type_params_t *out,
                             const std::map<std::string, std::string> &m) {
   char *const buf_begin = out->buf;
