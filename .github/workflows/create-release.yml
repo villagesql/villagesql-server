@@ -71,16 +71,16 @@ jobs:
   # Names the release and rejects what cannot work, before anything is written.
   # Every later job takes its identity from here, so the version is read once,
   # from the branch head, and never recomputed against a moving tree.
-  resolve:
-    name: Resolve Release
+  prepare_release:
+    name: Prepare Release
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
-      code-base: ${{ steps.resolve.outputs.code_base }}
+      vsql_codebase: ${{ steps.resolve.outputs.vsql_codebase }}
       version: ${{ steps.resolve.outputs.version }}
-      release-tag: ${{ steps.resolve.outputs.release_tag }}
-      publish-tag: ${{ steps.resolve.outputs.publish_tag }}
-      image-tag: ${{ steps.resolve.outputs.image_tag }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      publish_tag: ${{ steps.resolve.outputs.publish_tag }}
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
 
     steps:
       # Cone mode brings the root-level VSQL_VERSION along. build_info.sh and
@@ -108,18 +108,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The version registry is runnable locally exactly as it runs here:
-          #   villagesql/bld_matrix/json_version.sh | jq .
-          VERSION_JSON="$(villagesql/bld_matrix/json_version.sh)"
-          jq . <<<"$VERSION_JSON"
-          CODE_BASE="$(jq -r '.code_base' <<<"$VERSION_JSON")"
-
-          # The empty pre-release argument strips the -dev the branch carries,
-          # the form a release build uses. The whole release is named from this
-          # one string, and it is assembled by the same helper the build uses.
+          # The empty pre-release argument (#2) strips the -dev "pre release version"
+          # that the development branch (main) carries.
           source villagesql/scripts/vsql_script_utils.sh
           source villagesql/bld_tools/build_info.sh
           VERSION="$(vsql_json_version "$PWD" "")"
+          VSQL_CODEBASE="$(vsql_json_codebase "$PWD")"
 
           # prepare_release_update.sh takes the three numbers and nothing else;
           # the pre-release suffix stays whatever the branch already carries.
@@ -139,10 +133,10 @@ jobs:
           RELEASE_TAG="release/$VERSION"
 
           # Each tag with the prefix 'publish/' marks a codebase publication commit.
-          PUBLISH_TAG="publish/${CODE_BASE}_${VERSION}"
+          PUBLISH_TAG="publish/${VSQL_CODEBASE}_${VERSION}"
 
           # Docker image tag.
-          IMAGE_TAG="${CODE_BASE}_${VERSION}"
+          IMAGE_TAG="${VSQL_CODEBASE}_${VERSION}"
 
           # A tag that already exists means this release was cut before. Say so
           # now rather than half-way through, when the branch has already moved.
@@ -159,7 +153,7 @@ jobs:
 
           {
             echo "sha=$SHA"
-            echo "code_base=$CODE_BASE"
+            echo "vsql_codebase=$VSQL_CODEBASE"
             echo "version=$VERSION"
             echo "release_tag=$RELEASE_TAG"
             echo "publish_tag=$PUBLISH_TAG"
@@ -167,7 +161,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           {
-            echo "### Release $CODE_BASE $VERSION"
+            echo "### Release $VSQL_CODEBASE $VERSION"
             echo ""
             echo "| | |"
             echo "| --- | --- |"
@@ -190,32 +184,31 @@ jobs:
   # release.
   push:
     name: Push Release Commits
-    needs: resolve
+    needs: prepare_release
     runs-on: ubuntu-latest
     outputs:
-      notes-sha: ${{ steps.commits.outputs.notes_sha }}
+      notes_sha: ${{ steps.commits.outputs.notes_sha }}
 
     steps:
-      # The clone is all this step does, and the default token can do it.
-      - name: Checkout branch
+      - name: Checkout branch for release
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 1
-          persist-credentials: false
+          token: ${{ secrets.RELEASE_KEY }}
 
       - name: Prepare release commits
         id: commits
         env:
-          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+          EXPECTED_SHA: ${{ needs.prepare_release.outputs.sha }}
           RELEASE_NOTE: ${{ inputs.release_note }}
           NEXT_VERSION: ${{ inputs.next_version }}
           RELEASE_ROLE: ${{ vars.RELEASE_ROLE }}
         run: |
           set -euo pipefail
 
-          # The branch is frozen for the duration, so a head that moved between
-          # resolve and now means the freeze did not hold and the release would
+          # The branch is frozen for the duration, so a head that moved since
+          # prepare_release means the freeze did not hold and the release would
           # be cut from something acceptance never saw.
           HEAD_SHA="$(git rev-parse HEAD)"
           if [[ "$HEAD_SHA" != "$EXPECTED_SHA" ]]; then
@@ -239,31 +232,21 @@ jobs:
             echo "push_head=$PUSH_HEAD"
           } >> "$GITHUB_OUTPUT"
 
-      # Set up release credential to enable this job's last step to force
-      # push the two commits onto the branch (e.g. main).
-      - name: Log in as the release role
-        env:
-          RELEASE_KEY: ${{ secrets.RELEASE_KEY }}
-        run: |
-          set -euo pipefail
-          git remote set-url origin \
-            "https://x-access-token:${RELEASE_KEY}@github.com/${GITHUB_REPOSITORY}.git"
-
       # A rejected push means the branch moved, which is a reason to stop,
-      # not a reason to overwrite.  The lease names the head resolve read, so
-      # the push is refused unless the branch is still exactly where the
-      # release was cut from.  It may not be essential, since the two commits
-      # fast-forward that same head, but it eliminates rare cases and
-      # documents the intent.
+      # not a reason to overwrite.  The lease names the head prepare_release
+      # read, so the push is refused unless the branch is still exactly
+      # where the release was cut from.  It may not be essential, since the
+      # two commits fast-forward that same head, but it eliminates rare
+      # cases and documents the intent.
       #
       # This step requires the release credentials to bypass branch protection.
       - name: Push to branch
         env:
           BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+          EXPECTED_SHA: ${{ needs.prepare_release.outputs.sha }}
           NOTES_SHA: ${{ steps.commits.outputs.notes_sha }}
           PUSH_HEAD: ${{ steps.commits.outputs.push_head }}
-          VERSION: ${{ needs.resolve.outputs.version }}
+          VERSION: ${{ needs.prepare_release.outputs.version }}
           NEXT_VERSION: ${{ inputs.next_version }}
         run: |
           set -euo pipefail
@@ -282,7 +265,7 @@ jobs:
   # so nobody waits on the tagging and publishing that occurs next.
   announce:
     name: Announce Reopened Branch
-    needs: [resolve, push]
+    needs: [prepare_release, push]
     if: inputs.slack_notify
     runs-on: ubuntu-latest
     # Posts to a webhook; needs no repo access.
@@ -296,11 +279,11 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "🚀 ${{ inputs.branch }} is open for merges — ${{ needs.resolve.outputs.code-base }} ${{ needs.resolve.outputs.version }} released, branch now on ${{ inputs.next_version }}",
+              "text": "🚀 ${{ inputs.branch }} is open for merges — ${{ needs.prepare_release.outputs.vsql_codebase }} ${{ needs.prepare_release.outputs.version }} released, branch now on ${{ inputs.next_version }}",
               "attachments": [
                 {
                   "color": "#36a64f",
-                  "text": "Release ${{ needs.resolve.outputs.version }} is cut and ${{ inputs.branch }} has advanced to ${{ inputs.next_version }}. Merges can resume.",
+                  "text": "Release ${{ needs.prepare_release.outputs.version }} is cut and ${{ inputs.branch }} has advanced to ${{ inputs.next_version }}. Merges can resume.",
                   "fields": [
                     {
                       "title": "Branch",
@@ -309,7 +292,7 @@ jobs:
                     },
                     {
                       "title": "Released",
-                      "value": "${{ needs.resolve.outputs.version }}",
+                      "value": "${{ needs.prepare_release.outputs.version }}",
                       "short": true
                     },
                     {
@@ -319,7 +302,7 @@ jobs:
                     },
                     {
                       "title": "Release commit",
-                      "value": "${{ needs.push.outputs.notes-sha }}",
+                      "value": "${{ needs.push.outputs.notes_sha }}",
                       "short": true
                     },
                     {
@@ -341,10 +324,8 @@ jobs:
   # for publication.
   release:
     name: Release and Publish
-    needs: [resolve, push]
+    needs: [prepare_release, push]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
       # Checked out at the commit being released, so the tag, the note, and the
@@ -353,7 +334,7 @@ jobs:
       - name: Checkout release commit
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          ref: ${{ needs.push.outputs.notes-sha }}
+          ref: ${{ needs.push.outputs.notes_sha }}
           fetch-depth: 1
           token: ${{ secrets.RELEASE_KEY }}
 
@@ -361,7 +342,7 @@ jobs:
       # --verify-tag, which requires the tag to be on the remote already.
       - name: Push release tag
         env:
-          RELEASE_TAG: ${{ needs.resolve.outputs.release-tag }}
+          RELEASE_TAG: ${{ needs.prepare_release.outputs.release_tag }}
         run: |
           set -euo pipefail
           git tag "$RELEASE_TAG"
@@ -372,7 +353,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_KEY }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.resolve.outputs.release-tag }}
+          RELEASE_TAG: ${{ needs.prepare_release.outputs.release_tag }}
           RELEASE_NOTE: ${{ inputs.release_note }}
         run: |
           set -euo pipefail
@@ -391,7 +372,7 @@ jobs:
       # The tag prefix 'publish/' marks code base publication commits.
       - name: Push publish tag
         env:
-          PUBLISH_TAG: ${{ needs.resolve.outputs.publish-tag }}
+          PUBLISH_TAG: ${{ needs.prepare_release.outputs.publish_tag }}
         run: |
           set -euo pipefail
           git tag "$PUBLISH_TAG"
@@ -399,10 +380,10 @@ jobs:
           echo "Tagged $(git rev-parse --short HEAD) as $PUBLISH_TAG"
 
   # Publish the assets from the branch used to create the release (e.g main).
-  # Uses the tag "publish/${CODE_BASE}_${VERSION}" constructed in the resolve job.
+  # Uses the tag "publish/${VSQL_CODEBASE}_${VERSION}" constructed by prepare_release.
   publish:
     name: Publish Main Branch Assets
-    needs: [resolve, release]
+    needs: [prepare_release, release]
     runs-on: ubuntu-latest
     permissions:
       actions: write  # Required to start a workflow run
@@ -414,9 +395,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          PUBLISH_TAG: ${{ needs.resolve.outputs.publish-tag }}
-          RELEASE_TAG: ${{ needs.resolve.outputs.release-tag }}
-          IMAGE_TAG: ${{ needs.resolve.outputs.image-tag }}
+          PUBLISH_TAG: ${{ needs.prepare_release.outputs.publish_tag }}
+          RELEASE_TAG: ${{ needs.prepare_release.outputs.release_tag }}
+          IMAGE_TAG: ${{ needs.prepare_release.outputs.image_tag }}
           IMAGE_REPO: ${{ inputs.image_repo }}
           VERSION_LABELS: ${{ inputs.version_labels }}
           DEFINE_TAGS: ${{ inputs.define_tags }}
