@@ -39,6 +39,7 @@
 #include <type_traits>
 
 #include <villagesql/vsql/func_types.h>
+#include <villagesql/vsql/bind_check_types.h>
 #include <villagesql/vsql/pre_post_run.h>
 #include <villagesql/vsql/type_params.h>
 

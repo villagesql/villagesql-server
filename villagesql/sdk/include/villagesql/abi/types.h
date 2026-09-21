@@ -570,15 +570,11 @@ typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
 // Optional hook called once at analysis time (fix_fields), before prerun, when
 // the function is resolved. It lets the extension take full control of type
 // parameter resolution for the call, bypassing the built-in type
-// disambiguation rules (TD1: sibling args of the same custom type must agree;
-// TD2: a parameterized return type mirrors its same-typed arguments).
+// disambiguation rules (TD1 and TD2).
 //
 // Use it when the parameter relationship between arguments and the return type
 // is something the default rules cannot express, e.g.
 //   vector_concat(vector(M), vector(N)) -> vector(M+N)
-// or when the return type's parameters must be derived from a constant
-// argument value, e.g.
-//   TYPEID('user') -> typeid(prefix=user)
 //
 // The hook sees only declared argument types plus any constant argument values
 // (the same view prerun gets); it must not depend on per-row data. It reports
@@ -602,15 +598,11 @@ typedef struct {
   // Array has arg_count elements.
   size_t *const_lengths;
 
-  // For each argument: its resolved type parameters, in the same key/value
-  // form used everywhere else params are passed in (see vef_invalue_t).
-  // Array has arg_count elements; an argument with no resolved params -- a
-  // non-custom argument, or a custom one whose params are not yet known --
-  // has count == 0.
-  //
-  // This is how a hook implements its own TD1/TD2 logic: it reads each custom
-  // argument's params here and derives the return type's params (e.g. concat
-  // dimension = sum of the inputs).
+  // For each argument: its resolved type parameters, in key/value
+  // form.
+  // Array has arg_count elements; count == 0 for an argument with no
+  // parameters -- a non-custom argument, a non-parameterized custom type, or
+  // a custom one whose parameters are not yet known.
   const vef_type_params_t *arg_params;
 } vef_bind_types_args_t;
 
@@ -629,16 +621,12 @@ typedef struct {
   // function leaves the return-type parameters to the default rules.
   vef_inferred_type_params_t out_return_params;
 
-  // OPTIONAL OUTPUT: per-argument type parameters, one entry per argument,
-  // following the same contract as out_return_params. The caller supplies each
-  // entry's buf/max_buf_len; the hook writes the canonical "k=v,k=v" params for
-  // any argument it wants to resolve and leaves actual_len == 0 for the rest.
-  //
-  // This is how a hook resolves an argument the server cannot -- typically a
-  // string literal bound for a parameterized type, which has no sibling to
-  // borrow parameters from once TD1 is switched off. Arguments left at 0 keep
-  // whatever the server worked out on its own, so a hook only has to fill in
-  // the ones it cares about. NULL if the server did not offer the channel.
+  // OUTPUT: the return type's parameters as a canonical "k=v,k=v" string.
+  // The caller supplies buf/max_buf_len; the callee writes actual_len (and
+  //  sets overflow when the buffer is too small). actual_len == 0 means the
+  // hook says nothing about the return type. Installing a hook disables the
+  // built-in rule, so nothing fills in for it: leave it at 0 only when the
+  // return type has no parameters to decide.
   vef_inferred_type_params_t *out_arg_params;
 } vef_bind_types_result_t;
 
