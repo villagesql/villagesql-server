@@ -4,12 +4,13 @@
 # Advance the source tree to a new VillageSQL version and commit the result.
 #
 # Rewrites the three version numbers in VSQL_VERSION, updates the test result
-# files that embed the version string, and commits just those files.
+# files that embed the version string, and commits just those files.  The push
+# for these commits is left to the caller.  For releases, that caller is the
+# create-release.yml workflow.
 #
-# The result files come from the header comment of VSQL_VERSION, so that list
-# lives in one place.  Only the first group is used, the files listed under
-# "When changing the version".  The second group tracks codebase changes and is
-# not this script's concern.
+# The result files are enumerated in the header comment of VSQL_VERSION.  Each
+# result file is listed on separate lines, each one marked with the prefix
+# start-of-line comment "#VUP".
 #
 # Usage:
 #   villagesql/bld_tools/prepare_release_update.sh <major>.<minor>.<patch>
@@ -42,7 +43,9 @@ OLD_PATTERN="${VSQL_CODE_BASE}_$(vsql_json_version "$SOURCE_DIR" "")"
 # lines that changed.  A temp file and mv keeps this portable, as the -i flag of
 # sed differs between the BSD and GNU versions.
 replace_in_file() {
-    local from="$1" to="$2" file="$3"
+    local from="$1"
+    local to="$2"
+    local file="$3"
     local tmp changed
     tmp="$(mktemp)"
     sed "s|${from}|${to}|g" "$file" >"$tmp"
@@ -51,16 +54,9 @@ replace_in_file() {
     echo "$changed"
 }
 
-# The result files named in the first group of the VSQL_VERSION header.  Collect
-# the indented comment lines that follow that group's heading, stopping at the
-# first line that is not one of them.
+# The result files marked with "#VUP" in the VSQL_VERSION header.
 read_result_files() {
-    awk '
-        /^# When changing the version/ { collecting = 1; next }
-        !collecting                    { next }
-        /^#   [^ ]/                    { print $2; next }
-                                       { exit }
-    ' "$VERSION_FILE"
+    awk '/^#VUP[ \t]/ { print $2 }' "$VERSION_FILE"
 }
 
 log_step "Advancing $SOURCE_DIR to $NEW_VERSION"
@@ -72,6 +68,7 @@ done < <(read_result_files)
 [[ ${#RESULT_FILES[@]} -gt 0 ]] \
     || die "VSQL_VERSION names no test result files to update"
 
+# Rewrite the version numbers in VSQL_VERSION.
 replace_in_file "^VSQL_MAJOR_VERSION=.*" "VSQL_MAJOR_VERSION=$NEW_MAJOR" \
     "$VERSION_FILE" >/dev/null
 replace_in_file "^VSQL_MINOR_VERSION=.*" "VSQL_MINOR_VERSION=$NEW_MINOR" \
