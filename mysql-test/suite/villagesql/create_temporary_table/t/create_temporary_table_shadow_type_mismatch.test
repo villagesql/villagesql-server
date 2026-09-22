@@ -1,0 +1,52 @@
+# Regression test for issue #1190.
+#
+# A user temporary table whose name collides with a base table, where a
+# same-named column has a DIFFERENT type, must not crash. Previously the temp
+# table path fell through to the victionary, which is keyed only on
+# (db, table, column) and cannot distinguish a temp table from a base table of
+# the same name. It would adopt the base table's custom type onto the temp
+# column and trip the field-length assertion in CheckFieldLengthMatchesType.
+
+--source include/villagesql/install_complex_extension.inc
+
+# Case 1: plain INT temporary column shadows a base COMPLEX column of the same
+# name (the exact repro from #1190).
+CREATE TABLE t1 (c COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+CREATE TEMPORARY TABLE t1 (c INT);
+INSERT INTO t1 VALUES (42);
+# t1 now refers to the temporary INT table.
+SELECT * FROM t1;
+SHOW COLUMNS FROM t1;
+DROP TEMPORARY TABLE t1;
+# Base COMPLEX table is intact.
+SELECT * FROM t1;
+SHOW COLUMNS FROM t1;
+DROP TABLE t1;
+
+# Case 2: reverse direction - COMPLEX temporary column shadows a base INT
+# column of the same name.
+CREATE TABLE t2 (c INT);
+INSERT INTO t2 VALUES (7);
+CREATE TEMPORARY TABLE t2 (c COMPLEX);
+INSERT INTO t2 VALUES ('(3.0,4.0)');
+SELECT * FROM t2;
+SHOW COLUMNS FROM t2;
+DROP TEMPORARY TABLE t2;
+SELECT * FROM t2;
+SHOW COLUMNS FROM t2;
+DROP TABLE t2;
+
+# Case 3: multi-column table where a custom column is shadowed by a plain
+# column at the same name but a different ordinal position.
+CREATE TABLE t3 (a INT, val COMPLEX, b VARCHAR(20));
+INSERT INTO t3 VALUES (1, '(5.0,6.0)', 'base');
+CREATE TEMPORARY TABLE t3 (val INT, a INT, b VARCHAR(20));
+INSERT INTO t3 VALUES (100, 2, 'temp');
+SELECT * FROM t3;
+SHOW COLUMNS FROM t3;
+DROP TEMPORARY TABLE t3;
+SELECT * FROM t3;
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc
