@@ -1,0 +1,57 @@
+# Authoritative role sync (auto_grant = SYNC) for the vsql::preview::auth
+# capability. Companion to auth_auto_grant.test (ON, additive): SYNC makes the
+# token's staged roles the account's EXACT granted set -- grant the claimed AND
+# revoke every other granted role -- with one exception: an operator-pinned
+# DEFAULT role is never revoked.
+#
+# The vsql_auth_test "-token-roles" token stages a fixed {vsql_role_granted,
+# vsql_role_denied}. We pre-grant vsql_role_extra (never staged) to prove the
+# revoke, then pin it as DEFAULT to prove the exception. Token via
+# mysql_clear_password, so each login uses CLEARTEXT.
+
+call mtr.add_suppression("VEF auth: role .* is not granted; skipping");
+
+INSTALL EXTENSION vsql_auth_test;
+
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+CREATE ROLE vsql_role_granted;
+CREATE ROLE vsql_role_denied;
+CREATE ROLE vsql_role_extra;
+
+--echo # Account holds vsql_role_extra out of band -- the token never stages it.
+GRANT vsql_role_extra TO vsql_auth_test_user;
+--sorted_result
+SELECT FROM_USER, TO_USER FROM mysql.role_edges WHERE TO_USER = 'vsql_auth_test_user';
+
+--echo # SYNC: staged {granted, denied} are granted; unclaimed vsql_role_extra is
+--echo # revoked. Granted set becomes exactly {granted, denied}.
+SET GLOBAL vsql_auth_test.auto_grant = SYNC;
+--connect(sync_con, localhost, auth_user, vsql-auth-test-token-roles, , , , CLEARTEXT)
+--connection default
+--disconnect sync_con
+--sorted_result
+SELECT FROM_USER, TO_USER FROM mysql.role_edges WHERE TO_USER = 'vsql_auth_test_user';
+
+--echo # Operator pins vsql_role_extra as a DEFAULT role (re-granting it first).
+--echo # A default is deliberate operator intent, so SYNC must NOT revoke it even
+--echo # though the token never claims it.
+GRANT vsql_role_extra TO vsql_auth_test_user;
+ALTER USER vsql_auth_test_user DEFAULT ROLE vsql_role_extra;
+--connect(sync_con2, localhost, auth_user, vsql-auth-test-token-roles, , , , CLEARTEXT)
+--connection default
+--disconnect sync_con2
+--echo # granted + denied present, and the pinned vsql_role_extra survives.
+--sorted_result
+SELECT FROM_USER, TO_USER FROM mysql.role_edges WHERE TO_USER = 'vsql_auth_test_user';
+
+SET GLOBAL vsql_auth_test.auto_grant = OFF;
+ALTER USER vsql_auth_test_user DEFAULT ROLE NONE;
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;
+DROP ROLE vsql_role_granted;
+DROP ROLE vsql_role_denied;
+DROP ROLE vsql_role_extra;
+UNINSTALL EXTENSION vsql_auth_test;
