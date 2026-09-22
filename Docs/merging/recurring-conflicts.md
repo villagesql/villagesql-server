@@ -125,6 +125,24 @@ being maintained across merges.
 Refreshing it is its own task, not merge work. But every merge should check whether it
 just made the gap wider.
 
+## `include/welcome_copyright_notice.h`
+
+**Conflicts because:** VillageSQL inserts its own copyright line into three of Oracle's
+notice macros, and Oracle edits this file at least annually to bump
+`COPYRIGHT_NOTICE_CURRENT_YEAR`.
+
+**Resolution: keep both copyright lines — ours above Oracle's — and take upstream's
+year.** The constraints that are easy to break while resolving are documented in the
+file itself; `mysql-test/suite/villagesql/client/t/copyright_banner.test` is what
+catches a bad resolution.
+
+**On a base that adds its own copyright line (e.g. Percona 8.4):** the same rule
+applies to every additional copyright. Keep all of them and put the VillageSQL line
+first. On Percona the banner order is VillageSQL, then Percona, then Oracle — in the
+macros and in every affected `.result` (`mysql_config_editor`, `innochecksum_2`,
+`mysqlxtest_help`). Keep both year-masking regexes in `innochecksum_2.test` and
+`mysqlxtest_help.test`. `copyright_banner.result` expects Percona's line second there.
+
 ## `CONTRIBUTING.md`
 
 **Conflicts because:** VillageSQL replaced Oracle's contribution process, and upstream

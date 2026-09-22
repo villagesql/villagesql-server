@@ -19,6 +19,7 @@ INSERT INTO t1 SELECT * from t1;
 [2]:# Run the innochecksum when file isn't provided.
 # It will print the innochecksum usage similar to --help option.
 innochecksum Ver #.#.#
+Copyright (c) YEAR VillageSQL Contributors
 Copyright (c) YEAR-YEAR  Percona LLC and/or its affiliates
 Copyright (c) YEAR, YEAR , Oracle and/or its affiliates.
 
