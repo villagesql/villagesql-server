@@ -40,9 +40,7 @@ EOF
 --echo # Initialize two fresh datadirs
 --echo #
 
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR1 --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 > $MYSQLD_LOG 2>&1
 --exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR2 --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 >> $MYSQLD_LOG 2>&1
@@ -62,9 +60,7 @@ SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 --echo # Phase 2: Switch to data1 (no extensions installed)
 --echo #
 
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --exec echo "restart:--datadir=$DDIR1 --veb-dir=$veb_dir" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -77,9 +73,7 @@ SELECT COUNT(*) AS extension_count FROM INFORMATION_SCHEMA.EXTENSIONS;
 --echo # Phase 3: Switch back to data2 — server should start successfully
 --echo #
 
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 # Capture error output in case of failure
 --error 0,1
@@ -98,9 +92,7 @@ SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 UNINSTALL EXTENSION vsql_complex;
 
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --force-rmdir $DDIR1
 --force-rmdir $DDIR2
