@@ -17119,7 +17119,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
   // rolls back victionary modifications unless disarmed after a successful
   // store(). Constructed before process_alter so that a failure inside
-  // process_alter, after it has staged victionary marks, still rolls them back.
+  // process_alter, after it has staged victionary modifications, still rolls
+  // them back.
   villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
 
   // VillageSQL: Track custom columns and acquire necessary MDL locks.

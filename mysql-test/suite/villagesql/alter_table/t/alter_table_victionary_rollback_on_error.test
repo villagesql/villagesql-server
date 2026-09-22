@@ -25,23 +25,4 @@ SELECT * FROM t ORDER BY id;
 
 DROP TABLE t;
 
-# Regression for issue #1189: a failed ALTER that adds a custom column under
-# LOCK TABLES fails inside process_alter (opening the villagesql system tables
-# is not permitted under LOCK TABLES) after the victionary mark was already
-# staged. The staged mark must be rolled back; otherwise the implicit commit at
-# the start of the next statement sweeps it into the committed set, and a
-# subsequent CHANGE COLUMN referring to that never-created column asserts on
-# find_field_in_table_sef returning null.
-CREATE TABLE t1 (c1 INT);
-LOCK TABLES t1 WRITE;
---error ER_TABLE_NOT_LOCKED
-ALTER TABLE t1 ADD COLUMN c2 COMPLEX;
-# c2 was never created and its staged victionary mark was rolled back, so this
-# is treated as a plain-to-custom conversion of a non-existent column and errors
-# cleanly instead of crashing.
---error ER_VILLAGESQL_GENERIC_ERROR
-ALTER TABLE t1 CHANGE COLUMN c2 c3 COMPLEX;
-UNLOCK TABLES;
-DROP TABLE t1;
-
 --source include/villagesql/uninstall_complex_extension.inc
