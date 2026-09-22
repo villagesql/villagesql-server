@@ -125,6 +125,17 @@ being maintained across merges.
 Refreshing it is its own task, not merge work. But every merge should check whether it
 just made the gap wider.
 
+## `include/welcome_copyright_notice.h`
+
+**Conflicts because:** VillageSQL inserts its own copyright line into three of Oracle's
+notice macros, and Oracle edits this file at least annually to bump
+`COPYRIGHT_NOTICE_CURRENT_YEAR`.
+
+**Resolution: keep both copyright lines — ours above Oracle's — and take upstream's
+year.** The constraints that are easy to break while resolving are documented in the
+file itself; `mysql-test/suite/villagesql/client/t/copyright_banner.test` is what
+catches a bad resolution.
+
 ## `CONTRIBUTING.md`
 
 **Conflicts because:** VillageSQL replaced Oracle's contribution process, and upstream
