@@ -1,8 +1,7 @@
-# tvector_max_element / tvector_min_element: (TVECTOR) -> REAL
+# The max/min reductions, in both their scalar and vector forms:
 #
-# The narrowest use of a bind hook in this extension. The return is a REAL, so
-# there are no return parameters to decide and the shared hook never calls
-# set_return() -- its only job is the argument.
+#   tvector_max_element / tvector_min_element   (TVECTOR) -> REAL
+#   tvector_max_as_vector / tvector_min_as_vector   (TVECTOR(N)) -> TVECTOR(1)
 #
 # Both functions work without a hook for a TVECTOR column, and for an
 # explicitly converted TVECTOR::from_string(...). What the hook adds is the
@@ -16,24 +15,25 @@ INSERT INTO v3 VALUES (1, '[3,9,4]'), (2, '[-5,-1,-7]');
 
 ########################################################################
 #
-# 1. A column: resolved already, the hook has nothing to publish.
+# 1. A column: resolved already, the bind_and_check_types hook has nothing
+#    to do.
 #
 ########################################################################
 
 SELECT id, v,
-       vsql_tvector.tvector_max_element(v) AS largest,
-       vsql_tvector.tvector_min_element(v) AS smallest
+       vsql_tvector.tvector_max_element(v) AS max,
+       vsql_tvector.tvector_min_element(v) AS min
 FROM v3 ORDER BY id;
 
 ########################################################################
 #
 # 2. An explicit conversion: the inner call resolves to TVECTOR(3) on its
-#    own, so again nothing is published.
+#    own, so again bind_and_check_types has nothing to do.
 #
 ########################################################################
 
-SELECT vsql_tvector.tvector_max_element(TVECTOR::from_string('[1,8,2]')) AS mx,
-       vsql_tvector.tvector_min_element(TVECTOR::from_string('[1,8,2]')) AS mn;
+SELECT vsql_tvector.tvector_max_element(TVECTOR::from_string('[1,8,2]')) AS max,
+       vsql_tvector.tvector_min_element(TVECTOR::from_string('[1,8,2]')) AS min;
 
 ########################################################################
 #
@@ -42,35 +42,21 @@ SELECT vsql_tvector.tvector_max_element(TVECTOR::from_string('[1,8,2]')) AS mx,
 #
 ########################################################################
 
-SELECT vsql_tvector.tvector_max_element('[1,8,2]') AS mx,
-       vsql_tvector.tvector_min_element('[1,8,2]') AS mn;
+SELECT vsql_tvector.tvector_max_element('[1,8,2]') AS max,
+       vsql_tvector.tvector_min_element('[1,8,2]') AS min;
 
-SELECT vsql_tvector.tvector_max_element('[42]') AS mx,
-       vsql_tvector.tvector_min_element('[42]') AS mn;
+SELECT vsql_tvector.tvector_max_element('[42]') AS max,
+       vsql_tvector.tvector_min_element('[42]') AS min;
 
-SELECT vsql_tvector.tvector_max_element('[-3,-9]') AS mx,
-       vsql_tvector.tvector_min_element('[-3,-9]') AS mn;
+SELECT vsql_tvector.tvector_max_element('[-3,-9]') AS max,
+       vsql_tvector.tvector_min_element('[-3,-9]') AS min;
 
-SELECT vsql_tvector.tvector_max_element('[1.5,2.25,0.5]') AS mx,
-       vsql_tvector.tvector_min_element('[1.5,2.25,0.5]') AS mn;
-
-########################################################################
-#
-# 4. Element type. A lone literal has no other side to take one from, so it
-#    is read as float; a double column keeps its own width.
-#
-########################################################################
-
-CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
-INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
-
-SELECT vsql_tvector.tvector_max_element(v) AS mx,
-       vsql_tvector.tvector_min_element(v) AS mn
-FROM d3;
+SELECT vsql_tvector.tvector_max_element('[1.5,2.25,0.5]') AS max,
+       vsql_tvector.tvector_min_element('[1.5,2.25,0.5]') AS min;
 
 ########################################################################
 #
-# 5. Rejections, all at resolution time, and reported under the calling
+# 4. Rejections, all at resolution time, and reported under the calling
 #    function's own name.
 #
 ########################################################################
@@ -99,14 +85,59 @@ SELECT vsql_tvector.tvector_min_element(t) FROM texts;
 
 ########################################################################
 #
-# 6. NULL propagates.
+# 5. The _as_vector forms. 
+#
+########################################################################
+
+CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
+
+SELECT id,
+       vsql_tvector.tvector_max_as_vector(v) AS max,
+       vsql_tvector.tvector_min_as_vector(v) AS min
+FROM v3 ORDER BY id;
+
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_max_as_vector(v)) AS n
+FROM v3 WHERE id = 1;
+
+--echo # The result is TVECTOR(1) to be stored in matching column
+CREATE TABLE peaks (id INT PRIMARY KEY, p TVECTOR(1));
+INSERT INTO peaks SELECT id, vsql_tvector.tvector_max_as_vector(v) FROM v3;
+SELECT id, p FROM peaks ORDER BY id;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO peaks VALUES (99, 9);
+
+SELECT vsql_tvector.tvector_max_as_vector(v) AS max FROM d3;
+
+CREATE TABLE dpeaks (p TVECTOR('dimension=1,type=double'));
+INSERT INTO dpeaks SELECT vsql_tvector.tvector_max_as_vector(v) FROM d3;
+SELECT p FROM dpeaks;
+
+-- echo # Element type mismatch
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO peaks VALUES (98, vsql_tvector.tvector_max_as_vector(
+                                (SELECT v FROM d3 LIMIT 1)));
+
+--echo # From a bare literal too.
+SELECT vsql_tvector.tvector_max_as_vector('[4,1,7,2]') AS max,
+       vsql_tvector.tvector_min_as_vector('[4,1,7,2]') AS min;
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_max_as_vector('[]');
+
+########################################################################
+#
+# 6. NULL propagates through all four.
 #
 ########################################################################
 
 INSERT INTO v3 VALUES (3, NULL);
 SELECT id,
        vsql_tvector.tvector_max_element(v) IS NULL AS max_is_null,
-       vsql_tvector.tvector_min_element(v) IS NULL AS min_is_null
+       vsql_tvector.tvector_min_element(v) IS NULL AS min_is_null,
+       vsql_tvector.tvector_max_as_vector(v) IS NULL AS max_vec_is_null,
+       vsql_tvector.tvector_min_as_vector(v) IS NULL AS min_vec_is_null
 FROM v3 ORDER BY id;
 
 ########################################################################
@@ -115,6 +146,8 @@ FROM v3 ORDER BY id;
 #
 ########################################################################
 
+DROP TABLE dpeaks;
+DROP TABLE peaks;
 DROP TABLE texts;
 DROP TABLE d3;
 DROP TABLE v3;

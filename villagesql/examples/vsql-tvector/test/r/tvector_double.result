@@ -69,5 +69,42 @@ CREATE TABLE t_err (v TVECTOR('dimension=3,type=int'));
 ERROR 42000: TVECTOR: type must be 'float' or 'double', got 'int' near 'TVECTOR('dimension=3,type=int'))' at line 1
 CREATE TABLE t_err (v TVECTOR('dimension=3,type='));
 ERROR 42000: TVECTOR: type must be 'float' or 'double', got '' near 'TVECTOR('dimension=3,type='))' at line 1
+CREATE TABLE f3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO f3 VALUES (1, '[1.5,2.25,4]'), (2, NULL);
+SELECT id, v, vsql_tvector.tvector_as_double(v) AS widened
+FROM f3 ORDER BY id;
+id	v	widened
+1	[1.5,2.25,4]	[1.5,2.25,4]
+2	NULL	NULL
+# The dimension is carried over unchanged.
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_as_double(v)) AS n
+FROM f3 WHERE id = 1;
+n
+3
+CREATE TABLE wide3 (v TVECTOR('dimension=3,type=double'));
+INSERT INTO wide3 SELECT vsql_tvector.tvector_as_double(v) FROM f3 WHERE id = 1;
+SELECT v FROM wide3;
+v
+[1.5,2.25,4]
+INSERT INTO f3 SELECT 9, vsql_tvector.tvector_as_double(v) FROM f3 WHERE id = 1;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR('dimension=3,type=double') to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+# Widening does not invent precision the float never had: 0.1 stored as
+# float and widened is the float value, not the double nearest 0.1.
+INSERT INTO f3 VALUES (3, '[0.1,0,0]');
+SELECT vsql_tvector.tvector_as_double(v) AS widened_tenth
+FROM f3 WHERE id = 3;
+widened_tenth
+[0.10000000149011612,0,0]
+# A double argument passes through unchanged.
+SELECT vsql_tvector.tvector_as_double(v) AS already_wide FROM t WHERE id = 1;
+already_wide
+[1,2,3]
+# And from a bare literal, which the hook reads as float first.
+SELECT vsql_tvector.tvector_as_double('[1.5,2.5]') AS widened;
+widened
+[1.5,2.5]
+SELECT vsql_tvector.tvector_as_double('[]');
+ERROR HY000: Can't initialize function 'tvector_as_double'; tvector_as_double: argument 1 is empty; a TVECTOR must have at least one element
+DROP TABLE wide3, f3;
 DROP TABLE t, t_nulls;
 UNINSTALL EXTENSION vsql_tvector;

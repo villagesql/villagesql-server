@@ -129,11 +129,12 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   // We resolve unknown type params from sibling args by default, then infer
   // return type params from the args, as written into return_params. If the
   // function carries a bind_and_check_types hook, the hooks resolve those
-  // params and returned params instead. 
+  // params and returned params instead.
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
-  const vef_bind_types_func_t bind_and_check = m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4
-                                                ? m_udf->vdf_func_desc->bind_and_check_types
-                                                : nullptr;
+  const vef_bind_types_func_t bind_and_check =
+      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4
+          ? m_udf->vdf_func_desc->bind_and_check_types
+          : nullptr;
   villagesql::TypeParameters return_params;
   if (signature != nullptr &&
       villagesql::ValidateAndConvertVDFArguments(

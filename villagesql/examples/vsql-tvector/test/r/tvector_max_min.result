@@ -2,39 +2,32 @@ INSTALL EXTENSION vsql_tvector;
 CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
 INSERT INTO v3 VALUES (1, '[3,9,4]'), (2, '[-5,-1,-7]');
 SELECT id, v,
-vsql_tvector.tvector_max_element(v) AS largest,
-vsql_tvector.tvector_min_element(v) AS smallest
+vsql_tvector.tvector_max_element(v) AS max,
+vsql_tvector.tvector_min_element(v) AS min
 FROM v3 ORDER BY id;
-id	v	largest	smallest
+id	v	max	min
 1	[3,9,4]	9	3
 2	[-5,-1,-7]	-1	-7
-SELECT vsql_tvector.tvector_max_element(TVECTOR::from_string('[1,8,2]')) AS mx,
-vsql_tvector.tvector_min_element(TVECTOR::from_string('[1,8,2]')) AS mn;
-mx	mn
+SELECT vsql_tvector.tvector_max_element(TVECTOR::from_string('[1,8,2]')) AS max,
+vsql_tvector.tvector_min_element(TVECTOR::from_string('[1,8,2]')) AS min;
+max	min
 8	1
-SELECT vsql_tvector.tvector_max_element('[1,8,2]') AS mx,
-vsql_tvector.tvector_min_element('[1,8,2]') AS mn;
-mx	mn
+SELECT vsql_tvector.tvector_max_element('[1,8,2]') AS max,
+vsql_tvector.tvector_min_element('[1,8,2]') AS min;
+max	min
 8	1
-SELECT vsql_tvector.tvector_max_element('[42]') AS mx,
-vsql_tvector.tvector_min_element('[42]') AS mn;
-mx	mn
+SELECT vsql_tvector.tvector_max_element('[42]') AS max,
+vsql_tvector.tvector_min_element('[42]') AS min;
+max	min
 42	42
-SELECT vsql_tvector.tvector_max_element('[-3,-9]') AS mx,
-vsql_tvector.tvector_min_element('[-3,-9]') AS mn;
-mx	mn
+SELECT vsql_tvector.tvector_max_element('[-3,-9]') AS max,
+vsql_tvector.tvector_min_element('[-3,-9]') AS min;
+max	min
 -3	-9
-SELECT vsql_tvector.tvector_max_element('[1.5,2.25,0.5]') AS mx,
-vsql_tvector.tvector_min_element('[1.5,2.25,0.5]') AS mn;
-mx	mn
+SELECT vsql_tvector.tvector_max_element('[1.5,2.25,0.5]') AS max,
+vsql_tvector.tvector_min_element('[1.5,2.25,0.5]') AS min;
+max	min
 2.25	0.5
-CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
-INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
-SELECT vsql_tvector.tvector_max_element(v) AS mx,
-vsql_tvector.tvector_min_element(v) AS mn
-FROM d3;
-mx	mn
-9.25	1.5
 SELECT vsql_tvector.tvector_max_element('not a vector');
 ERROR HY000: Can't initialize function 'tvector_max_element'; tvector_max_element: argument 1 is not a vector literal
 SELECT vsql_tvector.tvector_min_element('not a vector');
@@ -50,15 +43,60 @@ SELECT vsql_tvector.tvector_max_element(t) FROM texts;
 ERROR HY000: Can't initialize function 'tvector_max_element'; tvector_max_element: argument 1 must be a TVECTOR or a constant vector literal
 SELECT vsql_tvector.tvector_min_element(t) FROM texts;
 ERROR HY000: Can't initialize function 'tvector_min_element'; tvector_min_element: argument 1 must be a TVECTOR or a constant vector literal
+CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
+SELECT id,
+vsql_tvector.tvector_max_as_vector(v) AS max,
+vsql_tvector.tvector_min_as_vector(v) AS min
+FROM v3 ORDER BY id;
+id	max	min
+1	[9]	[3]
+2	[-1]	[-7]
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_max_as_vector(v)) AS n
+FROM v3 WHERE id = 1;
+n
+1
+# The result is TVECTOR(1) to be stored in matching column
+CREATE TABLE peaks (id INT PRIMARY KEY, p TVECTOR(1));
+INSERT INTO peaks SELECT id, vsql_tvector.tvector_max_as_vector(v) FROM v3;
+SELECT id, p FROM peaks ORDER BY id;
+id	p
+1	[9]
+2	[-1]
+INSERT INTO peaks VALUES (99, 9);
+ERROR HY000: Incorrect TVECTOR value: '9' for column 'p' at row 1
+SELECT vsql_tvector.tvector_max_as_vector(v) AS max FROM d3;
+max
+[9.25]
+CREATE TABLE dpeaks (p TVECTOR('dimension=1,type=double'));
+INSERT INTO dpeaks SELECT vsql_tvector.tvector_max_as_vector(v) FROM d3;
+SELECT p FROM dpeaks;
+p
+[9.25]
+# Element type mismatch
+INSERT INTO peaks VALUES (98, vsql_tvector.tvector_max_as_vector(
+(SELECT v FROM d3 LIMIT 1)));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR('dimension=1,type=double') to vsql_tvector.TVECTOR(1) for column 'p' at row 2
+# From a bare literal too.
+SELECT vsql_tvector.tvector_max_as_vector('[4,1,7,2]') AS max,
+vsql_tvector.tvector_min_as_vector('[4,1,7,2]') AS min;
+max	min
+[7]	[1]
+SELECT vsql_tvector.tvector_max_as_vector('[]');
+ERROR HY000: Can't initialize function 'tvector_max_as_vector'; tvector_max_as_vector: argument 1 is empty; a TVECTOR must have at least one element
 INSERT INTO v3 VALUES (3, NULL);
 SELECT id,
 vsql_tvector.tvector_max_element(v) IS NULL AS max_is_null,
-vsql_tvector.tvector_min_element(v) IS NULL AS min_is_null
+vsql_tvector.tvector_min_element(v) IS NULL AS min_is_null,
+vsql_tvector.tvector_max_as_vector(v) IS NULL AS max_vec_is_null,
+vsql_tvector.tvector_min_as_vector(v) IS NULL AS min_vec_is_null
 FROM v3 ORDER BY id;
-id	max_is_null	min_is_null
-1	0	0
-2	0	0
-3	1	1
+id	max_is_null	min_is_null	max_vec_is_null	min_vec_is_null
+1	0	0	0	0
+2	0	0	0	0
+3	1	1	1	1
+DROP TABLE dpeaks;
+DROP TABLE peaks;
 DROP TABLE texts;
 DROP TABLE d3;
 DROP TABLE v3;

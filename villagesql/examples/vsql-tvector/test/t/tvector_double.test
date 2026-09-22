@@ -119,10 +119,49 @@ CREATE TABLE t_err (v TVECTOR('dimension=3,type='));
 
 ########################################################################
 #
+# Test: tvector_as_double -- widening a float vector to double
+#
+########################################################################
+
+CREATE TABLE f3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO f3 VALUES (1, '[1.5,2.25,4]'), (2, NULL);
+
+SELECT id, v, vsql_tvector.tvector_as_double(v) AS widened
+FROM f3 ORDER BY id;
+
+--echo # The dimension is carried over unchanged.
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_as_double(v)) AS n
+FROM f3 WHERE id = 1;
+
+CREATE TABLE wide3 (v TVECTOR('dimension=3,type=double'));
+INSERT INTO wide3 SELECT vsql_tvector.tvector_as_double(v) FROM f3 WHERE id = 1;
+SELECT v FROM wide3;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO f3 SELECT 9, vsql_tvector.tvector_as_double(v) FROM f3 WHERE id = 1;
+
+--echo # Widening does not invent precision the float never had: 0.1 stored as
+--echo # float and widened is the float value, not the double nearest 0.1.
+INSERT INTO f3 VALUES (3, '[0.1,0,0]');
+SELECT vsql_tvector.tvector_as_double(v) AS widened_tenth
+FROM f3 WHERE id = 3;
+
+--echo # A double argument passes through unchanged.
+SELECT vsql_tvector.tvector_as_double(v) AS already_wide FROM t WHERE id = 1;
+
+--echo # And from a bare literal, which the hook reads as float first.
+SELECT vsql_tvector.tvector_as_double('[1.5,2.5]') AS widened;
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_as_double('[]');
+
+########################################################################
+#
 # Clean up
 #
 ########################################################################
 
+DROP TABLE wide3, f3;
 DROP TABLE t, t_nulls;
 
 UNINSTALL EXTENSION vsql_tvector;

@@ -1457,8 +1457,8 @@ static bool ConvertVDFArguments(
   // when it does, and the caller only ever runs one of them. They are keyed
   // differently because of how each is decided -- known_params by type name,
   // since TD1 shares one answer across every argument of that type;
-  // hook_arg_params by argument index, since the hook is asked about each argument
-  // separately.
+  // hook_arg_params by argument index, since the hook is asked about each
+  // argument separately.
   assert(known_params.empty() || hook_arg_params.empty());
 
   // The hook's answer for one argument, or null if the hook did not supply one
@@ -1592,7 +1592,7 @@ static void InferVDFReturnParams(
   }
 }
 
-// Buffer for one canonical "k=v,k=v" params string. 
+// Buffer for one canonical "k=v,k=v" params string.
 static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 
 // Invokes a function's bind_and_check_types hook.
