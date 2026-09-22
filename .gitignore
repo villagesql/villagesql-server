@@ -17,7 +17,7 @@ TAGS_sorted_by_file
 .vscode/
 
 build/
-build-debug/
+build-*/
 # Exception: libarchive needs its build/ directory for version and cmake modules
 !extra/libarchive/libarchive-3.8.1/build/
 datatool/
