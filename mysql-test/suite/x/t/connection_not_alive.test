@@ -20,6 +20,10 @@
 -->recvtovar %ID%
 -->endmacro
 
+# Call this only after whatever the session was blocked on has been
+# released. An aborted session blocked on lock wait is reaped when its
+# statement unblocks, not when the client goes away. Starting the
+# assert while the lock is still held only creates a race.
 -->macro Assert_connection_not_alive	%CONNECTION_ID%
 -->wait_for 0	SELECT count(*) FROM information_schema.processlist WHERE id = %CONNECTION_ID%
 -->endmacro
@@ -60,13 +64,14 @@ SET SESSION DEBUG_SYNC="now WAIT_FOR reached_xpl_connection_alive_wait";
 -->setsession
 SET SESSION DEBUG_SYNC="now SIGNAL continue_xpl_connection_alive_wait";
 -->query_result
--->callmacro Assert_connection_not_alive	%ID%
 
 -->setsession lock_table
 -->sql
 UNLOCK TABLES;
 -->endsql
 -->closesession
+
+-->callmacro Assert_connection_not_alive	%ID%
 
 
 -->title =III. Aborting of updating table session used by transaction
@@ -92,13 +97,14 @@ SET SESSION DEBUG_SYNC="now WAIT_FOR reached_xpl_connection_alive_wait";
 -->setsession
 SET SESSION DEBUG_SYNC="now SIGNAL continue_xpl_connection_alive_wait";
 -->query_result
--->callmacro Assert_connection_not_alive	%ID%
 
 -->setsession transaction
 -->sql
 COMMIT;
 -->endsql
 -->closesession
+
+-->callmacro Assert_connection_not_alive	%ID%
 
 EOF
 
