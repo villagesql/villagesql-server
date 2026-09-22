@@ -174,14 +174,16 @@ class AuthDescriptor {
     return *this;
   }
 
-  // `auto_grant`: opt in to having the server GRANT the roles this method
-  // stages (set_active_roles) to the resolved account, so a token claiming a
-  // role the account was not granted takes effect instead of being skipped.
-  // Queried live per login. Independent of auto_create (grant-to-existing vs
-  // create-unknown). Optional: unset (or a callback returning false) keeps
+  // `roles_mode`: how the server reconciles the roles this method stages
+  // (set_active_roles) with the resolved account's granted roles --
+  // ACTIVATE (activate-only, the default), GRANT (also grant a claimed role the
+  // account lacks), or SYNC (make the staged set authoritative: grant the
+  // missing, revoke every other granted role). See vef_auth_roles_mode_t.
+  // Queried live per login. Independent of auto_create (roles-on-existing vs
+  // create-unknown). Optional: unset (or a callback returning ACTIVATE) keeps
   // the activate-only default (the DBA owns grants).
-  constexpr AuthDescriptor &auto_grant(bool (*callback)()) {
-    cc_.auto_grant_roles = callback;
+  constexpr AuthDescriptor &roles_mode(vef_auth_roles_mode_t (*callback)()) {
+    cc_.roles_mode = callback;
     return *this;
   }
 
