@@ -23,9 +23,7 @@ CREATE DATABASE test;
 EOF
 
 --echo # Shut server down
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --echo # Initialize a fresh datadir
 --exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 > $INIT_LOG 2>&1
@@ -52,9 +50,7 @@ SELECT SUBSTRING_INDEX(value, '_', 1)
  WHERE name = 'version';
 
 --echo # Shut server down
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --echo # Starting on that datadir must fail rather than skip the upgrade.
 # mysqld is run directly rather than through the restart mechanism so that a
