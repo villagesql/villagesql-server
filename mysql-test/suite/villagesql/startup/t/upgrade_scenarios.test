@@ -18,9 +18,7 @@ EOF
 --echo # This simulates a fresh MySQL installation with VillageSQL added
 
 --echo # Shut server down
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --echo # Initialize fresh datadir
 --exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$BOOTSTRAP_SQL --log-error-verbosity=1 > $MYSQLD_LOG 2>&1
@@ -60,9 +58,7 @@ WHERE name = 'created';
 --echo # Add a small delay to ensure timestamp will be different
 --sleep 1
 
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --exec echo "restart:--datadir=$DDIR" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --source include/wait_until_connected_again.inc
@@ -83,9 +79,7 @@ SELECT name, value FROM villagesql.properties WHERE name = 'version';
 --sleep 1
 
 --echo # Restart with upgrade=FORCE (should be no-op)
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --exec echo "restart:--datadir=$DDIR --upgrade=FORCE" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --source include/wait_until_connected_again.inc
@@ -112,9 +106,7 @@ SELECT name, value FROM villagesql.properties WHERE name = 'version';
 --sleep 1
 
 --echo # Restart with upgrade=FORCE to trigger version upgrade
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --exec echo "restart:--datadir=$DDIR --upgrade=FORCE" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --source include/wait_until_connected_again.inc
@@ -145,9 +137,7 @@ WHERE schema_id = @villagesql_schema_id
 --sleep 1
 
 --echo # Restart to trigger partial installation recovery
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --exec echo "restart:--datadir=$DDIR --upgrade=FORCE" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --source include/wait_until_connected_again.inc
@@ -181,9 +171,7 @@ SELECT name, value FROM villagesql.properties WHERE name = 'version';
 
 --echo # Cleanup
 --echo # Shutdown server before cleanup
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 # Remove test directory and files
 --force-rmdir $DDIR
