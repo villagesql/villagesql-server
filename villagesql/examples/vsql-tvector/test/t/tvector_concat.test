@@ -1,0 +1,173 @@
+# tvector_concat: (TVECTOR(M), TVECTOR(N)) -> TVECTOR(M+N)
+#
+# The only TVECTOR function whose arguments may disagree on dimension, and the
+# only one whose return dimension is computed rather than copied. Both are the
+# job of its bind_and_check_types hook: TD1 would reject differing sibling
+# params, and TD2 could only copy M or N onto the return.
+#
+# Because a hook switches TD1 off, a constant argument gets no donated params
+# either -- the hook counts the literal's elements itself and answers with
+# set_arg(). These tests walk every combination of column and literal on both
+# sides.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE v2 (id INT PRIMARY KEY, v TVECTOR(2));
+CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
+CREATE TABLE v5 (id INT PRIMARY KEY, v TVECTOR(5));
+INSERT INTO v2 VALUES (1, '[1,2]');
+INSERT INTO v3 VALUES (1, '[3,4,5]');
+INSERT INTO v5 VALUES (1, '[9,9,9,9,9]');
+
+########################################################################
+#
+# 1. Both arguments are columns, with different dimensions
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM v2 a, v3 b;
+SELECT vsql_tvector.tvector_concat(b.v, a.v) AS c FROM v2 a, v3 b;
+
+--echo # Same dimension on both sides still concatenates rather than copying:
+--echo # TD2 would have produced TVECTOR(2) here.
+SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM v2 a, v2 b;
+
+--echo # The return really is TVECTOR(5): adding it to a TVECTOR(5) column is
+--echo # accepted, and to a TVECTOR(3) column is rejected by TD1 on tvector_add.
+SELECT vsql_tvector.tvector_add(vsql_tvector.tvector_concat(a.v, b.v), c.v) AS s
+FROM v2 a, v3 b, v5 c;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_add(vsql_tvector.tvector_concat(a.v, b.v), c.v)
+FROM v2 a, v3 b, v3 c;
+
+########################################################################
+#
+# 2. First argument a literal, second a column
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_concat('[7,8]', v) AS c FROM v3;
+SELECT vsql_tvector.tvector_concat('[7]', v) AS c FROM v3;
+SELECT vsql_tvector.tvector_concat('[1,2,3,4]', v) AS c FROM v2;
+
+########################################################################
+#
+# 3. First argument a column, second a literal
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_concat(v, '[7,8]') AS c FROM v3;
+SELECT vsql_tvector.tvector_concat(v, '[7]') AS c FROM v3;
+SELECT vsql_tvector.tvector_concat(v, '[1,2,3,4]') AS c FROM v2;
+
+########################################################################
+#
+# 4. Both arguments literals -- neither side can donate, so the hook is the
+#    only source of params for either one
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_concat('[1,2]', '[3,4,5]') AS c;
+SELECT vsql_tvector.tvector_concat('[1]', '[2]') AS c;
+SELECT vsql_tvector.tvector_concat('[1.5,2.5]', '[3.5]') AS c;
+
+########################################################################
+#
+# 5. Empty vectors. A TVECTOR must have at least one element (resolve_params
+#    rejects dimension 0), so every empty case is an error -- reported by the
+#    hook at resolution time, before any row is read.
+#
+########################################################################
+
+--echo # empty + non-empty
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat('[]', '[1,2]') AS c;
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat('[]', v) AS c FROM v3;
+
+--echo # non-empty + empty
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat('[1,2]', '[]') AS c;
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat(v, '[]') AS c FROM v3;
+
+--echo # empty + empty
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat('[]', '[]') AS c;
+
+########################################################################
+#
+# 6. Element type. A literal has no element type of its own, so it takes the
+#    one the server already resolved for the other side.
+#
+########################################################################
+
+CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d3 VALUES (1, '[1.5,2.5,3.5]');
+
+SELECT vsql_tvector.tvector_concat(v, '[4.5]') AS c FROM d3;
+SELECT vsql_tvector.tvector_concat('[0.5]', v) AS c FROM d3;
+
+--echo # Two columns whose element types differ cannot be concatenated.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat(a.v, b.v) FROM d3 a, v3 b;
+
+--echo # With two literals and nothing resolved, float is the default, matching
+--echo # what tvector_from_string infers for a bare literal.
+SELECT vsql_tvector.tvector_concat('[1.5]', '[2.5]') AS c;
+
+########################################################################
+#
+# 7. Malformed and non-constant arguments
+#
+########################################################################
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat('not a vector', '[1]') AS c;
+
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat('[1,2', '[1]') AS c;
+
+CREATE TABLE texts (t VARCHAR(32));
+INSERT INTO texts VALUES ('[1,2]');
+
+--echo # A non-constant argument has no value the hook can count at resolution.
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat(t, '[1]') FROM texts;
+
+########################################################################
+#
+# 8. NULL propagates from either side.
+#
+########################################################################
+
+INSERT INTO v3 VALUES (2, NULL);
+SELECT id, vsql_tvector.tvector_concat(v, '[7]') IS NULL AS is_null
+FROM v3 ORDER BY id;
+
+########################################################################
+#
+# 9. The combined dimension is bounded by the type's maximum.
+#
+########################################################################
+
+CREATE TABLE big (id INT PRIMARY KEY, v TVECTOR(4096));
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_tvector.tvector_concat(v, '[1]') FROM big;
+
+########################################################################
+#
+# Cleanup
+#
+########################################################################
+
+DROP TABLE big;
+DROP TABLE texts;
+DROP TABLE d3;
+DROP TABLE v5;
+DROP TABLE v3;
+DROP TABLE v2;
+UNINSTALL EXTENSION vsql_tvector;
