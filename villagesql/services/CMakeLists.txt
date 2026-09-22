@@ -36,7 +36,7 @@ SET(VILLAGESQL_SERVICES_SOURCES
 ADD_LIBRARY(villagesql_services OBJECT
   ${VILLAGESQL_SERVICES_SOURCES})
 
-TARGET_LINK_LIBRARIES(villagesql_services PRIVATE extra::rapidjson extra::unordered_dense)
+TARGET_LINK_LIBRARIES(villagesql_services PRIVATE extra::rapidjson extra::unordered_dense boost)
 
 ADD_DEPENDENCIES(villagesql_services GenError)
 ADD_DEPENDENCIES(villagesql_services GenServerSource)
