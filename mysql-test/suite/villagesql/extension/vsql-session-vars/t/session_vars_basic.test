@@ -4,8 +4,22 @@
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 
+# Regression: reading an extension session var from a connection opened BEFORE
+# the extension was installed grows that connection's THD dynamic-var array on
+# first read, which must hold LOCK_global_system_variables (the read path once
+# passed global_lock=false -> unlocked grow -> debug assert / release race).
+# Order matters: open the connection, then install, then read on it.
+connect (predates,localhost,root,,);
+connection default;
+
 --echo # Install extension
 INSTALL EXTENSION vsql_session_var_test;
+
+connection predates;
+SELECT vsql_session_var_test.read_session_int_var();
+SELECT vsql_session_var_test.read_session_int_var();
+connection default;
+disconnect predates;
 
 # Reset this connection's session values to their defaults so the reads below
 # are independent of any earlier test in the same server.
