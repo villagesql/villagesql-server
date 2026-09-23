@@ -955,7 +955,8 @@ struct AccessPath {
       // holds an opaque scan spec (owned by thd->mem_root) and `range` is null;
       // for the spatial variant this is null. A non-null value both selects the
       // custom iterator and carries its parameters. The concrete spec type
-      // lives in villagesql/sql/custom_index_knn_optimizer.cc.
+      // (CustomKnnDistanceScanSpec) lives in
+      // villagesql/sql/custom_index_knn_scan.h.
       void *custom_scan_spec;
       bool reverse;
     } index_distance_scan;

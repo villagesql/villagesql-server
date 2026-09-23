@@ -19,9 +19,10 @@
 
 // KNN scan execution for custom indexes: the scan-dispatch entry points that
 // forward to the extension's scan callbacks on the loaded index, and the row
-// iterator that drives them. The optimizer (custom_index_knn_optimizer.cc)
-// recognizes the scan and fills a CustomHypergraphDistanceScanSpec; this unit
-// consumes it at execution time.
+// iterator that drives them. An optimizer integration fills a
+// CustomKnnDistanceScanSpec (via the recognition core in
+// custom_index_knn_recognition.cc); this unit consumes it at execution time.
+// The spec/iterator are optimizer-agnostic.
 
 #include <cstdint>
 
@@ -37,12 +38,11 @@ namespace villagesql {
 
 struct CustomIndexKnnScan;
 
-// Per-query KNN scan spec. Allocated on thd->mem_root by
-// CollectCustomKnnOrderingsForHypergraph and threaded through
-// SpatialDistanceScanInfo::custom_scan_spec →
-// AccessPath::index_distance_scan().custom_scan_spec →
-// CreateCustomHypergraphDistanceIterator. No process-wide registry.
-struct CustomHypergraphDistanceScanSpec {
+// Per-query KNN scan spec. Allocated on thd->mem_root by an optimizer
+// integration (built on the recognition core, custom_index_knn_recognition.cc)
+// and threaded through AccessPath::index_distance_scan().custom_scan_spec →
+// CreateCustomKnnDistanceIterator. No process-wide registry.
+struct CustomKnnDistanceScanSpec {
   TABLE *table = nullptr;
   const unsigned char *query_key = nullptr;
   uint32_t query_key_len = 0;
@@ -62,7 +62,7 @@ void custom_index_knn_scan_end(CustomIndexKnnScan **scan);
 
 // `custom_scan_spec` is the opaque pointer parked on
 // AccessPath::index_distance_scan().custom_scan_spec.
-unique_ptr_destroy_only<RowIterator> CreateCustomHypergraphDistanceIterator(
+unique_ptr_destroy_only<RowIterator> CreateCustomKnnDistanceIterator(
     THD *thd, MEM_ROOT *mem_root, TABLE *table, int key_idx,
     void *custom_scan_spec, double expected_rows, ha_rows *examined_rows);
 

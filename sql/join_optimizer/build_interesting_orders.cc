@@ -66,7 +66,7 @@
 #include "sql/table.h"
 #include "sql/window.h"
 #include "template_utils.h"
-#include "villagesql/sql/custom_index_knn_optimizer.h"
+#include "villagesql/sql/custom_index_knn_optimizer_hypergraph.h"
 
 using hypergraph::NodeMap;
 using std::has_single_bit;

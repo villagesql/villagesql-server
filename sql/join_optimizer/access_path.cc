@@ -555,7 +555,7 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         // VillageSQL: custom-index KNN distance scan (spatial variant leaves
         // custom_scan_spec null and falls through below).
         if (param.custom_scan_spec != nullptr) {
-          iterator = villagesql::CreateCustomHypergraphDistanceIterator(
+          iterator = villagesql::CreateCustomKnnDistanceIterator(
               thd, mem_root, param.table, param.idx, param.custom_scan_spec,
               path->num_output_rows(), examined_rows);
           break;

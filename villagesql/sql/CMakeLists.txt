@@ -14,7 +14,8 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_SQL_SOURCES
-  custom_index_knn_optimizer.cc
+  custom_index_knn_recognition.cc
+  custom_index_knn_optimizer_hypergraph.cc
   custom_index_knn_scan.cc
   custom_index_runtime.cc
   custom_vdf.cc
