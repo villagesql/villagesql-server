@@ -20,7 +20,7 @@ name: Create Release
 # The Docker values are the ones expected of a release, with image_repo as
 # `villagesql/server` and version_labels as `latest`.
 # Since the primary branch (e.g. main) provides the latest for Docker,
-# production runs should set define_tags to `latest` rather than the more
+# production runs should set manifest_tags to `latest` rather than the more
 # common leave it empty.
 
 on:
@@ -48,7 +48,7 @@ on:
         required: false
         type: string
         default: ''
-      define_tags:
+      manifest_tags:
         description: 'Comma-separated tags published as given. Blank publishes none.'
         required: false
         type: string
@@ -104,7 +104,7 @@ jobs:
           RELEASE_NOTE: ${{ inputs.release_note }}
           IMAGE_REPO: ${{ inputs.image_repo }}
           VERSION_LABELS: ${{ inputs.version_labels }}
-          DEFINE_TAGS: ${{ inputs.define_tags }}
+          MANIFEST_TAGS: ${{ inputs.manifest_tags }}
         run: |
           set -euo pipefail
 
@@ -171,9 +171,8 @@ jobs:
             echo "| Release tag | \`$RELEASE_TAG\` |"
             echo "| Publish tag | \`$PUBLISH_TAG\` |"
             echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
-            echo "| Dev ABI | $DEV_ABI |"
             echo "| Version labels | ${VERSION_LABELS:-_none_} |"
-            echo "| Define tags | ${DEFINE_TAGS:-_none_} |"
+            echo "| Manifest tags | ${MANIFEST_TAGS:-_none_} |"
             echo "| Branch reopens on | $NEXT_VERSION |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -400,7 +399,7 @@ jobs:
           IMAGE_TAG: ${{ needs.prepare_release.outputs.image_tag }}
           IMAGE_REPO: ${{ inputs.image_repo }}
           VERSION_LABELS: ${{ inputs.version_labels }}
-          DEFINE_TAGS: ${{ inputs.define_tags }}
+          MANIFEST_TAGS: ${{ inputs.manifest_tags }}
           SLACK_NOTIFY: ${{ inputs.slack_notify }}
         run: |
           set -euo pipefail
@@ -411,9 +410,8 @@ jobs:
             -f release_tag="$RELEASE_TAG" \
             -f image_tag="$IMAGE_TAG" \
             -f image_repo="$IMAGE_REPO" \
-            -f dev_abi="$DEV_ABI" \
             -f version_labels="$VERSION_LABELS" \
-            -f define_tags="$DEFINE_TAGS" \
+            -f manifest_tags="$MANIFEST_TAGS" \
             -f slack_notify="$SLACK_NOTIFY"
 
           {

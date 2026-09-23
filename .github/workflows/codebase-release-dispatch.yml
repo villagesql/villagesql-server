@@ -47,12 +47,12 @@ on:
         type: string
         default: 'villagesql/server'
       version_labels:
-        description: 'Codebase version labels, e.g. latest. Comma-separated values, such as "latest,stable" (without quotes), define multiple generated image tags.  Blank publishes no additional tags.  Each version label defines an additional manifest tag with the version label replacing the version number in the resource's image tag.'
+        description: 'Codebase version labels, e.g. latest. Comma-separated values, such as "latest,stable" (without quotes), define multiple generated manifest tags.  Blank publishes no additional tags.'
         required: false
         type: string
         default: ''
       manifest_tags:
-        description: 'Tags for the multi-platform manifest, e.g. latest.  Comma-separated values, such as "latest,stable" (without quotes), define multiple manifest tags.  Blank publishes no additional tags.  Each manifest tag is applied directly to the multi-platform manifest.'
+        description: 'Tags for the multi-platform manifest, e.g. latest.  Comma-separated values, such as "latest,edge" (without quotes), define multiple manifest tags.  Blank publishes no additional tags.'
         required: false
         type: string
         default: ''
@@ -74,8 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
-      code-base: ${{ steps.resolve.outputs.code_base }}
-      version: ${{ steps.resolve.outputs.version }}
+      vsql_codebase: ${{ steps.resolve.outputs.vsql_codebase }}
+      vsql_version: ${{ steps.resolve.outputs.vsql_version }}
 
     steps:
       # cone mode brings the root-level VSQL_VERSION along.
@@ -99,16 +99,17 @@ jobs:
           RELEASE_BUILD: ${{ inputs.release_build }}
           VERSION_LABELS: ${{ inputs.version_labels }}
           MANIFEST_TAGS: ${{ inputs.manifest_tags }}
+          PRE_RELEASE: ${{ !inputs.release_build && 'dev' || '' }}
         run: |
           set -euo pipefail
 
-          source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
-          source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
-          VSQL_VERSION=$(vsql_json_version "$SOURCE_DIR")
-          VSQL_CODEBASE=$(vsql_json_codebase "$SOURCE_DIR")
+          source villagesql/scripts/vsql_script_utils.sh
+          source villagesql/bld_tools/build_info.sh
+          VSQL_VERSION=$(vsql_json_version . "$PRE_RELEASE")
+          VSQL_CODEBASE=$(vsql_json_codebase .)
 
           # Pretty print the version info.
-          "$SOURCE_DIR/villagesql/bld_matrix/json_version.sh" | jq .
+          villagesql/bld_matrix/json_version.sh | jq .
 
           # A Docker tag cannot hold a slash, and the labels and manifest tags
           # become tags too. Catching a GitHub release tag pasted into the
@@ -125,8 +126,8 @@ jobs:
 
           {
             echo "sha=$SHA"
-            echo "code_base=$VSQL_CODEBASE"
-            echo "version=$VSQL_VERSION"
+            echo "vsql_codebase=$VSQL_CODEBASE"
+            echo "vsql_version=$VSQL_VERSION"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -167,7 +168,7 @@ jobs:
       # VSQL_PRE_RELEASE_VERSION, so both halves derive the suffix from
       # release_build identically.
       pre_release_version: ${{ !inputs.release_build && 'dev' || '' }}
-      dev_abi: OFF
+      dev_abi: 'OFF'
       version_labels: ${{ inputs.version_labels }}
       manifest_tags: ${{ inputs.manifest_tags }}
 
@@ -254,7 +255,7 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "${{ steps.status.outputs.emoji }} Codebase release ${{ needs.resolve.outputs.code-base || 'unknown' }} ${{ needs.resolve.outputs.version || '' }} ${{ steps.status.outputs.label }}",
+              "text": "${{ steps.status.outputs.emoji }} Codebase release ${{ needs.resolve.outputs.vsql_codebase || 'unknown' }} ${{ needs.resolve.outputs.vsql_version || '' }} ${{ steps.status.outputs.label }}",
               "attachments": [
                 {
                   "color": "${{ steps.status.outputs.color }}",
@@ -262,12 +263,12 @@ jobs:
                   "fields": [
                     {
                       "title": "Codebase",
-                      "value": "${{ needs.resolve.outputs.code-base || 'unresolved' }}",
+                      "value": "${{ needs.resolve.outputs.vsql_codebase || 'unresolved' }}",
                       "short": true
                     },
                     {
                       "title": "Release",
-                      "value": "${{ needs.resolve.outputs.version || 'unresolved' }}",
+                      "value": "${{ needs.resolve.outputs.vsql_version || 'unresolved' }}",
                       "short": true
                     },
                     {
