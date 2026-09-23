@@ -118,6 +118,7 @@
 #include "sql/window.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "villagesql/sql/custom_index_knn_optimizer_classic.h"
 
 using std::ceil;
 using std::max;
@@ -959,7 +960,13 @@ bool JOIN::optimize(bool finalize_access_paths) {
     for (ORDER *tmp_order = order.order; tmp_order;
          tmp_order = tmp_order->next) {
       Item *item = *tmp_order->item;
-      if (item->cost().IsExpensive()) {
+      // VillageSQL: a KNN distance UDF over a custom index is "expensive" but
+      // is exactly the ordering that index can serve. Don't force it into a
+      // filesort here, or test_if_skip_sort_order() (and the KNN recognition
+      // hook) never gets the chance to route it to the custom distance scan.
+      if (item->cost().IsExpensive() &&
+          !villagesql::IsCustomKnnDistanceOrderItem(
+              best_ref[const_tables]->table(), item)) {
         /* Force tmp table without sort */
         simple_order = simple_group = false;
         break;
@@ -1395,6 +1402,7 @@ uint QEP_TAB::effective_index() const {
 
     case JT_INDEX_SCAN:
     case JT_FT:
+    case JT_INDEX_DISTANCE:
       return index();
 
     case JT_INDEX_MERGE:
@@ -2312,6 +2320,19 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
         return true;
       }
     }
+  }
+
+  /*
+    VillageSQL: a KNN-capable custom index can satisfy a single ASC
+    ORDER BY <distance>(col, const) LIMIT k, analogous to the FT case above.
+    All recognition and plan marking live in villagesql; if it applies, the
+    table is marked JT_INDEX_DISTANCE and QEP_TAB::access_path() builds the
+    distance scan. As with FT, this is the only place a non-field ordering can
+    bind to an index; the generic loop below rejects function orderings.
+  */
+  if (villagesql::TrySkipSortWithCustomKnnIndex(tab, order.order, no_changes)) {
+    *order_idx = -1;
+    return true;
   }
 
   /*

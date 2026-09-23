@@ -113,6 +113,7 @@
 #include "sql/window.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "villagesql/sql/custom_index_knn_optimizer_classic.h"
 #include "villagesql/types/util.h"
 
 using std::any_of;
@@ -3838,6 +3839,16 @@ AccessPath *QEP_TAB::access_path() {
       path = NewIndexScanAccessPath(join()->thd, table(), index(), use_order(),
                                     m_reversed_access,
                                     /*count_examined_rows=*/true);
+      break;
+    case JT_INDEX_DISTANCE:
+      // VillageSQL: KNN ordered scan of a custom index (ORDER BY <distance>
+      // LIMIT k). All construction lives in villagesql; the spec is rebuilt
+      // from the query block's ORDER BY (no plan-time stash). The LIMIT is read
+      // from the query block (get_limit) rather than JOIN::m_select_limit,
+      // matching the recognition hook (TrySkipSortWithCustomKnnIndex).
+      path = villagesql::BuildCustomKnnDistanceAccessPath(
+          join()->thd, table(), index(), join()->order.order,
+          join()->query_block->get_limit(join()->thd));
       break;
     case JT_ALL:
     case JT_RANGE:
