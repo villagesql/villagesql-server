@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Codebase branch, tag, or SHA for build (e.g. main for rehearsal, publish/mysql-8.4_0.0.7 for release).'
+        description: 'Codebase branch, tag, or other commit-ish for build (e.g. main for rehearsal, publish/mysql-8.4_0.0.7 for release).'
         required: true
         type: string
         default: 'main'
@@ -47,12 +47,12 @@ on:
         type: string
         default: 'villagesql/server'
       version_labels:
-        description: 'Codebase version labels, e.g. latest. Comma-separated, prefixed with the codebase, replacing version, applied to manifest. Blank publishes none.'
+        description: 'Codebase version labels, e.g. latest. Comma-separated values, such as "latest,stable" (without quotes), define multiple generated image tags.  Blank publishes no additional tags.  Each version label defines an additional manifest tag with the version label replacing the version number in the resource's image tag.'
         required: false
         type: string
         default: ''
-      define_tags:
-        description: 'Define image tag, e.g. latest, Comma-separated, applied directly to manifest. Blank publishes none.'
+      manifest_tags:
+        description: 'Tags for the multi-platform manifest, e.g. latest.  Comma-separated values, such as "latest,stable" (without quotes), define multiple manifest tags.  Blank publishes no additional tags.  Each manifest tag is applied directly to the multi-platform manifest.'
         required: false
         type: string
         default: ''
@@ -98,22 +98,22 @@ jobs:
           IMAGE_REPO: ${{ inputs.image_repo }}
           RELEASE_BUILD: ${{ inputs.release_build }}
           VERSION_LABELS: ${{ inputs.version_labels }}
-          DEFINE_TAGS: ${{ inputs.define_tags }}
+          MANIFEST_TAGS: ${{ inputs.manifest_tags }}
         run: |
           set -euo pipefail
 
-          # The version registry is runnable locally exactly as it runs here:
-          #   villagesql/bld_matrix/json_version.sh | jq .
-          VERSION_JSON="$(villagesql/bld_matrix/json_version.sh)"
-          jq . <<<"$VERSION_JSON"
+          source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
+          source "$SOURCE_DIR/villagesql/bld_tools/build_info.sh"
+          VSQL_VERSION=$(vsql_json_version "$SOURCE_DIR")
+          VSQL_CODEBASE=$(vsql_json_codebase "$SOURCE_DIR")
 
-          CODE_BASE="$(jq -r '.code_base' <<<"$VERSION_JSON")"
-          VERSION="$(jq -r '"\(.major).\(.minor).\(.patch)"' <<<"$VERSION_JSON")"
+          # Pretty print the version info.
+          "$SOURCE_DIR/villagesql/bld_matrix/json_version.sh" | jq .
 
-          # A Docker tag cannot hold a slash, and the labels and define tags
+          # A Docker tag cannot hold a slash, and the labels and manifest tags
           # become tags too. Catching a GitHub release tag pasted into the
           # wrong box here saves an hour of building first.
-          IFS=',' read -ra TAG_PARTS <<<"$IMAGE_TAG,$VERSION_LABELS,$DEFINE_TAGS"
+          IFS=',' read -ra TAG_PARTS <<<"$IMAGE_TAG,$VERSION_LABELS,$MANIFEST_TAGS"
           for PART in "${TAG_PARTS[@]}"; do
             if [[ "$PART" == */* ]]; then
               echo "::error::'$PART' contains '/', which Docker tags cannot hold."
@@ -125,12 +125,12 @@ jobs:
 
           {
             echo "sha=$SHA"
-            echo "code_base=$CODE_BASE"
-            echo "version=$VERSION"
+            echo "code_base=$VSQL_CODEBASE"
+            echo "version=$VSQL_VERSION"
           } >> "$GITHUB_OUTPUT"
 
           {
-            echo "### Codebase release: $CODE_BASE $VERSION"
+            echo "### Codebase release: $VSQL_CODEBASE $VSQL_VERSION"
             echo ""
             echo "| | |"
             echo "| --- | --- |"
@@ -140,7 +140,7 @@ jobs:
             echo "| GitHub Release | ${RELEASE_TAG:-_none — packages stay on the run page_} |"
             echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
             echo "| Version labels | ${VERSION_LABELS:-_none_} |"
-            echo "| Define tags | ${DEFINE_TAGS:-_none_} |"
+            echo "| Manifest tags | ${MANIFEST_TAGS:-_none_} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   release-server:
@@ -169,7 +169,7 @@ jobs:
       pre_release_version: ${{ !inputs.release_build && 'dev' || '' }}
       dev_abi: OFF
       version_labels: ${{ inputs.version_labels }}
-      define_tags: ${{ inputs.define_tags }}
+      manifest_tags: ${{ inputs.manifest_tags }}
 
   notify:
     name: Slack Notification
@@ -193,7 +193,7 @@ jobs:
           IMAGE: ${{ inputs.image_repo }}:${{ inputs.image_tag }}
           RELEASE_BUILD: ${{ inputs.release_build }}
           VERSION_LABELS: ${{ inputs.version_labels }}
-          DEFINE_TAGS: ${{ inputs.define_tags }}
+          MANIFEST_TAGS: ${{ inputs.manifest_tags }}
         run: |
           line() {
             local label="$1" outcome="$2" detail="$3" icon
@@ -216,8 +216,8 @@ jobs:
             if [ -n "$VERSION_LABELS" ]; then
               echo "Version labels: $VERSION_LABELS"
             fi
-            if [ -n "$DEFINE_TAGS" ]; then
-              echo "Define tags: $DEFINE_TAGS"
+            if [ -n "$MANIFEST_TAGS" ]; then
+              echo "Manifest tags: $MANIFEST_TAGS"
             fi
           )
           echo "$SUMMARY"
