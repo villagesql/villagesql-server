@@ -1,6 +1,12 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 # Install extension
 INSTALL EXTENSION vsql_session_var_test;
+SELECT vsql_session_var_test.read_session_int_var();
+vsql_session_var_test.read_session_int_var()
+20
+SELECT vsql_session_var_test.read_session_int_var();
+vsql_session_var_test.read_session_int_var()
+20
 # Variables exist with SESSION scope and the declared defaults
 SELECT @@global.vsql_session_var_test.session_int_var;
 @@global.vsql_session_var_test.session_int_var

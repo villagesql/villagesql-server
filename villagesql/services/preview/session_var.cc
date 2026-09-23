@@ -247,10 +247,12 @@ static bool session_var_read_int(const vef_session_var_handle_t *handle,
   if (handle == nullptr || out == nullptr) return true;
   THD *thd = current_thd;
   if (thd == nullptr) return true;
-  // Lock-free per-thread read: base pointer for this connection's session
-  // variable storage plus the captured offset. global_lock=false matches how
-  // the server reads THD-local variables on the connection thread (THDVAR).
-  const uchar *p = intern_sys_var_ptr(thd, handle->offset, false);
+  // global_lock=true: a connection that predates this var's registration must
+  // grow its THD dynamic-variable array on the first read, and that allocation
+  // takes LOCK_global_system_variables (asserts ownership otherwise). Later
+  // reads take the fast path and never re-lock. Matches the server's own
+  // mysql_sys_var_int/bool accessors.
+  const uchar *p = intern_sys_var_ptr(thd, handle->offset, true);
   if (p == nullptr) return true;
   *out = *reinterpret_cast<const long long *>(p);
   return false;
