@@ -1,0 +1,9 @@
+usr/share/mysql-*/charsets
+usr/share/mysql-*/*.sql
+usr/share/mysql-*/*/errmsg.sys
+usr/share/mysql-*/dictionary.txt
+usr/share/mysql-*/messages_to_clients.txt
+usr/share/mysql-*/messages_to_error_log.txt
+usr/share/mysql-*/mysql-log-rotate
+usr/share/mysql-*/LICENSE
+usr/share/mysql-*/README

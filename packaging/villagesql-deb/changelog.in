@@ -1,0 +1,5 @@
+villagesql (@DEB_VERSION@) unstable; urgency=medium
+
+  * Initial VillageSQL Debian packaging.
+
+ -- VillageSQL Contributors <info@villagesql.com>  @DEB_DATE@
