@@ -14,8 +14,13 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef VILLAGESQL_SQL_CUSTOM_INDEX_KNN_OPTIMIZER_H_
-#define VILLAGESQL_SQL_CUSTOM_INDEX_KNN_OPTIMIZER_H_
+#ifndef VILLAGESQL_SQL_CUSTOM_INDEX_KNN_OPTIMIZER_HYPERGRAPH_H_
+#define VILLAGESQL_SQL_CUSTOM_INDEX_KNN_OPTIMIZER_HYPERGRAPH_H_
+
+// Hypergraph-optimizer integration for the KNN custom-index distance scan.
+// Include this from the hypergraph optimizer to register KNN orderings as
+// distance-scan candidates. The optimizer-agnostic recognition it builds on
+// lives in custom_index_knn_recognition.h.
 
 class LogicalOrderings;
 class Query_block;
@@ -27,6 +32,8 @@ struct TABLE;
 
 namespace villagesql {
 
+// Hypergraph optimizer: collect KNN ORDER BY <distance> LIMIT k orderings over
+// KNN-capable custom indexes and register them as distance-scan candidates.
 void CollectCustomKnnOrderingsForHypergraph(
     THD *thd, Query_block *query_block, TABLE *table,
     LogicalOrderings *orderings,
@@ -34,4 +41,4 @@ void CollectCustomKnnOrderingsForHypergraph(
 
 }  // namespace villagesql
 
-#endif  // VILLAGESQL_SQL_CUSTOM_INDEX_KNN_OPTIMIZER_H_
+#endif  // VILLAGESQL_SQL_CUSTOM_INDEX_KNN_OPTIMIZER_HYPERGRAPH_H_

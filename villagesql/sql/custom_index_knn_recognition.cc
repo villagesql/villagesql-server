@@ -14,25 +14,19 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "villagesql/sql/custom_index_knn_optimizer.h"
+#include "villagesql/sql/custom_index_knn_recognition.h"
 
 #include <algorithm>
 #include <limits>
 #include <string>
-#include <vector>
 
-#include "my_base.h"
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
-#include "sql/join_optimizer/build_interesting_orders.h"
-#include "sql/join_optimizer/interesting_orders.h"
 #include "sql/key.h"
 #include "sql/sql_class.h"
-#include "sql/sql_lex.h"
-#include "sql/sql_optimizer.h"
 #include "sql/table.h"
 #include "template_utils.h"
 #include "villagesql/schema/descriptor/index_context.h"
@@ -40,7 +34,7 @@
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/victionary_client.h"
-#include "villagesql/sql/custom_index_knn_scan.h"
+#include "villagesql/sql/custom_index_knn_scan.h"  // CustomKnnDistanceScanSpec
 
 namespace villagesql {
 namespace {
@@ -183,69 +177,51 @@ bool FindCustomKnnIndexOnField(TABLE *table, Field *field,
 
 }  // namespace
 
-void CollectCustomKnnOrderingsForHypergraph(
-    THD *thd, Query_block *query_block, TABLE *table,
-    LogicalOrderings *orderings,
-    Mem_root_array<SpatialDistanceScanInfo> *spatial_indexes) {
-  if (query_block->join == nullptr ||
-      query_block->join->m_select_limit == HA_POS_ERROR) {
-    return;
+bool RecognizeKnnOrderItem(TABLE *table, Item *order_item, uint *key_idx,
+                           Item **query_item_out) {
+  Item_udf_func *distance_func = GetCustomKnnDistanceFunction(order_item);
+  if (distance_func == nullptr) return true;
+
+  Item_field *field_item = nullptr;
+  Item *query_item = nullptr;
+  if (GetFieldAndQueryFromKnnDistance(distance_func, table, &field_item,
+                                      &query_item)) {
+    return true;
   }
 
-  for (int i = 1; i < orderings->num_items(); ++i) {
-    Item_udf_func *distance_func =
-        GetCustomKnnDistanceFunction(orderings->item(i));
-    if (distance_func == nullptr) continue;
+  const char *qualified_fn_name = distance_func->qualified_name();
+  if (qualified_fn_name == nullptr) return true;
 
-    Item_field *field_item = nullptr;
-    Item *query_item = nullptr;
-    if (GetFieldAndQueryFromKnnDistance(distance_func, table, &field_item,
-                                        &query_item)) {
-      continue;
-    }
-
-    const char *qualified_fn_name = distance_func->qualified_name();
-    if (qualified_fn_name == nullptr) continue;
-
-    uint key_idx = 0;
-    if (FindCustomKnnIndexOnField(table, field_item->field, qualified_fn_name,
-                                  &key_idx)) {
-      continue;
-    }
-
-    String query_buffer;
-    String *query_value = query_item->val_str(&query_buffer);
-    if (query_value == nullptr || query_item->null_value ||
-        query_value->length() == 0) {
-      continue;
-    }
-
-    auto *query_key = pointer_cast<unsigned char *>(
-        memdup_root(thd->mem_root, query_value->ptr(), query_value->length()));
-    if (query_key == nullptr) continue;
-
-    auto *spec = new (thd->mem_root) CustomHypergraphDistanceScanSpec;
-    if (spec == nullptr) continue;
-    spec->table = table;
-    spec->query_key = query_key;
-    spec->query_key_len = static_cast<uint32_t>(query_value->length());
-    spec->limit = static_cast<uint32_t>(
-        std::min<ha_rows>(query_block->join->m_select_limit,
-                          std::numeric_limits<uint32_t>::max()));
-
-    SpatialDistanceScanInfo index_info;
-    index_info.table = table;
-    index_info.key_idx = static_cast<int>(key_idx);
-    // A non-null spec marks this as the custom-index variant of the scan.
-    index_info.custom_scan_spec = spec;
-
-    OrderElement order_element{i, ORDER_ASC};
-    Ordering::Elements elements{&order_element, 1};
-    index_info.forward_order = orderings->AddOrdering(
-        thd, Ordering(elements, Ordering::Kind::kOrder),
-        /*interesting=*/false, /*used_at_end=*/true, /*homogenize_tables=*/0);
-    spatial_indexes->push_back(index_info);
+  if (FindCustomKnnIndexOnField(table, field_item->field, qualified_fn_name,
+                                key_idx)) {
+    return true;
   }
+  *query_item_out = query_item;
+  return false;
+}
+
+CustomKnnDistanceScanSpec *BuildKnnScanSpec(THD *thd, TABLE *table,
+                                            Item *query_item,
+                                            ha_rows select_limit) {
+  String query_buffer;
+  String *query_value = query_item->val_str(&query_buffer);
+  if (query_value == nullptr || query_item->null_value ||
+      query_value->length() == 0) {
+    return nullptr;
+  }
+
+  auto *query_key = pointer_cast<unsigned char *>(
+      memdup_root(thd->mem_root, query_value->ptr(), query_value->length()));
+  if (query_key == nullptr) return nullptr;
+
+  auto *spec = new (thd->mem_root) CustomKnnDistanceScanSpec;
+  if (spec == nullptr) return nullptr;
+  spec->table = table;
+  spec->query_key = query_key;
+  spec->query_key_len = static_cast<uint32_t>(query_value->length());
+  spec->limit = static_cast<uint32_t>(
+      std::min<ha_rows>(select_limit, std::numeric_limits<uint32_t>::max()));
+  return spec;
 }
 
 }  // namespace villagesql

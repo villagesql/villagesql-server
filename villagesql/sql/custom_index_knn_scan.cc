@@ -219,11 +219,11 @@ void custom_index_knn_scan_end(CustomIndexKnnScan **scan) {
 
 namespace {
 
-class CustomHypergraphDistanceIterator final : public TableRowIterator {
+class CustomKnnDistanceIterator final : public TableRowIterator {
  public:
-  CustomHypergraphDistanceIterator(THD *thd, TABLE *table, int key_idx,
-                                   const CustomHypergraphDistanceScanSpec *spec,
-                                   double expected_rows, ha_rows *examined_rows)
+  CustomKnnDistanceIterator(THD *thd, TABLE *table, int key_idx,
+                            const CustomKnnDistanceScanSpec *spec,
+                            double expected_rows, ha_rows *examined_rows)
       : TableRowIterator(thd, table),
         m_record(table->record[0]),
         m_key_idx(key_idx),
@@ -231,9 +231,7 @@ class CustomHypergraphDistanceIterator final : public TableRowIterator {
         m_expected_rows(expected_rows),
         m_examined_rows(examined_rows) {}
 
-  ~CustomHypergraphDistanceIterator() override {
-    custom_index_knn_scan_end(&m_scan);
-  }
+  ~CustomKnnDistanceIterator() override { custom_index_knn_scan_end(&m_scan); }
 
   bool Init() override {
     custom_index_knn_scan_end(&m_scan);
@@ -293,7 +291,7 @@ class CustomHypergraphDistanceIterator final : public TableRowIterator {
  private:
   uchar *const m_record;
   const int m_key_idx;
-  const CustomHypergraphDistanceScanSpec *const m_spec;
+  const CustomKnnDistanceScanSpec *const m_spec;
   const double m_expected_rows;
   ha_rows *const m_examined_rows;
   CustomIndexKnnScan *m_scan{nullptr};
@@ -301,15 +299,15 @@ class CustomHypergraphDistanceIterator final : public TableRowIterator {
 
 }  // namespace
 
-unique_ptr_destroy_only<RowIterator> CreateCustomHypergraphDistanceIterator(
+unique_ptr_destroy_only<RowIterator> CreateCustomKnnDistanceIterator(
     THD *thd, MEM_ROOT *mem_root, TABLE *table, int key_idx,
     void *custom_scan_spec, double expected_rows, ha_rows *examined_rows) {
   const auto *spec =
-      static_cast<const CustomHypergraphDistanceScanSpec *>(custom_scan_spec);
+      static_cast<const CustomKnnDistanceScanSpec *>(custom_scan_spec);
   if (spec == nullptr || spec->table != table) {
     return unique_ptr_destroy_only<RowIterator>(nullptr);
   }
-  return NewIterator<CustomHypergraphDistanceIterator>(
+  return NewIterator<CustomKnnDistanceIterator>(
       thd, mem_root, table, key_idx, spec, expected_rows, examined_rows);
 }
 
