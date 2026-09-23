@@ -16,11 +16,12 @@ on:
         description: 'Docker tag to publish, e.g. mysql-8.4_0.0.7-test. This is a rehearsal, so name a tag you are willing to overwrite.'
         required: true
         type: string
+        default: 'acceptance-test'
       image_repo:
         description: 'Docker repository to push to.'
         required: true
         type: string
-        default: 'villagesql/server'
+        default: 'villagesql/server-test'
 
 permissions:
   contents: read
@@ -80,10 +81,12 @@ jobs:
             echo "| Docker image | \`$IMAGE_REPO:$IMAGE_TAG\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Run the start- jobs on ubuntu-latest because these are lightweight runs
+  # and ubuntu-latest has gh.  VillageSQL self-hosted does not.
   start-full-test-release:
     name: Start full test suite (linux, release)
     needs: resolve
-    runs-on: [self-hosted, vsql_build_worker]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
@@ -106,7 +109,7 @@ jobs:
   start-full-test-debug:
     name: Start full test suite (linux, debug)
     needs: resolve
-    runs-on: [self-hosted, vsql_build_worker]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
@@ -129,7 +132,7 @@ jobs:
   start-release-server-dev:
     name: Start server packages (dev)
     needs: resolve
-    runs-on: [self-hosted, vsql_build_worker]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
@@ -152,7 +155,7 @@ jobs:
   start-release-server-release:
     name: Start server packages (release)
     needs: resolve
-    runs-on: [self-hosted, vsql_build_worker]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
@@ -175,7 +178,7 @@ jobs:
   start-release-docker:
     name: Start Docker image
     needs: resolve
-    runs-on: [self-hosted, vsql_build_worker]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write  # Required to start a workflow run

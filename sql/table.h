@@ -833,6 +833,15 @@ struct TABLE_SHARE {
   enum row_type real_row_type = {};  // Zero-initialized to ROW_TYPE_DEFAULT
   tmp_table_type tmp_table{NO_TMP_TABLE};
 
+  // VillageSQL: true when this share belongs to a user-created temporary table
+  // (CREATE TEMPORARY TABLE). Stamped in open_table_def from the DD object's
+  // is_temporary() before columns are filled, so that MaybeInjectCustomType can
+  // tell a genuine user temporary table from a base table opened through an
+  // uncached/temp share: both carry tmp_table == INTERNAL_TMP_TABLE during the
+  // fill. User temporary tables are never in the victionary; their custom
+  // columns live only in the session-local metadata map.
+  bool is_user_tmp_table{false};
+
   /**
     Only for internal temporary tables.
     Count of TABLEs (having this TABLE_SHARE) which have a "handler"

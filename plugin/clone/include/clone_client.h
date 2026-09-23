@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -385,6 +386,11 @@ struct Remote_Parameters {
 
   /** Remote plugins with shared object name */
   Key_Values m_plugins_with_so;
+
+  /** Opaque VillageSQL extension payload from the donor, validated by
+  villagesql/veb without clone interpreting its contents. Empty if the donor
+  sent none. */
+  String_Key m_extensions;
 };
 
 /** For Remote Clone, "Clone Client" is created at recipient. It receives data
@@ -680,6 +686,12 @@ class Client {
   @param[in]	length	packet length
   @return error code */
   int add_charset(const uchar *packet, size_t length);
+
+  /** Extract the opaque VillageSQL extension payload from network packet.
+  @param[in]	packet	network packet
+  @param[in]	length	packet length
+  @return error code */
+  int add_extensions(const uchar *packet, size_t length);
 
   /** Extract and add remote configuration from network packet.
   @param[in]	packet	network packet

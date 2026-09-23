@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -125,6 +126,7 @@ static PSI_statement_info clone_stmts[] = {{0, "local", 0, PSI_DOCUMENT_ME},
 SERVICE_TYPE(registry) * mysql_service_registry;
 SERVICE_TYPE(mysql_backup_lock) * mysql_service_mysql_backup_lock;
 SERVICE_TYPE(clone_protocol) * mysql_service_clone_protocol;
+SERVICE_TYPE(vsql_clone_protocol) * mysql_service_vsql_clone_protocol;
 
 /* Use mysql logging service */
 SERVICE_TYPE(registry) * reg_srv;
@@ -365,6 +367,13 @@ static int plugin_clone_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   mysql_service_clone_protocol =
       reinterpret_cast<SERVICE_TYPE(clone_protocol) *>(service);
 
+  /* Acquire VillageSQL clone protocol service handle. */
+  if (mysql_service_registry->acquire("vsql_clone_protocol", &service)) {
+    return (-1);
+  }
+  mysql_service_vsql_clone_protocol =
+      reinterpret_cast<SERVICE_TYPE(vsql_clone_protocol) *>(service);
+
   auto error = clone_handle_create(clone_plugin_name);
 
   /* During DB creation skip PFS dynamic tables. PFS is not fully initialized
@@ -432,6 +441,11 @@ static int plugin_clone_deinit(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   mysql_service_registry->release(reinterpret_cast<my_h_service>(
       const_cast<clone_protocol_t *>(mysql_service_clone_protocol)));
   mysql_service_clone_protocol = nullptr;
+
+  using vsql_clone_protocol_t = SERVICE_TYPE_NO_CONST(vsql_clone_protocol);
+  mysql_service_registry->release(reinterpret_cast<my_h_service>(
+      const_cast<vsql_clone_protocol_t *>(mysql_service_vsql_clone_protocol)));
+  mysql_service_vsql_clone_protocol = nullptr;
 
   deinit_logging_service_for_plugin(&mysql_service_registry, &log_bi, &log_bs);
 

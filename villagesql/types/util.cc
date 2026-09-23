@@ -149,17 +149,18 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   std::string column_name(field->field_name);
   ColumnKey col_key(db_name, table_name, column_name);
 
-  // User-created temporary tables are never in the victionary. If session
-  // metadata has an entry for this column, inject it and return.
-  if (share.tmp_table != NO_TMP_TABLE &&
-      thd->villagesql_tmp_metadata != nullptr) {
+  // User-created temporary tables are never in the victionary; their custom
+  // columns live only in the session map. Consult only it, never the
+  // victionary: the victionary is keyed on (db, table, column) and would return
+  // a same-named base table's custom type for a shadowing temporary column.
+  // share.tmp_table can't be used to detect this (still INTERNAL_TMP_TABLE
+  // during the fill); see is_user_tmp_table.
+  if (share.is_user_tmp_table) {
+    if (thd->villagesql_tmp_metadata == nullptr) return false;
     const TypeContext *tc = thd->villagesql_tmp_metadata->get(col_key.str());
-    if (tc != nullptr) {
-      field->set_type_context(tc);
-      return CheckFieldLengthMatchesType(field, tc);
-    }
-    // Fall through to victionary for type injection and field length
-    // validation.
+    if (tc == nullptr) return false;
+    field->set_type_context(tc);
+    return CheckFieldLengthMatchesType(field, tc);
   }
 
   auto &vclient = VictionaryClient::instance();
@@ -338,8 +339,9 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
   if (should_assert_if_true(results.size() > 1)) {
     if (!current_thd->is_error()) {
       villagesql_error(
-          "Failed to resolve type %.*s; VictionaryClient not initialized",
-          MYF(0), static_cast<int>(type_name.size()), type_name.data());
+          "Failed to resolve type %.*s; it matches %zu registered types",
+          MYF(0), static_cast<int>(type_name.size()), type_name.data(),
+          results.size());
     }
     return true;
   }

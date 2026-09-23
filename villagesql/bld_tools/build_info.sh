@@ -63,6 +63,23 @@ vsql_json_version() {
     echo "$version"
 }
 
+# Print the VillageSQL codebase.
+#
+# Usage: vsql_json_codebase <source_dir>
+#   The codebase comes from villagesql/bld_matrix/json_version.sh.
+#
+# Prints to stdout and sets nothing, so a caller captures it:
+#   VSQL_CODEBASE=$(vsql_json_codebase "$SOURCE_DIR")
+vsql_json_codebase() {
+    local source_dir="$1"
+    local json
+    json=$("$source_dir/villagesql/bld_matrix/json_version.sh") \
+        || die "Cannot read the version of $source_dir"
+
+    jq -r '.code_base' <<< "$json"
+}
+
+
 # Set PLATFORM (linux|macos) and ARCH (x86_64|aarch64|arm64) for this machine.
 vsql_platform_info() {
     PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"

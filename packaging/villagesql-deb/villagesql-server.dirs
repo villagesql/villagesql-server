@@ -1,0 +1,3 @@
+etc/mysql/conf.d
+var/lib/mysql
+var/log/mysql

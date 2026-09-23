@@ -27,7 +27,10 @@
 #include "mysql/plugin_auth_common.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_common.h"
+#include "sql/auth/auth_internal.h"
+#include "sql/auth/sql_auth_cache.h"
 #include "sql/auth/sql_authentication.h"
+#include "sql/auth/sql_authorization.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/auto_thd.h"
 #include "sql/current_thd.h"
@@ -218,6 +221,17 @@ static void grant_staged_role(const char *staged,
   grant.append(" TO ");
   grant.append(account_id);
   (void)provision_run(grant);
+}
+
+// REVOKE one role (an already-quoted `role_id`) from `account_id`. The mirror
+// of grant_staged_role; a failing revoke is logged and skipped, not fatal.
+static void revoke_staged_role(const std::string &role_id,
+                               const std::string &account_id) {
+  std::string revoke = "REVOKE ";
+  revoke.append(role_id);
+  revoke.append(" FROM ");
+  revoke.append(account_id);
+  (void)provision_run(revoke);
 }
 
 void vef_auth_request_provision(vef_auth_ctx_t *ctx, const char *account,
@@ -454,31 +468,33 @@ std::string auth_method_for_unknown_accounts() {
              : std::string();
 }
 
-bool method_wants_auto_grant(std::string_view method_name) {
+static vef_auth_roles_mode_t method_roles_mode(std::string_view method_name) {
   const std::string normalized =
       canonical_extension_name(std::string(method_name));
   std::lock_guard<std::mutex> lock(g_mu);
-  // Queried live so it reflects the extension's runtime sysvar.
+  // Queried live so it reflects the extension's runtime sysvar. A method with
+  // no roles_mode callback defaults to activate-only (the DBA owns grants).
   for (const auto &m : g_methods) {
     if (m.method_name == normalized) {
-      return m.cc != nullptr && m.cc->auto_grant_roles != nullptr &&
-             m.cc->auto_grant_roles();
+      if (m.cc != nullptr && m.cc->roles_mode != nullptr)
+        return m.cc->roles_mode();
+      return VEF_AUTH_ROLES_ACTIVATE;
     }
   }
-  return false;
+  return VEF_AUTH_ROLES_ACTIVATE;
 }
 
 void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
                                  const char *acl_user_host) {
   const VefAuthState *state = mpvio->vef_auth_info.vef_auth_state;
-  if (state == nullptr || state->roles.empty()) return;  // nothing staged
+  if (state == nullptr) return;  // handler staged no role set at all
 
-  // Only grant when this login's method has opted into auto-grant; off by
-  // default, in which case the staged roles are used solely to activate roles
-  // the account already holds, never to grant new ones. The method name is the
-  // account's plugin.
+  // ACTIVATE grants/revokes nothing here; the staged set only drives
+  // activation.
   const char *const method = mpvio->acl_user_plugin.str;
-  if (method == nullptr || !method_wants_auto_grant(method)) return;
+  if (method == nullptr) return;
+  const vef_auth_roles_mode_t mode = method_roles_mode(method);
+  if (mode == VEF_AUTH_ROLES_ACTIVATE) return;
 
   if (acl_user_authid == nullptr || acl_user_authid[0] == '\0') return;
   const std::string account_id =
@@ -487,12 +503,66 @@ void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
               acl_user_host != nullptr ? strlen(acl_user_host) : 1)
           .auth_str();
 
-  // GRANT each staged role additively -- never revoke. Roles must pre-exist as
-  // DB roles; an ungrantable one is skipped.
-  //
-  // TODO(villagesql-general): authoritative reconcile (revoke roles no longer
-  // claimed) is a separate, deferred task.
+  // GRANT the claimed roles (both GRANT and SYNC do this).
   for (const char *staged : state->roles) grant_staged_role(staged, account_id);
+
+  if (mode != VEF_AUTH_ROLES_SYNC) return;
+
+  // SYNC additionally makes the staged set authoritative: revoke every granted
+  // role the token did not claim (empty claim revokes all) -- the token issuer
+  // is the sole source of truth, so even a DBA's out-of-band grant is revoked.
+  //
+  // Exception: DEFAULT roles are never revoked. Provisioning sets no default,
+  // so a default present is a deliberate operator ALTER USER ... DEFAULT ROLE;
+  // and REVOKE would strip it from mysql.default_roles, silently dropping that
+  // pin.
+  //
+  // Normalize the staged names to the same quoted key form grant_staged_role
+  // uses, so they diff exactly against the granted/default keys below.
+  std::vector<std::string> staged_keys;
+  staged_keys.reserve(state->roles.size());
+  for (const char *staged : state->roles) {
+    if (staged == nullptr || staged[0] == '\0') continue;
+    const auto [role_name, role_host] = get_authid_from_quoted_string(staged);
+    staged_keys.push_back(Auth_id(role_name.c_str(), role_name.length(),
+                                  role_host.c_str(), role_host.length())
+                              .auth_str());
+  }
+
+  // Enumerate the account's currently granted roles and its default roles from
+  // the in-memory role graph, under a short ACL read lock. These read global
+  // state, so they need the lock; we copy out the keys and drop the lock before
+  // running any REVOKE DDL (which re-takes ACL locks on its own THD).
+  List_of_granted_roles granted;
+  std::vector<std::string> default_keys;
+  {
+    LEX_USER user;
+    user.user = {acl_user_authid, strlen(acl_user_authid)};
+    user.host = {acl_user_host != nullptr ? acl_user_host : "%",
+                 acl_user_host != nullptr ? strlen(acl_user_host) : 1};
+    Acl_cache_lock_guard acl_cache_lock(current_thd,
+                                        Acl_cache_lock_mode::READ_MODE);
+    if (!acl_cache_lock.lock(/*raise_error=*/false)) return;
+    get_granted_roles(&user, &granted);
+    List_of_auth_id_refs defaults;
+    get_default_roles(create_authid_from(&user), defaults);
+    default_keys.reserve(defaults.size());
+    for (const Auth_id_ref &d : defaults)
+      default_keys.push_back(
+          Auth_id(d.first.str, d.first.length, d.second.str, d.second.length)
+              .auth_str());
+  }
+
+  for (const auto &[role, with_admin] : granted) {
+    const std::string role_id = role.auth_str();
+    const bool claimed = std::find(staged_keys.begin(), staged_keys.end(),
+                                   role_id) != staged_keys.end();
+    const bool is_default = std::find(default_keys.begin(), default_keys.end(),
+                                      role_id) != default_keys.end();
+    // Revoke iff the token did not claim it AND it is not an operator-pinned
+    // default role.
+    if (!claimed && !is_default) revoke_staged_role(role_id, account_id);
+  }
 }
 
 std::optional<bool> handle_vef_user_bind(std::string_view method_name,

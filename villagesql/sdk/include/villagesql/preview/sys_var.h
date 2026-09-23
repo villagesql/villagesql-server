@@ -45,6 +45,7 @@ enum Type {
   INT = VEF_VAR_INT,
   DOUBLE = VEF_VAR_DOUBLE,
   STR = VEF_VAR_STR,
+  ENUM = VEF_VAR_ENUM,
 };
 
 // Typed wrapper around vef_sys_var_change_t passed to on_change callbacks.
@@ -61,10 +62,14 @@ class SysVarChange {
   bool is_int() const { return c_->type == VEF_VAR_INT; }
   bool is_real() const { return c_->type == VEF_VAR_DOUBLE; }
   bool is_str() const { return c_->type == VEF_VAR_STR; }
+  bool is_enum() const { return c_->type == VEF_VAR_ENUM; }
 
   IntArg as_int() const { return IntArg(&v_); }
   RealArg as_real() const { return RealArg(&v_); }
   StringArg as_str() const { return StringArg(&v_); }
+  // The selected enum value, as a zero-based index into the variable's name
+  // list (the order passed to make_enum). Valid only when is_enum().
+  unsigned long as_enum() const { return c_->enum_val; }
 
  private:
   static vef_invalue_t make_invalue(const vef_sys_var_change_t *c) {
@@ -82,6 +87,9 @@ class SysVarChange {
       case VEF_VAR_STR:
         v.str_value = c->str_val;
         v.str_len = c->str_val ? strlen(c->str_val) : 0;
+        break;
+      case VEF_VAR_ENUM:
+        v.int_value = static_cast<long long>(c->enum_val);
         break;
     }
     return v;
@@ -138,6 +146,12 @@ struct SysVarDescriptor {
       char **value_ptr;
       const char *def_val;
     } str;
+    struct {
+      unsigned long *value_ptr;
+      unsigned long def_val;
+      const char *const *names;
+      uint32_t name_count;
+    } enumeration;
   };
   vef_sys_var_on_change_func_t on_change_fn = nullptr;
 
@@ -205,6 +219,12 @@ class SysVarCapability
         case STR:
           descs_[i].str.value_ptr = descs[i].str.value_ptr;
           descs_[i].str.def_val = descs[i].str.def_val;
+          break;
+        case ENUM:
+          descs_[i].enumeration.value_ptr = descs[i].enumeration.value_ptr;
+          descs_[i].enumeration.def_val = descs[i].enumeration.def_val;
+          descs_[i].enumeration.names = descs[i].enumeration.names;
+          descs_[i].enumeration.name_count = descs[i].enumeration.name_count;
           break;
       }
       ptrs_[i] = &descs_[i];
@@ -336,6 +356,43 @@ inline SysVarDescriptor make_str(const char *name, const char *comment,
   d.str.value_ptr = value_ptr;
   d.str.def_val = def_val;
   return d;
+}
+
+// Enum variable: the value is one of `names` (a fixed, ordered list), stored in
+// `*value_ptr` as its zero-based index. Reads/writes as the name, so the server
+// validates the value at SET time -- an unlisted name is rejected (unlike a
+// free-form make_str). `def_val` is the default index. `names` and its strings
+// must outlive the extension (typically a static array), as the server keeps a
+// TYPELIB pointing at them; `name_count` excludes any trailing NULL.
+//
+//   static const char *const MODE_NAMES[] = {"off", "on", "sync"};
+//   static unsigned long g_mode = 0;  // default "off"
+//   sv::make_enum("mode", "Operating mode", &g_mode, MODE_NAMES, 3, 0)
+inline SysVarDescriptor make_enum(const char *name, const char *comment,
+                                  unsigned long *value_ptr,
+                                  const char *const *names, uint32_t name_count,
+                                  unsigned long def_val) {
+  SysVarDescriptor d;
+  d.type = ENUM;
+  d.name = name;
+  d.comment = comment;
+  d.enumeration.value_ptr = value_ptr;
+  d.enumeration.def_val = def_val;
+  d.enumeration.names = names;
+  d.enumeration.name_count = name_count;
+  return d;
+}
+
+// Convenience overload deducing name_count from a static array:
+//   static const char *const MODE_NAMES[] = {"off", "on", "sync"};
+//   sv::make_enum("mode", "Operating mode", &g_mode, MODE_NAMES, 0)
+template <size_t N>
+inline SysVarDescriptor make_enum(const char *name, const char *comment,
+                                  unsigned long *value_ptr,
+                                  const char *const (&names)[N],
+                                  unsigned long def_val) {
+  return make_enum(name, comment, value_ptr, names, static_cast<uint32_t>(N),
+                   def_val);
 }
 
 // Factory: deduces N from the array size.

@@ -9,7 +9,7 @@ This Docker setup provides a containerized build and test environment for Villag
 ./docker/dev/run.sh
 
 # Inside the container: configure build
-cmake /source -DWITH_SSL=system $CMAKE_EXTRA_FLAGS
+cmake /source $CMAKE_EXTRA_FLAGS
 
 # Build VillageSQL (ccache speeds up rebuilds)
 make -j$(getconf _NPROCESSORS_ONLN)
@@ -77,17 +77,17 @@ PARALLEL_JOBS=4 ./villagesql/bld_tools/build_ci.sh
 
 # Or manual build (standard release)
 cd /build
-cmake /source -DWITH_SSL=system $CMAKE_EXTRA_FLAGS
+cmake /source $CMAKE_EXTRA_FLAGS
 make -j4
 
 # Debug build
 cd /build
-cmake /source -DWITH_DEBUG=1 -DWITH_SSL=system $CMAKE_EXTRA_FLAGS
+cmake /source -DWITH_DEBUG=1 $CMAKE_EXTRA_FLAGS
 make -j4
 
 # Rebuild from scratch
 rm CMakeCache.txt
-cmake /source -DWITH_SSL=system $CMAKE_EXTRA_FLAGS
+cmake /source $CMAKE_EXTRA_FLAGS
 make -j4
 
 # Check ccache statistics
@@ -135,7 +135,7 @@ The following are pre-configured in the container:
 # Clean the build directory
 cd /build
 rm -rf *
-cmake /source -DWITH_SSL=system $CMAKE_EXTRA_FLAGS
+cmake /source $CMAKE_EXTRA_FLAGS
 make -j$(getconf _NPROCESSORS_ONLN)
 ```
 

@@ -1,0 +1,31 @@
+# An extension with session variables survives a server restart while left
+# installed: the variables are torn down at shutdown and reinstated on startup.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # Install extension
+INSTALL EXTENSION vsql_session_var_test;
+
+--echo # Set a session value before restarting
+SET SESSION vsql_session_var_test.session_str_var = 'before_restart';
+SELECT @@session.vsql_session_var_test.session_str_var;
+
+--echo # Restart without uninstalling
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # Extension is back after restart; variables exist with their defaults
+SELECT @@global.vsql_session_var_test.session_str_var;
+SELECT @@session.vsql_session_var_test.session_str_var;
+SELECT vsql_session_var_test.read_session_str_var();
+
+--echo # Uninstall cleanly
+UNINSTALL EXTENSION vsql_session_var_test;
+
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_session_var_test.session_str_var;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

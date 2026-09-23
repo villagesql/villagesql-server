@@ -17,6 +17,7 @@
 #include "villagesql/veb/veb_file.h"
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -62,6 +63,8 @@
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
 #include <rapidjson/error/error.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 // clang-format on
 
 namespace villagesql {
@@ -74,6 +77,92 @@ static std::string get_expansion_cache_base_path() {
   fn_format(path_buf, ".veb_expansion_cache", mysql_real_data_home, "", 0);
   return std::string(path_buf);
 }
+
+#ifndef _WIN32
+// fsync a single directory so the entries created inside it are durable.
+// Opening the directory read-only and syncing the fd is the POSIX idiom for
+// this. Failures are logged and swallowed: some filesystems (tmpfs and certain
+// overlays, e.g. the ones mysql-test-run.pl --mem uses) reject fsync on a
+// directory.
+static void sync_directory(const char *dir_path) {
+  File fd = my_open(dir_path, O_RDONLY, MYF(0));
+  if (fd < 0) {
+    LogVSQL(WARNING_LEVEL, "Could not open directory to fsync: %s (errno %d)",
+            dir_path, my_errno());
+    return;
+  }
+  if (my_sync(fd, MYF(0)) != 0) {
+    LogVSQL(WARNING_LEVEL, "Could not fsync directory: %s (errno %d)", dir_path,
+            my_errno());
+  }
+  my_close(fd, MYF(0));
+}
+
+// fsync one regular file by path so its data reaches stable storage.
+static void sync_file(const char *file_path) {
+  File fd = my_open(file_path, O_RDONLY, MYF(0));
+  if (fd < 0) {
+    LogVSQL(WARNING_LEVEL, "Could not open file to fsync: %s (errno %d)",
+            file_path, my_errno());
+    return;
+  }
+  if (my_sync(fd, MYF(0)) != 0) {
+    LogVSQL(WARNING_LEVEL, "Could not fsync file: %s (errno %d)", file_path,
+            my_errno());
+  }
+  my_close(fd, MYF(0));
+}
+
+// Force a freshly extracted VEB tree to sync to storage. Sync every regular
+// file first, then every directory (a file is durable only once both its data
+// and its containing directory entry are synced), walking from the leaf
+// expansion dir up through its ancestors to the datadir.
+static void sync_expanded_tree(const std::string &expanded_path,
+                               const std::string &name_dir,
+                               const std::string &base_path) {
+  std::error_code ec;
+  std::vector<std::string> dirs;
+  for (std::filesystem::recursive_directory_iterator
+           it(expanded_path, std::filesystem::directory_options::none, ec),
+       end;
+       !ec && it != end; it.increment(ec)) {
+    std::error_code sec;
+    std::filesystem::file_status status = it->symlink_status(sec);
+    if (sec) continue;
+    if (std::filesystem::is_directory(status)) {
+      dirs.push_back(it->path().string());
+    } else if (std::filesystem::is_regular_file(status)) {
+      sync_file(it->path().string().c_str());
+    }
+    // Symlinks and special files carry no data blocks of their own; the fsync
+    // of their parent directory persists the entry.
+  }
+  if (ec) {
+    LogVSQL(WARNING_LEVEL,
+            "Could not walk expansion tree to fsync: %s (error: %s)",
+            expanded_path.c_str(), ec.message().c_str());
+  }
+
+  // Sync directories bottom-up (leaf -> root). recursive_directory_iterator
+  // emits parents before children, so walk `dirs` in reverse to reach the
+  // deepest extracted subdirectory first, then the expansion dir and its
+  // ancestors up to the datadir. Each level's entry only becomes durable once
+  // its parent is synced, and syncing child-before-parent means a crash partway
+  // through this pass can never leave a parent entry pointing at a
+  // not-yet-durable child.
+  for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) {
+    sync_directory(it->c_str());
+  }
+  sync_directory(expanded_path.c_str());
+  sync_directory(name_dir.c_str());
+  sync_directory(base_path.c_str());
+  sync_directory(mysql_real_data_home);
+}
+#else   // _WIN32
+// TODO(villagesql-windows): Sync extension file contents to disk.
+static void sync_expanded_tree(const std::string &, const std::string &,
+                               const std::string &) {}
+#endif  // _WIN32
 
 std::string get_extension_so_path(const std::string &extension_name,
                                   const std::string &sha256) {
@@ -680,6 +769,11 @@ bool expand_veb_to_directory(const std::string &name,
     return true;
   }
 
+  // Extraction wrote everything through the page cache only; force it to stable
+  // storage before we report success, so the install commits only after the
+  // extension's expanded dir is durable.
+  sync_expanded_tree(expanded_path, name_dir, base_path);
+
   LogVSQL(INFORMATION_LEVEL, "Successfully expanded '%s' to %s", name.c_str(),
           expanded_path.c_str());
   return false;  // Success
@@ -695,6 +789,173 @@ bool expand_veb_to_directory(const std::string &name,
 // populated on failure and should not be used by callers.
 //
 // Caller must hold the victionary write lock.
+// Resolve the veb_version selector for an extension: prefer
+// {name}-{version}.veb if present, else fall back to {name}.veb.
+static std::string resolve_veb_version(const std::string &name,
+                                       const std::string &expected_version) {
+  if (veb_file_exists(name, expected_version)) {
+    return expected_version;
+  }
+  return "";
+}
+
+// Validate that the .veb bundle for a single extension is present and matches
+// the given metadata, without loading (dlopen'ing) it: the same
+// existence/version/sha256 bar load_installed_extensions() requires at startup.
+// Returns false when it matches; true on mismatch/error with a diagnostic in
+// *error_message. Diagnostic-area errors from the VEB helpers are suppressed.
+static bool extension_matches_on_disk(THD *thd, const std::string &name,
+                                      const std::string &expected_version,
+                                      const std::string &expected_sha256,
+                                      std::string *error_message) {
+  char msg[512];
+  auto fail = [&]() {
+    if (error_message != nullptr) *error_message = msg;
+    return true;
+  };
+
+  // load_veb_manifest (and other VEB helpers) may stash a condition onto the
+  // diagnostics area via villagesql_error. Push a scratch diagnostics area so
+  // any such condition is discarded when we pop; the caller surfaces its own
+  // error from *error_message. Same idiom as the precheck block below.
+  Diagnostics_area scratch_da(false);
+  thd->push_diagnostics_area(&scratch_da);
+
+  bool result = false;
+  std::string veb_version = resolve_veb_version(name, expected_version);
+  if (!veb_file_exists(name, veb_version)) {
+    snprintf(msg, sizeof(msg), "VEB file for extension '%s' not found",
+             name.c_str());
+    result = fail();
+  } else {
+    std::string actual_version = veb_version;
+    if (load_veb_manifest(name, actual_version)) {
+      snprintf(msg, sizeof(msg),
+               "Failed to load VEB manifest for extension '%s'", name.c_str());
+      result = fail();
+    } else if (actual_version != expected_version) {
+      snprintf(msg, sizeof(msg),
+               "Extension '%s' version mismatch: expected '%s', VEB manifest "
+               "has '%s'",
+               name.c_str(), expected_version.c_str(), actual_version.c_str());
+      result = fail();
+    } else {
+      std::string veb_path = get_veb_path(make_veb_filename(name, veb_version));
+      std::string actual_sha256;
+      if (veb_path.empty() || calculate_file_sha256(veb_path, actual_sha256)) {
+        snprintf(msg, sizeof(msg),
+                 "Failed to compute SHA256 for extension '%s'", name.c_str());
+        result = fail();
+      } else if (actual_sha256 != expected_sha256) {
+        snprintf(msg, sizeof(msg),
+                 "Extension '%s' VEB file has changed: expected SHA256 '%s', "
+                 "current VEB has '%s'",
+                 name.c_str(), expected_sha256.c_str(), actual_sha256.c_str());
+        result = fail();
+      }
+    }
+  }
+
+  thd->pop_diagnostics_area();
+  return result;
+}
+
+std::string serialize_installed_extensions() {
+  VictionaryClient &victionary = VictionaryClient::instance();
+  auto lock_guard = victionary.get_read_lock();
+
+  std::vector<const ExtensionEntry *> all =
+      victionary.extensions().get_all_committed();
+  if (all.empty()) return "";
+
+  const std::string server_version = GetBuildVersion().to_string();
+  const std::string schema_version = SchemaManager::get_version().to_string();
+
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> w(sb);
+
+  auto write_string = [&](const std::string &s) {
+    w.String(s.c_str(), static_cast<rapidjson::SizeType>(s.size()));
+  };
+
+  w.StartObject();
+  w.Key("format");
+  w.Int(CLONE_EXTENSION_PAYLOAD_FORMAT);
+  w.Key("server_version");
+  write_string(server_version);
+  w.Key("schema_version");
+  write_string(schema_version);
+  w.Key("extensions");
+  w.StartArray();
+  for (const ExtensionEntry *entry : all) {
+    if (entry == nullptr) continue;
+    w.StartObject();
+    w.Key("name");
+    write_string(entry->extension_name());
+    w.Key("version");
+    write_string(entry->extension_version);
+    w.Key("veb_sha256");
+    write_string(entry->veb_sha256);
+    w.EndObject();
+  }
+  w.EndArray();
+  w.EndObject();
+
+  return sb.GetString();
+}
+
+bool validate_cloned_extensions(THD *thd, const std::string &payload,
+                                std::string *error_message) {
+  auto fail = [&](const std::string &msg) {
+    if (error_message != nullptr) *error_message = msg;
+    return true;
+  };
+
+  // Empty payload: donor had no extensions (or is an older donor). Nothing to
+  // validate.
+  if (payload.empty()) return false;
+
+  rapidjson::Document doc;
+  doc.Parse(payload.c_str());
+  if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("extensions") ||
+      !doc["extensions"].IsArray()) {
+    return fail("Malformed clone extension payload");
+  }
+
+  // Record the donor's identity for diagnostics. We do not reject on version
+  // skew yet; the payload is self-describing so enforcement can be added later.
+  const int format = doc.HasMember("format") && doc["format"].IsInt()
+                         ? doc["format"].GetInt()
+                         : 0;
+  const char *server_version =
+      doc.HasMember("server_version") && doc["server_version"].IsString()
+          ? doc["server_version"].GetString()
+          : "";
+  const char *schema_version =
+      doc.HasMember("schema_version") && doc["schema_version"].IsString()
+          ? doc["schema_version"].GetString()
+          : "";
+  LogVSQL(INFORMATION_LEVEL,
+          "Validating clone donor extensions: payload format %d, donor server "
+          "version '%s', schema version '%s'",
+          format, server_version, schema_version);
+
+  for (const auto &item : doc["extensions"].GetArray()) {
+    if (!item.IsObject() || !item.HasMember("name") ||
+        !item.HasMember("version") || !item.HasMember("veb_sha256") ||
+        !item["name"].IsString() || !item["version"].IsString() ||
+        !item["veb_sha256"].IsString()) {
+      return fail("Malformed clone extension payload");
+    }
+    if (extension_matches_on_disk(
+            thd, item["name"].GetString(), item["version"].GetString(),
+            item["veb_sha256"].GetString(), error_message)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool load_one_extension(THD *thd, const std::string &extension_name,
                                const std::string &expected_version,
                                const std::string &sha256,
@@ -703,10 +964,8 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
 
   // Validate extension: load manifest and check version matches.
   // Prefer {name}-{version}.veb if present; fall back to {name}.veb.
-  std::string veb_version;
-  if (veb_file_exists(extension_name, expected_version)) {
-    veb_version = expected_version;
-  }
+  std::string veb_version =
+      resolve_veb_version(extension_name, expected_version);
   std::string actual_version = veb_version;
   if (load_veb_manifest(extension_name, actual_version)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEB manifest for extension '%s'",

@@ -113,6 +113,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "system_variable_source_imp.h"
 #include "thread_cleanup_register_imp.h"
 #include "udf_metadata_imp.h"
+#include "villagesql/services/vsql_clone_protocol_imp.h"
 
 // Must come after sql/log.h.
 #include "mysql/components/services/log_builtins.h"
@@ -334,6 +335,13 @@ mysql_clone_start_statement, mysql_clone_finish_statement,
     mysql_clone_disconnect, mysql_clone_get_error, mysql_clone_get_command,
     mysql_clone_send_response,
     mysql_clone_send_error END_SERVICE_IMPLEMENTATION();
+
+// VillageSQL: clone-plugin access to VillageSQL extension gathering/validation,
+// modeled on the upstream clone_protocol service (see
+// villagesql/services/vsql_clone_protocol.cc).
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, vsql_clone_protocol)
+mysql_vsql_clone_get_extensions, mysql_vsql_clone_free_payload,
+    mysql_vsql_clone_validate_extensions END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, bulk_data_convert)
 Bulk_data_convert::mysql_format, Bulk_data_convert::mysql_format_from_raw,
@@ -913,6 +921,7 @@ PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(mysql_server, system_variable_source),
     PROVIDES_SERVICE(mysql_server, mysql_backup_lock),
     PROVIDES_SERVICE(mysql_server, clone_protocol),
+    PROVIDES_SERVICE(mysql_server, vsql_clone_protocol),
     PROVIDES_SERVICE(mysql_server, bulk_data_convert),
     PROVIDES_SERVICE(mysql_server, bulk_data_load),
     PROVIDES_SERVICE(mysql_server, mysql_thd_security_context),

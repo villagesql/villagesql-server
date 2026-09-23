@@ -89,6 +89,16 @@ std::optional<ValidatedRegistration> parse_extension_registration(
 
       std::string type_name(td->name);
 
+      // TODO(villagesql-production): validate the characters in names coming
+      // from the extension: type names here, and index type, index profile and
+      // VDF names below. INSTALL EXTENSION already validates extension names
+      // this way. A name containing '.' breaks two things:
+      // parse_qualified_name() splits a profile's type reference on the first
+      // dot, and the victionary keys join their components with an unescaped
+      // '.' (see the TODO on TypeDescriptorKey, which tracks the escaping fix
+      // separately. That is needed regardless, since the version component is
+      // not validated either).
+
       if (td->max_decode_buffer_length <= 0) {
         error_out =
             "type '" + type_name + "' must set max_decode_buffer_length";

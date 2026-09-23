@@ -1,0 +1,5 @@
+# This test runs the query_expression_debug.inc body twice (VARCHAR and TEXT).
+# It takes about 116s locally but is much slower on GitHub workflow runners,
+# where it exceeds the default 15 minute testcase timeout. 20 minutes is about
+# what it needs there, so allow 30 minutes for 50% headroom.
+--testcase-timeout=30
