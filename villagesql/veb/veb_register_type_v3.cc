@@ -189,6 +189,7 @@ static const vef_func_desc_t *resolve_type_vdf(
     const vef_type_id expected_param_ids[],
     const char *expected_custom_params[], vef_type_id expected_return_id,
     const char *expected_custom_return, bool required, bool *error) {
+  *error = false;
   if (func_ptr != nullptr && vdf_name != nullptr) {
     LogVSQL(ERROR_LEVEL, "Type '%s' in extension '%s' sets both %s and %s",
             type_name.c_str(), extension_name.c_str(), func_label, vdf_label);
@@ -197,8 +198,7 @@ static const vef_func_desc_t *resolve_type_vdf(
   }
   // The other half of "exactly one": neither set leaves the operation with no
   // implementation at all.
-  if (func_ptr == nullptr && vdf_name == nullptr) {
-    if (!required) return nullptr;
+  if (func_ptr == nullptr && vdf_name == nullptr && required) {
     LogVSQL(ERROR_LEVEL,
             "Type '%s' in extension '%s' sets neither %s nor %s (exactly one "
             "is required)",

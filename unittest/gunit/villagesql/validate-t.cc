@@ -356,9 +356,9 @@ TEST_F(ValidateExtensionRegistrationTest,
 }
 
 // A descriptor that declares protocol 1 has no clear/accumulate fields of its
-// own, even inside a protocol-3 registration, so the pairing rule must not be
-// applied to it -- the fields would be read past the struct the extension
-// built.
+// own, even inside a protocol-3 registration, so the pairing rule for those
+// fields does not apply, and accessing them would read past the struct the
+// extension built.
 TEST_F(ValidateExtensionRegistrationTest,
        ClearWithoutAccumulateIgnoredForV1Descriptor) {
   vef_type_t ret = {VEF_TYPE_INT, nullptr};
@@ -379,11 +379,13 @@ TEST_F(ValidateExtensionRegistrationTest,
   auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
+  // Unlike V3 or later, V1 with just one of {clear, accumulate} is not checked.
   ASSERT_TRUE(result.has_value()) << error;
   EXPECT_EQ(result->funcs.size(), 1u);
 }
 
-// The other half of the rule: both callbacks set is a well-formed aggregate.
+// The other half of the rule: when both clear and accumulate callbacks are
+// set, the aggregate is well-formed.
 TEST_F(ValidateExtensionRegistrationTest, ClearWithAccumulateIsAccepted) {
   vef_type_t ret = {VEF_TYPE_INT, nullptr};
   vef_signature_t sig = {0, nullptr, ret};
@@ -403,6 +405,7 @@ TEST_F(ValidateExtensionRegistrationTest, ClearWithAccumulateIsAccepted) {
   auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
+  // V3 with both clear and accumulate is valid.
   ASSERT_TRUE(result.has_value()) << error;
   EXPECT_EQ(result->funcs.size(), 1u);
 }
@@ -468,8 +471,8 @@ TEST_F(ValidateExtensionRegistrationTest, V1TypeWithoutHashIsAccepted) {
   EXPECT_EQ(result->types.size(), 1u);
 }
 
-// From protocol 3 a required operation may come from either the function
-// pointer or a named VDF -- exactly one. Setting both was already rejected;
+// From protocol 3 a required operation may come from exactly one of the
+// function pointer or a named VDF. Setting both was already rejected;
 // setting neither must be too.
 TEST_F(ValidateExtensionRegistrationTest, V3TypeWithNoCompareImplementation) {
   vef_type_desc_t td = {};
@@ -492,8 +495,9 @@ TEST_F(ValidateExtensionRegistrationTest, V3TypeWithNoCompareImplementation) {
   auto result = villagesql::veb::parse_extension_registration(
       make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
 
+  // Expect a failure due to compare_func == nullptr.
   EXPECT_FALSE(result.has_value());
-  EXPECT_NE(error.find("MYTYPE"), std::string::npos) << error;
+  EXPECT_EQ(error, "type 'MYTYPE' failed validation") << error;
 }
 
 // The same type with all three pointers present still registers, and its

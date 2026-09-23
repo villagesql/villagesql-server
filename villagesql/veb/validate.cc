@@ -76,8 +76,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
 
   // check_vef_registration() has already established that the counts match the
   // arrays and that every descriptor is non-NULL, named and structurally
-  // complete, so the loops below index and dereference them directly. Assert
-  // the array half of that here.
+  // complete, so the loops below index and dereference them directly.
   assert(reg == nullptr || reg->func_count == 0 || reg->funcs != nullptr);
   assert(reg == nullptr || reg->type_count == 0 || reg->types != nullptr);
 
@@ -153,11 +152,10 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       std::string func_name(func_desc->name);
 
       // clear/accumulate were added in PROTOCOL_3. Read them only when the
-      // descriptor itself declares v3+ as well as the negotiated protocol --
-      // the same logic applied above to choose a builder. A descriptor
-      // declaring an older protocol was built against a struct that ends
-      // before these fields, so reading them would read past what the
-      // extension allocated.
+      // descriptor itself declares v3+ as well as the negotiated protocol, as
+      // applied above to choose a builder. A descriptor declaring an older
+      // protocol was built against a struct that ends before these fields, so
+      // reading them would read past what the extension allocated.
       if (func_desc->protocol >= VEF_PROTOCOL_3 &&
           ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
         bool has_clear = (func_desc->clear != nullptr);
