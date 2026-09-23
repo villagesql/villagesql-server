@@ -1,0 +1,35 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: villagesql-server
+Upstream-Contact: VillageSQL Contributors <info@villagesql.com>
+Source: https://github.com/villagesql/villagesql-server
+Comment:
+ VillageSQL Server is a tracking fork of upstream MySQL. The tree therefore
+ carries both VillageSQL and Oracle copyrights, plus the licences of the
+ bundled third-party components under extra/. The authoritative, complete
+ text is the LICENSE file at the root of the source package.
+
+Files: *
+Copyright: 2026 VillageSQL Contributors
+           2000-2026 Oracle and/or its affiliates
+License: GPL-2
+
+Files: villagesql/*
+Copyright: 2026 VillageSQL Contributors
+License: GPL-2
+
+License: GPL-2
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License, version 2.0, as
+ published by the Free Software Foundation.
+ .
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+ Public License, version 2.0, for more details.
+ .
+ You should have received a copy of the GNU General Public License along
+ with this program; if not, write to the Free Software Foundation, Inc.,
+ 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in "/usr/share/common-licenses/GPL-2".
