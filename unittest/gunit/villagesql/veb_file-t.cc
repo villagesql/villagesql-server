@@ -98,7 +98,7 @@ class CheckVefRegistrationTest : public ::testing::Test {
 // Counts and array pointers
 // ---------------------------------------------------------------------------
 
-// An extension that registers nothing leaves both arrays NULL, which is
+// An extension that registers nothing leaves both arrays as nullptr, which is
 // well formed as long as the counts agree.
 TEST_F(CheckVefRegistrationTest, EmptyRegistrationIsWellFormed) {
   vef_registration_t reg = {};
@@ -122,7 +122,6 @@ TEST_F(CheckVefRegistrationTest, PopulatedRegistrationIsWellFormed) {
   EXPECT_TRUE(error.empty());
 }
 
-// The crash case: consumers index funcs[] on func_count alone.
 TEST_F(CheckVefRegistrationTest, NullFuncsArrayWithNonZeroCountIsError) {
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_3;
@@ -147,7 +146,7 @@ TEST_F(CheckVefRegistrationTest, NullTypesArrayWithNonZeroCountIsError) {
   EXPECT_NE(error.find("3"), std::string::npos) << error;
 }
 
-// A valid funcs array must not mask a NULL types array.
+// A valid funcs array must not mask a nullptr types array.
 TEST_F(CheckVefRegistrationTest, NullTypesArrayIsCaughtAfterValidFuncs) {
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_3;
@@ -161,7 +160,7 @@ TEST_F(CheckVefRegistrationTest, NullTypesArrayIsCaughtAfterValidFuncs) {
   EXPECT_NE(error.find("types"), std::string::npos) << error;
 }
 
-// A zero count with a non-NULL array is harmless: nothing is indexed.
+// A zero count with a non-nullptr array is harmless: nothing is indexed.
 TEST_F(CheckVefRegistrationTest, ZeroCountWithNonNullArrayIsWellFormed) {
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_3;
@@ -189,8 +188,9 @@ TEST_F(CheckVefRegistrationTest, ProtocolV1RegistrationIsWellFormed) {
 // Array elements
 // ---------------------------------------------------------------------------
 
-// A NULL descriptor inside an otherwise valid array: the extension_registration
-// system view dereferences these without a check of its own.
+// A nullptr descriptor inside an otherwise valid array: the
+// extension_registration system view dereferences these without a check of its
+// own.
 TEST_F(CheckVefRegistrationTest, NullFuncDescriptorIsError) {
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_3;
@@ -215,7 +215,7 @@ TEST_F(CheckVefRegistrationTest, NullTypeDescriptorIsError) {
   EXPECT_NE(error.find("index 1"), std::string::npos) << error;
 }
 
-// A count shorter than the array must not reach the NULL element past it.
+// A count shorter than the array must not reach the nullptr element past it.
 TEST_F(CheckVefRegistrationTest, ElementsPastTheCountAreNotInspected) {
   vef_registration_t reg = {};
   reg.protocol = VEF_PROTOCOL_3;
@@ -247,7 +247,7 @@ TEST_F(CheckVefRegistrationTest, FuncWithoutNameIsError) {
   EXPECT_NE(error.find("index 0"), std::string::npos) << error;
 }
 
-// vdf_handler calls this pointer once per row with no NULL check.
+// vdf_handler calls this pointer once per row with no nullptr check.
 TEST_F(CheckVefRegistrationTest, FuncWithoutVdfPointerIsError) {
   vef_func_desc_t desc = g_func_desc;
   desc.vdf = nullptr;
@@ -282,11 +282,12 @@ TEST_F(CheckVefRegistrationTest, NullParamsArrayWithNonZeroCountIsError) {
 
   std::string error;
   EXPECT_TRUE(check_vef_registration(&reg, error));
-  EXPECT_NE(error.find("params array is NULL"), std::string::npos) << error;
+  EXPECT_NE(error.find("params array is a nullptr"), std::string::npos)
+      << error;
   EXPECT_NE(error.find("2"), std::string::npos) << error;
 }
 
-// A varargs signature carries the sentinel as its count and a NULL params;
+// A varargs signature carries the sentinel as its count and params is nullptr;
 // neither may be treated as a length or indexed.
 TEST_F(CheckVefRegistrationTest, VarargsSignatureIsWellFormed) {
   vef_signature_t sig = {
@@ -313,7 +314,7 @@ TEST_F(CheckVefRegistrationTest, ZeroParamSignatureIsWellFormed) {
 }
 
 // Resolving a CUSTOM param reads custom_type; outside a debug build the only
-// thing standing between a NULL here and the resolver is this check.
+// thing standing between a nullptr here and the resolver is this check.
 TEST_F(CheckVefRegistrationTest, CustomParamWithoutTypeNameIsError) {
   const vef_type_t params[] = {{VEF_TYPE_STRING, nullptr},
                                {VEF_TYPE_CUSTOM, nullptr}};
