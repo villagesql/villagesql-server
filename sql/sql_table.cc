@@ -17116,15 +17116,18 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
   }
 
+  // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
+  // rolls back victionary modifications unless disarmed after a successful
+  // store(). Constructed before process_alter so that a failure inside
+  // process_alter, after it has staged victionary modifications, still rolls
+  // them back.
+  villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
+
   // VillageSQL: Track custom columns and acquire necessary MDL locks.
   if (villagesql::Metadata_modifier::process_alter(
           thd, create_info, table_list, alter_info, &alter_ctx.tables_opened)) {
     return true;
   }
-  // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
-  // rolls back victionary modifications unless disarmed after a successful
-  // store().
-  villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
 
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
