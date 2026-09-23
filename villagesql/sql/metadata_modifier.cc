@@ -1085,10 +1085,10 @@ bool Metadata_modifier::lock_and_apply(THD *thd) {
   // in the user's locked-tables list. Opening them under LOCK TABLES would fail
   // deep inside open_tables() with a confusing ER_TABLE_NOT_LOCKED naming the
   // internal 'custom_columns' table. Reject up front with a clear message.
-  // TODO(villagesql): Support custom type table operations under LOCK TABLES by
-  // opening the villagesql system tables the way the data dictionary opens its
-  // own tables during DDL (via an attachable transaction, which detaches
-  // locked_tables_mode), instead of requiring the user to lock them.
+  // TODO(villagesql-general): Support custom type table operations under LOCK
+  // TABLES by opening the villagesql system tables the way the data dictionary
+  // opens its own tables during DDL (via an attachable transaction, which
+  // detaches locked_tables_mode), instead of requiring the user to lock them.
   if (thd->locked_tables_mode == LTM_LOCK_TABLES) {
     villagesql_error(
         "Custom type table operations are not supported under LOCK TABLES.",
