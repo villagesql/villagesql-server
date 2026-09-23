@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -229,7 +230,14 @@ enum join_type {
     the results into one. The merge can be used to
     produce unions and intersections
   */
-  JT_INDEX_MERGE
+  JT_INDEX_MERGE,
+  /*
+    VillageSQL: nearest-neighbor (KNN) ordered scan of a custom index that
+    satisfies ORDER BY <distance>(col, const) LIMIT k. Rows are produced in
+    ascending-distance order by the extension's index. Appended last so the
+    positional join_type_str[] mapping for existing values is unchanged.
+  */
+  JT_INDEX_DISTANCE
 };
 
 /// Holds members common to JOIN_TAB and QEP_TAB.
