@@ -269,7 +269,7 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
       villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare),
-      villagesql::HashFunction(dummy_hash),
+      villagesql::HashFunction(dummy_hash), std::nullopt,
       villagesql::IntToParamsFunction(&itp_fd),
       villagesql::ResolveParamsFunction(&rp_fd));
 

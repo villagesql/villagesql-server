@@ -71,4 +71,41 @@ size_t HashOp::invoke(const unsigned char *data, size_t len) const {
   return static_cast<size_t>(*result);
 }
 
+RealValueOp::RealValueOp(const RealValueFunction &func,
+                         const TypeParameters &params)
+    : vdf_(func.vdf()), params_(params) {}
+
+double RealValueOp::invoke(const unsigned char *data, size_t len) const {
+  vef_context_t ctx{};
+  ctx.protocol = vdf_->protocol;
+
+  vef_invalue_t input{};
+  input.type = VEF_TYPE_CUSTOM;
+  input.is_null = false;
+  input.bin_value = data;
+  input.bin_len = len;
+  input.type_params.count = params_.count();
+  input.type_params.keys = params_.key_data();
+  input.type_params.values = params_.value_data();
+
+  vef_invalue_t *inputs[] = {&input};
+  vef_vdf_args_t args{};
+  args.user_data = nullptr;
+  args.value_count = 1;
+  args.values = inputs;
+
+  char error_msg[VEF_MAX_ERROR_LEN] = {};
+  vef_vdf_result_t result{};
+  result.error_msg = error_msg;
+  result.type = VEF_RESULT_VALUE;
+  vdf_->vdf(&ctx, &args, &result);
+  if (result.type != VEF_RESULT_VALUE) {
+    LogVSQL(ERROR_LEVEL, "real_value VDF '%s' returned %d: %s", vdf_->name,
+            static_cast<int>(result.type),
+            error_msg[0] != '\0' ? error_msg : "unknown error");
+    return 0.0;
+  }
+  return result.real_value;
+}
+
 }  // namespace villagesql

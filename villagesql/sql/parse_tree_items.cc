@@ -68,7 +68,7 @@ static void emit_type_method_error(std::string_view ext_name,
   }
 
   static const char *valid_methods[] = {"from_string", "to_string", "compare",
-                                        "hash"};
+                                        "hash", "real_value"};
   bool is_valid_method = false;
   for (const char *m : valid_methods) {
     if (method_name == m) {
@@ -80,7 +80,7 @@ static void emit_type_method_error(std::string_view ext_name,
   if (!is_valid_method) {
     villagesql_error(
         "Unknown method '%s' for type '%s'. Valid methods: from_string, "
-        "to_string, compare, hash",
+        "to_string, compare, hash, real_value",
         MYF(0), method_name.c_str(), type_name.c_str());
     return;
   }

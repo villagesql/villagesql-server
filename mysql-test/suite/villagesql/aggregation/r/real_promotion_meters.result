@@ -1,0 +1,39 @@
+CREATE TABLE t_distances (
+id INT PRIMARY KEY,
+distance vsql_units.METERS
+);
+INSERT INTO t_distances VALUES
+(1, '1.25 m'),
+(2, '2.5 m'),
+(3, '3.75 m'),
+(4, NULL);
+SELECT distance FROM t_distances ORDER BY id;
+distance
+1.25 m
+2.5 m
+3.75 m
+NULL
+SELECT vsql_units.METERS::real_value(distance) AS meters
+FROM t_distances
+ORDER BY id;
+meters
+1.25
+2.5
+3.75
+NULL
+SELECT SUM(distance) AS total, AVG(distance) AS average
+FROM t_distances;
+total	average
+7.5	2.5
+CREATE TABLE t_distance_aggregates AS
+SELECT SUM(distance) AS total, AVG(distance) AS average
+FROM t_distances;
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+AND TABLE_NAME = 't_distance_aggregates'
+ORDER BY ORDINAL_POSITION;
+COLUMN_NAME	DATA_TYPE	COLUMN_TYPE
+total	double	double
+average	double	double
+DROP TABLE t_distance_aggregates, t_distances;
