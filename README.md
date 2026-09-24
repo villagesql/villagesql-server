@@ -167,7 +167,7 @@ Verify your build with the test suite:
 # From your build directory
 cd "$HOME/build/villagesql"
 
-# Run all VillageSQL tests including sub-suites
+# Run all VillageSQL tests including sub-suites (unit tests run separately)
 mysql-test/mysql-test-run.pl --do-suite=villagesql --nounit-tests --parallel=auto
 
 # Run a specific test

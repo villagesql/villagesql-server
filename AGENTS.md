@@ -79,10 +79,10 @@ cd $BUILD_HOME
 ./mysql-test/mysql-test-run.pl --parallel=auto
 
 # Run ALL VillageSQL tests including sub-suites (alter_table, create_table, etc.)
-./mysql-test/mysql-test-run.pl --do-suite=village --nounit-tests --parallel=auto
+./mysql-test/mysql-test-run.pl --do-suite=villagesql --nounit-tests --parallel=auto
 
 # Run VillageSQL tests including "big" tests (longer running)
-./mysql-test/mysql-test-run.pl --do-suite=village --nounit-tests  --parallel=auto --big-test
+./mysql-test/mysql-test-run.pl --do-suite=villagesql --nounit-tests  --parallel=auto --big-test
 
 # Run specific VillageSQL sub-suite
 ./mysql-test/mysql-test-run.pl --suite=villagesql/alter_table --parallel=auto
