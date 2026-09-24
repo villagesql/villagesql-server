@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -597,6 +598,13 @@ class ha_innobase : public handler {
   int general_fetch(uchar *buf, uint direction, uint match_mode);
 
   virtual dict_index_t *innobase_get_index(uint keynr);
+
+  /** VillageSQL: resolve a custom index's stable column reference to the owning
+  row and read it into @p buf (REF_LOOKUP read path). Resolves key_ref to the
+  clustered field-0 bytes via the indexed column's store, then does a clustered
+  read. @return false on success; true if not a custom index or on error. */
+  bool custom_index_ref_to_row(uint keynr, uint64_t key_ref, uchar *buf,
+                               char *error_msg, uint error_msg_len) override;
 
   /** Builds a 'template' to the m_prebuilt struct. The template is used in fast
   retrieval of just those column values MySQL needs in its processing.
