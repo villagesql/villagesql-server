@@ -165,10 +165,13 @@ if constexpr (has_new_member<Ext>::value) {
 }
 ```
 
-This is how the extension-side `on_init` / `on_deinit` hooks are wired: only the
-vsql builder carries `kInitFn` / `kDeinitFn`, and `vef_register_impl` guards the
-call with `has_init_fn<Ext>` so the legacy builder and frozen snapshots still
-compile.
+This is how the `on_init` / `on_deinit` hooks are wired: only the vsql builder
+carries `kInitFn` / `kDeinitFn`, and `vef_register_impl` guards the read with
+`has_init_fn<Ext>` so the legacy builder and frozen snapshots still compile. It
+stores both pointers in `vef_registration_t` rather than calling them: the
+server invokes `on_init` after populating the extension's capabilities and
+`on_deinit` before depopulating them, which is the only point at which the
+extension's own system variables and capability vtables exist.
 
 ## TODOs
 
