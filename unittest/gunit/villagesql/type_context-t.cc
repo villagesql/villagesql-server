@@ -149,7 +149,8 @@ static vef_func_desc_t make_resolve_params_fd(const char *name,
           false,
           nullptr,
           nullptr,
-          0};
+          0,
+          nullptr};
 }
 
 // resolve_params using the mutating overload: when the caller supplied only a
@@ -212,7 +213,8 @@ static vef_func_desc_t make_int_to_params_fd(const char *name,
           false,
           nullptr,
           nullptr,
-          0};
+          0,
+          nullptr};
 }
 
 // intrinsic_default VDF: returns the string the server then encodes. Takes no
@@ -254,7 +256,8 @@ static vef_func_desc_t make_intrinsic_default_fd(const char *name,
           false,
           nullptr,
           nullptr,
-          0};
+          0,
+          nullptr};
 }
 
 // from_string (encode) VDF counterpart of two_byte_encode. It delegates so the
@@ -287,7 +290,7 @@ static vef_func_desc_t make_encode_fd(const char *name, vef_vdf_func_t vdf) {
   static vef_type_t enc_param = {VEF_TYPE_STRING, nullptr};
   static vef_signature_t enc_sig = {1, &enc_param, {VEF_TYPE_CUSTOM, nullptr}};
   return {VEF_PROTOCOL_3, name,    &enc_sig, vdf, nullptr, nullptr, 0,
-          false,          nullptr, nullptr,  0};
+          false,          nullptr, nullptr,  0,   nullptr};
 }
 
 // Encode that echoes its input, so a test can assert which string the
