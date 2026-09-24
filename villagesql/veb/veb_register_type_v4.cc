@@ -37,6 +37,7 @@
 namespace villagesql {
 namespace veb {
 
+// TODO(villagesql-general): find_vdf_by_name can call the v3 version.
 static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
                                                const char *name) {
   for (unsigned int i = 0; i < reg.func_count; i++) {
@@ -105,6 +106,8 @@ static bool validate_type_method_vdf_name(const char *vdf_name,
 
 // Validate that a VDF's signature matches the expected pattern for a type
 // operation. Returns false on success, true on error.
+// TODO(villagesql-general): validate_type_vdf_signature can call the v3
+// version.
 static bool validate_type_vdf_signature(
     const vef_func_desc_t *fd, const char *op_name, const char *type_name,
     unsigned int expected_param_count, const vef_type_id expected_param_ids[],
@@ -181,6 +184,7 @@ static bool validate_type_vdf_signature(
 // validates its signature.
 // Returns: resolved VDF pointer (or nullptr if not VDF-based).
 // Sets *error = true on validation failure.
+// TODO(villagesql-general): resolve_type_vdf can call the v3 version.
 static const vef_func_desc_t *resolve_type_vdf(
     const char *vdf_name, const void *func_ptr, const char *func_label,
     const char *vdf_label, const vef_registration_t &reg,

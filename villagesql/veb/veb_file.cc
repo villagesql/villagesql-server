@@ -1618,6 +1618,7 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
   const vef_protocol_t negotiated_protocol =
       std::min(max_protocol, reg->protocol);
 
+  // TODO(villagesql-general): Use create_scope_guard for cleanup.
   if (reg->error_msg != nullptr) {
     error_message =
         std::string("vef_register returned an error: ") + reg->error_msg;
