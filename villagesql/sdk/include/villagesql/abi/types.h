@@ -617,7 +617,7 @@ typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
 // Optional hook called once at analysis time (fix_fields), before prerun, when
 // the function is resolved. It lets the extension take full control of type
 // parameter resolution for the call, bypassing the built-in type
-// disambiguation rules (TD1 and TD2).
+// disambiguation rules.
 //
 // Use it when the parameter relationship between arguments and the return type
 // is something the default rules cannot express, e.g.
@@ -636,9 +636,10 @@ typedef struct {
   // Declared type of each argument. Array has arg_count elements.
   const vef_type_t *arg_types;
 
-  // For each argument: non-NULL if the argument is a constant, NULL otherwise.
-  // If non-NULL, points to the constant's serialized value (for STRING args,
-  // the text bytes). Array has arg_count elements.
+  // For each argument that is a constant STRING: its text bytes. nullptr for
+  // every other argument, including a constant of a custom type. This is
+  // what lets a hook derive a type from a literal, e.g. TYPEID('user').
+  // Array has arg_count elements.
   char **const_values;
 
   // Length of each constant value. Only valid where const_values[i] != NULL.
@@ -647,9 +648,11 @@ typedef struct {
 
   // For each argument: its resolved type parameters, in key/value
   // form.
-  // Array has arg_count elements; count == 0 for an argument with no
-  // parameters -- a non-custom argument, a non-parameterized custom type, or
-  // a custom one whose parameters are not yet known.
+  // In case the corresponding argument doesn't have parameters,
+  // or is a non-custom argument, or is a non-parameterized custom type, or
+  // is a custom type whose parameters are not yet known - then the
+  // corresponding arg_params entry will have its count == 0.
+  // Array has arg_count elements;
   const vef_type_params_t *arg_params;
 } vef_bind_types_args_t;
 
@@ -668,7 +671,7 @@ typedef struct {
   // hook says nothing about the return type. Installing a hook disables the
   // built-in rule, so nothing fills in for it: leave it at 0 only when the
   // return type has no parameters to decide.
-  vef_inferred_type_params_t out_return_params;
+  vef_inferred_type_params_t *out_return_params;
 
   // OPTIONAL OUTPUT: per-argument type parameters, one entry per argument,
   // each following the same contract as out_return_params. The caller
@@ -676,12 +679,13 @@ typedef struct {
   // "k=v,k=v" params for any argument it wants to resolve and leaves
   // actual_len == 0 for the rest.
   //
-  // This is how a hook resolves an argument the server could not -- typically
+  // This is how a hook resolves an argument the server could not - typically
   // a string literal written where a parameterized custom type is expected,
   // which has no sibling to borrow parameters from once a hook switches the
   // built-in propagation off. Arguments left at 0 keep whatever the server
-  // worked out. NULL when the server did not offer the channel.
-  vef_inferred_type_params_t *out_arg_params;
+  // worked out. nullptr when the server did not offer the channel; when
+  // non-nullptr, every one of its arg_count entries is non-nullptr.
+  vef_inferred_type_params_t **out_arg_params;
 } vef_bind_types_result_t;
 
 typedef void (*vef_bind_types_func_t)(vef_context_t *ctx,
@@ -773,10 +777,10 @@ typedef struct {
   size_t max_result_length;
 
   // protocol >= VEF_PROTOCOL_4
-  // OPTIONAL: author-supplied type binding/checking hook. When non-NULL, the
+  // OPTIONAL: author-supplied type binding/checking hook. When non-nullptr, the
   // server calls it at fix_fields time to validate argument type parameters
-  // and compute the return type's parameters, bypassing the built-in TD1/TD2
-  // rules. See vef_bind_types_func_t.
+  // and compute the return type's parameters, bypassing the built-in
+  // disambiguation rules. See vef_bind_types_func_t.
   vef_bind_types_func_t bind_and_check_types;
 } vef_func_desc_t;
 
