@@ -11054,10 +11054,11 @@ struct my_option my_long_options[] = {
      nullptr, 0, nullptr},
 
     {"villagesql-custom-index", 0,
-     "Enable the custom (USING EXTENDED) index feature. The feature is not yet "
-     "implemented for release; off by default, CREATE/ALTER ... INDEX ... "
-     "USING "
-     "EXTENDED is rejected. Intended for development and benchmarking only.",
+     "Enable the custom (USING EXTENDED) index feature: both CREATE/ALTER ... "
+     "INDEX ... USING EXTENDED and the ANN ORDER BY query plan over such an "
+     "index. The feature is not yet implemented for release; off by default, "
+     "CREATE is rejected and the optimizer does not consider custom indexes. "
+     "Intended for development and benchmarking only.",
      &opt_villagesql_custom_index, &opt_villagesql_custom_index, nullptr,
      GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 
