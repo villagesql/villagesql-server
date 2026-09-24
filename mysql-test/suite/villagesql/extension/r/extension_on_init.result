@@ -1,3 +1,5 @@
+call mtr.add_suppression("on_deinit hook without an on_init");
+call mtr.add_suppression("on_init hook without an on_deinit");
 # Install the on_init test extension (fires on_init)
 INSTALL EXTENSION vsql_on_init_test;
 # Verify extension is installed
@@ -14,3 +16,11 @@ EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LA
 # After uninstall, the marker file records both on_init and on_deinit
 on_init
 on_deinit
+# Install fails: the registration has on_deinit and no on_init
+INSTALL EXTENSION vsql_deinit_only_test;
+ERROR HY000: Failed to load VEF extension 'vsql_deinit_only_test': extension registers an on_deinit hook without an on_init
+# Neither hook ran, so neither wrote a marker file
+# The mirror is rejected the same way: on_init with no on_deinit
+INSTALL EXTENSION vsql_init_only_test;
+ERROR HY000: Failed to load VEF extension 'vsql_init_only_test': extension registers an on_init hook without an on_deinit
+# Again, neither hook ran

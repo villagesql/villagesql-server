@@ -9944,6 +9944,11 @@ int mysqld_main(int argc, char **argv)
     return 1;
   }
 
+  // Extensions loaded in init_server_components() deferred their on_init hooks
+  // to here so they observe persisted system-variable values, which is what the
+  // call above applies.
+  villagesql::run_extension_init_hooks();
+
   /*
     Invoke the bootstrap thread, if required.
   */

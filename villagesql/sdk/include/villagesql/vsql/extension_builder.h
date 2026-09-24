@@ -48,8 +48,9 @@ struct ExtensionBuilder {
   static constexpr size_t kRequiredCapabilityCount =
       std::tuple_size_v<RequiredCapabilityTuple>;
 
-  // Extension-side init / deinit callbacks (null if unset). Invoked by
-  // vef_register_impl / vef_unregister — see on_init() / on_deinit() below.
+  // Extension-side init / deinit callbacks (null if unset). Handed to the
+  // server in vef_registration_t, which calls them — see on_init() /
+  // on_deinit() below.
   static constexpr void (*kInitFn)() = InitFn;
   static constexpr void (*kDeinitFn)() = DeinitFn;
 
@@ -115,26 +116,36 @@ struct ExtensionBuilder {
                                       require_atleast_min(VEF_PROTOCOL_3)};
   }
 
-  // Registers a function to run once, extension-side, at extension load (every
-  // server startup and at install), after the extension is validated and
-  // accepted. The function runs in the extension process with no server access;
-  // for server-interacting setup use a capability's on_populate instead. Use
-  // this for local one-time init such as choosing CPU/ISA-specific function
-  // pointers or allocating extension-owned state.
+  // Registers a function to run once at extension load (every server startup
+  // and at install), after the extension is validated, accepted, and its
+  // required capabilities are populated. Every capability the extension
+  // declared is usable by then and its system variables hold their configured
+  // values, so this is the place to read configuration once, allocate
+  // extension-owned state, or choose CPU/ISA-specific function pointers.
+  // Read string system variables through the capability's get() rather than
+  // through the storage pointer; see preview/sys_var.h.
+  //
+  // Registered as a pair with on_deinit(): declaring one without the other
+  // fails to compile. Register an empty one when there is no work to do.
   template <void (*Fn)()>
   constexpr auto on_init() const {
     return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple, Fn,
                             DeinitFn>{funcs_, types_, required_capabilities_,
-                                      min_protocol_};
+                                      require_atleast_min(VEF_PROTOCOL_4)};
   }
 
   // Registers a function to run at extension unload (server shutdown or
-  // uninstall). Like on_init(), it runs extension-side with no server access.
+  // uninstall), before the extension's capabilities are depopulated, so it
+  // sees the same live capabilities on_init() did. It does not run when the
+  // server rejects the registration, i.e. when on_init() never ran either.
+  //
+  // Registered as a pair with on_init(): declaring one without the other
+  // fails to compile. Register an empty one when there is no work to do.
   template <void (*Fn)()>
   constexpr auto on_deinit() const {
     return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple,
                             InitFn, Fn>{funcs_, types_, required_capabilities_,
-                                        min_protocol_};
+                                        require_atleast_min(VEF_PROTOCOL_4)};
   }
 
   // For testing only — forces the extension to require protocol p regardless
@@ -221,11 +232,6 @@ constexpr auto make_extension() {
                                  vef_registration_t *reg) {              \
     (void)arg;                                                           \
     (void)reg;                                                           \
-    using namespace vsql;                                                \
-    static constexpr auto kExt = (ext);                                  \
-    if constexpr (decltype(kExt)::kDeinitFn != nullptr) {                \
-      decltype(kExt)::kDeinitFn();                                       \
-    }                                                                    \
   }
 
 #endif  // VILLAGESQL_VSQL_EXTENSION_BUILDER_H
