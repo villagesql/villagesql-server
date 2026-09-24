@@ -29,6 +29,7 @@ SET(VILLAGESQL_UNIT_TESTS
   type_builder-t
   type_context-t
   type_descriptor-t
+  type_params-t
   validate-t
   victionary_client-t
 )
