@@ -202,6 +202,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "villagesql/custom_index.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/util.h"
+#include "villagesql/sql/custom_index_handle.h"
 #else
 #include <typelib.h>
 #include "buf0types.h"
@@ -10737,7 +10738,8 @@ dict_index_t *ha_innobase::innobase_get_index(
   return index;
 }
 
-bool ha_innobase::get_custom_index_handle(uint keynr, CustomIndexHandle *out) {
+bool ha_innobase::get_custom_index_handle(uint keynr,
+                                          villagesql::CustomIndexHandle *out) {
   dict_index_t *index = innobase_get_index(keynr);
   if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index) ||
       index->custom_index == nullptr) {

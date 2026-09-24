@@ -96,6 +96,11 @@ struct System_status_var;
 namespace dd {
 class Properties;
 }  // namespace dd
+namespace villagesql {
+// VillageSQL: defined (fully typed) in villagesql/sql/custom_index_handle.h;
+// forward-declared here so handler.h stays free of the preview VEF ABI.
+struct CustomIndexHandle;
+}  // namespace villagesql
 struct AccessPath;
 struct JoinHypergraph;
 struct KEY_CACHE;
@@ -5493,30 +5498,14 @@ class handler {
 
  public:
   /**
-    VillageSQL: handle to a custom index instance the storage engine has
-    already loaded (via the VEF extension's intf.load) and keeps for the
-    lifetime of the open index. Returned by get_custom_index_handle() so the
-    SQL layer can drive the extension's scan callbacks against the engine's
-    live, correctly-loaded storage context.
-
-    The pointers are opaque here to keep this header free of VEF ABI types;
-    the custom-index scan code casts them back to vef_index_ctx_t* /
-    vef_storage_ctx_t* / const vef_type_index_intf_t*.
-  */
-  struct CustomIndexHandle {
-    void *index_ctx{nullptr};
-    void *storage_ctx{nullptr};
-    const void *intf{nullptr};
-  };
-
-  /**
     VillageSQL: fetch the loaded custom-index handle for key number @p keynr.
 
     Custom indexes have no B-tree; the storage engine loads the extension's
     index instance (its vef_index_ctx_t + storage context) at table-open time
     and owns its lifetime. The SQL-layer custom-index scan uses this to reach
     that live instance instead of re-loading it, so it scans the engine's
-    actual storage.
+    actual storage. The handle type (villagesql::CustomIndexHandle) is defined
+    in villagesql/sql/custom_index_handle.h.
 
     @param keynr  key number, indexing table->key_info[] (same numbering the
                   engine uses).
@@ -5527,7 +5516,7 @@ class handler {
                    indexes — the caller must fall back (no custom scan).
   */
   virtual bool get_custom_index_handle(uint keynr [[maybe_unused]],
-                                       CustomIndexHandle *out
+                                       villagesql::CustomIndexHandle *out
                                        [[maybe_unused]]) {
     return true;
   }

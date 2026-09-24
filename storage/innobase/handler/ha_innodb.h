@@ -604,7 +604,8 @@ class ha_innobase : public handler {
   dict_index_t at table-open. Lets the SQL-layer custom-index scan drive the
   extension against InnoDB's live storage instead of re-loading it.
   @return false and fills @p out if keynr is a custom index; true otherwise. */
-  bool get_custom_index_handle(uint keynr, CustomIndexHandle *out) override;
+  bool get_custom_index_handle(uint keynr,
+                               villagesql::CustomIndexHandle *out) override;
 
   /** VillageSQL: resolve a custom index's stable column reference to the owning
   row and read it into @p buf (REF_LOOKUP read path). Resolves key_ref to the
