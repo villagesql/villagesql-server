@@ -51,6 +51,14 @@ struct has_max_result_length<
     T, std::void_t<decltype(std::declval<const T &>().max_result_length())>>
     : std::true_type {};
 
+// Same idiom for bind(): only the typed builder can declare a
+// bind_and_check_types hook, so the legacy builder is not asked for one.
+template <typename T, typename = void>
+struct has_bind : std::false_type {};
+template <typename T>
+struct has_bind<T, std::void_t<decltype(std::declval<const T &>().bind())>>
+    : std::true_type {};
+
 template <typename FuncData, size_t Index>
 __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     const FuncData &func_data) {
@@ -85,7 +93,11 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   desc.deterministic = func_data.deterministic();
   desc.clear = func_data.clear();
   desc.accumulate = func_data.accumulate();
-  desc.bind_and_check_types = func_data.bind();
+  if constexpr (has_bind<FuncData>::value) {
+    desc.bind_and_check_types = func_data.bind();
+  } else {
+    desc.bind_and_check_types = nullptr;
+  }
 
   return &desc;
 }
@@ -291,8 +303,13 @@ const char *vef_check_varargs_bind(const Ext &e, std::index_sequence<Is...>) {
   const char *offender = nullptr;
   auto check_one = [&offender](const auto &func) {
     if (offender) return;
-    if (func.num_params() == VEF_PARAM_VARARGS && func.bind() != nullptr) {
-      offender = func.name();
+    // Only the typed builder has bind(); a legacy builder cannot declare a
+    // hook, so it can never be the offender.
+    if constexpr (vsql::func_builder::has_bind<
+                      std::decay_t<decltype(func)>>::value) {
+      if (func.num_params() == VEF_PARAM_VARARGS && func.bind() != nullptr) {
+        offender = func.name();
+      }
     }
   };
   (check_one(e.template func_at<Is>()), ...);

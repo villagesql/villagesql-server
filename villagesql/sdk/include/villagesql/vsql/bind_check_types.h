@@ -24,7 +24,7 @@
 //
 // Called once at resolution time, before any row is read, for a function whose
 // return-type parameters the built-in rules cannot work out. The hook reads the
-// arguments and answers with the parameters for the return type -- and, where
+// arguments and answers with the parameters for the return type and, where
 // it needs to, for individual arguments.
 
 #include <cstddef>
