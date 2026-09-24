@@ -1770,6 +1770,15 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
   std::vector<vef_type_params_t> arg_params(arg_count, vef_type_params_t{});
   std::vector<String> const_store(arg_count);
 
+  // The ABI passes both of these as arrays of pointers rather than as the
+  // structs themselves.
+  std::vector<const vef_type_t *> arg_type_slots(arg_count);
+  std::vector<const vef_type_params_t *> arg_param_slots(arg_count);
+  for (uint i = 0; i < arg_count; i++) {
+    arg_type_slots[i] = &arg_types[i];
+    arg_param_slots[i] = &arg_params[i];
+  }
+
   for (uint i = 0; i < arg_count; i++) {
     const auto *tc = args[i]->get_type_context();
     if (tc != nullptr) {
@@ -1825,10 +1834,10 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
 
   vef_bind_types_args_t bt_args{};
   bt_args.arg_count = arg_count;
-  bt_args.arg_types = arg_types.data();
+  bt_args.arg_types = arg_type_slots.data();
   bt_args.const_values = const_values.data();
   bt_args.const_lengths = const_lengths.data();
-  bt_args.arg_params = arg_params.data();
+  bt_args.arg_params = arg_param_slots.data();
 
   vef_bind_types_result_t bt_result{};
   bt_result.type = VEF_RESULT_VALUE;
