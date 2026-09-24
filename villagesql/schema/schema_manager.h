@@ -21,7 +21,7 @@
 #include <cassert>
 #include "my_inttypes.h"
 #include "sql/dd/dd.h"
-#include "villagesql/include/semver.h"
+#include "villagesql/include/code_base_version.h"
 
 class THD;
 
@@ -147,7 +147,7 @@ class SchemaManager {
    * immediately after any schema updates run during server startup
    * after the schema is written during --initialize
    */
-  static Semver get_version();
+  static CodeBaseVersion get_version();
 
   /**
    * Free resources allocated by SchemaManager. Called during server shutdown.

@@ -31,7 +31,8 @@ namespace villagesql {
 // The git_sha pins the source revision; the three counts describe how far the
 // build tree diverged from that revision. A clean (unmodified) tree has
 // files_added == files_deleted == files_modified == 0. Version information is
-// not captured here; use villagesql::GetBuildVersion() (Semver) for that.
+// not captured here; use villagesql::GetBuildVersion() (CodeBaseVersion) for
+// that.
 struct BuildInfo {
   const char *git_sha;          // full 40-char commit SHA, or "unknown"
   int files_added;              // added + untracked files (git status A, ??)
