@@ -114,7 +114,7 @@ class BindResult {
   // the to_strings you registered for P, so you never format "k=v" by hand.
   template <typename P>
   void set_return(const P &p) {
-    write<P>(&r_->out_return_params, p);
+    write<P>(r_->out_return_params, p);
   }
 
   // Optionally decide argument i's parameters, for an argument the server
@@ -124,7 +124,7 @@ class BindResult {
   template <typename P>
   void set_arg(size_t i, const P &p) {
     if (r_->out_arg_params == nullptr) return;
-    write<P>(&r_->out_arg_params[i], p);
+    write<P>(r_->out_arg_params[i], p);
   }
 
   // Reject the call. The statement is aborted with this message.
