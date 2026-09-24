@@ -96,8 +96,8 @@ class BindArgs {
   size_t size() const { return a_->arg_count; }
 
   BindArgType at(size_t i) const {
-    return BindArgType(&a_->arg_types[i],
-                       a_->arg_params ? &a_->arg_params[i] : nullptr,
+    return BindArgType(a_->arg_types[i],
+                       a_->arg_params ? a_->arg_params[i] : nullptr,
                        a_->const_values ? a_->const_values[i] : nullptr,
                        a_->const_lengths ? a_->const_lengths[i] : 0);
   }
