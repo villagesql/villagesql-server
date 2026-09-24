@@ -122,6 +122,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // declare max_persisted_length, and a parameterized type's resolved
       // persisted_length is checked against it at DDL time, so bounding the
       // declared values bounds every parameterization.
+      // TODO(villagesql-general): address lingering issues for variable_length.
       const int64_t declared_length =
           std::max(maybe_descriptor->persisted_length(),
                    maybe_descriptor->max_persisted_length());
