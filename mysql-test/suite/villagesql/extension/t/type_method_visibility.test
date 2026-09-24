@@ -1,0 +1,18 @@
+# Test SQL visibility defaults for auto-embedded vsql type-operation VDFs.
+
+INSTALL EXTENSION vsql_tarray_test;
+
+--echo # Visible helpers stay callable from SQL.
+CREATE TABLE t1 (val vsql_tarray_test.TARRAY(3));
+INSERT INTO t1 VALUES ('[1,2,3]');
+SELECT vsql_tarray_test.TARRAY::to_string(val) AS roundtrip FROM t1;
+DROP TABLE t1;
+
+--echo # Hidden parameterized helpers are not SQL-callable.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tarray_test.TARRAY::int_to_params(3) AS params_str;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tarray_test.TARRAY::resolve_params('max_size=3,type=float') AS resolved;
+
+UNINSTALL EXTENSION vsql_tarray_test;
