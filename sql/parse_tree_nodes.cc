@@ -1862,6 +1862,7 @@ bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_extension = m_extension;
   // TODO(villagesql-indexing): Execute extended index type.
   DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
+  if (opt_villagesql_custom_index) return false;
   villagesql_error("Extended Index feature not yet implemented", MYF(0));
   return true;
 }
@@ -1870,6 +1871,7 @@ bool PT_index_with_options::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_params = m_params;
   // TODO(villagesql-indexing): Execute extended index WITH parameters.
   DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
+  if (opt_villagesql_custom_index) return false;
   villagesql_error("Extended Index feature not yet implemented", MYF(0));
   return true;
 }
