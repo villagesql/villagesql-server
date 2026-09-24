@@ -319,6 +319,29 @@ bool init_extension_infrastructure() {
   return false;
 }
 
+void run_extension_init_hooks() {
+  VictionaryClient &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return;
+
+  // A hook may run SQL or set one of its own variables, either of which can
+  // take the VictionaryClient lock, so collect the registrations under the
+  // read lock and release it before calling out to the extension. The set is
+  // stable: this runs before the server accepts connections, so no
+  // INSTALL/UNINSTALL EXTENSION can mutate it.
+  std::vector<const vef_registration_t *> targets;
+  {
+    auto guard = vclient.get_read_lock();
+    for (const ExtensionDescriptor *desc :
+         vclient.extension_descriptors().get_all_committed()) {
+      const veb::ExtensionRegistration &reg = desc->registration();
+      if (should_assert_if_null(reg.registration)) continue;
+      targets.push_back(reg.registration);
+    }
+  }
+
+  for (const vef_registration_t *reg : targets) veb::run_extension_on_init(reg);
+}
+
 void depopulate_extension_capabilities() {
   VictionaryClient &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) {
@@ -384,6 +407,9 @@ void depopulate_extension_capabilities() {
     LogVSQL(INFORMATION_LEVEL,
             "Depopulating capabilities for extension '%s' version '%s'",
             target.name.c_str(), target.version.c_str());
+    // The extension's unload hook runs first so it still has its capabilities.
+    // Phase 2 only dlcloses, which is too late for a hook to do anything.
+    veb::run_extension_on_deinit(target.registration);
     services::depopulate_capabilities(
         {.reason = services::UnloadReason::kShutdown}, target.registration);
   }
