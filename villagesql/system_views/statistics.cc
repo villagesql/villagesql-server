@@ -56,8 +56,41 @@ Statistics_base::Statistics_base() {
   m_target_def.add_field(
       FIELD_COLUMN_NAME, "COLUMN_NAME",
       "IF (col.hidden = 'SQL', NULL, col.name COLLATE utf8mb3_tolower_ci)");
+  // A custom index is recorded with icu.order = 'ASC' by the DDL path just as
+  // it is recorded with algorithm = BTREE, so reporting it verbatim claims the
+  // keys are stored in ascending column order -- meaningless for a KNN index.
+  // MySQL's convention is NULL where ordering does not apply, as for HASH and
+  // FULLTEXT, so report NULL for any index villagesql.custom_indexes knows of.
+  //
+  // The index profile's ordering would be the right source -- it is per key
+  // part and per direction, exactly the grain 'A'/'D'/NULL needs -- but it is
+  // memory-only, and a view cannot reach the Victionary. That, not any doubt
+  // about the value, is why this reports NULL. NULL is never false here: it
+  // means "no ordering information", not "unordered".
+  //
+  // TODO(villagesql-indexing): This under-reports for a profile that does
+  // declare an ordering -- 'A' or 'D' would be correct there, and this still
+  // says NULL.
+  //
+  // The fix is at DDL time, not here. add_indexes() already holds the profile
+  // descriptor (villagesql/sql/metadata_modifier.cc:343-365), so it can persist
+  // the resolved ordering into villagesql.custom_index_columns beside the
+  // profile it already records:
+  //
+  //   effective = prof_desc->ordering() & (kp->is_ascending() ? ASC : DESC)
+  //
+  // This view then reads it with one more LEFT JOIN on
+  // (vci.index_id, icu.ordinal_position - 1), with no Victionary access at
+  // execution time.
+  //
+  // Until then the answer is I_S.EXTENSION_INDEX_PROFILES.ORDERING_ASC /
+  // ORDERING_DESC, reached from an index through I_S.CUSTOM_INDEX_COLUMNS on
+  // (PROFILE_EXTENSION_NAME, PROFILE_EXTENSION_VERSION, PROFILE_NAME). That
+  // path is complete today -- it is only STATISTICS reporting it inline that is
+  // missing.
   m_target_def.add_field(FIELD_COLLATION, "COLLATION",
-                         "CASE WHEN icu.order = 'DESC' THEN 'D' "
+                         "CASE WHEN vci.index_id IS NOT NULL THEN NULL "
+                         "WHEN icu.order = 'DESC' THEN 'D' "
                          "WHEN icu.order = 'ASC'  THEN 'A' "
                          "ELSE NULL END");
   m_target_def.add_field(FIELD_SUB_PART, "SUB_PART",
