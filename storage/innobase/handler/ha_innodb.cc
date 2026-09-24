@@ -6649,6 +6649,16 @@ ulong ha_innobase::index_flags(uint key, uint, bool) const {
     return (0);
   }
 
+  /* Report no access flags for a custom (USING EXTENDED) index, so the
+  optimizer does not build a range, ref, ordered-scan, or index-only access path
+  over it.
+  TODO(villagesql-indexing): the ABI has no way for a custom index to declare
+  which of these operations it supports, so we report none; return the
+  operations the index actually supports once the ABI can express them. */
+  if (table_share->key_info[key].custom_index_context != nullptr) {
+    return (0);
+  }
+
   ulong flags = HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER | HA_READ_RANGE |
                 HA_KEYREAD_ONLY | HA_DO_INDEX_COND_PUSHDOWN;
 
@@ -10821,22 +10831,22 @@ int ha_innobase::change_active_index(
     return 1;
   }
 
-  /* A custom index (USING EXTENDED) has no InnoDB B-tree -- its data lives in
-  the extension's own storage and index->page is FIL_NULL. It can only be read
-  through the custom KNN distance scan (a hypergraph-optimizer access path) plus
-  the extension's scan callbacks, never a normal handler index scan. If we let a
-  normal scan open it, btr_cur_open_at_index_side reads a FIL_NULL root page and
-  asserts. This happens when a KNN ORDER BY runs under the classic optimizer,
-  which has no custom-scan access path and falls back to filesort over an index.
-  Refuse the scan and tell the user why. */
+  /* A custom index (USING EXTENDED) has no InnoDB B-tree: its data lives in the
+  extension's own storage, so its root-page number is FIL_NULL. It can only be
+  read through the custom KNN distance scan access path plus the extension's
+  scan callbacks, never a normal handler index scan. If a normal scan opens it,
+  btr_cur_open_at_index_side reads a FIL_NULL root page and asserts. That can
+  happen whenever the optimizer picks an ordinary index scan or a filesort over
+  this index instead of the custom distance scan. Detect that case -- a custom
+  index whose B-tree root is absent -- and refuse the scan with a clear message
+  rather than asserting deep in the B-tree code. */
   if (villagesql::innodb::Custom_index::is_custom(m_prebuilt->index) &&
       m_prebuilt->index->page == FIL_NULL) {
     push_warning_printf(m_user_thd, Sql_condition::SL_WARNING,
                         ER_UNSUPPORTED_EXTENSION,
-                        "Custom index '%s' cannot be scanned directly; a "
-                        "distance query over it "
-                        "requires the hypergraph optimizer "
-                        "(SET optimizer_switch='hypergraph_optimizer=on').",
+                        "Custom index '%s' cannot be scanned directly; it can "
+                        "only serve a nearest-neighbour distance ordering "
+                        "(ORDER BY <distance>(col, const) LIMIT k).",
                         m_prebuilt->index->name());
     m_prebuilt->index_usable = false;
     return HA_ERR_WRONG_COMMAND;
@@ -17174,10 +17184,10 @@ ha_rows ha_innobase::records_in_range(
     goto func_exit;
   }
   /* A custom index (USING EXTENDED) has no InnoDB B-tree to range-scan. Report
-  the range as un-estimatable so the (classic) optimizer never chooses it for an
+  the range as un-estimatable so the optimizer never chooses it for an ordinary
   index scan -- which would otherwise reach change_active_index /
   btr_cur_open_at_index_side on a FIL_NULL root page. The custom KNN distance
-  scan is costed separately by the hypergraph optimizer. */
+  scan is costed separately, through its own access path. */
   if (villagesql::innodb::Custom_index::is_custom(index) &&
       index->page == FIL_NULL) {
     n_rows = HA_POS_ERROR;
