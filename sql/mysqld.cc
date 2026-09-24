@@ -1266,6 +1266,7 @@ bool opt_no_monitor = false;
 long opt_upgrade_mode = UPGRADE_AUTO;
 bool opt_villagesql_allow_unsafe_dev_upgrade = false;
 bool opt_villagesql_skip_extension_updates = false;
+bool opt_villagesql_custom_index = false;
 long opt_check_table_funs = CHECK_TABLE_FUN_ABORT;
 bool opt_initialize = false;
 bool dd_init_failed_during_upgrade = false;
@@ -11604,6 +11605,14 @@ struct my_option my_long_options[] = {
      "user has access to in a comma delimited list.",
      &utility_user_schema_access, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0,
      0},
+
+    {"villagesql-custom-index", 0,
+     "Enable the custom (USING EXTENDED) index feature. The feature is not yet "
+     "implemented for release; off by default, CREATE/ALTER ... INDEX ... "
+     "USING "
+     "EXTENDED is rejected. Intended for development and benchmarking only.",
+     &opt_villagesql_custom_index, &opt_villagesql_custom_index, nullptr,
+     GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
