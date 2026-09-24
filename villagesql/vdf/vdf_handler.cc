@@ -15,11 +15,13 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <optional>
 #include <type_traits>
 
 #include "lex_string.h"
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"
+#include "scope_guard.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"
 #include "sql/item.h"
@@ -211,6 +213,28 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
     }
   }
 
+  // If fix_fields bails out after prerun allocated user_data, the caller
+  // (Item_udf_func::fix_fields) drops this handler without calling cleanup(),
+  // so postrun would never run and prerun's allocation would leak. Run postrun
+  // on any such early return. On success, we release() this and cleanup() owns
+  // postrun as usual. Mirrors the cleanup_guard in udf_handler::fix_fields.
+  bool prerun_completed = false;
+  auto run_postrun = [&]() {
+    if (prerun_completed) {
+      vef_postrun_args_t postrun_args{};
+      postrun_args.user_data = m_vdf_args.user_data;
+      vef_postrun_result_t postrun_result{};
+      m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
+    }
+  };
+  // Only arm the guard when the extension actually has a postrun. A prerun-only
+  // VDF has nothing to tear down, so we skip constructing the guard entirely
+  // instead of building one that no-ops.
+  std::optional<decltype(create_scope_guard(run_postrun))> postrun_guard;
+  if (m_udf->vdf_func_desc->postrun != nullptr) {
+    postrun_guard.emplace(create_scope_guard(run_postrun));
+  }
+
   // Call prerun if present
   if (m_udf->vdf_func_desc->prerun) {
     vef_prerun_args_t prerun_args{};
@@ -265,8 +289,15 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
 
     // Store user_data for subsequent calls
     m_vdf_args.user_data = prerun_result.user_data;
+    prerun_completed = true;
 
     // Handle buffer size request
+    // debug point here to explicitly and deterministically test what it looks
+    // like if there is a post-prerun buffer allocation failure.
+    DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    });
     if (MaybeResizeBuffer(prerun_result.result_buffer_size)) return true;
   }
 
@@ -300,6 +331,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   }
 
   m_active = true;
+  // success: cleanup() owns postrun from here (no-op if no guard was armed).
+  if (postrun_guard) postrun_guard->release();
   return false;
 }
 
