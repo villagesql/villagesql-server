@@ -175,8 +175,10 @@ static bool validate_type_vdf_signature(
 }
 
 // Helper to resolve a VDF name for a type operation that also has a direct
-// function pointer.  Checks mutual exclusion (both set = error), validates
-// the name convention, looks up the VDF, and validates its signature.
+// function pointer.  Enforces that exactly one of the two is set for a
+// required operation (both = error, and neither = error unless the operation
+// is optional), validates the name convention, looks up the VDF, and
+// validates its signature.
 // Returns: resolved VDF pointer (or nullptr if not VDF-based).
 // Sets *error = true on validation failure.
 static const vef_func_desc_t *resolve_type_vdf(
@@ -186,9 +188,20 @@ static const vef_func_desc_t *resolve_type_vdf(
     const std::string &extension_name, unsigned int expected_param_count,
     const vef_type_id expected_param_ids[],
     const char *expected_custom_params[], vef_type_id expected_return_id,
-    const char *expected_custom_return, bool *error) {
+    const char *expected_custom_return, bool required, bool *error) {
+  *error = false;
   if (func_ptr != nullptr && vdf_name != nullptr) {
     LogVSQL(ERROR_LEVEL, "Type '%s' in extension '%s' sets both %s and %s",
+            type_name.c_str(), extension_name.c_str(), func_label, vdf_label);
+    *error = true;
+    return nullptr;
+  }
+  // The other half of "exactly one": neither set leaves the operation with no
+  // implementation at all.
+  if (func_ptr == nullptr && vdf_name == nullptr && required) {
+    LogVSQL(ERROR_LEVEL,
+            "Type '%s' in extension '%s' sets neither %s nor %s (exactly one "
+            "is required)",
             type_name.c_str(), extension_name.c_str(), func_label, vdf_label);
     *error = true;
     return nullptr;
@@ -300,26 +313,30 @@ std::optional<TypeDescriptor> build_type_descriptor_v3(
   const vef_func_desc_t *encode_vdf = resolve_type_vdf(
       td->encode_vdf_name, reinterpret_cast<const void *>(td->encode_func),
       "encode_func", "encode_vdf_name", reg, td, type_name, extension_name, 1,
-      string_id, no_custom, VEF_TYPE_CUSTOM, td->name, &error);
+      string_id, no_custom, VEF_TYPE_CUSTOM, td->name, /*required=*/true,
+      &error);
   if (error) return std::nullopt;
 
   const vef_func_desc_t *decode_vdf = resolve_type_vdf(
       td->decode_vdf_name, reinterpret_cast<const void *>(td->decode_func),
       "decode_func", "decode_vdf_name", reg, td, type_name, extension_name, 1,
-      custom_id, custom_name, VEF_TYPE_STRING, nullptr, &error);
+      custom_id, custom_name, VEF_TYPE_STRING, nullptr, /*required=*/true,
+      &error);
   if (error) return std::nullopt;
 
   const vef_func_desc_t *compare_vdf = resolve_type_vdf(
       td->compare_vdf_name, reinterpret_cast<const void *>(td->compare_func),
       "compare_func", "compare_vdf_name", reg, td, type_name, extension_name, 2,
-      two_custom_ids, two_custom_names, VEF_TYPE_INT, nullptr, &error);
+      two_custom_ids, two_custom_names, VEF_TYPE_INT, nullptr,
+      /*required=*/true, &error);
   if (error) return std::nullopt;
 
   // 2. Resolve hash (optional; VDF or function pointer).
   const vef_func_desc_t *hash_vdf = resolve_type_vdf(
       td->hash_vdf_name, reinterpret_cast<const void *>(td->hash_func),
       "hash_func", "hash_vdf_name", reg, td, type_name, extension_name, 1,
-      custom_id, custom_name, VEF_TYPE_INT, nullptr, &error);
+      custom_id, custom_name, VEF_TYPE_INT, nullptr, /*required=*/false,
+      &error);
   if (error) return std::nullopt;
 
   // 3. Resolve int_to_params / resolve_params (VDF only, no function pointer).

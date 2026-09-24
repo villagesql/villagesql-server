@@ -1621,6 +1621,121 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
+// Contents of one function descriptor. Reads only protocol-1 fields, so it is
+// safe for a descriptor declaring any protocol version. `index` names the slot
+// for descriptors that have no usable name of their own.
+static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
+                            std::string &error_message) {
+  if (f->name == nullptr) {
+    error_message =
+        "invalid func descriptor: no name at index " + std::to_string(index);
+    return true;
+  }
+  if (f->vdf == nullptr) {
+    error_message =
+        std::string("VDF '") + f->name + "' has no vdf function pointer";
+    return true;
+  }
+  if (f->signature == nullptr) {
+    error_message = std::string("VDF '") + f->name + "' has no signature";
+    return true;
+  }
+
+  const vef_signature_t *sig = f->signature;
+  // params is nullptr for a varargs signature by definition; the count is a
+  // sentinel there, not a length, so nothing below it may be indexed.
+  if (sig->param_count != VEF_PARAM_VARARGS) {
+    if (sig->param_count > 0 && sig->params == nullptr) {
+      error_message = std::string("VDF '") + f->name + "' declares " +
+                      std::to_string(sig->param_count) +
+                      " params but the params array is a nullptr";
+      return true;
+    }
+    for (unsigned int i = 0; i < sig->param_count; i++) {
+      if (sig->params[i].id == VEF_TYPE_CUSTOM &&
+          sig->params[i].custom_type == nullptr) {
+        error_message = std::string("VDF '") + f->name + "' param " +
+                        std::to_string(i + 1) +
+                        " is a CUSTOM type but names no type";
+        return true;
+      }
+    }
+  }
+  if (sig->return_type.id == VEF_TYPE_CUSTOM &&
+      sig->return_type.custom_type == nullptr) {
+    error_message = std::string("VDF '") + f->name +
+                    "' returns a CUSTOM type but names no type";
+    return true;
+  }
+  return false;
+}
+
+// Contents of one type descriptor, the counterpart to check_func_desc. Covers
+// only what every protocol requires of a v1 field, which is what lets this run
+// without knowing the negotiated protocol: a name to be addressed by, and a
+// decode buffer size.
+//
+// Deliberately unexamined: persisted_length and the presence of
+// encode/decode/compare. They became protocol-dependent, so they stay with the
+// per-protocol builders that can read those fields.
+static bool check_type_desc(const vef_type_desc_t *t, unsigned int index,
+                            std::string &error_message) {
+  if (t->name == nullptr) {
+    error_message =
+        "invalid type descriptor: no name at index " + std::to_string(index);
+    return true;
+  }
+  if (t->max_decode_buffer_length <= 0) {
+    error_message = std::string("type '") + t->name +
+                    "' declares max_decode_buffer_length " +
+                    std::to_string(t->max_decode_buffer_length) +
+                    " (must be > 0)";
+    return true;
+  }
+  return false;
+}
+
+bool check_vef_registration(const vef_registration_t *registration,
+                            std::string &error_message) {
+  if (registration == nullptr) {
+    error_message = "invalid registration: nullptr";
+    return true;
+  }
+  // Check registration function members.
+  if (registration->func_count > 0 && registration->funcs == nullptr) {
+    error_message =
+        "invalid registration: " + std::to_string(registration->func_count) +
+        " funcs but the funcs array is a nullptr";
+    return true;
+  }
+  for (unsigned int i = 0; i < registration->func_count; i++) {
+    if (registration->funcs[i] == nullptr) {
+      error_message =
+          "invalid registration: func descriptor nullptr at index " +
+          std::to_string(i);
+      return true;
+    }
+    if (check_func_desc(registration->funcs[i], i, error_message)) return true;
+  }
+  // Check registration type members.
+  if (registration->type_count > 0 && registration->types == nullptr) {
+    error_message =
+        "invalid registration: " + std::to_string(registration->type_count) +
+        " types but the types array is a nullptr";
+    return true;
+  }
+  for (unsigned int i = 0; i < registration->type_count; i++) {
+    if (registration->types[i] == nullptr) {
+      error_message =
+          "invalid registration: type descriptor nullptr at index " +
+          std::to_string(i);
+      return true;
+    }
+    if (check_type_desc(registration->types[i], i, error_message)) return true;
+  }
+  return false;
+}
+
 bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
                         std::string &error_message) {
@@ -1662,7 +1777,7 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {
-    error_message = "vef_register returned NULL";
+    error_message = "vef_register returned nullptr";
     dlclose(handle);
     return true;
   }
@@ -1670,6 +1785,7 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
   const vef_protocol_t negotiated_protocol =
       std::min(max_protocol, reg->protocol);
 
+  // TODO(villagesql-general): Use create_scope_guard for cleanup.
   if (reg->error_msg != nullptr) {
     error_message =
         std::string("vef_register returned an error: ") + reg->error_msg;
@@ -1692,9 +1808,17 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
     return true;
   }
 
-  // TODO(villagesql-production): Add more validation of the returned
-  // registration object (e.g. func/type descriptors, protocol version, null
-  // pointers).
+  // Establish the invariants every consumer of the registration relies on:
+  // funcs[] and types[] hold exactly count non-NULL descriptors, each function
+  // descriptor is callable and describable, and each type descriptor is named
+  // and decodable. What stays with the per-protocol builders is the
+  // protocol-dependent half; see check_vef_registration().
+  if (check_vef_registration(reg, error_message)) {
+    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
+    vef_unregister(&unregister_arg, reg);
+    dlclose(handle);
+    return true;
+  }
 
   LogVSQL(INFORMATION_LEVEL,
           "Successfully loaded VEF extension '%s' (protocol %d, %d funcs, %d "

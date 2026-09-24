@@ -189,6 +189,40 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
                         std::string &error_message);
 
+// Checks the registration returned by vef_register against the invariants
+// every consumer of it relies on, so that each one is stated and enforced
+// once here rather than rediscovered (or forgotten) downstream:
+//
+//   - funcs[] and types[] hold exactly func_count/type_count non-NULL
+//     descriptors. Consumers walk these arrays on the count alone --
+//     parse_extension_registration(), RunUpdatePreCheck() and the
+//     extension_registration system view.
+//   - every function descriptor is callable and describable: it has a name,
+//     a vdf pointer, a signature, a params array matching its param_count,
+//     and a named type wherever it declares VEF_TYPE_CUSTOM. validate.cc
+//     dereferences signature unconditionally, vdf_handler calls vdf with no
+//     NULL check, and the CUSTOM type name is otherwise only guarded by a
+//     debug assert in types/util.cc.
+//   - every type descriptor has a name and a positive
+//     max_decode_buffer_length. RunUpdatePreCheck reads the name to decide
+//     which types a target version keeps, and TypeDecoder allocates the
+//     buffer size.
+//
+// Only protocol-1 fields are read, so this applies to every extension
+// regardless of the protocol it declares.
+//
+// This is what a registration must *be*, not what a server will accept from
+// it: semantic rules (identifier legality, aggregate callback pairing,
+// duplicate names, buffer lengths) stay in parse_extension_registration(),
+// which has the extension name and protocol context to report them well.
+//
+// Called by open_vef_extension(); exposed for unit testing.
+//
+// Returns false when the registration is well formed, true on error (a
+// message is written to error_message).
+bool check_vef_registration(const vef_registration_t *registration,
+                            std::string &error_message);
+
 // Symmetric counterpart to open_vef_extension: vef_unregister + dlclose, no
 // capability depopulate. Pair with open_vef_extension. Calling this on a
 // registration obtained from the full load_vef_extension would leak
