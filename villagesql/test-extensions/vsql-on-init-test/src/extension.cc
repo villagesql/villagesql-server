@@ -25,10 +25,8 @@
 //
 // The marker path lives under MYSQL_TMP_DIR (set by mysql-test-run and
 // inherited by the server process) so it is per-run and cleaned up with the
-// test vardir; it falls back to /tmp when that env var is absent. on_init /
-// on_deinit run at extension load/unload -- before/after any SQL -- so a sys
-// var cannot supply the path, and getenv() is the natural channel for
-// load-time code.
+// test vardir; it falls back to /tmp when that env var is absent. This
+// extension declares no capabilities, so getenv() is its only input.
 
 #include <cstdio>
 #include <cstdlib>
@@ -52,10 +50,11 @@ static void append_marker(const char *line) {
   }
 }
 
-// Runs extension-side, once, after the extension is validated and accepted.
+// Runs once at load, after the extension is accepted and its capabilities are
+// populated.
 static void on_init_hook() { append_marker("on_init"); }
 
-// Runs extension-side at unload (UNINSTALL / shutdown).
+// Runs at unload (UNINSTALL / shutdown), before capabilities are depopulated.
 static void on_deinit_hook() { append_marker("on_deinit"); }
 
 VEF_GENERATE_ENTRY_POINTS(

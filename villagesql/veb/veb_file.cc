@@ -22,8 +22,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <string_view>
 #include <system_error>
+#include <unordered_set>
 #include <vector>
 
 #include "my_config.h"
@@ -1026,6 +1028,9 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
+  // TODO(villagesql-production): unload on the failure paths below, as
+  // INSTALL EXTENSION does with a scope guard. The pending-update rollback
+  // continues past them, dropping the handle with capabilities populated.
   std::string reg_error;
   std::optional<ValidatedRegistration> validated = parse_extension_registration(
       *registration, extension_name, expected_version, reg_error);
@@ -1692,6 +1697,20 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
     return true;
   }
 
+  // The SDK rejects a half-registered pair at compile time; an extension that
+  // arrives with one anyway was not built by it.
+  if (reg->protocol >= VEF_PROTOCOL_4 &&
+      (reg->on_init == nullptr) != (reg->on_deinit == nullptr)) {
+    error_message =
+        reg->on_init == nullptr
+            ? "extension registers an on_deinit hook without an on_init"
+            : "extension registers an on_init hook without an on_deinit";
+    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
+    vef_unregister(&unregister_arg, reg);
+    dlclose(handle);
+    return true;
+  }
+
   // TODO(villagesql-production): Add more validation of the returned
   // registration object (e.g. func/type descriptors, protocol version, null
   // pointers).
@@ -1725,6 +1744,43 @@ void close_vef_extension(const ExtensionRegistration &registration) {
   dlclose(registration.dlhandle);
 }
 
+namespace {
+
+// Registrations the server has taken through the load-hook point, and which
+// are therefore owed an unload hook. Tracking it is what keeps the two hooks
+// symmetric: an extension the server rejected, or one whose startup aborted
+// before run_extension_init_hooks(), must not see an unload it was never told
+// about.
+std::mutex g_load_hook_mutex;
+std::unordered_set<const vef_registration_t *> g_load_hook_done;
+
+// True when the registration carries the hook fields at all. An extension
+// built against an older SDK has no such member for us to read, so the
+// protocol gates the field rather than the value.
+bool has_lifecycle_hooks(const vef_registration_t *reg) {
+  return reg != nullptr && reg->protocol >= VEF_PROTOCOL_4;
+}
+
+}  // namespace
+
+void run_extension_on_init(const vef_registration_t *reg) {
+  if (!has_lifecycle_hooks(reg)) return;
+  {
+    std::lock_guard<std::mutex> lock(g_load_hook_mutex);
+    if (!g_load_hook_done.insert(reg).second) return;
+  }
+  if (reg->on_init != nullptr) reg->on_init();
+}
+
+void run_extension_on_deinit(const vef_registration_t *reg) {
+  if (!has_lifecycle_hooks(reg)) return;
+  {
+    std::lock_guard<std::mutex> lock(g_load_hook_mutex);
+    if (g_load_hook_done.erase(reg) == 0) return;
+  }
+  if (reg->on_deinit != nullptr) reg->on_deinit();
+}
+
 bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
                         const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
@@ -1752,6 +1808,17 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
     registration.unregister_func = nullptr;
     return true;
   }
+
+  // Capabilities are live from here, so the extension's own load hook can use
+  // them. Nothing has called into the extension's functions yet.
+  //
+  // Startup is the exception: extensions load from init_server_components(),
+  // and the server does not apply persisted system-variable values until well
+  // after that, so a hook run here would read declared defaults. The startup
+  // path runs the hooks itself once that pass is done (see
+  // run_extension_init_hooks() in villagesql/sql/initialize.h).
+  if (ctx.reason != villagesql::services::LoadReason::kStartup)
+    run_extension_on_init(registration.registration);
   return false;
 }
 
@@ -1762,6 +1829,9 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
   }
 
   if (registration.registration != nullptr) {
+    // Mirror of load: the unload hook runs while the capabilities it was
+    // handed in on_init are still populated.
+    run_extension_on_deinit(registration.registration);
     villagesql::services::depopulate_capabilities(ctx,
                                                   registration.registration);
   }
