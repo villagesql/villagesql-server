@@ -5509,7 +5509,9 @@ class handler {
 
     @param keynr  key number, indexing table->key_info[] (same numbering the
                   engine uses).
-    @param[out] out  filled with the loaded handle on success.
+    @param[out] out  filled with the loaded handle on success. On failure it is
+                     not read from; the caller must treat a true return as
+                     "no custom scan" and not use @p out.
 
     @retval false  @p keynr is a custom index and @p out was filled.
     @retval true   not a custom index, or the engine does not support custom

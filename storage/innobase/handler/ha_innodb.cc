@@ -10740,6 +10740,9 @@ dict_index_t *ha_innobase::innobase_get_index(
 
 bool ha_innobase::get_custom_index_handle(uint keynr,
                                           villagesql::CustomIndexHandle *out) {
+  // Clear first, so *out is fully null after any early return -- the function's
+  // correctness does not depend on the caller pre-zeroing the handle.
+  *out = {};
   dict_index_t *index = innobase_get_index(keynr);
   if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index) ||
       index->custom_index == nullptr) {
