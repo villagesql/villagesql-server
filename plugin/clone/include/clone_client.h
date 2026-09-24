@@ -332,8 +332,9 @@ struct Client_Share {
   /** Maximum number of concurrent threads for current operation. */
   const uint32_t m_max_concurrency;
 
-  /** Negotiated protocol version */
-  uint32_t m_protocol_version;
+  /** Negotiated protocol version. Atomic: every worker sets it from its own
+  COM_RES_LOCS response, so the writes overlap even though the value agrees. */
+  std::atomic<uint32_t> m_protocol_version;
 
   /** Clone storage vector */
   Storage_Vector m_storage_vec;

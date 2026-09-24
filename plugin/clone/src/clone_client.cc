@@ -1375,8 +1375,9 @@ int Client::serialize_ack_cmd(size_t &buf_len) {
 }
 
 int Client::serialize_init_cmd(size_t &buf_len) {
-  /* Add length of protocol Version */
-  buf_len = sizeof(m_share->m_protocol_version);
+  /* Add length of protocol Version. Sized from the value type, not the atomic
+  itself, whose size the standard does not tie to it. */
+  buf_len = sizeof(decltype(m_share->m_protocol_version)::value_type);
 
   /* Add length for DDL timeout value */
   buf_len += 4;
