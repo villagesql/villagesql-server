@@ -10737,6 +10737,19 @@ dict_index_t *ha_innobase::innobase_get_index(
   return index;
 }
 
+bool ha_innobase::get_custom_index_handle(uint keynr, CustomIndexHandle *out) {
+  dict_index_t *index = innobase_get_index(keynr);
+  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index) ||
+      index->custom_index == nullptr) {
+    return true;
+  }
+  villagesql::innodb::Custom_index *ci = index->custom_index;
+  out->index_ctx = ci->index_ctx();
+  out->storage_ctx = ci->storage_ctx();
+  out->intf = &ci->interface();
+  return false;
+}
+
 bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
                                           uchar *buf, char *error_msg,
                                           uint error_msg_len) {
