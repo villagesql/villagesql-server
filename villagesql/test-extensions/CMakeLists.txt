@@ -36,6 +36,8 @@ vsql_add_test_extension(vsql-sys-var-rollback-test     vsql_sys_var_rollback_tes
 vsql_add_test_extension(vsql-session-var-test          vsql_session_var_test)
 vsql_add_test_extension(vsql-noop-test                 vsql_noop_test)
 vsql_add_test_extension(vsql-on-init-test              vsql_on_init_test)
+vsql_add_test_extension(vsql-deinit-only-test          vsql_deinit_only_test)
+vsql_add_test_extension(vsql-init-only-test            vsql_init_only_test)
 vsql_add_test_extension(vsql-ext-index-test            vsql_ext_index_test)
 
 # mysql_services capability test extensions consume raw MySQL component
