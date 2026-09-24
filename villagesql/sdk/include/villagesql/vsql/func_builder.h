@@ -33,6 +33,7 @@
 #include <tuple>
 #include <type_traits>
 
+#include <villagesql/vsql/bind_check_types.h>
 #include <villagesql/vsql/func_types.h>
 #include <villagesql/vsql/pre_post_run.h>
 #include <villagesql/vsql/type_params.h>
@@ -203,6 +204,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -227,6 +229,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     return next;
   }
 
@@ -247,6 +250,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     return next;
   }
 
@@ -286,6 +290,29 @@ class FuncBuilder {
     return *this;
   }
 
+  // Install a type binding/checking hook. Called once at resolution time,
+  // before any row is read, to work out the return type's parameters -- and,
+  // where needed, individual arguments' -- when the built-in rules cannot.
+  //
+  // Use it when the relationship between argument and return parameters is
+  // something the defaults cannot express (e.g. pvec_concat(PVEC(M), PVEC(N))
+  // -> PVEC(M+N)), or when the return parameters come from a constant argument
+  // value (e.g. TYPEID('user') -> typeid(prefix=user)).
+  //
+  //   void my_hook(vsql::BindArgs args, vsql::BindResult out);
+  template <auto Hook>
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &
+  bind_and_check_types() {
+    static_assert(detail::is_typed_bind<Hook>(),
+                  "bind_and_check_types<Hook>(): Hook must be void(BindArgs, "
+                  "BindResult). Raw ABI signatures are not accepted.");
+    static_assert(Mode != ParamMode::kVarargs,
+                  "declaring both .bind_and_check_types() and .varargs() "
+                  "is not currently supported");
+    bind_ = &detail::typed_bind_wrapper<Hook>;
+    return *this;
+  }
+
   template <auto Hook>
   constexpr FuncBuilder<Func, NumParams, Mode, true> prerun() const {
     static_assert(detail::is_typed_prerun<Hook>(),
@@ -299,6 +326,7 @@ class FuncBuilder {
     next.prerun_ = &detail::typed_prerun_wrapper<Hook>;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -410,6 +438,7 @@ class FuncBuilder {
 
     meta.prerun = prerun_;
     meta.postrun = postrun_;
+    meta.bind = bind_;
     meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
@@ -431,7 +460,8 @@ class FuncBuilder {
         max_result_length_(0),
         prerun_(nullptr),
         postrun_(nullptr),
-        deterministic_(false) {}
+        deterministic_(false),
+        bind_(nullptr) {}
 
   const char *name_;
   const char *return_type_;
@@ -441,6 +471,7 @@ class FuncBuilder {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   bool deterministic_;
+  vef_bind_types_func_t bind_;
 
   template <auto F, size_t M, ParamMode N, bool HP>
   friend class FuncBuilder;

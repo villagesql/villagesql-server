@@ -32,6 +32,7 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/vsql/bind_check_types.h>
 #include <villagesql/vsql/func_types.h>
 #include <villagesql/vsql/pre_post_run.h>
 #include <villagesql/vsql/type_params.h>
@@ -289,7 +290,8 @@ struct FuncWithMetadata {
         deterministic(false),
         is_varargs(false),
         check_params_cache_bound(nullptr),
-        check_signature(nullptr) {}
+        check_signature(nullptr),
+        bind(nullptr) {}
 
   vef_vdf_func_t f;
   vef_prerun_func_t prerun;
@@ -309,6 +311,7 @@ struct FuncWithMetadata {
   bool (*check_params_cache_bound)();
   const char *(*check_signature)(const vef_type_t *, size_t,
                                  const vef_type_t &);
+  vef_bind_types_func_t bind;
 };
 
 // Extracts the params type P from a type operation function pointer,
@@ -396,6 +399,23 @@ void typed_postrun_wrapper(vef_context_t *, vef_postrun_args_t *args,
 // Predicates used by FuncBuilder::prerun/postrun to decide which wrapper
 // (if any) to install. Each is true exactly when the hook's signature
 // matches the typed shape for its slot.
+
+template <auto Hook>
+void typed_bind_wrapper(vef_context_t *, vef_bind_types_args_t *args,
+                        vef_bind_types_result_t *result) {
+  Hook(BindArgs(args), BindResult(result));
+}
+
+template <auto Hook>
+constexpr bool is_typed_bind() {
+  using Params = typename FuncParamTypes<decltype(Hook)>::type;
+  if constexpr (std::tuple_size_v<Params> != 2) {
+    return false;
+  } else {
+    return std::is_same_v<std::tuple_element_t<0, Params>, BindArgs> &&
+           std::is_same_v<std::tuple_element_t<1, Params>, BindResult>;
+  }
+}
 
 template <auto Hook>
 constexpr bool is_typed_prerun() {
@@ -772,33 +792,7 @@ struct TypeEncodeWithCacheVdfWrapper {
       std::map<std::string, std::string> m;
       type_params_cache_for<P>().to_strings(maybe_params.value(), m);
 
-      // Single-pass greedy write into the caller's buffer. If a pair (with
-      // its leading comma if not first) won't fit, stop writing but keep
-      // iterating to accumulate `needed` for the snprintf-style overflow
-      // signal. Caller retries with a larger buffer.
-      char *const buf_begin = result->out_type_params->buf;
-      const size_t cap = result->out_type_params->max_buf_len;
-      char *p = buf_begin;
-      size_t needed = 0;
-      bool ok = true;
-      bool first = true;
-      for (const auto &[k, v] : m) {
-        const size_t pair_size = (first ? 0u : 1u) + k.size() + 1u + v.size();
-        if (ok && static_cast<size_t>(p - buf_begin) + pair_size <= cap) {
-          if (!first) *p++ = ',';
-          std::memcpy(p, k.data(), k.size());
-          p += k.size();
-          *p++ = '=';
-          std::memcpy(p, v.data(), v.size());
-          p += v.size();
-        } else {
-          ok = false;
-        }
-        needed += pair_size;
-        first = false;
-      }
-      result->out_type_params->actual_len = needed;
-      result->out_type_params->overflow = !ok;
+      write_params_to(result->out_type_params, m);
     }
   }
 };
@@ -1098,6 +1092,7 @@ struct StaticFuncDesc {
   bool (*check_params_cache_bound_)();
   const char *(*check_signature_)(const vef_type_t *, size_t,
                                   const vef_type_t &);
+  vef_bind_types_func_t bind_;
 
   constexpr const char *name() const { return name_; }
   // For varargs: reports VEF_PARAM_VARARGS so materialize_func_desc writes
@@ -1131,6 +1126,7 @@ struct StaticFuncDesc {
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr vef_vdf_clear_func_t clear() const { return clear_; }
   constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
+  constexpr vef_bind_types_func_t bind() const { return bind_; }
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -1146,7 +1142,8 @@ struct StaticFuncDesc {
         deterministic_(meta.deterministic),
         is_varargs_(meta.is_varargs),
         check_params_cache_bound_(meta.check_params_cache_bound),
-        check_signature_(meta.check_signature) {
+        check_signature_(meta.check_signature),
+        bind_(meta.bind) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }
