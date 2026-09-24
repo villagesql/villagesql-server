@@ -633,13 +633,15 @@ typedef struct {
   // Number of arguments to the call.
   unsigned int arg_count;
 
-  // Declared type of each argument. Array has arg_count elements.
-  const vef_type_t *arg_types;
+  // Declared type of each argument. Array has arg_count elements, each
+  // non-nullptr.
+  const vef_type_t **arg_types;
 
   // For each argument that is a constant STRING: its text bytes. nullptr for
-  // every other argument, including a constant of a custom type. This is
-  // what lets a hook derive a type from a literal, e.g. TYPEID('user').
-  // Array has arg_count elements.
+  // every other argument, including a constant of a custom type.
+  // In case of parametrized custom type, for which paramters are unknown,
+  // bind_and_check_types can be used to provide parameters for this type,
+  // based on the constant STRING.
   char **const_values;
 
   // Length of each constant value. Only valid where const_values[i] != NULL.
@@ -652,8 +654,8 @@ typedef struct {
   // or is a non-custom argument, or is a non-parameterized custom type, or
   // is a custom type whose parameters are not yet known - then the
   // corresponding arg_params entry will have its count == 0.
-  // Array has arg_count elements;
-  const vef_type_params_t *arg_params;
+  // Array has arg_count elements, each non-nullptr.
+  const vef_type_params_t **arg_params;
 } vef_bind_types_args_t;
 
 typedef struct {
