@@ -1391,6 +1391,7 @@ ulonglong replica_type_conversions_options;
 ulong opt_mts_replica_parallel_workers;
 ulonglong opt_mts_pending_jobs_size_max;
 bool opt_replica_preserve_commit_order;
+bool opt_replica_translate_deprecated_priv;
 #ifndef NDEBUG
 uint replica_rows_last_search_algorithm_used;
 #endif
@@ -9354,7 +9355,16 @@ class Plugin_and_data_dir_option_parser final {
     /* Backup mysql_real_data_home */
     if (mysql_real_data_home[0])
       memcpy(save_homedir_, mysql_real_data_home, strlen(mysql_real_data_home));
-    if (datadir_ != nullptr) {
+    /*
+      An empty value must not clobber the global. Before the buffer was
+      cleared before copying, an empty datadir_ copied zero bytes and thus
+      left the already initialized default in place. Clearing it first would
+      instead leave mysql_real_data_home empty, which breaks every path
+      derived from it - and trips the assert in
+      initialize_manifest_file_components() right after this parser runs.
+      Keep the default in that case, as if --datadir was not given at all.
+    */
+    if (datadir_ != nullptr && datadir_[0] != '\0') {
       memset(mysql_real_data_home, 0, sizeof(mysql_real_data_home));
       strncpy(mysql_real_data_home, datadir_, sizeof(mysql_real_data_home) - 1);
       mysql_real_data_home[sizeof(mysql_real_data_home) - 1] = '\0';
@@ -9364,7 +9374,8 @@ class Plugin_and_data_dir_option_parser final {
     if (opt_plugin_dir[0])
       memcpy(save_plugindir_, opt_plugin_dir,
              std::min(static_cast<size_t>(FN_REFLEN), strlen(opt_plugin_dir)));
-    if (plugindir_ != nullptr) {
+    /* Same reasoning as for mysql_real_data_home above. */
+    if (plugindir_ != nullptr && plugindir_[0] != '\0') {
       memset(opt_plugin_dir, 0, sizeof(opt_plugin_dir));
       strncpy(opt_plugin_dir, plugindir_, sizeof(opt_plugin_dir) - 1);
       opt_plugin_dir[sizeof(opt_plugin_dir) - 1] = '\0';
@@ -12090,6 +12101,19 @@ static int show_telemetry_traces_support(THD * /*unused*/, SHOW_VAR *var,
   return 0;
 }
 
+/** ON iff libcoredumper is linked in and --coredumper is in effect. */
+static int show_libcoredumper_enabled(THD * /*unused*/, SHOW_VAR *var,
+                                      char *buf) {
+  var->type = SHOW_BOOL;
+  var->value = buf;
+#if HAVE_LIBCOREDUMPER
+  *(pointer_cast<bool *>(buf)) = opt_libcoredumper;
+#else
+  *(pointer_cast<bool *>(buf)) = false;
+#endif
+  return 0;
+}
+
 static int show_deprecated_use_i_s_processlist_count(THD *, SHOW_VAR *var,
                                                      char *buf) {
   var->type = SHOW_LONG;
@@ -12278,6 +12302,8 @@ SHOW_VAR status_vars[] = {
     {"Last_query_partial_plans",
      (char *)offsetof(System_status_var, last_query_partial_plans),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_SESSION},
+    {"Libcoredumper_enabled", (char *)&show_libcoredumper_enabled, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
     {"Locked_connects", (char *)&locked_account_connection_count, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
     {"Max_execution_time_exceeded",
