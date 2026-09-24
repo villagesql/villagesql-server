@@ -1807,17 +1807,21 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
     }
   }
 
-  // One output slot per argument, plus one for the return type.
+  // One output slot per argument, plus one for the return type. The ABI hands
+  // the hook an array of pointers rather than the slots themselves.
   std::vector<vef_inferred_type_params_t> out_args(arg_count);
+  std::vector<vef_inferred_type_params_t *> out_arg_slots(arg_count);
   std::vector<char> arg_bufs(arg_count * kBindParamsBufLen);
   for (uint i = 0; i < arg_count; i++) {
     out_args[i] = {};
     out_args[i].buf = arg_bufs.data() + i * kBindParamsBufLen;
     out_args[i].max_buf_len = kBindParamsBufLen;
+    out_arg_slots[i] = &out_args[i];
   }
 
   char return_buf[kBindParamsBufLen];
   char err_msg[VEF_MAX_ERROR_LEN] = {0};
+  vef_inferred_type_params_t out_return{};
 
   vef_bind_types_args_t bt_args{};
   bt_args.arg_count = arg_count;
@@ -1829,9 +1833,10 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
   vef_bind_types_result_t bt_result{};
   bt_result.type = VEF_RESULT_VALUE;
   bt_result.error_msg = err_msg;
-  bt_result.out_return_params.buf = return_buf;
-  bt_result.out_return_params.max_buf_len = sizeof(return_buf);
-  bt_result.out_arg_params = arg_count > 0 ? out_args.data() : nullptr;
+  out_return.buf = return_buf;
+  out_return.max_buf_len = sizeof(return_buf);
+  bt_result.out_return_params = &out_return;
+  bt_result.out_arg_params = arg_count > 0 ? out_arg_slots.data() : nullptr;
 
   bind_and_check(ctx, &bt_args, &bt_result);
 
@@ -1841,15 +1846,14 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
              err_msg[0] ? err_msg : "bind_and_check_types failed");
     return true;
   }
-  if (bt_result.out_return_params.overflow) {
+  if (out_return.overflow) {
     my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name,
              "bind_and_check_types: return params buffer overflow");
     return true;
   }
-  if (bt_result.out_return_params.actual_len > 0 &&
-      out_return_params != nullptr) {
-    *out_return_params = TypeParameters(
-        std::string(return_buf, bt_result.out_return_params.actual_len));
+  if (out_return.actual_len > 0 && out_return_params != nullptr) {
+    *out_return_params =
+        TypeParameters(std::string(return_buf, out_return.actual_len));
   }
 
   for (uint i = 0; i < arg_count; i++) {
