@@ -133,6 +133,21 @@ class Custom_index {
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
                         const dtuple_t *entry, bool dup_chk_only);
 
+  // Resolves a stable column reference (the ref the extension stores per index
+  // entry for a HAS_COLUMN_REF index) to the owning row's identity: the primary
+  // key bytes ("rowid_prefix") that were snapshotted when the SVECTOR value was
+  // inserted into the column store. Custom indexes require a single-column key,
+  // so this is that one PK column -- or, for a PK-less table, InnoDB's
+  // synthetic DB_ROW_ID (in both cases, field 0 of the clustered index). The
+  // bytes are in InnoDB native clustered-storage format and are copied into
+  // `out` (a caller-owned buffer of capacity `out_cap`); `*out_len` is set to
+  // the byte count. Returns false on success, true on error (writes error_msg).
+  static bool col_ref_to_rowid(const dict_index_t *index,
+                               vef_storage_col_ref_t key_ref,
+                               unsigned char *out, uint32_t out_cap,
+                               uint32_t *out_len, char *error_msg,
+                               uint32_t error_msg_len);
+
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.
   template <typename Index>
