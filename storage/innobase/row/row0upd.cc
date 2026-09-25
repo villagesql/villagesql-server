@@ -80,6 +80,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "dict0dd.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
+#include "villagesql/services/capability_registry.h"
 #endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_HOTBACKUP
@@ -3115,6 +3117,37 @@ func_exit:
 
   ut_ad(lock_trx_has_rec_x_lock(thr, index->table, pcur->get_block(),
                                 page_rec_get_heap_no(rec)));
+
+  // TODO(villagesql-indexing): DELETE, and any UPDATE that changes an index
+  // ordering field, are not supported on a table with a custom index (USING
+  // EXTENDED): the custom index has no B-tree, so its secondary-entry
+  // maintenance below would drive btr_cur into a FIL_NULL root page and assert.
+  // This covers both a change to the custom index's own key column and a
+  // primary key change (which forces all secondary indexes, including the
+  // custom one, to be rebuilt). Reject here, before the clustered record is
+  // modified below, so there is nothing to undo -- rejecting after the
+  // clustered change would roll back through the same custom-index path and
+  // still crash. A payload-only UPDATE (UPD_NODE_NO_ORD_CHANGE) changes no
+  // ordering field and is left to proceed.
+  if (vsql_allow_preview_extensions &&
+      (node->is_delete || !(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE))) {
+    for (const dict_index_t *sec = index->next(); sec != nullptr;
+         sec = sec->next()) {
+      if (villagesql::innodb::Custom_index::is_custom(sec)) {
+        // Reason is set on the trx (not logged) so the client sees it via the
+        // DB_VILLAGESQL_ERROR mapping in convert_error_code_to_mysql.
+        trx_set_detailed_error(
+            trx, node->is_delete
+                     ? "DELETE on a table with a custom index (USING EXTENDED)"
+                       " is not supported yet."
+                     : "UPDATE that changes an indexed column on a table with a"
+                       " custom index (USING EXTENDED) is not supported yet.");
+        mtr_commit(&mtr);
+        err = DB_VILLAGESQL_ERROR;
+        goto exit_func;
+      }
+    }
+  }
 
   /* NOTE: the following function calls will also commit mtr */
 
