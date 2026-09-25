@@ -26,3 +26,25 @@ deadlock:find_sys_var_ex
 deadlock:Persisted_variables_cache::lock
 
 signal:my_print_stacktrace
+
+# VillageSQL additions below. Only cycles that are declared in both directions
+# in mysql-test/lock_order_dependencies.txt, in files VillageSQL does not touch
+# and does not call into. Keyed on functions, not files, so a cycle involving
+# our code still reports.
+
+# Relay-log and applier locks, e.g. MYSQL_RELAY_LOG::LOCK_log against
+# Relay_log_info::data_lock.
+deadlock:MYSQL_BIN_LOG::
+deadlock:Relay_log_info::
+deadlock:Rpl_applier_reader::
+deadlock:change_master
+
+# The error log's timestamp-uniqueness counter, reported by TSan as
+# 'log_line_submit(_log_line*)::previous_microtime'. Every thread that writes a
+# log line does an unsynchronized read-modify-write on it; worst case is a
+# duplicated timestamp. Keyed on the variable, so only races on it are hidden.
+race:previous_microtime
+
+# LOCK_system_variables_hash against LOCK_global_system_variables, declared in
+# both directions in mysql-test/lock_order_dependencies.txt.
+deadlock:alloc_and_copy_thd_dynamic_variables
