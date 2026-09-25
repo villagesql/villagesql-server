@@ -96,6 +96,11 @@ struct System_status_var;
 namespace dd {
 class Properties;
 }  // namespace dd
+namespace villagesql {
+// VillageSQL: defined (fully typed) in villagesql/sql/custom_index_handle.h;
+// forward-declared here so handler.h stays free of the preview VEF ABI.
+struct CustomIndexHandle;
+}  // namespace villagesql
 struct AccessPath;
 struct JoinHypergraph;
 struct KEY_CACHE;
@@ -5492,6 +5497,32 @@ class handler {
   int handle_records_error(int error, ha_rows *num_rows);
 
  public:
+  /**
+    VillageSQL: fetch the loaded custom-index handle for key number @p keynr.
+
+    Custom indexes have no B-tree; the storage engine loads the extension's
+    index instance (its vef_index_ctx_t + storage context) at table-open time
+    and owns its lifetime. The SQL-layer custom-index scan uses this to reach
+    that live instance instead of re-loading it, so it scans the engine's
+    actual storage. The handle type (villagesql::CustomIndexHandle) is defined
+    in villagesql/sql/custom_index_handle.h.
+
+    @param keynr  key number, indexing table->key_info[] (same numbering the
+                  engine uses).
+    @param[out] out  filled with the loaded handle on success. On failure it is
+                     not read from; the caller must treat a true return as
+                     "no custom scan" and not use @p out.
+
+    @retval false  @p keynr is a custom index and @p out was filled.
+    @retval true   not a custom index, or the engine does not support custom
+                   indexes — the caller must fall back (no custom scan).
+  */
+  virtual bool get_custom_index_handle(uint keynr [[maybe_unused]],
+                                       villagesql::CustomIndexHandle *out
+                                       [[maybe_unused]]) {
+    return true;
+  }
+
   /**
     VillageSQL: fetch a base-table row via a custom index's stable column
     reference (REF_LOOKUP / HAS_COLUMN_REF read path).
