@@ -355,35 +355,6 @@ TEST_F(ValidateExtensionRegistrationTest,
   EXPECT_EQ(result->funcs.size(), 1u);
 }
 
-// A descriptor that declares protocol 1 has no clear/accumulate fields of its
-// own, even inside a protocol-3 registration, so the pairing rule for those
-// fields does not apply, and accessing them would read past the struct the
-// extension built.
-TEST_F(ValidateExtensionRegistrationTest,
-       ClearWithoutAccumulateIgnoredForV1Descriptor) {
-  vef_type_t ret = {VEF_TYPE_INT, nullptr};
-  vef_signature_t sig = {0, nullptr, ret};
-  vef_func_desc_t fd = make_scalar_func("my_func", &sig);
-  ASSERT_EQ(fd.protocol, VEF_PROTOCOL_1);
-  fd.clear = stub_clear;
-  fd.accumulate = nullptr;
-  vef_func_desc_t *funcs[] = {&fd};
-
-  vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_3;
-  reg.deprecated_extension_name = "my_ext";
-  reg.func_count = 1;
-  reg.funcs = funcs;
-
-  std::string error;
-  auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
-
-  // Unlike V3 or later, V1 with just one of {clear, accumulate} is not checked.
-  ASSERT_TRUE(result.has_value()) << error;
-  EXPECT_EQ(result->funcs.size(), 1u);
-}
-
 // The other half of the rule: when both clear and accumulate callbacks are
 // set, the aggregate is well-formed.
 TEST_F(ValidateExtensionRegistrationTest, ClearWithAccumulateIsAccepted) {

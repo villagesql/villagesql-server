@@ -122,7 +122,11 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // declare max_persisted_length, and a parameterized type's resolved
       // persisted_length is checked against it at DDL time, so bounding the
       // declared values bounds every parameterization.
-      // TODO(villagesql-general): address lingering issues for variable_length.
+      // TODO(villagesql-general): address lingering issues for variable_length:
+      // 1. Incorrect log message for transitions from fixed -> variable and
+      //    variable -> fixed.
+      // 2. Variable length -> Variable length should be rejected if the new
+      //    length is smaller.
       const int64_t declared_length =
           std::max(maybe_descriptor->persisted_length(),
                    maybe_descriptor->max_persisted_length());
@@ -153,12 +157,15 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       std::string func_name(func_desc->name);
 
       // clear/accumulate were added in PROTOCOL_3. Read them only when the
-      // descriptor itself declares v3+ as well as the negotiated protocol, as
-      // applied above to choose a builder. A descriptor declaring an older
-      // protocol was built against a struct that ends before these fields, so
-      // reading them would read past what the extension allocated.
-      if (func_desc->protocol >= VEF_PROTOCOL_3 &&
-          ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
+      // negotiated protocol is v3+. A descriptor declaring an older protocol
+      // was built against a struct that ends before these fields, so reading
+      // them would read past what the extension allocated.
+      if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
+        // The declaration must be v3+ by implication: the SDK stamps every
+        // descriptor and the registration alike, and extensions are not built
+        // against the raw ABI header.
+        assert(func_desc->protocol >= VEF_PROTOCOL_3);
+
         bool has_clear = (func_desc->clear != nullptr);
         bool has_accumulate = (func_desc->accumulate != nullptr);
         if (has_clear != has_accumulate) {

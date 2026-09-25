@@ -16,6 +16,7 @@
 
 #include "villagesql/sql/func_lookup.h"
 
+#include <cassert>
 #include <cstring>
 #include <string>
 
@@ -177,11 +178,16 @@ udf_func *make_udf_func_from_vdf(const FuncDescriptor *desc,
   // NULL check, so promoting on `clear` alone would call through a NULL if a
   // half-declared pair ever reached here. parse_extension_registration()
   // rejects that pair at install time; this keeps the runtime from depending
-  // on a check made in another module. Gated on the descriptor's own protocol
-  // as well as the negotiated one, since a pre-v3 descriptor has neither
-  // field.
-  udf->type = (desc->protocol() >= VEF_PROTOCOL_3 &&
-               func_desc->protocol >= VEF_PROTOCOL_3 && func_desc->clear &&
+  // on a check made in another module.
+  //
+  // clear and accumulate arrived in PROTOCOL_3, and the ABI lets a descriptor
+  // declare an older protocol than its registration, which would put them past
+  // the end of the struct the extension allocated. No supported producer emits
+  // that: the SDK stamps every descriptor and the registration alike, and
+  // extensions are not built against the raw ABI header, so assert.
+  if (desc->protocol() >= VEF_PROTOCOL_3)
+    assert(func_desc->protocol >= VEF_PROTOCOL_3);
+  udf->type = (desc->protocol() >= VEF_PROTOCOL_3 && func_desc->clear &&
                func_desc->accumulate)
                   ? UDFTYPE_AGGREGATE
                   : UDFTYPE_FUNCTION;
