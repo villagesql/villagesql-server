@@ -202,6 +202,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "villagesql/custom_index.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/util.h"
+#include "villagesql/services/capability_registry.h"
 #include "villagesql/sql/custom_index_handle.h"
 #else
 #include <typelib.h>
@@ -2282,10 +2283,19 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
       return HA_ERR_UNSUPPORTED;
     case DB_VILLAGESQL_ERROR:
       if (thd) {
-        villagesql_error(
-            "InnoDB: Custom type operation failed. See server"
-            " error log for details.",
-            MYF(0));
+        // VillageSQL: surface the specific reason to the client when the
+        // failing code set one on the trx (via trx_set_detailed_error);
+        // otherwise fall back to the generic message that points at the server
+        // error log.
+        trx_t *const err_trx = thd_to_trx(thd);
+        if (err_trx != nullptr && *err_trx->detailed_error != 0) {
+          villagesql_error("%s", MYF(0), err_trx->detailed_error);
+        } else {
+          villagesql_error(
+              "InnoDB: Custom type operation failed. See server"
+              " error log for details.",
+              MYF(0));
+        }
       }
       return HA_ERR_GENERIC;
   }
