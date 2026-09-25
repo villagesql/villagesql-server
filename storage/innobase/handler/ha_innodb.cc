@@ -6959,6 +6959,15 @@ bool innobase_match_index_columns(const KEY *key_info,
       return false;
     }
 
+    const dict_col_t *col = innodb_idx_fld->col;
+    if (col->stored_by_extn()) {
+      if (!col->custom_column->matches_mysql_type(key_part->field)) {
+        return false;
+      }
+      innodb_idx_fld++;
+      continue;
+    }
+
     if (col_type != mtype) {
       /* If the col_type we get from mysql type is a geometry
       data type, we should check if mtype is a legacy type
@@ -9860,11 +9869,6 @@ static dberr_t calc_row_difference(
       if (col->stored_by_extn()) {
         // Note that an extended column is updated.
         uvect->update_extended = true;
-
-        // The input buffer is set to nullptr. This is safe because the buffer
-        // is only accessed for DATA_INT.
-        auto *dtype = dfield_get_type(&ufield->old_val);
-        ut_a(dtype->mtype != DATA_INT);
 
         if (o_len != UNIV_SQL_NULL) {
           std::ignore = row_mysql_store_col_in_innobase_format(
