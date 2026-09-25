@@ -9,7 +9,7 @@ t_empty	CREATE TABLE `t_empty` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t_empty;
 # --- Populated table: CREATE INDEX builds over existing rows ---
@@ -22,7 +22,7 @@ t_full	CREATE TABLE `t_full` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # --- Rows are intact and a plain scan still works after the build ---
 SELECT COUNT(*) FROM t_full;
@@ -44,7 +44,7 @@ t_alter	CREATE TABLE `t_alter` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t_alter;
 # --- Index-at-CREATE-TABLE then load still works (incremental build) ---
