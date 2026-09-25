@@ -23,6 +23,7 @@ name: TSan Tests
 # Results are posted to Slack; see the notify job at the bottom.
 #
 # Trigger via: Actions tab -> Run workflow, or `gh workflow run tsan.yml`.
+# nightly-dispatch.yml starts one run this way after every nightly build.
 
 on:
   workflow_dispatch:
