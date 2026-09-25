@@ -2283,10 +2283,19 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
       return HA_ERR_UNSUPPORTED;
     case DB_VILLAGESQL_ERROR:
       if (thd) {
-        villagesql_error(
-            "InnoDB: Custom type operation failed. See server"
-            " error log for details.",
-            MYF(0));
+        // VillageSQL: surface the specific reason to the client when the
+        // failing code set one on the trx (via trx_set_detailed_error);
+        // otherwise fall back to the generic message that points at the server
+        // error log.
+        trx_t *const err_trx = thd_to_trx(thd);
+        if (err_trx != nullptr && *err_trx->detailed_error != 0) {
+          villagesql_error("%s", MYF(0), err_trx->detailed_error);
+        } else {
+          villagesql_error(
+              "InnoDB: Custom type operation failed. See server"
+              " error log for details.",
+              MYF(0));
+        }
       }
       return HA_ERR_GENERIC;
   }
@@ -10255,21 +10264,6 @@ int ha_innobase::delete_row(
   }
 
   ha_statistic_increment(&System_status_var::ha_delete_count);
-
-  // TODO(villagesql-indexing): DELETE on a table with a custom index not
-  // supported yet. Reject cleanly instead of crashing in the DML path below.
-  if (vsql_allow_preview_extensions) {
-    for (const dict_index_t *idx = UT_LIST_GET_FIRST(m_prebuilt->table->indexes);
-         idx != nullptr; idx = UT_LIST_GET_NEXT(indexes, idx)) {
-      if (villagesql::innodb::Custom_index::is_custom(idx)) {
-        villagesql_error(
-            "InnoDB: DELETE on a table with a custom index (USING EXTENDED) is "
-            "not supported yet.",
-            MYF(0));
-        return convert_error_code_to_mysql(DB_VILLAGESQL_ERROR, 0, m_user_thd);
-      }
-    }
-  }
 
   if (!m_prebuilt->upd_node) {
     row_get_prebuilt_update_vector(m_prebuilt);
