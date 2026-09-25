@@ -37,6 +37,11 @@
 
 namespace villagesql {
 
+// Size of the stack error-message buffer the scan/fetch callbacks write into.
+// The ABI honors the passed length (snprintf-truncated), so this is only a cap
+// on the detail captured for the error log, never an overflow risk.
+constexpr uint32_t kScanErrorMsgSize = 512;
+
 struct CustomIndexKnnScan {
   // The loaded index handle the storage engine owns for this open index
   // (fetched via handler::get_custom_index_handle). We do not own these; the
@@ -250,7 +255,7 @@ class CustomKnnDistanceIterator final : public TableRowIterator {
       return true;
     }
 
-    char error_msg[512]{};
+    char error_msg[kScanErrorMsgSize]{};
     if (custom_index_knn_scan_begin(
             table(), m_key_idx, table()->key_info[m_key_idx].name,
             m_spec->query_key, m_spec->query_key_len, m_spec->limit, &m_scan,
@@ -266,7 +271,7 @@ class CustomKnnDistanceIterator final : public TableRowIterator {
     for (;;) {
       uint64_t key_ref = 0;
       bool eof = false;
-      char error_msg[512]{};
+      char error_msg[kScanErrorMsgSize]{};
       if (custom_index_knn_scan_next(m_scan, &key_ref, &eof, error_msg,
                                      sizeof(error_msg))) {
         LogVSQL(ERROR_LEVEL, "Failed to read custom KNN scan: %s", error_msg);

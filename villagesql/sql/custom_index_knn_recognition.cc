@@ -39,8 +39,8 @@
 namespace villagesql {
 namespace {
 
-// Returns the udf if it names an index-profile-bound VDF that could drive
-// a KNN scan; nullptr otherwise. Recognition consults
+// Returns @p item as a VDF if it names an index-profile-bound VDF that could
+// drive a KNN scan; nullptr otherwise. Recognition consults
 // index_profile_descriptors in the victionary: any two-argument VDF that
 // appears in some profile's functions() bindings is a candidate. Downstream
 // checks (FindCustomKnnIndexOnField) confirm that a matching KNN-capable
@@ -82,32 +82,33 @@ Item_udf_func *GetCustomKnnDistanceFunction(Item *item) {
   return nullptr;
 }
 
+// If @p maybe_field is a field of @p table and @p maybe_query is a constant,
+// binds them to the out-params and returns true. Used to try both argument
+// orderings of the distance function.
+bool BindFieldAndQuery(Item *maybe_field, Item *maybe_query, TABLE *table,
+                       Item_field **field_item, Item **query_item) {
+  if (maybe_field->type() != Item::FIELD_ITEM) return false;
+  auto *candidate = down_cast<Item_field *>(maybe_field);
+  if (candidate->field == nullptr || candidate->field->table != table ||
+      !maybe_query->const_item()) {
+    return false;
+  }
+  *field_item = candidate;
+  *query_item = maybe_query;
+  return true;
+}
+
 bool GetFieldAndQueryFromKnnDistance(Item_udf_func *distance_func, TABLE *table,
                                      Item_field **field_item,
                                      Item **query_item) {
   Item *arg0 = distance_func->arguments()[0]->real_item();
   Item *arg1 = distance_func->arguments()[1]->real_item();
 
-  if (arg0->type() == Item::FIELD_ITEM) {
-    auto *candidate = down_cast<Item_field *>(arg0);
-    if (candidate->field != nullptr && candidate->field->table == table &&
-        arg1->const_item()) {
-      *field_item = candidate;
-      *query_item = arg1;
-      return false;
-    }
+  // The field may be either argument, with the query constant as the other.
+  if (BindFieldAndQuery(arg0, arg1, table, field_item, query_item) ||
+      BindFieldAndQuery(arg1, arg0, table, field_item, query_item)) {
+    return false;
   }
-
-  if (arg1->type() == Item::FIELD_ITEM) {
-    auto *candidate = down_cast<Item_field *>(arg1);
-    if (candidate->field != nullptr && candidate->field->table == table &&
-        arg0->const_item()) {
-      *field_item = candidate;
-      *query_item = arg0;
-      return false;
-    }
-  }
-
   return true;
 }
 
