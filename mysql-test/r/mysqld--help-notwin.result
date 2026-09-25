@@ -1599,6 +1599,11 @@ The following options may be given as the first argument:
  build (one whose VillageSQL version has a pre-release
  suffix, e.g. '-dev'). Upgrading from a dev build is
  disallowed by default.
+ --villagesql-custom-index 
+ Enable the custom (USING EXTENDED) index feature. The
+ feature is not yet implemented for release; off by
+ default, CREATE/ALTER ... INDEX ... USING EXTENDED is
+ rejected. Intended for development and benchmarking only.
  --villagesql-skip-extension-updates 
  At startup, skip processing of pending ALTER EXTENSION
  ... AT RESTART actions. Extensions load at their
@@ -2041,6 +2046,7 @@ validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
 villagesql-allow-unsafe-dev-upgrade FALSE
+villagesql-custom-index FALSE
 villagesql-skip-extension-updates FALSE
 vsql-allow-preview-extensions FALSE
 wait-timeout 28800
