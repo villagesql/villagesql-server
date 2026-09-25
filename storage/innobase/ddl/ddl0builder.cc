@@ -1045,6 +1045,19 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
   const dict_index_t *old_index =
       m_index->is_clustered() ? m_ctx.m_old_table->first_index() : nullptr;
 
+  /* TODO(villagesql-indexing): custom index (USING EXTENDED) on a populated
+  table not supported yet -- old_index is null for a secondary build. Reject
+  cleanly instead of asserting in fetch_for_bulk_ddl on the first row. The
+  reason is set on the trx (not logged) so the client sees it via the
+  DB_VILLAGESQL_ERROR mapping. */
+  if (m_index->custom_index != nullptr && old_index == nullptr) {
+    trx_set_detailed_error(
+        m_ctx.m_trx,
+        "CREATE INDEX ... USING EXTENDED on a non-empty table is not supported"
+        " yet; create the index before loading data.");
+    return DB_VILLAGESQL_ERROR;
+  }
+
   for (;;) {
     // clang-format off
     DBUG_EXECUTE_IF(
