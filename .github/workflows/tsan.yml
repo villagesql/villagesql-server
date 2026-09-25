@@ -217,6 +217,34 @@ jobs:
         if-no-files-found: warn
         retention-days: 7
 
+    # TSan does not symbolize frames in dlopen'd plugins: it reports
+    # <module>.so+0xoffset with no name, though addr2line resolves the same
+    # offsets. Resolve them here, while the modules are still on disk.
+    - name: Symbolize plugin frames
+      if: always()
+      run: |
+        VAR="$BUILD_DIR/mysql-test/var"
+        PLUGINS="$BUILD_DIR/plugin_output_directory"
+        [ -d "$VAR" ] || exit 0
+
+        grep -rhoE "[a-z_0-9]+\\.so\\+0x[0-9a-f]+" "$VAR" 2>/dev/null \
+          | sort -u > /tmp/frames.txt || true
+        if [ ! -s /tmp/frames.txt ]; then
+          echo "no unsymbolized plugin frames"
+          exit 0
+        fi
+
+        cut -d+ -f1 /tmp/frames.txt | sort -u | while read -r mod; do
+          SO="$PLUGINS/$mod"
+          [ -f "$SO" ] || continue
+          echo "=== $mod ==="
+          grep -F "$mod+" /tmp/frames.txt | sed 's/.*+//' | sort -u \
+            | while read -r off; do
+                printf '%s -> ' "$off"
+                addr2line -Cfe "$SO" "$off" | paste -sd' | ' -
+              done
+        done
+
     - name: Fail if any TSan phase failed
       if: always()
       run: |

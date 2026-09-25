@@ -35,6 +35,7 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     libssl-dev \
     libtirpc-dev \
     libz-dev \
+    llvm \
     make \
     mold \
     openssl \
@@ -44,3 +45,14 @@ $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
     unzip \
     valgrind \
     zip
+
+# Sanitizers symbolize through an unversioned llvm-symbolizer on PATH. It does
+# not help with dlopen'd plugins -- the tsan workflow resolves those itself.
+if ! command -v llvm-symbolizer >/dev/null 2>&1; then
+    VERSIONED=$(ls -1 /usr/bin/llvm-symbolizer-* 2>/dev/null | sort -V | tail -1)
+    if [[ -n "$VERSIONED" ]]; then
+        $SUDO ln -sf "$VERSIONED" /usr/bin/llvm-symbolizer
+    fi
+fi
+
+command -v llvm-symbolizer || echo "WARNING: no llvm-symbolizer; sanitizer reports will be less readable"
