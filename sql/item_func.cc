@@ -4601,8 +4601,8 @@ void udf_handler::free_handler() {
   // free_udf() which tries to manipulate the UDF hash.
   if (u_d->calling_convention != UdfCallingConvention::VDF) {
     free_udf(u_d);
+    u_d = nullptr;
   }
-  u_d = nullptr;
   m_initialized = false;
 }
 
