@@ -35,6 +35,7 @@
 #include "storage/innobase/include/mtr0mtr.h"
 #include "storage/innobase/include/rem0types.h"
 #include "storage/innobase/include/row0log.h"
+#include "storage/innobase/include/row0mysql.h"
 #include "storage/innobase/include/row0upd.h"
 #include "storage/innobase/include/trx0rec.h"
 #include "storage/innobase/include/univ.i"
@@ -97,6 +98,12 @@ int Custom_column::compare(const unsigned char *data1, size_t len1,
   return type_context_->compare_op().invoke(data1, len1, data2, len2);
 }
 
+bool Custom_column::matches_mysql_type(const Field *field) const {
+  ulint is_unsigned;
+  ulint col_type = get_innobase_type_from_mysql_type(&is_unsigned, field);
+  return col_type == mysql_type_.mtype;
+}
+
 void Custom_column::load(dict_table_t *table, dict_col_t *col,
                          const Field *sql_field, const dd::Column *dd_col) {
   ut_ad(!col->custom_column);
@@ -110,8 +117,21 @@ void Custom_column::load(dict_table_t *table, dict_col_t *col,
   col->custom_column = new (mem) Custom_column(std::move(tc));
 
   auto &custom_column = col->custom_column;
+  col->copy_type(&custom_column->mysql_type_);
 
   if (!custom_column->stored_by_extension()) return;
+
+  // InnoDB persists only the fixed-size REF; the actual value lives in the
+  // extension's storage. Represent the dict column as a fixed BIGINT UNSIGNED
+  // so row-size accounting, record layout, and comparisons reflect the REF.
+  // The SQL Field remains VARCHAR (see PT_custom_type) because row conversion
+  // stages the REF and extension payload in its buffer.
+  col->mtype = DATA_INT;
+  col->len = sizeof(Custom_column::Ref);
+  col->prtype =
+      (col->prtype & DATA_NOT_NULL) | DATA_UNSIGNED |
+      (custom_column->is_long_true_varchar() ? DATA_LONG_TRUE_VARCHAR : 0);
+  col->mbminmaxlen = 0;
 
   table->has_extended_storage = true;
 
@@ -314,7 +334,7 @@ static dberr_t create_column_storage(const dict_col_t *col, mem_heap_t *heap,
 
   ut_ad(intf);
   bool failed =
-      !intf || intf->create(space, trx_id, col->len,
+      !intf || intf->create(space, trx_id, custom_column->get_len(),
                             reinterpret_cast<Arena::Type *>(heap), arena_alloc,
                             &ctx, error_msg, sizeof(error_msg));
 
@@ -1025,6 +1045,56 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   return DB_SUCCESS;
 }
 
+dberr_t Custom_column::store_mysql_true_varchar(const dict_table_t *table,
+                                                const dict_col_t *col,
+                                                byte *dest, ulint mysql_col_len,
+                                                ulint length_bytes,
+                                                const byte *ref_data,
+                                                ulint ref_len) {
+  ut_a(mysql_col_len >= length_bytes);
+  ulint dest_len = mysql_col_len - length_bytes;
+
+  auto data_len = col->custom_column->get_len();
+  dest = row_mysql_store_true_var_len(dest, data_len, length_bytes);
+
+  ut_a(dest_len >= ref_len);
+  memcpy(dest, ref_data, ref_len);
+  dest += ref_len;
+  dest_len -= ref_len;
+
+  return fetch(table, col, dest, dest_len, ref_data, ref_len);
+}
+
+void Custom_column::store_innodb_true_varchar(dfield_t *dfield,
+                                              bool row_format_col,
+                                              const byte *mysql_data) {
+  const dtype_t *dtype = dfield_get_type(dfield);
+  ut_ad(dtype->extended_storage);
+
+  ulint lenlen;
+  if (row_format_col) {
+    lenlen = (dtype->prtype & DATA_LONG_TRUE_VARCHAR) ? 2 : 1;
+  } else {
+    lenlen = 2;
+  }
+
+  ulint col_len = 0;
+  const byte *ptr = row_mysql_read_true_varchar(&col_len, mysql_data, lenlen);
+  dfield_set_data(dfield, ptr, col_len);
+}
+
+uint32_t Custom_column::get_mysql_true_varchar_length(const dict_col_t *col,
+                                                      ulint prefix_len) {
+  ut_ad(col->custom_column);
+
+  uint32_t len = col->custom_column->get_len();
+  if (prefix_len != 0 && prefix_len < len) {
+    len = static_cast<uint32_t>(prefix_len);
+  }
+  // Add MySQL varchar key length prefix.
+  return len + 2;
+}
+
 dberr_t Custom_column::fetch_for_bulk_ddl(const dict_index_t *new_index,
                                           const dict_index_t *old_index,
                                           const ulint *col_map, size_t n_fields,
@@ -1096,7 +1166,7 @@ dberr_t Custom_column::allocate_fetch(const dict_table_t *table,
   }
   ut_a(data_len == dfield_t::extended_ref_size());
 
-  ulint new_len = col->len;
+  ulint new_len = col->custom_column->get_len();
   auto *new_data = static_cast<byte *>(mem_heap_alloc(heap, new_len));
 
   if (new_data == nullptr) {

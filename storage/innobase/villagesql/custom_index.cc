@@ -181,7 +181,8 @@ static uint32_t vef_index_max_key_len_impl(vef_index_ref_t index_ref,
   const dict_field_t *field = field_index->get_field(key_pos);
   const dict_col_t *col = field->col;
 
-  uint32_t max_size = col->len;
+  uint32_t max_size =
+      col->custom_column ? col->custom_column->get_len() : col->len;
   if (field->prefix_len != 0 && field->prefix_len < max_size) {
     max_size = field->prefix_len;
   }
@@ -242,7 +243,7 @@ static bool vef_index_col_ref_to_data_impl(
 
   constexpr uint32_t ref_size =
       static_cast<uint32_t>(dfield_t::extended_ref_size());
-  const uint32_t value_len = col->len;
+  const uint32_t value_len = col->custom_column->get_len();
   ut_a(value_len > ref_size);
 
   if (col_data->data == nullptr || col_data->length < value_len) {
