@@ -243,6 +243,32 @@ jobs:
             -f slack_notify=true
           echo "Started valgrind tests on $REF" >> "$GITHUB_STEP_SUMMARY"
 
+  start-tsan:
+    if: always()
+    name: Start TSan tests
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start tsan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+
+          # The phase toggles all default to true, so this runs the unit tests,
+          # the villagesql MTR suite, and every bundled extension.
+          gh workflow run tsan.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f slack_notify=true
+          echo "Started TSan tests on $REF" >> "$GITHUB_STEP_SUMMARY"
+
   start-sanitizer:
     if: always()
     name: Start sanitizer tests (ASan+UBSan)
