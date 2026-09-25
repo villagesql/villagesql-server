@@ -3120,8 +3120,9 @@ func_exit:
 
   // TODO(villagesql-indexing): DELETE, and any UPDATE that changes an index
   // ordering field, are not supported on a table with a custom index (USING
-  // EXTENDED): the custom index has no B-tree, so its secondary-entry
-  // maintenance below would drive btr_cur into a FIL_NULL root page and assert.
+  // EXTENDED): the custom index has no InnoDB B-tree (its storage lives in the
+  // extension, so index->page is FIL_NULL), and its secondary-entry maintenance
+  // below would drive btr_cur into that FIL_NULL root page and assert.
   // This covers both a change to the custom index's own key column and a
   // primary key change (which forces all secondary indexes, including the
   // custom one, to be rebuilt). Reject here, before the clustered record is
