@@ -3621,9 +3621,10 @@ void Item_string::print(const THD *, String *str,
     String decoded;
     if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
                                           &decoded)) {
-      // TODO(villagesql-general): Should we print a placeholder in case of
-      // error?
       str->append(decoded);
+    } else {
+      //  TODO(villagesql-general): Make this error obseravable.
+      str->append("<error decoding value>");
     }
     str->append('\'');
     return;
