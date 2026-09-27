@@ -3118,23 +3118,25 @@ func_exit:
   ut_ad(lock_trx_has_rec_x_lock(thr, index->table, pcur->get_block(),
                                 page_rec_get_heap_no(rec)));
 
-  // TODO(villagesql-indexing): DELETE, and any UPDATE that changes an index
-  // ordering field, are not supported on a table with a custom index (USING
-  // EXTENDED): the custom index has no InnoDB B-tree (its storage lives in the
-  // extension, so index->page is FIL_NULL), and its secondary-entry maintenance
-  // below would drive btr_cur into that FIL_NULL root page and assert.
-  // This covers both a change to the custom index's own key column and a
-  // primary key change (which forces all secondary indexes, including the
-  // custom one, to be rebuilt). Reject here, before the clustered record is
-  // modified below, so there is nothing to undo -- rejecting after the
-  // clustered change would roll back through the same custom-index path and
-  // still crash. A payload-only UPDATE (UPD_NODE_NO_ORD_CHANGE) changes no
-  // ordering field and is left to proceed.
+  // VillageSQL: reject custom-index DML the server cannot yet service, before
+  // the clustered record is modified below so there is nothing to undo: an
+  // UPDATE that changes an index ordering field, and a DELETE against a
+  // REF_LOOKUP index. A REF_LOOKUP index identifies entries by an opaque
+  // key_ref the server does not yet persist, so on delete it cannot tell the
+  // extension which entry to drop. A payload-only UPDATE
+  // (UPD_NODE_NO_ORD_CHANGE) and a DELETE against a non-REF_LOOKUP index are
+  // left to proceed.
+  // TODO(villagesql-indexing): support key_ref persistence (enables REF_LOOKUP
+  // DELETE), and ord-change UPDATE.
   if (vsql_allow_preview_extensions &&
       (node->is_delete || !(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE))) {
     for (const dict_index_t *sec = index->next(); sec != nullptr;
          sec = sec->next()) {
       if (villagesql::innodb::Custom_index::is_custom(sec)) {
+        if (node->is_delete && !(sec->custom_index->interface().storage_props &
+                                 VEF_INDEX_STORAGE_REF_LOOKUP)) {
+          continue;
+        }
         // Reason is set on the trx (not logged) so the client sees it via the
         // DB_VILLAGESQL_ERROR mapping in convert_error_code_to_mysql.
         trx_set_detailed_error(
@@ -3288,7 +3290,10 @@ static dberr_t row_upd(upd_node_t *node, /*!< in: row update node */
       break;
     }
 
-    if (node->index->type != DICT_FTS) {
+    // VillageSQL: a custom index does its own maintenance in the extension;
+    // exclude it from generic secondary-index maintenance, as for DICT_FTS.
+    if (node->index->type != DICT_FTS &&
+        !villagesql::innodb::Custom_index::is_custom(node->index)) {
       err = row_upd_sec_step(node, thr);
 
       if (err != DB_SUCCESS) {
