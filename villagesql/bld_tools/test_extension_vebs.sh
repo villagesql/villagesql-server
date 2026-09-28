@@ -24,6 +24,8 @@
 #                      --valgrind for a WITH_VALGRIND=1 build).
 #   MTR_MAX_PARALLEL - cap on MTR workers. Read by mysql-test-run.pl itself;
 #                      set it when each worker is expensive (valgrind).
+#   MTR_RETRY        - --retry value. Defaults to 0 (no retries); raise it when
+#                      the run is prone to infrastructure flakes (sanitizers).
 
 set -e
 
@@ -84,7 +86,7 @@ MTR_FLAGS=(
     "--nounit-tests"
     "--parallel=auto"
     "--force"
-    "--retry=0"
+    "--retry=${MTR_RETRY:-0}"
 )
 
 if [[ -n "${MTR_EXTRA_FLAGS:-}" ]]; then
