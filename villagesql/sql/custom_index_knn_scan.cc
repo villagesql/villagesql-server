@@ -283,10 +283,20 @@ class CustomKnnDistanceIterator final : public TableRowIterator {
       // which resolves it to the owning row's clustered-index identity (its
       // primary key, or the synthetic DB_ROW_ID for a PK-less table) and reads
       // the full row.
-      if (table()->file->custom_index_ref_to_row(
-              m_key_idx, key_ref, m_record, error_msg, sizeof(error_msg))) {
+      bool row_not_found = false;
+      if (table()->file->custom_index_ref_to_row(m_key_idx, key_ref, m_record,
+                                                 &row_not_found, error_msg,
+                                                 sizeof(error_msg))) {
         LogVSQL(ERROR_LEVEL, "Failed to fetch row for KNN hit: %s", error_msg);
         return HandleError(HA_ERR_INTERNAL_ERROR);
+      }
+      if (row_not_found) {
+        // The KNN hit's row is not visible to this transaction (MVCC) -- e.g. a
+        // concurrently-inserted, uncommitted row the graph surfaced. Skip it
+        // and pull the next candidate; the scan returned the full ef_search
+        // pool (not just k), so there is backfill to satisfy the LIMIT. Not
+        // counted as an examined row.
+        continue;
       }
       if (m_examined_rows != nullptr) {
         ++*m_examined_rows;
