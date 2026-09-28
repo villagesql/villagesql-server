@@ -32,6 +32,8 @@
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "storage/innobase/include/mtr0mtr.h"
+#include "storage/innobase/include/trx0sys.h"
+#include "storage/innobase/include/trx0trx.h"
 #include "storage/innobase/include/univ.i"
 #include "storage/innobase/villagesql/custom_column.h"
 #include "villagesql/schema/descriptor/index_context.h"
@@ -596,8 +598,9 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error creating custom index storage: " << error_msg;
+    if (trx_t *trx = trx_rw_is_active(trx_id, false)) {
+      trx_set_detailed_error(trx, error_msg);
+    }
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -619,8 +622,9 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error dropping custom index storage: " << error_msg;
+    if (trx_t *trx = trx_rw_is_active(trx_id, false)) {
+      trx_set_detailed_error(trx, error_msg);
+    }
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
