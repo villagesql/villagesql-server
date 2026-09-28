@@ -156,16 +156,11 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       const vef_func_desc_t *func_desc = reg->funcs[i];
       std::string func_name(func_desc->name);
 
-      // clear/accumulate were added in PROTOCOL_3. Read them only when the
-      // negotiated protocol is v3+. A descriptor declaring an older protocol
-      // was built against a struct that ends before these fields, so reading
-      // them would read past what the extension allocated.
+      // clear/accumulate were added in PROTOCOL_3. The negotiated protocol is
+      // the only gate needed: check_vef_registration() has already rejected a
+      // descriptor declaring less than its registration, so a v3+ negotiation
+      // means this descriptor really has these fields.
       if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
-        // The declaration must be v3+ by implication: the SDK stamps every
-        // descriptor and the registration alike, and extensions are not built
-        // against the raw ABI header.
-        assert(func_desc->protocol >= VEF_PROTOCOL_3);
-
         bool has_clear = (func_desc->clear != nullptr);
         bool has_accumulate = (func_desc->accumulate != nullptr);
         if (has_clear != has_accumulate) {

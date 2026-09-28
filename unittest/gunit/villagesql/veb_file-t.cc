@@ -365,9 +365,27 @@ TEST_F(CheckVefRegistrationTest, ProtocolV1FuncDescriptorIsWellFormed) {
   desc.vdf = stub_vdf;
   vef_func_desc_t *slot = nullptr;
   vef_registration_t reg = with_one_func(&desc, &slot);
+  // A v1 extension declares v1 throughout; the descriptor may not sit below
+  // its registration.
+  reg.protocol = VEF_PROTOCOL_1;
 
   std::string error;
   EXPECT_FALSE(check_vef_registration(&reg, error));
+}
+
+// A descriptor declaring more than its registration is fine: it is a superset,
+// and consumers read only up to the negotiated protocol. The converse with a
+// descriptor below its registration is rejected in release, but would assert
+// in debug.
+TEST_F(CheckVefRegistrationTest, FuncDescriptorAboveRegistrationProtocol) {
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_4;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+
+  std::string error;
+  EXPECT_FALSE(check_vef_registration(&reg, error));
+  EXPECT_TRUE(error.empty());
 }
 
 // ---------------------------------------------------------------------------

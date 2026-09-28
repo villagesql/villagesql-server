@@ -1711,7 +1711,7 @@ bool check_vef_registration(const vef_registration_t *registration,
   if (registration->protocol >= VEF_PROTOCOL_4 &&
       (registration->on_init == nullptr) != (registration->on_deinit == nullptr)) {
     error_message =
-        reg->on_init == nullptr
+        registration->on_init == nullptr
             ? "extension registers an on_deinit hook without an on_init"
             : "extension registers an on_init hook without an on_deinit";
     return true;
@@ -1728,6 +1728,28 @@ bool check_vef_registration(const vef_registration_t *registration,
       error_message =
           "invalid registration: func descriptor nullptr at index " +
           std::to_string(i);
+      return true;
+    }
+    // The SDK stamps every function descriptor with the registration's own
+    // protocol, so a lower one means the .so did not come from a supported
+    // path: extensions are built against the C++ API, not this ABI header.
+    // Consumers gate the post-v1 fields on the descriptor's protocol, so an
+    // inconsistent pair would have them reading past what the extension
+    // allocated. Establishing it here lets those consumers gate on the
+    // negotiated protocol alone.
+    //
+    // Type descriptors are deliberately exempt: the type builder computes
+    // their protocol per feature, so a type declaring less than its
+    // registration is the normal case.
+    if (should_assert_if_false(registration->funcs[i]->protocol >=
+                               registration->protocol)) {
+      error_message =
+          "invalid registration: func descriptor at index " +
+          std::to_string(i) + " declares protocol " +
+          std::to_string(
+              static_cast<unsigned>(registration->funcs[i]->protocol)) +
+          ", below the registration's " +
+          std::to_string(static_cast<unsigned>(registration->protocol));
       return true;
     }
     if (check_func_desc(registration->funcs[i], i, error_message)) return true;
