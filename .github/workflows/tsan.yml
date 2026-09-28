@@ -55,6 +55,10 @@ on:
         description: 'Limit the extension phase to one extension (e.g. vsql-vector); empty for all'
         required: false
         default: ''
+      max-parallel:
+        description: 'Cap on mysql-test-run workers (each one runs a TSan-instrumented mysqld)'
+        required: false
+        default: '16'
       slack_notify:
         description: 'Send Slack notification with results'
         required: false
@@ -103,6 +107,11 @@ jobs:
       # instrumented server.
       SAN_CFLAGS: -fsanitize=thread -fno-omit-frame-pointer
       SAN_LDFLAGS: -fsanitize=thread
+      # --parallel=auto resolves to the runner's CPU count; mysql-test-run caps
+      # it at MTR_MAX_PARALLEL, and test_extension_vebs.sh honors the same cap.
+      # A TSan mysqld holds several times its usual RSS, so letting auto take
+      # every core gets servers OOM-killed during the startup burst.
+      MTR_MAX_PARALLEL: ${{ inputs.max-parallel }}
 
     steps:
     - name: Report Parameters
@@ -203,6 +212,8 @@ jobs:
       continue-on-error: true
       env:
         MTR_EXTRA_FLAGS: --sanitize
+        # Matches the server phase, which uses MTR's default.
+        MTR_RETRY: 3
       run: |
         source/villagesql/bld_tools/test_extension_vebs.sh \
           "$BUILD_DIR" "$EXTS_ROOT/sources"
