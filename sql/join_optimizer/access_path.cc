@@ -552,8 +552,13 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       }
       case AccessPath::INDEX_DISTANCE_SCAN: {
         const auto &param = path->index_distance_scan();
-        // VillageSQL: custom-index KNN distance scan (spatial variant leaves
-        // custom_scan_spec null and falls through below).
+        // VillageSQL: custom-index KNN distance scan. The two variants are
+        // mutually exclusive: the custom variant sets custom_scan_spec and
+        // leaves range null; the spatial variant sets range and leaves
+        // custom_scan_spec null. The spatial iterator dereferences range
+        // unconditionally, so custom_scan_spec is the discriminator that keeps
+        // the null range away from it.
+        assert((param.custom_scan_spec != nullptr) != (param.range != nullptr));
         if (param.custom_scan_spec != nullptr) {
           iterator = villagesql::CreateCustomKnnDistanceIterator(
               thd, mem_root, param.table, param.idx, param.custom_scan_spec,

@@ -39,7 +39,7 @@
 namespace villagesql {
 namespace {
 
-// Returns @p item as a VDF if it names an index-profile-bound VDF that could
+// Returns item as a VDF if it names an index-profile-bound VDF that could
 // drive a KNN scan; nullptr otherwise. Recognition consults
 // index_profile_descriptors in the victionary: any two-argument VDF that
 // appears in some profile's functions() bindings is a candidate. Downstream
@@ -82,9 +82,9 @@ Item_udf_func *GetCustomKnnDistanceFunction(Item *item) {
   return nullptr;
 }
 
-// If @p maybe_field is a field of @p table and @p maybe_query is a constant,
-// binds them to the out-params and returns true. Used to try both argument
-// orderings of the distance function.
+// If maybe_field is a field of table and maybe_query is a constant, binds them
+// to the out-params and returns true. Used to try both argument orderings of
+// the distance function.
 bool BindFieldAndQuery(Item *maybe_field, Item *maybe_query, TABLE *table,
                        Item_field **field_item, Item **query_item) {
   if (maybe_field->type() != Item::FIELD_ITEM) return false;

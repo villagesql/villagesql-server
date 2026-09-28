@@ -279,8 +279,10 @@ class CustomKnnDistanceIterator final : public TableRowIterator {
       }
       if (eof) return -1;
 
-      // REF_LOOKUP: resolve the extension's column reference to the full row
-      // inside the engine. No primary key involved.
+      // REF_LOOKUP: hand the extension's opaque column reference to the engine,
+      // which resolves it to the owning row's clustered-index identity (its
+      // primary key, or the synthetic DB_ROW_ID for a PK-less table) and reads
+      // the full row.
       if (table()->file->custom_index_ref_to_row(
               m_key_idx, key_ref, m_record, error_msg, sizeof(error_msg))) {
         LogVSQL(ERROR_LEVEL, "Failed to fetch row for KNN hit: %s", error_msg);
