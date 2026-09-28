@@ -7,76 +7,68 @@ SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
 
 # Inline USING EXTENDED -- unqualified type name
---error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) USING EXTENDED(dummy_index_hnsw));
-
---error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t1;
 
-# Inline USING EXTENDED -- qualified extension.type_name
---error ER_VILLAGESQL_GENERIC_ERROR
-CREATE TABLE t2 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw));
+DROP TABLE t1;
 
---error ER_NO_SUCH_TABLE
+# Inline USING EXTENDED -- qualified extension.type_name
+CREATE TABLE t2 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw));
 SHOW CREATE TABLE t2;
 
+DROP TABLE t2;
+
 # Inline USING EXTENDED + WITH -- numeric and string params
---error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t3 (
   id INT PRIMARY KEY,
   a dummy_type_vector,
-  INDEX idx (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16, metric = 'l2')
+  INDEX idx (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16, label = 'l2')
 );
-
---error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t3;
 
-# Inline WITH standalone -- exercises PT_index_with_options path in CREATE TABLE context
---error ER_VILLAGESQL_GENERIC_ERROR
-CREATE TABLE t4 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) WITH (M = 16));
+DROP TABLE t3;
 
---error ER_NO_SUCH_TABLE
+# Inline WITH standalone -- exercises PT_index_with_options path in CREATE TABLE context
+CREATE TABLE t4 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a) WITH (M = 16));
 SHOW CREATE TABLE t4;
 
-# Inline column with index profile + USING EXTENDED
---error ER_VILLAGESQL_GENERIC_ERROR
-CREATE TABLE t5 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw));
+DROP TABLE t4;
 
---error ER_NO_SUCH_TABLE
+# Inline column with index profile + USING EXTENDED
+CREATE TABLE t5 (id INT PRIMARY KEY, a dummy_type_vector, INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw));
 SHOW CREATE TABLE t5;
 
+DROP TABLE t5;
+
 # Inline column with index profile + qualified type + WITH params
---error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t6 (
   id INT PRIMARY KEY,
   a dummy_type_vector,
   INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16)
 );
-
---error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t6;
 
+DROP TABLE t6;
+
 # Inline column with qualified extension.profile
---error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t7 (
   id INT PRIMARY KEY,
   a dummy_type_vector,
   INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw)
 );
-
---error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t7;
 
+DROP TABLE t7;
+
 # Qualified profile + qualified type + WITH params
---error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t8 (
   id INT PRIMARY KEY,
   a dummy_type_vector,
-  INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, metric = 'l2')
+  INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2')
 );
-
---error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE t8;
+
+DROP TABLE t8;
 
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
