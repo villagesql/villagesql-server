@@ -1,0 +1,29 @@
+# SHOW CREATE VIEW on a view whose VDF argument no longer resolves.
+#
+# Resolving the view fails once the column the VDF reads is gone. That failure
+# runs udf_handler::fix_fields()'s cleanup guard, which releases the handler.
+# SHOW CREATE VIEW suppresses the resolution error as a warning and prints the
+# unresolved item tree anyway, so Item_udf_func::print() has to survive a
+# released handler.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (c COMPLEX);
+CREATE VIEW v1 AS SELECT vsql_complex.complex_real(c) FROM t1;
+
+SHOW CREATE VIEW v1;
+
+# Drop the column the view's VDF reads, so the view no longer resolves.
+ALTER TABLE t1 DROP COLUMN c, ADD COLUMN c1 INT;
+
+SHOW CREATE VIEW v1;
+CHECK TABLE v1;
+
+# Same again with the underlying table gone entirely.
+DROP TABLE t1;
+
+SHOW CREATE VIEW v1;
+
+DROP VIEW v1;
+
+--source include/villagesql/uninstall_complex_extension.inc

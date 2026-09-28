@@ -182,7 +182,9 @@ class udf_handler {
   void set_vdf_string_result_type(Item *item, uint32 default_length);
 
   const char *name() const { return u_d ? u_d->name.str : "?"; }
-  const char *qualified_name() const { return u_d->qualified_name.str; }
+  const char *qualified_name() const {
+    return u_d != nullptr ? u_d->qualified_name.str : nullptr;
+  }
   Item_result result_type() const {
     return (Item_result)(u_d ? (u_d->returns) : STRING_RESULT);
   }
