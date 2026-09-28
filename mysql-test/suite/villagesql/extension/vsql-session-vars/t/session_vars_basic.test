@@ -2,6 +2,8 @@
 # per-session independence across connections, SET SESSION, @@session vs
 # @@global, and reads from a VDF.
 
+--source include/count_sessions.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 
 # Regression: reading an extension session var from a connection opened BEFORE
@@ -85,6 +87,10 @@ SELECT vsql_session_var_test.read_session_int_var();
 
 connection default;
 disconnect con2;
+
+# con2's last statement releases its VDF reference after the reply is sent, and
+# disconnect does not wait for that; UNINSTALL below would race it.
+--source include/wait_until_count_sessions.inc
 
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_session_var_test;
