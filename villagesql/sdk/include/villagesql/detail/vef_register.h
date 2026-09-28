@@ -296,26 +296,6 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
   return unbound;
 }
 
-// Returns the name of the first VDF that declares both .varargs() and
-// .bind_and_check_types(), or nullptr when none does.
-template <typename Ext, size_t... Is>
-const char *vef_check_varargs_bind(const Ext &e, std::index_sequence<Is...>) {
-  const char *offender = nullptr;
-  auto check_one = [&offender](const auto &func) {
-    if (offender) return;
-    // Only the typed builder has bind(); a legacy builder cannot declare a
-    // hook, so it can never be the offender.
-    if constexpr (vsql::func_builder::has_bind<
-                      std::decay_t<decltype(func)>>::value) {
-      if (func.num_params() == VEF_PARAM_VARARGS && func.bind() != nullptr) {
-        offender = func.name();
-      }
-    }
-  };
-  (check_one(e.template func_at<Is>()), ...);
-  return offender;
-}
-
 template <typename T, typename = void>
 struct has_check_signature : std::false_type {};
 template <typename T>
@@ -443,18 +423,6 @@ vef_registration_t *vef_register_impl(
       return &reg;
     }
 
-    const char *varargs_bind_vdf =
-        vef_check_varargs_bind(ext, std::make_index_sequence<FuncCount>{});
-    if (varargs_bind_vdf) {
-      static char error_buf[256];
-      snprintf(error_buf, sizeof(error_buf),
-               "VDF '%s' declares both .varargs() and "
-               ".bind_and_check_types(). This is not currently supported.",
-               varargs_bind_vdf);
-      reg.protocol = arg->protocol;
-      reg.error_msg = error_buf;
-      return &reg;
-    }
   }
 
   reg.protocol = VEF_PROTOCOL_4;

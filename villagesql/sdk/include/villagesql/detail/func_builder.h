@@ -1104,8 +1104,14 @@ struct StaticFuncDesc {
   }
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
+  //
+  // bind_and_check_types is the last field of vef_func_desc_t and only exists
+  // from VEF_PROTOCOL_4. Without this, an extension declaring only a hook
+  // reports a V1 minimum, loads against a V3 server, and the hook is silently
+  // never called -- the author sees an unresolved-parameters error instead of
+  // a protocol mismatch.
   constexpr vef_protocol_t required_protocol() const {
-    if (max_result_length_ > 0) return VEF_PROTOCOL_4;
+    if (max_result_length_ > 0 || bind_ != nullptr) return VEF_PROTOCOL_4;
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }
   constexpr size_t buffer_size() const { return buffer_size_; }

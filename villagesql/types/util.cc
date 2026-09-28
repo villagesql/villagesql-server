@@ -20,6 +20,7 @@
 #include <cinttypes>
 #include <map>
 #include <optional>
+#include <span>
 
 #include "lex_string.h"
 #include "my_alloc.h"
@@ -1523,22 +1524,25 @@ struct KnownEntry {
 // parameters: nothing is collected and differing sibling params are not an
 // error.
 //
-// The caller must handle varargs before calling this -- signature->params is
-// null for a varargs function. Returns true on error (error already raised).
+// expected_types is what each argument is required to be: signature->params
+// for a fixed-arity function, or the types a bind_and_check_types hook
+// declared for a varargs one. Its size is the expected arity, so on the
+// varargs path it holds exactly arg_count entries and the count check below is
+// satisfied by construction. Returns true on error (error already raised).
 static bool ValidateVDFArguments(
     const char *func_name, std::string_view extension_name, uint arg_count,
-    Item **args, const vef_signature_t *signature,
+    Item **args, std::span<const vef_type_t> expected_types,
     std::map<std::string, KnownEntry> *out_known_params) {
   // Asking for NO params back is what disabled TD1: nothing is
   // collected for pass 2 and TD1 is not enforced.
   const bool enable_TD1 = (out_known_params != nullptr);
 
   // Validate argument count matches signature
-  if (arg_count != signature->param_count) {
+  if (arg_count != expected_types.size()) {
     villagesql_error(
         "Cannot initialize function '%s': wrong number of arguments "
         "(expected %u, got %u)",
-        MYF(0), func_name, signature->param_count, arg_count);
+        MYF(0), func_name, static_cast<uint>(expected_types.size()), arg_count);
     return true;
   }
 
@@ -1553,7 +1557,7 @@ static bool ValidateVDFArguments(
   std::map<std::string, KnownEntry> known_params;
 
   for (uint i = 0; i < arg_count; i++) {
-    const vef_type_t &expected_type = signature->params[i];
+    const vef_type_t &expected_type = expected_types[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
@@ -1609,7 +1613,7 @@ static bool ValidateVDFArguments(
 // type that needs them errors out.
 static bool ConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
-    uint arg_count, Item **args, const vef_signature_t *signature,
+    uint arg_count, Item **args, std::span<const vef_type_t> expected_types,
     const std::map<std::string, KnownEntry> &known_params,
     const std::vector<TypeParameters> &hook_arg_params) {
   // The two sources are alternatives, TD1 fills known_params when the server
@@ -1631,7 +1635,7 @@ static bool ConvertVDFArguments(
   };
 
   for (uint i = 0; i < arg_count; i++) {
-    const vef_type_t &expected_type = signature->params[i];
+    const vef_type_t &expected_type = expected_types[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
@@ -1662,9 +1666,18 @@ static bool ConvertVDFArguments(
                                  *params, *thd->mem_root, resolved_tc)) {
           return true;
         }
-        if (resolved_tc != nullptr) {
-          args[i]->set_type_context(resolved_tc);
+        if (resolved_tc == nullptr) {
+          // Unreachable while expected_types comes from a compiled signature,
+          // but a varargs hook names the type itself, so a name that resolves
+          // at validation and then does not here must not pass silently --
+          // the argument would keep its old, unknown-params context.
+          villagesql_error(
+              "Cannot initialize function '%s': custom type '%s' not found for "
+              "argument %u",
+              MYF(0), func_name, expected_type.custom_type, i + 1);
+          return true;
         }
+        args[i]->set_type_context(resolved_tc);
       } else {
         // Neither the hook nor TD1 could supply params for this type.
         villagesql_error(
@@ -1763,6 +1776,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
                               vef_context_t *ctx, const char *func_name,
                               uint arg_count, Item **args,
                               std::vector<TypeParameters> *out_arg_params,
+                              std::vector<std::string> *out_arg_type_names,
                               TypeParameters *out_return_params) {
   std::vector<vef_type_t> arg_types(arg_count);
   std::vector<char *> const_values(arg_count, nullptr);
@@ -1828,6 +1842,24 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
     out_arg_slots[i] = &out_args[i];
   }
 
+  // The type-name channel is offered only when the caller asked for it, which
+  // means only for a varargs call: a fixed-arity signature already says what
+  // each argument must be.
+  const bool offer_arg_types = out_arg_type_names != nullptr && arg_count > 0;
+  std::vector<vef_inferred_type_params_t> out_names;
+  std::vector<vef_inferred_type_params_t *> out_name_slots;
+  std::vector<char> name_bufs;
+  if (offer_arg_types) {
+    out_names.resize(arg_count);
+    out_name_slots.resize(arg_count);
+    name_bufs.resize(arg_count * VEF_MAX_TYPE_NAME_LEN);
+    for (uint i = 0; i < arg_count; i++) {
+      out_names[i].buf = name_bufs.data() + i * VEF_MAX_TYPE_NAME_LEN;
+      out_names[i].max_buf_len = VEF_MAX_TYPE_NAME_LEN;
+      out_name_slots[i] = &out_names[i];
+    }
+  }
+
   char return_buf[kBindParamsBufLen];
   char err_msg[VEF_MAX_ERROR_LEN] = {0};
   vef_inferred_type_params_t out_return{};
@@ -1846,6 +1878,8 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
   out_return.max_buf_len = sizeof(return_buf);
   bt_result.out_return_params = &out_return;
   bt_result.out_arg_params = arg_count > 0 ? out_arg_slots.data() : nullptr;
+  bt_result.out_arg_types =
+      offer_arg_types ? out_name_slots.data() : nullptr;
 
   bind_and_check(ctx, &bt_args, &bt_result);
 
@@ -1880,6 +1914,67 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
       (*out_arg_params)[i] =
           TypeParameters(std::string(out_args[i].buf, out_args[i].actual_len));
     }
+
+    if (!offer_arg_types) continue;
+    if (out_names[i].overflow) {
+      char reason[VEF_MAX_ERROR_LEN];
+      snprintf(reason, sizeof(reason),
+               "bind_and_check_types: type name too long for argument %u",
+               i + 1);
+      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name, reason);
+      return true;
+    }
+    if (out_names[i].actual_len > 0) {
+      (*out_arg_type_names)[i] =
+          std::string(out_names[i].buf, out_names[i].actual_len);
+    }
+  }
+  return false;
+}
+
+// Turns a varargs hook's answers into the expected-type array the two passes
+// consume. Only an argument the hook named gets an entry: staying silent about
+// an argument means the server's own inference stands, and both passes skip
+// anything that is not VEF_TYPE_CUSTOM.
+//
+// name_store owns the names -- out_expected points into it, so every name is
+// written before any pointer is taken. Returns true on error (already raised).
+static bool BuildVarargsExpectedTypes(
+    const char *func_name, std::string_view extension_name, uint arg_count,
+    const std::vector<std::string> &hook_names,
+    std::vector<std::string> *name_store,
+    std::vector<vef_type_t> *out_expected) {
+  for (uint i = 0; i < arg_count; i++) {
+    if (hook_names[i].empty()) continue;
+
+    // The name is extension-supplied, so look it up rather than trust it.
+    // ResolveTypeDescriptor takes only a read lock, filters by extension --
+    // which is what enforces "must be a type of this extension" -- and
+    // matches the case-folded key, so a hook writing 'tvector' finds TVECTOR.
+    const TypeDescriptor *td = nullptr;
+    if (ResolveTypeDescriptor(extension_name, hook_names[i], td)) return true;
+    if (td == nullptr) {
+      char reason[VEF_MAX_ERROR_LEN];
+      snprintf(reason, sizeof(reason),
+               "bind_and_check_types named unknown custom type '%s' for "
+               "argument %u",
+               hook_names[i].c_str(), i + 1);
+      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), func_name, reason);
+      return true;
+    }
+    // Copy the canonical spelling: the read lock is gone once we return, and
+    // an UNINSTALL EXTENSION could free the registry entry behind it.
+    (*name_store)[i] = td->type_name();
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if ((*name_store)[i].empty()) {
+      // Any non-CUSTOM id: both passes branch only on VEF_TYPE_CUSTOM, so
+      // this entry exists to be skipped.
+      (*out_expected)[i] = {VEF_TYPE_STRING, nullptr};
+    } else {
+      (*out_expected)[i] = {VEF_TYPE_CUSTOM, (*name_store)[i].c_str()};
+    }
   }
   return false;
 }
@@ -1891,44 +1986,103 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     TypeParameters *out_return_params,
                                     const vef_bind_types_func_t bind_and_check,
                                     vef_context_t *ctx) {
-  // Varargs: skip both arg-count and per-arg type validation. The function's
-  // prerun hook is responsible for inspecting arg_count and arg_types and
-  // rejecting calls it does not accept.
-  if (signature->param_count == VEF_PARAM_VARARGS) {
-    return false;
-  }
   const bool has_bind_hook = nullptr != bind_and_check;
+  const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
+
+  // Varargs without a hook: skip both arg-count and per-arg type validation.
+  // The function's prerun hook is responsible for inspecting arg_count and
+  // arg_types and rejecting calls it does not accept.
+  if (varargs && !has_bind_hook) return false;
+
+  // Backing store for a varargs expected-type array. Declared out here rather
+  // than in the block below because expected_types is a span over
+  // varargs_expected and must stay valid across both passes, and name_store
+  // owns the names it points at. Neither is touched once the span is taken.
+  std::vector<std::string> name_store;
+  std::vector<vef_type_t> varargs_expected;
+
+  // One slot per argument for whatever the hook resolves; left empty when
+  // there is no hook, which is what tells pass 2 that TD1 rather than a hook
+  // owns the parameters. Sized once, here, so neither hook site below can
+  // re-size it -- a second resize would be a silent no-op that kept the first
+  // hook's answers instead of clearing them.
+  std::vector<TypeParameters> hook_arg_params;
+  if (has_bind_hook) hook_arg_params.resize(arg_count);
+
+  if (varargs) {
+    // Varargs runs the hook FIRST, because there is no signature to check
+    // arguments against and the hook supplies what signature->params would
+    // have. The arity check is meaningless here and TD1/TD2 are off for any
+    // hooked function, so nothing else of the fixed-arity path is lost.
+    std::vector<std::string> hook_arg_type_names(arg_count);
+    if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
+                          &hook_arg_params, &hook_arg_type_names,
+                          out_return_params)) {
+      return true;
+    }
+    name_store.resize(arg_count);
+    varargs_expected.resize(arg_count);
+    if (BuildVarargsExpectedTypes(func_name, extension_name, arg_count,
+                                  hook_arg_type_names, &name_store,
+                                  &varargs_expected)) {
+      return true;
+    }
+  }
+
+  // What each argument is required to be. For varargs that is exactly
+  // arg_count entries, so pass 1's count check passes by construction and only
+  // its base-type half does any work; for fixed arity it is the declared
+  // signature and the count check is the real arity check.
+  //
+  // A ternary rather than an if/else assignment so the result stays const, and
+  // so the fixed-arity operand is never evaluated on the varargs path: there
+  // param_count is the VEF_PARAM_VARARGS sentinel (UINT_MAX) and params is
+  // null, which would make a span of four billion entries over nothing.
+  const std::span<const vef_type_t> expected_types =
+      varargs ? std::span<const vef_type_t>{varargs_expected}
+              : std::span<const vef_type_t>{signature->params,
+                                            signature->param_count};
 
   // A bind_and_check_types hook replaces both TD1 and TD2. Passing nullptr
   // leaves known_params empty, which is what switches TD1 off: pass 1 collects
   // nothing and stops enforcing sibling agreement, and pass 2 has nothing of
   // TD1's to propagate. Pass 2 still runs for its non-TD1 half -- encoding
   // string literals and rejecting arguments that are neither a custom value nor
-  // a literal -- and for applying whatever the hook decided below.
+  // a literal -- and for applying whatever the hook decided.
+  //
+  // It is also what keeps ConvertVDFArguments's "only one source of params"
+  // assert true, now that both arities share this one call.
   std::map<std::string, KnownEntry> known_params;
   if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
-                           signature,
+                           expected_types,
                            has_bind_hook ? nullptr : &known_params)) {
     return true;
   }
 
-  // The hook sits between the passes: it sees what pass 1 resolved, and the
-  // params it decides are what pass 2 applies.
-  std::vector<TypeParameters> hook_arg_params;
-  if (has_bind_hook) {
-    hook_arg_params.resize(arg_count);
+  // Fixed arity runs the hook HERE, between the passes, and deliberately so:
+  // after pass 1's base-type check, a hook never sees an argument whose
+  // declared type was wrong. Pass 1 resolves nothing -- it only validates and
+  // collects -- so the hook sees the same arguments either way; what matters
+  // is that the params it decides are what pass 2 applies. Varargs already ran
+  // it above, where it had to.
+  if (has_bind_hook && !varargs) {
+    // nullptr: a fixed-arity signature already declares every argument's type,
+    // so the hook is not offered the type-name channel.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params)) {
+                          &hook_arg_params, /*out_arg_type_names=*/nullptr,
+                          out_return_params)) {
       return true;
     }
   }
 
   if (ConvertVDFArguments(thd, func_name, extension_name, arg_count, args,
-                          signature, known_params, hook_arg_params)) {
+                          expected_types, known_params, hook_arg_params)) {
     return true;
   }
 
   // TD2's replacement: the hook already supplied the return type's params.
+  // Varargs always has a hook by the time it gets here, so what follows is
+  // fixed-arity only.
   if (has_bind_hook) return false;
 
   if (out_return_params != nullptr) {

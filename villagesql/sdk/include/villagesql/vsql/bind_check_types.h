@@ -67,9 +67,16 @@ class BindArgType {
   // This argument's parameters as your own params struct, or nullptr when they
   // are not known. P must be the type registered with
   // .params<P, &P::parse, &P::to_strings>() on the type builder.
+  //
+  // Also returns nullptr when no custom type registered P, rather than
+  // dereferencing the cache's null parse function. A fixed-arity function is
+  // caught at registration by check_params_cache_bound, but that check is
+  // only derived for typed argument lists, so a varargs hook has no other
+  // safety net.
   template <typename P>
   const P *params() const {
     if (!has_params()) return nullptr;
+    if (!type_params_cache_for<P>().is_bound()) return nullptr;
     return &type_params_cache_for<P>().get(*params_);
   }
 
@@ -127,6 +134,31 @@ class BindResult {
     write<P>(r_->out_arg_params[i], p);
   }
 
+  // Varargs only: read argument i as the given custom type. Pass the type
+  // object you registered -- out.set_arg_type(0, TVECTOR) -- so the name
+  // always matches a real type of this extension.
+  //
+  // Only an argument the server could not type at all, in practice a string
+  // constant, can be named this way; naming a type for an argument that
+  // already carries one is checked rather than applied, and a disagreement
+  // aborts the statement. Silent for a fixed-arity function, whose signature
+  // already says what each argument is.
+  void set_arg_type(size_t i, const char *type_name) {
+    if (r_->out_arg_types == nullptr || type_name == nullptr) return;
+    write_name(r_->out_arg_types[i], type_name);
+  }
+
+  // The two halves of typing a constant argument in one gesture: what it
+  // should be read as, and the parameters to read it with. Prefer this over
+  // calling set_arg_type() and set_arg() separately -- naming a type makes
+  // these parameters the only ones the server will use for the argument, so
+  // supplying one without the other leaves it unresolvable.
+  template <typename P>
+  void set_arg(size_t i, const char *type_name, const P &p) {
+    set_arg_type(i, type_name);
+    set_arg<P>(i, p);
+  }
+
   // Reject the call. The statement is aborted with this message.
   void error(std::string_view msg) {
     r_->type = VEF_RESULT_ERROR;
@@ -154,6 +186,16 @@ class BindResult {
     std::map<std::string, std::string> m;
     type_params_cache_for<P>().to_strings(p, m);
     write_params_to(slot, m);
+  }
+
+  // Same snprintf-style contract as write_params_to: actual_len is always the
+  // length the whole name would take, and overflow says whether buf is safe
+  // to read.
+  static void write_name(vef_inferred_type_params_t *slot,
+                         std::string_view name) {
+    slot->actual_len = name.size();
+    slot->overflow = name.size() > slot->max_buf_len;
+    if (!slot->overflow) std::memcpy(slot->buf, name.data(), name.size());
   }
 
   vef_bind_types_result_t *r_;

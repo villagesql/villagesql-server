@@ -486,23 +486,59 @@ void tvector_concat(vsql::CustomArgWith<TVectorParams> a,
   out.set_length(da.size() + db.size());
 }
 
-// The element width both tvector_concat arguments will use. A constant has no
-// element type of its own, so it takes whichever side the server resolved;
-// when both sides are resolved they must agree. This is the one question that
-// needs to look at both arguments at once.
+// tvector_concat over any number of vectors.
+//
+// Every argument arrives as VEF_TYPE_CUSTOM because the bind hook told the
+// server what the constants among them are, and the server then encoded them
+// -- by the time a row is read there are no strings left to handle here.
+void tvector_concat_all(vsql::VarArgs args,
+                        vsql::CustomResultWith<TVectorParams> out) {
+  size_t total = 0;
+  for (size_t i = 0; i < args.size(); i++) {
+    if (args[i].is_null()) {
+      out.set_null();
+      return;
+    }
+    total += args[i].as_custom().size();
+  }
+
+  auto buf = out.buffer();
+  if (buf.size() < total) {
+    out.error("tvector_concat_all: output buffer too small");
+    return;
+  }
+  size_t at = 0;
+  for (size_t i = 0; i < args.size(); i++) {
+    const auto d = args[i].as_custom();
+    memcpy(buf.data() + at, d.data(), d.size());
+    at += d.size();
+  }
+  out.set_length(total);
+}
+
+// The element width every argument of a concat will use. A constant has no
+// element type of its own, so it takes whichever argument the server
+// resolved; where more than one is resolved they must agree. This is the one
+// question that needs to look at all the arguments at once, which is why it
+// is not folded into bind_params_for_vector below.
 //
 // Returns true and fills error_msg on failure.
-bool common_element_width(vsql::BindArgs args, size_t &bpe,
-                          std::string &error_msg) {
-  const TVectorParams *a = args.at(0).params<TVectorParams>();
-  const TVectorParams *b = args.at(1).params<TVectorParams>();
-  if (a != nullptr && b != nullptr && a->bytes_per_elem != b->bytes_per_elem) {
-    error_msg = "tvector_concat: vectors must have the same element type";
-    return true;
+bool common_element_width(const std::string &func_name, vsql::BindArgs args,
+                          size_t &bpe, std::string &error_msg) {
+  const TVectorParams *resolved = nullptr;
+  for (size_t i = 0; i < args.size(); i++) {
+    const TVectorParams *p = args.at(i).params<TVectorParams>();
+    if (p == nullptr) continue;
+    if (resolved != nullptr &&
+        resolved->bytes_per_elem != p->bytes_per_elem) {
+      error_msg = func_name + ": vectors must have the same element type";
+      return true;
+    }
+    resolved = p;
   }
-  bpe = (a != nullptr)   ? a->bytes_per_elem
-        : (b != nullptr) ? b->bytes_per_elem
-                         : 4;
+  // Nothing resolved at all means every argument is a constant, so there is
+  // no element type to inherit; float is TVECTOR's default.
+  bpe = (resolved != nullptr) ? resolved->bytes_per_elem : 4;
   return false;
 }
 
@@ -567,7 +603,7 @@ void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
 
   std::string error_msg;
   size_t bpe = 0;
-  if (common_element_width(args, bpe, error_msg)) {
+  if (common_element_width("tvector_concat", args, bpe, error_msg)) {
     out.error(error_msg);
     return;
   }
@@ -859,6 +895,56 @@ constexpr auto TVECTOR =
         .intrinsic_default_vdf("tvector_intrinsic_default")
         .build();
 
+// bind_and_check_types for tvector_concat_all, the variadic concat.
+//
+// Declared below TVECTOR rather than beside the other hooks because it names
+// the type object: set_arg(i, TVECTOR, params) is what tells the server that
+// a particular argument is a TVECTOR at all.
+//
+// That naming is the whole difference from tvector_concat's hook. A
+// fixed-arity function has a signature saying every argument is a TVECTOR, so
+// its hook only supplies the missing parameters. A variadic one has no
+// signature, so a bare '[1,2]' among the arguments is just a string until the
+// hook says otherwise -- and an argument the hook stays silent about keeps
+// whatever the server worked out on its own.
+void tvector_concat_all_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) {
+    out.error("tvector_concat_all requires at least one argument");
+    return;
+  }
+
+  std::string error_msg;
+  size_t bpe = 0;
+  if (common_element_width("tvector_concat_all", args, bpe, error_msg)) {
+    out.error(error_msg);
+    return;
+  }
+
+  int64_t total = 0;
+  for (size_t i = 0; i < args.size(); i++) {
+    TVectorParams params{};
+    bool needs_publish = false;
+    if (bind_params_for_vector("tvector_concat_all", args, i, bpe, params,
+                               needs_publish, error_msg)) {
+      out.error(error_msg);
+      return;
+    }
+    // Name the type and hand back the parameters together: naming a type
+    // makes these parameters the only ones the server will use for the
+    // argument, so the two have to travel as one answer.
+    if (needs_publish) out.set_arg(i, TVECTOR, params);
+    total += params.dimension;
+  }
+
+  if (total > kTVectorMaxDimension) {
+    out.error("tvector_concat_all: combined dimension " +
+              std::to_string(total) + " exceeds the maximum of " +
+              std::to_string(kTVectorMaxDimension));
+    return;
+  }
+  out.set_return(TVectorParams{.dimension = total, .bytes_per_elem = bpe});
+}
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -876,6 +962,12 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(TVECTOR)
                   .param(TVECTOR)
                   .param(TVECTOR)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_concat_all>("tvector_concat_all")
+                  .returns(TVECTOR)
+                  .varargs()
+                  .bind_and_check_types<&tvector_concat_all_bind>()
                   .deterministic()
                   .build())
         .func(make_func<&tvector_concat>("tvector_concat")

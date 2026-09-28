@@ -210,6 +210,11 @@ typedef enum : unsigned int {
 // resolve_params "k=v,..." strings. On overflow the required length is reported
 // via actual_len and the caller retries with a larger buffer.
 //
+// VEF_MAX_TYPE_NAME_LEN (192 bytes): the size of the buffers a
+// bind_and_check_types hook writes a custom type name into via
+// out_arg_types. This is the server's identifier limit -- 64 characters in
+// the utf8mb3 system charset. Follows the same overflow contract.
+//
 // A custom-type column's storage footprint is capped at 65532 bytes. A custom
 // column is backed by a VARBINARY field, and the server's 65535-byte row budget
 // also pays for that field's 2 length bytes and the row's null byte.
@@ -688,6 +693,33 @@ typedef struct {
   // worked out. nullptr when the server did not offer the channel; when
   // non-nullptr, every one of its arg_count entries is non-nullptr.
   vef_inferred_type_params_t **out_arg_params;
+
+  // protocol >= VEF_PROTOCOL_4
+  // OPTIONAL OUTPUT, varargs only: the custom type an argument should be
+  // read as. buf carries the type name -- the same struct and the same
+  // overflow contract as out_arg_params, but holding a name rather than
+  // "k=v,k=v", sized VEF_MAX_TYPE_NAME_LEN. actual_len == 0 leaves the
+  // server's own inference for that argument in place.
+  //
+  // A fixed-arity function has no use for this: its signature already says
+  // what each argument must be, and the server offers the channel only for a
+  // varargs call, where there is no signature to say so. A bare '[1,2,3]'
+  // written among a varargs function's arguments is otherwise just a string,
+  // because nothing declares that it should become a custom type.
+  //
+  // What it can do is narrower than the name suggests. An argument that
+  // already carries a type -- a column, a nested VDF's result, a CAST -- is
+  // only *checked* against the declared name, and the call is rejected if
+  // they disagree; the hook cannot reinterpret such an argument. Naming a
+  // type is effective only for an argument the server could not type at all,
+  // which in practice means a string constant.
+  //
+  // Declaring a name here makes out_arg_params[i] the sole source of that
+  // argument's parameters. The name must be a type registered by this same
+  // extension; anything else aborts the statement. nullptr when the server
+  // did not offer the channel; when non-nullptr, every one of its arg_count
+  // entries is non-nullptr.
+  vef_inferred_type_params_t **out_arg_types;
 } vef_bind_types_result_t;
 
 typedef void (*vef_bind_types_func_t)(vef_context_t *ctx,
@@ -833,6 +865,19 @@ typedef size_t (*vef_hash_func_t)(const unsigned char *data, size_t len);
 // Maximum length of the serialized "key=value,key=value,..." string used
 // by int_to_params and resolve_params VDFs.
 #define VEF_MAX_TYPE_PARAMS_STRING_LEN 1024
+
+// Maximum length in bytes of a custom type name written back through
+// vef_bind_types_result_t::out_arg_types. A type name is a MySQL identifier,
+// so it is at most 64 characters in the utf8mb3 system charset -- this is the
+// server's NAME_LEN (NAME_CHAR_LEN * SYSTEM_CHARSET_MBMAXLEN), restated here
+// because this header must stand alone for extensions. No terminating NUL is
+// written; actual_len gives the length.
+//
+// Only the server reads this, to size the buffers it hands the hook; an
+// extension sees the capacity at runtime as max_buf_len. Raising it later is
+// therefore not an ABI change -- extensions built against an older SDK keep
+// working and simply get more room.
+#define VEF_MAX_TYPE_NAME_LEN 192
 
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
