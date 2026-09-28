@@ -31,6 +31,7 @@
 #include "sql/sql_opt_exec_shared.h"
 #include "sql/sql_optimizer.h"
 #include "sql/table.h"
+#include "villagesql/services/capability_registry.h"
 #include "villagesql/sql/custom_index_knn_recognition.h"
 #include "villagesql/sql/custom_index_knn_scan.h"
 
@@ -56,7 +57,7 @@ bool IsCustomKnnDistanceOrderItem(TABLE *table, Item *order_item) {
   // UDF as ordinarily expensive (forcing the filesort it would otherwise take).
   // This also keeps recognition off JOIN::optimize's per-ORDER-BY-item hot path
   // for every ordinary query.
-  if (!opt_villagesql_custom_index) return false;
+  if (!vsql_allow_preview_extensions) return false;
   if (table == nullptr || order_item == nullptr) return false;
   uint key_idx = 0;
   Item *query_item = nullptr;
@@ -78,7 +79,7 @@ bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
   // never called -- no distance scan is ever built. So the flag needs checking
   // only here (and in IsCustomKnnDistanceOrderItem's filesort exemption); the
   // absent JT_INDEX_DISTANCE marking carries the decision the rest of the way.
-  if (!opt_villagesql_custom_index) return false;
+  if (!vsql_allow_preview_extensions) return false;
 
   // A KNN index order is only useful with a LIMIT; without one we'd walk the
   // whole graph outward. Read the limit from the query block rather than
@@ -146,7 +147,7 @@ AccessPath *BuildCustomKnnDistanceAccessPath(THD *thd, TABLE *table,
   path->type = AccessPath::INDEX_DISTANCE_SCAN;
   path->count_examined_rows = true;
   path->index_distance_scan().table = table;
-  path->index_distance_scan().idx = static_cast<int>(key_idx);
+  path->index_distance_scan().idx = key_idx;
   path->index_distance_scan().custom_scan_spec = spec;
   // Custom-index variant carries no range (nearest-neighbor QUICK_RANGE is only
   // for the spatial variant).
