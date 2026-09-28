@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,6 +80,7 @@
 #include "sql/table.h"
 #include "sql/visible_fields.h"
 #include "template_utils.h"
+#include "villagesql/sql/custom_index_knn_scan.h"
 
 using pack_rows::TableCollection;
 using std::all_of;
@@ -550,6 +552,19 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       }
       case AccessPath::INDEX_DISTANCE_SCAN: {
         const auto &param = path->index_distance_scan();
+        // VillageSQL: custom-index KNN distance scan. The two variants are
+        // mutually exclusive: the custom variant sets custom_scan_spec and
+        // leaves range null; the spatial variant sets range and leaves
+        // custom_scan_spec null. The spatial iterator dereferences range
+        // unconditionally, so custom_scan_spec is the discriminator that keeps
+        // the null range away from it.
+        assert((param.custom_scan_spec != nullptr) != (param.range != nullptr));
+        if (param.custom_scan_spec != nullptr) {
+          iterator = villagesql::CreateCustomKnnDistanceIterator(
+              thd, mem_root, param.table, param.idx, param.custom_scan_spec,
+              path->num_output_rows(), examined_rows);
+          break;
+        }
         iterator = NewIterator<IndexDistanceScanIterator>(
             thd, mem_root, param.table, param.idx, param.range,
             path->num_output_rows(), examined_rows);
