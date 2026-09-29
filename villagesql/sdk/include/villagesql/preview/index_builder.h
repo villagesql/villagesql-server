@@ -240,6 +240,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdio>
 #include <new>
 #include <type_traits>
@@ -436,6 +437,9 @@ class Index {
   // returns false on success, true on error (get_error() for details).
   bool helper_fn_name(uint32_t key_pos, uint32_t fn_id, char *name_buf,
                       uint32_t name_buf_len) const {
+    // The server populates helper_fn_name_fn unconditionally for every custom
+    // index (init_index_ctx); it is never null on a live index context.
+    assert(ctx_.helper_fn_name_fn != nullptr);
     return ctx_.helper_fn_name_fn(ctx_.index_ref, key_pos, fn_id, name_buf,
                                   name_buf_len, tl_error_msg, ERROR_MSG_SIZE);
   }
