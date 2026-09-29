@@ -875,6 +875,7 @@ static PSI_thread_info all_innodb_threads[] = {
                    PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(recv_writer_thread, "ib_recv_write", PSI_FLAG_SINGLETON, 0,
                    PSI_DOCUMENT_ME),
+    PSI_THREAD_KEY(buf_lru_manager_thread, "ib_buf_lru", 0, 0, PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_error_monitor_thread, "ib_srv_err", PSI_FLAG_SINGLETON,
                    0, PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_lock_timeout_thread, "ib_srv_lock_to",
@@ -23789,6 +23790,14 @@ static MYSQL_SYSVAR_ULONG(lru_scan_depth, srv_LRU_scan_depth,
                           "How deep to scan LRU to keep it clean", nullptr,
                           nullptr, 1024, 100, UINT32_MAX, 0);
 
+static MYSQL_SYSVAR_BOOL(
+    lru_threads, srv_lru_threads_enabled,
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+    "Enable to use LRU manager threads that flush the LRU tail and refill "
+    "the free list. There would be one thread for each buffer pool instance. "
+    "When disabled (the default), page cleaners perform the LRU flushing.",
+    nullptr, nullptr, false);
+
 static MYSQL_SYSVAR_ULONG(flush_neighbors, srv_flush_neighbors,
                           PLUGIN_VAR_OPCMDARG,
                           "Set to 0 (don't flush neighbors from buffer pool),"
@@ -24282,9 +24291,30 @@ static MYSQL_SYSVAR_BOOL(use_native_aio, srv_use_native_aio,
 static MYSQL_SYSVAR_BOOL(
     numa_interleave, srv_numa_interleave,
     PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_READONLY,
-    "Use NUMA interleave memory policy to allocate InnoDB buffer pool.",
+    "Use NUMA interleave memory policy to allocate InnoDB buffer pool."
+    " Note: it is recommended to keep it enabled when using large pages"
+    " on systems with multiple NUMA nodes.",
     nullptr, nullptr, true);
 #endif /* HAVE_LIBNUMA */
+
+static MYSQL_SYSVAR_BOOL(
+    buffer_pool_populate, srv_buf_pool_populate, PLUGIN_VAR_NOCMDARG,
+    "Enforce page faults for InnoDB buffer pool allocations at allocation time"
+    " (pre-populate pages). When ON (default), pre-population happens at"
+    " allocation time. When OFF, the pre-population is skipped to reduce"
+    " startup time and page-faults happen on first page accesses."
+    " Note: it is recommended to turn on this variable when using large pages"
+    " on systems with multiple NUMA nodes.",
+    nullptr, nullptr, true);
+
+static MYSQL_SYSVAR_BOOL(
+    buffer_pool_lazy_latch_init, srv_buf_pool_lazy_latch_init,
+    PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_READONLY,
+    "Create buffer pool block latches (mutex, rw-locks) lazily on first use"
+    " instead of eagerly while the buffer pool is built. Speeds up buffer"
+    " pool initialization for large pools at the cost of slightly slower first"
+    " use of each page, which then pays the latch construction.",
+    nullptr, nullptr, false);
 
 static MYSQL_SYSVAR_BOOL(
     api_enable_binlog, ib_binlog_enabled,
@@ -24615,6 +24645,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(buffer_pool_load_abort),
     MYSQL_SYSVAR(buffer_pool_load_at_startup),
     MYSQL_SYSVAR(lru_scan_depth),
+    MYSQL_SYSVAR(lru_threads),
     MYSQL_SYSVAR(flush_neighbors),
     MYSQL_SYSVAR(checksum_algorithm),
     MYSQL_SYSVAR(log_checksums),
@@ -24744,6 +24775,8 @@ static SYS_VAR *innobase_system_variables[] = {
 #ifdef HAVE_LIBNUMA
     MYSQL_SYSVAR(numa_interleave),
 #endif /* HAVE_LIBNUMA */
+    MYSQL_SYSVAR(buffer_pool_lazy_latch_init),
+    MYSQL_SYSVAR(buffer_pool_populate),
     MYSQL_SYSVAR(change_buffering),
     MYSQL_SYSVAR(change_buffer_max_size),
 #if defined UNIV_DEBUG || defined UNIV_IBUF_DEBUG

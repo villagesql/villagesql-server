@@ -13346,7 +13346,7 @@ ER_AUDIT_TABLE_READ_FIELD_FAILURE
   eng "Failed to read %s.%s"
 
 ER_AUDIT_TABLE_FILTER_WRONG_FORMAT
-  eng "audit_log_filter name: %s, filter: %s has wrong format, consider using audit_log_filter.event_mode=FULL"
+  eng "audit_log_filter name: %s, filter: %s has wrong format: %s"
 
 ER_AUDIT_TABLE_FILTER_INSERT_COMMIT_FAILURE
   eng "Failed to insert filtering rule '%s', '%s', commit failed"
@@ -13478,6 +13478,9 @@ ER_AUDIT_PARSE_SKIP_DISABLED_EVENT_SUBCLASS
 # Start of Percona Server 8.4 error log messages
 #
 start-error-number 48300
+
+ER_LOG_REPLICA_TRANSLATED_DEPRECATED_PRIVILEGE
+  eng "Replica applier rewrote removed dynamic privilege '%s' into '%s' before applying the query received from an older source server. Original query: %s"
 
 #
 # End of Percona Server 8.4 error log messages

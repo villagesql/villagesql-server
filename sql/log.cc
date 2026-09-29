@@ -2024,14 +2024,9 @@ bool log_slow_applicable(THD *thd, int sp_sql_command) {
     Do not log administrative statements unless the appropriate option is
     set.
   */
-  // 8.4.11 made this gate telemetry-aware so an enabled OTEL logger keeps the
-  // statement eligible even when the legacy slow log is off. Kept as an early
-  // return rather than upstream's wrapping if-block, because Percona's filters
-  // below (log_slow_filter, rate limiting, sp statements) run after this point
-  // and upstream's block ended the function.
   PSI_LogRecord rec(key_slow_query_logger, OTELLogLevel::TLOG_WARN, "");
   const bool telemetry_log = rec.check_enabled();
-  if (!((thd->enable_slow_log && opt_slow_log) || telemetry_log)) return false;
+  if ((!thd->enable_slow_log || !opt_slow_log) && !telemetry_log) return false;
 
   /*
     Copy all needed global variables into a session one before doing all checks.
@@ -2723,6 +2718,7 @@ int log_vmessage(int log_type [[maybe_unused]], va_list fili) {
 
   ll.count = 0;
   ll.seen = 0;
+  ll.flags = 0;
 
   do {
     dedup = false;

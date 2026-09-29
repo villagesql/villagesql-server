@@ -2059,7 +2059,7 @@ ulint dict_index_node_ptr_max_size(const dict_index_t *index) /*!< in: index */
   ulint comp;
   ulint i;
   /* maximum possible storage size of a record */
-  ulint rec_max_size;
+  size_t rec_max_size;
 
   if (dict_index_is_ibuf(index)) {
     /* cannot estimate accurately */
@@ -2266,7 +2266,7 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
     }
   } else if (!always_inlined &&
              field_max_size > BTR_EXTERN_LOCAL_STORED_MAX_SIZE &&
-             index->is_clustered()) {
+             DATA_BIG_COL(col) && index->is_clustered()) {
     /* In dtuple_convert_big_rec(), a "big" variable-length column that is
     longer than BTR_EXTERN_LOCAL_STORED_MAX_SIZE and is not used for navigation
     may be chosen for external storage. */
