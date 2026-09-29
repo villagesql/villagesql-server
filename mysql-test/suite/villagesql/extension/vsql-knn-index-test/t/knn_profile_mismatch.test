@@ -1,0 +1,96 @@
+# Profile discrimination over the REAL InnoDB-resident custom-index surface.
+#
+# The optimizer must tie an ORDER BY distance function to the index type whose
+# profile actually binds it. The store-test extension registers two index types:
+#   kvec_l2      profile binds kvec_l2_distance
+#   kvec_cos  profile binds kvec_cos_distance
+# A table with only a kvec_l2 (L2) index must drive a custom distance scan
+# for an L2 ORDER BY, but must NOT be used for a cosine ORDER BY (which belongs
+# to kvec_cos). Otherwise a cosine query would be answered in L2 order --
+# silently wrong.
+#
+INSTALL EXTENSION vsql_knn_index_test;
+
+# Reset the static scan/insert counters so their absolute values are
+# deterministic regardless of what ran earlier in this server session.
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+
+CREATE TABLE tvm (
+  id INT PRIMARY KEY,
+  v KVECTOR
+);
+
+# Only an L2 index exists on this table.
+CREATE INDEX idx_vm ON tvm (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+INSERT INTO tvm VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo #
+--echo # Matching case: L2 ORDER BY against the L2 index -> custom scan chosen.
+--echo #
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id
+FROM tvm
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS l2_begins_before;
+
+SELECT id
+FROM tvm
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+--echo # Scan fired for the matching L2 query.
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS l2_begins_after;
+
+--echo #
+--echo # Mismatched case: cosine ORDER BY against a table that has only an L2
+--echo # index. kvec_cos_distance is a recognized distance function (bound
+--echo # in the kvec_cos profile), but no kvec_cos index exists here,
+--echo # so the optimizer must NOT take a custom scan -- EXPLAIN shows a sort,
+--echo # not a "Custom index distance scan".
+--echo #
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id
+FROM tvm
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v,
+           KVECTOR::from_string('[1,0,0,0]'))
+LIMIT 3;
+
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS cos_begins_before;
+
+--echo #
+--echo # Results are still correct (cosine order, computed by filesort). Nearest
+--echo # by cosine to [1,0,0,0]: id=1 and id=5 are colinear (cos dist 0), then
+--echo # id=4 (45 degrees).
+--echo #
+SELECT id
+FROM tvm
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v,
+           KVECTOR::from_string('[1,0,0,0]')),
+         id
+LIMIT 3;
+
+--echo #
+--echo # The custom scan did NOT fire for the mismatched cosine query: the
+--echo # begin count is unchanged from before the query.
+--echo #
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS cos_begins_after;
+
+DROP TABLE tvm;
+UNINSTALL EXTENSION vsql_knn_index_test;
