@@ -1709,7 +1709,8 @@ bool check_vef_registration(const vef_registration_t *registration,
   // The SDK rejects a half-registered pair at compile time; an extension that
   // arrives with one anyway was not built by it.
   if (registration->protocol >= VEF_PROTOCOL_4 &&
-      (registration->on_init == nullptr) != (registration->on_deinit == nullptr)) {
+      (registration->on_init == nullptr) !=
+          (registration->on_deinit == nullptr)) {
     error_message =
         registration->on_init == nullptr
             ? "extension registers an on_deinit hook without an on_init"
