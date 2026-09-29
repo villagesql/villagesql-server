@@ -1,0 +1,77 @@
+# A KNN read only returns rows visible to the reading transaction.
+#
+# A row inserted in an open transaction is visible to a KNN query in the same
+# transaction, is not visible to another connection until committed, and
+# disappears again if the transaction rolls back.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+--echo # Three committed rows.
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]');
+
+--echo # --- Same transaction sees its own uncommitted insert ---
+START TRANSACTION;
+INSERT INTO t VALUES (99, '[1,1,1,1]');
+--echo # The query vector equals id=99's vector, so it is the nearest and must
+--echo # appear first for the inserting transaction.
+SELECT id
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
+LIMIT 1;
+
+--echo # --- Another connection must NOT see the uncommitted row ---
+--connect (con1, localhost, root,,)
+--connection con1
+--echo # LIMIT 10 exceeds the visible rows, so all committed rows come back; the
+--echo # uncommitted id=99 must be absent and the query must not error. The
+--echo # committed vectors are equidistant from the query, so --sorted_result
+--echo # compares the set, not the order.
+--sorted_result
+SELECT id
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
+LIMIT 10;
+
+--echo # --- The inserting transaction rolls back ---
+--connection default
+ROLLBACK;
+
+--echo # id=99 is gone: no transaction ever committed it.
+--sorted_result
+SELECT id
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
+LIMIT 10;
+
+--echo # --- Re-insert and COMMIT this time; the row becomes visible everywhere ---
+START TRANSACTION;
+INSERT INTO t VALUES (99, '[1,1,1,1]');
+COMMIT;
+
+--echo # Now id=99 is the nearest for the default connection.
+SELECT id
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
+LIMIT 1;
+
+--echo # ...and for the other connection too.
+--connection con1
+SELECT id
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
+LIMIT 1;
+--disconnect con1
+
+--connection default
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
