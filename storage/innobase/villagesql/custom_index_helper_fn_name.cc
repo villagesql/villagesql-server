@@ -53,6 +53,15 @@ bool vef_index_helper_fn_name_impl(vef_index_ref_t index_ref, uint32_t key_pos,
              fn_id, key_pos);
     return true;
   }
+  // The bare helper name is enough for the extension to recognize its own
+  // helpers and pick a native fast-path: a profile's helpers are all from the
+  // same extension today (cross-extension profile references are not designed
+  // yet -- see the TODO in veb/register.cc). This name is only a hint; an
+  // extension that does not recognize it falls back to the generic helper()
+  // dispatch through the server, which works for any bound function.
+  // TODO(villagesql-indexing): if cross-extension profile references land, an
+  // unrecognized name simply loses the fast-path (still correct via the
+  // fallback); conveying the owning extension here would let it be recognized.
   snprintf(name_buf, name_buf_len, "%s", binding->name);
   return false;
 }
