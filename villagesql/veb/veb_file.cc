@@ -164,6 +164,7 @@ static void sync_expanded_tree(const std::string &expanded_path,
 // TODO(villagesql-windows): Sync extension file contents to disk.
 static void sync_expanded_tree(const std::string &, const std::string &,
                                const std::string &) {}
+static void sync_directory(const char *) {}
 #endif  // _WIN32
 
 std::string get_extension_so_path(const std::string &extension_name,
@@ -195,6 +196,43 @@ std::string get_extension_so_path(const std::string &extension_name,
   fn_format(path_buf, so_filename.c_str(), lib_dir.c_str(), "", 0);
 
   return std::string(path_buf);
+}
+
+// Prefix for a staging directory inside {cache}/{name}/. Expansion extracts
+// into {name}/{kStagingPrefix}{sha256} and renames it to {name}/{sha256} to
+// commit its creation.
+static constexpr const char *kStagingPrefix = ".tmp.";
+
+// True when a directory entry inside {cache}/{name}/ is an expansion staging
+// directory rather than a {sha256} expansion.
+static bool is_staging_dir_name(const std::string &entry_name) {
+  return entry_name.rfind(kStagingPrefix, 0) == 0;
+}
+
+// Path of the staging directory used to build {name_dir}/{sha256}.
+//
+// Because datadir belongs to one server, sha256 is sufficient. Presence of a
+// staging directory indicates a crash.
+static std::string make_staging_path(const std::string &name_dir,
+                                     const std::string &sha256) {
+  std::string staging_name = std::string(kStagingPrefix) + sha256;
+  char path_buf[FN_REFLEN];
+  fn_format(path_buf, staging_name.c_str(), name_dir.c_str(), "", 0);
+  return std::string(path_buf);
+}
+
+// True when the expansion cache holds a .so we can hand to dlopen: it exists,
+// it is a regular file, and it is not empty.
+//
+// Only emptiness is detectable here; a partially written but non-empty .so is
+// indistinguishable from a good one without hashing it, and dlopen rejects it.
+//
+// Note that incomplete expansion is handled separately via rename.
+static bool expanded_so_is_usable(const std::string &so_path) {
+  MY_STAT so_stat;
+  if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) return false;
+  if (!MY_S_ISREG(so_stat.st_mode)) return false;
+  return so_stat.st_size > 0;
 }
 
 bool ResolveTargetSoPath(const std::string &extension_name,
@@ -538,14 +576,34 @@ bool expand_veb_to_directory(const std::string &name,
 
   LogVSQL(INFORMATION_LEVEL, "Expansion path: %s", expanded_path.c_str());
 
-  // Check if already expanded with this SHA256
+  // Check if already expanded with this SHA256.
+  //
+  // Nothing is removed here even when the expansion turns out to be unusable.
+  // The directory is only discarded once a complete replacement is staged and
+  // durable below.
   MY_STAT dir_stat;
+  bool stale_expansion = false;
   if (my_stat(expanded_path.c_str(), &dir_stat, MYF(0)) &&
       MY_S_ISDIR(dir_stat.st_mode)) {
-    LogVSQL(INFORMATION_LEVEL,
-            "Extension '%s' already expanded at %s, skipping extraction",
-            name.c_str(), expanded_path.c_str());
-    return false;  // Already expanded, success
+    std::string cached_so = get_extension_so_path(name, sha256_hash);
+    if (cached_so.empty()) {
+      villagesql_error("Failed to construct .so path for extension '%s'",
+                       MYF(0), name.c_str());
+      return true;
+    }
+
+    if (expanded_so_is_usable(cached_so)) {
+      LogVSQL(INFORMATION_LEVEL,
+              "Extension '%s' already expanded at %s, skipping extraction",
+              name.c_str(), expanded_path.c_str());
+      return false;  // Already expanded, success
+    }
+
+    LogVSQL(WARNING_LEVEL,
+            "Extension '%s' expansion at %s has no usable .so at %s; "
+            "re-expanding from the VEB",
+            name.c_str(), expanded_path.c_str(), cached_so.c_str());
+    stale_expansion = true;
   }
 
   // Create directory structure: .veb_expansion_cache/,
@@ -573,9 +631,27 @@ bool expand_veb_to_directory(const std::string &name,
     LogVSQL(INFORMATION_LEVEL, "Created directory: %s", name_dir.c_str());
   }
 
-  // Create .veb_expansion_cache/{name}/{sha256}/
-  if (my_mkdir(expanded_path.c_str(), 0755, MYF(0)) != 0) {
-    villagesql_error("Failed to create SHA256 expansion directory", MYF(0));
+  // Extract into .veb_expansion_cache/{name}/.tmp.{sha256}/ and rename it to
+  // {sha256}/ only once the whole tree is on stable storage.
+  std::string staging_path = make_staging_path(name_dir, sha256_hash);
+
+  // Any staging directory still here is from a crash during an earlier
+  // expansion, so reclaim it.
+  std::error_code ec;
+  std::filesystem::remove_all(staging_path, ec);
+
+  // Check the outcome, rather than remove_all's return. All that matters here
+  // is that the path is clear for the mkdir below.
+  if (my_stat(staging_path.c_str(), &dir_stat, MYF(0))) {
+    villagesql_error("Failed to remove stale staging directory '%s': %s",
+                     MYF(0), staging_path.c_str(),
+                     ec ? ec.message().c_str() : "still present after removal");
+    return true;
+  }
+
+  if (my_mkdir(staging_path.c_str(), 0755, MYF(0)) != 0) {
+    villagesql_error("Failed to create staging expansion directory for '%s'",
+                     MYF(0), name.c_str());
     return true;
   }
 
@@ -682,17 +758,17 @@ bool expand_veb_to_directory(const std::string &name,
       }
     }
 
-    // Construct target path: expanded_path + current_file
+    // Construct target path: staging_path + current_file
     // Use fn_format with MY_RELATIVE_PATH to prepend directory to relative
     // paths.
     // current_file may contain subdirectories (e.g., "lib/simple_udf.so")
     char target_path_buf[FN_REFLEN];
-    if (!fn_format(target_path_buf, current_file, expanded_path.c_str(), "",
+    if (!fn_format(target_path_buf, current_file, staging_path.c_str(), "",
                    MY_RELATIVE_PATH | MY_SAFE_PATH)) {
       // fn_format returns NULL if path is too long (>512 bytes total or >256
       // bytes filename)
       villagesql_error("Path or filename too long for extraction: %s/%s",
-                       MYF(0), expanded_path.c_str(), current_file);
+                       MYF(0), staging_path.c_str(), current_file);
       extraction_error = true;
       break;
     }
@@ -740,41 +816,74 @@ bool expand_veb_to_directory(const std::string &name,
   archive_read_free(a);
   archive_write_free(ext);
 
+  // Force the failure path with a fully staged tree on disk.
+  DBUG_EXECUTE_IF("villagesql_veb_fail_extraction", extraction_error = true;);
+
   if (extraction_error) {
     villagesql_error("VEB expansion failed for '%s'", MYF(0), name.c_str());
 
-    // Clean up partial expansion directory on failure
-    // This removes the SHA256 hash subdirectory and parent name directory if
-    // empty
-    if (!expanded_path.empty()) {
-      LogVSQL(INFORMATION_LEVEL, "Cleaning up failed expansion at: %s",
-              expanded_path.c_str());
-      std::error_code ec;
-      std::filesystem::remove_all(expanded_path, ec);
-      if (ec) {
-        LogVSQL(WARNING_LEVEL,
-                "Failed to clean up expansion directory: %s (error: %s)",
-                expanded_path.c_str(), ec.message().c_str());
-      }
-
-      // Also try to remove parent directory (name dir) if it's now empty
-      // Get the parent by going up one level from expanded_path
-      char parent_dir[FN_REFLEN];
-      size_t parent_len = 0;
-      dirname_part(parent_dir, expanded_path.c_str(), &parent_len);
-      parent_dir[parent_len] = '\0';
-      if (parent_len > 0) {
-        rmdir(parent_dir);  // Ignore errors - might not be empty
-      }
+    // Discard the staging directory. Any existing {sha256} expansion is
+    // untouched.
+    LogVSQL(INFORMATION_LEVEL, "Cleaning up failed expansion at: %s",
+            staging_path.c_str());
+    std::filesystem::remove_all(staging_path, ec);
+    if (ec) {
+      LogVSQL(WARNING_LEVEL,
+              "Failed to clean up staging directory: %s (error: %s)",
+              staging_path.c_str(), ec.message().c_str());
     }
+
+    // Drop the {name} directory too if this expansion created it and nothing
+    // else is in it.
+    rmdir(name_dir.c_str());
 
     return true;
   }
 
   // Extraction wrote everything through the page cache only; force it to stable
-  // storage before we report success, so the install commits only after the
-  // extension's expanded dir is durable.
-  sync_expanded_tree(expanded_path, name_dir, base_path);
+  // storage before the tree becomes reachable under its final name, so the
+  // rename below can only ever publish a complete expansion.
+  sync_expanded_tree(staging_path, name_dir, base_path);
+
+  // Publish the staged tree. Removing a stale expansion is safe at this point
+  // in a way it would not have been up front: a complete, durable replacement
+  // already exists, so the worst a crash in the gap can do is leave no
+  // {sha256} directory at all, which the next expansion rebuilds.
+  if (stale_expansion) {
+    // As above, discard remove_all's return. The rename below only needs the
+    // destination gone.
+    std::filesystem::remove_all(expanded_path, ec);
+    if (my_stat(expanded_path.c_str(), &dir_stat, MYF(0))) {
+      villagesql_error(
+          "Failed to replace stale expansion '%s': %s", MYF(0),
+          expanded_path.c_str(),
+          ec ? ec.message().c_str() : "still present after removal");
+      std::error_code cleanup_ec;
+      std::filesystem::remove_all(staging_path, cleanup_ec);
+      return true;
+    }
+  }
+
+  if (my_rename(staging_path.c_str(), expanded_path.c_str(), MYF(0)) != 0) {
+    villagesql_error("Failed to publish expansion for '%s' as '%s'", MYF(0),
+                     name.c_str(), expanded_path.c_str());
+    std::error_code cleanup_ec;
+    std::filesystem::remove_all(staging_path, cleanup_ec);
+    return true;
+  }
+
+  // The rename is durable only once the directory holding it is synced.
+  sync_directory(name_dir.c_str());
+
+  // This tree was just built from the VEB, so a .so still missing from it is
+  // one the VEB does not carry. Make that explicit so callers can then treat a
+  // successful expansion as holding a loadable .so.
+  std::string published_so = get_extension_so_path(name, sha256_hash);
+  if (published_so.empty() || !expanded_so_is_usable(published_so)) {
+    villagesql_error("VEB for '%s' contains no usable 'lib/%s.so'", MYF(0),
+                     name.c_str(), name.c_str());
+    return true;
+  }
 
   LogVSQL(INFORMATION_LEVEL, "Successfully expanded '%s' to %s", name.c_str(),
           expanded_path.c_str());
@@ -994,11 +1103,10 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
-  // Re-expand VEB if the .so is missing from the expansion cache.
-  MY_STAT so_stat;
-  if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) {
+  // Re-expand the VEB if the expansion cache has no usable .so.
+  if (!expanded_so_is_usable(so_path)) {
     LogVSQL(INFORMATION_LEVEL,
-            "Extension '%s' .so not found at '%s', re-expanding from VEB",
+            "Extension '%s' has no usable .so at '%s', re-expanding from VEB",
             extension_name.c_str(), so_path.c_str());
     std::string expanded_path;
     std::string reexpand_sha256;
@@ -1532,6 +1640,43 @@ bool load_installed_extensions(THD *thd) {
   return false;
 }
 
+// Remove every expansion staging directory inside {cache}/{name}/. Returns
+// how many were removed.
+static int remove_staging_dirs(const std::string &name_dir_path) {
+  DIR *name_dir = opendir(name_dir_path.c_str());
+  if (!name_dir) {
+    LogVSQL(WARNING_LEVEL, "Failed to open expansion directory: %s",
+            name_dir_path.c_str());
+    return 0;
+  }
+
+  int removed_count = 0;
+  struct dirent *entry;
+  while ((entry = readdir(name_dir)) != nullptr) {
+    std::string entry_name = entry->d_name;
+    if (!is_staging_dir_name(entry_name)) continue;
+
+    char staging_path_buf[FN_REFLEN];
+    fn_format(staging_path_buf, entry_name.c_str(), name_dir_path.c_str(), "",
+              0);
+
+    LogVSQL(INFORMATION_LEVEL, "Removing stale expansion staging directory: %s",
+            staging_path_buf);
+    std::error_code ec;
+    std::filesystem::remove_all(staging_path_buf, ec);
+    if (!ec) {
+      removed_count++;
+    } else {
+      LogVSQL(WARNING_LEVEL,
+              "Failed to remove staging directory: %s (error: %s)",
+              staging_path_buf, ec.message().c_str());
+    }
+  }
+
+  closedir(name_dir);
+  return removed_count;
+}
+
 void cleanup_orphaned_expansion_directories(
     const std::set<std::string> &installed_extensions) {
   LogVSQL(INFORMATION_LEVEL, "Cleaning up orphaned expansion directories");
@@ -1591,7 +1736,12 @@ void cleanup_orphaned_expansion_directories(
                 "Failed to remove orphaned directory: %s (error: %s)",
                 name_dir_path.c_str(), ec.message().c_str());
       }
+      continue;
     }
+
+    // The extension is installed, so its {name}/ directory stays. Sweep any
+    // staging directories inside it.
+    removed_count += remove_staging_dirs(name_dir_path);
   }
 
   closedir(expanded_dir);
@@ -1783,6 +1933,12 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
   registration.dlhandle = nullptr;
   registration.registration = nullptr;
   registration.unregister_func = nullptr;
+
+  // Callers ought to have checked this. Log or assert if not.
+  if (should_assert_if_false(expanded_so_is_usable(so_path))) {
+    error_message = "so file is missing or empty: " + so_path;
+    return true;
+  }
 
   // RTLD_LOCAL ensures each extension's symbols are isolated. Without it,
   // macOS defaults to RTLD_GLOBAL, allowing the dynamic linker to coalesce

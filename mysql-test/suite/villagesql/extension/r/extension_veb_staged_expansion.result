@@ -1,0 +1,47 @@
+call mtr.add_suppression("has no usable .so");
+call mtr.add_suppression("VEB expansion failed");
+#
+# A staging directory left by a crash is reclaimed, not loaded.
+#
+Planted staging directory .tmp.<sha256> with a partial .so
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+CREATE TABLE test_staged (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_staged VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_staged ORDER BY id;
+id	c
+1	(1.5,2.5)
+Staging directories left behind: 0
+# Extension works; staging directory reclaimed
+#
+# A failed re-expansion leaves the existing expansion in place.
+#
+DROP TABLE test_staged;
+Expansion directory present before the failed re-expansion
+SET SESSION debug='+d,villagesql_veb_fail_extraction';
+INSTALL EXTENSION vsql_complex;
+ERROR HY000: VEB expansion failed for 'vsql_complex'
+SET SESSION debug='-d,villagesql_veb_fail_extraction';
+Existing expansion survived the failure: yes
+Staging directories left behind: 0
+# Nothing was destroyed; retry now succeeds
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+CREATE TABLE test_staged (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_staged VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_staged ORDER BY id;
+id	c
+1	(1.5,2.5)
+#
+# Startup sweeps staging directories under an installed extension.
+#
+Planted a staging directory under a sha256 no longer in use
+# restart
+Staging directories after restart: 0
+SELECT id, c FROM test_staged ORDER BY id;
+id	c
+1	(1.5,2.5)
+# Swept, extension still usable
+DROP TABLE test_staged;

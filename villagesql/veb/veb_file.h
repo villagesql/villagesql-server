@@ -78,9 +78,16 @@ bool load_veb_manifest(const std::string &name, std::string &version);
 //         lib/
 //           my_extension.so
 //
-// If .veb_expansion_cache/{name}/{sha256}/ already exists, skips extraction
+// Extraction goes to .veb_expansion_cache/{name}/.tmp.{sha256}/ and is renamed
+// to {sha256}/ once the tree is on stable storage, so a {sha256} directory is
+// never half-written and an expansion that fails partway leaves any previous
+// one intact. If {sha256}/ already exists and holds a loadable .so, extraction
+// is skipped.
+//
 // Returns false on success, true on error
-// On success, expanded_path contains full path and sha256_hash contains hash
+// On success, expanded_path contains full path, sha256_hash contains hash, and
+// the expansion holds a loadable lib/{name}.so -- a VEB that carries no such
+// file is an error here rather than a dlopen failure later
 bool expand_veb_to_directory(const std::string &name,
                              const std::string &veb_version,
                              std::string &expanded_path,
