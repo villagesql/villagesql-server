@@ -48,3 +48,9 @@ race:previous_microtime
 # LOCK_system_variables_hash against LOCK_global_system_variables, declared in
 # both directions in mysql-test/lock_order_dependencies.txt.
 deadlock:alloc_and_copy_thd_dynamic_variables
+
+# STOP REPLICA holds Source_info::run_lock and Relay_log_info::run_lock across
+# terminate_slave_thread's cond_timedwait on each, so TSan sees the pair taken
+# in both orders. Declared both ways in mysql-test/lock_order_dependencies.txt.
+deadlock:lock_slave_threads
+deadlock:terminate_slave_thread
