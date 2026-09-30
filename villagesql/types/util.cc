@@ -1616,10 +1616,10 @@ static bool ConvertVDFArguments(
   // The two sources are alternatives: the server fills known_params when it
   // works the parameters out itself, a bind_and_check_types hook fills
   // hook_arg_params when it does, and the caller only ever runs one of them.
-  // They are keyed differently because of how each is decided, i.e. known_params
-  // by type name, since one answer is shared across every argument of that
-  // type; hook_arg_params by argument index, since the hook is asked about
-  // each argument separately.
+  // They are keyed differently because of how each is decided, i.e.
+  // known_params by type name, since one answer is shared across every argument
+  // of that type; hook_arg_params by argument index, since the hook is asked
+  // about each argument separately.
   assert(known_params.empty() || hook_arg_params.empty());
 
   // The hook's answer for one argument, or null if the hook did not supply one
