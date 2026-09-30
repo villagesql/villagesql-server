@@ -50,6 +50,9 @@
 // constant-string inference path.
 constexpr int64_t kTVectorMaxDimension = 4096;
 
+// TVECTOR's default element type is float, four bytes per element.
+constexpr size_t kDefaultBytesPerElem = 4;
+
 // Parsed representation of TVECTOR type parameters.
 // The static parse() method is used automatically by make_type_encode,
 // make_type_decode, and make_intrinsic_default when the operation function
@@ -61,7 +64,7 @@ struct TVectorParams {
   static TVectorParams parse(const std::map<std::string, std::string> &params) {
     auto dim_it = params.find("dimension");
     int64_t dim = strtoll(dim_it->second.c_str(), nullptr, 10);
-    size_t bytes = 4;
+    size_t bytes = kDefaultBytesPerElem;
     auto type_it = params.find("type");
     if (type_it != params.end() && type_it->second == "double") bytes = 8;
     return TVectorParams{.dimension = dim, .bytes_per_elem = bytes};
@@ -146,7 +149,7 @@ static size_t chars_per_element(size_t bpe) {
 size_t bytes_per_element(const std::map<std::string, std::string> &params) {
   auto it = params.find("type");
   if (it != params.end() && it->second == "double") return 8;
-  return 4;
+  return kDefaultBytesPerElem;
 }
 
 // Convert TYPE(N) integer to parameter key-value pairs.
@@ -230,10 +233,10 @@ void tvector_from_string(vsql::MaybeParams<TVectorParams> &p,
   s++;
 
   auto buf = out.buffer();
-  // bpe is fixed if known; defaults to 4 (float) when inferring.
+  // bpe is fixed if known; falls back to float when inferring.
   const size_t bpe = (p.is_known() && p.value().bytes_per_elem > 0)
                          ? p.value().bytes_per_elem
-                         : 4;
+                         : kDefaultBytesPerElem;
   // Cap the loop on what the output buffer can hold; expected-dimension
   // mismatch is reported once at the end.
   const size_t max_supportable = buf.size() / bpe;
@@ -405,13 +408,13 @@ void tvector_add(vsql::CustomArgWith<TVectorParams> a,
   const TVectorParams &pa = a.params();
   const TVectorParams &pb = b.params();
   if (pa.dimension != pb.dimension || pa.bytes_per_elem != pb.bytes_per_elem) {
-    out.error("tvector_add: vectors must have the same dimension and type");
+    out.error("vectors must have the same dimension and type");
     return;
   }
   auto buf = out.buffer();
   size_t byte_size = static_cast<size_t>(pa.dimension) * pa.bytes_per_elem;
   if (buf.size() < byte_size) {
-    out.error("tvector_add: output buffer too small");
+    out.error("output buffer too small");
     return;
   }
   const unsigned char *da = a.value().data();
@@ -459,10 +462,10 @@ int64_t count_vector_elements(std::string_view text) {
 // Concatenate: (TVECTOR(M), TVECTOR(N)) -> TVECTOR(M+N)
 //
 // Unlike every other TVECTOR function, the arguments are allowed to disagree
-// on dimension -- that disagreement is the input. The built-in rules cannot
-// express this: TD1 rejects same-typed arguments whose params differ, and TD2
-// can only copy an argument's params to the return, never add them. So the
-// dimensions are worked out by tvector_concat_bind below.
+// on dimension and that disagreement is the input. The built-in rules cannot
+// express this: one rejects same-typed arguments whose params differ, and the
+// other can only copy an argument's params to the return, never add them. So
+// the dimensions are worked out by tvector_concat_bind below.
 void tvector_concat(vsql::CustomArgWith<TVectorParams> a,
                     vsql::CustomArgWith<TVectorParams> b,
                     vsql::CustomResultWith<TVectorParams> out) {
@@ -471,14 +474,14 @@ void tvector_concat(vsql::CustomArgWith<TVectorParams> a,
     return;
   }
   if (a.params().bytes_per_elem != b.params().bytes_per_elem) {
-    out.error("tvector_concat: vectors must have the same element type");
+    out.error("vectors must have the same element type");
     return;
   }
   const auto da = a.value();
   const auto db = b.value();
   auto buf = out.buffer();
   if (buf.size() < da.size() + db.size()) {
-    out.error("tvector_concat: output buffer too small");
+    out.error("output buffer too small");
     return;
   }
   memcpy(buf.data(), da.data(), da.size());
@@ -486,39 +489,39 @@ void tvector_concat(vsql::CustomArgWith<TVectorParams> a,
   out.set_length(da.size() + db.size());
 }
 
-// The element width both tvector_concat arguments will use. A constant has no
-// element type of its own, so it takes whichever side the server resolved;
-// when both sides are resolved they must agree. This is the one question that
-// needs to look at both arguments at once.
-//
+// The element width both tvector_concat arguments will use.
+// A bare constant carries no element type, so it inherits the width
+// from whichever argument the server resolved. If both arguments are
+// resolved, they must agree.
 // Returns true and fills error_msg on failure.
 bool common_element_width(vsql::BindArgs args, size_t &bpe,
                           std::string &error_msg) {
   const TVectorParams *a = args.at(0).params<TVectorParams>();
   const TVectorParams *b = args.at(1).params<TVectorParams>();
   if (a != nullptr && b != nullptr && a->bytes_per_elem != b->bytes_per_elem) {
-    error_msg = "tvector_concat: vectors must have the same element type";
+    error_msg = "vectors must have the same element type";
     return true;
   }
   bpe = (a != nullptr)   ? a->bytes_per_elem
         : (b != nullptr) ? b->bytes_per_elem
-                         : 4;
+                         : kDefaultBytesPerElem;
   return false;
+}
+
+// Names the failing argument by its 1-based position.
+static std::string arg_error(size_t index, std::string_view what) {
+  return "argument " + std::to_string(index + 1) + " " + std::string(what);
 }
 
 // Works out the params of one TVECTOR argument, whether the server already
 // resolved it or it arrived as a bare constant whose elements have to be
-// counted. Sets needs_publish when it was the latter -- the server holds no
-// params for that argument, so the caller has to hand these back with
+// counted. Sets needs_publish when it was the latter, i.e if the server holds
+// no params for that argument, so the caller has to hand these back with
 // set_arg() before the constant can be encoded.
-//
-// func_name only appears in error messages; the logic is the same for every
-// hook that accepts a TVECTOR argument.
-//
 // Returns true and fills error_msg on failure.
-bool bind_params_for_vector(const std::string &func_name, vsql::BindArgs args,
-                            size_t index, size_t bpe, TVectorParams &params,
-                            bool &needs_publish, std::string &error_msg) {
+bool bind_params_for_vector(vsql::BindArgs args, size_t index, size_t bpe,
+                            TVectorParams &params, bool &needs_publish,
+                            std::string &error_msg) {
   const vsql::BindArgType arg = args.at(index);
   needs_publish = false;
   if (const TVectorParams *known = arg.params<TVectorParams>()) {
@@ -526,21 +529,19 @@ bool bind_params_for_vector(const std::string &func_name, vsql::BindArgs args,
     return false;
   }
 
-  const std::string prefix = func_name + ": argument ";
-  const std::string which = std::to_string(index + 1);
   if (!arg.has_const_value()) {
     error_msg =
-        prefix + which + " must be a TVECTOR or a constant vector literal";
+        arg_error(index, "must be a TVECTOR or a constant vector literal");
     return true;
   }
   const int64_t n = count_vector_elements(arg.const_value());
   if (n < 0) {
-    error_msg = prefix + which + " is not a vector literal";
+    error_msg = arg_error(index, "is not a vector literal");
     return true;
   }
   if (n == 0) {
     error_msg =
-        prefix + which + " is empty; a TVECTOR must have at least one element";
+        arg_error(index, "is empty; a TVECTOR must have at least one element");
     return true;
   }
   params = TVectorParams{.dimension = n, .bytes_per_elem = bpe};
@@ -551,17 +552,18 @@ bool bind_params_for_vector(const std::string &func_name, vsql::BindArgs args,
 // bind_and_check_types for tvector_concat.
 //
 // Two jobs the built-in rules cannot do:
-//   1. permit arguments whose dimensions differ (TD1 would reject the call);
-//   2. compute the return dimension as M+N (TD2 could only copy M or N).
+//   1. permit arguments whose dimensions differ (parameter sharing rejects it);
+//   2. compute the return dimension as M+N (the server return rule only
+//      copies).
 //
 // A third job appears when an argument is a constant: a bare '[1,2,3]' has no
 // type context, and with a hook installed nothing donates params to it, so the
 // hook counts the elements itself and answers with set_arg(). The element type
-// comes from whichever side the server already resolved, which is what TD1
-// would have donated.
+// comes from whichever side the server already resolved, which is what the
+// built-in rules would have donated.
 void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
   if (args.size() != 2) {
-    out.error("tvector_concat expects 2 arguments");
+    out.error("expects 2 arguments");
     return;
   }
 
@@ -575,23 +577,19 @@ void tvector_concat_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams first{}, second{};
   bool publish_first = false, publish_second = false;
 
-  if (bind_params_for_vector("tvector_concat", args, 0, bpe, first,
-                             publish_first, error_msg) ||
-      bind_params_for_vector("tvector_concat", args, 1, bpe, second,
-                             publish_second, error_msg)) {
+  if (bind_params_for_vector(args, 0, bpe, first, publish_first, error_msg) ||
+      bind_params_for_vector(args, 1, bpe, second, publish_second, error_msg)) {
     out.error(error_msg);
     return;
   }
 
-  // Hand back the params of whichever side the server could not resolve.
-  // Without this a constant has nothing to be encoded under and the statement
-  // cannot be resolved -- a hook switches TD1's donation off.
+  // Hand back the params of whichever argument the server could not resolve.
   if (publish_first) out.set_arg(0, first);
   if (publish_second) out.set_arg(1, second);
 
   const int64_t total = first.dimension + second.dimension;
   if (total > kTVectorMaxDimension) {
-    out.error("tvector_concat: combined dimension " + std::to_string(total) +
+    out.error("combined dimension " + std::to_string(total) +
               " exceeds the maximum of " +
               std::to_string(kTVectorMaxDimension));
     return;
@@ -647,7 +645,7 @@ void tvector_store_single(double value, const TVectorParams &p,
                           vsql::CustomResultWith<TVectorParams> out) {
   auto buf = out.buffer();
   if (buf.size() < p.bytes_per_elem) {
-    out.error("tvector: output buffer too small for a one-element vector");
+    out.error("output buffer too small for a one-element vector");
     return;
   }
   if (p.bytes_per_elem == 8) {
@@ -660,8 +658,8 @@ void tvector_store_single(double value, const TVectorParams &p,
 
 // Largest element as a vector: (TVECTOR(N)) -> TVECTOR(1)
 //
-// The REAL-returning form above cannot be stored in a TVECTOR column -- a
-// numeric has no implicit conversion to a custom type -- so this exists for
+// The REAL-returning form above cannot be stored in a TVECTOR column. A
+// numeric has no implicit conversion to a custom type, so this exists for
 // INSERT ... SELECT into a TVECTOR(1) column.
 void tvector_max_as_vector(vsql::CustomArgWith<TVectorParams> v,
                            vsql::CustomResultWith<TVectorParams> out) {
@@ -713,7 +711,7 @@ void tvector_as_double(vsql::CustomArgWith<TVectorParams> v,
   auto buf = out.buffer();
   const size_t needed = static_cast<size_t>(p.dimension) * 8;
   if (buf.size() < needed) {
-    out.error("tvector_as_double: output buffer too small");
+    out.error("output buffer too small");
     return;
   }
   for (int64_t i = 0; i < p.dimension; i++) {
@@ -730,28 +728,27 @@ void tvector_as_double(vsql::CustomArgWith<TVectorParams> v,
 //
 // These functions work without a hook for a TVECTOR column, and for an
 // explicitly converted TVECTOR::from_string('[1,2,3]'). What the hook adds is
-// the bare literal: with a single argument there is no sibling for TD1 to
-// donate a dimension from, so without this the call cannot be resolved at all.
-// The dimension is counted from the literal's own text -- which TVECTOR's text
-// form does determine -- and handed back with set_arg().
+// the bare literal: parameter sharing needs a second argument of the same type
+// to take a dimension from, and there is only one, so without this the call
+// cannot be resolved at all. The dimension is counted from the literal's own
+// text (which TVECTOR's text form does determine) and handed back with
+// set_arg().
 //
 // The argument's resolved params come back in `resolved` so callers whose
 // return type is a TVECTOR can derive it. Returns true if it reported an
-// error. func_name is the bare function name; each message adds its own
-// punctuation.
+// error.
 bool tvector_one_element_bind(vsql::BindArgs args, vsql::BindResult out,
-                              const std::string &func_name,
                               TVectorParams &resolved) {
   if (args.size() != 1) {
-    out.error(func_name + ": expects 1 argument");
+    out.error("expects 1 argument");
     return true;
   }
   // A lone constant has no other side to take an element type from, so it
   // falls back to float, matching what tvector_from_string infers for one.
   bool needs_publish = false;
   std::string error_msg;
-  if (bind_params_for_vector(func_name, args, 0, 4, resolved, needs_publish,
-                             error_msg)) {
+  if (bind_params_for_vector(args, 0, kDefaultBytesPerElem, resolved,
+                             needs_publish, error_msg)) {
     out.error(error_msg);
     return true;
   }
@@ -759,28 +756,30 @@ bool tvector_one_element_bind(vsql::BindArgs args, vsql::BindResult out,
   return false;
 }
 
-// The scalar-returning reductions and tvector_dim need no set_return at all:
-// REAL and INT have no parameters to decide. The argument is the whole job.
+// tvector_max_element, tvector_min_element and tvector_dim return REAL or
+// INT so there is no return type to set. We still need to resolve the
+// arguments' params.
 void tvector_max_element_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
-  tvector_one_element_bind(args, out, "tvector_max_element", resolved);
+  tvector_one_element_bind(args, out, resolved);
 }
 
 void tvector_min_element_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
-  tvector_one_element_bind(args, out, "tvector_min_element", resolved);
+  tvector_one_element_bind(args, out, resolved);
 }
 
 void tvector_dim_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
-  tvector_one_element_bind(args, out, "tvector_dim", resolved);
+  tvector_one_element_bind(args, out, resolved);
 }
 
 // The _as_vector reductions keep the argument's element type and fix the
-// dimension at 1. TD2 could only copy both parameters, giving TVECTOR(N).
+// dimension at 1. The built-in rule could only copy the argument's params,
+// giving TVECTOR(N).
 void tvector_max_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
-  if (tvector_one_element_bind(args, out, "tvector_max_as_vector", resolved)) {
+  if (tvector_one_element_bind(args, out, resolved)) {
     return;
   }
   out.set_return(
@@ -789,7 +788,7 @@ void tvector_max_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
 
 void tvector_min_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
-  if (tvector_one_element_bind(args, out, "tvector_min_as_vector", resolved)) {
+  if (tvector_one_element_bind(args, out, resolved)) {
     return;
   }
   out.set_return(
@@ -800,7 +799,7 @@ void tvector_min_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
 // both, leaving the result claiming to be float.
 void tvector_as_double_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
-  if (tvector_one_element_bind(args, out, "tvector_as_double", resolved)) {
+  if (tvector_one_element_bind(args, out, resolved)) {
     return;
   }
   out.set_return(
@@ -819,7 +818,7 @@ void tvector_scale(vsql::CustomArgWith<TVectorParams> a, vsql::RealArg scalar,
   auto buf = out.buffer();
   size_t byte_size = static_cast<size_t>(pa.dimension) * pa.bytes_per_elem;
   if (buf.size() < byte_size) {
-    out.error("tvector_scale: output buffer too small");
+    out.error("output buffer too small");
     return;
   }
   const unsigned char *da = a.value().data();

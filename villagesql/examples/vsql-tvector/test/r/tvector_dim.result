@@ -30,14 +30,14 @@ FROM v3 WHERE id = 1;
 after_reduce
 1
 SELECT vsql_tvector.tvector_dim('not a vector');
-ERROR HY000: Can't initialize function 'tvector_dim'; tvector_dim: argument 1 is not a vector literal
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 is not a vector literal
 SELECT vsql_tvector.tvector_dim('[]');
-ERROR HY000: Can't initialize function 'tvector_dim'; tvector_dim: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 is empty; a TVECTOR must have at least one element
 CREATE TABLE texts (t VARCHAR(32));
 INSERT INTO texts VALUES ('[1,2]');
 # Not constant, so there is no value to count at resolution time.
 SELECT vsql_tvector.tvector_dim(t) FROM texts;
-ERROR HY000: Can't initialize function 'tvector_dim'; tvector_dim: argument 1 must be a TVECTOR or a constant vector literal
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
 INSERT INTO v3 VALUES (3, NULL);
 SELECT id, vsql_tvector.tvector_dim(v) IS NULL AS is_null
 FROM v3 ORDER BY id;

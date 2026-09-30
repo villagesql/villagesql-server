@@ -29,20 +29,20 @@ vsql_tvector.tvector_min_element('[1.5,2.25,0.5]') AS min;
 max	min
 2.25	0.5
 SELECT vsql_tvector.tvector_max_element('not a vector');
-ERROR HY000: Can't initialize function 'tvector_max_element'; tvector_max_element: argument 1 is not a vector literal
+ERROR HY000: Cannot initialize function 'tvector_max_element': argument 1 is not a vector literal
 SELECT vsql_tvector.tvector_min_element('not a vector');
-ERROR HY000: Can't initialize function 'tvector_min_element'; tvector_min_element: argument 1 is not a vector literal
+ERROR HY000: Cannot initialize function 'tvector_min_element': argument 1 is not a vector literal
 SELECT vsql_tvector.tvector_max_element('[]');
-ERROR HY000: Can't initialize function 'tvector_max_element'; tvector_max_element: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_max_element': argument 1 is empty; a TVECTOR must have at least one element
 SELECT vsql_tvector.tvector_min_element('[]');
-ERROR HY000: Can't initialize function 'tvector_min_element'; tvector_min_element: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_min_element': argument 1 is empty; a TVECTOR must have at least one element
 CREATE TABLE texts (t VARCHAR(32));
 INSERT INTO texts VALUES ('[1,2]');
 # Not constant, so there is no value to count at resolution time.
 SELECT vsql_tvector.tvector_max_element(t) FROM texts;
-ERROR HY000: Can't initialize function 'tvector_max_element'; tvector_max_element: argument 1 must be a TVECTOR or a constant vector literal
+ERROR HY000: Cannot initialize function 'tvector_max_element': argument 1 must be a TVECTOR or a constant vector literal
 SELECT vsql_tvector.tvector_min_element(t) FROM texts;
-ERROR HY000: Can't initialize function 'tvector_min_element'; tvector_min_element: argument 1 must be a TVECTOR or a constant vector literal
+ERROR HY000: Cannot initialize function 'tvector_min_element': argument 1 must be a TVECTOR or a constant vector literal
 CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
 INSERT INTO d3 VALUES (1, '[1.5,9.25,3.5]');
 SELECT id,
@@ -83,7 +83,7 @@ vsql_tvector.tvector_min_as_vector('[4,1,7,2]') AS min;
 max	min
 [7]	[1]
 SELECT vsql_tvector.tvector_max_as_vector('[]');
-ERROR HY000: Can't initialize function 'tvector_max_as_vector'; tvector_max_as_vector: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_max_as_vector': argument 1 is empty; a TVECTOR must have at least one element
 INSERT INTO v3 VALUES (3, NULL);
 SELECT id,
 vsql_tvector.tvector_max_element(v) IS NULL AS max_is_null,

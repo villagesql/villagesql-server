@@ -12,12 +12,13 @@ SELECT vsql_tvector.tvector_concat(b.v, a.v) AS c FROM v2 a, v3 b;
 c
 [3,4,5,1,2]
 # Same dimension on both sides still concatenates rather than copying:
-# TD2 would have produced TVECTOR(2) here.
+# The built-in return rule would have produced TVECTOR(2) here.
 SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM v2 a, v2 b;
 c
 [1,2,1,2]
 # The return really is TVECTOR(5): adding it to a TVECTOR(5) column is
-# accepted, and to a TVECTOR(3) column is rejected by TD1 on tvector_add.
+# accepted, and to a TVECTOR(3) column is rejected by parameter sharing
+# on tvector_add.
 SELECT vsql_tvector.tvector_add(vsql_tvector.tvector_concat(a.v, b.v), c.v) AS s
 FROM v2 a, v3 b, v5 c;
 s
@@ -54,17 +55,17 @@ c
 [1.5,2.5,3.5]
 # empty + non-empty
 SELECT vsql_tvector.tvector_concat('[]', '[1,2]') AS c;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 1 is empty; a TVECTOR must have at least one element
 SELECT vsql_tvector.tvector_concat('[]', v) AS c FROM v3;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 1 is empty; a TVECTOR must have at least one element
 # non-empty + empty
 SELECT vsql_tvector.tvector_concat('[1,2]', '[]') AS c;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 2 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 2 is empty; a TVECTOR must have at least one element
 SELECT vsql_tvector.tvector_concat(v, '[]') AS c FROM v3;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 2 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 2 is empty; a TVECTOR must have at least one element
 # empty + empty
 SELECT vsql_tvector.tvector_concat('[]', '[]') AS c;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 1 is empty; a TVECTOR must have at least one element
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 1 is empty; a TVECTOR must have at least one element
 CREATE TABLE d3 (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
 INSERT INTO d3 VALUES (1, '[1.5,2.5,3.5]');
 SELECT vsql_tvector.tvector_concat(v, '[4.5]') AS c FROM d3;
@@ -75,21 +76,21 @@ c
 [0.5,1.5,2.5,3.5]
 # Two columns whose element types differ cannot be concatenated.
 SELECT vsql_tvector.tvector_concat(a.v, b.v) FROM d3 a, v3 b;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: vectors must have the same element type
+ERROR HY000: Cannot initialize function 'tvector_concat': vectors must have the same element type
 # With two literals and nothing resolved, float is the default, matching
 # what tvector_from_string infers for a bare literal.
 SELECT vsql_tvector.tvector_concat('[1.5]', '[2.5]') AS c;
 c
 [1.5,2.5]
 SELECT vsql_tvector.tvector_concat('not a vector', '[1]') AS c;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 1 is not a vector literal
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 1 is not a vector literal
 SELECT vsql_tvector.tvector_concat('[1,2', '[1]') AS c;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 1 is not a vector literal
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 1 is not a vector literal
 CREATE TABLE texts (t VARCHAR(32));
 INSERT INTO texts VALUES ('[1,2]');
 # A non-constant argument has no value the hook can count at resolution.
 SELECT vsql_tvector.tvector_concat(t, '[1]') FROM texts;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: argument 1 must be a TVECTOR or a constant vector literal
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 1 must be a TVECTOR or a constant vector literal
 INSERT INTO v3 VALUES (2, NULL);
 SELECT id, vsql_tvector.tvector_concat(v, '[7]') IS NULL AS is_null
 FROM v3 ORDER BY id;
@@ -98,7 +99,7 @@ id	is_null
 2	1
 CREATE TABLE big (id INT PRIMARY KEY, v TVECTOR(4096));
 SELECT vsql_tvector.tvector_concat(v, '[1]') FROM big;
-ERROR HY000: Can't initialize function 'tvector_concat'; tvector_concat: combined dimension 4097 exceeds the maximum of 4096
+ERROR HY000: Cannot initialize function 'tvector_concat': combined dimension 4097 exceeds the maximum of 4096
 DROP TABLE big;
 DROP TABLE texts;
 DROP TABLE d3;

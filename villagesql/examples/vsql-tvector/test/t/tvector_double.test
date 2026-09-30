@@ -154,7 +154,7 @@ SELECT vsql_tvector.tvector_as_double(v) AS already_wide FROM t WHERE id = 1;
 --echo # And from a bare literal, which the hook reads as float first.
 SELECT vsql_tvector.tvector_as_double('[1.5,2.5]') AS widened;
 
---error ER_CANT_INITIALIZE_UDF
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT vsql_tvector.tvector_as_double('[]');
 
 ########################################################################
