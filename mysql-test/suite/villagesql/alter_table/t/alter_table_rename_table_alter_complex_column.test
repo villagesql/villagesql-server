@@ -1,0 +1,32 @@
+# ALTER TABLE ... RENAME TO combined with a change to an existing custom
+# column.
+#
+# The table rename restages every custom column of the table under the new
+# table name, so the per-column operation has to target the new name as well.
+# When it targets the old name instead, the two operations collide on the same
+# row: whichever runs second finds nothing to update.
+
+--source include/villagesql/install_complex_extension.inc
+
+# DROP COLUMN: the rename must not be left looking for the dropped row.
+CREATE TABLE t1 (c3 COMPLEX, c9 INT);
+ALTER TABLE t1 RENAME TO t2, DROP COLUMN c3;
+SHOW CREATE TABLE t2;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE t2;
+
+# RENAME COLUMN: one row moves to both the new table name and new column name.
+CREATE TABLE t3 (c3 COMPLEX);
+ALTER TABLE t3 RENAME TO t4, RENAME COLUMN c3 TO c5;
+SHOW CREATE TABLE t4;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE t4;
+
+# MODIFY COLUMN: restages the entry, which must land on the new table name.
+CREATE TABLE t5 (c3 COMPLEX);
+ALTER TABLE t5 RENAME TO t6, MODIFY COLUMN c3 COMPLEX NOT NULL;
+SHOW CREATE TABLE t6;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE t6;
+
+--source include/villagesql/uninstall_complex_extension.inc

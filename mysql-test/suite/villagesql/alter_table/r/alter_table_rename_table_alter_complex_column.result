@@ -1,0 +1,32 @@
+CREATE TABLE t1 (c3 COMPLEX, c9 INT);
+ALTER TABLE t1 RENAME TO t2, DROP COLUMN c3;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `c9` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+DROP TABLE t2;
+CREATE TABLE t3 (c3 COMPLEX);
+ALTER TABLE t3 RENAME TO t4, RENAME COLUMN c3 TO c5;
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c5` vsql_complex.COMPLEX DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t4	c5	vsql_complex	0.0.1	COMPLEX	{}
+DROP TABLE t4;
+CREATE TABLE t5 (c3 COMPLEX);
+ALTER TABLE t5 RENAME TO t6, MODIFY COLUMN c3 COMPLEX NOT NULL;
+SHOW CREATE TABLE t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `c3` vsql_complex.COMPLEX NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t6	c3	vsql_complex	0.0.1	COMPLEX	{}
+DROP TABLE t6;
