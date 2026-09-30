@@ -92,6 +92,17 @@ same steps but multiply the timeout by 6 when `$VALGRIND_TEST` is set:
 | `include/start_mysqld.inc` | Start a server stopped by one of the above |
 | `include/kill_mysqld.inc` | Deliberately kill the server (`--shutdown_server 0`, no timeout involved) |
 
+The scaling is Oracle's, so call these directly; there is no VillageSQL
+equivalent and there should not be. If another upstream include has a bare
+`shutdown_server`, point it at one of these rather than copying it into
+`include/villagesql/` — a copy stops tracking upstream's other fixes.
+`restart_with_mysqld_safe.inc` is the known exception: no VillageSQL test
+reaches it, and it has no `$rpl_inited` guard, so it is left alone.
+
+A test can reach a bare one without naming it — `keyring_no_component.test`
+reached one three levels down through `setup_component.inc`. Follow `--source`
+transitively rather than grepping the test.
+
 ```
 # Wrong - 60s default, flaky under Valgrind.
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -129,11 +140,11 @@ knowing.
 
 When `--shutdown_server` times out, mysqltest sends the server `SIGABRT` on
 purpose to leave a core behind (`abort_process()` in `client/mysqltest.cc`).
-Under Valgrind the aborted server never frees anything, so Valgrind dumps a
-full leak report into `var/<worker>/log/mysqld.N.err`. MTR's synthetic
-`valgrind_report` test fails on any report with a nonzero `possibly lost`,
-`still reachable`, or `ERROR SUMMARY` (`valgrind_exit_reports()` in
-`mysql-test/mysql-test-run.pl`).
+Valgrind intercepts `SIGABRT` — unlike the `SIGKILL` MTR itself falls back to —
+so the server dumps a full leak report into `var/<worker>/log/mysqld.N.err` on
+the way out. MTR's synthetic `valgrind_report` test fails on any report with a
+nonzero `possibly lost`, `still reachable`, or `ERROR SUMMARY`
+(`valgrind_exit_reports()` in `mysql-test/mysql-test-run.pl`).
 
 The test itself is usually retried and passes, so it is reported as unstable
 rather than failing, and `valgrind_report` is the only name in the failure
@@ -152,6 +163,9 @@ mysqltest: At line NN: Command "shutdown_server" failed with error 2.
 mysqld got signal 6 ;
 ```
 
-A `SIGABRT` arriving exactly 60 seconds after `Received SHUTDOWN from user
-root` is this problem, not a product bug. Fix the test to use the includes
-above rather than suppressing the Valgrind report.
+A `SIGABRT` a flat 360 seconds after `Received SHUTDOWN from user root` is this
+problem, not a product bug — 60 seconds if the path taken does not scale. Every
+include reachable from a VillageSQL test does scale, so check first whether the
+test lowered `$shutdown_server_timeout`; otherwise the shutdown really is
+exceeding six minutes and that is the thing to investigate. Do not suppress the
+Valgrind report.
