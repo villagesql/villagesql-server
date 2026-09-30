@@ -184,7 +184,7 @@ struct NoDefaultParams {
   static NoDefaultParams parse(
       const std::map<std::string, std::string> &params) {
     auto it = params.find("length");
-    return NoDefaultParams{std::stoll(it->second)};
+    return NoDefaultParams{std::strtoll(it->second.c_str(), nullptr, 0)};
   }
 
   static void to_strings(const NoDefaultParams &p,
@@ -214,7 +214,7 @@ bool no_default_resolve_params(const std::map<std::string, std::string> &params,
              "NO_DEFAULT_PARAM_TYPE length is required");
     return true;
   }
-  int64_t length = std::stoll(it->second);
+  int64_t length = std::strtoll(it->second.c_str(), nullptr, 0);
   if (length <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "NO_DEFAULT_PARAM_TYPE length must be positive");
@@ -262,7 +262,7 @@ struct PVecParams {
 
   static PVecParams parse(const std::map<std::string, std::string> &params) {
     auto it = params.find("dimension");
-    return PVecParams{std::stoll(it->second)};
+    return PVecParams{std::strtoll(it->second.c_str(), nullptr, 0)};
   }
 
   static void to_strings(const PVecParams &p,
@@ -290,7 +290,7 @@ bool pvec_resolve_params(const std::map<std::string, std::string> &params,
     snprintf(err, VEF_MAX_ERROR_LEN, "PVEC requires dimension parameter");
     return true;
   }
-  int64_t dim = std::stoll(it->second);
+  int64_t dim = std::strtoll(it->second.c_str(), nullptr, 0);
   if (dim <= 0 || dim > kPVecMaxDim) {
     snprintf(err, VEF_MAX_ERROR_LEN, "PVEC dimension must be 1..%" PRId64,
              kPVecMaxDim);

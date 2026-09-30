@@ -60,7 +60,7 @@ struct LenParam {
 
   static LenParam parse(const std::map<std::string, std::string> &params) {
     auto it = params.find("length");
-    return LenParam{it == params.end() ? 0 : std::stoll(it->second)};
+    return LenParam{it == params.end() ? 0 : std::strtoll(it->second.c_str(), nullptr, 0)};
   }
 
   static void to_strings(const LenParam &p,
