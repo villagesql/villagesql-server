@@ -99,6 +99,8 @@ CMAKE_FLAGS=(
     "-DWITH_ROCKSDB=0"
     "-DWITH_COREDUMPER=OFF"
     "-DWITHOUT_COMPONENT_KEYRING_KMIP=ON"
+    # Introduced in Percona 8.4.11-11 merge, but turned off for VillageSQL
+    "-DWITH_AUTH_OPENID_CONNECT=OFF"
 )
 
 if [[ "$BUILD_TYPE" == "debug" ]]; then
