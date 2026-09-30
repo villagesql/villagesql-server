@@ -59,6 +59,7 @@ RUN mkdir /build && cd /build && \
         -DWITH_NUMA=OFF \
         -DWITH_ROCKSDB=0 \
         -DWITH_COREDUMPER=OFF \
+        -DWITH_AUTH_OPENID_CONNECT=OFF \
         -DWITHOUT_COMPONENT_KEYRING_KMIP=ON \
         -DMYSQL_DATADIR=/var/lib/mysql \
         -DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
