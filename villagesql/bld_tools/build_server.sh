@@ -37,7 +37,9 @@ EXTRA_FLAGS="${CMAKE_EXTRA_FLAGS:-}"
 OS="$(discover_build_env)"
 case "$OS" in
     macos)
-        EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
+        # Pin openssl@3: Homebrew retargeted the unversioned `openssl`
+        # alias to openssl@4, which the server is not validated against.
+        EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl@3)"
         ;;
 esac
 
