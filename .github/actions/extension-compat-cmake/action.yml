@@ -39,8 +39,11 @@ runs:
     - name: Clone extension
       shell: bash
       run: |
-        # Self-hosted runners reuse the workspace; wipe any stale clone.
-        rm -rf extension
+        # Self-hosted runners reuse the workspace; wipe any stale clone. The
+        # build tree goes too: every extension configures into the same
+        # ext-build/ from the same -S path, so CMake would reuse the previous
+        # extension's cache, including its resolved OpenSSL paths.
+        rm -rf extension ext-build
         CLONE_ARGS=(--depth=1)
         [[ -n "${{ inputs.branch }}" ]] && CLONE_ARGS+=(--branch "${{ inputs.branch }}")
         git clone "${CLONE_ARGS[@]}" ${{ inputs.url }} extension/
@@ -51,6 +54,15 @@ runs:
       shell: bash
       run: |
         NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
+        # openssl@3 is keg-only on macOS and Homebrew's unversioned `openssl`
+        # now resolves to openssl@4. Name the prefix so find_package(OpenSSL)
+        # cannot pick a different OpenSSL than the server links.
+        # TODO(villagesql-general): drop this once the SDK's cmake config
+        # declares the OpenSSL the server was built against, so extensions
+        # get it in local builds too and not just here.
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          export OPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+        fi
         DEV_ABI_FLAG=""
         [ "${{ inputs.abi }}" = "dev" ] && DEV_ABI_FLAG="-DVSQL_USE_DEV_ABI=ON"
         cmake -S "$EXT_ROOT"/ -B ext-build/ \
