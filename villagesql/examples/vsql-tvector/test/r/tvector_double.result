@@ -88,8 +88,9 @@ v
 [1.5,2.25,4]
 INSERT INTO f3 SELECT 9, vsql_tvector.tvector_as_double(v) FROM f3 WHERE id = 1;
 ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR('dimension=3,type=double') to vsql_tvector.TVECTOR(3) for column 'v' at row 1
-# Widening does not invent precision the float never had: 0.1 stored as
-# float and widened is the float value, not the double nearest 0.1.
+# Widening is a re-encode, not a re-parse: the double holds exactly the
+# value the float held. The extra digits were always there; a float
+# simply prints fewer of them.
 INSERT INTO f3 VALUES (3, '[0.1,0,0]');
 SELECT vsql_tvector.tvector_as_double(v) AS widened_tenth
 FROM f3 WHERE id = 3;

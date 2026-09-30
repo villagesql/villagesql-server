@@ -142,8 +142,9 @@ SELECT v FROM wide3;
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSERT INTO f3 SELECT 9, vsql_tvector.tvector_as_double(v) FROM f3 WHERE id = 1;
 
---echo # Widening does not invent precision the float never had: 0.1 stored as
---echo # float and widened is the float value, not the double nearest 0.1.
+--echo # Widening is a re-encode, not a re-parse: the double holds exactly the
+--echo # value the float held. The extra digits were always there; a float
+--echo # simply prints fewer of them.
 INSERT INTO f3 VALUES (3, '[0.1,0,0]');
 SELECT vsql_tvector.tvector_as_double(v) AS widened_tenth
 FROM f3 WHERE id = 3;
