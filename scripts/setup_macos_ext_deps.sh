@@ -10,6 +10,9 @@
 # extension with its own third-party dependency installs it in its own CI, not
 # here.
 
+# openssl@3 is pinned, not the unversioned `openssl` alias: Homebrew
+# retargeted that alias to openssl@4, which MySQL 8.4 does not build against.
+
 set -e
 
-brew install cmake openssl curl pkg-config
+brew install cmake openssl@3 curl pkg-config
