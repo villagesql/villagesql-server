@@ -547,14 +547,18 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     return a.ref < b.ref;
   });
 
-  const uint32_t limit = scan_desc.limit();
+  // Return every ranked hit, not just scan_desc.limit() of them. The server
+  // owns the final LIMIT/OFFSET and any WHERE filter above this scan; it needs
+  // the whole distance-ordered pool to slice from. Truncating to the raw limit
+  // here starves those operators -- an OFFSET or a filter would drop rows the
+  // scan never handed up. (A real index may cap the pool for cost; a
+  // brute-force test index returns all.)
   auto *c = new (std::nothrow) KVecCursor();
   if (c == nullptr) {
     snprintf(err, err_len, "kvec_l2: out of memory allocating cursor");
     return true;
   }
   for (const Hit &hit : hits) {
-    if (limit != 0 && c->refs.size() >= limit) break;
     c->refs.push_back(hit.ref);
   }
 
