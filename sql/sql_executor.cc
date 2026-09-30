@@ -3842,11 +3842,10 @@ AccessPath *QEP_TAB::access_path() {
       break;
     case JT_INDEX_DISTANCE:
       // VillageSQL: KNN ordered scan of a custom index (ORDER BY <distance>
-      // LIMIT k), all construction in villagesql. The query vector and index
-      // are carried on the plan from recognition (set_knn_query_item /
-      // set_index). The LIMIT is read from the query block (get_limit) rather
-      // than JOIN::m_select_limit, matching the recognition hook
-      // (TrySkipSortWithCustomKnnIndex).
+      // LIMIT k). The query vector and index were chosen at recognition and
+      // carried on the plan (set_knn_query_item / set_index); the LIMIT is read
+      // from the query block (get_limit) rather than JOIN::m_select_limit,
+      // matching the recognition hook (TrySkipSortWithCustomKnnIndex).
       path = villagesql::BuildCustomKnnDistanceAccessPath(
           join()->thd, table(), index(), knn_query_item(),
           join()->query_block->get_limit(join()->thd));
