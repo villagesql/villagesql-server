@@ -66,6 +66,7 @@ bool IsCustomKnnDistanceOrderItem(TABLE *table, Item *order_item) {
 }
 
 bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
+                                   const Key_map *usable_keys,
                                    bool no_changes) {
   // The custom-index feature gate. When off, custom indexes cannot be created,
   // so none can exist to serve a KNN ordering; bail before any recognition
@@ -104,6 +105,13 @@ bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
   if (RecognizeKnnOrderItem(table, order_item, &key_idx, &query_item)) {
     return false;
   }
+
+  // Honor index hints: usable_keys is the FORCE/IGNORE INDEX-filtered key map.
+  // If the KNN index is not in it (IGNORE INDEX on it, or FORCE INDEX on
+  // another), do not route to the distance scan -- fall back to a plain scan +
+  // sort, which an ANN user selects precisely to get exact results instead of
+  // the index's approximate order.
+  if (usable_keys != nullptr && !usable_keys->is_set(key_idx)) return false;
 
   // Mark the plan only when allowed to change it (test_if_skip_sort_order is
   // also called in probe mode). The distance scan uses no ref access, so ref is

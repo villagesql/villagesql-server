@@ -24,6 +24,7 @@
 // (custom_index_knn_optimizer_hypergraph.h).
 
 #include "my_base.h"  // ha_rows
+#include "sql/sql_bitmap.h"  // Key_map
 
 class Item;
 class JOIN_TAB;
@@ -50,9 +51,11 @@ bool IsCustomKnnDistanceOrderItem(TABLE *table, Item *order_item);
 // SELECT). When it applies and `no_changes` is false, marks the table
 // JT_INDEX_DISTANCE + sets the chosen index so QEP_TAB::access_path() builds
 // the distance scan; with `no_changes` true it only reports applicability
-// (probe mode). Called from test_if_skip_sort_order().
+// (probe mode). `usable_keys` is the FORCE/IGNORE INDEX-filtered key map; the
+// KNN index is used only if it is in that map, so index hints are honored.
+// Called from test_if_skip_sort_order().
 bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
-                                   bool no_changes);
+                                   const Key_map *usable_keys, bool no_changes);
 
 // Classic optimizer access-path builder. Rebuilds the KNN scan spec for the
 // index `key_idx` chosen by TrySkipSortWithCustomKnnIndex from the query
