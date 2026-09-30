@@ -1531,7 +1531,7 @@ static bool ValidateVDFArguments(
     std::map<std::string, KnownEntry> *out_known_params) {
   // Passing nullptr switches off parameter sharing between arguments: nothing
   // is collected for pass 2 to propagate, and two arguments of the same custom
-  // type are no longer required to agree
+  // type are no longer required to agree.
   const bool collect_shared_params = (out_known_params != nullptr);
 
   // Validate argument count matches signature
@@ -1616,7 +1616,7 @@ static bool ConvertVDFArguments(
   // The two sources are alternatives: the server fills known_params when it
   // works the parameters out itself, a bind_and_check_types hook fills
   // hook_arg_params when it does, and the caller only ever runs one of them.
-  // They are keyed differently because of how each is decided -- known_params
+  // They are keyed differently because of how each is decided, i.e. known_params
   // by type name, since one answer is shared across every argument of that
   // type; hook_arg_params by argument index, since the hook is asked about
   // each argument separately.
