@@ -427,9 +427,9 @@ bool Metadata_modifier::remove_columns(THD *thd [[maybe_unused]],
   return false;
 }
 
-bool Metadata_modifier::rename_columns_table(THD *thd [[maybe_unused]],
-                                             Table_name old_name,
-                                             Table_name new_name) {
+bool Metadata_modifier::rename_columns_table(
+    THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
+    const std::unordered_set<std::string> *skip_columns) {
   if (should_assert_if_null(old_name.first) ||
       should_assert_if_null(old_name.second) ||
       should_assert_if_null(new_name.first) ||
@@ -463,6 +463,12 @@ bool Metadata_modifier::rename_columns_table(THD *thd [[maybe_unused]],
 
   for (const ColumnEntry *old_col : custom_columns) {
     if (!old_col) continue;
+
+    // The caller stages its own operation for these, keyed by new_name
+    // already. Renaming them here too would race that operation for the row.
+    if (skip_columns != nullptr &&
+        skip_columns->count(canonical_column_name(old_col->column_name())) > 0)
+      continue;
 
     ColumnEntry new_entry(ColumnKey(new_db, new_table, old_col->column_name()),
                           old_col->extension_name, old_col->extension_version,
@@ -501,19 +507,47 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
     return false;
   }
 
-  // 0. Handle ALTER TABLE RENAME - update all custom columns with new table
-  // name
+  // The names the table carries once this ALTER completes. Every entry
+  // describing the post-ALTER state is keyed by these, so that an ALTER which
+  // renames the table and changes its columns in one statement files the
+  // changed columns under the name the table ends up with. Deletions are the
+  // exception: they keep the stored entry's key, since the row on disk still
+  // holds the old name when the delete probes for it.
+  const bool renaming_table = (alter_info->flags & Alter_info::ALTER_RENAME) &&
+                              alter_info->new_table_name.str != nullptr;
+  const char *new_db_name = (renaming_table && alter_info->new_db_name.str)
+                                ? alter_info->new_db_name.str
+                                : db_name;
+  const char *new_table_name =
+      renaming_table ? alter_info->new_table_name.str : table_name;
+
+  // Columns this statement names explicitly. Each gets its own operation
+  // below, already keyed by the new table name, so the bulk rename in step 0
+  // has to leave them alone. Removals are applied before renames, so a bulk
+  // rename of a row that a drop or a change has already claimed would find
+  // nothing to update.
+  std::unordered_set<std::string> columns_with_own_op;
+  for (const Alter_drop *drop : alter_info->drop_list) {
+    if (drop->type == Alter_drop::COLUMN)
+      columns_with_own_op.insert(canonical_column_name(drop->name));
+  }
+  for (const Alter_column *alter : alter_info->alter_list) {
+    if (alter->change_type() == Alter_column::Type::RENAME_COLUMN)
+      columns_with_own_op.insert(canonical_column_name(alter->name));
+  }
+  for (const Create_field &field : alter_info->create_list) {
+    if (field.change)
+      columns_with_own_op.insert(canonical_column_name(field.change));
+  }
+
+  // 0. Handle ALTER TABLE RENAME - move the custom columns that this
+  // statement does not otherwise touch to the new table name
   // This must be done before acquiring the read lock since
   // rename_columns_table() acquires its own lock
-  if ((alter_info->flags & Alter_info::ALTER_RENAME) &&
-      alter_info->new_table_name.str) {
-    const char *new_db =
-        alter_info->new_db_name.str ? alter_info->new_db_name.str : db_name;
-    const char *new_table = alter_info->new_table_name.str;
+  if (renaming_table) {
+    Table_name new_name = {new_db_name, new_table_name};
 
-    Table_name new_name = {new_db, new_table};
-
-    if (rename_columns_table(thd, db_table, new_name)) {
+    if (rename_columns_table(thd, db_table, new_name, &columns_with_own_op)) {
       return true;
     }
   }
@@ -571,7 +605,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         if (old_entry_ptr) {
           // Create new entry with renamed column
           ColumnEntry new_entry(
-              ColumnKey(db_name, table_name, alter->m_new_name),
+              ColumnKey(new_db_name, new_table_name, alter->m_new_name),
               old_entry_ptr->extension_name, old_entry_ptr->extension_version,
               old_entry_ptr->type_name, old_entry_ptr->type_parameters);
 
@@ -633,30 +667,33 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         to_remove_.emplace_back(find_custom_column(field.change)->key());
       } else if (!was_custom_type && is_custom_type) {
         // Changing FROM non-custom TO custom - insert entry
-        to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
-                             field.custom_type_context->extension_name(),
-                             field.custom_type_context->extension_version(),
-                             field.custom_type_context->type_name(),
-                             field.custom_type_context->parameters().to_json());
+        to_add_.emplace_back(
+            ColumnKey(new_db_name, new_table_name, field.field_name),
+            field.custom_type_context->extension_name(),
+            field.custom_type_context->extension_version(),
+            field.custom_type_context->type_name(),
+            field.custom_type_context->parameters().to_json());
       } else if (was_custom_type && is_custom_type) {
         // Changing FROM custom TO custom - use delete-then-insert pattern
         // Note: Apply removals before additions
         // See Metadata_modifier::mark_victionary_modifications()
         to_remove_.emplace_back(find_custom_column(field.change)->key());
 
-        to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
-                             field.custom_type_context->extension_name(),
-                             field.custom_type_context->extension_version(),
-                             field.custom_type_context->type_name(),
-                             field.custom_type_context->parameters().to_json());
+        to_add_.emplace_back(
+            ColumnKey(new_db_name, new_table_name, field.field_name),
+            field.custom_type_context->extension_name(),
+            field.custom_type_context->extension_version(),
+            field.custom_type_context->type_name(),
+            field.custom_type_context->parameters().to_json());
       }
     } else if (is_custom_type) {
       // This is ADD COLUMN with custom type - insert entry
-      to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
-                           field.custom_type_context->extension_name(),
-                           field.custom_type_context->extension_version(),
-                           field.custom_type_context->type_name(),
-                           field.custom_type_context->parameters().to_json());
+      to_add_.emplace_back(
+          ColumnKey(new_db_name, new_table_name, field.field_name),
+          field.custom_type_context->extension_name(),
+          field.custom_type_context->extension_version(),
+          field.custom_type_context->type_name(),
+          field.custom_type_context->parameters().to_json());
     }
   }
   return false;

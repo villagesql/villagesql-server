@@ -1,0 +1,32 @@
+# ALTER TABLE ... RENAME TO combined with ADD COLUMN of a custom type.
+#
+# The added column's victionary entry must be keyed by the table's new name.
+# Keying it by the old name has two consequences: the new column loses its
+# custom type, and the row is orphaned, because DROP TABLE on the renamed
+# table only clears rows keyed by the new name. Reusing the old table name
+# then inserts a duplicate key into villagesql.custom_columns.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (c3 COMPLEX);
+--source include/villagesql/query_custom_columns.inc
+
+ALTER TABLE t1 RENAME TO t2, ADD COLUMN c4 COMPLEX;
+
+# Both columns are keyed by the new table name, and c4 kept its custom type.
+--source include/villagesql/query_custom_columns.inc
+SHOW CREATE TABLE t2;
+
+INSERT INTO t2 VALUES ('(1.0,2.0)', '(3.0,4.0)');
+SELECT * FROM t2;
+
+# Dropping the renamed table clears every row it owns.
+DROP TABLE t2;
+--source include/villagesql/query_custom_columns.inc
+
+# Reusing the old table name must not collide with a leftover row.
+CREATE TABLE t1 (c4 COMPLEX);
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

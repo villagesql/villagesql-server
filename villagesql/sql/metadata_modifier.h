@@ -18,6 +18,7 @@
 #define VILLAGESQL_SQL_METADATA_MODIFIER_H_
 
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -197,8 +198,12 @@ class Metadata_modifier {
   bool remove_columns(THD *thd, Table_name db_table);
 
   // Update the table name associated with columns from old_name to new_name.
+  // Canonical column names in skip_columns are left alone: the caller stages
+  // its own operation for them, already carrying new_name.
   // Returns false on success, true on error.
-  bool rename_columns_table(THD *thd, Table_name old_name, Table_name new_name);
+  bool rename_columns_table(
+      THD *thd, Table_name old_name, Table_name new_name,
+      const std::unordered_set<std::string> *skip_columns = nullptr);
 
   // Modify column entries based on alter_info. table_ref is the table being
   // altered.
