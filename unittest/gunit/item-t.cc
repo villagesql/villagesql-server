@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -61,6 +62,7 @@
 #include "unittest/gunit/mock_field_timestamp.h"
 #include "unittest/gunit/mysys_util.h"
 #include "unittest/gunit/test_utils.h"
+#include "villagesql/schema/descriptor/type_context.h"
 
 namespace item_unittest {
 
@@ -80,6 +82,55 @@ class ItemTest : public ::testing::Test {
 
   Server_initializer initializer;
 };
+
+// An ASCII literal can encode to arbitrary bytes when assigned to a custom
+// column. Exercise the actual encoding and field-store path, including the
+// metadata on the rewritten literal.
+TEST_F(ItemTest, CustomTypeEncodingUpdatesLiteralRepertoire) {
+  auto encode = +[](unsigned char *out, size_t capacity, const char *, size_t,
+                    size_t *written) -> bool {
+    if (capacity < 2) return true;
+    out[0] = 0xAB;
+    out[1] = 0xCD;
+    *written = 2;
+    return false;
+  };
+  auto decode = +[](const unsigned char *, size_t, char *, size_t,
+                    size_t *) -> bool { return false; };
+  auto compare = +[](const unsigned char *, size_t, const unsigned char *,
+                     size_t) -> int { return 0; };
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("BINARY_PAIR", "test_ext", "1.0.0"),
+      VEF_PROTOCOL_1, 1, 2, 16, /*max_persisted_length=*/0,
+      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(encode),
+      villagesql::DecodeFunction(decode), villagesql::CompareFunction(compare));
+  auto ctx = villagesql::TableTraits<villagesql::TypeContext>::create(
+      villagesql::TypeContextKey("BINARY_PAIR", "test_ext", "1.0.0"), &desc);
+  ASSERT_NE(ctx, nullptr);
+
+  Fake_TABLE_SHARE share(1);
+  Field_varstring field(nullptr, 2, 1, nullptr, 0, Field::NONE, "c", &share,
+                        &my_charset_bin);
+  Fake_TABLE table(&field);
+  bitmap_set_bit(table.write_set, 0);
+  field.set_type_context(ctx.get());
+
+  auto *literal = new Item_string("ascii", 5, &my_charset_utf8mb4_0900_ai_ci,
+                                  DERIVATION_COERCIBLE, MY_REPERTOIRE_ASCII);
+  ASSERT_EQ(literal->collation.repertoire, MY_REPERTOIRE_ASCII);
+  ASSERT_EQ(literal->save_in_field(&field, false), TYPE_OK);
+
+  EXPECT_EQ(literal->get_type_context(), ctx.get());
+  EXPECT_EQ(literal->collation.collation, &my_charset_bin);
+  EXPECT_EQ(literal->collation.derivation, DERIVATION_COERCIBLE);
+  EXPECT_EQ(literal->collation.repertoire, MY_REPERTOIRE_UNICODE30);
+  String buffer;
+  String *stored = field.val_str(&buffer, &buffer);
+  ASSERT_NE(stored, nullptr);
+  ASSERT_EQ(stored->length(), 2u);
+  EXPECT_EQ(static_cast<unsigned char>(stored->ptr()[0]), 0xAB);
+  EXPECT_EQ(static_cast<unsigned char>(stored->ptr()[1]), 0xCD);
+}
 
 /**
   This is a simple mock Field class, illustrating how to set expectations on
