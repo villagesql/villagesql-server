@@ -55,9 +55,6 @@ bool custom_index_knn_scan_begin(TABLE *table, uint key_idx,
                                  uint32_t query_key_len, uint32_t limit,
                                  CustomIndexKnnScan **scan, char *error_msg,
                                  uint32_t error_msg_len);
-bool custom_index_knn_scan_next(CustomIndexKnnScan *scan, uint64_t *out_key_ref,
-                                bool *eof, char *error_msg,
-                                uint32_t error_msg_len);
 void custom_index_knn_scan_end(CustomIndexKnnScan **scan);
 
 // `custom_scan_spec` is the opaque pointer parked on
