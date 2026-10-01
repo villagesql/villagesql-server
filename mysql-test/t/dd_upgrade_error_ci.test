@@ -1,9 +1,15 @@
 --source include/have_case_insensitive_file_system.inc
 
 --let ZIP_FILE= $MYSQLTEST_VARDIR/std_data/data80011_upgrade_groupby_desc_ci_win.zip
+# The server must be started with the lower_case_table_names the data
+# directory was built with, or DD init aborts on the mismatch before it ever
+# parses the objects this test is about. The _win datadir carries 1, the _mac
+# one carries 2.
+--let $LCTN= 1
 if (`SELECT CONVERT(@@version_compile_os USING LATIN1) RLIKE '^(osx|macos)'`)
 {
     --let ZIP_FILE= $MYSQLTEST_VARDIR/std_data/data80011_upgrade_groupby_desc_ci_mac.zip
+    --let $LCTN= 2
 }
 
 --echo # Stop DB server which was created by MTR default
@@ -36,7 +42,7 @@ let $MYSQLD_DATADIR1 = $MYSQL_TMP_DIR/data80011_upgrade_groupby_desc_ci;
 --echo # events/triggers/views/routines contain GROUP BY DESC
 let MYSQLD_LOG= $MYSQL_TMP_DIR/server.log;
 --error 1
---exec $MYSQLD --lower-case-table-names=1 --no-defaults $extra_args --innodb_dedicated_server=OFF --secure-file-priv="" --log-error=$MYSQLD_LOG --datadir=$MYSQLD_DATADIR1
+--exec $MYSQLD --lower-case-table-names=$LCTN --no-defaults $extra_args --innodb_dedicated_server=OFF --secure-file-priv="" --log-error=$MYSQLD_LOG --datadir=$MYSQLD_DATADIR1
 
 --let SEARCH_FILE= $MYSQLD_LOG
 --let SEARCH_PATTERN= Trigger 'trigger_groupby_desc' has an error in its body
