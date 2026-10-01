@@ -153,18 +153,21 @@ SELECT uuid_vx_to_bin('123');
 --echo #v1 (wrong values, boost bug, check if test fails)
 SELECT uuid_vx_version('93c39787-225d-11ef-bfac-f5e814172db8');
 SELECT uuid_vx_to_timestamp('93c39787-225d-11ef-bfac-f5e814172db8');
+--replace_regex / GMT/ <TZ>/ / UTC/ <TZ>/
 SELECT uuid_vx_to_timestamp_tz('93c39787-225d-11ef-bfac-f5e814172db8');
 SELECT uuid_vx_to_unixtime('93c39787-225d-11ef-bfac-f5e814172db8');
 
 --echo #v6 (wrong values, boost bug, check if test fails)
 SELECT uuid_vx_version('1ef225dd-aded-6cfa-8604-ff7079a99e49');
 SELECT uuid_vx_to_timestamp('1ef225dd-aded-6cfa-8604-ff7079a99e49');
+--replace_regex / GMT/ <TZ>/ / UTC/ <TZ>/
 SELECT uuid_vx_to_timestamp_tz('1ef225dd-aded-6cfa-8604-ff7079a99e49');
 SELECT uuid_vx_to_unixtime('1ef225dd-aded-6cfa-8604-ff7079a99e49');
 
 --echo #v7 (proper values)
 SELECT uuid_vx_version('018fe2cf-8209-71fe-8034-fa62177f35c7');
 SELECT uuid_vx_to_timestamp('018fe2cf-8209-71fe-8034-fa62177f35c7');
+--replace_regex / GMT/ <TZ>/ / UTC/ <TZ>/
 SELECT uuid_vx_to_timestamp_tz('018fe2cf-8209-71fe-8034-fa62177f35c7');
 SELECT uuid_vx_to_unixtime('018fe2cf-8209-71fe-8034-fa62177f35c7');
 

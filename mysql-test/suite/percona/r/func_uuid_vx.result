@@ -232,7 +232,7 @@ uuid_vx_to_timestamp('93c39787-225d-11ef-bfac-f5e814172db8')
 2024-06-04 10:31:17.814
 SELECT uuid_vx_to_timestamp_tz('93c39787-225d-11ef-bfac-f5e814172db8');
 uuid_vx_to_timestamp_tz('93c39787-225d-11ef-bfac-f5e814172db8')
-Tue Jun  4 10:31:17 2024 GMT
+Tue Jun  4 10:31:17 2024 <TZ>
 SELECT uuid_vx_to_unixtime('93c39787-225d-11ef-bfac-f5e814172db8');
 uuid_vx_to_unixtime('93c39787-225d-11ef-bfac-f5e814172db8')
 1717497077814
@@ -245,7 +245,7 @@ uuid_vx_to_timestamp('1ef225dd-aded-6cfa-8604-ff7079a99e49')
 2024-06-04 10:33:17.111
 SELECT uuid_vx_to_timestamp_tz('1ef225dd-aded-6cfa-8604-ff7079a99e49');
 uuid_vx_to_timestamp_tz('1ef225dd-aded-6cfa-8604-ff7079a99e49')
-Tue Jun  4 10:33:17 2024 GMT
+Tue Jun  4 10:33:17 2024 <TZ>
 SELECT uuid_vx_to_unixtime('1ef225dd-aded-6cfa-8604-ff7079a99e49');
 uuid_vx_to_unixtime('1ef225dd-aded-6cfa-8604-ff7079a99e49')
 1717497197111
@@ -258,7 +258,7 @@ uuid_vx_to_timestamp('018fe2cf-8209-71fe-8034-fa62177f35c7')
 2024-06-04 10:33:21.161
 SELECT uuid_vx_to_timestamp_tz('018fe2cf-8209-71fe-8034-fa62177f35c7');
 uuid_vx_to_timestamp_tz('018fe2cf-8209-71fe-8034-fa62177f35c7')
-Tue Jun  4 10:33:21 2024 GMT
+Tue Jun  4 10:33:21 2024 <TZ>
 SELECT uuid_vx_to_unixtime('018fe2cf-8209-71fe-8034-fa62177f35c7');
 uuid_vx_to_unixtime('018fe2cf-8209-71fe-8034-fa62177f35c7')
 1717497201161

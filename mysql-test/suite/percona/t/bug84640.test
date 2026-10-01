@@ -48,6 +48,9 @@ SET DEBUG_SYNC="now SIGNAL finish_open";
 --connection con1
 
 --replace_result $custom_data_directory custom_data_directory
+# ELOOP is 40 on glibc, 62 on BSD/macOS. The text is portable, the number
+# is not. ENOENT in the third case below is 2 everywhere, so it is left.
+--replace_regex /OS errno [0-9]+/OS errno <ELOOP>/
 --error 29
 reap;
 
@@ -91,6 +94,7 @@ SET DEBUG_SYNC="now SIGNAL finish_open";
 --connection con1
 
 --replace_result $custom_index_directory custom_index_directory
+--replace_regex /Got error [0-9]+/Got error <ELOOP>/
 --error ER_GET_ERRNO
 reap;
 
