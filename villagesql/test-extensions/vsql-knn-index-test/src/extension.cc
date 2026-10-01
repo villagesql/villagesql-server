@@ -25,22 +25,23 @@
 //   * Stores the KVECTOR value in a REAL external column store
 //   (make_column_store
 //     + StorageCapability + ColumnStoreCapability), so the server hands out a
-//     stable col_ref per stored value and persists a rowid_prefix alongside it.
-//   * Declares the index with HAS_COLUMN_REF (NOT HAS_ROW_REF), so the server
-//     drives the col_ref row-fetch path: the extension returns the col_ref at
-//     scan_fetch and the server resolves col_ref -> rowid_prefix -> base-table
-//     row (handler::custom_index_ref_to_row).
-//   * The index itself stores ONLY the col_ref per row (reference-only, like
-//   the
-//     real HNSW node) in a real page-backed store -- NOT the vector bytes.
+//     stable col_ref per stored value. The store holds only the vector.
+//   * Declares the index with HAS_COLUMN_REF | HAS_ROW_REF. The INDEX owns the
+//     row identity: the server hands it the owning row's primary key at insert
+//     (pkey_columns, HAS_ROW_REF); the index stores it and returns it at
+//     scan_fetch via pkey_columns; the server resolves the base-table row from
+//     that primary key (handler::custom_index_pkey_to_row).
+//   * The index stores, per row, the col_ref (for the vector) AND the primary
+//     key (reference-plus-rowid, like an HNSW node with a resident PK) -- NOT
+//     the vector bytes.
 //   * At scan time it resolves each stored col_ref back to the vector via
 //     get_key_data (the col_ref_to_data_fn path) and computes distance by
 //     dispatching through the registered profile HELPER VDF (index.helper<>),
 //     exercising the real protocol-3 dispatch -- not a private C++ loop.
 //
 // So a regression in any of: InnoDB insert routing, profile
-// resolution/dispatch, col_ref_to_data_fn, the col_ref->row read path, or
-// rowid_prefix persistence, fails this extension's MTR test.
+// resolution/dispatch, col_ref_to_data_fn, or the index-returned pkey_columns
+// row read path, fails this extension's MTR test.
 //
 // NOTE: internal testing tool, not an example of how to write an extension. The
 // scan is exact brute force (no graph); HNSW-graph correctness stays in
@@ -144,21 +145,15 @@ static double cosine_distance_floats(const unsigned char *a,
 // ============================================================================
 // KVECTOR external column store (models vsql-storage-test's STORED_INT store).
 // One data page per stored value. Page DATA layout:
-//   HEADER_SIZE + 0            [kVecBytes]  float payload (col_data)
-//   HEADER_SIZE + kVecBytes    [1]          rowid length
-//   HEADER_SIZE + kVecBytes+1  [kRowidMax]  rowid bytes (zero padded)
-//   HEADER_SIZE + ...          [8]          last-writer trx_ref
-//   HEADER_SIZE + ...          [1]          delete-mark flag
-// The rowid_prefix IS persisted and returned at select -- the col_ref row
-// fetch depends on it (this is exactly the bug-10 surface).
+//   HEADER_SIZE + 0          [kVecBytes]  float payload (col_data)
+//   HEADER_SIZE + kVecBytes  [8]          last-writer trx_ref
+//   HEADER_SIZE + ...        [1]          delete-mark flag
+// The store holds only the vector; the index owns the row identity, so no rowid
+// is persisted here.
 // ============================================================================
 
-static constexpr uint32_t kRowidMax = 32;
-
 constexpr storage::Page::Offset kColOff = storage::Page::HEADER_SIZE;
-constexpr storage::Page::Offset kRowidLenOff = kColOff + kVecBytes;
-constexpr storage::Page::Offset kRowidOff = kRowidLenOff + 1;
-constexpr storage::Page::Offset kTrxOff = kRowidOff + kRowidMax;
+constexpr storage::Page::Offset kTrxOff = kColOff + kVecBytes;
 constexpr storage::Page::Offset kFlagOff = kTrxOff + 8;
 
 struct KVecColCtx {
@@ -211,17 +206,12 @@ static bool kvec_col_load(ColCtx *ctx, storage::Column::StorageRef storage_ref,
 static bool kvec_col_insert(ColCtx *ctx, storage::MtrCtx::Ref mctx,
                             storage::Segment::TrxRef trx,
                             storage::Column::Data col_data,
-                            storage::Column::Data rowid_prefix,
+                            storage::Column::Data /*rowid_prefix*/,
                             storage::Column::Ref *col_ref, char *err,
                             uint32_t err_len) {
   if (col_data.length != kVecBytes) {
     snprintf(err, err_len, "kvector insert: expected %u-byte payload, got %u",
              kVecBytes, col_data.length);
-    return true;
-  }
-  if (rowid_prefix.length > kRowidMax) {
-    snprintf(err, err_len, "kvector insert: rowid too long (%u > %u)",
-             rowid_prefix.length, kRowidMax);
     return true;
   }
 
@@ -246,14 +236,6 @@ static bool kvec_col_insert(ColCtx *ctx, storage::MtrCtx::Ref mctx,
   }
 
   data_page.write_string(kColOff, col_data.data, col_data.length, mctx);
-
-  unsigned char rowid_buf[kRowidMax] = {};
-  if (rowid_prefix.length > 0)
-    memcpy(rowid_buf, rowid_prefix.data, rowid_prefix.length);
-  data_page.write_integer_1(kRowidLenOff,
-                            static_cast<uint8_t>(rowid_prefix.length), mctx);
-  data_page.write_string(kRowidOff, rowid_buf, kRowidMax, mctx);
-
   data_page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
   data_page.write_integer_1(kFlagOff, 0, mctx);
 
@@ -278,10 +260,10 @@ static bool kvec_col_select(ColCtx *ctx, storage::MtrCtx::Ref mctx,
   const unsigned char *base = page.get_data();
   col_data->data = base + kColOff;
   col_data->length = kVecBytes;
-  // Return the persisted rowid_prefix (its real length) so the server's
-  // col_ref row-fetch path can resolve the row.
-  rowid_prefix->data = base + kRowidOff;
-  rowid_prefix->length = page.read_integer_1(kRowidLenOff);
+  // The store holds only the vector; the index owns the row identity, so no
+  // rowid is returned here.
+  rowid_prefix->data = nullptr;
+  rowid_prefix->length = 0;
   *trx_ref =
       static_cast<storage::Segment::TrxRef>(page.read_integer_8(kTrxOff));
   *delete_marked = page.read_integer_1(kFlagOff) != 0;
@@ -385,15 +367,23 @@ static int kvector_compare(vsql::CustomArg a, vsql::CustomArg b) {
 // Index: stores ONE col_ref per row (reference-only), brute-force KNN scan.
 // ============================================================================
 
-// Per-index state: the flat list of stored col_refs. Persisted on a real
-// page-backed store would be ideal, but for a brute-force test index an
-// arena-resident list (like vsql-knn-mem-test) is sufficient to exercise the
-// col_ref surface. The col_ref values themselves come from the REAL column
-// store, so the col_ref_to_data_fn / rowid_prefix / col_ref row-fetch paths are
-// all genuinely driven.
+// A primary key as its field parts, in clustered-index key order.
+using PrimaryKey = std::vector<std::vector<unsigned char>>;
+
+// Per-index state: one entry per row, each holding the stored col_ref (for the
+// vector, resolved via get_key_data during the scan) AND the owning row's
+// primary key (all parts). The index owns the row identity: the server hands it
+// the primary key at insert (pkey_columns, HAS_ROW_REF), the index stores it
+// here and returns it at scan_fetch via pkey_columns, and the server resolves
+// the row from it. A real index would page-back this store; a brute-force test
+// index keeps it arena-resident.
+struct KVecEntry {
+  IndexScanKey::KeyPartRef ref;  // vector's column reference
+  PrimaryKey pkey;               // owning row's primary key (all parts)
+};
 struct KVecIndexCtx {
-  std::vector<IndexScanKey::KeyPartRef> col_refs;
-  // Guards col_refs. Like vsql-vector's operation mutex: writers (insert) take
+  std::vector<KVecEntry> entries;
+  // Guards entries. Like vsql-vector's operation mutex: writers (insert) take
   // it exclusive, readers (scan) take it shared, so a parallel DDL build can
   // insert from multiple threads and a scan sees a consistent list.
   std::shared_mutex mutex;
@@ -409,7 +399,11 @@ static std::atomic<long long> g_scan_fetch_count{0};
 static std::atomic<long long> g_insert_count{0};
 
 struct KVecCursor {
-  std::vector<IndexScanKey::KeyPartRef> refs;
+  struct Result {
+    IndexScanKey::KeyPartRef ref;  // vector column reference
+    PrimaryKey pkey;  // owning row's primary key (copied, all parts)
+  };
+  std::vector<Result> results;
   size_t pos = 0;
 };
 
@@ -422,7 +416,7 @@ static bool kvec_create(IdxCtx * /*ctx*/, const Index & /*index*/,
 static bool kvec_drop(IdxCtx *ctx, const Index & /*index*/,
                       Segment::TrxRef /*trx_ref*/, char * /*err*/,
                       uint32_t /*err_len*/) {
-  ctx->user()->col_refs.clear();
+  ctx->user()->entries.clear();
   return false;
 }
 
@@ -435,11 +429,18 @@ static bool kvec_load(IdxCtx * /*ctx*/, const Index & /*index*/,
 static bool kvec_insert(IdxCtx *ctx, const Index &index,
                         Segment::TrxRef /*trx_ref*/,
                         IndexScanKey::KeyPartData *key_columns,
-                        IndexScanKey::KeyPartData * /*pkey_columns*/,
+                        IndexScanKey::KeyPartData *pkey_columns,
                         IndexScanKey::KeyPartRef * /*key_ref*/, char *err,
                         uint32_t err_len) {
   if (key_columns == nullptr || key_columns[0].data == nullptr) {
     snprintf(err, err_len, "kvec_l2: missing key column");
+    return true;
+  }
+  // HAS_ROW_REF: the server hands the owning row's primary key (all parts) in
+  // pkey_columns. The index owns it -- store it now, return it at scan_fetch.
+  const uint32_t num_pk_parts = index.get_primary_num_key_cols();
+  if (pkey_columns == nullptr || num_pk_parts == 0) {
+    snprintf(err, err_len, "kvec_l2: missing primary key at insert");
     return true;
   }
   // Ask the server for the stable col_ref of this stored value (get_key_ref /
@@ -452,10 +453,19 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
              index.get_error());
     return true;
   }
+  KVecEntry entry;
+  entry.ref = ref;
+  // Primary-key parts are NOT NULL, but a part may be zero-length (an empty
+  // VARCHAR/VARBINARY) -- a valid key value.
+  entry.pkey.reserve(num_pk_parts);
+  for (uint32_t i = 0; i < num_pk_parts; i++) {
+    entry.pkey.emplace_back(pkey_columns[i].data,
+                            pkey_columns[i].data + pkey_columns[i].length);
+  }
   // Exclusive lock: a parallel DDL build inserts each scanned row from multiple
   // worker threads (like vsql-vector's unique_lock on its operation mutex).
   std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  ctx->user()->col_refs.push_back(ref);
+  ctx->user()->entries.push_back(std::move(entry));
   ++g_insert_count;
   return false;
 }
@@ -507,15 +517,16 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // protocol-3 profile dispatch on server-resolved column data.
   struct Hit {
     IndexScanKey::KeyPartRef ref;
+    const PrimaryKey *pkey;  // points into ctx entries
     double distance;
   };
   std::vector<Hit> hits;
   // Shared lock: readers don't block each other, but they exclude a concurrent
-  // insert mutating col_refs (mirrors vsql-vector's shared_lock on reads). Held
-  // for the whole scan of the list.
+  // insert mutating entries (mirrors vsql-vector's shared_lock on reads). Held
+  // for the whole scan of the list -- and keeps the rowid pointers valid.
   std::shared_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  const auto &col_refs = ctx->user()->col_refs;
-  hits.reserve(col_refs.size());
+  const auto &entries = ctx->user()->entries;
+  hits.reserve(entries.size());
 
   // get_key_data is caller-provides-buffer: raw.data points at a buffer of at
   // least get_max_col_len(key_pos) bytes and raw.length is that capacity; the
@@ -525,11 +536,11 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // exactly like vsql-vector.
   const uint32_t max_col_len = index.get_max_col_len(kKeyPos);
   std::vector<unsigned char> stored(max_col_len);
-  for (IndexScanKey::KeyPartRef ref : col_refs) {
+  for (const KVecEntry &entry : entries) {
     IndexScanKey::KeyPartData raw;
     raw.data = stored.data();
     raw.length = max_col_len;
-    if (index.get_key_data(kKeyPos, ref, &raw)) {
+    if (index.get_key_data(kKeyPos, entry.ref, &raw)) {
       snprintf(err, err_len, "kvec_l2: get_key_data failed: %s",
                index.get_error());
       return true;
@@ -538,7 +549,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
 
     double d = 0.0;
     index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
-    hits.push_back(Hit{ref, d});
+    hits.push_back(Hit{entry.ref, &entry.pkey, d});
   }
 
   std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
@@ -558,36 +569,45 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     snprintf(err, err_len, "kvec_l2: out of memory allocating cursor");
     return true;
   }
+  // Copy each hit's primary key into the cursor (still under the shared lock,
+  // so the pointers into entries are valid). The cursor outlives the lock, so
+  // it must own the bytes.
   for (const Hit &hit : hits) {
-    c->refs.push_back(hit.ref);
+    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey});
   }
 
   *cursor = c;
-  *eof = c->refs.empty();
+  *eof = c->results.empty();
   return false;
 }
 
 static bool kvec_position(Index::Cursor cursor, Index::CursorOp op, bool *eof,
                           char * /*err*/, uint32_t /*err_len*/) {
   auto *c = static_cast<KVecCursor *>(cursor);
-  if (op == Index::CursorOp::Next && c->pos < c->refs.size()) ++c->pos;
-  *eof = c->pos >= c->refs.size();
+  if (op == Index::CursorOp::Next && c->pos < c->results.size()) ++c->pos;
+  *eof = c->pos >= c->results.size();
   return false;
 }
 
 static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
                        IndexScanKey::KeyPartData * /*key_columns*/,
-                       IndexScanKey::KeyPartData * /*pkey_columns*/, char *err,
+                       IndexScanKey::KeyPartData *pkey_columns, char *err,
                        uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
-  if (c->pos >= c->refs.size()) {
+  if (c->pos >= c->results.size()) {
     snprintf(err, err_len, "kvec_l2: fetch past end of cursor");
     return true;
   }
   ++g_scan_fetch_count;
-  // Return the stored col_ref; the server resolves it to the row
-  // (col_ref -> rowid_prefix -> clustered row). pkey_columns is left unset.
-  if (key_ref != nullptr) *key_ref = c->refs[c->pos];
+  const KVecCursor::Result &res = c->results[c->pos];
+  if (key_ref != nullptr) *key_ref = res.ref;
+
+  // The index owns the row identity: return the primary key stored at insert
+  // (all parts), so the server resolves the row directly from pkey_columns.
+  for (size_t i = 0; i < res.pkey.size(); i++) {
+    pkey_columns[i] = IndexScanKey::KeyPartData{
+        res.pkey[i].data(), static_cast<uint32_t>(res.pkey[i].size())};
+  }
   return false;
 }
 
@@ -601,7 +621,7 @@ static bool kvec_restore(Index::Cursor cursor, MtrCtx::Ref /*mctx*/, bool *eof,
   // The cursor is fully in-memory (no mtr dependency), so the scan resumes from
   // its saved position; report EOF only if that position is past the last hit.
   auto *c = static_cast<KVecCursor *>(cursor);
-  *eof = c->pos >= c->refs.size();
+  *eof = c->pos >= c->results.size();
   return false;
 }
 
@@ -678,7 +698,8 @@ static constexpr auto KVEC_STORE_INDEX =
 
         .global()
             .capabilities(Index::Support::KNN)
-            .storage_props(Index::Storage::HAS_COLUMN_REF)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
 
         .build();
 // clang-format on
@@ -710,7 +731,8 @@ static constexpr auto KVEC_STORE_COS_INDEX =
 
         .global()
             .capabilities(Index::Support::KNN)
-            .storage_props(Index::Storage::HAS_COLUMN_REF)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
 
         .build();
 // clang-format on
