@@ -396,11 +396,6 @@ extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 // when the Item carries a TypeContext, otherwise derived from its SQL result
 // type. Note DECIMAL_RESULT lands in VEF_TYPE_STRING, which is why a decimal
 // literal reaches an extension as a string rather than a number.
-//
-// Used wherever the server has to describe an argument without a declared
-// signature to read it from: the prerun's arg_types, the bind hook's
-// arg_types, varargs marshalling, and the expected-type array a varargs hook
-// is checked against. Keeping one copy is what keeps those four agreeing.
 extern vef_type_id InferArgTypeId(const Item *item);
 
 // Validate VDF arguments against function signature and convert string

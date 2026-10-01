@@ -1935,10 +1935,8 @@ vef_type_id InferArgTypeId(const Item *item) {
 }
 
 // Turns a varargs hook's answers into the expected-type array the two passes
-// consume. An argument the hook named takes that name; one it stayed silent
-// about keeps whatever type the argument already carries, so that every custom
-// argument is checked and not only the declared ones. An argument that is not
-// custom at all gets a non-CUSTOM entry, which both passes skip.
+// consume. An argument's type the hook named takes that name; one it stayed silent
+// about keeps whatever type the argument already carries
 //
 // name_store owns the names, and out_expected points into it, so every name is
 // written before any pointer is taken. Returns true on error (already raised).
@@ -1950,19 +1948,13 @@ static bool BuildVarargsExpectedTypes(
   for (uint i = 0; i < arg_count; i++) {
     if (hook_names[i].empty()) {
       // The hook said nothing, so the argument stands as the server already
-      // typed it. Recording that rather than leaving a gap is what lets pass 1
-      // check every custom argument: without it a value of the wrong custom
-      // type reaches the function body unexamined. A type belonging to another
-      // extension is reported there as an ordinary base-type mismatch.
+      // typed it.
       const auto *tc = args[i]->get_type_context();
       if (tc != nullptr) (*name_store)[i] = tc->type_name();
       continue;
     }
 
     // The name is extension-supplied, so look it up rather than trust it.
-    // ResolveTypeDescriptor takes only a read lock, filters by extension --
-    // which is what enforces "must be a type of this extension" -- and
-    // matches the case-folded key, so a hook writing 'tvector' finds TVECTOR.
     const TypeDescriptor *td = nullptr;
     if (ResolveTypeDescriptor(extension_name, hook_names[i], td)) return true;
     if (td == nullptr) {
@@ -1981,10 +1973,7 @@ static bool BuildVarargsExpectedTypes(
 
   for (uint i = 0; i < arg_count; i++) {
     if ((*name_store)[i].empty()) {
-      // Not a custom argument, so record what it actually is. Both passes only
-      // branch on VEF_TYPE_CUSTOM and would skip it whatever we wrote here,
-      // but an array that describes every argument truthfully can be reused;
-      // one holding a placeholder cannot.
+      // Not a custom argument, so record what it actually is.
       (*out_expected)[i] = {InferArgTypeId(args[i]), nullptr};
     } else {
       (*out_expected)[i] = {VEF_TYPE_CUSTOM, (*name_store)[i].c_str()};
