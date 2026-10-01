@@ -12,8 +12,16 @@ INSERT INTO t VALUES
 CREATE INDEX idx_v ON t (v)
 USING EXTENDED(vsql_knn_index_test.kvec_l2);
 #
-# EXPLAIN shows the custom distance scan for the KNN query (proves the
-# optimizer chose the custom index built over the pre-existing rows).
+# The index has not been searched yet (building it does not search it), so
+# the count is 0. This baseline makes the non-zero count after the KNN
+# queries attributable to them.
+#
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS scan_begins_before_query;
+scan_begins_before_query
+0
+#
+# EXPLAIN shows the KNN query is served by the index built over the
+# pre-existing rows, not by a sort.
 #
 EXPLAIN FORMAT=tree
 SELECT id

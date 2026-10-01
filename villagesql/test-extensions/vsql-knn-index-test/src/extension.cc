@@ -82,8 +82,9 @@ using vsql::preview_storage_builder::StorageCapability;
 //   [0..7]   Column::Ref placeholder (zero from from_string; the server fills
 //            it in with the stable col_ref after the column-store insert).
 //   [8..end] kVecDim little-endian float32 elements.
-// So the persisted length is 8 + kVecBytes. The 8-byte prefix is what the index
-// reads as the col_ref at insert (like vsql-vector create_node).
+// So the persisted length is 8 + kVecBytes. The prefix only shapes the field
+// like a real vector; the index does not read it as the col_ref -- it asks the
+// server for the stable ref via get_key_ref at insert (see kvec_insert).
 
 static constexpr uint32_t kVecDim = 4;
 static constexpr uint32_t kVecBytes = kVecDim * sizeof(float);
@@ -416,6 +417,8 @@ static bool kvec_create(IdxCtx * /*ctx*/, const Index & /*index*/,
 static bool kvec_drop(IdxCtx *ctx, const Index & /*index*/,
                       Segment::TrxRef /*trx_ref*/, char * /*err*/,
                       uint32_t /*err_len*/) {
+  // Exclusive, like insert: entries is only ever touched under the mutex.
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
   ctx->user()->entries.clear();
   return false;
 }
@@ -547,6 +550,11 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     }
     const IndexScanKey::KeyPartData stored_val{stored.data(), raw.length};
 
+    // helper() returns void: the ABI's helper_fn has no error channel, so a
+    // distance computation that fails server-side cannot be detected here and
+    // leaves d at 0.0, ranking that row as the nearest neighbour. Giving
+    // helper_fn an error return is a separate ABI change; until then a failing
+    // helper silently corrupts the ordering.
     double d = 0.0;
     index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
     hits.push_back(Hit{entry.ref, &entry.pkey, d});
@@ -642,7 +650,9 @@ static constexpr const char kKVecL2Func[] = "kvec_l2_distance";
 // A second index type + profile binding a different metric (cosine). The
 // optimizer must tie an ORDER BY distance function to the index type whose
 // profile actually binds it: a cosine ORDER BY may only drive a kvec_cos
-// index, never a kvec_l2 (L2) one. Exercised by knn_profile_mismatch.
+// index, never a kvec_l2 (L2) one. knn_profile_mismatch exercises the negative
+// case (a cosine ORDER BY must not drive an L2-only table); knn_cos_index
+// exercises the positive case (a kvec_cos index serving a cosine KNN query).
 static constexpr const char kKVecIndexCos[] = "kvec_cos";
 static constexpr const char kKVecProfileCos[] = "kvec_profile_cos";
 static constexpr const char kKVecCosFunc[] = "kvec_cos_distance";
