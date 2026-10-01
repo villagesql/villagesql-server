@@ -1807,17 +1807,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
                          params.value_data()};
       }
     } else {
-      switch (args[i]->result_type()) {
-        case REAL_RESULT:
-          arg_types[i].id = VEF_TYPE_REAL;
-          break;
-        case INT_RESULT:
-          arg_types[i].id = VEF_TYPE_INT;
-          break;
-        default:
-          arg_types[i].id = VEF_TYPE_STRING;
-          break;
-      }
+      arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
     // Provide constant string values where available
@@ -1932,20 +1922,42 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
   return false;
 }
 
+vef_type_id InferArgTypeId(const Item *item) {
+  if (item->get_type_context() != nullptr) return VEF_TYPE_CUSTOM;
+  switch (item->result_type()) {
+    case REAL_RESULT:
+      return VEF_TYPE_REAL;
+    case INT_RESULT:
+      return VEF_TYPE_INT;
+    default:
+      return VEF_TYPE_STRING;
+  }
+}
+
 // Turns a varargs hook's answers into the expected-type array the two passes
-// consume. Only an argument the hook named gets an entry: staying silent about
-// an argument means the server's own inference stands, and both passes skip
-// anything that is not VEF_TYPE_CUSTOM.
+// consume. An argument the hook named takes that name; one it stayed silent
+// about keeps whatever type the argument already carries, so that every custom
+// argument is checked and not only the declared ones. An argument that is not
+// custom at all gets a non-CUSTOM entry, which both passes skip.
 //
-// name_store owns the names -- out_expected points into it, so every name is
+// name_store owns the names, and out_expected points into it, so every name is
 // written before any pointer is taken. Returns true on error (already raised).
 static bool BuildVarargsExpectedTypes(
     const char *func_name, std::string_view extension_name, uint arg_count,
-    const std::vector<std::string> &hook_names,
+    Item **args, const std::vector<std::string> &hook_names,
     std::vector<std::string> *name_store,
     std::vector<vef_type_t> *out_expected) {
   for (uint i = 0; i < arg_count; i++) {
-    if (hook_names[i].empty()) continue;
+    if (hook_names[i].empty()) {
+      // The hook said nothing, so the argument stands as the server already
+      // typed it. Recording that rather than leaving a gap is what lets pass 1
+      // check every custom argument: without it a value of the wrong custom
+      // type reaches the function body unexamined. A type belonging to another
+      // extension is reported there as an ordinary base-type mismatch.
+      const auto *tc = args[i]->get_type_context();
+      if (tc != nullptr) (*name_store)[i] = tc->type_name();
+      continue;
+    }
 
     // The name is extension-supplied, so look it up rather than trust it.
     // ResolveTypeDescriptor takes only a read lock, filters by extension --
@@ -1969,9 +1981,11 @@ static bool BuildVarargsExpectedTypes(
 
   for (uint i = 0; i < arg_count; i++) {
     if ((*name_store)[i].empty()) {
-      // Any non-CUSTOM id: both passes branch only on VEF_TYPE_CUSTOM, so
-      // this entry exists to be skipped.
-      (*out_expected)[i] = {VEF_TYPE_STRING, nullptr};
+      // Not a custom argument, so record what it actually is. Both passes only
+      // branch on VEF_TYPE_CUSTOM and would skip it whatever we wrote here,
+      // but an array that describes every argument truthfully can be reused;
+      // one holding a placeholder cannot.
+      (*out_expected)[i] = {InferArgTypeId(args[i]), nullptr};
     } else {
       (*out_expected)[i] = {VEF_TYPE_CUSTOM, (*name_store)[i].c_str()};
     }
@@ -2015,7 +2029,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     }
     name_store.resize(arg_count);
     varargs_expected.resize(arg_count);
-    if (BuildVarargsExpectedTypes(func_name, extension_name, arg_count,
+    if (BuildVarargsExpectedTypes(func_name, extension_name, arg_count, args,
                                   hook_arg_type_names, &name_store,
                                   &varargs_expected)) {
       return true;
