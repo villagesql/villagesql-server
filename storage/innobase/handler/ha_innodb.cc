@@ -11342,34 +11342,30 @@ bool ha_innobase::get_custom_index_handle(uint keynr,
   return false;
 }
 
-bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
-                                          uchar *buf, bool *row_not_found,
-                                          char *error_msg, uint error_msg_len) {
+bool ha_innobase::custom_index_pkey_to_row(
+    uint keynr, const Custom_index_pkey_part *pkey_parts,
+    uint32_t num_pkey_parts, uchar *buf, bool *row_not_found, char *error_msg,
+    uint error_msg_len) {
   if (row_not_found != nullptr) *row_not_found = false;
   dict_index_t *index = innobase_get_index(keynr);
   if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index)) {
     snprintf(error_msg, error_msg_len,
-             "custom_index_ref_to_row: keynr %u is not a custom index", keynr);
+             "custom_index_pkey_to_row: keynr %u is not a custom index", keynr);
     return true;
   }
-
-  // Step 1: resolve the extension's column reference to the owning row's
-  // clustered field-0 bytes (InnoDB native format), copied into a local buffer.
-  unsigned char rowid_buf[REC_MAX_N_FIELDS * sizeof(uint64_t)];
-  uint32_t rowid_len = 0;
-  if (villagesql::innodb::Custom_index::col_ref_to_rowid(
-          index, key_ref, rowid_buf, sizeof(rowid_buf), &rowid_len, error_msg,
-          error_msg_len)) {
+  if (pkey_parts == nullptr || num_pkey_parts == 0) {
+    snprintf(error_msg, error_msg_len,
+             "custom_index_pkey_to_row: empty primary key");
     return true;
   }
 
   ut_a(m_prebuilt->trx == thd_to_trx(ha_thd()));
 
-  // Step 2: position the prebuilt read on the clustered index and (re)build the
-  // row template so row_search_mvcc materializes the full MySQL row into buf.
+  // Position the prebuilt read on the clustered index and (re)build the row
+  // template so row_search_mvcc materializes the full MySQL row into buf.
   if (change_active_index(MAX_KEY)) {
     snprintf(error_msg, error_msg_len,
-             "custom_index_ref_to_row: failed to select clustered index");
+             "custom_index_pkey_to_row: failed to select clustered index");
     return true;
   }
   dict_index_t *clust = m_prebuilt->index;
@@ -11378,19 +11374,29 @@ bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
     build_template(false);
   }
 
-  // Step 3: build the clustered search tuple directly from the native field-0
-  // bytes. Unlike index_read()'s key path we do NOT call
-  // row_sel_convert_mysql_key_to_innobase: rowid_buf is already in InnoDB
-  // clustered-storage format (it was snapshotted from a clustered record), so
-  // it goes straight into field 0. Field 0 is the clustered index's unique key
-  // for a single-column PK, or the hidden DB_ROW_ID for a PK-less table.
+  // Build the clustered search tuple directly from the native PK bytes the
+  // index returned. As in index_read()'s snapshot path we do NOT call
+  // row_sel_convert_mysql_key_to_innobase: each part is already in InnoDB
+  // clustered-storage format, so it goes straight into the matching clustered
+  // key field. The parts are the clustered index's unique key
+  // (dict_index_t::n_uniq fields), or the hidden DB_ROW_ID for a PK-less table.
+  if (num_pkey_parts != dict_index_get_n_unique(clust)) {
+    snprintf(error_msg, error_msg_len,
+             "custom_index_pkey_to_row: got %u primary key parts, clustered "
+             "index has %lu",
+             num_pkey_parts,
+             static_cast<unsigned long>(dict_index_get_n_unique(clust)));
+    return true;
+  }
   dtuple_t *search_tuple = m_prebuilt->search_tuple;
   dict_index_copy_types(search_tuple, clust, clust->n_fields);
-  dtuple_set_n_fields(search_tuple, 1);
-  dfield_t *dfield = dtuple_get_nth_field(search_tuple, 0);
-  dfield_set_data(dfield, rowid_buf, rowid_len);
+  dtuple_set_n_fields(search_tuple, num_pkey_parts);
+  for (uint32_t i = 0; i < num_pkey_parts; i++) {
+    dfield_t *dfield = dtuple_get_nth_field(search_tuple, i);
+    dfield_set_data(dfield, pkey_parts[i].data, pkey_parts[i].length);
+  }
 
-  // Step 4: exact clustered lookup into buf.
+  // Exact clustered lookup into buf.
   m_prebuilt->m_mysql_handler = this;
   dberr_t ret = innobase_srv_conc_enter_innodb(m_prebuilt);
   if (ret == DB_SUCCESS) {
@@ -11399,11 +11405,11 @@ bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
   }
 
   if (ret == DB_RECORD_NOT_FOUND) {
-    // The reference resolved, but the row is not visible to this transaction's
-    // read view -- e.g. a KNN hit on a concurrently-inserted, uncommitted row
-    // (the HNSW graph is not yet MVCC-filtered, so the scan can surface such
-    // nodes). This is an expected MVCC outcome, NOT a hard error: signal
-    // not-found so the caller skips this hit and fetches the next candidate.
+    // The key resolved, but the row is not visible to this transaction's read
+    // view -- e.g. a KNN hit on a concurrently-inserted, uncommitted row (the
+    // HNSW graph is not yet MVCC-filtered, so the scan can surface such nodes).
+    // Expected MVCC outcome, NOT a hard error: signal not-found so the caller
+    // skips this hit and fetches the next candidate.
     if (row_not_found != nullptr) {
       *row_not_found = true;
       return false;
@@ -11413,7 +11419,7 @@ bool ha_innobase::custom_index_ref_to_row(uint keynr, uint64_t key_ref,
 
   if (ret != DB_SUCCESS) {
     snprintf(error_msg, error_msg_len,
-             "custom_index_ref_to_row: clustered lookup failed (err %d)",
+             "custom_index_pkey_to_row: clustered lookup failed (err %d)",
              static_cast<int>(ret));
     return true;
   }

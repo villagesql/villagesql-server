@@ -5642,40 +5642,37 @@ class handler {
     return true;
   }
 
-  /**
-    VillageSQL: fetch a base-table row via a custom index's stable column
-    reference (REF_LOOKUP / HAS_COLUMN_REF read path).
+  /** VillageSQL: one field of a custom index's returned primary key: the field
+  value bytes in InnoDB clustered-storage format, and their length. */
+  struct Custom_index_pkey_part {
+    const unsigned char *data;
+    uint32_t length;
+  };
 
-    For a custom KNN index the scan returns, per hit, the extension's stable
-    column reference (@p key_ref) rather than a primary key. The engine
-    resolves that reference to the owning row's identity (the clustered
-    field-0 bytes it snapshotted at insert) and reads the full row into @p buf,
-    entirely inside the engine — the SQL layer never needs the row's PK or its
-    byte format.
+  /** VillageSQL: fetch a base-table row from a custom index's returned primary
+    key. For a custom KNN index whose scan returns the owning row's primary key
+    directly (each part in InnoDB clustered-storage byte format), the engine
+    builds the clustered search key from the parts and reads the full row into
+    @p buf via an exact clustered lookup.
 
-    @param keynr    key number of the custom index (table->key_info[]).
-    @param key_ref  the extension's stable column reference (opaque uint64).
-    @param[out] buf record buffer to receive the fetched row (table->record[0]).
-    @param[out] row_not_found  set true (and false returned) when the reference
-                  resolves but the row is NOT VISIBLE to the current
-                  transaction's read view (MVCC) -- e.g. a KNN hit on a
-                  concurrently-inserted, uncommitted row. This is an expected
-                  outcome, not a hard error: the caller should SKIP this hit and
-                  fetch the next candidate rather than fail the query. nullptr
-    is allowed (callers that do not distinguish treat it as an error).
-    @param error_msg      buffer for an error description on failure.
-    @param error_msg_len  size of @p error_msg.
-
-    @retval false  the row was fetched into @p buf, OR (with row_not_found set)
-                   the row was not visible and should be skipped.
+    @param keynr    key number of the custom index.
+    @param pkey_parts array of @p num_pkey_parts primary-key field parts, in
+                  clustered-index key order.
+    @param num_pkey_parts number of primary-key parts.
+    @param[out] buf record buffer to receive the fetched row.
+    @param[out] row_not_found  set true when the key resolves but the row is not
+                  visible to the current transaction (MVCC); caller skips the
+    hit.
+    @param error_msg / error_msg_len  error description buffer.
+    @retval false  the row was fetched (or, with row_not_found set, skip it).
     @retval true   not a custom index, unsupported, or the fetch failed.
   */
-  virtual bool custom_index_ref_to_row(uint keynr [[maybe_unused]],
-                                       uint64_t key_ref [[maybe_unused]],
-                                       uchar *buf [[maybe_unused]],
-                                       bool *row_not_found [[maybe_unused]],
-                                       char *error_msg [[maybe_unused]],
-                                       uint error_msg_len [[maybe_unused]]) {
+  virtual bool custom_index_pkey_to_row(
+      uint keynr [[maybe_unused]],
+      const Custom_index_pkey_part *pkey_parts [[maybe_unused]],
+      uint32_t num_pkey_parts [[maybe_unused]], uchar *buf [[maybe_unused]],
+      bool *row_not_found [[maybe_unused]], char *error_msg [[maybe_unused]],
+      uint error_msg_len [[maybe_unused]]) {
     return true;
   }
 
