@@ -5553,9 +5553,27 @@ static SYS_VAR *group_replication_system_vars[] = {
 #define DEF_GR_FC_STATUS_VAR_PTR(name, ptr, option) \
   { name, (char *)ptr, option, SHOW_SCOPE_GLOBAL }
 
+// SHOW_CHAR_PTR means "value is the address of a char *", and SHOW_CHAR means
+// "value is the characters". Neither describes a std::string, so these two must
+// be read through a function that copies out of the string.
+static int show_gr_fc_active(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_CHAR;
+  var->value = buff;
+  snprintf(buff, SHOW_VAR_FUNC_BUFF_SIZE, "%s", fc_stats.active.c_str());
+  return 0;
+}
+
+static int show_gr_fc_threshold_nodes(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_CHAR;
+  var->value = buff;
+  snprintf(buff, SHOW_VAR_FUNC_BUFF_SIZE, "%s", fc_stats.nodes.c_str());
+  return 0;
+}
+
 static SHOW_VAR gr_flow_control_status_variables[] = {
-    DEF_GR_FC_STATUS_VAR_PTR("active", &fc_stats.active, SHOW_CHAR_PTR),
-    DEF_GR_FC_STATUS_VAR_PTR("threshold_nodes", &fc_stats.nodes, SHOW_CHAR_PTR),
+    DEF_GR_FC_STATUS_VAR_PTR("active", &show_gr_fc_active, SHOW_FUNC),
+    DEF_GR_FC_STATUS_VAR_PTR("threshold_nodes", &show_gr_fc_threshold_nodes,
+                             SHOW_FUNC),
     DEF_GR_FC_STATUS_VAR_PTR("throttle_quota", &fc_stats.quota, SHOW_LONGLONG),
     // end of the array marker
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
