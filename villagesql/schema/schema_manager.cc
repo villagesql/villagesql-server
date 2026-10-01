@@ -49,6 +49,7 @@
 #include "sql/transaction.h"
 #include "villagesql/include/byteorder.h"
 #include "villagesql/include/error.h"
+#include "villagesql/include/semver.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/system_table_check.h"
@@ -83,7 +84,7 @@ class SchemaManagerStatus {
    *
    * @return the version of VillageSQL installed.
    */
-  static Semver get_version() {
+  static CodeBaseVersion get_version() {
     assert(version);
     return *version;
   }
@@ -101,9 +102,9 @@ class SchemaManagerStatus {
    * Record the version of the VillageSQL Schema installed in memory.  This
    * must only be called between preinit() and init().
    *
-   * @param[in]  version  The Semver of the schema installed
+   * @param[in]  version  The version of the schema installed
    */
-  static void set_version(const Semver &version);
+  static void set_version(const CodeBaseVersion &version);
 
   /**
    * Read current VillageSQL version from villagesql.properties table.
@@ -116,7 +117,7 @@ class SchemaManagerStatus {
    * @retval false  ON SUCCESS
    * @retval true   ON FAILURE
    */
-  static bool read_villagesql_version(THD *thd, Semver *version);
+  static bool read_villagesql_version(THD *thd, CodeBaseVersion *version);
 
   /**
    * Set VillageSQL version in villagesql.properties table.
@@ -127,7 +128,8 @@ class SchemaManagerStatus {
    * @retval false  ON SUCCESS
    * @retval true   ON FAILURE
    */
-  static bool write_villagesql_version(THD *thd, const Semver &version);
+  static bool write_villagesql_version(THD *thd,
+                                       const CodeBaseVersion &version);
 
   /**
    * Free resources allocated by SchemaManagerStatus. Called during shutdown.
@@ -149,14 +151,14 @@ class SchemaManagerStatus {
   // The pointer is never null after pre_init(), and is not changed after
   // init(). Memory is managed via set_version() which handles
   // allocation/deallocation.
-  static Semver *version;
+  static CodeBaseVersion *version;
   // Set during preinit() never changed after that.
   static bool *upgrade_needed;
 };
 
 std::atomic<bool> SchemaManagerStatus::is_initialized = false;
 std::atomic<bool> SchemaManagerStatus::is_initializing = false;
-Semver *SchemaManagerStatus::version = nullptr;
+CodeBaseVersion *SchemaManagerStatus::version = nullptr;
 bool *SchemaManagerStatus::upgrade_needed = nullptr;
 
 // Keep these table definitions in sync with
@@ -375,29 +377,32 @@ static bool validate_villagesql_tables(THD *thd) {
 
 // Run version-specific VillageSQL upgrades, which are in
 // villagesql/schema/upgrade.h.
-bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
+bool run_villagesql_version_upgrades(THD *thd,
+                                     const CodeBaseVersion &from_version) {
+  // The caller has already established that from_version names this build's
+  // code base, so the thresholds below are plain semvers.
+  const Semver &from = from_version.semver();
+
   // Upgrade from 0.0.1 to 0.0.3: add type_parameters column to custom_columns
-  // Build the threshold with the same code base as from_version so the
-  // comparison is ordered (versions with differing code bases are unordered).
   Semver version_003;
-  version_003.from_components(0, 0, 3, from_version.code_base());
-  if (from_version < version_003) {
+  version_003.from_components(0, 0, 3);
+  if (from < version_003) {
     // Upgrade from 0.0.1 to 0.0.3: add type_parameters column to
     // custom_columns.
     if (upgrade::upgrade_villagesql_from_0_0_1_to_0_0_3(thd)) return true;
   }
   // Upgrade from 0.0.4 to 0.0.5: add pending_action column to extensions
   Semver version_005;
-  version_005.from_components(0, 0, 5, from_version.code_base());
-  if (from_version < version_005) {
+  version_005.from_components(0, 0, 5);
+  if (from < version_005) {
     if (upgrade::upgrade_villagesql_from_0_0_4_to_0_0_5(thd)) return true;
   }
   // Upgrade from 0.0.5 to 0.0.6: convert system tables to utf8mb4_bin and
   // disable persistent InnoDB statistics on the system tables so the background
   // stats thread stops taking MDL on them.
   Semver version_006;
-  version_006.from_components(0, 0, 6, from_version.code_base());
-  if (from_version < version_006) {
+  version_006.from_components(0, 0, 6);
+  if (from < version_006) {
     if (upgrade::upgrade_villagesql_from_0_0_5_to_0_0_6(thd)) return true;
   }
   // Future versions would be added here
@@ -518,7 +523,7 @@ bool preinit_for_restart(THD *thd) {
   dd::upgrade::Bootstrap_error_handler error_handler;
 
   // Get current VillageSQL version from villagesql.properties table
-  Semver current_villagesql_version;
+  CodeBaseVersion current_villagesql_version;
   if (SchemaManagerStatus::read_villagesql_version(
           thd, &current_villagesql_version)) {
     return true;  // Error reading version
@@ -551,7 +556,7 @@ bool SchemaManager::bootstrap(THD *thd) {
   }
 
   // Get current VillageSQL version from villagesql.properties table
-  Semver current_villagesql_version;
+  CodeBaseVersion current_villagesql_version;
   if (SchemaManagerStatus::read_villagesql_version(
           thd, &current_villagesql_version)) {
     return true;  // Error reading version
@@ -635,7 +640,7 @@ bool install_villagesql_schema(THD *thd) {
 
   // Reread the version from the database now that the schema has been
   // installed.
-  Semver installed_villagesql_version;
+  CodeBaseVersion installed_villagesql_version;
   if (SchemaManagerStatus::read_villagesql_version(
           thd, &installed_villagesql_version)) {
     LogVSQL(ERROR_LEVEL, "Error reading the current version after install");
@@ -712,12 +717,12 @@ bool SchemaManager::run_villagesql_upgrades_standalone() {
 
 bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
   // Get current VillageSQL version from villagesql.properties table
-  const Semver current_villagesql_version = get_version();
-  const Semver target_villagesql_version = GetBuildVersion();
+  const CodeBaseVersion current_villagesql_version = get_version();
+  const CodeBaseVersion target_villagesql_version = GetBuildVersion();
 
-  // A code base change is not a numeric upgrade, so Semver deliberately leaves
-  // versions from different code bases unordered and the comparison below can
-  // never see one. Refuse to start rather than fall through it: otherwise the
+  // A code base change is not a numeric upgrade, and the semver comparison
+  // below is only meaningful within one code base, so rule the mismatch out
+  // here. Refuse to start rather than fall through it: otherwise the
   // version-specific upgrades are skipped, the stored version keeps naming the
   // old code base, and is_villagesql_upgrade_needed() stays true so every
   // later restart re-runs the whole server upgrade path.
@@ -731,8 +736,7 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
   // TODO(villagesql-production): support upgrading a data directory across code
   // bases.
   if (current_villagesql_version.is_valid() &&
-      current_villagesql_version.code_base() !=
-          target_villagesql_version.code_base()) {
+      !current_villagesql_version.same_code_base(target_villagesql_version)) {
     LogVSQL(ERROR_LEVEL,
             "Cannot upgrade the VillageSQL schema across code bases: this data "
             "directory was created by a %s build, but this server is a %s "
@@ -742,14 +746,16 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
     return true;
   }
 
-  if (current_villagesql_version < target_villagesql_version) {
+  // Both versions name the same code base by now, so the semvers decide.
+  if (current_villagesql_version.semver() <
+      target_villagesql_version.semver()) {
     if (opt_upgrade_mode == UPGRADE_NONE) {
       LogVSQL(ERROR_LEVEL,
               "An upgrade is required, but --upgrade=NONE is specified");
       return true;
     }
 
-    if (current_villagesql_version.has_prerelease()) {
+    if (current_villagesql_version.semver().has_prerelease()) {
       if (!opt_villagesql_allow_unsafe_dev_upgrade) {
         LogVSQL(ERROR_LEVEL,
                 "Upgrading from a development version (%s) is not allowed. "
@@ -778,7 +784,7 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
       return true;
     }
 
-    Semver updated_villagesql_version;
+    CodeBaseVersion updated_villagesql_version;
     if (SchemaManagerStatus::read_villagesql_version(
             thd, &updated_villagesql_version)) {
       LogVSQL(ERROR_LEVEL, "Failed to read updated schema version");
@@ -791,7 +797,9 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
     }
 
     SchemaManagerStatus::set_version(updated_villagesql_version);
-    if (updated_villagesql_version != target_villagesql_version) {
+    if (!updated_villagesql_version.same_code_base(target_villagesql_version) ||
+        updated_villagesql_version.semver() !=
+            target_villagesql_version.semver()) {
       LogVSQL(ERROR_LEVEL,
               "Schema updates did not reach desired version: %s vs. %s",
               updated_villagesql_version.to_string().c_str(),
@@ -815,13 +823,13 @@ bool SchemaManager::is_villagesql_upgrade_needed() {
   return SchemaManagerStatus::get_upgrade_needed();
 }
 
-Semver SchemaManager::get_version() {
+CodeBaseVersion SchemaManager::get_version() {
   return SchemaManagerStatus::get_version();
 }
 
 void SchemaManager::deinit() { SchemaManagerStatus::deinit(); }
 
-void SchemaManagerStatus::set_version(const Semver &ver) {
+void SchemaManagerStatus::set_version(const CodeBaseVersion &ver) {
   assert(!is_initializing.load() && !is_initialized.load());
 
   LogVSQL(INFORMATION_LEVEL, "Setting Schema Version to %s",
@@ -829,23 +837,24 @@ void SchemaManagerStatus::set_version(const Semver &ver) {
 
   // Safe because we only update during single-threaded initialization/upgrade
   delete version;
-  version = new Semver(ver);
+  version = new CodeBaseVersion(ver);
 
   if (!upgrade_needed) {
     // Treat as an upgrade when the stored version is invalid, when its code
     // base differs from the build (including legacy stored versions that
     // predate code bases and were assigned the legacy code base), or when it
     // is numerically older than the build.
-    const Semver build_version = GetBuildVersion();
-    upgrade_needed = new bool(!ver.is_valid() ||
-                              ver.code_base() != build_version.code_base() ||
-                              ver < build_version);
+    const CodeBaseVersion build_version = GetBuildVersion();
+    upgrade_needed =
+        new bool(!ver.is_valid() || !ver.same_code_base(build_version) ||
+                 ver.semver() < build_version.semver());
   }
 }
 
-bool SchemaManagerStatus::read_villagesql_version(THD *thd, Semver *version) {
+bool SchemaManagerStatus::read_villagesql_version(THD *thd,
+                                                  CodeBaseVersion *version) {
   // Initialize outputs
-  *version = Semver();
+  *version = CodeBaseVersion();
 
   // Check if villagesql schema exists at all, and get its id
   char query[512];
@@ -929,8 +938,8 @@ bool SchemaManagerStatus::read_villagesql_version(THD *thd, Semver *version) {
   return false;  // Success
 }
 
-bool SchemaManagerStatus::write_villagesql_version(THD *thd,
-                                                   const Semver &version) {
+bool SchemaManagerStatus::write_villagesql_version(
+    THD *thd, const CodeBaseVersion &version) {
   // Insert or update version in villagesql.properties table
   std::string version_str = version.to_string();
   char query[512];

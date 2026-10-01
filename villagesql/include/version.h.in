@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "villagesql/include/code_base_version.h"
 #include "villagesql/include/semver.h"
 
 #define VSQL_CODE_BASE              "@VSQL_CODE_BASE@"
@@ -30,18 +31,21 @@
 
 namespace villagesql {
 
-inline Semver GetBuildVersion() {
+inline CodeBaseVersion GetBuildVersion() {
   // When VSQL_PRE_RELEASE_VERSION is "" (release builds via -DVSQL_PRE_RELEASE_VERSION=""),
-  // passing {""} to from_components creates an invalid Semver because "" fails
+  // passing {""} to from_components creates an invalid version because "" fails
   // is_valid_identifier. This made @@villagesql_server_version return empty,
   // breaking extension tests that use it to locate the SDK directory.
   std::vector<std::string> prerelease;
   if (std::string_view(VSQL_PRE_RELEASE_VERSION).size() > 0) {
     prerelease.push_back(VSQL_PRE_RELEASE_VERSION);
   }
-  Semver v;
-  v.from_components(VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION,
-                    VSQL_PATCH_VERSION,  VSQL_CODE_BASE, prerelease);
+  Semver semver;
+  semver.from_components(VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION,
+                         VSQL_PATCH_VERSION, prerelease);
+
+  CodeBaseVersion v;
+  v.from_semver(VSQL_CODE_BASE, semver);
   return v;
 }
 

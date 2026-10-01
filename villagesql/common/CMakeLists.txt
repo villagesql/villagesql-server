@@ -14,7 +14,9 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_COMMON_SOURCES
+  code_base_version.cc
   semver.cc
+  string_utils.cc
 )
 
 # Generated build metadata (git SHA, work-tree file counts, build timestamp,
