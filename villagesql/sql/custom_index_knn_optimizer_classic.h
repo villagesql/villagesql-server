@@ -55,7 +55,7 @@ bool IsCustomKnnDistanceOrderItem(TABLE *table, Item *order_item);
 // KNN index is used only if it is in that map, so index hints are honored.
 // Called from test_if_skip_sort_order().
 bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
-                                   const Key_map *usable_keys, bool no_changes);
+                                   const Key_map &usable_keys, bool no_changes);
 
 // Classic optimizer access-path builder. Rebuilds the KNN scan spec for the
 // index `key_idx` chosen by TrySkipSortWithCustomKnnIndex from the query
