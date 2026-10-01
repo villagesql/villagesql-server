@@ -7104,11 +7104,11 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
       return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
     }
 
-    // Now re-cache the new version. The repertoire must match the encoded
-    // bytes, not the original literal.
+    // Now re-cache the new version.
+    // TODO(villagesql-charset): check on the collation settings.
     fixed = false;
     init(encoded->ptr(), encoded->length(), &my_charset_bin,
-         collation.derivation, my_charset_repertoire(&my_charset_bin));
+         collation.derivation, collation.repertoire);
   }
   String *result = val_str(&str_value);
   return save_str_value_in_field(field, result);
