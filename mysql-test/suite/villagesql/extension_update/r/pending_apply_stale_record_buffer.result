@@ -1,0 +1,49 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
+INSTALL EXTENSION update_test VERSION '2.0.0';
+INSTALL EXTENSION update_schema_test VERSION '1.0.0';
+CREATE TABLE t (id INT PRIMARY KEY,
+a update_schema_test.MYTYPE,
+z update_test.COUNTER);
+INSERT INTO t VALUES (1, '10', '20');
+SELECT extension_name, extension_version
+FROM villagesql.extensions ORDER BY extension_name;
+extension_name	extension_version
+update_schema_test	1.0.0
+update_test	2.0.0
+SELECT db_name, table_name, column_name, extension_name, extension_version,
+type_name
+FROM villagesql.custom_columns ORDER BY db_name, table_name, column_name;
+db_name	table_name	column_name	extension_name	extension_version	type_name
+test	t	a	update_schema_test	1.0.0	MYTYPE
+test	t	z	update_test	2.0.0	COUNTER
+ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+# restart
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('update_schema_test', 'update_test')
+ORDER BY extension_name;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_schema_test	2.0.0	NULL	NULL
+update_test	2.0.0	NULL	NULL
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT db_name, table_name, column_name, extension_name, extension_version,
+type_name
+FROM villagesql.custom_columns ORDER BY db_name, table_name, column_name;
+db_name	table_name	column_name	extension_name	extension_version	type_name
+test	t	a	update_schema_test	2.0.0	MYTYPE
+test	t	z	update_test	2.0.0	COUNTER
+# restart
+SELECT id, a, z FROM t ORDER BY id;
+id	a	z
+1	v1:10	v2:20
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` update_schema_test.MYTYPE DEFAULT NULL,
+  `z` update_test.COUNTER DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+UNINSTALL EXTENSION update_schema_test;
+UNINSTALL EXTENSION update_test;

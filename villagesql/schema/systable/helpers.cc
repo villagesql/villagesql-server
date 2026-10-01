@@ -21,14 +21,26 @@
 #include <initializer_list>
 #include <string>
 #include "lex_string.h"
+#include "my_base.h"
 #include "mysql/strings/m_ctype.h"
 #include "sql/field.h"
+#include "sql/handler.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/statement/ed_connection.h"
+#include "sql/table.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql {
+
+int read_row_for_update(TABLE &table, const uchar *key_buf) {
+  int error = table.file->ha_index_read_map(table.record[0], key_buf,
+                                            HA_WHOLE_KEY, HA_READ_KEY_EXACT);
+  if (error) return error;
+
+  store_record(&table, record[1]);
+  return 0;
+}
 
 void read_string_field(Field *f, std::string &out) {
   if (f && !f->is_null()) {

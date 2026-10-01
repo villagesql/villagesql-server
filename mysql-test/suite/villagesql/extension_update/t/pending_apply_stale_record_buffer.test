@@ -1,0 +1,64 @@
+# Restart-time apply must rewrite every field of the rows it touches, even
+# when a neighbouring row happens to hold the same value.
+#
+# ha_update_row() takes a diff: the engine compares record[1] with
+# record[0] and leaves out every field that compares equal. The row
+# buffer a system table comes back with still holds the last row read
+# during startup's victionary load, in primary key order, so an old-row
+# snapshot taken before the index read makes a field silently keep its
+# on-disk value whenever the two rows agree.
+#
+# update_schema_test sorts before update_test, so update_test is the last
+# row loaded from both villagesql.extensions and villagesql.custom_columns
+# and is what a stale buffer would carry. Installing it at the same 2.0.0
+# that update_schema_test is upgraded to makes the colliding field the
+# version itself, and a NULL pending_action collides as well.
+
+--source include/villagesql/internal_schema_test.inc
+
+INSTALL EXTENSION update_test VERSION '2.0.0';
+INSTALL EXTENSION update_schema_test VERSION '1.0.0';
+
+# Column 'a' is the row to be rewritten, 'z' sorts last and is the
+# colliding neighbour.
+CREATE TABLE t (id INT PRIMARY KEY,
+                a update_schema_test.MYTYPE,
+                z update_test.COUNTER);
+INSERT INTO t VALUES (1, '10', '20');
+
+SELECT extension_name, extension_version
+  FROM villagesql.extensions ORDER BY extension_name;
+
+SELECT db_name, table_name, column_name, extension_name, extension_version,
+       type_name
+  FROM villagesql.custom_columns ORDER BY db_name, table_name, column_name;
+
+ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+
+--source include/restart_mysqld.inc
+
+# The extensions row: version advanced and pending_action cleared. A row
+# updated against a stale buffer keeps 1.0.0 and a 2.0.0 pending_version,
+# with no error recorded.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name IN ('update_schema_test', 'update_test')
+  ORDER BY extension_name;
+
+# The dependent column row was rewritten to 2.0.0 on disk, not just in
+# the victionary cache.
+--source include/villagesql/internal_schema_test.inc
+SELECT db_name, table_name, column_name, extension_name, extension_version,
+       type_name
+  FROM villagesql.custom_columns ORDER BY db_name, table_name, column_name;
+
+# A stale extension_version only bites on the next load, when the type is
+# looked up against a version that is no longer installed.
+--source include/restart_mysqld.inc
+
+SELECT id, a, z FROM t ORDER BY id;
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+UNINSTALL EXTENSION update_schema_test;
+UNINSTALL EXTENSION update_test;
