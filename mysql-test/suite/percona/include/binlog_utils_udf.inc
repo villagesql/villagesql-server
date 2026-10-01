@@ -328,7 +328,10 @@ while($stage <= $number_of_stages)
 
 # Modify the index file (remove leading ./ leaving only binlog file names)
 --let $index_file = `SELECT @@log_bin_index`
---exec $SED -i 's|^\./binlog\.|binlog.|' $index_file
+# BSD/macOS sed requires an argument to -i; GNU sed accepts the suffix
+# attached, so -i.bak is the form both understand. Remove the backup after.
+--exec $SED -i.bak 's|^\./binlog\.|binlog.|' $index_file
+--exec rm -f $index_file.bak
 
 # There will be no temp tables after restart
 --let $binlog_file_name = `SELECT binlog_name FROM captured_gtid LIMIT 1`
