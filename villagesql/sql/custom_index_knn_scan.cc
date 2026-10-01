@@ -51,10 +51,10 @@ struct CustomIndexKnnScan {
   vef_storage_ctx_t *storage{nullptr};
   vef_index_cursor_ref_t cursor{0};
   bool eof{true};
-  // scan_fetch fills these. The row identity is taken from pkey_columns (the
-  // owning row's primary key, one entry per part), which the engine resolves
-  // via a clustered lookup. key_columns and the key_ref out-param are passed
-  // per the ABI but not consumed for resolution.
+  // scan_fetch fills these. This read path resolves each hit to its row from
+  // pkey_columns alone -- the owning row's primary key, one entry per part,
+  // which the engine looks up in the clustered index. key_columns and the
+  // key_ref out-param are filled per the ABI but this path ignores them.
   std::vector<vef_storage_col_data_t> key_columns;
   std::vector<vef_storage_col_data_t> pkey_columns;
   // pkey_columns converted to the engine-neutral part type passed to the
