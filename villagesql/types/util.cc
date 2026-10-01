@@ -1526,9 +1526,8 @@ struct KnownEntry {
 //
 // expected_types is what each argument is required to be: signature->params
 // for a fixed-arity function, or the types a bind_and_check_types hook
-// declared for a varargs one. Its size is the expected arity, so on the
-// varargs path it holds exactly arg_count entries and the count check below is
-// satisfied by construction. Returns true on error (error already raised).
+// declared for a varargs one.
+// Returns true on error (error already raised).
 static bool ValidateVDFArguments(
     const char *func_name, std::string_view extension_name, uint arg_count,
     Item **args, std::span<const vef_type_t> expected_types,
@@ -1667,10 +1666,11 @@ static bool ConvertVDFArguments(
           return true;
         }
         if (resolved_tc == nullptr) {
-          // Unreachable while expected_types comes from a compiled signature,
-          // but a varargs hook names the type itself, so a name that resolves
-          // at validation and then does not here must not pass silently --
-          // the argument would keep its old, unknown-params context.
+          // Defensive. The name was resolved in BuildVarargsExpectedTypes
+          // (varargs) or comes from the compiled signature (fixed arity), and
+          // pass 1 matched it against this argument's own type, so it should
+          // always resolve here. Falling through would silently leave the
+          // argument with its old unknown-params context.
           villagesql_error(
               "Cannot initialize function '%s': custom type '%s' not found for "
               "argument %u",
@@ -1842,9 +1842,9 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
     out_arg_slots[i] = &out_args[i];
   }
 
-  // The type-name channel is offered only when the caller asked for it, which
-  // means only for a varargs call: a fixed-arity signature already says what
-  // each argument must be.
+  // The type-name channel is offered only for a varargs call:
+  // a fixed-arity signature already says what each argument
+  // must be.
   const bool offer_arg_types = out_arg_type_names != nullptr && arg_count > 0;
   std::vector<vef_inferred_type_params_t> out_names;
   std::vector<vef_inferred_type_params_t *> out_name_slots;
@@ -1994,26 +1994,19 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   // arg_types and rejecting calls it does not accept.
   if (varargs && !has_bind_hook) return false;
 
-  // Backing store for a varargs expected-type array. Declared out here rather
-  // than in the block below because expected_types is a span over
-  // varargs_expected and must stay valid across both passes, and name_store
-  // owns the names it points at. Neither is touched once the span is taken.
+  // Backing store for a varargs expected-type array.
   std::vector<std::string> name_store;
   std::vector<vef_type_t> varargs_expected;
 
   // One slot per argument for whatever the hook resolves; left empty when
-  // there is no hook, which is what tells pass 2 that TD1 rather than a hook
-  // owns the parameters. Sized once, here, so neither hook site below can
-  // re-size it -- a second resize would be a silent no-op that kept the first
-  // hook's answers instead of clearing them.
+  // there is no hook.
   std::vector<TypeParameters> hook_arg_params;
   if (has_bind_hook) hook_arg_params.resize(arg_count);
 
   if (varargs) {
     // Varargs runs the hook FIRST, because there is no signature to check
     // arguments against and the hook supplies what signature->params would
-    // have. The arity check is meaningless here and TD1/TD2 are off for any
-    // hooked function, so nothing else of the fixed-arity path is lost.
+    // have.
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
                           &hook_arg_params, &hook_arg_type_names,
@@ -2029,15 +2022,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     }
   }
 
-  // What each argument is required to be. For varargs that is exactly
-  // arg_count entries, so pass 1's count check passes by construction and only
-  // its base-type half does any work; for fixed arity it is the declared
-  // signature and the count check is the real arity check.
-  //
-  // A ternary rather than an if/else assignment so the result stays const, and
-  // so the fixed-arity operand is never evaluated on the varargs path: there
-  // param_count is the VEF_PARAM_VARARGS sentinel (UINT_MAX) and params is
-  // null, which would make a span of four billion entries over nothing.
+  // What each argument is required to be.
   const std::span<const vef_type_t> expected_types =
       varargs ? std::span<const vef_type_t>{varargs_expected}
               : std::span<const vef_type_t>{signature->params,
@@ -2049,9 +2034,6 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   // TD1's to propagate. Pass 2 still runs for its non-TD1 half -- encoding
   // string literals and rejecting arguments that are neither a custom value nor
   // a literal -- and for applying whatever the hook decided.
-  //
-  // It is also what keeps ConvertVDFArguments's "only one source of params"
-  // assert true, now that both arities share this one call.
   std::map<std::string, KnownEntry> known_params;
   if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
                            expected_types,
@@ -2059,12 +2041,9 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return true;
   }
 
-  // Fixed arity runs the hook HERE, between the passes, and deliberately so:
-  // after pass 1's base-type check, a hook never sees an argument whose
-  // declared type was wrong. Pass 1 resolves nothing -- it only validates and
-  // collects -- so the hook sees the same arguments either way; what matters
-  // is that the params it decides are what pass 2 applies. Varargs already ran
-  // it above, where it had to.
+  // Fixed arity runs the hook HERE. The hook sits between the passes:
+  // it sees what pass 1 resolved, and the params it decides are what
+  // pass 2 applies.
   if (has_bind_hook && !varargs) {
     // nullptr: a fixed-arity signature already declares every argument's type,
     // so the hook is not offered the type-name channel.
