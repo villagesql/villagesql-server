@@ -58,6 +58,9 @@
 # GRANT/REVOKE SET_USER_ID statement from the source would fail to apply
 # without the replica-side rewrite under test.
 
+# R4 below creates `set_user_id` and SET_USER_ID as separate databases, which
+# a case-insensitive filesystem cannot represent.
+--source include/have_case_sensitive_file_system.inc
 --source include/have_debug.inc
 --source include/have_binlog_format_row.inc
 --source include/rpl/init_source_replica.inc
