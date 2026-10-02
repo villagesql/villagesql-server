@@ -17,6 +17,13 @@ db_name	table_name	column_name	extension_name	extension_version	type_name
 test	t	a	update_schema_test	1.0.0	MYTYPE
 test	t	z	update_test	2.0.0	COUNTER
 ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version, pending_last_error
+FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('update_schema_test', 'update_test')
+ORDER BY extension_name;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_LAST_ERROR
+update_schema_test	1.0.0	2.0.0	NULL
+update_test	2.0.0	NULL	NULL
 # restart
 SELECT extension_name, extension_version, pending_version, pending_last_error
 FROM INFORMATION_SCHEMA.EXTENSIONS

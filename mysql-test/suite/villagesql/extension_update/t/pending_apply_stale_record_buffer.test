@@ -35,6 +35,11 @@ SELECT db_name, table_name, column_name, extension_name, extension_version,
 
 ALTER EXTENSION update_schema_test VERSION '2.0.0' AT RESTART;
 
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name IN ('update_schema_test', 'update_test')
+  ORDER BY extension_name;
+
 --source include/restart_mysqld.inc
 
 # The extensions row: version advanced and pending_action cleared. A row
