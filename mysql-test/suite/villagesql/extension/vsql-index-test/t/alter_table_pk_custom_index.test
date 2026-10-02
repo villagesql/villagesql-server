@@ -1,0 +1,45 @@
+# Changing the primary key of a table that has a custom (USING EXTENDED) index
+# is rejected, for any ALGORITHM.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+
+CREATE TABLE t (
+  k VARBINARY(8) NOT NULL PRIMARY KEY,
+  a dummy_type_vector,
+  INDEX idx (a) USING EXTENDED(dummy_index_hnsw)
+);
+SHOW CREATE TABLE t;
+
+--echo # Modifying a primary-key column is rejected: INPLACE, COPY, and default.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL, ALGORITHM=INPLACE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL, ALGORITHM=COPY;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL;
+
+--echo # Dropping/adding or re-defining the primary key is likewise rejected.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (k, a);
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t DROP PRIMARY KEY;
+
+--echo # The table and its primary key are unchanged by the rejected ALTERs.
+SHOW CREATE TABLE t;
+
+--echo # An ALTER that does not touch the primary key is allowed.
+ALTER TABLE t ADD COLUMN note INT DEFAULT 0;
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+
+--echo # With no custom index, a primary-key change is allowed.
+CREATE TABLE t2 (k VARBINARY(8) NOT NULL PRIMARY KEY, a dummy_type_vector);
+ALTER TABLE t2 MODIFY k VARBINARY(64) NOT NULL;
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

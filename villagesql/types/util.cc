@@ -310,6 +310,79 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
 namespace {
 
+// The new table's column at index idx, from the ALTER's create list (matches
+// the KEY_PART_INFO::fieldnr numbering used for the prepared keys).
+const Create_field *new_field_at(Alter_info *alter_info, uint idx) {
+  List_iterator_fast<Create_field> it(alter_info->create_list);
+  const Create_field *field = nullptr;
+  for (uint i = 0; (field = it++) != nullptr && i < idx; i++) {
+  }
+  return field;
+}
+
+// The new table's primary key, or nullptr if it has none.
+const KEY *find_new_primary_key(const KEY *key_info, uint key_count) {
+  for (uint i = 0; i < key_count; i++) {
+    if (key_info[i].name != nullptr &&
+        my_strcasecmp(system_charset_info, key_info[i].name, "PRIMARY") == 0) {
+      return &key_info[i];
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+bool alter_changes_pk_of_custom_indexed_table(const TABLE *old_table,
+                                              Alter_info *alter_info,
+                                              const KEY *new_key_info,
+                                              uint new_key_count) {
+  // The table must actually have a custom index.
+  bool has_custom_index = false;
+  for (uint i = 0; i < old_table->s->keys; i++) {
+    if (old_table->key_info[i].custom_index_context != nullptr) {
+      has_custom_index = true;
+      break;
+    }
+  }
+  if (!has_custom_index) {
+    return false;
+  }
+
+  const KEY *old_pk = (old_table->s->primary_key < old_table->s->keys)
+                          ? &old_table->key_info[old_table->s->primary_key]
+                          : nullptr;
+  const KEY *new_pk = find_new_primary_key(new_key_info, new_key_count);
+  const uint old_count = old_pk != nullptr ? old_pk->user_defined_key_parts : 0;
+  const uint new_count = new_pk != nullptr ? new_pk->user_defined_key_parts : 0;
+
+  // A changed column count (including gaining or losing the primary key) is a
+  // change.
+  if (old_count != new_count) {
+    return true;
+  }
+
+  // Compare the primary key's columns in order: a column is changed if it is a
+  // different column (by name) or its definition changed (Field::is_equal, the
+  // same test ALTER uses to decide a column type/length change). The old key's
+  // fields are bound; the new key's are resolved from the ALTER's create list
+  // (its KEY_PART_INFO::field pointers are not bound at this point).
+  for (uint i = 0; i < new_count; i++) {
+    const Field *old_field = old_pk->key_part[i].field;
+    const Create_field *new_field =
+        new_field_at(alter_info, new_pk->key_part[i].fieldnr);
+    if (old_field == nullptr || new_field == nullptr ||
+        my_strcasecmp(system_charset_info, old_field->field_name,
+                      new_field->field_name) != 0 ||
+        old_field->is_equal(new_field) != IS_EQUAL_YES) {
+      return true;
+    }
+  }
+  return false;
+}
+
+namespace {
+
 // Look up the TypeDescriptor for a (possibly extension-qualified) type name.
 // REQUIRES: caller holds the victionary read or write lock.
 // Returns true on internal failure. A type that simply isn't found returns

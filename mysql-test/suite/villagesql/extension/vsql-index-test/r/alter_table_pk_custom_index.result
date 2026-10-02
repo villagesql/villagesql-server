@@ -1,0 +1,62 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+CREATE TABLE t (
+k VARBINARY(8) NOT NULL PRIMARY KEY,
+a dummy_type_vector,
+INDEX idx (a) USING EXTENDED(dummy_index_hnsw)
+);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `k` varbinary(8) NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`k`),
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Modifying a primary-key column is rejected: INPLACE, COPY, and default.
+ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL, ALGORITHM=INPLACE;
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL, ALGORITHM=COPY;
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL;
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+# Dropping/adding or re-defining the primary key is likewise rejected.
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (k, a);
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+ALTER TABLE t DROP PRIMARY KEY;
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+# The table and its primary key are unchanged by the rejected ALTERs.
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `k` varbinary(8) NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`k`),
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# An ALTER that does not touch the primary key is allowed.
+ALTER TABLE t ADD COLUMN note INT DEFAULT 0;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `k` varbinary(8) NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `note` int DEFAULT '0',
+  PRIMARY KEY (`k`),
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+# With no custom index, a primary-key change is allowed.
+CREATE TABLE t2 (k VARBINARY(8) NOT NULL PRIMARY KEY, a dummy_type_vector);
+ALTER TABLE t2 MODIFY k VARBINARY(64) NOT NULL;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `k` varbinary(64) NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`k`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
