@@ -41,9 +41,10 @@ SELECT id FROM v_knn;
 SELECT id FROM v_knn;
 DROP VIEW v_knn;
 
---echo # A view forced to materialize into a temporary table (ALGORITHM=TEMPTABLE),
---echo # then a KNN ordering over it: the distance scan feeds / is wrapped by the
---echo # temp table.
+--echo # A view forced to materialize into a temporary table (ALGORITHM=TEMPTABLE):
+--echo # the view's rows are materialized first, so the outer ORDER BY is over the
+--echo # temp table's column, which has no index. The KNN ordering therefore does
+--echo # NOT route -- it falls back to a plain sort. The rows are still correct.
 CREATE ALGORITHM=TEMPTABLE VIEW v_tmp AS SELECT id, v FROM t;
 --replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
 EXPLAIN FORMAT=tree

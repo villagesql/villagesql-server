@@ -47,9 +47,10 @@ id
 4
 5
 DROP VIEW v_knn;
-# A view forced to materialize into a temporary table (ALGORITHM=TEMPTABLE),
-# then a KNN ordering over it: the distance scan feeds / is wrapped by the
-# temp table.
+# A view forced to materialize into a temporary table (ALGORITHM=TEMPTABLE):
+# the view's rows are materialized first, so the outer ORDER BY is over the
+# temp table's column, which has no index. The KNN ordering therefore does
+# NOT route -- it falls back to a plain sort. The rows are still correct.
 CREATE ALGORITHM=TEMPTABLE VIEW v_tmp AS SELECT id, v FROM t;
 EXPLAIN FORMAT=tree
 SELECT id FROM v_tmp
