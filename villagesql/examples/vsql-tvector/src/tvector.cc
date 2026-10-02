@@ -795,8 +795,9 @@ void tvector_min_as_vector_bind(vsql::BindArgs args, vsql::BindResult out) {
       TVectorParams{.dimension = 1, .bytes_per_elem = resolved.bytes_per_elem});
 }
 
-// The mirror: dimension inherited, element type fixed. TD2 could only copy
-// both, leaving the result claiming to be float.
+// The mirror: dimension inherited, element type fixed. Without this hook the
+// return type would copy both params from the arg, so the result would claim
+// to be float.
 void tvector_as_double_bind(vsql::BindArgs args, vsql::BindResult out) {
   TVectorParams resolved{};
   if (tvector_one_element_bind(args, out, resolved)) {
