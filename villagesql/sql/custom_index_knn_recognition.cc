@@ -154,6 +154,12 @@ bool FindCustomKnnIndexOnField(TABLE *table, Field *field,
         !(descriptor->intf().capabilities & VEF_INDEX_CAP_KNN)) {
       continue;
     }
+    // A KNN hit is resolved to its row from the primary key the scan returns,
+    // so the index must store it (HAS_ROW_REF). Without it there is no way to
+    // materialize the row, so the index cannot drive a distance scan.
+    if (!(descriptor->intf().storage_props & VEF_INDEX_STORAGE_HAS_ROW_REF)) {
+      continue;
+    }
 
     if (keyinfo.user_defined_key_parts != 1) continue;
     if (keyinfo.key_part[0].field != field) continue;
