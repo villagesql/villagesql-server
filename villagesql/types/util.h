@@ -32,6 +32,7 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
+class Alter_info;
 class Create_field;
 class Field;
 class Item;
@@ -71,6 +72,15 @@ extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
 // Only operates on committed entries (existing tables opened from DD).
 // Returns true on error, false on success (including when not a custom index).
 extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo);
+
+// True if the ALTER changes the primary key of a table that has a custom
+// (USING EXTENDED) index -- its column set, order, or any column's definition.
+// old_table is the table being altered; new_key_info/new_key_count are the
+// prepared keys for the new table and alter_info describes the column changes.
+extern bool alter_changes_pk_of_custom_indexed_table(const TABLE *old_table,
+                                                     Alter_info *alter_info,
+                                                     const KEY *new_key_info,
+                                                     uint new_key_count);
 
 // Injects custom TypeContexts into SP variable fields for a stored procedure
 // by looking up villagesql.custom_sp_params. Restores custom type information
