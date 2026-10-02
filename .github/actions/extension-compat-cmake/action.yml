@@ -32,9 +32,23 @@ runs:
     - name: Extract SDK
       shell: bash
       run: |
+        # A multi-match glob turns the extras into tar member names, which
+        # fails as an unreadable "Not found in archive". Check the count so a
+        # mis-packed artifact names itself.
+        shopt -s nullglob
+        tarballs=(artifacts/villagesql-extension-sdk-*.tar.gz)
+        if [[ ${#tarballs[@]} -ne 1 ]]; then
+          echo "::error::Expected one SDK tarball in artifacts/, found ${#tarballs[@]}: ${tarballs[*]}"
+          exit 1
+        fi
         mkdir -p sdk
-        tar xzf artifacts/villagesql-extension-sdk-*.tar.gz -C sdk
-        echo "SDK_DIR=$(echo "$PWD"/sdk/villagesql-extension-sdk-*)" >> "$GITHUB_ENV"
+        tar xzf "${tarballs[0]}" -C sdk
+        sdk_dirs=(sdk/villagesql-extension-sdk-*/)
+        if [[ ${#sdk_dirs[@]} -ne 1 ]]; then
+          echo "::error::Expected one SDK directory in sdk/, found ${#sdk_dirs[@]}: ${sdk_dirs[*]}"
+          exit 1
+        fi
+        echo "SDK_DIR=$PWD/${sdk_dirs[0]%/}" >> "$GITHUB_ENV"
 
     - name: Clone extension
       shell: bash
