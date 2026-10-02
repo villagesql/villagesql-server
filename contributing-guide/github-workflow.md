@@ -57,13 +57,13 @@ Using `fetch` and then `rebase` as above is preferable to using `git pull`. Whil
 
 ## 5. Run the Linter
 
-VillageSQL includes a linter in the scripts directory to assist with some minor style and convention compliance. Run it right before committing and pushing your changes.
+VillageSQL includes a linter in the scripts directory. It formats changed C and C++ lines with `clang-format`, adds copyright headers, removes trailing whitespace, and adds missing final newlines. It edits the files in place. Run it right before committing and pushing your changes.
 
 ```sh
 ./scripts/villint.sh
 ```
 
-If you do not have its dependencies installed, you will be prompted to do so in your terminal.
+Every pull request runs the same linter, and the check fails if the linter reports an error or would change any file. The linter needs a specific version of `clang-format`. See the README [Prerequisites](../README.md#prerequisites) to install it.
 
 
 ## 6. Commit Your Changes
