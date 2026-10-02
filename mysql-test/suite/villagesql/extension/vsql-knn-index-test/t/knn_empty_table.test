@@ -1,0 +1,55 @@
+# KNN over an EMPTY table (no rows), and the write that follows.
+#
+# A nearest-neighbour scan over a table with zero indexed rows must return an
+# empty result without error, and a subsequent INSERT and query must work
+# normally.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+--echo # KNN on the empty table: routes to the index, returns no rows.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # An INSERT after the empty query proceeds normally.
+INSERT INTO t VALUES (1, '[1,0,0,0]');
+
+--echo # And the row is now returned by the KNN query, still served by the index.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # Emptying the table again (all rows deleted) and re-querying: still no
+--echo # error, no rows.
+DELETE FROM t;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+DROP TABLE t;
+
+--echo # Same on a table that was NEVER populated and has no index built rows,
+--echo # created empty and queried immediately.
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v2 ON t2 (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+SELECT id FROM t2
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_knn_index_test;
