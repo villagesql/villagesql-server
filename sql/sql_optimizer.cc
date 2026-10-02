@@ -2319,7 +2319,8 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
     distance scan. As with FT, this is the only place a non-field ordering can
     bind to an index; the generic loop below rejects function orderings.
   */
-  if (villagesql::TrySkipSortWithCustomKnnIndex(tab, order.order, no_changes)) {
+  if (villagesql::TrySkipSortWithCustomKnnIndex(tab, order.order, *map,
+                                                no_changes)) {
     *order_idx = -1;
     return true;
   }
