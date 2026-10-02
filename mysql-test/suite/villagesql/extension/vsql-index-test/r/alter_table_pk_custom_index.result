@@ -98,6 +98,40 @@ tm	CREATE TABLE `tm` (
   KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE tm;
+# Composite primary key whose parts are the custom (vector) type, with the
+# custom index built on one of those PK columns.
+CREATE TABLE tv (
+v1 dummy_type_vector NOT NULL,
+v2 dummy_type_vector NOT NULL,
+PRIMARY KEY (v1, v2),
+INDEX idx (v1) USING EXTENDED(dummy_index_hnsw)
+);
+SHOW CREATE TABLE tv;
+Table	Create Table
+tv	CREATE TABLE `tv` (
+  `v1` vsql_index_test.dummy_type_vector NOT NULL,
+  `v2` vsql_index_test.dummy_type_vector NOT NULL,
+  PRIMARY KEY (`v1`,`v2`),
+  KEY `idx` (`v1` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Changing a vector primary-key part's type is rejected.
+ALTER TABLE tv MODIFY v1 VARBINARY(32) NOT NULL;
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+# Narrowing or dropping the composite primary key is rejected.
+ALTER TABLE tv DROP PRIMARY KEY, ADD PRIMARY KEY (v2);
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+ALTER TABLE tv DROP PRIMARY KEY;
+ERROR HY000: VillageSQL: Changing the primary key of a table with a USING EXTENDED index is not supported
+# The primary key is unchanged by the rejected ALTERs.
+SHOW CREATE TABLE tv;
+Table	Create Table
+tv	CREATE TABLE `tv` (
+  `v1` vsql_index_test.dummy_type_vector NOT NULL,
+  `v2` vsql_index_test.dummy_type_vector NOT NULL,
+  PRIMARY KEY (`v1`,`v2`),
+  KEY `idx` (`v1` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE tv;
 # With no custom index, a primary-key change is allowed.
 CREATE TABLE t2 (k VARBINARY(8) NOT NULL PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t2 MODIFY k VARBINARY(64) NOT NULL;

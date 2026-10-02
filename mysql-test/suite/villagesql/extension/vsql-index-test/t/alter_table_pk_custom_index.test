@@ -67,6 +67,30 @@ SHOW CREATE TABLE tm;
 
 DROP TABLE tm;
 
+--echo # Composite primary key whose parts are the custom (vector) type, with the
+--echo # custom index built on one of those PK columns.
+CREATE TABLE tv (
+  v1 dummy_type_vector NOT NULL,
+  v2 dummy_type_vector NOT NULL,
+  PRIMARY KEY (v1, v2),
+  INDEX idx (v1) USING EXTENDED(dummy_index_hnsw)
+);
+SHOW CREATE TABLE tv;
+
+--echo # Changing a vector primary-key part's type is rejected.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tv MODIFY v1 VARBINARY(32) NOT NULL;
+--echo # Narrowing or dropping the composite primary key is rejected.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tv DROP PRIMARY KEY, ADD PRIMARY KEY (v2);
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tv DROP PRIMARY KEY;
+
+--echo # The primary key is unchanged by the rejected ALTERs.
+SHOW CREATE TABLE tv;
+
+DROP TABLE tv;
+
 --echo # With no custom index, a primary-key change is allowed.
 CREATE TABLE t2 (k VARBINARY(8) NOT NULL PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t2 MODIFY k VARBINARY(64) NOT NULL;
