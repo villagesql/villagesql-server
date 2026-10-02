@@ -1,0 +1,44 @@
+call mtr.add_suppression("has no usable .so");
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+CREATE TABLE test_zero_so (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_zero_so VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_zero_so ORDER BY id;
+id	c
+1	(1.5,2.5)
+#
+# Phase 1: truncate the cached .so, then restart.
+#
+Replaced cached .so with a zero-length file, planted canary
+# restart
+# Server started after re-expanding the VEB
+Cached .so restored: yes
+Old expansion replaced wholesale (canary gone): yes
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+SELECT id, c FROM test_zero_so ORDER BY id;
+id	c
+1	(1.5,2.5)
+INSERT INTO test_zero_so VALUES (2, '(3.5,4.5)');
+SELECT id, c FROM test_zero_so ORDER BY id;
+id	c
+1	(1.5,2.5)
+2	(3.5,4.5)
+# Extension usable and data intact
+#
+# Phase 2: truncate the cached .so again, then INSTALL EXTENSION.
+#
+DROP TABLE test_zero_so;
+Replaced cached .so with a zero-length file
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+CREATE TABLE test_zero_so (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_zero_so VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_zero_so ORDER BY id;
+id	c
+1	(1.5,2.5)
+# INSTALL re-expanded over the unusable expansion
+DROP TABLE test_zero_so;

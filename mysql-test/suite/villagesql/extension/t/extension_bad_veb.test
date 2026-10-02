@@ -308,6 +308,17 @@ INSTALL EXTENSION deep_traversal;
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
+--echo #
+--echo # MISSING SHARED LIBRARY
+--echo #
+
+--echo # Manifest is valid but the VEB carries no lib/{name}.so
+--let $extension_name = no_shared_library
+--let $extension_files = --file manifest.json '{"name": "no_shared_library", "version": "1.0.0"}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION no_shared_library;
+
 --echo # Test 4: Symlink in subdirectory pointing outside
 --let $extension_name = nested_symlink
 --let $extension_files = --file manifest.json '{"name": "nested_symlink", "version": "1.0.0"}' --file subdir/file.txt 'content' --symlink subdir/evil ../../outside.txt

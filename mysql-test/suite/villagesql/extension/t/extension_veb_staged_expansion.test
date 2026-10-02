@@ -1,0 +1,173 @@
+# Test how VEB expansion stages and publishes its work.
+#
+# Expansion extracts into .veb_expansion_cache/{name}/.tmp.{sha256}/ and
+# renames that into {sha256}/ only once the tree is on stable storage. Two
+# properties follow:
+#
+#   - a {sha256} directory always holds a complete expansion, because it is
+#     only ever created by that rename. A crash during extraction leaves a
+#     staging directory, which is reclaimed rather than dlopened.
+#   - a re-expansion that fails never destroys the expansion it was going to
+#     replace. Publishing is the only step that discards the old directory,
+#     and by then a complete replacement is already durable.
+#
+# The failure injection needs a debug build.
+--source include/have_debug.inc
+
+call mtr.add_suppression("has no usable .so");
+call mtr.add_suppression("VEB expansion failed");
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc
+
+let MYSQLD_DATADIR= `SELECT @@datadir`;
+
+--echo #
+--echo # A staging directory left by a crash is reclaimed, not loaded.
+--echo #
+
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+# readdir order is arbitrary, so picking [0] is only meaningful when there is
+# exactly one expansion. Fail loudly rather than plant a staging directory
+# under a sha256 the server will not look for.
+die "expected one expansion dir under $ext_dir, found: @subdirs"
+  unless scalar(@subdirs) == 1;
+my $sha = $subdirs[0];
+
+# Make the cached .so unusable so the next INSTALL re-expands. Unlink before
+# recreating: after UNINSTALL, glibc's dlclose commonly leaves the library in
+# the process link map, and truncating the file under that live mapping
+# invalidates its pages, so the next dlopen of the same path resolves to the
+# poisoned mapping and dlsym dies with SIGBUS.
+my $cached_so = "$ext_dir/$sha/lib/vsql_complex.so";
+unlink($cached_so) or die "Can't unlink $cached_so: $!";
+open(my $fh, '>', $cached_so) or die $!;
+close($fh);
+
+# Directory a crash during the previous expansion would have left.
+my $staging = "$ext_dir/.tmp.$sha";
+mkdir($staging) or die "Can't create $staging: $!";
+mkdir("$staging/lib") or die $!;
+open($fh, '>', "$staging/lib/vsql_complex.so") or die $!;
+print $fh "half-written garbage";
+close($fh);
+print "Planted staging directory .tmp.<sha256> with a partial .so\n";
+EOF
+
+--source include/villagesql/install_complex_extension.inc
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+CREATE TABLE test_staged (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_staged VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_staged ORDER BY id;
+
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @staging = grep { /^\.tmp\./ } readdir($dh);
+closedir($dh);
+printf("Staging directories left behind: %d\n", scalar(@staging));
+EOF
+
+--echo # Extension works; staging directory reclaimed
+
+--echo #
+--echo # A failed re-expansion leaves the existing expansion in place.
+--echo #
+
+DROP TABLE test_staged;
+--source include/villagesql/uninstall_complex_extension.inc
+
+# Make the cached .so unusable again so INSTALL attempts a re-expansion, and
+# record what is in the expansion directory beforehand.
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+my $sha_dir = "$ext_dir/$subdirs[0]";
+my $cached_so = "$sha_dir/lib/vsql_complex.so";
+unlink($cached_so) or die "Can't unlink $cached_so: $!";
+open(my $fh, '>', $cached_so) or die $!;
+close($fh);
+open($fh, '>', "$sha_dir/KEEPME") or die $!;
+print $fh "content that a failed repair must not destroy\n";
+close($fh);
+print "Expansion directory present before the failed re-expansion\n";
+EOF
+
+SET SESSION debug='+d,villagesql_veb_fail_extraction';
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_complex;
+SET SESSION debug='-d,villagesql_veb_fail_extraction';
+
+# Check and report if the directory is gone.
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+my (@subdirs, @staging);
+if (opendir(my $dh, $ext_dir)) {
+  my @entries = readdir($dh);
+  closedir($dh);
+  @subdirs = grep { $_ ne '.' && $_ ne '..' && !/^\.tmp\./ } @entries;
+  @staging = grep { /^\.tmp\./ } @entries;
+}
+printf("Existing expansion survived the failure: %s\n",
+       (scalar(@subdirs) == 1 && -e "$ext_dir/$subdirs[0]/KEEPME")
+         ? "yes" : "no");
+printf("Staging directories left behind: %d\n", scalar(@staging));
+EOF
+
+--echo # Nothing was destroyed; retry now succeeds
+
+--source include/villagesql/install_complex_extension.inc
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+CREATE TABLE test_staged (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_staged VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_staged ORDER BY id;
+
+--echo #
+--echo # Startup sweeps staging directories under an installed extension.
+--echo #
+
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+my $staging = "$ext_dir/.tmp.0000000000000000000000000000000000000000000000000000000000000000";
+mkdir($staging) or die "Can't create $staging: $!";
+open(my $fh, '>', "$staging/junk") or die $!;
+close($fh);
+print "Planted a staging directory under a sha256 no longer in use\n";
+EOF
+
+--source include/restart_mysqld.inc
+
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @staging = grep { /^\.tmp\./ } readdir($dh);
+closedir($dh);
+printf("Staging directories after restart: %d\n", scalar(@staging));
+EOF
+
+SELECT id, c FROM test_staged ORDER BY id;
+
+--echo # Swept, extension still usable
+
+DROP TABLE test_staged;
+--source include/villagesql/uninstall_complex_extension.inc
