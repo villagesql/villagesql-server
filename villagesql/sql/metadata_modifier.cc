@@ -50,7 +50,7 @@
 namespace villagesql {
 
 Metadata_modifier::AlterGuard::~AlterGuard() {
-  ClearAlterCustomFields(thd_);
+  ClearAlterCustomContext(thd_);
   if (armed_) rollback(thd_);
 }
 
