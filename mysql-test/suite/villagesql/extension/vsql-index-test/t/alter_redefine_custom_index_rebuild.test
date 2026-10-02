@@ -1,0 +1,31 @@
+# Redefining a custom (USING EXTENDED) index under the same name in a rebuilding
+# ALTER binds the index to its new definition, not the old one. The index starts
+# on one column and is dropped and re-added, same name, on a different column, in
+# a single COPY rebuild; afterwards it must reference the new column.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_ext_index_test;
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a  ext_index_wide_blob,
+  b  ext_index_wide_blob,
+  INDEX idx_a (a ext_index_default) USING EXTENDED(ext_index)
+);
+INSERT INTO t1 (id) VALUES (1), (2), (3);
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 DROP INDEX idx_a,
+               ADD INDEX idx_a (b ext_index_default) USING EXTENDED(ext_index),
+               FORCE, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+
+SELECT COUNT(*) AS rows_total FROM t1;
+INSERT INTO t1 (id) VALUES (4);
+SELECT COUNT(*) AS rows_after_insert FROM t1;
+
+DROP TABLE t1;
+
+UNINSTALL EXTENSION vsql_ext_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
