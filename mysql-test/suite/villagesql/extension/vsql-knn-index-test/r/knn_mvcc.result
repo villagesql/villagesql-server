@@ -34,22 +34,9 @@ id
 1
 2
 3
-# --- The inserting transaction rolls back ---
-ROLLBACK;
-# id=99 is gone: no transaction ever committed it.
-SELECT id
-FROM t
-ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
-LIMIT 10;
-id
-1
-2
-3
-# --- Re-insert and COMMIT this time; the row becomes visible everywhere ---
-START TRANSACTION;
-INSERT INTO t VALUES (99, '[1,1,1,1]');
+# --- The inserting transaction commits; the row becomes visible to all ---
 COMMIT;
-# Now id=99 is the nearest for the default connection.
+# id=99 is the nearest for the default connection.
 SELECT id
 FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')

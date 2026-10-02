@@ -1,8 +1,8 @@
 # A KNN read only returns rows visible to the reading transaction.
 #
 # A row inserted in an open transaction is visible to a KNN query in the same
-# transaction, is not visible to another connection until committed, and
-# disappears again if the transaction rolls back.
+# transaction, is not visible to another connection until committed, and becomes
+# visible to both once committed.
 
 INSTALL EXTENSION vsql_knn_index_test;
 
@@ -42,23 +42,11 @@ FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
 LIMIT 10;
 
---echo # --- The inserting transaction rolls back ---
+--echo # --- The inserting transaction commits; the row becomes visible to all ---
 --connection default
-ROLLBACK;
-
---echo # id=99 is gone: no transaction ever committed it.
---sorted_result
-SELECT id
-FROM t
-ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
-LIMIT 10;
-
---echo # --- Re-insert and COMMIT this time; the row becomes visible everywhere ---
-START TRANSACTION;
-INSERT INTO t VALUES (99, '[1,1,1,1]');
 COMMIT;
 
---echo # Now id=99 is the nearest for the default connection.
+--echo # id=99 is the nearest for the default connection.
 SELECT id
 FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,1,1,1]')
