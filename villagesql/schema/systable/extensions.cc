@@ -371,9 +371,6 @@ bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
   key_copy(key_buf, table.record[0], table.key_info,
            table.key_info->key_length);
 
-  // Save old record for update
-  store_record(&table, record[1]);
-
   // Find the row using index read
   int error = table.file->ha_index_init(0, false);
   if (error) {
@@ -384,8 +381,7 @@ bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
   auto index_end_guard =
       create_scope_guard([&table]() { table.file->ha_index_end(); });
 
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  error = read_row_for_update(table, key_buf);
   if (should_assert_if_true(error)) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for update: error %d", error);
     return true;
