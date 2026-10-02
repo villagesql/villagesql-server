@@ -189,6 +189,14 @@ jobs:
         if: env.BUILD_BUNDLED_EXTENSIONS == '1' && inputs.os == 'macos'
         run: source/scripts/setup_macos_ext_deps.sh
 
+      - name: Clear previous build outputs
+        run: |
+          # Start clean rather than trusting a later job to clean up after us.
+          # Other workflows build in this same workspace, and the artifacts
+          # here are version-named, so leftovers accumulate beside ours and
+          # the upload globs below would ship both.
+          rm -rf "${BUILD_DIR:?}" "${OUTPUT_DIR:?}"
+
       - name: Build the dev server
         run: source/villagesql/bld_tools/build_server.sh
 
