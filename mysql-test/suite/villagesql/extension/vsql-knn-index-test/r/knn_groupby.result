@@ -15,15 +15,16 @@ INSERT INTO t VALUES
 # Group by grp, order groups by their nearest member's distance
 # (MIN over the distance). Legal aggregation; groups ordered nearest-first.
 # grp 10 has id 1 (dist 0), grp 20 has id 4 (dist 1), grp 30 has id 5
-# (dist 1) -> order 10, 20, 30.
+# (dist 1) -> order 10, 20, 30. grp 20 and 30 tie on md, so grp is the
+# tiebreaker for a deterministic order.
 EXPLAIN FORMAT=tree
 SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
 FROM t
 GROUP BY grp
-ORDER BY md LIMIT 3;
+ORDER BY md, grp LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)
-    -> Sort: md, limit input to 3 row(s) per chunk
+    -> Sort: md, t.grp, limit input to 3 row(s) per chunk
         -> Table scan on <temporary>
             -> Aggregate using temporary table
                 -> Table scan on t  (cost=COST rows=ROWS)
@@ -31,7 +32,7 @@ EXPLAIN
 SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
 FROM t
 GROUP BY grp
-ORDER BY md LIMIT 3;
+ORDER BY md, grp LIMIT 3;
 grp	md
 10	0
 20	1

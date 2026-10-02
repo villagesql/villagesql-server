@@ -24,17 +24,18 @@ INSERT INTO t VALUES
 --echo # Group by grp, order groups by their nearest member's distance
 --echo # (MIN over the distance). Legal aggregation; groups ordered nearest-first.
 --echo # grp 10 has id 1 (dist 0), grp 20 has id 4 (dist 1), grp 30 has id 5
---echo # (dist 1) -> order 10, 20, 30.
+--echo # (dist 1) -> order 10, 20, 30. grp 20 and 30 tie on md, so grp is the
+--echo # tiebreaker for a deterministic order.
 --replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
 EXPLAIN FORMAT=tree
 SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
 FROM t
 GROUP BY grp
-ORDER BY md LIMIT 3;
+ORDER BY md, grp LIMIT 3;
 SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
 FROM t
 GROUP BY grp
-ORDER BY md LIMIT 3;
+ORDER BY md, grp LIMIT 3;
 
 --echo # Group by the distance value itself (projected), ordered by it: rows with
 --echo # equal distance collapse into one group, groups ordered by distance.
