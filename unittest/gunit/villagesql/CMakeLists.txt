@@ -88,9 +88,26 @@ FOREACH(test_name ${VILLAGESQL_UNIT_TESTS})
   ADD_VILLAGESQL_TEST(${test_name})
 ENDFOREACH()
 
+# custom_type_item tests need the full server initialization supplied by
+# gunit_large.
+MYSQL_ADD_EXECUTABLE(custom_type_item-t custom_type_item-t.cc
+  COMPONENT Test
+  ENABLE_EXPORTS
+  EXCLUDE_FROM_ALL
+  SKIP_INSTALL
+  LINK_LIBRARIES gunit_large server_unittest_library
+  DEPENDENCIES GenError ${GTEST_LIBRARIES}
+  ADD_TEST custom_type_item-t
+  ADD_GCOV_TEST custom_type_item-t
+)
+SET_TESTS_PROPERTIES(custom_type_item-t PROPERTIES
+  TIMEOUT ${VILLAGESQL_TEST_TIMEOUT}
+  LABELS "villagesql"
+)
+
 # Custom target to build all VillageSQL unit tests
 ADD_CUSTOM_TARGET(villagesql-unit-tests
-  DEPENDS ${VILLAGESQL_UNIT_TESTS}
+  DEPENDS ${VILLAGESQL_UNIT_TESTS} custom_type_item-t
 )
 
 # Also add them to the main test-unit dependencies if we're building unit tests
