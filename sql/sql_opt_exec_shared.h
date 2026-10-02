@@ -304,6 +304,9 @@ class QEP_shared {
   void set_type(enum join_type t) { m_type = t; }
   Item *condition() const { return m_condition; }
   void set_condition(Item *c) { m_condition = c; }
+  // VillageSQL: see m_knn_query_item.
+  Item *knn_query_item() const { return m_knn_query_item; }
+  void set_knn_query_item(Item *i) { m_knn_query_item = i; }
   bool condition_is_pushed_to_sort() const {
     return m_condition_is_pushed_to_sort;
   }
@@ -426,6 +429,13 @@ class QEP_shared {
   */
   Item *m_condition;
 
+  // VillageSQL: for a JT_INDEX_DISTANCE table, the constant query vector Item
+  // of the ORDER BY distance function, captured at plan time and consumed by
+  // the distance-scan builder. Holding it here keeps it independent of the
+  // ORDER BY list, which later optimizer phases may transform. nullptr
+  // otherwise.
+  Item *m_knn_query_item{nullptr};
+
   /**
     Whether the condition in m_condition is evaluated in front of a sort,
     so that it does not need to be evaluated again (unless it is outer to
@@ -533,6 +543,9 @@ class QEP_shared_owner {
   void set_type(enum join_type t) { return m_qs->set_type(t); }
   Item *condition() const { return m_qs->condition(); }
   void set_condition(Item *to) { return m_qs->set_condition(to); }
+  // VillageSQL: see QEP_shared::m_knn_query_item.
+  Item *knn_query_item() const { return m_qs->knn_query_item(); }
+  void set_knn_query_item(Item *i) { return m_qs->set_knn_query_item(i); }
   bool condition_is_pushed_to_sort() const {
     return m_qs->condition_is_pushed_to_sort();
   }
