@@ -108,36 +108,24 @@ bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
   // Mark the plan only when allowed to change it (test_if_skip_sort_order is
   // also called in probe mode). The distance scan uses no ref access, so ref is
   // left as-is (already -1 on this no-preceding-index path, mirroring FT's own
-  // `assert(tab->ref().key == -1)` just above the FT branch). The query vector
-  // is re-derived from this ORDER BY in BuildCustomKnnDistanceAccessPath, so no
-  // spec is stashed on the plan here.
+  // `assert(tab->ref().key == -1)` just above the FT branch). The recognized
+  // query vector is carried on the plan for the builder, so it depends on the
+  // ORDER BY only here, at recognition, not later at build time.
   if (!no_changes) {
     tab->set_type(JT_INDEX_DISTANCE);
     tab->set_index(key_idx);
+    tab->set_knn_query_item(query_item);
   }
   return true;
 }
 
 AccessPath *BuildCustomKnnDistanceAccessPath(THD *thd, TABLE *table,
-                                             uint key_idx, ORDER *order,
+                                             uint key_idx, Item *query_item,
                                              ha_rows select_limit) {
-  if (table == nullptr) return nullptr;
+  if (table == nullptr || query_item == nullptr) return nullptr;
 
-  // Re-derive the query vector from the ORDER BY the recognition step matched.
-  // TrySkipSortWithCustomKnnIndex already validated single/ASC and set the
-  // table's index to `key_idx`; re-running recognition here keeps the spec
-  // build stateless (no plan-time stash) and confirms the item still resolves.
-  Item *order_item = SingleAscOrderItem(order);
-  if (order_item == nullptr) return nullptr;
-
-  uint recognized_key = 0;
-  Item *query_item = nullptr;
-  if (RecognizeKnnOrderItem(table, order_item, &recognized_key, &query_item)) {
-    return nullptr;
-  }
-  // The recognition and the chosen index must agree.
-  if (recognized_key != key_idx) return nullptr;
-
+  // query_item is the query vector carried on the plan from recognition
+  // (set_knn_query_item). Materialize it into the scan spec for index key_idx.
   CustomKnnDistanceScanSpec *spec =
       BuildKnnScanSpec(thd, table, query_item, select_limit);
   if (spec == nullptr) return nullptr;
