@@ -315,8 +315,7 @@ namespace {
 const Create_field *new_field_at(Alter_info *alter_info, uint idx) {
   List_iterator_fast<Create_field> it(alter_info->create_list);
   const Create_field *field = nullptr;
-  for (uint i = 0; (field = it++) != nullptr && i < idx; i++) {
-  }
+  for (uint i = 0; (field = it++) != nullptr && i < idx; i++);
   return field;
 }
 

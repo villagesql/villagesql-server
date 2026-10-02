@@ -34,6 +34,39 @@ SHOW CREATE TABLE t;
 
 DROP TABLE t;
 
+--echo # Same rejection for a multi-part (composite) primary key.
+CREATE TABLE tm (
+  k1 INT NOT NULL,
+  k2 VARBINARY(8) NOT NULL,
+  a dummy_type_vector,
+  PRIMARY KEY (k1, k2),
+  INDEX idx (a) USING EXTENDED(dummy_index_hnsw)
+);
+SHOW CREATE TABLE tm;
+
+--echo # Modifying either primary-key part is rejected (INPLACE, COPY, default).
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tm MODIFY k2 VARBINARY(64) NOT NULL, ALGORITHM=INPLACE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tm MODIFY k1 BIGINT NOT NULL, ALGORITHM=COPY;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tm MODIFY k2 VARBINARY(64) NOT NULL;
+
+--echo # Dropping/re-defining the composite primary key is likewise rejected.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tm DROP PRIMARY KEY, ADD PRIMARY KEY (k1);
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tm DROP PRIMARY KEY;
+
+--echo # The composite primary key is unchanged by the rejected ALTERs.
+SHOW CREATE TABLE tm;
+
+--echo # An ALTER that does not touch the primary key is allowed.
+ALTER TABLE tm ADD COLUMN note INT DEFAULT 0;
+SHOW CREATE TABLE tm;
+
+DROP TABLE tm;
+
 --echo # With no custom index, a primary-key change is allowed.
 CREATE TABLE t2 (k VARBINARY(8) NOT NULL PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t2 MODIFY k VARBINARY(64) NOT NULL;
