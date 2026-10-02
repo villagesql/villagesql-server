@@ -1,0 +1,53 @@
+# KNN ordering inside a subquery: an IN/semijoin subquery and a derived table
+# (FROM-subquery). The distance scan runs inside the inner query block; the outer
+# query consumes its result (semijoin materialization / derived-table
+# materialization). Same plan-wrapping class as DISTINCT and views.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t1 (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t1 VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo # Derived table (FROM-subquery): the inner query orders by distance +
+--echo # LIMIT; the outer reads it. Inner KNN routes to the distance scan.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM (
+  SELECT id FROM t1
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+) AS s;
+--sorted_result
+SELECT id FROM (
+  SELECT id FROM t1
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+) AS s;
+
+--echo # KNN derived table joined to the outer table (LIMIT inside an IN subquery
+--echo # is not supported by the server, so a join expresses the same intent): the
+--echo # inner KNN yields the 2 nearest ids and the join selects those rows.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT t1.id FROM t1
+JOIN (
+  SELECT id FROM t1
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+) AS s ON t1.id = s.id;
+--sorted_result
+SELECT t1.id FROM t1
+JOIN (
+  SELECT id FROM t1
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+) AS s ON t1.id = s.id;
+
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_knn_index_test;
