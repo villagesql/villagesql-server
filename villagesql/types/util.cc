@@ -229,6 +229,20 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   std::string table_name(share.table_name.str, share.table_name.length);
   std::string index_name(keyinfo->name);
+
+  // An ALTER TABLE rebuild opens the table under a #sql-xxx name that matches
+  // nothing in the victionary. Resolve against the real target table instead;
+  // its entries (unchanged ones committed, added/redefined ones staged
+  // uncommitted) are all keyed under the real name and visible to get() below.
+  // TODO(villagesql-general): investigate a cleaner way to bridge the #sql-xxx
+  // temp name, e.g. staging the rebuild table's victionary entries uncommitted
+  // and unstaging them before commit, as explored for custom-type ALTER.
+  if (is_alter_rebuild_table(share) &&
+      !thd->villagesql_alter_target_table.empty()) {
+    db_name = thd->villagesql_alter_target_db;
+    table_name = thd->villagesql_alter_target_table;
+  }
+
   IndexKey idx_key(db_name, table_name, index_name);
 
   auto &vclient = VictionaryClient::instance();
@@ -1577,8 +1591,48 @@ void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
   }
 }
 
-void ClearAlterCustomFields(THD *thd) {
+void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table) {
+  if (should_assert_if_null(thd) || should_assert_if_null(old_table)) {
+    LogVSQL(ERROR_LEVEL, "null argument in SetAlterTargetForCustomIndexes");
+    return;
+  }
+  thd->villagesql_alter_target_db.assign(old_table->s->db.str,
+                                         old_table->s->db.length);
+  thd->villagesql_alter_target_table.assign(old_table->s->table_name.str,
+                                            old_table->s->table_name.length);
+}
+
+bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
+                                     KEY_CREATE_INFO *key_create_info) {
+  const IndexContext *cic = key_info->custom_index_context;
+  if (cic == nullptr) return false;
+
+  char *type = strmake_root(thd->mem_root, cic->index_type_name().c_str(),
+                            cic->index_type_name().length());
+  char *ext = strmake_root(thd->mem_root, cic->extension_name().c_str(),
+                           cic->extension_name().length());
+  // On allocation failure, fail rather than leave custom_index_type with a null
+  // str and nonzero length: is_custom_index() would read it as null and rebuild
+  // the index as an ordinary one -- the exact loss this carry prevents.
+  if (type == nullptr || ext == nullptr) {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
+             cic->index_type_name().length() + cic->extension_name().length());
+    return true;
+  }
+  key_create_info->custom_index_type = {type, cic->index_type_name().length()};
+  key_create_info->custom_index_extension = {ext,
+                                             cic->extension_name().length()};
+  // TODO(villagesql-indexing): also carry the index's WITH parameters. The
+  // rebuilt key keeps its type and extension but not custom_index_params, so a
+  // CREATE TABLE ... LIKE of a custom index loses its WITH clause (the ALTER
+  // rebuild path is unaffected, as it does not re-register the index).
+  return false;
+}
+
+void ClearAlterCustomContext(THD *thd) {
   thd->villagesql_alter_custom_fields.clear();
+  thd->villagesql_alter_target_db.clear();
+  thd->villagesql_alter_target_table.clear();
 }
 
 // Params observed for one qualified base name, plus the index of the argument

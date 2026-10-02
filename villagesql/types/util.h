@@ -38,6 +38,8 @@ class Field;
 class Item;
 class Item_func;
 enum class enum_sp_type;
+class KEY;
+class KEY_CREATE_INFO;
 struct MEM_ROOT;
 struct ORDER;
 class sp_pcontext;
@@ -154,8 +156,22 @@ extern void RemoveTmpTableMetadata(THD *thd, TABLE *table);
 extern void PrepareAlterCustomFields(THD *thd,
                                      const List<Create_field> &create_list);
 
-// Clear thd->villagesql_alter_custom_fields.
-extern void ClearAlterCustomFields(THD *thd);
+// Stash old_table's real (db, table) on the THD so MaybeInjectCustomIndex can
+// resolve the #sql-xxx rebuild table's custom indexes against the victionary
+// under the real name. Called from mysql_alter_table before the rebuild table
+// is opened.
+extern void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table);
+
+// Carry a custom (USING EXTENDED) index's type and extension names from the old
+// key's IndexContext onto key_create_info, so key_create_info.is_custom_index()
+// stays true for the rebuilt key (the names are copied onto thd->mem_root).
+// No-op when key_info is not a custom index. Returns true on error (OOM, with
+// my_error raised), false on success.
+extern bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
+                                            KEY_CREATE_INFO *key_create_info);
+
+// Clear thd->villagesql_alter_custom_fields and the alter target name stash.
+extern void ClearAlterCustomContext(THD *thd);
 
 // Check if any column in a create_list has a custom type.
 // Used to determine if we need to regenerate the CREATE TABLE statement

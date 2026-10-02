@@ -16219,6 +16219,12 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         key_create_info.m_secondary_engine_attribute =
             key_info->secondary_engine_attribute;
 
+      // VillageSQL: carry a custom (USING EXTENDED) index's identity onto the
+      // rebuilt key so it is re-created as a custom index, not an ordinary one.
+      if (villagesql::MaybeCarryCustomIndexForRebuild(thd, key_info,
+                                                      &key_create_info))
+        return true;
+
       for (const Alter_index_visibility *alter_index_visibility :
            alter_info->alter_index_visibility_list) {
         const char *name = alter_index_visibility->name();
@@ -18488,6 +18494,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
              "is not supported");
     goto err_new_table_cleanup;
   }
+
+  // VillageSQL: stash the real target table name so the #sql-xxx rebuild table
+  // can resolve its custom indexes against the victionary under that name (the
+  // #sql-xxx name matches nothing there).
+  villagesql::SetAlterTargetForCustomIndexes(thd, table);
 
   if (alter_info->requested_algorithm !=
       Alter_info::ALTER_TABLE_ALGORITHM_COPY) {
