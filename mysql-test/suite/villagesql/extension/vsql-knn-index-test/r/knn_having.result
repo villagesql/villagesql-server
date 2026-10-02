@@ -1,0 +1,44 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+# Distance projected and filtered in HAVING, ordered by distance. Only rows
+# within distance 1 of [1,0,0,0] qualify: ids 1 (0), 4 (1), 5 (1).
+EXPLAIN FORMAT=tree
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+HAVING d <= 1
+ORDER BY d LIMIT 10;
+EXPLAIN
+-> Limit: 10 row(s)  (cost=COST rows=ROWS)
+    -> Filter: (d <= 1)  (cost=COST rows=ROWS)
+        -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+HAVING d <= 1
+ORDER BY d LIMIT 10;
+id	d
+1	0
+4	1
+5	1
+# HAVING that excludes the exact match, still ordered by distance.
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+HAVING d > 0
+ORDER BY d LIMIT 3;
+id	d
+4	1
+5	1
+2	1.4142135623730951
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

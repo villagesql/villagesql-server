@@ -1,0 +1,42 @@
+# A distance expression in a HAVING clause, alongside a KNN ORDER BY.
+#
+# HAVING is evaluated after the row source, so a distance predicate there filters
+# the rows the scan produces, much like a WHERE. The KNN ORDER BY should still
+# drive the index; HAVING selects a subset.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo # Distance projected and filtered in HAVING, ordered by distance. Only rows
+--echo # within distance 1 of [1,0,0,0] qualify: ids 1 (0), 4 (1), 5 (1).
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+HAVING d <= 1
+ORDER BY d LIMIT 10;
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+HAVING d <= 1
+ORDER BY d LIMIT 10;
+
+--echo # HAVING that excludes the exact match, still ordered by distance.
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+HAVING d > 0
+ORDER BY d LIMIT 3;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
