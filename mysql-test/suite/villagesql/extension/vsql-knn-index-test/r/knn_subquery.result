@@ -1,0 +1,65 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t1 (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t1 VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+# Derived table (FROM-subquery): the inner query orders by distance +
+# LIMIT; the outer reads it. Inner KNN routes to the distance scan. LIMIT 3
+# includes id 1 (dist 0) and the tied 4, 5 (dist 1), so the set is
+# deterministic.
+EXPLAIN FORMAT=tree
+SELECT id FROM (
+SELECT id FROM t1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+) AS s;
+EXPLAIN
+-> Table scan on s  (cost=COST rows=ROWS)
+    -> Materialize  (cost=COST rows=ROWS)
+        -> Limit: 3 row(s)  (cost=COST rows=ROWS)
+            -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+SELECT id FROM (
+SELECT id FROM t1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+) AS s;
+id
+1
+4
+5
+# KNN derived table joined to the outer table (LIMIT inside an IN subquery
+# is not supported by the server, so a join expresses the same intent): the
+# inner KNN yields the 3 nearest ids (1, and the tied 4, 5) and the join
+# selects those rows.
+EXPLAIN FORMAT=tree
+SELECT t1.id FROM t1
+JOIN (
+SELECT id FROM t1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+) AS s ON t1.id = s.id;
+EXPLAIN
+-> Nested loop inner join  (cost=COST rows=ROWS)
+    -> Table scan on s  (cost=COST rows=ROWS)
+        -> Materialize  (cost=COST rows=ROWS)
+            -> Limit: 3 row(s)  (cost=COST rows=ROWS)
+                -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Single-row covering index lookup on t1 using PRIMARY (id=s.id)  (cost=COST rows=ROWS)
+
+SELECT t1.id FROM t1
+JOIN (
+SELECT id FROM t1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+) AS s ON t1.id = s.id;
+id
+1
+4
+5
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_knn_index_test;
