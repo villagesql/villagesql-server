@@ -1,0 +1,57 @@
+# KNN through a VIEW.
+#
+# A view over a KNN query, and a KNN ordering that reads from a view, exercise
+# the distance scan under view merging and (for a materialized view) a temporary
+# table wrapping the scan -- the same plan-transformation class as DISTINCT.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo # A mergeable view exposing the table; the KNN ordering is applied by the
+--echo # outer query and should route to the index through the merged view.
+CREATE VIEW v_merge AS SELECT id, v FROM t;
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM v_merge
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM v_merge
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP VIEW v_merge;
+
+--echo # A view whose definition already contains the KNN ordering + LIMIT; the
+--echo # outer query just reads it.
+CREATE VIEW v_knn AS
+  SELECT id FROM t
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM v_knn;
+SELECT id FROM v_knn;
+DROP VIEW v_knn;
+
+--echo # A view forced to materialize into a temporary table (ALGORITHM=TEMPTABLE),
+--echo # then a KNN ordering over it: the distance scan feeds / is wrapped by the
+--echo # temp table.
+CREATE ALGORITHM=TEMPTABLE VIEW v_tmp AS SELECT id, v FROM t;
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM v_tmp
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM v_tmp
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP VIEW v_tmp;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
