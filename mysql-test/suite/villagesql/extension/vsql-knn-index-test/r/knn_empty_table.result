@@ -1,0 +1,45 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+# KNN on the empty table: routes to the index, returns no rows.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+# An INSERT after the empty query proceeds normally.
+INSERT INTO t VALUES (1, '[1,0,0,0]');
+# And the row is now returned by the KNN query.
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+# Emptying the table again (all rows deleted) and re-querying: still no
+# error, no rows.
+DELETE FROM t;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+DROP TABLE t;
+# Same on a table that was NEVER populated and has no index built rows,
+# created empty and queried immediately.
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v2 ON t2 (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+SELECT id FROM t2
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+id
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_knn_index_test;
