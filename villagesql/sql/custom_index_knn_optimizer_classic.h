@@ -54,13 +54,13 @@ bool IsCustomKnnDistanceOrderItem(TABLE *table, Item *order_item);
 bool TrySkipSortWithCustomKnnIndex(JOIN_TAB *tab, ORDER *order,
                                    bool no_changes);
 
-// Classic optimizer access-path builder. Rebuilds the KNN scan spec for the
-// index `key_idx` chosen by TrySkipSortWithCustomKnnIndex from the query
-// block's ORDER BY (`order`, single ASC distance term) and returns an
+// Classic optimizer access-path builder. Builds the KNN scan spec for the index
+// `key_idx` chosen by TrySkipSortWithCustomKnnIndex, from `query_item` -- the
+// query vector carried on the plan (set_knn_query_item). Returns an
 // AccessPath::INDEX_DISTANCE_SCAN driving CreateCustomKnnDistanceIterator, or
 // nullptr on failure. Called from QEP_TAB::access_path() for JT_INDEX_DISTANCE.
 AccessPath *BuildCustomKnnDistanceAccessPath(THD *thd, TABLE *table,
-                                             uint key_idx, ORDER *order,
+                                             uint key_idx, Item *query_item,
                                              ha_rows select_limit);
 
 }  // namespace villagesql
