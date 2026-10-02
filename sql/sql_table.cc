@@ -18181,6 +18181,16 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
   }
 
+  // TODO(villagesql-indexing): changing the primary key of a table with a
+  // custom index is not supported yet
+  if (villagesql::alter_changes_pk_of_custom_indexed_table(
+          table, alter_info, key_info, key_count)) {
+    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0),
+             "Changing the primary key of a table with a USING EXTENDED index "
+             "is not supported");
+    goto err_new_table_cleanup;
+  }
+
   if (alter_info->requested_algorithm !=
       Alter_info::ALTER_TABLE_ALGORITHM_COPY) {
     Alter_inplace_info ha_alter_info(create_info, alter_info,
