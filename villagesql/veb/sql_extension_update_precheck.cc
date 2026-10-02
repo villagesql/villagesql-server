@@ -42,27 +42,64 @@ UpdatePreCheckResult ok() {
   return r;
 }
 
-// Reject if a type retained across the update has a persisted_length change.
-// A change would cause existing on-disk bytes to be misinterpreted.
+// Storage length of a type in the target version, harvested from the loaded
+// registration. Mirrors the length fields of CurrentTypeSnapshot.
+struct TargetTypeLength {
+  int64_t persisted_length{0};
+  int64_t max_persisted_length{0};
+  bool variable_length{false};
+};
+
+// Reject if a type retained across the update changes its storage length.
+// Every existing column of the type has a backing field whose length was
+// fixed at CREATE TABLE (persisted_length for a fixed-length type,
+// max_persisted_length for a variable-length one). Opening the table
+// requires that length to still match the type, so the update must keep:
+//   - the length kind (fixed vs. variable),
+//   - persisted_length, for a fixed-length type,
+//   - max_persisted_length, for a variable-length type. A grow is rejected
+//     as well as a shrink. Either one leaves existing columns mismatched.
 //
 // `current` is the state of the extension as installed today. The
-// `target_persisted_length` map is built from the new version's VEB that
-// we're being asked to update to.
-UpdatePreCheckResult check_retained_types_persisted_length(
+// `target_lengths` map is built from the new version's VEB that we're being
+// asked to update to.
+UpdatePreCheckResult check_retained_types_storage_length(
     const UpdatePreCheckInput &current,
-    const std::unordered_map<std::string, int64_t> &target_persisted_length) {
+    const std::unordered_map<std::string, TargetTypeLength> &target_lengths) {
   for (const auto &c : current.current_types) {
-    auto it = target_persisted_length.find(c.type_name);
-    if (it == target_persisted_length.end()) continue;  // dropped
-    if (it->second != c.persisted_length) {
-      char buf[512];
+    auto it = target_lengths.find(c.type_name);
+    if (it == target_lengths.end()) continue;  // dropped
+    const TargetTypeLength &t = it->second;
+    char buf[512];
+    if (t.variable_length != c.variable_length) {
+      std::snprintf(
+          buf, sizeof(buf),
+          "Cannot update extension '%s': type '%s' changed from %s to %s. "
+          "Existing stored data would be corrupted",
+          current.extension_name.c_str(), c.type_name.c_str(),
+          c.variable_length ? "variable-length" : "fixed-length",
+          t.variable_length ? "variable-length" : "fixed-length");
+      return fail(buf);
+    }
+    if (!c.variable_length && t.persisted_length != c.persisted_length) {
       std::snprintf(
           buf, sizeof(buf),
           "Cannot update extension '%s': type '%s' persisted_length changed "
-          "from %lld to %lld -- existing stored data would be corrupted",
+          "from %lld to %lld. Existing stored data would be corrupted",
           current.extension_name.c_str(), c.type_name.c_str(),
           static_cast<long long>(c.persisted_length),
-          static_cast<long long>(it->second));
+          static_cast<long long>(t.persisted_length));
+      return fail(buf);
+    }
+    if (c.variable_length && t.max_persisted_length != c.max_persisted_length) {
+      std::snprintf(
+          buf, sizeof(buf),
+          "Cannot update extension '%s': variable-length type '%s' "
+          "max_persisted_length changed from %lld to %lld. Existing "
+          "columns of this type would no longer match their stored length",
+          current.extension_name.c_str(), c.type_name.c_str(),
+          static_cast<long long>(c.max_persisted_length),
+          static_cast<long long>(t.max_persisted_length));
       return fail(buf);
     }
   }
@@ -125,15 +162,30 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
 
   // Harvest target-side type metadata from the loaded registration. We don't
   // hold pointers into the registration past the unload call below.
-  std::unordered_map<std::string, int64_t> target_persisted_length;
+  //
+  // max_persisted_length and variable_length sit past the end of older
+  // vef_type_desc_t layouts, so read them only when both the type and the
+  // negotiated protocol are new enough -- the same gating registration
+  // applies (see validate.cc).
+  std::unordered_map<std::string, TargetTypeLength> target_lengths;
   std::unordered_set<std::string> target_type_names;
   if (target.registration != nullptr) {
     const vef_registration_t *reg = target.registration;
     for (unsigned int i = 0; i < reg->type_count; ++i) {
       const vef_type_desc_t *t = reg->types[i];
       if (t == nullptr || t->name == nullptr) continue;
-      target_persisted_length[t->name] =
-          static_cast<int64_t>(t->persisted_length);
+      TargetTypeLength length;
+      length.persisted_length = static_cast<int64_t>(t->persisted_length);
+      if (t->protocol >= VEF_PROTOCOL_3 &&
+          target.negotiated_protocol >= VEF_PROTOCOL_3) {
+        length.max_persisted_length =
+            static_cast<int64_t>(t->max_persisted_length);
+      }
+      if (t->protocol >= VEF_PROTOCOL_4 &&
+          target.negotiated_protocol >= VEF_PROTOCOL_4) {
+        length.variable_length = t->variable_length;
+      }
+      target_lengths[t->name] = length;
       target_type_names.insert(t->name);
     }
   }
@@ -145,7 +197,7 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
 
   UpdatePreCheckResult r;
 
-  r = check_retained_types_persisted_length(input, target_persisted_length);
+  r = check_retained_types_storage_length(input, target_lengths);
   if (!r.ok) return r;
 
   r = check_dropped_types_have_no_dependents(input, target_type_names);
@@ -186,6 +238,8 @@ void BuildUpdatePreCheckSnapshot(const VictionaryClient &victionary,
     CurrentTypeSnapshot s;
     s.type_name = td->type_name();
     s.persisted_length = td->persisted_length();
+    s.max_persisted_length = td->max_persisted_length();
+    s.variable_length = td->is_variable_length();
     input->current_types.push_back(std::move(s));
   }
 

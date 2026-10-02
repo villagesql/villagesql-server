@@ -71,6 +71,17 @@ vsql_add_test_extension(update-test-v1.1               update_test  VERSION 1.1.
 vsql_add_test_extension(update-test-v1.2               update_test  VERSION 1.2.0)
 vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.0)
 
+# update_length_test v1 installable + four target variants exercise the
+# retained-type storage-length pre-check: v1.1 shrinks and v1.2 grows a
+# variable-length type's max_persisted_length, v1.3 turns a fixed-length type
+# variable-length, and v1.4 turns a variable-length type fixed-length. They are
+# separate VEBs because the pre-check stops at the first incompatible type.
+vsql_add_test_extension(update-length-test-v1          update_length_test  VERSION 1.0.0)
+vsql_add_test_extension(update-length-test-v1.1        update_length_test  VERSION 1.1.0)
+vsql_add_test_extension(update-length-test-v1.2        update_length_test  VERSION 1.2.0)
+vsql_add_test_extension(update-length-test-v1.3        update_length_test  VERSION 1.3.0)
+vsql_add_test_extension(update-length-test-v1.4        update_length_test  VERSION 1.4.0)
+
 # update_schema_test v1/v2 exercise on-disk representation migration across
 # ALTER EXTENSION ... AT RESTART: v1 registers MYTYPE (4-byte int), v2 keeps
 # MYTYPE (backward-compatible) and adds MYTYPE_V2 (8-byte int) plus a
