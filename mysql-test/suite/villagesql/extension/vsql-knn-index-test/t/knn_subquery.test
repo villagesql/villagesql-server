@@ -1,7 +1,7 @@
-# KNN ordering inside a subquery: an IN/semijoin subquery and a derived table
-# (FROM-subquery). The distance scan runs inside the inner query block; the outer
-# query consumes its result (semijoin materialization / derived-table
-# materialization). Same plan-wrapping class as DISTINCT and views.
+# KNN ordering inside a subquery: a derived table (FROM-subquery), on its own and
+# joined to the outer table. The distance scan runs inside the inner query block;
+# the outer query consumes its result (derived-table materialization). Same
+# plan-wrapping class as DISTINCT and views.
 
 INSTALL EXTENSION vsql_knn_index_test;
 
@@ -19,34 +19,37 @@ INSERT INTO t1 VALUES
   (5, '[2,0,0,0]');
 
 --echo # Derived table (FROM-subquery): the inner query orders by distance +
---echo # LIMIT; the outer reads it. Inner KNN routes to the distance scan.
+--echo # LIMIT; the outer reads it. Inner KNN routes to the distance scan. LIMIT 3
+--echo # includes id 1 (dist 0) and the tied 4, 5 (dist 1), so the set is
+--echo # deterministic.
 --replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
 EXPLAIN FORMAT=tree
 SELECT id FROM (
   SELECT id FROM t1
-  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
 ) AS s;
 --sorted_result
 SELECT id FROM (
   SELECT id FROM t1
-  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
 ) AS s;
 
 --echo # KNN derived table joined to the outer table (LIMIT inside an IN subquery
 --echo # is not supported by the server, so a join expresses the same intent): the
---echo # inner KNN yields the 2 nearest ids and the join selects those rows.
+--echo # inner KNN yields the 3 nearest ids (1, and the tied 4, 5) and the join
+--echo # selects those rows.
 --replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
 EXPLAIN FORMAT=tree
 SELECT t1.id FROM t1
 JOIN (
   SELECT id FROM t1
-  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
 ) AS s ON t1.id = s.id;
 --sorted_result
 SELECT t1.id FROM t1
 JOIN (
   SELECT id FROM t1
-  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
 ) AS s ON t1.id = s.id;
 
 DROP TABLE t1;
