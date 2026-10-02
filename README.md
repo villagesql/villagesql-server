@@ -53,6 +53,25 @@ The build also needs a C++20 compiler, CMake 3.14.6 or newer (3.19 on macOS),
 Bison 3.0.4 or newer, OpenSSL 3, and several development libraries. Step 2
 below installs all of them.
 
+To contribute a change, you also need clang-format for the linter,
+`./scripts/villint.sh`. Every pull request must pass the linter, so run it
+before each commit. Step 2 does not install clang-format. The linter needs one
+exact clang-format version, and it refuses any other. Homebrew and Linux
+package managers ship whatever version they currently carry, so do not install
+clang-format from them. Install the exact version with `pipx`:
+
+```bash
+# macOS with Homebrew
+brew install pipx
+
+# Linux (Ubuntu/Debian)
+sudo apt-get install pipx
+
+# Both
+pipx install "clang-format==22.1.*"
+pipx ensurepath   # adds ~/.local/bin to PATH in your shell startup file; open a new shell after
+```
+
 ### Build Steps (Linux & macOS)
 
 > **Note:** These steps are the same on Linux and macOS. Paths use `$HOME`
