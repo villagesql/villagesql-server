@@ -1,16 +1,17 @@
 INSTALL EXTENSION vsql_knn_index_test;
 CREATE TABLE t (
-id INT PRIMARY KEY,
-v  KVECTOR
+id  INT PRIMARY KEY,
+grp INT,
+v   KVECTOR
 );
 CREATE INDEX idx_v ON t (v)
 USING EXTENDED(vsql_knn_index_test.kvec_l2);
 INSERT INTO t VALUES
-(1, '[1,0,0,0]'),
-(2, '[0,1,0,0]'),
-(3, '[0,0,1,0]'),
-(4, '[1,1,0,0]'),
-(5, '[2,0,0,0]');
+(1, 10, '[1,0,0,0]'),
+(2, 10, '[0,1,0,0]'),
+(3, 20, '[0,0,1,0]'),
+(4, 20, '[1,1,0,0]'),
+(5, 30, '[2,0,0,0]');
 # Distance projected and filtered in HAVING, ordered by distance. Only rows
 # within distance 1 of [1,0,0,0] qualify: ids 1 (0), 4 (1), 5 (1).
 EXPLAIN FORMAT=tree
@@ -40,5 +41,41 @@ id	d
 4	1
 5	1
 2	1.4142135623730951
+# GROUP BY ... HAVING: group by grp, keep groups whose nearest member is
+# within distance 1, ordered by that nearest distance. grp 10 (min 0),
+# 20 (min 1), 30 (min 1) all qualify.
+EXPLAIN FORMAT=tree
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
+FROM t
+GROUP BY grp
+HAVING md <= 1
+ORDER BY md LIMIT 10;
+EXPLAIN
+-> Limit: 10 row(s)
+    -> Sort: md
+        -> Filter: (md <= 1)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t  (cost=COST rows=ROWS)
+
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
+FROM t
+GROUP BY grp
+HAVING md <= 1
+ORDER BY md LIMIT 10;
+grp	md
+10	0
+20	1
+30	1
+# GROUP BY ... HAVING that excludes the group containing the exact match
+# (grp 10, min distance 0): only grp 20 and 30 remain.
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
+FROM t
+GROUP BY grp
+HAVING md > 0
+ORDER BY md LIMIT 10;
+grp	md
+20	1
+30	1
 DROP TABLE t;
 UNINSTALL EXTENSION vsql_knn_index_test;
