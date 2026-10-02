@@ -1,13 +1,14 @@
-# CREATE INDEX ... USING EXTENDED on a POPULATED table over the real
+# CREATE INDEX ... USING EXTENDED on a populated table over the real
 # InnoDB-resident custom-index surface.
 #
-# The rows are INSERTed BEFORE the index exists, then CREATE INDEX builds the
+# The rows are inserted before the index exists, then CREATE INDEX builds the
 # index over the existing data: the DDL builder scans the clustered index and,
 # for the custom index, resolves each row's stored vector (fetch_for_bulk_ddl)
-# and calls Custom_index::insert row-by-row (the build is forced single-threaded
-# because the extension index is not concurrency-safe). The KNN query afterwards
-# must return the same neighbours as the create-index-then-insert order, proving
-# every pre-existing row was indexed.
+# and calls Custom_index::insert row-by-row. The scan may run on several threads,
+# so inserts reach the extension index concurrently, as run-time DML inserts do;
+# the extension serializes them with its own lock. The KNN query afterwards must
+# return the same neighbours as the create-index-then-insert order, proving every
+# pre-existing row was indexed.
 #
 INSTALL EXTENSION vsql_knn_index_test;
 

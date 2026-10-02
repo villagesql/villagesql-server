@@ -46,6 +46,10 @@
 // NOTE: internal testing tool, not an example of how to write an extension. The
 // scan is exact brute force (no graph); HNSW-graph correctness stays in
 // vsql-vector's own tests.
+//
+// Not implemented: mark_delete and purge are no-op stubs -- this extension does
+// not remove entries, so DELETE leaves a stale entry that the server's
+// MVCC-at-fetch filters out.
 
 #include <villagesql/preview/index_builder.h>
 #include <villagesql/preview/storage_api.h>
@@ -385,7 +389,7 @@ struct KVecEntry {
 struct KVecIndexCtx {
   std::vector<KVecEntry> entries;
   // Guards entries. Like vsql-vector's operation mutex: writers (insert) take
-  // it exclusive, readers (scan) take it shared, so a parallel DDL build can
+  // it exclusive, readers (scan) take it shared, so a concurrent DDL build can
   // insert from multiple threads and a scan sees a consistent list.
   std::shared_mutex mutex;
 };
@@ -394,7 +398,7 @@ using IdxCtx = Index::StorageCtx<KVecIndexCtx>;
 
 // Observability: prove the custom scan/insert actually executed. Atomic because
 // concurrent queries scan the same index and concurrent inserts (DML or a
-// parallel DDL build) fire from many threads.
+// concurrent DDL build) fire from many threads.
 static std::atomic<long long> g_scan_begin_count{0};
 static std::atomic<long long> g_scan_fetch_count{0};
 static std::atomic<long long> g_insert_count{0};
@@ -465,8 +469,9 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
     entry.pkey.emplace_back(pkey_columns[i].data,
                             pkey_columns[i].data + pkey_columns[i].length);
   }
-  // Exclusive lock: a parallel DDL build inserts each scanned row from multiple
-  // worker threads (like vsql-vector's unique_lock on its operation mutex).
+  // Exclusive lock: a concurrent DDL build inserts each scanned row from
+  // multiple worker threads (like vsql-vector's unique_lock on its operation
+  // mutex).
   std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
   ctx->user()->entries.push_back(std::move(entry));
   ++g_insert_count;
