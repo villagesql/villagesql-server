@@ -24,7 +24,11 @@ ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 --echo # An INSERT after the empty query proceeds normally.
 INSERT INTO t VALUES (1, '[1,0,0,0]');
 
---echo # And the row is now returned by the KNN query.
+--echo # And the row is now returned by the KNN query, still served by the index.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 

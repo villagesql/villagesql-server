@@ -18,7 +18,14 @@ ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 id
 # An INSERT after the empty query proceeds normally.
 INSERT INTO t VALUES (1, '[1,0,0,0]');
-# And the row is now returned by the KNN query.
+# And the row is now returned by the KNN query, still served by the index.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 id
