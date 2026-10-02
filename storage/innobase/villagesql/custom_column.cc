@@ -1073,14 +1073,18 @@ dberr_t Custom_column::fetch_for_bulk_ddl(const dict_index_t *new_index,
     if (!old_col->stored_by_extn()) continue;
 
     // Locate the field position in the new index for this column.
-    uint32_t new_field_pos = UINT32_MAX;
+    constexpr uint32_t kNotFound = UINT32_MAX;
+    uint32_t new_field_pos = kNotFound;
     for (uint32_t i = 0; i < n_fields; i++) {
       if (new_index->get_field(i)->col->ind == new_col_ind) {
         new_field_pos = i;
         break;
       }
     }
-    ut_a(new_field_pos != UINT32_MAX);
+    // A secondary index carries only its own key columns, so an extended column
+    // of the table that this index does not cover is not a field of this index.
+    // Skip it here; it is fetched when its covering index is built.
+    if (new_field_pos == kNotFound) continue;
 
     auto err = fetch_at(new_field_pos, old_col);
     if (err != DB_SUCCESS) return err;
