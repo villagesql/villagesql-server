@@ -1,0 +1,62 @@
+# GROUP BY combined with a KNN distance ordering.
+#
+# GROUP BY, like DISTINCT, builds a temporary table and coordinates its own
+# ordering, so it collides with the KNN "skip the sort, let the index provide the
+# order" optimization -- the same trouble spot. This test exercises the
+# combinations and asserts correct results (or a clean rejection).
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id  INT PRIMARY KEY,
+  grp INT,
+  v   KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, 10, '[1,0,0,0]'),
+  (2, 10, '[0,1,0,0]'),
+  (3, 20, '[0,0,1,0]'),
+  (4, 20, '[1,1,0,0]'),
+  (5, 30, '[2,0,0,0]');
+
+--echo # Group by grp, order groups by their nearest member's distance
+--echo # (MIN over the distance). Legal aggregation; groups ordered nearest-first.
+--echo # grp 10 has id 1 (dist 0), grp 20 has id 4 (dist 1), grp 30 has id 5
+--echo # (dist 1) -> order 10, 20, 30.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
+FROM t
+GROUP BY grp
+ORDER BY md LIMIT 3;
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md
+FROM t
+GROUP BY grp
+ORDER BY md LIMIT 3;
+
+--echo # Group by the distance value itself (projected), ordered by it: rows with
+--echo # equal distance collapse into one group, groups ordered by distance.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d, COUNT(*) AS n
+FROM t
+GROUP BY d
+ORDER BY d LIMIT 3;
+SELECT vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d, COUNT(*) AS n
+FROM t
+GROUP BY d
+ORDER BY d LIMIT 3;
+
+--echo # Group by a column, order by the raw (non-aggregated) distance: the
+--echo # distance is not functionally dependent on the group, so this is rejected
+--echo # for the same reason DISTINCT rejects it.
+--error ER_WRONG_FIELD_WITH_GROUP
+SELECT grp
+FROM t
+GROUP BY grp
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
