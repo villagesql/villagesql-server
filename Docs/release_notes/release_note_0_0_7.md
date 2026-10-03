@@ -1,6 +1,6 @@
 # VillageSQL 0.0.7
 
-Draft release notes through commit `3aa4ebbbeab`: index: bulk build fix (#1281)
+Draft release notes through commit `6a634f8c`: relnotes: final draft (#1278)
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
