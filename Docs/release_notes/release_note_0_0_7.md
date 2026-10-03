@@ -70,10 +70,6 @@ Custom index DDL is refused by default, with `Extended Index feature not yet imp
 - **CI** — The nightly dispatch drives the sanitizer and extension-compat runs, the Full Test Suite runs nightly on macOS, and pull request labels, review, and merge run through one prow-based workflow. (`39d5d8b8955`, #1071; `a7790b71ef2`, #1072; `6442c74867e`, #1038; `6d147a1b021`, #1114; `2deed4a37f8`, #1146; `2c7bb6fa3a6`, #1130; `2a1a1344475`, #1134; `4d7152888a8`, #1163; `7f8af9db1c8`, #1164; `2eb58eefbb6`, #1167; `41181a73177`, #1166; `b7133dd53f6`, #1235, #1218; `d259762bbc1`, #1277; `9998b5e1dc4`, #1207; `f436c0f953b`, #1080; `aba58cfba3f`, #1176)
 - **README and policy** — The README and `AGENTS.md` give the current build and test commands and how to install the `clang-format` version the linter needs, and the contributing guide's AI policy covers issues and bars AI code review assistants. (`030bccd2aae`, #1141; `1d56259388d`, #1154; `99ed4310e91`, #1147; `6dc6ca1c6c9`, #1061; `aa68a9c2a55`, #1056; `ebb1c10167e`, #1177; `20d5fed75ec`, #1257)
 
-## Known Issues
-
-- **`--initialize` with `--default_table_encryption=ON` aborts** — Upstream MySQL 8.4.11 (the fix for Bug#39114059) assumes the `mysql` tablespace is unencrypted during initialization. With `--default_table_encryption=ON`, `mysqld --initialize` fails with `ERROR 3825` and leaves the data directory unusable. A fix is in progress.
-
 ## Community
 
 Thanks to @EvgeniyPatlan for the native RPM and DEB packaging. (`ea623810efb`, #931)
