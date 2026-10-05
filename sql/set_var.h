@@ -1,6 +1,7 @@
 #ifndef SET_VAR_INCLUDED
 #define SET_VAR_INCLUDED
 /* Copyright (c) 2002, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1122,9 +1123,11 @@ bool set_global_variable_attribute(const char *variable_base,
                                    const char *variable_name,
                                    const char *attribute_name,
                                    const char *attribute_value);
-bool set_global_variable_attribute(const System_variable_tracker &var_tracker,
-                                   const char *attribute_name,
-                                   const char *attribute_value);
+bool set_global_variable_attribute(
+    const System_variable_tracker &var_tracker, const char *attribute_name,
+    const char *attribute_value,
+    Suppress_not_found_error suppress_not_found_error =
+        Suppress_not_found_error::NO);
 
 extern bool get_sysvar_source(const char *name, uint length,
                               enum enum_variable_source *source);

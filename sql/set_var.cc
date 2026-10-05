@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1544,7 +1545,18 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened) {
       set_var *setvar = dynamic_cast<set_var *>(var);
       if (setvar &&
           (setvar->type == OPT_GLOBAL || setvar->type == OPT_PERSIST)) {
-        set_global_variable_attribute(setvar->m_var_tracker, nullptr, nullptr);
+        // TODO(villagesql-rebase): drop this once Oracle fixes
+        // mysql/mysql-server#818. The statement holds no lock on the variable
+        // between its visits, so a component variable may have been
+        // unregistered by a concurrent UNINSTALL COMPONENT since the update
+        // loop ran. There are then no attributes left to reset, which is not
+        // an error: upstream reports ER_UNKNOWN_SYSTEM_VARIABLE here and
+        // discards the return value, leaving an error in the diagnostics area
+        // while the statement still succeeds, so my_ok() then aborts a debug
+        // server.
+        (void)set_global_variable_attribute(setvar->m_var_tracker, nullptr,
+                                            nullptr,
+                                            Suppress_not_found_error::YES);
       }
     }
   }
@@ -2223,9 +2235,10 @@ bool set_global_variable_attribute(const char *variable_base,
                                        attribute_value);
 }
 
-bool set_global_variable_attribute(const System_variable_tracker &var_tracker,
-                                   const char *attribute_name,
-                                   const char *attribute_value) {
+bool set_global_variable_attribute(
+    const System_variable_tracker &var_tracker, const char *attribute_name,
+    const char *attribute_value,
+    Suppress_not_found_error suppress_not_found_error) {
   auto f = [attribute_name, attribute_value](const System_variable_tracker &,
                                              sys_var *var) -> int {
     if ((var->scope() & sys_var::flag_enum::GLOBAL) == 0) {
@@ -2252,9 +2265,9 @@ bool set_global_variable_attribute(const System_variable_tracker &var_tracker,
     return 0;
   };
 
-  int ret = var_tracker
-                .access_system_variable<int>(current_thd, f,
-                                             Suppress_not_found_error::NO)
-                .value_or(-1);
+  int ret =
+      var_tracker
+          .access_system_variable<int>(current_thd, f, suppress_not_found_error)
+          .value_or(-1);
   return ret != 0;
 }

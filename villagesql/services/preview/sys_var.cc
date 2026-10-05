@@ -159,14 +159,17 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *var,
   }
 
   // on_change runs with g_sys_vars_mutex released (the callback may re-enter
-  // via SYS_VARS.set()). MySQL keeps the .so loaded across the call: a
-  // component variable update holds LOCK_system_variables_hash for read
-  // (visit_component_variable in set_var.cc), which the unregister_variable in
-  // on_depopulate_sys_var needs for write before the caller dlcloses. Hence
-  // there is no drain counter here, unlike other capabilities whose callbacks
-  // dispatch under no such lock. This assumption is validated in
-  // sys_var_uninstall_race.test and should fail if that assumption is ever
-  // broken.
+  // via SYS_VARS.set()). MySQL keeps the .so loaded across the call: the
+  // variable visit that reaches this update trampoline holds
+  // LOCK_system_variables_hash for read (visit_component_variable in
+  // set_var.cc), which the unregister_variable in on_depopulate_sys_var needs
+  // for write before the caller dlcloses. Note the lock is held per visit, not
+  // for the whole statement -- resolve(), check() and update() each take and
+  // release it -- so it is this one visit that keeps the .so alive, not the
+  // SET as a whole. Hence there is no drain counter here, unlike other
+  // capabilities whose callbacks dispatch under no such lock. This assumption
+  // is validated in sys_var_uninstall_race.test and should fail if that
+  // assumption is ever broken.
   DEBUG_SYNC_C("vef_sys_var_before_on_change");
   on_change(&change);
 }
