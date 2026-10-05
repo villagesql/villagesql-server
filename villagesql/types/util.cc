@@ -1671,9 +1671,8 @@ static bool ValidateVDFArguments(
 
   // Pass 1: Validate base type matches for args that already have a
   // TypeContext, and collect known TypeParameters per qualified base name.
-  // This enables type disambiguation rule 1 (TD1): when multiple args share the
-  // same custom type, known params from one arg propagate to args that lack
-  // params.
+  // Args of the same custom type must have the same params, so known params
+  // from one arg propagate to args of that type that lack params.
   //
   // known_params maps qbn -> (TypeParameters*, first_arg_index) so that
   // conflicts can be reported with both argument positions.
