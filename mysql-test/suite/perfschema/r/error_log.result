@@ -191,8 +191,8 @@ ORDER BY logged;
 prio	error_code	subsystem	data
 System	MY-013576	InnoDB	InnoDB initialization has started.
 System	MY-013577	InnoDB	InnoDB initialization has ended.
-System	MY-010666	Server	VillageSQL: 'Validating system schema...'
-System	MY-010666	Server	VillageSQL: 'System schema verification completed successfully'
+System	MY-010666	Server	VillageSQL: Validating system schema...
+System	MY-010666	Server	VillageSQL: System schema verification completed successfully
 
 # FR-1.4.1 Show the log-error-verbosity applies
 # We passed --log-error-verbosity=3 at start-up. Show that we have Notes.

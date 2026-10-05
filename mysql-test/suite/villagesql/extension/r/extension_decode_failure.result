@@ -26,12 +26,12 @@ INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
 SELECT id, val FROM t1 WHERE id = 4;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
 # Verify the failure was logged
-VillageSQL: 'Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value'
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
 # SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
 SELECT id, val FROM t1 ORDER BY id;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4: check server log for details
 # Verify the failure was logged
-VillageSQL: 'Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value'
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
 # UPDATE: overwrite the DECODE_FAIL row with a good value
 UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
 # The previously-failing row should now decode successfully
@@ -47,7 +47,7 @@ UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
 SELECT id, val FROM t1 ORDER BY id;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
 # Verify the failure was logged
-VillageSQL: 'Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value'
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
 # Clean up
 DROP TABLE t1;
 # ENCODE_FAIL: INSERT is rejected with an error, nothing is stored
