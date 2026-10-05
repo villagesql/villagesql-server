@@ -186,3 +186,12 @@ extension authors.
 ### 2. Controls to prevent ABI breakages
 
 Add presubmit checks to warn contributors if they have broken ABI compatibility.
+
+### Type parameter text validation
+
+Type parameter strings crossing the ABI must be valid UTF-8 without embedded
+NUL. `vef_type_params_t` exposes NUL-terminated names and values without lengths,
+so embedded NUL cannot be represented. This validation does not change the ABI
+layout or protocol version. The server also validates length-delimited callback
+output before constructing parameter arrays. See the custom type parameter text
+policy in [README.md](README.md) for canonicalization and duplicate-name rules.

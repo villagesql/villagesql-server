@@ -31,3 +31,10 @@ Concretely:
   all future server versions.
 - Headers under `abi/preview/` expose preview-capability ABIs and follow
   the preview-capability rules in [../preview/README.md](../preview/README.md).
+
+Type parameter names and values must be valid UTF-8 without embedded NUL.
+`vef_type_params_t` uses NUL-terminated strings. Length-delimited parameter
+outputs from extension callbacks have the same text restriction. The server
+lowercases names and values, trims surrounding ASCII spaces, and rejects names
+that compare equal under `utf8mb4_0900_ai_ci`. See the
+[SDK parameter policy](../../../README.md#custom-type-parameter-text).

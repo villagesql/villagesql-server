@@ -901,6 +901,45 @@ struct IntrinsicDefaultWithCacheWrapper {
   }
 };
 
+// UTF-8 scalar values, excluding NUL because parameter ABI strings have no
+// lengths. Reject overlong sequences, surrogates and values above U+10FFFF.
+inline bool valid_type_parameter_text(std::string_view text) {
+  size_t i = 0;
+  while (i < text.size()) {
+    const auto first = static_cast<unsigned char>(text[i++]);
+    if (first == 0) return false;
+    if (first < 0x80) continue;
+    unsigned remaining;
+    uint32_t codepoint;
+    uint32_t minimum;
+    if (first >= 0xc2 && first <= 0xdf) {
+      remaining = 1;
+      codepoint = first & 0x1f;
+      minimum = 0x80;
+    } else if (first >= 0xe0 && first <= 0xef) {
+      remaining = 2;
+      codepoint = first & 0x0f;
+      minimum = 0x800;
+    } else if (first >= 0xf0 && first <= 0xf4) {
+      remaining = 3;
+      codepoint = first & 0x07;
+      minimum = 0x10000;
+    } else {
+      return false;
+    }
+    if (remaining > text.size() - i) return false;
+    while (remaining--) {
+      const auto next = static_cast<unsigned char>(text[i++]);
+      if ((next & 0xc0) != 0x80) return false;
+      codepoint = (codepoint << 6) | (next & 0x3f);
+    }
+    if (codepoint < minimum || codepoint > 0x10ffff ||
+        (codepoint >= 0xd800 && codepoint <= 0xdfff))
+      return false;
+  }
+  return true;
+}
+
 // Serialize a params map into the canonical "key=value,key=value,..." string.
 // Keys and values may not be empty (keys) or contain ',' or '='. On violation,
 // writes error_msg and returns true. op_name is the operation being serialized
@@ -908,9 +947,14 @@ struct IntrinsicDefaultWithCacheWrapper {
 inline bool serialize_type_params(
     const std::map<std::string, std::string> &params, const char *op_name,
     std::string &out, char *error_msg) {
-  // TODO(villagesql-charset): decide on a broader character set policy.
   out.clear();
   for (const auto &[key, value] : params) {
+    if (!valid_type_parameter_text(key) || !valid_type_parameter_text(value)) {
+      snprintf(error_msg, VEF_MAX_ERROR_LEN,
+               "%s: type parameters must be valid UTF-8 without embedded NUL",
+               op_name);
+      return true;
+    }
     if (key.empty() || key.find_first_of(",=") != std::string::npos) {
       snprintf(error_msg, VEF_MAX_ERROR_LEN,
                "%s: key '%s' is empty or contains ',' or '='", op_name,

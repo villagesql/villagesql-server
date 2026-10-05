@@ -23,6 +23,12 @@
 #include <utility>
 #include <vector>
 
+#include "my_rapidjson_size_t.h"
+
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+
 #include "mysql/strings/m_ctype.h"
 #include "sql/strfunc.h"
 #include "template_utils.h"
@@ -210,14 +216,17 @@ void TypeContext::resolve_cached_values() {
           // provide resolve_params (enforced at registration), so it is always
           // present here.
           assert(descriptor_->resolve_params_fn().has_value());
+          TypeParameters initial = TypeParameters::from_raw(result);
+          if (!initial.validation_error().empty()) continue;
           ResolvedTypeParams tmp = {};
           char rerr[VEF_MAX_ERROR_LEN] = {0};
           std::string canonical = result;
-          if (descriptor_->resolve_params_fn()->invoke(result, &tmp, rerr,
-                                                       &canonical))
+          if (descriptor_->resolve_params_fn()->invoke(initial.str(), &tmp,
+                                                       rerr, &canonical))
             continue;
           TypeParameters candidate = TypeParameters::from_raw(canonical);
-          if (candidate == key_.parameters()) {
+          if (candidate.validation_error().empty() &&
+              candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);
             qualified_name_ += ")";
@@ -264,11 +273,43 @@ void TypeContext::resolve_cached_values() {
   }
 }
 
+const char *TypeParameters::text_error(std::string_view text) {
+  if (text.find('\0') != std::string_view::npos)
+    return "embedded NUL in type parameters";
+  if (text.empty()) return nullptr;
+  const CHARSET_INFO *cs = type_parameter_collation();
+  int error = 0;
+  const size_t length = cs->cset->well_formed_len(
+      cs, text.data(), text.data() + text.size(), text.size(), &error);
+  if (error || length != text.size())
+    return "type parameters must be valid UTF-8";
+  return nullptr;
+}
+
+std::string TypeParameters::validation_error() const {
+  if (!error_.empty()) return error_;
+  if (const char *error = text_error(str_)) return error;
+  for (size_t i = 0; i < keys_.size(); ++i) {
+    if (keys_[i].empty()) return "empty parameter name";
+    if (values_[i].empty()) return "parameter '" + keys_[i] + "' has no value";
+    // Also support callers constructing already-canonical strings directly.
+    for (size_t j = 0; j < i; ++j) {
+      if (type_parameter_names_equal(keys_[i], keys_[j]))
+        return "duplicate parameter '" + keys_[i] + "'";
+    }
+  }
+  return {};
+}
+
 void TypeParameters::build_entries() {
   keys_.clear();
   values_.clear();
   c_keys_.clear();
   c_values_.clear();
+  if (const char *error = text_error(str_)) {
+    error_ = error;
+    return;
+  }
   if (str_.empty()) return;
 
   // Parse "key=value" pairs separated by commas. Keys are already sorted
@@ -299,6 +340,7 @@ void TypeParameters::build_entries() {
 }
 
 TypeParameters TypeParameters::from_raw(const std::string_view raw) {
+  if (const char *error = text_error(raw)) return invalid(error);
   if (raw.empty()) return TypeParameters();
 
   // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
@@ -361,75 +403,41 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
 }
 
 std::string TypeParameters::to_json() const {
-  if (str_.empty()) return std::string("{}");
-
-  // Convert "k1=v1,k2=v2" → {"k1":"v1","k2":"v2"}
-  std::string json = "{";
-  size_t start = 0;
-  bool first = true;
-  while (start < str_.size()) {
-    size_t comma = str_.find(',', start);
-    if (comma == std::string::npos) comma = str_.size();
-    size_t eq = str_.find('=', start);
-    if (eq != std::string::npos && eq < comma) {
-      if (!first) json += ',';
-      json += '"';
-      json += str_.substr(start, eq - start);
-      json += "\":\"";
-      json += str_.substr(eq + 1, comma - eq - 1);
-      json += '"';
-      first = false;
-    }
-    start = comma + 1;
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  writer.StartObject();
+  for (size_t i = 0; i < keys_.size(); ++i) {
+    writer.Key(keys_[i].data(), keys_[i].size());
+    writer.String(values_[i].data(), values_[i].size());
   }
-  json += '}';
-  return json;
+  writer.EndObject();
+  return {buffer.GetString(), buffer.GetSize()};
 }
 
 TypeParameters TypeParameters::from_json(const std::string &json) {
-  if (json.empty() || json == "{}") return TypeParameters();
-
-  // Parse {"k1":"v1","k2":"v2"} → "k1=v1,k2=v2"
-  // Simple parser: skip '{', find "key":"value" pairs, skip '}'
-  std::string canonical;
-  size_t pos = json.find('{');
-  if (pos == std::string::npos) return TypeParameters();
-  pos++;
-
-  bool first = true;
-  while (pos < json.size()) {
-    // Skip whitespace and commas
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ',')) pos++;
-    if (pos >= json.size() || json[pos] == '}') break;
-
-    // Expect "key"
-    if (json[pos] != '"') break;
-    pos++;
-    size_t key_end = json.find('"', pos);
-    if (key_end == std::string::npos) break;
-    std::string key = json.substr(pos, key_end - pos);
-    pos = key_end + 1;
-
-    // Skip ':'
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':')) pos++;
-
-    // Expect "value"
-    if (pos >= json.size() || json[pos] != '"') break;
-    pos++;
-    size_t val_end = json.find('"', pos);
-    if (val_end == std::string::npos) break;
-    std::string value = json.substr(pos, val_end - pos);
-    pos = val_end + 1;
-
-    if (!first) canonical += ',';
-    canonical += key;
-    canonical += '=';
-    canonical += value;
-    first = false;
+  if (json.empty()) return TypeParameters();
+  rapidjson::Document document;
+  document.Parse<rapidjson::kParseValidateEncodingFlag>(json.data(),
+                                                        json.size());
+  if (document.HasParseError() || !document.IsObject())
+    return invalid("invalid type parameter JSON object");
+  std::string raw;
+  for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it) {
+    if (!it->value.IsString())
+      return invalid("type parameter values must be strings");
+    std::string_view key(it->name.GetString(), it->name.GetStringLength());
+    std::string_view value(it->value.GetString(), it->value.GetStringLength());
+    if (const char *error = text_error(key)) return invalid(error);
+    if (const char *error = text_error(value)) return invalid(error);
+    if (key.find_first_of(",=") != std::string_view::npos ||
+        value.find(',') != std::string_view::npos)
+      return invalid("invalid delimiter in stored type parameters");
+    if (!raw.empty()) raw += ',';
+    raw.append(key);
+    raw += '=';
+    raw.append(value);
   }
-
-  // Canonicalize so key order and casing match what from_raw() produces.
-  return from_raw(canonical);
+  return from_raw(raw);
 }
 
 }  // namespace villagesql

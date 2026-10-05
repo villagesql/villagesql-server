@@ -42,9 +42,8 @@ namespace villagesql_unittest {
 //
 //   2. Canonical (key-sorted) order. TypeParameters::operator== is a raw
 //      string compare, and the constructor the server feeds a hook's output
-//      into only splits -- it does not sort, unlike the DDL path's from_raw.
-//      Unsorted output here would make a hook-produced parameterization
-//      compare unequal to the identical one declared on a column.
+//      into canonicalizes through from_raw(), just like the DDL path.
+//      The SDK serialization itself is deterministic in byte-sorted order.
 
 class WriteParamsToTest : public ::testing::Test {
  protected:

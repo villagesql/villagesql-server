@@ -1,0 +1,35 @@
+# Type parameter strings use UTF-8 independently of the connection charset.
+--source include/have_debug.inc
+INSTALL EXTENSION vsql_test_only;
+SET NAMES utf8mb4;
+SET character_set_connection = latin1;
+CREATE TABLE t_latin (v LENIENT_PARAM_TYPE('length=3,label=CAFÉ'));
+SET NAMES utf8mb4;
+CREATE TABLE t_utf8 (v LENIENT_PARAM_TYPE('length=3,label=CAFÉ'));
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT table_name, type_parameters FROM villagesql.custom_columns
+  WHERE db_name = DATABASE() AND table_name IN ('t_latin', 't_utf8')
+  ORDER BY table_name;
+FLUSH TABLES;
+SELECT COUNT(*) FROM t_latin;
+SELECT COUNT(*) FROM t_utf8;
+SELECT a.type_parameters = b.type_parameters AS same_parameters
+  FROM villagesql.custom_columns a JOIN villagesql.custom_columns b
+    ON a.db_name = b.db_name
+  WHERE a.db_name = DATABASE() AND a.table_name = 't_latin'
+    AND b.table_name = 't_utf8';
+CREATE TABLE t_unicode (v LENIENT_PARAM_TYPE('length=3,label=É😀'));
+SELECT type_parameters FROM villagesql.custom_columns
+  WHERE db_name = DATABASE() AND table_name = 't_unicode';
+FLUSH TABLES;
+SELECT COUNT(*) FROM t_unicode;
+SHOW CREATE TABLE t_unicode;
+--error ER_PARSE_ERROR
+CREATE TABLE t_duplicate (v LENIENT_PARAM_TYPE('length=3,resume=a,résumé=b'));
+--error ER_PARSE_ERROR
+CREATE TABLE t_duplicate (v LENIENT_PARAM_TYPE('length=3,Metric=a,metric=b'));
+--error ER_PARSE_ERROR
+CREATE TABLE t_nul (v LENIENT_PARAM_TYPE('length=3,label=x\0y'));
+DROP TABLE t_latin, t_utf8, t_unicode;
+SET SESSION debug='-d,skip_dd_table_access_check';
+UNINSTALL EXTENSION vsql_test_only;

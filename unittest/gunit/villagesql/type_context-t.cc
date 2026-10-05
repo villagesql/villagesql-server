@@ -491,12 +491,9 @@ TEST_F(TypeParametersTest, ToJsonKeepsEmptyValue) {
   EXPECT_EQ(params.to_json(), R"({"metric":""})");
 }
 
-// A canonical string is always "k=v,..."; a bare token with no '=' can only be
-// built by the explicit constructor, and to_json() drops it rather than
-// emitting a key with no value.
-TEST_F(TypeParametersTest, ToJsonDropsTokenWithoutSeparator) {
+TEST_F(TypeParametersTest, RejectsTokenWithoutValue) {
   villagesql::TypeParameters params("metric");
-  EXPECT_EQ(params.to_json(), "{}");
+  EXPECT_FALSE(params.validation_error().empty());
 }
 
 // '=' inside a value survives: the canonical form splits on the first '=' only,
@@ -531,12 +528,10 @@ TEST_F(TypeParametersTest, FromJsonToleratesWhitespace) {
   EXPECT_EQ(params.str(), "dimension=1536");
 }
 
-// The parser skips over ':' rather than requiring it, so a missing colon is
-// accepted. This is due to the parser's behavior.
-TEST_F(TypeParametersTest, FromJsonAcceptsMissingColon) {
-  villagesql::TypeParameters params =
-      villagesql::TypeParameters::from_json(R"({"a""1"})");
-  EXPECT_EQ(params.str(), "a=1");
+TEST_F(TypeParametersTest, FromJsonRejectsMissingColon) {
+  EXPECT_FALSE(villagesql::TypeParameters::from_json(R"({"a""1"})")
+                   .validation_error()
+                   .empty());
 }
 
 // Round trip is the property the storage layer depends on.
@@ -552,56 +547,58 @@ TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
   }
 }
 
-// A value the parser cannot read stops the parse, and everything after it is
-// dropped with no diagnostic. Dropping one that determines storage size is
-// caught later by CheckFieldLengthMatchesType; dropping one that does not is
-// not caught at all.
-//
-// TODO(villagesql-general): from_json() should reject malformed input rather
-// than reading what it can and dropping the rest, so a column cannot load
-// with fewer parameters than it holds. It is lenient in the other direction
-// too, accepting input a JSON parser would refuse, such as a missing ':'.
-TEST_F(TypeParametersTest, FromJsonStopsAtUnquotedValue) {
-  // Non-string value in the only pair: nothing is recovered.
-  EXPECT_TRUE(
-      villagesql::TypeParameters::from_json(R"({"dimension":1536})").empty());
-
-  // Non-string value in a later pair: the earlier pairs survive, the rest do
-  // not.
-  EXPECT_EQ(villagesql::TypeParameters::from_json(R"({"a":"1","b":2})").str(),
-            "a=1");
+TEST_F(TypeParametersTest, FromJsonRejectsMalformedMetadata) {
+  for (const char *json :
+       {R"({"dimension":1536})", R"({"a":"1","b":2})", R"("a":"1")", R"({"a)",
+        R"({"a":"1)", R"({"a":"x\u0000y"})", R"({"a,b":"x"})"}) {
+    EXPECT_FALSE(
+        villagesql::TypeParameters::from_json(json).validation_error().empty())
+        << json;
+  }
 }
 
-TEST_F(TypeParametersTest, FromJsonReturnsEmptyForMalformedInput) {
-  // No object at all.
-  EXPECT_TRUE(villagesql::TypeParameters::from_json(R"("a":"1")").empty());
-  // Unterminated key.
-  EXPECT_TRUE(villagesql::TypeParameters::from_json(R"({"a)").empty());
-  // Unterminated value.
-  EXPECT_TRUE(villagesql::TypeParameters::from_json(R"({"a":"1)").empty());
+TEST_F(TypeParametersTest, JsonRoundTripsEscapedUtf8) {
+  auto original = villagesql::TypeParameters::from_raw("a=É😀\"\\\n");
+  ASSERT_TRUE(original.validation_error().empty());
+  auto restored = villagesql::TypeParameters::from_json(original.to_json());
+  EXPECT_TRUE(restored.validation_error().empty());
+  EXPECT_EQ(restored, original);
 }
 
-// to_json() writes values verbatim, so a value containing a double quote
-// produces JSON that from_json() cannot read back: the value is truncated at
-// the embedded quote and every later pair is dropped. Reachable from SQL via
-// TYPE('a=x"y'), though the malformed JSON is then rejected by the
-// type_parameters column, so today this surfaces as a confusing JSON parse
-// error rather than a bad row.
-//
-// TODO(villagesql-production): escape '"' and '\' in to_json() and unescape
-// them in from_json(), the way params_to_json() already does for index
-// parameters. Until then a value's legal characters are limited by the
-// serialization rather than by what the extension accepts, which is a
-// restriction extension authors have no way to discover. The expectations
-// below should become a round trip validation once it is fixed.
-TEST_F(TypeParametersTest, JsonDoesNotEscapeQuotesInValues) {
-  villagesql::TypeParameters original(R"(a=x"y)");
-  EXPECT_EQ(original.to_json(), R"({"a":"x"y"})");
+TEST_F(TypeParametersTest, RejectsMalformedUtf8AndNulBeforeAbi) {
+  for (const std::string &raw :
+       {std::string("a=x\0y", 5), std::string("a=\xe9"),
+        std::string("a=\xc0\xaf"), std::string("a=\xed\xa0\x80"),
+        std::string("a=\xf4\x90\x80\x80")}) {
+    auto params = villagesql::TypeParameters::from_raw(raw);
+    EXPECT_FALSE(params.validation_error().empty());
+    EXPECT_EQ(params.count(), 0U);
+    EXPECT_EQ(params.key_data(), nullptr);
+    auto copy = params;
+    EXPECT_EQ(copy.validation_error(), params.validation_error());
+    auto moved = std::move(copy);
+    EXPECT_EQ(moved.validation_error(), params.validation_error());
+  }
+}
 
-  villagesql::TypeParameters restored =
-      villagesql::TypeParameters::from_json(original.to_json());
-  EXPECT_EQ(restored.str(), "a=x");
-  EXPECT_FALSE(restored == original);
+TEST_F(TypeParametersTest, DuplicateKeysUseParameterCollation) {
+  for (const char *raw :
+       {"Metric=a,metric=b", "resume=a,résumé=b", "e=a,é=b,e=c"}) {
+    EXPECT_NE(villagesql::TypeParameters::from_raw(raw).validation_error().find(
+                  "duplicate parameter"),
+              std::string::npos);
+  }
+  EXPECT_FALSE(
+      villagesql::TypeParameters::from_json(R"({"resume":"a","résumé":"b"})")
+          .validation_error()
+          .empty());
+}
+
+TEST_F(TypeParametersTest, PreservesNormalizationPolicy) {
+  auto params =
+      villagesql::TypeParameters::from_raw(" MÉTRIC = COSINE , label = É😀 ");
+  EXPECT_TRUE(params.validation_error().empty());
+  EXPECT_EQ(params.str(), "label=é😀,métric=cosine");
 }
 
 // key_data()/value_data() hand the ABI arrays of const char* that point into

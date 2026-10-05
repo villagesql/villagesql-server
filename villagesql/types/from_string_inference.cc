@@ -164,8 +164,15 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
     return true;
   }
 
-  *out_inferred = TypeParameters(
+  *out_inferred = TypeParameters::from_raw(
       std::string(inferred_workspace.buf, inferred_workspace.actual_len));
+
+  const std::string validation = out_inferred->validation_error();
+  if (!validation.empty()) {
+    villagesql_error("Invalid inferred type parameters: %s", MYF(0),
+                     validation.c_str());
+    return true;
+  }
 
   const unsigned char *out_bytes =
       result.alt_bin_buf != nullptr ? *result.alt_bin_buf : result.bin_buf;

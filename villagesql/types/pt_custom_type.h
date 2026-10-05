@@ -28,6 +28,7 @@
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/types/util.h"
 
@@ -112,8 +113,8 @@ class PT_custom_type : public PT_type {
 
   // Reject parameter sets that an extension should not have to defend against:
   // a nameless parameter, a parameter with no value, or the same name given
-  // twice. params must be in canonical form, so keys are lowercased and sorted
-  // and duplicates are adjacent. The offending statement is quoted alongside
+  // twice under the parameter collation. params must be in canonical form.
+  // The offending statement is quoted alongside
   // the message, which is what tells the reader whether the parameters came
   // from their own SQL or from int_to_params / a resolve_params rewrite.
   // Returns true with the error recorded at pos, false when the parameters are
@@ -121,23 +122,12 @@ class PT_custom_type : public PT_type {
   static bool validate_params(const POS &pos, THD *thd,
                               const TypeDescriptor *descriptor,
                               const TypeParameters &params) {
-    for (unsigned int i = 0; i < params.count(); i++) {
-      const char *key = params.key_data()[i];
-      if (*key == '\0') {
-        thd->syntax_error_at(pos, "Type '%s': empty parameter name",
-                             descriptor->qualified_base_name().c_str());
-        return true;
-      }
-      if (*params.value_data()[i] == '\0') {
-        thd->syntax_error_at(pos, "Type '%s': parameter '%s' has no value",
-                             descriptor->qualified_base_name().c_str(), key);
-        return true;
-      }
-      if (i > 0 && strcmp(key, params.key_data()[i - 1]) == 0) {
-        thd->syntax_error_at(pos, "Type '%s': duplicate parameter '%s'",
-                             descriptor->qualified_base_name().c_str(), key);
-        return true;
-      }
+    const std::string error = params.validation_error();
+    if (!error.empty()) {
+      thd->syntax_error_at(pos, "Type '%s': %s",
+                           descriptor->qualified_base_name().c_str(),
+                           error.c_str());
+      return true;
     }
     return false;
   }
@@ -153,7 +143,7 @@ class PT_custom_type : public PT_type {
       const char *key = before.key_data()[i];
       bool found = false;
       for (unsigned int j = 0; j < after.count() && !found; j++) {
-        found = strcmp(key, after.key_data()[j]) == 0;
+        found = type_parameter_names_equal(key, after.key_data()[j]);
       }
       if (!found) {
         thd->syntax_error_at(pos,
@@ -353,6 +343,7 @@ class PT_custom_type : public PT_type {
     // Normalize to canonical form (lowercase, sorted) just like the
     // TYPE('k=v,...') path does via from_raw.
     TypeParameters canonical = TypeParameters::from_raw(params_str);
+    if (validate_params(pos, thd, descriptor, canonical)) return nullptr;
     if (canonical.empty()) {
       thd->syntax_error_at(pos, "Invalid parameter string for type '%s'",
                            descriptor->qualified_base_name().c_str());
@@ -399,7 +390,12 @@ class PT_custom_type : public PT_type {
     }
 
     // Normalize the raw parameter string to canonical form
-    std::string input(params_str, params_str_len);
+    LEX_STRING converted;
+    if (thd->convert_string(&converted, type_parameter_collation(), params_str,
+                            params_str_len, thd->variables.collation_connection,
+                            true))
+      return nullptr;
+    std::string input(converted.str, converted.length);
     if (input.empty()) {
       thd->syntax_error_at(pos, "Empty parameter string for type '%s'",
                            descriptor->qualified_base_name().c_str());
@@ -407,6 +403,7 @@ class PT_custom_type : public PT_type {
     }
 
     TypeParameters canonical = TypeParameters::from_raw(input);
+    if (validate_params(pos, thd, descriptor, canonical)) return nullptr;
     if (canonical.empty()) {
       thd->syntax_error_at(pos, "Invalid parameter string for type '%s'",
                            descriptor->qualified_base_name().c_str());
