@@ -50,7 +50,7 @@ EXPLAIN
         -> Materialize  (cost=COST rows=ROWS)
             -> Limit: 3 row(s)  (cost=COST rows=ROWS)
                 -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
-    -> Single-row covering index lookup on t1 using PRIMARY (id=s.id)  (cost=COST rows=ROWS)
+    -> Single-row covering index lookup on t1 using PRIMARY (id = s.id)  (cost=COST rows=ROWS)
 
 SELECT t1.id FROM t1
 JOIN (
