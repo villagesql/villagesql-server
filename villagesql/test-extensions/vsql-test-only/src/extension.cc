@@ -727,15 +727,26 @@ constexpr int64_t kParamTestSize = 4;
 struct LenParam {
   int64_t length;
 
+  // Only the bind-hook fixtures near the bottom of this file set this, to make
+  // to_strings emit more than the server's parameter buffer can hold. Left at
+  // 0 the serialized form is exactly what it was, so the ten types sharing
+  // LenParam are unaffected.
+  int64_t pad_len = 0;
+
   static LenParam parse(const std::map<std::string, std::string> &params) {
     auto it = params.find("length");
+    auto pad = params.find("pad");
     return LenParam{
-        it == params.end() ? 0 : std::strtoll(it->second.c_str(), nullptr, 0)};
+        it == params.end() ? 0 : std::strtoll(it->second.c_str(), nullptr, 0),
+        pad == params.end() ? 0 : static_cast<int64_t>(pad->second.size())};
   }
 
   static void to_strings(const LenParam &p,
                          std::map<std::string, std::string> &out) {
     out["length"] = std::to_string(p.length);
+    if (p.pad_len > 0) {
+      out["pad"] = std::string(static_cast<size_t>(p.pad_len), 'x');
+    }
   }
 };
 
@@ -1292,6 +1303,76 @@ constexpr auto BAD_DECODE_BUF =
         .compare<&param_test_compare>()
         .build();
 
+// Misbehaving bind_and_check_types hooks.
+//
+// The server cannot trust what a hook hands back, since the answers come from
+// an extension, so it validates them. These five functions each break one of
+// those rules, because nothing a well-written hook does can reach the checks:
+//
+//   bad_bind_return_overflow   return parameters longer than the server's
+//                              buffer
+//   bad_bind_arg_overflow      the same for an argument's parameters
+//   bad_bind_name_too_long     a type name longer than the server's buffer
+//   bad_bind_unknown_type      a type name that no type in this extension has
+//   bad_bind_params_no_type    parameters for an argument whose type the hook
+//                              never named, which a variadic call has no
+//                              signature to supply
+//
+// All five are variadic. The last three have to be: the server only offers a
+// hook the chance to name argument types when there is no signature to take
+// them from.
+//
+// Each hook misbehaves on the LAST argument rather than the first, so the
+// "argument N" in each message is something the test can actually check.
+//
+// None of the function bodies ever run: every one of these hooks fails the
+// statement while it is still being resolved.
+
+constexpr int64_t kBindPadOverflow = VEF_MAX_TYPE_PARAMS_STRING_LEN + 1;
+
+void bad_bind_unreachable(vsql::VarArgs, vsql::IntResult out) {
+  out.set(0);  // unreachable: the hook always rejects the statement
+}
+
+void bad_bind_return_overflow_impl(vsql::VarArgs,
+                                   vsql::CustomResultWith<LenParam> out) {
+  auto buf = out.buffer();  // unreachable, as above
+  if (!buf.empty()) buf[0] = 0;
+  out.set_length(0);
+}
+
+void bad_bind_return_overflow_bind(vsql::BindArgs, vsql::BindResult out) {
+  out.set_return(LenParam{4, kBindPadOverflow});
+}
+
+void bad_bind_arg_overflow_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Names a real type as well, so the parameters are what is wrong with this
+  // call and not the missing name.
+  out.set_arg(args.size() - 1, LENIENT_PARAM_TYPE,
+              LenParam{4, kBindPadOverflow});
+}
+
+void bad_bind_name_too_long_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Longer than VEF_MAX_TYPE_NAME_LEN. No parameters are set, so the name is
+  // the only thing wrong here.
+  const std::string too_long(VEF_MAX_TYPE_NAME_LEN + 1, 'T');
+  out.set_arg_type(args.size() - 1, too_long.c_str());
+}
+
+void bad_bind_unknown_type_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Short enough to fit the buffer, so this reaches the name lookup.
+  out.set_arg_type(args.size() - 1, "NO_SUCH_TYPE_XYZ");
+}
+
+void bad_bind_params_no_type_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Parameters that fit, with no set_arg_type to say what they belong to.
+  out.set_arg(args.size() - 1, LenParam{4, 0});
+}
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -1341,4 +1422,32 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(PVEC)
                   .clear<&pvec_norm_sq_clear>()
                   .accumulate<&pvec_norm_sq_accumulate>()
+                  .build())
+        // Hooks that break the rules the server checks. See the block comment
+        // above their definitions.
+        .func(make_func<&bad_bind_return_overflow_impl>(
+                  "bad_bind_return_overflow")
+                  .returns(LENIENT_PARAM_TYPE)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_return_overflow_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_arg_overflow")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_arg_overflow_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_name_too_long")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_name_too_long_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_unknown_type")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_unknown_type_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_params_no_type")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_params_no_type_bind>()
                   .build()))
