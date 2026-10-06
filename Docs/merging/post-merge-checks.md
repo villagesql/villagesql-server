@@ -83,11 +83,23 @@ a paste.
 
 ## The `sys` view metadata repair
 
-`refresh_sys_view_metadata()` in `villagesql/sql/initialize.cc` replays the
-`CREATE OR REPLACE VIEW` statement of a handful of `sys` views on every startup that
-needs it, to undo the column metadata that installing our `INFORMATION_SCHEMA` overrides
-rewrites. It finds those statements by scanning the generated `mysql_sys_schema[]` array
-for `"VIEW <name>"`, using the view names in `kAffectedSysViews`.
+`refresh_sys_view_metadata()` — declared in `villagesql/sql/sys_view_metadata.h`,
+defined in `villagesql/sql/sys_view_metadata.cc`, called from
+`villagesql/sql/initialize.cc` — replays the `CREATE OR REPLACE VIEW` statement of a
+handful of `sys` views on every startup that needs it, to undo the column metadata that
+installing our `INFORMATION_SCHEMA` overrides rewrites. It finds those statements by
+scanning the generated `mysql_sys_schema[]` array for `"VIEW <name>"`, using the view
+names in `kAffectedSysViews`.
+
+**Two requirements on the caller.** The replay has to run on a bootstrap thread:
+`run_bootstrap_thread()` installs the server default `sql_mode`, and the strict mode in
+it is what makes the replay record the vanilla values — under a relaxed `sql_mode` it
+re-records the rewritten form and achieves nothing. It also needs the optimizer cost
+model up, because some of the affected views are `ALGORITHM = TEMPTABLE` and
+`create_tmp_table()` reaches into it; startup tears the cost model down between
+bootstrap DDL phases, which is why `init_extension_infrastructure()` brackets the
+bootstrap thread with `init_optimizer_cost_module(true)` and
+`delete_optimizer_cost_module()`. Move the call and you owe it both.
 
 That couples us to upstream's sys schema in two ways a merge can break.
 
@@ -122,3 +134,13 @@ green — no list to update and no result to re-record. `schema_unused_indexes` 
 existing example of that second case: it joins `information_schema.statistics` but
 projects all three of its columns from `performance_schema`, so nothing of its own can
 flip.
+
+**`STATISTICS` and `SHOW_STATISTICS` are VillageSQL overrides now.** Both are registered
+as `NON_DD_BASED` overrides in `sql/dd/impl/system_registry.cc`
+(`villagesql::system_views::Statistics` and `villagesql::system_views::Show_statistics`),
+because the VillageSQL definitions join `villagesql.custom_indexes`, which does not exist
+when the DD-based views are created during bootstrap. The upstream classes in
+`sql/dd/impl/system_views/statistics.h` now override `name()` to return
+`STATISTICS.bootstrap` and `SHOW_STATISTICS.bootstrap`. Both are files we have edited, so
+an upstream change to either view arrives as a conflict there, and the column list in
+`villagesql/system_views/statistics.cc` has to be brought along with it.
