@@ -20,6 +20,7 @@
 #include <cinttypes>
 #include <map>
 #include <optional>
+#include <span>
 
 #include "lex_string.h"
 #include "my_alloc.h"
@@ -1649,11 +1650,13 @@ struct KnownEntry {
 // parameters: nothing is collected and differing sibling params are not an
 // error.
 //
-// The caller must handle varargs before calling this -- signature->params is
-// null for a varargs function. Returns true on error (error already raised).
+// expected_types is what each argument is required to be: signature->params
+// for a fixed-arity function, or the types a bind_and_check_types hook
+// declared for a varargs one.
+// Returns true on error (error already raised).
 static bool ValidateVDFArguments(
     const char *func_name, std::string_view extension_name, uint arg_count,
-    Item **args, const vef_signature_t *signature,
+    Item **args, std::span<const vef_type_t> expected_types,
     std::map<std::string, KnownEntry> *out_known_params) {
   // Passing nullptr switches off parameter sharing between arguments: nothing
   // is collected for pass 2 to propagate, and two arguments of the same custom
@@ -1661,11 +1664,11 @@ static bool ValidateVDFArguments(
   const bool collect_shared_params = (out_known_params != nullptr);
 
   // Validate argument count matches signature
-  if (arg_count != signature->param_count) {
+  if (arg_count != expected_types.size()) {
     villagesql_error(
         "Cannot initialize function '%s': wrong number of arguments "
         "(expected %u, got %u)",
-        MYF(0), func_name, signature->param_count, arg_count);
+        MYF(0), func_name, static_cast<uint>(expected_types.size()), arg_count);
     return true;
   }
 
@@ -1679,7 +1682,7 @@ static bool ValidateVDFArguments(
   std::map<std::string, KnownEntry> known_params;
 
   for (uint i = 0; i < arg_count; i++) {
-    const vef_type_t &expected_type = signature->params[i];
+    const vef_type_t &expected_type = expected_types[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
@@ -1735,7 +1738,7 @@ static bool ValidateVDFArguments(
 // type that needs them errors out.
 static bool ConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
-    uint arg_count, Item **args, const vef_signature_t *signature,
+    uint arg_count, Item **args, std::span<const vef_type_t> expected_types,
     const std::map<std::string, KnownEntry> &known_params,
     const std::vector<TypeParameters> &hook_arg_params) {
   // The two sources are alternatives: the server fills known_params when it
@@ -1757,7 +1760,7 @@ static bool ConvertVDFArguments(
   };
 
   for (uint i = 0; i < arg_count; i++) {
-    const vef_type_t &expected_type = signature->params[i];
+    const vef_type_t &expected_type = expected_types[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
@@ -1789,9 +1792,18 @@ static bool ConvertVDFArguments(
                                  *params, *thd->mem_root, resolved_tc)) {
           return true;
         }
-        if (resolved_tc != nullptr) {
-          args[i]->set_type_context(resolved_tc);
+        if (resolved_tc == nullptr) {
+          // Defensive. The name was resolved in BuildVarargsExpectedTypes
+          // (varargs) or comes from the compiled signature (fixed arity), and
+          // pass 1 matched it against this argument's own type, so it should
+          // always resolve here.
+          villagesql_error(
+              "Cannot initialize function '%s': custom type '%s' not found for "
+              "argument %u",
+              MYF(0), func_name, expected_type.custom_type, i + 1);
+          return true;
         }
+        args[i]->set_type_context(resolved_tc);
       } else {
         // Neither the hook nor the built-in rules could supply params.
         villagesql_error(
@@ -1892,6 +1904,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
                               vef_context_t &ctx, const char *func_name,
                               uint arg_count, Item **args,
                               std::vector<TypeParameters> *out_arg_params,
+                              std::vector<std::string> *out_arg_type_names,
                               TypeParameters *out_return_params) {
   std::vector<vef_type_t> arg_types(arg_count);
   std::vector<char *> const_values(arg_count, nullptr);
@@ -1922,17 +1935,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
                          params.value_data()};
       }
     } else {
-      switch (args[i]->result_type()) {
-        case REAL_RESULT:
-          arg_types[i].id = VEF_TYPE_REAL;
-          break;
-        case INT_RESULT:
-          arg_types[i].id = VEF_TYPE_INT;
-          break;
-        default:
-          arg_types[i].id = VEF_TYPE_STRING;
-          break;
-      }
+      arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
     // Provide constant string values where available
@@ -1957,6 +1960,24 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
     out_arg_slots[i] = &out_args[i];
   }
 
+  // The type-name channel is offered only for a varargs call:
+  // a fixed-arity signature already says what each argument
+  // must be.
+  const bool offer_arg_types = out_arg_type_names != nullptr && arg_count > 0;
+  std::vector<vef_inferred_type_params_t> out_names;
+  std::vector<vef_inferred_type_params_t *> out_name_slots;
+  std::vector<char> name_bufs;
+  if (offer_arg_types) {
+    out_names.resize(arg_count);
+    out_name_slots.resize(arg_count);
+    name_bufs.resize(arg_count * VEF_MAX_TYPE_NAME_LEN);
+    for (uint i = 0; i < arg_count; i++) {
+      out_names[i].buf = name_bufs.data() + i * VEF_MAX_TYPE_NAME_LEN;
+      out_names[i].max_buf_len = VEF_MAX_TYPE_NAME_LEN;
+      out_name_slots[i] = &out_names[i];
+    }
+  }
+
   char return_buf[kBindParamsBufLen];
   char err_msg[VEF_MAX_ERROR_LEN] = {0};
   vef_inferred_type_params_t out_return{};
@@ -1975,6 +1996,7 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
   out_return.max_buf_len = sizeof(return_buf);
   bt_result.out_return_params = &out_return;
   bt_result.out_arg_params = arg_count > 0 ? out_arg_slots.data() : nullptr;
+  bt_result.out_arg_types = offer_arg_types ? out_name_slots.data() : nullptr;
 
   bind_and_check(&ctx, &bt_args, &bt_result);
 
@@ -2008,6 +2030,77 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
       (*out_arg_params)[i] =
           TypeParameters(std::string(out_args[i].buf, out_args[i].actual_len));
     }
+
+    if (!offer_arg_types) continue;
+    if (out_names[i].overflow) {
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types type name too "
+          "long for argument %u",
+          MYF(0), func_name, i + 1);
+      return true;
+    }
+    if (out_names[i].actual_len > 0) {
+      (*out_arg_type_names)[i] =
+          std::string(out_names[i].buf, out_names[i].actual_len);
+    }
+  }
+  return false;
+}
+
+vef_type_id InferArgTypeId(const Item *item) {
+  if (item->get_type_context() != nullptr) return VEF_TYPE_CUSTOM;
+  switch (item->result_type()) {
+    case REAL_RESULT:
+      return VEF_TYPE_REAL;
+    case INT_RESULT:
+      return VEF_TYPE_INT;
+    default:
+      return VEF_TYPE_STRING;
+  }
+}
+
+// Turns a varargs hook's answers into the expected-type array the two passes
+// consume. A type the hook named is looked up rather than trusted; an
+// argument the hook stayed silent about keeps the type it already carries.
+//
+// name_store owns the names, and out_expected points into it.
+// Returns true on error (already raised).
+static bool BuildVarargsExpectedTypes(
+    const char *func_name, std::string_view extension_name, uint arg_count,
+    Item **args, const std::vector<std::string> &hook_names,
+    std::vector<std::string> *name_store,
+    std::vector<vef_type_t> *out_expected) {
+  for (uint i = 0; i < arg_count; i++) {
+    if (hook_names[i].empty()) {
+      // The hook said nothing, so the argument stands as the server already
+      // typed it.
+      const auto *tc = args[i]->get_type_context();
+      if (tc != nullptr) (*name_store)[i] = tc->type_name();
+      continue;
+    }
+
+    // The name is extension-supplied, so look it up rather than trust it.
+    const TypeDescriptor *td = nullptr;
+    if (ResolveTypeDescriptor(extension_name, hook_names[i], td)) return true;
+    if (td == nullptr) {
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types named unknown "
+          "custom type '%s' for argument %u",
+          MYF(0), func_name, hook_names[i].c_str(), i + 1);
+      return true;
+    }
+    // Copy the canonical spelling: the read lock is gone once we return, and
+    // an UNINSTALL EXTENSION could free the registry entry behind it.
+    (*name_store)[i] = td->type_name();
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if ((*name_store)[i].empty()) {
+      // Not a custom argument, so record what it actually is.
+      (*out_expected)[i] = {InferArgTypeId(args[i]), nullptr};
+    } else {
+      (*out_expected)[i] = {VEF_TYPE_CUSTOM, (*name_store)[i].c_str()};
+    }
   }
   return false;
 }
@@ -2019,13 +2112,61 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     TypeParameters *out_return_params,
                                     const vef_bind_types_func_t bind_and_check,
                                     vef_context_t &ctx) {
-  // Varargs: skip both arg-count and per-arg type validation. The function's
-  // prerun hook is responsible for inspecting arg_count and arg_types and
-  // rejecting calls it does not accept.
-  if (signature->param_count == VEF_PARAM_VARARGS) {
-    return false;
-  }
   const bool has_bind_hook = nullptr != bind_and_check;
+  const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
+
+  // Varargs without a hook: skip both arg-count and per-arg type validation.
+  // The function's prerun hook is responsible for inspecting arg_count and
+  // arg_types and rejecting calls it does not accept.
+  if (varargs && !has_bind_hook) return false;
+
+  // Backing store for a varargs expected-type array.
+  std::vector<std::string> name_store;
+  std::vector<vef_type_t> varargs_expected;
+
+  // One slot per argument for whatever the hook resolves; left empty when
+  // there is no hook.
+  std::vector<TypeParameters> hook_arg_params;
+  if (has_bind_hook) hook_arg_params.resize(arg_count);
+
+  if (varargs) {
+    // Varargs runs the hook first, because there is no signature to check
+    // arguments against and the hook supplies what signature->params would
+    // have.
+    std::vector<std::string> hook_arg_type_names(arg_count);
+    if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
+                          &hook_arg_params, &hook_arg_type_names,
+                          out_return_params)) {
+      return true;
+    }
+    // Parameters are only ever applied to an argument that has a type, and a
+    // varargs call has no signature to take one from. Thus, a hook cannot
+    // supply parameters without also naming the type.
+    for (uint i = 0; i < arg_count; i++) {
+      if (hook_arg_params[i].empty() || !hook_arg_type_names[i].empty()) {
+        continue;
+      }
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types supplied type "
+          "parameters for argument %u without naming its type",
+          MYF(0), func_name, i + 1);
+      return true;
+    }
+
+    name_store.resize(arg_count);
+    varargs_expected.resize(arg_count);
+    if (BuildVarargsExpectedTypes(func_name, extension_name, arg_count, args,
+                                  hook_arg_type_names, &name_store,
+                                  &varargs_expected)) {
+      return true;
+    }
+  }
+
+  // What each argument is required to be.
+  const std::span<const vef_type_t> expected_types =
+      varargs ? std::span<const vef_type_t>{varargs_expected}
+              : std::span<const vef_type_t>{signature->params,
+                                            signature->param_count};
 
   // A bind_and_check_types hook replaces the built-in type disambiguation
   // rules. Passing nullptr is the off switch: known_params stays empty, so
@@ -2036,29 +2177,32 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   // applying whatever the hook decided below.
   std::map<std::string, KnownEntry> known_params;
   if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
-                           signature,
+                           expected_types,
                            has_bind_hook ? nullptr : &known_params)) {
     return true;
   }
 
-  // The hook sits between the passes: it sees what pass 1 resolved, and the
-  // params it decides are what pass 2 applies.
-  std::vector<TypeParameters> hook_arg_params;
-  if (has_bind_hook) {
-    hook_arg_params.resize(arg_count);
+  // Fixed arity runs the hook here. The hook sits between the passes:
+  // it sees what pass 1 resolved, and the params it decides are what
+  // pass 2 applies.
+  if (has_bind_hook && !varargs) {
+    // nullptr: a fixed-arity signature already declares every argument's type,
+    // so the hook is not offered the type-name channel.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params)) {
+                          &hook_arg_params, /*out_arg_type_names=*/nullptr,
+                          out_return_params)) {
       return true;
     }
   }
 
   if (ConvertVDFArguments(thd, func_name, extension_name, arg_count, args,
-                          signature, known_params, hook_arg_params)) {
+                          expected_types, known_params, hook_arg_params)) {
     return true;
   }
 
   // Nothing left to work out: the hook already supplied the return type's
-  // params, so skip the built-in rule below.
+  // params, so skip the built-in rule below. A varargs call always has a hook
+  // by the time it reaches here, so what follows is fixed-arity only.
   if (has_bind_hook) return false;
 
   if (out_return_params != nullptr) {

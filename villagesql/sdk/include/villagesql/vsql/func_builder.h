@@ -306,9 +306,6 @@ class FuncBuilder {
     static_assert(detail::is_typed_bind<Hook>(),
                   "bind_and_check_types<Hook>(): Hook must be void(BindArgs, "
                   "BindResult). Raw ABI signatures are not accepted.");
-    static_assert(Mode != ParamMode::kVarargs,
-                  "declaring both .bind_and_check_types() and .varargs() "
-                  "is not currently supported");
     bind_ = &detail::typed_bind_wrapper<Hook>;
     return *this;
   }
