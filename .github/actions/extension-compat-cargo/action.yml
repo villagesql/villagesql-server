@@ -68,8 +68,10 @@ runs:
     - name: Build extension VEB
       shell: bash
       run: |
-        # Repoint the villagesql dependency at the freshly cloned HEAD SDK.
-        ( cd "$EXT_ROOT" \
-          && cargo add villagesql --path "$SDK_VILLAGESQL" \
-          && cargo vsql package )
+        # Standalone repos depend on the published villagesql crate, so repoint
+        # it at the freshly cloned HEAD SDK to build against HEAD.
+        if [ ! -d extension/villagesql ]; then
+          ( cd "$EXT_ROOT" && cargo add villagesql --path "$SDK_VILLAGESQL" )
+        fi
+        ( cd "$EXT_ROOT" && cargo vsql package )
         cp extension/dist/*.veb "$PACKAGE_DIR/lib/veb/"
