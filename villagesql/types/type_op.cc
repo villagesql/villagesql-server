@@ -23,7 +23,10 @@
 namespace villagesql {
 
 EncodeOp::EncodeOp(const EncodeFunction &func, const TypeParameters &params)
-    : fn_(func.fn()), vdf_(func.vdf()), params_(params) {}
+    : fn_(func.fn()),
+      vdf_(func.vdf()),
+      from_binary_fn_(func.from_binary_fn()),
+      params_(params) {}
 
 DecodeOp::DecodeOp(const DecodeFunction &func, const TypeParameters &params)
     : fn_(func.fn()), vdf_(func.vdf()), params_(params) {}

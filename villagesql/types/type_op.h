@@ -53,11 +53,14 @@ class EncodeOp {
 
   vef_encode_func_t fn() const { return fn_; }
   const vef_func_desc_t *vdf() const { return vdf_; }
+  // Null unless the type declared from_binary_func at protocol >= 4.
+  vef_from_binary_func_t from_binary_fn() const { return from_binary_fn_; }
   const TypeParameters &parameters() const { return params_; }
 
  private:
   vef_encode_func_t fn_{nullptr};
   const vef_func_desc_t *vdf_{nullptr};
+  vef_from_binary_func_t from_binary_fn_{nullptr};
   const TypeParameters &params_;
 };
 

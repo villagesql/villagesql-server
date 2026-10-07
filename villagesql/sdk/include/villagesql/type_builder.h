@@ -176,8 +176,9 @@ class TypeBuilder {
         resolve_params_vdf_name_,
         intrinsic_default_vdf_name_,
         intrinsic_default_str_,
-        0,      // max_persisted_length: only set via the v2+ API
-        false,  // variable_length: only set via vsql's variable_length_type()
+        0,        // max_persisted_length: only set via the v2+ API
+        false,    // variable_length: only set via vsql's variable_length_type()
+        nullptr,  // from_binary_func: only set via vsql's from_binary()
     };
     return desc;
   }

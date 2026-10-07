@@ -56,9 +56,17 @@ class EncodeFunction {
   vef_encode_func_t fn() const { return fn_; }
   const vef_func_desc_t *vdf() const { return vdf_; }
 
+  // Optional companion converter for values that are already binary, taken
+  // from the type's from_binary_func (protocol >= 4). Null when the type does
+  // not provide one, in which case binary values go through fn()/vdf() as
+  // bytes in a String, as they always have.
+  void set_from_binary_fn(vef_from_binary_func_t fn) { from_binary_fn_ = fn; }
+  vef_from_binary_func_t from_binary_fn() const { return from_binary_fn_; }
+
  private:
   vef_encode_func_t fn_{nullptr};
   const vef_func_desc_t *vdf_{nullptr};
+  vef_from_binary_func_t from_binary_fn_{nullptr};
 };
 
 class DecodeFunction {

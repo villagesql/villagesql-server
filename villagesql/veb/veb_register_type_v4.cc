@@ -444,6 +444,10 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
   // Build function objects.
   EncodeFunction encode_fn =
       encode_vdf ? EncodeFunction(encode_vdf) : EncodeFunction(td->encode_func);
+  // Optional: a converter for values that are already binary. Without it,
+  // binary values keep reaching the string converter as bytes in a String.
+  if (td->from_binary_func != nullptr)
+    encode_fn.set_from_binary_fn(td->from_binary_func);
   DecodeFunction decode_fn =
       decode_vdf ? DecodeFunction(decode_vdf) : DecodeFunction(td->decode_func);
   CompareFunction compare_fn = compare_vdf ? CompareFunction(compare_vdf)

@@ -192,6 +192,9 @@ typedef enum : unsigned int {
                    //   calls the extension's load and unload hooks with its
                    //   capabilities populated, rather than the extension
                    //   running them itself inside vef_register/vef_unregister.
+                   // + from_binary_func on vef_type_desc_t: a type may convert
+                   //   an already-binary value directly, instead of having its
+                   //   encode function recognize bytes passed as a string.
 } vef_protocol_t;
 
 // =============================================================================
@@ -813,6 +816,37 @@ typedef bool (*vef_encode_func_t)(unsigned char *buffer, size_t buffer_size,
                                   const char *from, size_t from_len,
                                   size_t *length);
 
+// From binary: convert an already-binary value to the internal representation.
+// OPTIONAL; see from_binary_func on vef_type_desc_t.
+//
+// The server calls this instead of encode_func when the value it is storing is
+// a binary string -- a BINARY/VARBINARY/BLOB column or expression, a _binary
+// literal, or a parameter the client declared as a BLOB type. Such a value is
+// a sequence of bytes the extension defined, not text in a character set, so
+// there is nothing to parse: the type can read its own serialization directly.
+//
+// A type that does not set it keeps today's behaviour, where binary values
+// reach encode_func as bytes-in-a-string and the type must recognize them
+// itself.
+//
+// Unlike encode_func, this receives the target's resolved type parameters, so
+// a parameterized type can validate the payload against them -- e.g. a vector
+// type can require from_len to equal dimension * sizeof(float) rather than
+// inferring a dimension from the length and silently accepting a truncated
+// value. params->count is 0 for a type without parameters.
+//
+// Parameters:
+//   buffer      - Output buffer for the internal representation
+//   buffer_size - Size of output buffer
+//   from        - Input bytes
+//   from_len    - Number of input bytes
+//   params      - Resolved type parameters of the target, never NULL
+//   length      - Output: actual bytes written, or SIZE_MAX to return SQL NULL
+// Returns: false on success, true on error
+typedef bool (*vef_from_binary_func_t)(
+    unsigned char *buffer, size_t buffer_size, const unsigned char *from,
+    size_t from_len, const vef_type_params_t *params, size_t *length);
+
 // Decode: Convert internal binary representation to string representation
 // Parameters:
 //   buffer      - Input binary data
@@ -937,6 +971,13 @@ typedef struct {
   //
   // Read only when protocol >= VEF_PROTOCOL_4.
   bool variable_length;
+
+  // OPTIONAL (NULL if not provided): converts an already-binary value to the
+  // internal representation, in place of running encode_func on its bytes.
+  // See vef_from_binary_func_t for when the server selects it.
+  //
+  // Read only when protocol >= VEF_PROTOCOL_4.
+  vef_from_binary_func_t from_binary_func;
 } vef_type_desc_t;
 
 // Forward declaration so vef_required_capability_t can reference it.

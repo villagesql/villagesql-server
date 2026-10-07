@@ -658,7 +658,16 @@ String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
     is_valid = true;  // OOM, my_error already called
     return nullptr;
   }
-  String *encoded = encoder->encode(from, is_valid);
+  // The value's own charset says which converter applies. A binary charset
+  // means the bytes are already the type's serialization rather than text, so
+  // they go to the type's from_binary converter if it declared one; everything
+  // else, and any type without from_binary, goes to the string converter.
+  const bool is_binary = from.charset() == &my_charset_bin;
+  String *encoded =
+      (is_binary && encoder->has_from_binary())
+          ? encoder->encode_binary(pointer_cast<const uchar *>(from.ptr()),
+                                   from.length(), is_valid)
+          : encoder->encode(from, is_valid);
   if (encoded == nullptr) {
     if (is_valid) return nullptr;  // OOM, my_error already called
     // Encoding failed - invalid value for custom type

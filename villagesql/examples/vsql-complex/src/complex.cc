@@ -160,6 +160,32 @@ void complex_from_string(std::string_view from, vsql::CustomResult out) {
   out.set_length(kComplexSize);
 }
 
+// COMPLEX from_binary: 16 raw bytes -> COMPLEX, for a value the server
+// already knows is binary (a _binary literal, a BINARY/BLOB column, or a
+// parameter the client declared as a BLOB type).
+//
+// The payload is the type's own storage form -- two little-endian doubles,
+// real then imaginary -- so there is nothing to parse. Contrast
+// complex_from_string, which has to accept "(real,imag)" text.
+//
+// Exact-length only: 16 bytes or it is not a COMPLEX. params is unused
+// because COMPLEX is not parameterized (params->count is 0), but it is
+// never null.
+bool complex_from_binary(unsigned char *buffer, size_t buffer_size,
+                         const unsigned char *from, size_t from_len,
+                         const vef_type_params_t *params, size_t *length) {
+  (void)params;
+  if (from_len != static_cast<size_t>(kComplexSize)) return true;
+  if (buffer_size < static_cast<size_t>(kComplexSize)) return true;
+  // Round-trip through Complex so the stored bytes are canonicalized the same
+  // way complex_from_string canonicalizes them (-0.0 -> 0.0).
+  Complex cx = load_complex(from);
+  cx.canonicalize();
+  store_complex(buffer, cx);
+  *length = kComplexSize;
+  return false;
+}
+
 // COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
 // preserves -0.0 in binary form)
 // STRING -> COMPLEX2
@@ -440,8 +466,9 @@ constexpr auto COMPLEX =
         .persisted_length(kComplexSize)
         .max_decode_buffer_length(64)
         .from_string<&complex_from_string>()  // auto: "COMPLEX::from_string"
-        .to_string<&complex_to_string>()      // auto: "COMPLEX::to_string"
-        .compare<&complex_compare>()          // auto: "COMPLEX::compare"
+        .from_binary(&complex_from_binary)
+        .to_string<&complex_to_string>()  // auto: "COMPLEX::to_string"
+        .compare<&complex_compare>()      // auto: "COMPLEX::compare"
         .intrinsic_default_str("(0,0)")
         .build();
 

@@ -164,6 +164,27 @@ class TypeBuilder {
                        Name>{s, embedded_funcs_};
   }
 
+  // Handles an already-binary value directly, instead of having from_string
+  // recognize bytes handed to it as a string. The server selects it when the
+  // value being stored is a binary string -- a BINARY/VARBINARY/BLOB column or
+  // expression, a _binary literal, or a parameter the client declared as a
+  // BLOB type -- and falls back to from_string when the type does not set it.
+  //
+  // from_binary is a VEF_PROTOCOL_4 feature, so this raises the type's
+  // required protocol to VEF_PROTOCOL_4 (the server only reads
+  // from_binary_func at protocol >= 4). require_atleast_min() keeps the bump
+  // monotonic, so later v3-level setters cannot lower it back.
+  constexpr auto from_binary(vef_from_binary_func_t f) const {
+    detail::TypeBuilderState s = state_;
+    s.desc.vef_desc.from_binary_func = f;
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf, EFT,
+                       Name>{s, embedded_funcs_};
+  }
+
   // Upper bound on persisted_length across all valid parameterizations.
   // Required for parameterized types (parse + to_strings) — build()
   // static_asserts the pairing. Ignored for non-parameterized types

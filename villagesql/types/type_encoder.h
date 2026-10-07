@@ -69,11 +69,27 @@ class TypeEncoder {
   // The returned String* is valid until the next encode() call.
   String *encode(const String &from, bool &is_valid);
 
+  // True when the type declared a from_binary converter, i.e. when
+  // encode_binary() will do something different from encode().
+  bool has_from_binary() const { return from_binary_fn_ != nullptr; }
+
+  // Convert 'from', whose bytes are already the type's own serialization,
+  // via the type's from_binary converter. Same contract and buffer lifetime
+  // as encode(). Only call when has_from_binary() is true.
+  String *encode_binary(const unsigned char *from, size_t from_len,
+                        bool &is_valid);
+
  private:
   MEM_ROOT *mem_root_{nullptr};  // owning mem_root, used for overflow growth
   char *buffer_{nullptr};        // pre-allocated from mem_root_
   size_t buffer_size_{0};        // = tc->field_buffer_length()
   String result_;                // reused String wrapper pointing into buffer_
+
+  // Optional converter for already-binary input; null unless the type
+  // declared from_binary_func (protocol >= 4). from_binary_params_ is a view
+  // of the target's resolved type parameters, owned by the EncodeOp.
+  vef_from_binary_func_t from_binary_fn_{nullptr};
+  vef_type_params_t from_binary_params_{0, nullptr, nullptr};
 
   // Overflow path: reused when VDF output exceeds buffer_size_ (rare).
   uchar *overflow_buf_{nullptr};

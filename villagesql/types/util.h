@@ -192,6 +192,9 @@ extern bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
 // The TypeContext and field name are taken from the field itself. On error,
 // returns nullptr; if is_valid is false the value was invalid (warning
 // pushed), otherwise OOM.
+// A value whose charset is binary is taken to be the type's own serialization
+// already, and goes to the type's from_binary converter when it declared one;
+// everything else goes to the string converter.
 extern String *EncodeStringForField(Field *field, const String &from,
                                     bool &is_valid);
 

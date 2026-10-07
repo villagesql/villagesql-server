@@ -38,6 +38,14 @@ TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
   assert(buffer_size_ > 0);
 
   const EncodeOp &op = tc->encode_op();
+  from_binary_fn_ = op.from_binary_fn();
+  if (from_binary_fn_ != nullptr) {
+    // from_binary takes the target's resolved parameters directly, so stash a
+    // view of them; the EncodeOp (and its TypeParameters) outlive this.
+    const auto &params = op.parameters();
+    from_binary_params_ = vef_type_params_t{params.count(), params.key_data(),
+                                            params.value_data()};
+  }
   if (op.vdf() != nullptr) {
     vdf_call_.emplace(op.vdf());
     const auto &params = op.parameters();
@@ -101,6 +109,25 @@ String *TypeEncoder::encode(const String &from, bool &is_valid) {
     result_.set(buffer_, actual_length, &my_charset_bin);
   }
 
+  return &result_;
+}
+
+String *TypeEncoder::encode_binary(const unsigned char *from, size_t from_len,
+                                   bool &is_valid) {
+  assert(from_binary_fn_ != nullptr);
+  is_valid = true;
+
+  size_t actual_length = 0;
+  if (from_binary_fn_(pointer_cast<uchar *>(buffer_), buffer_size_, from,
+                      from_len, &from_binary_params_, &actual_length)) {
+    is_valid = false;
+    return nullptr;
+  }
+  if (should_assert_if_false(actual_length <= buffer_size_)) {
+    is_valid = false;
+    return nullptr;
+  }
+  result_.set(buffer_, actual_length, &my_charset_bin);
   return &result_;
 }
 
