@@ -1,14 +1,14 @@
 INSTALL EXTENSION update_length_test VERSION '1.0.0';
 # variable-length shrink
 ALTER EXTENSION update_length_test VERSION '1.1.0' AT RESTART;
-ERROR HY000: Cannot update extension 'update_length_test': variable-length type 'VAR' max_persisted_length changed from 64 to 32. Existing columns of this type would no longer match their stored length
+ERROR HY000: Cannot update extension 'update_length_test': variable-length type 'VAR' max_persisted_length changed from 64 to 32. Existing columns of this type would no longer match their stored length.
 # variable-length grow
 ALTER EXTENSION update_length_test VERSION '1.2.0' AT RESTART;
-ERROR HY000: Cannot update extension 'update_length_test': variable-length type 'VAR' max_persisted_length changed from 64 to 128. Existing columns of this type would no longer match their stored length
+ERROR HY000: Cannot update extension 'update_length_test': variable-length type 'VAR' max_persisted_length changed from 64 to 128. Existing columns of this type would no longer match their stored length.
 # fixed-length to variable-length
 ALTER EXTENSION update_length_test VERSION '1.3.0' AT RESTART;
-ERROR HY000: Cannot update extension 'update_length_test': type 'FIX' changed from fixed-length to variable-length. Existing stored data would be corrupted
+ERROR HY000: Cannot update extension 'update_length_test': type 'FIX' changed from fixed-length to variable-length. Existing stored data would be corrupted.
 # variable-length to fixed-length
 ALTER EXTENSION update_length_test VERSION '1.4.0' AT RESTART;
-ERROR HY000: Cannot update extension 'update_length_test': type 'VAR' changed from variable-length to fixed-length. Existing stored data would be corrupted
+ERROR HY000: Cannot update extension 'update_length_test': type 'VAR' changed from variable-length to fixed-length. Existing stored data would be corrupted.
 UNINSTALL EXTENSION update_length_test;

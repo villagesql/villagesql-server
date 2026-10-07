@@ -75,7 +75,7 @@ UpdatePreCheckResult check_retained_types_storage_length(
       std::snprintf(
           buf, sizeof(buf),
           "Cannot update extension '%s': type '%s' changed from %s to %s. "
-          "Existing stored data would be corrupted",
+          "Existing stored data would be corrupted.",
           current.extension_name.c_str(), c.type_name.c_str(),
           c.variable_length ? "variable-length" : "fixed-length",
           t.variable_length ? "variable-length" : "fixed-length");
@@ -85,7 +85,7 @@ UpdatePreCheckResult check_retained_types_storage_length(
       std::snprintf(
           buf, sizeof(buf),
           "Cannot update extension '%s': type '%s' persisted_length changed "
-          "from %lld to %lld. Existing stored data would be corrupted",
+          "from %lld to %lld. Existing stored data would be corrupted.",
           current.extension_name.c_str(), c.type_name.c_str(),
           static_cast<long long>(c.persisted_length),
           static_cast<long long>(t.persisted_length));
@@ -96,7 +96,7 @@ UpdatePreCheckResult check_retained_types_storage_length(
           buf, sizeof(buf),
           "Cannot update extension '%s': variable-length type '%s' "
           "max_persisted_length changed from %lld to %lld. Existing "
-          "columns of this type would no longer match their stored length",
+          "columns of this type would no longer match their stored length.",
           current.extension_name.c_str(), c.type_name.c_str(),
           static_cast<long long>(c.max_persisted_length),
           static_cast<long long>(t.max_persisted_length));
@@ -165,8 +165,8 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
   //
   // max_persisted_length and variable_length sit past the end of older
   // vef_type_desc_t layouts, so read them only when both the type and the
-  // negotiated protocol are new enough -- the same gating registration
-  // applies (see validate.cc).
+  // negotiated protocol are new enough. The same check applies to registration
+  // (see validate.cc).
   std::unordered_map<std::string, TargetTypeLength> target_lengths;
   std::unordered_set<std::string> target_type_names;
   if (target.registration != nullptr) {
