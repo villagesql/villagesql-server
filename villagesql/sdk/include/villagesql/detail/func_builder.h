@@ -65,7 +65,7 @@ void auto_prerun(vef_context_t *ctx, vef_prerun_args_t *,
   VDF_EXCEPTIONS_CATCH(result);
 }
 
-// TODO(villagesql-general) nothing reports/tests postrun_result
+// TODO(villagesql-general): nothing reports/tests postrun_result
 template <typename State>
 void auto_postrun(vef_context_t *ctx, vef_postrun_args_t *args,
                   vef_postrun_result_t *postrun_result) {
@@ -344,8 +344,8 @@ struct TypeOpParamsType<size_t (*)(CustomArgWith<P>)> {
   using type = P;
 };
 
-// TODO(villagesql-general) clear function should have a vef_vdf_result_t out param.
-// Wraps void(State&) -> vef_vdf_clear_func_t
+// TODO(villagesql-general): clear function should have a vef_vdf_result_t out
+// param. Wraps void(State&) -> vef_vdf_clear_func_t
 template <typename State, auto Func>
 void agg_clear_wrapper(vef_context_t *ctx, vef_vdf_args_t *args) {
   char msg[VEF_MAX_ERROR_LEN];
