@@ -422,12 +422,20 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
   std::vector<const TypeDescriptor *> results =
       vclient.type_descriptors().get_prefix_committed(prefix);
 
-  if (should_assert_if_true(results.size() > 1)) {
+  // An unqualified name matches several types when more than one installed
+  // extension registers a type with that name. That is a user error.
+  if (results.size() > 1) {
     if (!current_thd->is_error()) {
+      std::string extensions;
+      for (size_t i = 0; i < results.size(); i++) {
+        if (i > 0) extensions.append(", ");
+        extensions.append(results[i]->extension_name());
+      }
       villagesql_error(
-          "Failed to resolve type %.*s; it matches %zu registered types",
+          "Ambiguous type '%.*s' - provided by multiple extensions: %s. "
+          "Use qualified name (extension.type).",
           MYF(0), static_cast<int>(type_name.size()), type_name.data(),
-          results.size());
+          extensions.c_str());
     }
     return true;
   }
