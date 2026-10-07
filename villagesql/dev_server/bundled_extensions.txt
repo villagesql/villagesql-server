@@ -24,6 +24,7 @@
 https://github.com/villagesql/vsql-ai main
 https://github.com/villagesql/vsql-boolean main
 https://github.com/villagesql/vsql-crypto main
+https://github.com/villagesql/vsql-currency main build=cargo abi=stable bundle=false
 https://github.com/villagesql/vsql-fuzzystrmatch main
 https://github.com/villagesql/vsql-trgm main
 https://github.com/villagesql/vsql-cube main
