@@ -426,9 +426,16 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
   // extension registers a type with that name. That is a user error.
   if (results.size() > 1) {
     if (!current_thd->is_error()) {
+      // Adjust for ", ". Safe from underflow since results.size() > 1.
+      size_t total_size = 2 * (results.size() - 1);
+      for (size_t i = 0; i < results.size(); ++i) {
+        total_size += results[i]->extension_name().size();
+      }
       std::string extensions;
-      for (size_t i = 0; i < results.size(); i++) {
-        if (i > 0) extensions.append(", ");
+      extensions.reserve(total_size);
+      extensions.append(results[0]->extension_name());
+      for (size_t i = 1; i < results.size(); ++i) {
+        extensions.append(", ");
         extensions.append(results[i]->extension_name());
       }
       villagesql_error(
