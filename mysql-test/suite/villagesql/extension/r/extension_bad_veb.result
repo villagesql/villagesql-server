@@ -194,15 +194,6 @@ INSTALL EXTENSION deep_traversal;
 ERROR HY000: VEB contains symlink 'deep_link' pointing outside extraction directory (target: '../../../../../../etc/passwd', resolves to: '../../../../../../etc/passwd')
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
-#
-# MISSING SHARED LIBRARY
-#
-# Manifest is valid but the VEB carries no lib/{name}.so
-Creating test extension: no_shared_library.veb
-Created no_shared_library.veb with contents:
-  manifest.json
-INSTALL EXTENSION no_shared_library;
-ERROR HY000: VEB for 'no_shared_library' contains no usable 'lib/no_shared_library.so'
 # Test 4: Symlink in subdirectory pointing outside
 Creating test extension: nested_symlink.veb
 Created nested_symlink.veb with contents:
@@ -214,4 +205,13 @@ INSTALL EXTENSION nested_symlink;
 ERROR HY000: VEB contains symlink 'subdir/evil' pointing outside extraction directory (target: '../../outside.txt', resolves to: '../../outside.txt')
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+#
+# MISSING SHARED LIBRARY
+#
+# Manifest is valid but the VEB carries no lib/{name}.so
+Creating test extension: no_shared_library.veb
+Created no_shared_library.veb with contents:
+  manifest.json
+INSTALL EXTENSION no_shared_library;
+ERROR HY000: VEB for 'no_shared_library' contains no usable 'lib/no_shared_library.so'
 include/rpl/deprecated/show_binlog_events.inc

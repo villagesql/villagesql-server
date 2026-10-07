@@ -86,8 +86,13 @@ bool load_veb_manifest(const std::string &name, std::string &version);
 //
 // Returns false on success, true on error
 // On success, expanded_path contains full path, sha256_hash contains hash, and
-// the expansion holds a loadable lib/{name}.so -- a VEB that carries no such
-// file is an error here rather than a dlopen failure later
+// the expansion holds a non-empty lib/{name}.so.
+//
+// A VEB carrying no such file is rejected here rather than on the load step,
+// because here the tree has just been extracted and the absence can be reported
+// against the package. open_vef_extension() is given only a path, so it cannot
+// tell a bad package from a damaged cache; it asserts on this guarantee
+// instead.
 bool expand_veb_to_directory(const std::string &name,
                              const std::string &veb_version,
                              std::string &expanded_path,

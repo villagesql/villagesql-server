@@ -198,13 +198,20 @@ std::string get_extension_so_path(const std::string &extension_name,
   return std::string(path_buf);
 }
 
-// Prefix for a staging directory inside {cache}/{name}/. Expansion extracts
-// into {name}/{kStagingPrefix}{sha256} and renames it to {name}/{sha256} to
-// commit its creation.
+// Expansion cache layout, shared by the helpers below:
+//
+//   {datadir}/.veb_expansion_cache/{name}/
+//     .tmp.{sha256}/    extraction in progress
+//     {sha256}/         committed expansion, holding lib/{name}.so
+//
+// The rename of .tmp.{sha256}/ onto {sha256}/ is the commit, and the only way
+// {sha256}/ is ever created.
+
+// Prefix marking a staging directory within {name}/.
 static constexpr const char *kStagingPrefix = ".tmp.";
 
-// True when a directory entry inside {cache}/{name}/ is an expansion staging
-// directory rather than a {sha256} expansion.
+// True when an entry name carries the staging prefix, marking it as expansion
+// scratch rather than a completed {sha256} expansion.
 static bool is_staging_dir_name(const std::string &entry_name) {
   return entry_name.rfind(kStagingPrefix, 0) == 0;
 }
@@ -578,9 +585,10 @@ bool expand_veb_to_directory(const std::string &name,
 
   // Check if already expanded with this SHA256.
   //
-  // Nothing is removed here even when the expansion turns out to be unusable.
-  // The directory is only discarded once a complete replacement is staged and
-  // durable below.
+  // An unusable .so here means a VEB that had none (published below, then
+  // rejected), a cache predating rename-to-commit, or damage after the fact.
+  // (Mid-expansion crash leaving .tmp.{sha256}/ is handled later). Nothing
+  // is removed until a complete replacement is staged and durable below.
   MY_STAT dir_stat;
   bool stale_expansion = false;
   if (my_stat(expanded_path.c_str(), &dir_stat, MYF(0)) &&
@@ -765,7 +773,7 @@ bool expand_veb_to_directory(const std::string &name,
     char target_path_buf[FN_REFLEN];
     if (!fn_format(target_path_buf, current_file, staging_path.c_str(), "",
                    MY_RELATIVE_PATH | MY_SAFE_PATH)) {
-      // fn_format returns NULL if path is too long (>512 bytes total or >256
+      // fn_format returns nullptr if path is too long (>512 bytes total or >256
       // bytes filename)
       villagesql_error("Path or filename too long for extraction: %s/%s",
                        MYF(0), staging_path.c_str(), current_file);
@@ -834,8 +842,9 @@ bool expand_veb_to_directory(const std::string &name,
     }
 
     // Drop the {name} directory too if this expansion created it and nothing
-    // else is in it.
-    rmdir(name_dir.c_str());
+    // else is in it. remove() only takes an empty directory, so a surviving
+    // expansion keeps it. Since that is the ordinary outcome, ec is ignored.
+    std::filesystem::remove(name_dir, ec);
 
     return true;
   }
