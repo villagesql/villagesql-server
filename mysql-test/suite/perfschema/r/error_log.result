@@ -193,8 +193,8 @@ prio	error_code	subsystem	data
 Warning	MY-010097	Server	Insecure configuration for --secure-log-path: Current value does not restrict location of generated files. Consider setting it to a valid, non-empty path.
 System	MY-013576	InnoDB	InnoDB initialization has started.
 System	MY-013577	InnoDB	InnoDB initialization has ended.
-System	MY-010666	Server	VillageSQL: 'Validating system schema...'
-System	MY-010666	Server	VillageSQL: 'System schema verification completed successfully'
+System	MY-010666	Server	VillageSQL: Validating system schema...
+System	MY-010666	Server	VillageSQL: System schema verification completed successfully
 
 # FR-1.4.1 Show the log-error-verbosity applies
 # We passed --log-error-verbosity=3 at start-up. Show that we have Notes.
