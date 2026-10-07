@@ -372,7 +372,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
 
       auto parse_bindings =
           [&](uint32_t count, const vef_index_profile_fn_binding_t *arr,
-              const char *kind,
+              const char *kind, bool is_helper,
               std::vector<vef_index_profile_fn_binding_t> &out) -> bool {
         out.reserve(count);
         for (unsigned int k = 0; k < count; k++) {
@@ -431,6 +431,26 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                     error_out.c_str());
             return true;
           }
+          // TODO(villagesql-indexing): Support RESTRICT profile functions.
+          if (!is_helper && fn.kind == VEF_INDEX_PROFILE_FN_KIND_RESTRICT) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has kind RESTRICT, which is not yet implemented";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          const bool kind_valid =
+              is_helper ? fn.kind == VEF_INDEX_PROFILE_FN_KIND_INVALID
+                        : fn.kind == VEF_INDEX_PROFILE_FN_KIND_ORDER;
+          if (!kind_valid) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name + "' has invalid kind " +
+                        std::to_string(fn.kind);
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
           out.push_back(fn);
         }
         return false;
@@ -438,12 +458,12 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
 
       std::vector<vef_index_profile_fn_binding_t> functions;
       if (parse_bindings(profile.function_count, profile.functions, "function",
-                         functions)) {
+                         false, functions)) {
         return std::nullopt;
       }
 
       std::vector<vef_index_profile_fn_binding_t> helpers;
-      if (parse_bindings(profile.helper_count, profile.helpers, "helper",
+      if (parse_bindings(profile.helper_count, profile.helpers, "helper", true,
                          helpers)) {
         return std::nullopt;
       }
