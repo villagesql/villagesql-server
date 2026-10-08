@@ -1,0 +1,64 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[2,0,0,0]');
+# For reference: a usable operand routes to the distance scan.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+#
+# A NULL operand. The plan is a sort rather than the distance scan, and
+# the distance function then rejects the operand per row.
+#
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)
+    -> Sort: vsql_knn_index_test.kvec_l2_distance(t.v,NULL), limit input to 2 row(s) per chunk
+        -> Stream results  (cost=COST rows=ROWS)
+            -> Table scan on t  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand too short
+#
+# An empty-string operand never reaches recognition: converting it to
+# the column's type fails first, so even EXPLAIN errors.
+#
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '') LIMIT 2;
+ERROR HY000: Incorrect kvector value: ''
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '') LIMIT 2;
+ERROR HY000: Incorrect kvector value: ''
+#
+# A NULL operand with no LIMIT, so the KNN path is not a candidate at
+# all.
+#
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL);
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand too short
+#
+# A usable operand still routes after the rejected ones.
+#
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[2,0,0,0]') LIMIT 2;
+id
+4
+1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

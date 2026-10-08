@@ -1,0 +1,70 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+# A literal query vector routes to the distance scan. Nearest 3 to
+# [1,0,0,0]: 1, 4, 5.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+#
+# The same query with the vector as a parameter must route the same way
+# and return the same rows.
+#
+PREPARE p FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+SET @q = '[1,0,0,0]';
+EXECUTE p USING @q;
+id
+1
+4
+5
+PREPARE pe FROM 'EXPLAIN FORMAT=tree SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+EXECUTE pe USING @q;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+#
+# A different vector on the same prepared statement gives a different
+# answer, so the parameter is read per execution. Nearest 3 to
+# [2,0,0,0]: 5, 1, 4.
+#
+SET @q = '[2,0,0,0]';
+EXECUTE p USING @q;
+id
+5
+1
+4
+#
+# A NULL parameter does not take the distance scan, and the distance
+# function rejects it when the fallback evaluates it per row.
+#
+SET @q = NULL;
+EXECUTE p USING @q;
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand too short
+#
+# The statement still routes and answers correctly after the NULL.
+#
+SET @q = '[3,0,0,0]';
+EXECUTE p USING @q;
+id
+5
+1
+4
+DEALLOCATE PREPARE p;
+DEALLOCATE PREPARE pe;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

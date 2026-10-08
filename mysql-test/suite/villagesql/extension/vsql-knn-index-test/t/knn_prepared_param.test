@@ -1,0 +1,66 @@
+# A KNN ORDER BY whose query vector is a prepared-statement parameter.
+#
+# The parameter form must route to the distance scan like a literal does, and
+# must be read per execution.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo # A literal query vector routes to the distance scan. Nearest 3 to
+--echo # [1,0,0,0]: 1, 4, 5.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo #
+--echo # The same query with the vector as a parameter must route the same way
+--echo # and return the same rows.
+--echo #
+PREPARE p FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+SET @q = '[1,0,0,0]';
+EXECUTE p USING @q;
+
+PREPARE pe FROM 'EXPLAIN FORMAT=tree SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXECUTE pe USING @q;
+
+--echo #
+--echo # A different vector on the same prepared statement gives a different
+--echo # answer, so the parameter is read per execution. Nearest 3 to
+--echo # [2,0,0,0]: 5, 1, 4.
+--echo #
+SET @q = '[2,0,0,0]';
+EXECUTE p USING @q;
+
+--echo #
+--echo # A NULL parameter does not take the distance scan, and the distance
+--echo # function rejects it when the fallback evaluates it per row.
+--echo #
+SET @q = NULL;
+--error ER_UDF_ERROR
+EXECUTE p USING @q;
+
+--echo #
+--echo # The statement still routes and answers correctly after the NULL.
+--echo #
+SET @q = '[3,0,0,0]';
+EXECUTE p USING @q;
+
+DEALLOCATE PREPARE p;
+DEALLOCATE PREPARE pe;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
