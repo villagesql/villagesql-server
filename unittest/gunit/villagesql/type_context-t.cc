@@ -491,6 +491,7 @@ TEST_F(TypeParametersTest, ToJsonKeepsEmptyValue) {
   EXPECT_EQ(params.to_json(), R"({"metric":""})");
 }
 
+// A name without a value must not be silently dropped.
 TEST_F(TypeParametersTest, RejectsTokenWithoutValue) {
   villagesql::TypeParameters params("metric");
   EXPECT_FALSE(params.validation_error().empty());
@@ -541,16 +542,30 @@ TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
   }
 }
 
+// Reject bad stored parameters instead of loading only the readable parts.
 TEST_F(TypeParametersTest, FromJsonRejectsMalformedMetadata) {
   for (const char *json :
-       {R"({"dimension":1536})", R"({"a":"1","b":2})", R"("a":"1")", R"({"a)",
-        R"({"a":"1)", R"({"a""1"})", R"({"a":"x\u0000y"})", R"({"a,b":"x"})"}) {
+       {// Values must be strings, even when they look like numbers.
+        R"({"dimension":1536})",
+        // A bad later value must fail the whole object.
+        R"({"a":"1","b":2})",
+        // Missing object braces.
+        R"("a":"1")",
+        // Unclosed key or value.
+        R"({"a)", R"({"a":"1)",
+        // Missing colon between the key and value.
+        R"({"a""1"})",
+        // The JSON escape becomes an embedded NUL after parsing.
+        R"({"a":"x\u0000y"})",
+        // A comma in a key would split it into separate parameters.
+        R"({"a,b":"x"})"}) {
     EXPECT_FALSE(
         villagesql::TypeParameters::from_json(json).validation_error().empty())
         << json;
   }
 }
 
+// Quotes, backslashes, newlines and Unicode must survive JSON storage.
 TEST_F(TypeParametersTest, JsonRoundTripsEscapedUtf8) {
   auto original = villagesql::TypeParameters::from_raw("a=É😀\"\\\n");
   ASSERT_TRUE(original.validation_error().empty());
@@ -559,10 +574,18 @@ TEST_F(TypeParametersTest, JsonRoundTripsEscapedUtf8) {
   EXPECT_EQ(restored, original);
 }
 
+// Invalid text must not reach the ABI's NUL-terminated parameter strings.
 TEST_F(TypeParametersTest, RejectsMalformedUtf8AndNulBeforeAbi) {
   for (const std::string &raw :
-       {std::string("a=x\0y", 5), std::string("a=\xe9"),
-        std::string("a=\xc0\xaf"), std::string("a=\xed\xa0\x80"),
+       {// NUL inside the value; the explicit length keeps it in the string.
+        std::string("a=x\0y", 5),
+        // Latin1 é, which is not valid UTF-8.
+        std::string("a=\xe9"),
+        // '/' encoded with two bytes instead of one (overlong UTF-8).
+        std::string("a=\xc0\xaf"),
+        // U+D800 is a surrogate, which UTF-8 does not allow.
+        std::string("a=\xed\xa0\x80"),
+        // U+110000 is above Unicode's maximum code point, U+10FFFF.
         std::string("a=\xf4\x90\x80\x80")}) {
     SCOPED_TRACE(::testing::PrintToString(raw));
     auto params = villagesql::TypeParameters::from_raw(raw);
@@ -580,6 +603,7 @@ TEST_F(TypeParametersTest, RejectsMalformedUtf8AndNulBeforeAbi) {
   EXPECT_EQ(direct.value_data(), nullptr);
 }
 
+// Copying or moving a parse error must not turn it into valid empty parameters.
 TEST_F(TypeParametersTest, ParseErrorSurvivesCopyAndMove) {
   auto params = villagesql::TypeParameters::from_raw(std::string("a=x\0y", 5));
   const std::string error = params.validation_error();
@@ -598,6 +622,7 @@ TEST_F(TypeParametersTest, ParseErrorSurvivesCopyAndMove) {
   EXPECT_EQ(move_assigned.validation_error(), error);
 }
 
+// Names that differ only by case or accents count as duplicates.
 TEST_F(TypeParametersTest, DuplicateKeysUseParameterCollation) {
   for (const char *raw :
        {"Metric=a,metric=b", "resume=a,résumé=b", "e=a,é=b,e=c"}) {
@@ -605,12 +630,14 @@ TEST_F(TypeParametersTest, DuplicateKeysUseParameterCollation) {
                   "duplicate parameter"),
               std::string::npos);
   }
+  // The same rule applies when loading stored JSON.
   EXPECT_FALSE(
       villagesql::TypeParameters::from_json(R"({"resume":"a","résumé":"b"})")
           .validation_error()
           .empty());
 }
 
+// Trimming, lowercasing and sorting must preserve accents and emoji.
 TEST_F(TypeParametersTest, PreservesNormalizationPolicy) {
   auto params =
       villagesql::TypeParameters::from_raw(" MÉTRIC = COSINE , label = É😀 ");
