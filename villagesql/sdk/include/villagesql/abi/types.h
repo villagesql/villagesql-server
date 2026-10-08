@@ -606,7 +606,13 @@ typedef struct {
 } vef_postrun_args_t;
 
 typedef struct {
-  // Reserved for future use
+  // protocol >= VEF_PROTOCOL_4
+
+  // Result type: IS_VALUE on success, IS_ERROR on failure
+  vef_return_value_type_t type;
+
+  char *error_msg{nullptr};
+
 } vef_postrun_result_t;
 
 typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
