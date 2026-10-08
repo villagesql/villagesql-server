@@ -78,9 +78,21 @@ bool load_veb_manifest(const std::string &name, std::string &version);
 //         lib/
 //           my_extension.so
 //
-// If .veb_expansion_cache/{name}/{sha256}/ already exists, skips extraction
+// Extraction goes to .veb_expansion_cache/{name}/.tmp.{sha256}/ and is renamed
+// to {sha256}/ once the tree is on stable storage, so a {sha256} directory is
+// never half-written and an expansion that fails partway leaves any previous
+// one intact. If {sha256}/ already exists and holds a loadable .so, extraction
+// is skipped.
+//
 // Returns false on success, true on error
-// On success, expanded_path contains full path and sha256_hash contains hash
+// On success, expanded_path contains full path, sha256_hash contains hash, and
+// the expansion holds a non-empty lib/{name}.so.
+//
+// A VEB carrying no such file is rejected here rather than on the load step,
+// because here the tree has just been extracted and the absence can be reported
+// against the package. open_vef_extension() is given only a path, so it cannot
+// tell a bad package from a damaged cache; it asserts on this guarantee
+// instead.
 bool expand_veb_to_directory(const std::string &name,
                              const std::string &veb_version,
                              std::string &expanded_path,
