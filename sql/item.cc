@@ -6624,6 +6624,7 @@ bool Item::eq_by_collation(Item *item, bool binary_cmp,
 /**
   Create a field to hold a string value from an item.
 
+  If the item carries a custom type, ignore CONVERT_IF_BIGGER_TO_BLOB @n
   If max_length > CONVERT_IF_BIGGER_TO_BLOB create a blob @n
   If max_length > 0 create a varchar @n
   If max_length == 0 create a CHAR(0)
@@ -6641,6 +6642,13 @@ Field *Item::make_string_field(TABLE *table) const {
     field = new (*THR_MALLOC)
         Field_geom(max_length, m_nullable, item_name.ptr(),
                    Field::GEOM_GEOMETRY, std::optional<gis::srid_t>());
+  } else if (has_type_context()) {
+    // VillageSQL: don't change the type to a blob if the field is a
+    // custom type.
+    assert(get_type_context()->descriptor()->implementation_type() ==
+           MYSQL_TYPE_VARCHAR);
+    field = new (*THR_MALLOC) Field_varstring(
+        max_length, m_nullable, item_name.ptr(), table->s, collation.collation);
   } else if (max_length / collation.collation->mbmaxlen >
              CONVERT_IF_BIGGER_TO_BLOB)
     field = new (*THR_MALLOC) Field_blob(

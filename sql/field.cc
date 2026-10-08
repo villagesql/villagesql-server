@@ -10563,6 +10563,17 @@ Create_field *generate_create_field(THD *thd, Item *source_item,
   }
   if (!tmp_table_field) return nullptr; /* purecov: inspected */
 
+  // VillageSQL: carry a custom type onto the field the column will be built
+  // from. create_tmp_field() does this for the paths that go through it, but
+  // the FUNC_ITEM branch above does not, so without this a function returning
+  // a custom type reaches CREATE TABLE ... SELECT as a plain binary column of
+  // the right width and the wrong type.
+  if (source_item->has_type_context() && !tmp_table_field->has_type_context() &&
+      static_cast<int64_t>(tmp_table_field->field_length) ==
+          source_item->get_type_context()->field_buffer_length()) {
+    tmp_table_field->set_type_context(source_item->get_type_context());
+  }
+
   Field *table_field = nullptr;
   switch (source_item->type()) {
     case Item::FIELD_ITEM:
