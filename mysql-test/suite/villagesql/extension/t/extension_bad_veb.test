@@ -319,4 +319,13 @@ INSTALL EXTENSION nested_symlink;
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
+--echo # MISSING SHARED LIBRARY
+
+--echo # Manifest is valid but the VEB carries no lib/{name}.so
+--let $extension_name = no_shared_library
+--let $extension_files = --file manifest.json '{"name": "no_shared_library", "version": "1.0.0"}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION no_shared_library;
+
 --source include/villagesql/binlog_check_end.inc
