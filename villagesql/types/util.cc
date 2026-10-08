@@ -777,8 +777,8 @@ bool DecodeStringForItem(Item *item, const String &from, String *out) {
 
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
   const std::string &name = tc.qualified_name();
-  // Match MySQL type displays: convert UTF-8 text to the destination charset.
-  // The DD display field uses utf8mb3, while parameter JSON retains utf8mb4.
+  // Convert to the output charset. MySQL's dictionary type description uses
+  // utf8mb3; the separately stored parameter JSON keeps the full UTF-8 text.
   out->append(name.c_str(), name.length(), type_parameter_collation());
 }
 

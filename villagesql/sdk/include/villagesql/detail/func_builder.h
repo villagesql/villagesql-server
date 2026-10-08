@@ -901,8 +901,7 @@ struct IntrinsicDefaultWithCacheWrapper {
   }
 };
 
-// UTF-8 scalar values, excluding NUL because parameter ABI strings have no
-// lengths. Reject overlong sequences, surrogates and values above U+10FFFF.
+// Require valid UTF-8 without embedded NUL: ABI strings end at the first NUL.
 inline bool valid_type_parameter_text(std::string_view text) {
   size_t i = 0;
   while (i < text.size()) {

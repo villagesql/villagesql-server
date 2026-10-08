@@ -40,14 +40,13 @@ namespace villagesql {
 
 struct ColumnEntry;
 
-// TypeParameters holds the concrete instantiation parameters for a custom type
-// as a canonical "key1=value1,key2=value2,..." string. The server treats this
-// as a canonical string; the extension interprets the meaning of each value.
+// Holds custom type parameters as "key1=value1,key2=value2,...".
+// The extension defines what each parameter means.
 //
-// Canonical form: valid UTF-8 without NUL, keys sorted by the parameter
-// collation, names and values lowercased with surrounding ASCII spaces trimmed.
-// Parameter names must be distinct under utf8mb4_0900_ai_ci.
-// Equality is just string comparison.
+// Names and values must be valid UTF-8 without NUL. Normalization trims
+// surrounding ASCII spaces, lowercases names and values, and sorts keys by
+// the parameter collation. Duplicate names are checked with utf8mb4_0900_ai_ci.
+// Equality compares the stored string and any parsing error.
 //
 // Examples:
 //   - COMPLEX with no parameters: empty string
@@ -100,9 +99,8 @@ class TypeParameters {
   // path.
   static TypeParameters from_raw(const std::string_view raw);
 
-  // Returns an error retained during parsing or found in the parameter set.
-  // Check this before testing empty(), calling extensions or accepting
-  // metadata.
+  // Returns an error message, or an empty string if valid. Check this before
+  // empty(): a parse failure can leave an empty string with an error.
   std::string validation_error() const;
   static const char *text_error(std::string_view text);
 
@@ -145,12 +143,12 @@ class TypeParameters {
     for (const auto &v : values_) c_values_.push_back(v.c_str());
   }
 
-  // The canonical string representation of the key/value pairs
   static TypeParameters invalid(std::string error) {
     TypeParameters result;
     result.error_ = std::move(error);
     return result;
   }
+  // The normalized "key=value,..." string.
   std::string str_;
   std::string error_;
 

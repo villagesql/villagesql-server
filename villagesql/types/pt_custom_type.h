@@ -111,14 +111,9 @@ class PT_custom_type : public PT_type {
   // (extension_name.type_name), pass extension_name; for unqualified names,
   // pass empty LEX_STRING {} for extension_name.
 
-  // Reject parameter sets that an extension should not have to defend against:
-  // a nameless parameter, a parameter with no value, or the same name given
-  // twice under the parameter collation. params must be in canonical form.
-  // The offending statement is quoted alongside
-  // the message, which is what tells the reader whether the parameters came
-  // from their own SQL or from int_to_params / a resolve_params rewrite.
-  // Returns true with the error recorded at pos, false when the parameters are
-  // well formed.
+  // Validate normalized parameters, including text encoding, empty names or
+  // values, and duplicate names. On failure, report the error at pos and return
+  // true. Used for both SQL input and parameters returned by extensions.
   static bool validate_params(const POS &pos, THD *thd,
                               const TypeDescriptor *descriptor,
                               const TypeParameters &params) {
@@ -389,7 +384,7 @@ class PT_custom_type : public PT_type {
       return nullptr;
     }
 
-    // Normalize the raw parameter string to canonical form
+    // Convert from the connection charset to UTF-8 before normalizing.
     LEX_STRING converted;
     if (thd->convert_string(&converted, type_parameter_collation(), params_str,
                             params_str_len, thd->variables.collation_connection,

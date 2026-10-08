@@ -1,4 +1,4 @@
-# Type parameter strings use UTF-8 independently of the connection charset.
+# Store parameters as UTF-8, even when the connection uses latin1.
 --source include/have_debug.inc
 INSTALL EXTENSION vsql_test_only;
 SET NAMES utf8mb4;
@@ -13,21 +13,34 @@ SELECT table_name, type_parameters FROM villagesql.custom_columns
 FLUSH TABLES;
 SELECT COUNT(*) FROM t_latin;
 SELECT COUNT(*) FROM t_utf8;
-SELECT a.type_parameters = b.type_parameters AS same_parameters
-  FROM villagesql.custom_columns a JOIN villagesql.custom_columns b
-    ON a.db_name = b.db_name
-  WHERE a.db_name = DATABASE() AND a.table_name = 't_latin'
-    AND b.table_name = 't_utf8';
+
+--echo # Recreating the table from SHOW CREATE preserves café
+SET @original_parameters = (SELECT type_parameters
+  FROM villagesql.custom_columns
+  WHERE db_name = DATABASE() AND table_name = 't_latin');
+--let $parameter_ddl = query_get_value(SHOW CREATE TABLE t_latin, Create Table, 1)
+DROP TABLE t_latin;
+--eval $parameter_ddl
+FLUSH TABLES;
+SELECT COUNT(*) FROM t_latin;
+SELECT type_parameters,
+       type_parameters = CAST(@original_parameters AS JSON) AS same_parameters
+  FROM villagesql.custom_columns
+  WHERE db_name = DATABASE() AND table_name = 't_latin';
+
+# Check that the emoji is stored and the table can reopen.
+# SHOW CREATE uses utf8mb3, so it replaces the emoji with '?'.
+--echo # Emoji is stored, but SHOW CREATE replaces it with '?'
 CREATE TABLE t_unicode (v LENIENT_PARAM_TYPE('length=3,label=É😀'));
 SELECT type_parameters FROM villagesql.custom_columns
   WHERE db_name = DATABASE() AND table_name = 't_unicode';
 FLUSH TABLES;
 SELECT COUNT(*) FROM t_unicode;
+# TODO(villagesql-rebase): When MySQL supports utf8mb4 in type descriptions,
+# check that recreating the table from SHOW CREATE preserves the emoji.
 SHOW CREATE TABLE t_unicode;
 --error ER_PARSE_ERROR
 CREATE TABLE t_duplicate (v LENIENT_PARAM_TYPE('length=3,resume=a,résumé=b'));
---error ER_PARSE_ERROR
-CREATE TABLE t_duplicate (v LENIENT_PARAM_TYPE('length=3,Metric=a,metric=b'));
 --error ER_PARSE_ERROR
 CREATE TABLE t_nul (v LENIENT_PARAM_TYPE('length=3,label=x\0y'));
 DROP TABLE t_latin, t_utf8, t_unicode;

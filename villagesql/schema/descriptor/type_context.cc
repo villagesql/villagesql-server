@@ -292,7 +292,8 @@ std::string TypeParameters::validation_error() const {
   for (size_t i = 0; i < keys_.size(); ++i) {
     if (keys_[i].empty()) return "empty parameter name";
     if (values_[i].empty()) return "parameter '" + keys_[i] + "' has no value";
-    // Also support callers constructing already-canonical strings directly.
+    // Direct constructor calls can leave keys unsorted, so check all prior
+    // keys.
     for (size_t j = 0; j < i; ++j) {
       if (type_parameter_names_equal(keys_[i], keys_[j]))
         return "duplicate parameter '" + keys_[i] + "'";

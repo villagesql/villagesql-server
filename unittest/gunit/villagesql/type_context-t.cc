@@ -528,12 +528,6 @@ TEST_F(TypeParametersTest, FromJsonToleratesWhitespace) {
   EXPECT_EQ(params.str(), "dimension=1536");
 }
 
-TEST_F(TypeParametersTest, FromJsonRejectsMissingColon) {
-  EXPECT_FALSE(villagesql::TypeParameters::from_json(R"({"a""1"})")
-                   .validation_error()
-                   .empty());
-}
-
 // Round trip is the property the storage layer depends on.
 TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
   for (const char *canonical :
@@ -550,7 +544,7 @@ TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
 TEST_F(TypeParametersTest, FromJsonRejectsMalformedMetadata) {
   for (const char *json :
        {R"({"dimension":1536})", R"({"a":"1","b":2})", R"("a":"1")", R"({"a)",
-        R"({"a":"1)", R"({"a":"x\u0000y"})", R"({"a,b":"x"})"}) {
+        R"({"a":"1)", R"({"a""1"})", R"({"a":"x\u0000y"})", R"({"a,b":"x"})"}) {
     EXPECT_FALSE(
         villagesql::TypeParameters::from_json(json).validation_error().empty())
         << json;
@@ -570,15 +564,38 @@ TEST_F(TypeParametersTest, RejectsMalformedUtf8AndNulBeforeAbi) {
        {std::string("a=x\0y", 5), std::string("a=\xe9"),
         std::string("a=\xc0\xaf"), std::string("a=\xed\xa0\x80"),
         std::string("a=\xf4\x90\x80\x80")}) {
+    SCOPED_TRACE(::testing::PrintToString(raw));
     auto params = villagesql::TypeParameters::from_raw(raw);
     EXPECT_FALSE(params.validation_error().empty());
     EXPECT_EQ(params.count(), 0U);
     EXPECT_EQ(params.key_data(), nullptr);
-    auto copy = params;
-    EXPECT_EQ(copy.validation_error(), params.validation_error());
-    auto moved = std::move(copy);
-    EXPECT_EQ(moved.validation_error(), params.validation_error());
+    EXPECT_EQ(params.value_data(), nullptr);
   }
+
+  // The direct constructor must also reject NUL before building ABI arrays.
+  villagesql::TypeParameters direct(std::string("a=x\0y", 5));
+  EXPECT_FALSE(direct.validation_error().empty());
+  EXPECT_EQ(direct.count(), 0U);
+  EXPECT_EQ(direct.key_data(), nullptr);
+  EXPECT_EQ(direct.value_data(), nullptr);
+}
+
+TEST_F(TypeParametersTest, ParseErrorSurvivesCopyAndMove) {
+  auto params = villagesql::TypeParameters::from_raw(std::string("a=x\0y", 5));
+  const std::string error = params.validation_error();
+  ASSERT_FALSE(error.empty());
+
+  auto copy = params;
+  EXPECT_EQ(copy.validation_error(), error);
+  auto moved = std::move(copy);
+  EXPECT_EQ(moved.validation_error(), error);
+
+  villagesql::TypeParameters assigned;
+  assigned = params;
+  EXPECT_EQ(assigned.validation_error(), error);
+  villagesql::TypeParameters move_assigned;
+  move_assigned = std::move(assigned);
+  EXPECT_EQ(move_assigned.validation_error(), error);
 }
 
 TEST_F(TypeParametersTest, DuplicateKeysUseParameterCollation) {

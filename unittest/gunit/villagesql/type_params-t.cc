@@ -40,10 +40,8 @@ namespace villagesql_unittest {
 //      overflow before reading actual_len bytes out of the buffer, which is
 //      why ValidateAndConvertVDFArguments checks it first.
 //
-//   2. Canonical (key-sorted) order. TypeParameters::operator== is a raw
-//      string compare, and the constructor the server feeds a hook's output
-//      into canonicalizes through from_raw(), just like the DDL path.
-//      The SDK serialization itself is deterministic in byte-sorted order.
+//   2. Stable key order. The SDK sorts keys by bytes. The server then uses
+//      from_raw() to lowercase, trim and sort them by the parameter collation.
 
 class WriteParamsToTest : public ::testing::Test {
  protected:
