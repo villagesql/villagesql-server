@@ -422,7 +422,9 @@ TypeParameters TypeParameters::from_json(const std::string &json) {
                                                         json.size());
   if (document.HasParseError() || !document.IsObject())
     return invalid("invalid type parameter JSON object");
-  std::string raw;
+
+  // Validate the parameters and count the bytes needed for "key=value,...".
+  size_t raw_size = 0;
   for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it) {
     if (!it->value.IsString())
       return invalid("type parameter values must be strings");
@@ -433,10 +435,16 @@ TypeParameters TypeParameters::from_json(const std::string &json) {
     if (key.find_first_of(",=") != std::string_view::npos ||
         value.find(',') != std::string_view::npos)
       return invalid("invalid delimiter in stored type parameters");
+    raw_size += key.size() + value.size() + 2;  // key=value,
+  }
+
+  std::string raw;
+  raw.reserve(raw_size);
+  for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it) {
     if (!raw.empty()) raw += ',';
-    raw.append(key);
+    raw.append(it->name.GetString(), it->name.GetStringLength());
     raw += '=';
-    raw.append(value);
+    raw.append(it->value.GetString(), it->value.GetStringLength());
   }
   return from_raw(raw);
 }
