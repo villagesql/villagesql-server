@@ -210,8 +210,8 @@ std::string get_extension_so_path(const std::string &extension_name,
 // Prefix marking a staging directory within {name}/.
 static constexpr const char *kStagingPrefix = ".tmp.";
 
-// True when an entry name carries the staging prefix, marking it as expansion
-// scratch rather than a completed {sha256} expansion.
+// True when an entry name begins with the staging prefix, marking it as
+// expansion scratch rather than a completed {sha256} expansion.
 static bool is_staging_dir_name(const std::string &entry_name) {
   return entry_name.rfind(kStagingPrefix, 0) == 0;
 }

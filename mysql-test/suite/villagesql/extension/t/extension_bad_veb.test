@@ -319,9 +319,7 @@ INSTALL EXTENSION nested_symlink;
 # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
---echo #
 --echo # MISSING SHARED LIBRARY
---echo #
 
 --echo # Manifest is valid but the VEB carries no lib/{name}.so
 --let $extension_name = no_shared_library
