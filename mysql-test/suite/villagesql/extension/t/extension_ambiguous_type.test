@@ -1,0 +1,44 @@
+# Scenario: two installed extensions both register a type named TESTTYPE. An
+# unqualified TESTTYPE column must fail with an ambiguity error rather than
+# assert; qualified names must still resolve.
+
+--let $testtype_extension_name = test_type_a
+--source include/villagesql/testtype_short_precision.inc
+--let $testtype_extension_name = test_type_b
+--source include/villagesql/testtype_full_precision.inc
+
+INSTALL EXTENSION test_type_a;
+
+--echo # Unqualified name resolves while only one extension provides it.
+CREATE TABLE t1 (id INT PRIMARY KEY, v TESTTYPE NOT NULL);
+DROP TABLE t1;
+
+INSTALL EXTENSION test_type_b;
+
+--echo # Unqualified name is ambiguous once both extensions provide it.
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, v TESTTYPE NOT NULL);
+
+--echo # Qualified names still resolve.
+CREATE TABLE t1 (id INT PRIMARY KEY, a test_type_a.TESTTYPE NOT NULL,
+                 b test_type_b.TESTTYPE NOT NULL);
+INSERT INTO t1 VALUES (1, '(3.141592653589793,2.718281828459045)',
+                          '(3.141592653589793,2.718281828459045)');
+SELECT id, a, b FROM t1;
+
+--echo # ADD COLUMN with an unqualified name is ambiguous too.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ADD COLUMN c TESTTYPE;
+
+--echo # ADD COLUMN with a qualified name resolves to the named extension.
+ALTER TABLE t1 ADD COLUMN c test_type_b.TESTTYPE;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+UNINSTALL EXTENSION test_type_b;
+
+--echo # Unqualified name resolves again with one provider left.
+CREATE TABLE t1 (id INT PRIMARY KEY, v TESTTYPE NOT NULL);
+DROP TABLE t1;
+
+UNINSTALL EXTENSION test_type_a;
