@@ -1,0 +1,79 @@
+# Test a parameter passed where a VDF expects a custom type.
+#
+# The other ps_vdf_* tests pass the custom type as a column and use ? only for
+# non-custom arguments; here the custom-type argument itself is the parameter.
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t1 VALUES (1, '(1.5,-2.5)'), (2, '(3.0,4.0)');
+
+--echo #
+--echo # Test 1: a parameter, and the same call with a string constant
+--echo #
+
+SELECT complex_real('(1.5,-2.5)') AS re;
+PREPARE stmt1 FROM 'SELECT complex_real(?) AS re';
+SET @val = '(1.5,-2.5)';
+EXECUTE stmt1 USING @val;
+
+--echo # Re-executed with a different value
+SET @val = '(3.0,4.0)';
+EXECUTE stmt1 USING @val;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: a parameter alongside a column of the same custom type
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id, complex_real(complex_add(val, ?)) AS re FROM t1 ORDER BY id';
+SET @val = '(1.0,1.0)';
+EXECUTE stmt2 USING @val;
+SET @val = '(10.0,0.0)';
+EXECUTE stmt2 USING @val;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: parameters in every custom-type argument of one call
+--echo #
+
+PREPARE stmt3 FROM 'SELECT complex_real(complex_add(?, ?)) AS re';
+SET @a = '(1.0,2.0)';
+SET @b = '(3.0,4.0)';
+EXECUTE stmt3 USING @a, @b;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: an invalid value is rejected at EXECUTE, not at PREPARE
+--echo #
+
+PREPARE stmt4 FROM 'SELECT complex_real(?) AS re';
+SET @val = 'not a complex';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE stmt4 USING @val;
+
+--echo # The statement still works with a valid value after
+SET @val = '(7.0,8.0)';
+EXECUTE stmt4 USING @val;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: a NULL parameter
+--echo #
+
+PREPARE stmt5 FROM 'SELECT complex_real(?) AS re';
+SET @val = NULL;
+EXECUTE stmt5 USING @val;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc
