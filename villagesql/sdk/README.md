@@ -153,36 +153,3 @@ SDK snapshot (e.g. only at release time).
 The `stable_sdk/` snapshots are the source of truth for what extensions compiled
 against a given protocol version can expect. An extension built from a frozen
 snapshot must continue to load on all future server versions.
-
-### Custom type parameter text
-
-Custom type parameter names and values are valid UTF-8 (the full `utf8mb4`
-range), without embedded NUL. The server converts SQL parameter literals from
-the connection charset to UTF-8 before canonicalization. Extension callbacks
-must return UTF-8 themselves, including integer shorthand, parameter rewrites,
-and inferred parameters. Invalid encoding and embedded NUL are errors; the
-server validates callback output even when an extension does not use the SDK.
-
-The server trims leading and trailing ASCII spaces and lowercases **both names
-and values** using `utf8mb4_0900_ai_ci`, retaining the existing normalization
-contract. Values must not depend on preserving case or surrounding spaces.
-For duplicate detection and rewrite validation, names compare using that
-collation: case and accent differences do not make
-names distinct, so `Metric`/`metric` and `resume`/`résumé` are duplicate names
-and are rejected. Comparison does not remove accents from stored text.
-Names and values must be nonempty after normalization. The map serialization
-uses comma and equals delimiters; SDK-produced names and values cannot contain
-those delimiters.
-
-Parameters are stored as JSON metadata for the custom column or stored routine
-parameter, not repeated in each user-data row. Existing metadata containing
-invalid text or collation-equivalent duplicate names is rejected when loaded;
-no parameter is silently discarded or merged. The system-table storage
-collation and `character_set_results` do not change this parameter policy.
-
-Type display text is converted to the receiving charset, as for MySQL built-in
-types. MySQL's dictionary display fields and `SHOW CREATE` use `utf8mb3`, so
-supplementary characters may appear as replacement characters there even though
-the complete UTF-8 parameter values are retained in VillageSQL JSON metadata.
-The SDK's `std::map` uses ordinary string lookup; server duplicate detection does
-not make the extension's own map lookups accent-insensitive.
