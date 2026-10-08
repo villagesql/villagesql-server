@@ -187,7 +187,12 @@ class TypeParamsCache {
 
   static std::string key_from_map(
       const std::map<std::string, std::string> &params) {
+    // One ',' between each pair of entries.
+    size_t size = params.empty() ? 0 : params.size() - 1;
+    // Each entry contributes "key=value".
+    for (const auto &[k, v] : params) size += k.size() + 1 + v.size();
     std::string key;
+    key.reserve(size);
     for (const auto &[k, v] : params) {
       if (!key.empty()) key += ',';
       key += k;
@@ -202,6 +207,8 @@ class TypeParamsCache {
     // The server normally delivers params in sorted order (matching the
     // std::map ordering used by key_from_map), so this is the common case.
     std::string key;
+    // Reserve the full key so the appends below never reallocate.
+    key.reserve(raw_key_size(raw));
     for (unsigned i = 0; i < raw.count; ++i) {
       if (i > 0) {
         if (std::strcmp(raw.keys[i - 1], raw.keys[i]) >= 0) {
@@ -216,6 +223,17 @@ class TypeParamsCache {
     return key;
   }
 
+  // Length of the "k1=v1,k2=v2,..." key built from raw, for reserve().
+  static size_t raw_key_size(const vef_type_params_t &raw) {
+    // One ',' between each pair of entries.
+    size_t size = raw.count == 0 ? 0 : raw.count - 1;
+    for (unsigned i = 0; i < raw.count; ++i) {
+      // Each entry contributes "key=value".
+      size += std::strlen(raw.keys[i]) + 1 + std::strlen(raw.values[i]);
+    }
+    return size;
+  }
+
   static std::string key_from_raw_unsorted(const vef_type_params_t &raw) {
     std::vector<unsigned> idx(raw.count);
     std::iota(idx.begin(), idx.end(), 0);
@@ -223,6 +241,8 @@ class TypeParamsCache {
       return std::strcmp(raw.keys[a], raw.keys[b]) < 0;
     });
     std::string key;
+    // Same length as the sorted key; only the entry order differs.
+    key.reserve(raw_key_size(raw));
     for (unsigned j : idx) {
       if (!key.empty()) key += ',';
       key += raw.keys[j];
