@@ -49,9 +49,7 @@ namespace veb {
 // stays as-is.
 //
 // Capability on_check_update hooks are NOT invoked from here; they require
-// an ABI shape that does not depend on THD or live catalog handles. See
-// Docs/EXTENSION_UPDATE_AT_RESTART.md "Pre-Check API Shape" for the planned
-// hook contract.
+// an ABI shape that does not depend on THD or live catalog handles.
 //
 // TODO(villagesql-general): relocate the precheck out of the live server
 // process. Phase 1 (this file) runs the dlopen + vef_register harvest
@@ -60,12 +58,19 @@ namespace veb {
 // re-execs mysqld with a pre-check-mode flag, the child does the harvest
 // under seccomp + rlimits + privilege drop, writes a framed result to a
 // pipe, and exits. Phase 3 swaps the re-exec'd mysqld for a dedicated
-// mysqld-vef-precheck helper binary for faster spawn. See
-// Docs/VEF_PRECHECK_SUBPROCESS_DESIGN.md for the full plan.
+// mysqld-vef-precheck helper binary for faster spawn.
 
+// Storage length of a type in the installed version. Together these determine
+// the length of the backing field of every column already created with the
+// type, which must not change across an update (see
+// check_retained_types_storage_length).
 struct CurrentTypeSnapshot {
   std::string type_name;
   int64_t persisted_length{0};
+  // Upper bound on the backing field for variable-length types; also set for
+  // fixed-length parameterized types, where it bounds persisted_length.
+  int64_t max_persisted_length{0};
+  bool variable_length{false};
 };
 
 struct DependentColumnSnapshot {
@@ -114,6 +119,15 @@ struct UpdatePreCheckInput {
   // rows pointing at a version that no longer defines their index_type
   // -- catalog corruption. Add a DependentIndexSnapshot list and a
   // dropped-index-type / dropped-index-profile check before beta.
+  //
+  // TODO(villagesql-general): the storage-length check compares type
+  // descriptors only. A parameterized type runs resolve_params on each
+  // column's parameters (for a fixed-length one, persisted_length -1, that
+  // is what decides the column's length), and the target version can change
+  // that mapping -- or reject parameters existing columns use -- without
+  // changing any descriptor field. Catching that requires snapshotting each
+  // dependent column's type parameters and resolved length, and running the
+  // target's resolve_params against them.
 };
 
 struct UpdatePreCheckResult {
@@ -132,8 +146,7 @@ struct UpdatePreCheckResult {
 // v2 mitigation runs this function in a separate process so the target
 // .so never touches the live server at all. The function signature is
 // already shaped to make that lift mechanical -- the input struct is the
-// wire format. See Docs/EXTENSION_UPDATE_AT_RESTART.md "Pre-Check API
-// Shape: Subprocess-Ready" and "Extension Author Contract".
+// wire format.
 UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input);
 
 // Populate `input` from the victionary: sets extension_name / current_version

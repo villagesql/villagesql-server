@@ -1,0 +1,7 @@
+{
+  "name": "update_length_test",
+  "version": "1.0.0",
+  "description": "VillageSQL test extension: baseline of the update_length_test series (FIX fixed 8, VAR variable max 64)",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}
