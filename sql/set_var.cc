@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1544,7 +1545,19 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened) {
       set_var *setvar = dynamic_cast<set_var *>(var);
       if (setvar &&
           (setvar->type == OPT_GLOBAL || setvar->type == OPT_PERSIST)) {
-        set_global_variable_attribute(setvar->m_var_tracker, nullptr, nullptr);
+        // VillageSQL: the statement has already succeeded, and the variable
+        // may be gone: this access takes LOCK_system_variables_hash afresh,
+        // so a concurrent UNINSTALL EXTENSION (or UNINSTALL COMPONENT) can
+        // unregister it after update() returns. Raising
+        // ER_UNKNOWN_SYSTEM_VARIABLE here would leave an error in the
+        // diagnostics area of a statement that then reports OK.
+        auto f = [](const System_variable_tracker &, sys_var *lvar) {
+          if ((lvar->scope() & sys_var::flag_enum::GLOBAL) != 0) {
+            lvar->m_global_attributes.clear();
+          }
+        };
+        setvar->m_var_tracker.access_system_variable(
+            thd, f, Suppress_not_found_error::YES);
       }
     }
   }
