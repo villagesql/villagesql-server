@@ -29,4 +29,32 @@ INSERT INTO t_param VALUES (2, '(42)');
 SELECT id, v FROM t_param ORDER BY id;
 DROP TABLE t_param;
 
+--echo #
+--echo # The VDF that supplies the default is not callable from SQL.
+--echo #
+--echo # It has to be registered under a name for the type to refer to it,
+--echo # which puts it in the SQL namespace. However, it should not be
+--echo # callable. For the parameterized types the parameters are needed to
+--echo # resolve the default value. The type parameters are unknown during
+--echo # SQL call. Thus, SQL call is blocked.
+--echo #
+
+--echo # Qualified.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.default_vdf_type_default();
+
+--echo # Unqualified, which resolves by a different path.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT default_vdf_type_default();
+
+--echo # The default itself is unaffected: the type machinery reaches the VDF
+--echo # without going through function resolution at all.
+CREATE TABLE t_again (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_again VALUES (1, NULL);
+SELECT id, v FROM t_again;
+DROP TABLE t_again;
+
+--echo # An ordinary VDF in the same extension is still callable.
+SELECT vsql_test_only.test_result_kind('ok') AS k;
+
 UNINSTALL EXTENSION vsql_test_only;
