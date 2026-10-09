@@ -127,6 +127,13 @@ class FuncDescriptor {
   vef_protocol_t protocol() const { return protocol_; }
   Item_result return_type() const { return return_type_; }
 
+  // False when a type in this extension claims this VDF as its intrinsic
+  // default. Such a VDF is invoked only by TypeContext, which supplies the type
+  // parameters it needs; a direct SQL call has none to give, so there is no
+  // value it could correctly return.
+  bool is_callable_from_sql() const { return callable_from_sql_; }
+  void set_not_callable_from_sql() { callable_from_sql_ = false; }
+
  private:
   FuncKey key_;
 
@@ -142,6 +149,11 @@ class FuncDescriptor {
 
   // MySQL result type for the return value
   Item_result return_type_{STRING_RESULT};
+
+  // Set by parse_extension_registration() for a VDF a type claims as its
+  // intrinsic default. Defaults to callable so a function no type claims keeps
+  // the behaviour it has always had.
+  bool callable_from_sql_{true};
 };
 
 // TableTraits specialization for FuncDescriptor.

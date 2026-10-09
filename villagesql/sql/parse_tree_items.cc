@@ -91,6 +91,18 @@ static void emit_type_method_error(std::string_view ext_name,
       MYF(0), type_name.c_str(), method_name.c_str());
 }
 
+// Intrinsic default function should not be callable. For a parameterized
+// types, the parameters are needed to resolve the default value.
+// The type's parameters are unknown during SQL call. Thus, SQL call is blocked.
+static void emit_not_callable_error(std::string_view ext_name,
+                                    const LEX_STRING &func) {
+  villagesql_error(
+      "Function '%.*s.%.*s' supplies the intrinsic default for a custom type "
+      "and cannot be called directly",
+      MYF(0), static_cast<int>(ext_name.length()), ext_name.data(),
+      static_cast<int>(func.length), func.str);
+}
+
 bool try_itemize_custom_vdf(Parse_context *pc, const LEX_STRING &extension_name,
                             const LEX_STRING &func, PT_item_list *opt_expr_list,
                             Item **res, bool *error) {
@@ -110,6 +122,12 @@ bool try_itemize_custom_vdf(Parse_context *pc, const LEX_STRING &extension_name,
       }
     }
     return false;  // Not found - let caller try other resolution
+  }
+
+  if (!func_desc->is_callable_from_sql()) {
+    emit_not_callable_error(to_string_view(extension_name), func);
+    *error = true;
+    return true;
   }
 
   // Add custom function to the list of used custom routines for MDL tracking
@@ -166,6 +184,12 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
   }
 
   const std::string &ext_name = vdf_desc->extension_name();
+
+  if (!vdf_desc->is_callable_from_sql()) {
+    emit_not_callable_error(ext_name, func);
+    *error = true;
+    return true;
+  }
 
   custom_add_used_routine(pc->thd->lex, pc->thd->stmt_arena, ext_name.c_str(),
                           ext_name.length(), func.str, func.length);

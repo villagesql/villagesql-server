@@ -1452,4 +1452,75 @@ TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullParamsFails) {
   EXPECT_NE(error.find("params"), std::string::npos);
 }
 
+// A VDF a type claims as its intrinsic default is not callable from SQL, while
+// every other func in the same extension still is.
+TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  td.protocol = VEF_PROTOCOL_4;
+  td.intrinsic_default_vdf_name = "my_default";
+  vef_type_desc_t *types[] = {&td};
+
+  // The intrinsic default takes no arguments and returns STRING, which is what
+  // the type builder's signature check requires.
+  vef_type_t str_ret = {VEF_TYPE_STRING, nullptr};
+  vef_signature_t default_sig = {0, nullptr, str_ret};
+  vef_func_desc_t default_fd = make_scalar_func("my_default", &default_sig);
+  default_fd.protocol = VEF_PROTOCOL_4;
+
+  vef_signature_t other_sig = {0, nullptr, str_ret};
+  vef_func_desc_t other_fd = make_scalar_func("my_func", &other_sig);
+  other_fd.protocol = VEF_PROTOCOL_4;
+
+  vef_func_desc_t *funcs[] = {&default_fd, &other_fd};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_4;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.func_count = 2;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  ASSERT_EQ(result->funcs.size(), 2u);
+  EXPECT_EQ(result->funcs[0].function_name(), "my_default");
+  EXPECT_FALSE(result->funcs[0].is_callable_from_sql());
+  EXPECT_EQ(result->funcs[1].function_name(), "my_func");
+  EXPECT_TRUE(result->funcs[1].is_callable_from_sql());
+}
+
+// intrinsic_default_vdf_name arrived in the v3 ABI, so a type negotiating v1
+// never allocated the field and it must not be read. A v1 registration leaves
+// every func callable even when the field happens to hold a name.
+TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultNameIgnoredForV1) {
+  vef_type_desc_t td = make_v1_type("MYTYPE");
+  td.intrinsic_default_vdf_name = "my_default";
+  vef_type_desc_t *types[] = {&td};
+
+  vef_type_t str_ret = {VEF_TYPE_STRING, nullptr};
+  vef_signature_t sig = {0, nullptr, str_ret};
+  vef_func_desc_t fd = make_scalar_func("my_default", &sig);
+  vef_func_desc_t *funcs[] = {&fd};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_1;
+  reg.deprecated_extension_name = "my_ext";
+  reg.type_count = 1;
+  reg.types = types;
+  reg.func_count = 1;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_1), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value()) << error;
+  ASSERT_EQ(result->funcs.size(), 1u);
+  EXPECT_TRUE(result->funcs[0].is_callable_from_sql());
+}
+
 }  // namespace villagesql_unittest
