@@ -17,7 +17,9 @@
 #include "villagesql/veb/register.h"
 
 #include <algorithm>
+#include <map>
 #include <set>
+#include <utility>
 
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
@@ -126,6 +128,11 @@ bool register_preview_capabilities(THD &thd,
   auto &victionary = VictionaryClient::instance();
   victionary.assert_write_lock_held();
 
+  // Tracks which (data type, index type) pairs already have a default profile
+  // in this batch, keyed by the resolved normalized prefixes. At most one
+  // profile may be the default for a pair.
+  std::map<std::pair<std::string, std::string>, std::string> default_profiles;
+
   // Validate profile references before moving any descriptor. Each profile's
   // data type and index type must resolve to exactly one entry in the current
   // batch.
@@ -199,6 +206,24 @@ bool register_preview_capabilities(THD &thd,
     if (profile.index_type_ref().extension_name().empty()) {
       profile.set_index_type_ref(IndexTypeDescriptorKeyPrefix(
           profile.index_type_name(), resolved_index_type_ext));
+    }
+
+    // Both refs are fully qualified now, so their normalized prefixes identify
+    // the (data type, index type) pair a default profile claims.
+    if (profile.default_for_type()) {
+      auto [it, inserted] = default_profiles.emplace(
+          std::make_pair(profile.type_ref().str(),
+                         profile.index_type_ref().str()),
+          prof_name);
+      if (!inserted) {
+        error_out =
+            "index profile '" + prof_name + "': type '" + profile.type_name() +
+            "' with index type '" + profile.index_type_name() +
+            "' already has a default index profile '" + it->second + "'";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", prof_ext.c_str(),
+                error_out.c_str());
+        return true;
+      }
     }
   }
 
