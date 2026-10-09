@@ -760,6 +760,10 @@ static constexpr auto KVEC_STORE_COS_INDEX =
 // 8-byte ref prefix and compute L2 over the floats, like SVECTOR's distance.
 static void kvec_l2_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
                                 vsql::RealResult out) {
+  if (a.is_null() || b.is_null()) {
+    out.error("kvec_l2_distance: operand must not be NULL");
+    return;
+  }
   auto va = a.value();
   auto vb = b.value();
   if (va.size() < kFieldSize || vb.size() < kFieldSize) {
@@ -808,6 +812,10 @@ static const auto KVEC_L2_PROFILE = make_index_profile(kKVecProfileL2)
 // default_for_type -- a type may have only one default profile, and L2 owns it.
 static void kvec_cos_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
                                  vsql::RealResult out) {
+  if (a.is_null() || b.is_null()) {
+    out.error("kvec_cos_distance: operand must not be NULL");
+    return;
+  }
   auto va = a.value();
   auto vb = b.value();
   if (va.size() < kFieldSize || vb.size() < kFieldSize) {
