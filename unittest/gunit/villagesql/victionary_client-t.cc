@@ -2234,8 +2234,8 @@ TEST_F(VictionaryClientTest, AcquireOrCreateWithParameters) {
   MEM_ROOT mem_root(PSI_NOT_INSTRUMENTED, 1024);
 
   // Create different TypeContextKeys with different parameters
-  TypeParameters params1("dimension=1536");
-  TypeParameters params2("dimension=3");
+  TypeParameters params1 = TypeParameters::from_raw("dimension=1536");
+  TypeParameters params2 = TypeParameters::from_raw("dimension=3");
 
   TypeContextKey ctx_key1("VECTOR", "vector_ext", "2.0.0", params1);
   TypeContextKey ctx_key2("VECTOR", "vector_ext", "2.0.0", params2);

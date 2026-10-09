@@ -36,6 +36,7 @@ Concretely:
 
 Type parameter names and values must be valid UTF-8 without embedded NUL
 because the ABI uses NUL-terminated strings. The server converts SQL input
-from the connection charset; extensions must supply UTF-8. The server trims
-surrounding ASCII spaces, lowercases names and values, and rejects duplicate
-names using `utf8mb4_0900_ai_ci` (case- and accent-insensitive).
+from the connection charset to utf8mb4; extensions must supply UTF-8. The server
+trims surrounding ASCII spaces and lowercases names and values. Names are sorted
+and checked for duplicates using the fixed `utf8mb4_0900_ai_ci` collation (case-
+and accent-insensitive). Extensions cannot configure this collation.

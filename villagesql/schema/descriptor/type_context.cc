@@ -216,8 +216,11 @@ void TypeContext::resolve_cached_values() {
           // provide resolve_params (enforced at registration), so it is always
           // present here.
           assert(descriptor_->resolve_params_fn().has_value());
+          // Validate and normalize int_to_params output before resolving
+          // defaults. Missing parameters are allowed; malformed entries are
+          // not.
           TypeParameters initial = TypeParameters::from_raw(result);
-          if (!initial.validation_error().empty()) continue;
+          if (initial.has_error()) continue;
           ResolvedTypeParams tmp = {};
           char rerr[VEF_MAX_ERROR_LEN] = {0};
           std::string canonical = result;
@@ -225,8 +228,7 @@ void TypeContext::resolve_cached_values() {
                                                        rerr, &canonical))
             continue;
           TypeParameters candidate = TypeParameters::from_raw(canonical);
-          if (candidate.validation_error().empty() &&
-              candidate == key_.parameters()) {
+          if (!candidate.has_error() && candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);
             qualified_name_ += ")";
@@ -286,35 +288,15 @@ const char *TypeParameters::text_error(std::string_view text) {
   return nullptr;
 }
 
-std::string TypeParameters::validation_error() const {
-  if (!error_.empty()) return error_;
-  if (const char *error = text_error(str_)) return error;
-  for (size_t i = 0; i < keys_.size(); ++i) {
-    if (keys_[i].empty()) return "empty parameter name";
-    if (values_[i].empty()) return "parameter '" + keys_[i] + "' has no value";
-    // Direct constructor calls can leave keys unsorted, so check all prior
-    // keys.
-    for (size_t j = 0; j < i; ++j) {
-      if (type_parameter_names_equal(keys_[i], keys_[j]))
-        return "duplicate parameter '" + keys_[i] + "'";
-    }
-  }
-  return {};
-}
-
 void TypeParameters::build_entries() {
   keys_.clear();
   values_.clear();
   c_keys_.clear();
   c_values_.clear();
-  if (const char *error = text_error(str_)) {
-    error_ = error;
-    return;
-  }
   if (str_.empty()) return;
 
-  // Parse "key=value" pairs separated by commas. Keys are already sorted
-  // alphabetically in canonical form.
+  // from_raw() has already checked the text and sorted the keys.
+  // Parse "key=value" pairs separated by commas.
   size_t start = 0;
   while (start < str_.size()) {
     size_t comma = str_.find(',', start);
@@ -337,6 +319,21 @@ void TypeParameters::build_entries() {
   c_values_.reserve(values_.size());
   for (const auto &v : values_) {
     c_values_.push_back(v.c_str());
+  }
+  for (size_t i = 0; i < keys_.size(); ++i) {
+    if (keys_[i].empty()) {
+      error_ = "empty parameter name";
+      return;
+    }
+    if (values_[i].empty()) {
+      error_ = "parameter '" + keys_[i] + "' has no value";
+      return;
+    }
+    // Equal names are adjacent after sorting with the parameter collation.
+    if (i > 0 && type_parameter_names_equal(keys_[i], keys_[i - 1])) {
+      error_ = "duplicate parameter '" + keys_[i] + "'";
+      return;
+    }
   }
 }
 
@@ -432,6 +429,8 @@ TypeParameters TypeParameters::from_json(const std::string &json) {
     std::string_view value(it->value.GetString(), it->value.GetStringLength());
     if (const char *error = text_error(key)) return invalid(error);
     if (const char *error = text_error(value)) return invalid(error);
+    // TODO(villagesql-general): Support commas in parameter values in both
+    // the server and SDK parsers/serializers.
     if (key.find_first_of(",=") != std::string_view::npos ||
         value.find(',') != std::string_view::npos)
       return invalid("invalid delimiter in stored type parameters");

@@ -43,10 +43,12 @@ struct ColumnEntry;
 // Holds custom type parameters as "key1=value1,key2=value2,...".
 // The extension defines what each parameter means.
 //
-// Names and values must be valid UTF-8 without NUL. Normalization trims
-// surrounding ASCII spaces, lowercases names and values, and sorts keys by
-// the parameter collation. Duplicate names are checked with utf8mb4_0900_ai_ci.
-// Equality compares the stored string and any parsing error.
+// Names and values use utf8mb4 without NUL. SQL input is converted from the
+// connection charset; extensions must supply UTF-8. Normalization trims
+// surrounding ASCII spaces and lowercases names and values. Keys are sorted
+// and checked for duplicates using utf8mb4_0900_ai_ci. This collation is fixed,
+// not configurable by extensions.
+// Equality compares the stored string and any validation error.
 //
 // Examples:
 //   - COMPLEX with no parameters: empty string
@@ -55,9 +57,6 @@ struct ColumnEntry;
 class TypeParameters {
  public:
   TypeParameters() = default;
-  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {
-    build_entries();
-  }
 
   TypeParameters(const TypeParameters &other)
       : str_(other.str_),
@@ -99,17 +98,18 @@ class TypeParameters {
   // path.
   static TypeParameters from_raw(const std::string_view raw);
 
-  // Returns an error message, or an empty string if valid. Check this before
-  // empty(): a parse failure can leave an empty string with an error.
-  std::string validation_error() const;
-  static const char *text_error(std::string_view text);
+  // Check this before empty(): invalid input can leave an empty string.
+  bool has_error() const { return !error_.empty(); }
+
+  // Returns the stored error message, or an empty string if valid.
+  const std::string &validation_error() const { return error_; }
 
   bool empty() const { return str_.empty(); }
   const std::string &str() const { return str_; }
 
   // ABI accessors: parallel key/value arrays for vef_type_params_t.
   // keys and values are in the same order (keys[i] pairs with values[i]),
-  // sorted alphabetically by key.
+  // sorted by the parameter collation.
   unsigned int count() const { return static_cast<unsigned int>(keys_.size()); }
   const char *const *key_data() const {
     return c_keys_.empty() ? nullptr : c_keys_.data();
@@ -133,6 +133,12 @@ class TypeParameters {
   }
 
  private:
+  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {
+    build_entries();
+  }
+
+  // Checks UTF-8 and embedded NUL; returns nullptr if the text is valid.
+  static const char *text_error(std::string_view text);
   void build_entries();
   void rebuild_c_ptrs() {
     c_keys_.clear();
