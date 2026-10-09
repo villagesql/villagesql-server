@@ -82,15 +82,36 @@ Item_udf_func *GetCustomKnnDistanceFunction(Item *item) {
   return nullptr;
 }
 
-// If maybe_field is a field of table and maybe_query is a constant, binds them
-// to the out-params and returns true. Used to try both argument orderings of
-// the distance function.
+// True if the query operand can serve as the scan key: it must be the same for
+// every row, and it must yield the non-empty, non-NULL value BuildKnnScanSpec
+// needs to build one. Declining here leaves the ordering to a scan and sort.
+//
+// const_for_execution() rather than const_item(): a prepared statement's
+// parameter is constant per execution, but Item_param::used_tables() returns
+// INNER_TABLE_BIT so the optimizer will not read it before a value is
+// supplied. One still awaiting a value cannot be read at all
+// (Item_param::val_str asserts), so it is refused before the read below.
+bool UsableAsQueryOperand(Item *item) {
+  if (!item->const_for_execution()) return false;
+  if (item->type() == Item::PARAM_ITEM &&
+      down_cast<Item_param *>(item)->param_state() == Item_param::NO_VALUE) {
+    return false;
+  }
+
+  String buffer;
+  const String *value = item->val_str(&buffer);
+  return value != nullptr && !item->null_value && value->length() > 0;
+}
+
+// If maybe_field is a field of table and maybe_query is a usable query operand,
+// binds them to the out-params and returns true. Used to try both argument
+// orderings of the distance function.
 bool BindFieldAndQuery(Item *maybe_field, Item *maybe_query, TABLE *table,
                        Item_field **field_item, Item **query_item) {
   if (maybe_field->type() != Item::FIELD_ITEM) return false;
   auto *candidate = down_cast<Item_field *>(maybe_field);
   if (candidate->field == nullptr || candidate->field->table != table ||
-      !maybe_query->const_item()) {
+      !UsableAsQueryOperand(maybe_query)) {
     return false;
   }
   *field_item = candidate;
