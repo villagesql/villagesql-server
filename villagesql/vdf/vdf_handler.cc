@@ -303,6 +303,15 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
           MaybeResizeBuffer(static_cast<size_t>(buffer_len))) {
         return true;
       }
+
+      // The item's declared width came from resolve_type(), which ran before
+      // this function and so sized the result from the widest argument: the
+      // only measure available before the return type was settled. Now that it
+      // is settled, set the width to what the type says.
+      if (buffer_len > 0 &&
+          static_cast<uint32>(buffer_len) != func->max_length) {
+        func->max_length = static_cast<uint32>(buffer_len);
+      }
     }
   }
 

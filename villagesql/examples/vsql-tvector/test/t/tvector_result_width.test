@@ -1,0 +1,209 @@
+# Scenario: a function that returns a custom type says two things about its
+# result: which type it is, and how many bytes one value takes. The two have
+# to agree.
+#
+# A plain SELECT reads neither, because each value goes straight to the
+# client. Sorting, grouping, de-duplicating and storing all have to put the
+# value into a field first, and that field is built from both: the byte count
+# sizes it, the type names it. A byte count too small for the type cuts the
+# value short.
+#
+# A custom return gets its type parameters by one of three routes, and each
+# decides a different width, so each is covered here:
+#
+#   a bind_and_check_types hook   can make the result any width it likes,
+#                                 wider or narrower than its arguments
+#   the built-in copy rule        copies a same-typed argument's parameters,
+#                                 so the result matches that argument
+#   constant-string inference     reads the parameters out of a literal
+#
+# Fixture: tvector_concat(TVECTOR(M), TVECTOR(N)) -> TVECTOR(M+N). A TVECTOR
+# element is a 4-byte float, so TVECTOR(2) is 8 bytes, TVECTOR(3) is 12, and
+# their concatenation is 20.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE v2 (v TVECTOR(2));
+CREATE TABLE v3 (v TVECTOR(3));
+INSERT INTO v2 VALUES ('[1,2]');
+INSERT INTO v3 VALUES ('[3,4,5]');
+
+########################################################################
+#
+# 1. Streamed straight to the client.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+
+########################################################################
+#
+# 2. Materialized. Each of these builds a field for the value first, so
+#    each needs the declared width to match the type.
+#
+########################################################################
+
+SELECT DISTINCT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3 ORDER BY c;
+
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3 GROUP BY c;
+
+SELECT c FROM
+  (SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3) d;
+
+--echo # Both arms must be the same custom type
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3
+UNION
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+
+--echo # Read back through another function, so the materialized bytes are
+--echo # used rather than only displayed. The dimension shows all five
+--echo # elements made the round trip.
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+  (SELECT DISTINCT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3) d;
+
+########################################################################
+#
+# 3. CREATE TABLE ... SELECT, which needs the type as well as the width:
+#    the column it creates has to be a TVECTOR, not the binary string a
+#    custom value is carried as. SHOW CREATE TABLE is the assertion.
+#
+########################################################################
+
+CREATE TABLE made AS
+  SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+SHOW CREATE TABLE made;
+SELECT c FROM made;
+DROP TABLE made;
+
+########################################################################
+#
+# 4. Arguments of equal width.
+#
+#    Mismatched arguments are not what makes a result outgrow them: two
+#    TVECTOR(3) values give a TVECTOR(6), 24 bytes from a pair of 12-byte
+#    inputs. For a concatenation the result exceeds the widest single
+#    argument on every call.
+#
+########################################################################
+
+SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM v3 a, v3 b;
+
+########################################################################
+#
+# 5. A hook that makes the result narrower than its argument.
+#
+#    tvector_max_as_vector(TVECTOR(10)) is a TVECTOR(1), 4 bytes from a
+#    40-byte input. Nothing can truncate in this direction, so only the
+#    created column shows whether the width followed the type.
+#
+########################################################################
+
+CREATE TABLE src (v TVECTOR(10));
+INSERT INTO src VALUES ('[1,2,3,4,5,6,7,8,9,10]');
+
+SELECT vsql_tvector.tvector_max_as_vector(v) AS c FROM src;
+
+CREATE TABLE narrowed AS
+  SELECT vsql_tvector.tvector_max_as_vector(v) AS c FROM src;
+SHOW CREATE TABLE narrowed;
+SELECT COLUMN_NAME, CHARACTER_OCTET_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME='narrowed';
+DROP TABLE narrowed;
+DROP TABLE src;
+
+########################################################################
+#
+# 6. The two routes that involve no hook.
+#
+#    tvector_scale takes its parameters from the built-in copy rule, so its
+#    result is the same width as its argument. TVECTOR::from_string takes
+#    them from the literal it is given. Both still have to reach a created
+#    column as a TVECTOR.
+#
+########################################################################
+
+CREATE TABLE src3 (v TVECTOR(3));
+INSERT INTO src3 VALUES ('[1,2,3]');
+
+CREATE TABLE scaled AS SELECT vsql_tvector.tvector_scale(v, 2.0) AS c FROM src3;
+SHOW CREATE TABLE scaled;
+SELECT c FROM scaled;
+
+CREATE TABLE inferred AS
+  SELECT vsql_tvector.TVECTOR::from_string('[1.0,2.0]') AS c;
+SHOW CREATE TABLE inferred;
+SELECT COLUMN_NAME, CHARACTER_OCTET_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME='inferred';
+
+DROP TABLE inferred;
+DROP TABLE scaled;
+DROP TABLE src3;
+
+########################################################################
+#
+# 7. A wide result.
+#
+#    TVECTOR(100) + TVECTOR(100) is 800 bytes. Width changes nothing: a wide
+#    result is de-duplicated, grouped, sorted and stored exactly as a narrow
+#    one is, and exactly as a column of the same type is.
+#
+#    Two different rows, so the sort and the grouping have something to
+#    compare and really do build a temporary table; with one row the server
+#    can skip that work and the width would go unexercised.
+#
+#    The spilled case is checked on its own, because an in-memory temporary
+#    table and an on-disk one hold a value differently.
+#
+########################################################################
+
+CREATE TABLE w (v TVECTOR(100));
+--let $ones = `SELECT CONCAT('[', REPEAT('1,', 99), '1]')`
+--let $twos = `SELECT CONCAT('[', REPEAT('2,', 99), '2]')`
+--disable_query_log
+eval INSERT INTO w VALUES ('$ones');
+eval INSERT INTO w VALUES ('$twos');
+--enable_query_log
+
+--echo # Streamed, for comparison with the materialized forms below.
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_concat(a.v, b.v)) AS dim
+FROM w a, w b LIMIT 1;
+
+--echo # Each clause that forces a field, checked separately.
+
+--echo # de-duplicating
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+  (SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b) d;
+
+--echo # grouping
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+  (SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c
+     FROM w a, w b GROUP BY c) d;
+
+--echo # sorting
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+  (SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c
+     FROM w a, w b ORDER BY c) d;
+
+--echo # spilled to an on-disk temporary table rather than held in memory
+SET SESSION tmp_table_size = 1024;
+SET SESSION max_heap_table_size = 16384;
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+  (SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b) d;
+SET SESSION tmp_table_size = DEFAULT;
+SET SESSION max_heap_table_size = DEFAULT;
+
+--echo # storing
+CREATE TABLE wide AS
+  SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b;
+SHOW CREATE TABLE wide;
+SELECT COLUMN_NAME, CHARACTER_OCTET_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME='wide';
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM wide;
+DROP TABLE wide;
+
+DROP TABLE w;
+DROP TABLE v2;
+DROP TABLE v3;
+UNINSTALL EXTENSION vsql_tvector;

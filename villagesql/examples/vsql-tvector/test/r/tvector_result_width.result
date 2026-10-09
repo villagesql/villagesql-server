@@ -1,0 +1,159 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE v2 (v TVECTOR(2));
+CREATE TABLE v3 (v TVECTOR(3));
+INSERT INTO v2 VALUES ('[1,2]');
+INSERT INTO v3 VALUES ('[3,4,5]');
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+c
+[1,2,3,4,5]
+SELECT DISTINCT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+c
+[1,2,3,4,5]
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3 ORDER BY c;
+c
+[1,2,3,4,5]
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3 GROUP BY c;
+c
+[1,2,3,4,5]
+SELECT c FROM
+(SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3) d;
+c
+[1,2,3,4,5]
+# Both arms must be the same custom type
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3
+UNION
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+c
+[1,2,3,4,5]
+# Read back through another function, so the materialized bytes are
+# used rather than only displayed. The dimension shows all five
+# elements made the round trip.
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+(SELECT DISTINCT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3) d;
+dim
+5
+CREATE TABLE made AS
+SELECT vsql_tvector.tvector_concat(v2.v, v3.v) AS c FROM v2, v3;
+SHOW CREATE TABLE made;
+Table	Create Table
+made	CREATE TABLE `made` (
+  `c` vsql_tvector.TVECTOR(5) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT c FROM made;
+c
+[1,2,3,4,5]
+DROP TABLE made;
+SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM v3 a, v3 b;
+c
+[3,4,5,3,4,5]
+CREATE TABLE src (v TVECTOR(10));
+INSERT INTO src VALUES ('[1,2,3,4,5,6,7,8,9,10]');
+SELECT vsql_tvector.tvector_max_as_vector(v) AS c FROM src;
+c
+[10]
+CREATE TABLE narrowed AS
+SELECT vsql_tvector.tvector_max_as_vector(v) AS c FROM src;
+SHOW CREATE TABLE narrowed;
+Table	Create Table
+narrowed	CREATE TABLE `narrowed` (
+  `c` vsql_tvector.TVECTOR(1) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COLUMN_NAME, CHARACTER_OCTET_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME='narrowed';
+COLUMN_NAME	CHARACTER_OCTET_LENGTH
+c	4
+DROP TABLE narrowed;
+DROP TABLE src;
+CREATE TABLE src3 (v TVECTOR(3));
+INSERT INTO src3 VALUES ('[1,2,3]');
+CREATE TABLE scaled AS SELECT vsql_tvector.tvector_scale(v, 2.0) AS c FROM src3;
+SHOW CREATE TABLE scaled;
+Table	Create Table
+scaled	CREATE TABLE `scaled` (
+  `c` vsql_tvector.TVECTOR(3) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT c FROM scaled;
+c
+[2,4,6]
+CREATE TABLE inferred AS
+SELECT vsql_tvector.TVECTOR::from_string('[1.0,2.0]') AS c;
+SHOW CREATE TABLE inferred;
+Table	Create Table
+inferred	CREATE TABLE `inferred` (
+  `c` vsql_tvector.TVECTOR(2) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COLUMN_NAME, CHARACTER_OCTET_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME='inferred';
+COLUMN_NAME	CHARACTER_OCTET_LENGTH
+c	8
+DROP TABLE inferred;
+DROP TABLE scaled;
+DROP TABLE src3;
+CREATE TABLE w (v TVECTOR(100));
+# Streamed, for comparison with the materialized forms below.
+SELECT vsql_tvector.tvector_dim(vsql_tvector.tvector_concat(a.v, b.v)) AS dim
+FROM w a, w b LIMIT 1;
+dim
+200
+# Each clause that forces a field, checked separately.
+# de-duplicating
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+(SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b) d;
+dim
+200
+200
+200
+200
+# grouping
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+(SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c
+FROM w a, w b GROUP BY c) d;
+dim
+200
+200
+200
+200
+# sorting
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+(SELECT vsql_tvector.tvector_concat(a.v, b.v) AS c
+FROM w a, w b ORDER BY c) d;
+dim
+200
+200
+200
+200
+# spilled to an on-disk temporary table rather than held in memory
+SET SESSION tmp_table_size = 1024;
+SET SESSION max_heap_table_size = 16384;
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM
+(SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b) d;
+dim
+200
+200
+200
+200
+SET SESSION tmp_table_size = DEFAULT;
+SET SESSION max_heap_table_size = DEFAULT;
+# storing
+CREATE TABLE wide AS
+SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b;
+SHOW CREATE TABLE wide;
+Table	Create Table
+wide	CREATE TABLE `wide` (
+  `c` vsql_tvector.TVECTOR(200) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COLUMN_NAME, CHARACTER_OCTET_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME='wide';
+COLUMN_NAME	CHARACTER_OCTET_LENGTH
+c	800
+SELECT vsql_tvector.tvector_dim(c) AS dim FROM wide;
+dim
+200
+200
+200
+200
+DROP TABLE wide;
+DROP TABLE w;
+DROP TABLE v2;
+DROP TABLE v3;
+UNINSTALL EXTENSION vsql_tvector;
