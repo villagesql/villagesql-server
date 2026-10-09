@@ -33,7 +33,7 @@ EXPLAIN
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
-ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand too short
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand must not be NULL
 #
 # An empty-string operand never reaches recognition: converting it to
 # the column's type fails first, so even EXPLAIN errors.
@@ -51,7 +51,7 @@ ERROR HY000: Incorrect kvector value: ''
 #
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL);
-ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand too short
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand must not be NULL
 #
 # A usable operand still routes after the rejected ones.
 #

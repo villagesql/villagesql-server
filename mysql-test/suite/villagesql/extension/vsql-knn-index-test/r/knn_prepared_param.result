@@ -54,7 +54,7 @@ id
 #
 SET @q = NULL;
 EXECUTE p USING @q;
-ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand too short
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand must not be NULL
 #
 # The statement still routes and answers correctly after the NULL.
 #
