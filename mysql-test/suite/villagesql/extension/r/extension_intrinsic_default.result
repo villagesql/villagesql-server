@@ -32,4 +32,33 @@ id	v
 1	(5)
 2	(42)
 DROP TABLE t_param;
+#
+# The VDF that supplies the default is not callable from SQL.
+#
+# It has to be registered under a name for the type to refer to it,
+# which puts it in the SQL namespace. However, it should not be
+# callable. For the parameterized types the parameters are needed to
+# resolve the default value. The type parameters are unknown during
+# SQL call. Thus, SQL call is blocked.
+#
+# Qualified.
+SELECT vsql_test_only.default_vdf_type_default();
+ERROR HY000: Function 'vsql_test_only.default_vdf_type_default' supplies the intrinsic default for a custom type and cannot be called directly
+# Unqualified, which resolves by a different path.
+SELECT default_vdf_type_default();
+ERROR HY000: Function 'vsql_test_only.default_vdf_type_default' supplies the intrinsic default for a custom type and cannot be called directly
+# The default itself is unaffected: the type machinery reaches the VDF
+# without going through function resolution at all.
+CREATE TABLE t_again (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_again VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+SELECT id, v FROM t_again;
+id	v
+1	(9)
+DROP TABLE t_again;
+# An ordinary VDF in the same extension is still callable.
+SELECT vsql_test_only.test_result_kind('ok') AS k;
+k
+42
 UNINSTALL EXTENSION vsql_test_only;

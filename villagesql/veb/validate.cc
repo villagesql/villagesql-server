@@ -20,6 +20,7 @@
 #include <cassert>
 #include <cstring>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_set>
 
@@ -73,6 +74,9 @@ std::optional<ValidatedRegistration> parse_extension_registration(
     const std::string &extension_version, std::string &error_out) {
   ValidatedRegistration result;
   const vef_registration_t *reg = ext_reg.registration;
+
+  // VDF names claimed by a type as its intrinsic default
+  std::set<std::string> intrinsic_default_vdf_names;
 
   // check_vef_registration() has already established that the counts match the
   // arrays and that every descriptor is non-NULL, named and structurally
@@ -141,6 +145,9 @@ std::optional<ValidatedRegistration> parse_extension_registration(
                 error_out.c_str());
         return std::nullopt;
       }
+
+      if ((is_v4 || is_v3) && td->intrinsic_default_vdf_name != nullptr)
+        intrinsic_default_vdf_names.insert(td->intrinsic_default_vdf_name);
 
       result.types.push_back(std::move(*maybe_descriptor));
     }
@@ -252,6 +259,15 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         }
       }
       break;
+    }
+  }
+
+  // Close the SQL route to every VDF a type claims as its intrinsic default.
+  // A name that resolves to no function has already failed validation in the
+  // type builder, so each name here matches exactly one entry.
+  for (FuncDescriptor &func : result.funcs) {
+    if (intrinsic_default_vdf_names.count(func.function_name()) > 0) {
+      func.set_not_callable_from_sql();
     }
   }
 
