@@ -26,6 +26,8 @@ INSERT INTO exceptions_ints VALUES (2);
 INSERT INTO exceptions_ints VALUES (5);
 INSERT INTO exceptions_ints VALUES (7);
 
+# libc++ (macOS) and libstdc++ (Linux) word this what() string differently.
+--replace_result bad_optional_access "bad optional access"
 --error 3200
 SELECT vsql_exceptions_test.exception_sum(bad_data) FROM exceptions_ints;
 
