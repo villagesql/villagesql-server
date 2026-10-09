@@ -237,17 +237,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
           arg_types[i].id = VEF_TYPE_CUSTOM;
           arg_types[i].custom_type = tc->type_name().c_str();
         } else {
-          switch (m_args[i]->result_type()) {
-            case REAL_RESULT:
-              arg_types[i].id = VEF_TYPE_REAL;
-              break;
-            case INT_RESULT:
-              arg_types[i].id = VEF_TYPE_INT;
-              break;
-            default:
-              arg_types[i].id = VEF_TYPE_STRING;
-              break;
-          }
+          arg_types[i].id = villagesql::InferArgTypeId(m_args[i]);
           arg_types[i].custom_type = nullptr;
         }
       }
@@ -368,22 +358,7 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
       // Varargs: no per-slot signature, so infer the type from the Item.
       // ValidateAndConvertVDFArguments already rejects arg-count mismatches
       // for fixed-arity functions, so this branch only fires for varargs.
-      auto *tc = arg_item->get_type_context();
-      if (tc != nullptr) {
-        param_type = VEF_TYPE_CUSTOM;
-      } else {
-        switch (arg_item->result_type()) {
-          case REAL_RESULT:
-            param_type = VEF_TYPE_REAL;
-            break;
-          case INT_RESULT:
-            param_type = VEF_TYPE_INT;
-            break;
-          default:
-            param_type = VEF_TYPE_STRING;
-            break;
-        }
-      }
+      param_type = villagesql::InferArgTypeId(arg_item);
     }
     invalues[i].type = param_type;
 
