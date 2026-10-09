@@ -1,0 +1,67 @@
+# A KNN ORDER BY whose query operand yields no usable key.
+#
+# NULL and the empty string cannot be a scan key, so the ordering does not take
+# the distance scan and the distance function is evaluated per row instead,
+# which rejects the operand. The point of the test is that this errors rather
+# than crashing the server.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[2,0,0,0]');
+
+--echo # For reference: a usable operand routes to the distance scan.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+
+--echo #
+--echo # A NULL operand. The plan is a sort rather than the distance scan, and
+--echo # the distance function then rejects the operand per row.
+--echo #
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
+--error ER_UDF_ERROR
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
+
+--echo #
+--echo # An empty-string operand never reaches recognition: converting it to
+--echo # the column's type fails first, so even EXPLAIN errors.
+--echo #
+--error ER_WRONG_VALUE
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '') LIMIT 2;
+--error ER_WRONG_VALUE
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '') LIMIT 2;
+
+--echo #
+--echo # A NULL operand with no LIMIT, so the KNN path is not a candidate at
+--echo # all.
+--echo #
+--error ER_UDF_ERROR
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL);
+
+--echo #
+--echo # A usable operand still routes after the rejected ones.
+--echo #
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[2,0,0,0]') LIMIT 2;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
