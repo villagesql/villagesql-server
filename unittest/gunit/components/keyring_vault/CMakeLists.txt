@@ -74,14 +74,15 @@ add_dependencies(merge_component_keyring_vault_tests-t GenError)
 # the link-time warning downgrades that whole-server links need. Without them a
 # RelWithDebInfo build on a DEB platform fails: dpkg-buildflags supplies
 # -flto=auto, and under LTO these diagnostics are emitted at link time, where
-# per-source-file suppressions cannot reach them. The same three warning classes
-# upstream downgrades elsewhere then become fatal via VILLAGESQL_WERROR --
-# boost geometry/spirit and sql/rpl_info_values.cc, the very sites named in the
-# server_unittest_library block in the top-level CMakeLists.txt.
+# per-source-file suppressions cannot reach them. The warning classes upstream
+# downgrades elsewhere then become fatal via VILLAGESQL_WERROR -- e.g. boost
+# geometry/spirit, sql/rpl_info_values.cc, sql/log_event.cc and
+# storage/innobase/fts/fts0fts.cc.
 #
 # The alloc-size downgrade follows unittest/gunit/CMakeLists.txt's
 # merge_large_tests-t. The stringop and maybe-uninitialized downgrades follow the
-# LTO-gated server_unittest_library block. The stringop ones cannot use
+# LTO-gated server_unittest_library block, and the uninitialized one follows
+# mysqld's LTO block in sql/CMakeLists.txt. The stringop ones cannot use
 # DOWNGRADE_STRINGOP_WARNINGS as merge_large_tests-t does: that macro acts only
 # under WITH_LTO AND FPROFILE_USE, so it is a no-op for dpkg-buildflags LTO, and
 # merge_large_tests-t gets its real stringop downgrade from
@@ -97,6 +98,11 @@ IF(TARGET merge_component_keyring_vault_tests-t)
   ENDIF()
   IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
     MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
+    IF(HAS_WARN_FLAG)
+      MY_TARGET_LINK_OPTIONS(merge_component_keyring_vault_tests-t
+        "${HAS_WARN_FLAG}")
+    ENDIF()
+    MY_CHECK_CXX_COMPILER_WARNING("error=uninitialized" HAS_WARN_FLAG)
     IF(HAS_WARN_FLAG)
       MY_TARGET_LINK_OPTIONS(merge_component_keyring_vault_tests-t
         "${HAS_WARN_FLAG}")
