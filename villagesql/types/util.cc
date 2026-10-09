@@ -1818,9 +1818,16 @@ static bool ConvertVDFArguments(
       continue;
     }
 
-    // Case 3: Arg is a constant string — implicit conversion.
-    if (args[i]->type() == Item::STRING_ITEM &&
-        args[i]->const_for_execution()) {
+    // Case 3: Arg is a constant string, or a prepared-statement parameter —
+    // implicit conversion.
+    //
+    // A parameter has no value here, so only its type context is set:
+    // InjectAndEncodeCustomType encodes a constant string in place and leaves
+    // any other Item alone, and Item_param::val_str encodes whatever value
+    // each EXECUTE supplies.
+    if (args[i]->type() == Item::PARAM_ITEM ||
+        (args[i]->type() == Item::STRING_ITEM &&
+         args[i]->const_for_execution())) {
       // Take the params from whichever source is in play -- the hook's answer
       // for this argument, or the answer shared across arguments of its type
       // (the server's built-in disambiguation rules). Neither supplying any
