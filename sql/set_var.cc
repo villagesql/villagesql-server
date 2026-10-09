@@ -1544,7 +1544,14 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened) {
       set_var *setvar = dynamic_cast<set_var *>(var);
       if (setvar &&
           (setvar->type == OPT_GLOBAL || setvar->type == OPT_PERSIST)) {
-        set_global_variable_attribute(setvar->m_var_tracker, nullptr, nullptr);
+        // VillageSQL: the statement has already succeeded, and the variable
+        // may be gone: this access takes LOCK_system_variables_hash afresh,
+        // so a concurrent UNINSTALL EXTENSION (or UNINSTALL COMPONENT) can
+        // unregister it after update() returns. Raising
+        // ER_UNKNOWN_SYSTEM_VARIABLE here would leave an error in the
+        // diagnostics area of a statement that then reports OK.
+        set_global_variable_attribute(setvar->m_var_tracker, nullptr, nullptr,
+                                      Suppress_not_found_error::YES);
       }
     }
   }
@@ -2223,9 +2230,10 @@ bool set_global_variable_attribute(const char *variable_base,
                                        attribute_value);
 }
 
-bool set_global_variable_attribute(const System_variable_tracker &var_tracker,
-                                   const char *attribute_name,
-                                   const char *attribute_value) {
+bool set_global_variable_attribute(
+    const System_variable_tracker &var_tracker, const char *attribute_name,
+    const char *attribute_value,
+    Suppress_not_found_error suppress_not_found_error) {
   auto f = [attribute_name, attribute_value](const System_variable_tracker &,
                                              sys_var *var) -> int {
     if ((var->scope() & sys_var::flag_enum::GLOBAL) == 0) {
@@ -2254,7 +2262,7 @@ bool set_global_variable_attribute(const System_variable_tracker &var_tracker,
 
   int ret = var_tracker
                 .access_system_variable<int>(current_thd, f,
-                                             Suppress_not_found_error::NO)
+                                             suppress_not_found_error)
                 .value_or(-1);
   return ret != 0;
 }
