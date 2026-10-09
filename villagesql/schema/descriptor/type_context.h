@@ -40,13 +40,15 @@ namespace villagesql {
 
 struct ColumnEntry;
 
-// TypeParameters holds the concrete instantiation parameters for a custom type
-// as a canonical "key1=value1,key2=value2,..." string. The server treats this
-// as an opaque string; only the extension's resolve_params callback interprets
-// the key/value pairs.
+// Holds custom type parameters as "key1=value1,key2=value2,...".
+// The extension defines what each parameter means.
 //
-// Canonical form: keys sorted alphabetically, all lowercased.
-// Equality is just string comparison.
+// Names and values use utf8mb4 without NUL. SQL input is converted from the
+// connection charset; extensions must supply UTF-8. Normalization trims
+// surrounding ASCII spaces and lowercases names and values. Keys are sorted
+// and checked for duplicates using utf8mb4_0900_ai_ci. This collation is fixed,
+// not configurable by extensions.
+// Equality compares the stored string and any validation error.
 //
 // Examples:
 //   - COMPLEX with no parameters: empty string
@@ -55,17 +57,18 @@ struct ColumnEntry;
 class TypeParameters {
  public:
   TypeParameters() = default;
-  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {
-    build_entries();
-  }
 
   TypeParameters(const TypeParameters &other)
-      : str_(other.str_), keys_(other.keys_), values_(other.values_) {
+      : str_(other.str_),
+        error_(other.error_),
+        keys_(other.keys_),
+        values_(other.values_) {
     rebuild_c_ptrs();
   }
   TypeParameters &operator=(const TypeParameters &other) {
     if (this != &other) {
       str_ = other.str_;
+      error_ = other.error_;
       keys_ = other.keys_;
       values_ = other.values_;
       rebuild_c_ptrs();
@@ -74,6 +77,7 @@ class TypeParameters {
   }
   TypeParameters(TypeParameters &&other) noexcept
       : str_(std::move(other.str_)),
+        error_(std::move(other.error_)),
         keys_(std::move(other.keys_)),
         values_(std::move(other.values_)) {
     rebuild_c_ptrs();
@@ -81,6 +85,7 @@ class TypeParameters {
   TypeParameters &operator=(TypeParameters &&other) noexcept {
     if (this != &other) {
       str_ = std::move(other.str_);
+      error_ = std::move(other.error_);
       keys_ = std::move(other.keys_);
       values_ = std::move(other.values_);
       rebuild_c_ptrs();
@@ -93,12 +98,18 @@ class TypeParameters {
   // path.
   static TypeParameters from_raw(const std::string_view raw);
 
+  // Check this before empty(): invalid input can leave an empty string.
+  bool has_error() const { return !error_.empty(); }
+
+  // Returns the stored error message, or an empty string if valid.
+  const std::string &validation_error() const { return error_; }
+
   bool empty() const { return str_.empty(); }
   const std::string &str() const { return str_; }
 
   // ABI accessors: parallel key/value arrays for vef_type_params_t.
   // keys and values are in the same order (keys[i] pairs with values[i]),
-  // sorted alphabetically by key.
+  // sorted by the parameter collation.
   unsigned int count() const { return static_cast<unsigned int>(keys_.size()); }
   const char *const *key_data() const {
     return c_keys_.empty() ? nullptr : c_keys_.data();
@@ -115,13 +126,19 @@ class TypeParameters {
   static TypeParameters from_json(const std::string &json);
 
   bool operator==(const TypeParameters &other) const {
-    return str_ == other.str_;
+    return error_ == other.error_ && str_ == other.str_;
   }
   bool operator<(const TypeParameters &other) const {
     return str_ < other.str_;
   }
 
  private:
+  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {
+    build_entries();
+  }
+
+  // Checks UTF-8 and embedded NUL; returns nullptr if the text is valid.
+  static const char *text_error(std::string_view text);
   void build_entries();
   void rebuild_c_ptrs() {
     c_keys_.clear();
@@ -132,8 +149,14 @@ class TypeParameters {
     for (const auto &v : values_) c_values_.push_back(v.c_str());
   }
 
-  // The canonical string representation of the key/value pairs
+  static TypeParameters invalid(std::string error) {
+    TypeParameters result;
+    result.error_ = std::move(error);
+    return result;
+  }
+  // The normalized "key=value,..." string.
   std::string str_;
+  std::string error_;
 
   // Pre-parsed parallel key/value arrays (sorted by key).
   // We own the strings and keep const char* vectors for the ABI.
@@ -396,6 +419,12 @@ struct TableTraits<TypeContext> {
   static std::shared_ptr<TypeContext> create(const TypeContextKey &key,
                                              const TypeDescriptor *descriptor) {
     if (!descriptor) return std::shared_ptr<TypeContext>();
+    const std::string validation = key.parameters().validation_error();
+    if (!validation.empty()) {
+      villagesql_error("Invalid type parameters: %s", MYF(0),
+                       validation.c_str());
+      return {};
+    }
     // Use new directly: make_shared constructs via the allocator which doesn't
     // have friend access to the private constructor.
     std::shared_ptr<TypeContext> tc(new TypeContext(key, descriptor));
