@@ -212,4 +212,11 @@ Created no_shared_library.veb with contents:
   manifest.json
 INSTALL EXTENSION no_shared_library;
 ERROR HY000: VEB for 'no_shared_library' contains no usable 'lib/no_shared_library.so'
+# TRUNCATED VEB
+# The manifest is intact but the archive ends inside lib/{name}.so
+INSTALL EXTENSION truncated_veb;
+ERROR HY000: Failed to read data for 'lib/truncated_veb.so': Truncated tar archive detected while reading data
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# No expansion or staging directory was left behind
 include/rpl/deprecated/show_binlog_events.inc
