@@ -702,7 +702,8 @@ typedef struct {
   // Bitmask of VEF_INDEX_ORDERING_* flags indicating supported scan directions.
   uint8_t ordering;
   // 1 if this is the default profile for the type when no profile is named at
-  // CREATE INDEX time.
+  // CREATE INDEX time. At most one profile per (type_name, index_type_name)
+  // pair may set this; registration rejects an extension that declares two.
   uint8_t default_for_type;
 } vef_index_profile_reg_t;
 
