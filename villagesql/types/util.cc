@@ -1040,8 +1040,22 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
     case Item::STRING_ITEM:
     case Item::NULL_ITEM:
     case Item::DEFAULT_VALUE_ITEM:
-    case Item::PARAM_ITEM:
       return true;
+    case Item::PARAM_ITEM: {
+      // Only a parameter carrying string bytes can be encoded; an integer,
+      // real, decimal or temporal value would reach the field in its own
+      // representation, never the type's. Bytes streamed with
+      // mysql_stmt_send_long_data() arrive as one string value, and NULL is
+      // stored as NULL, subject to the column's nullability.
+      switch (down_cast<const Item_param *>(item)->param_state()) {
+        case Item_param::NULL_VALUE:
+        case Item_param::STRING_VALUE:
+        case Item_param::LONG_DATA_VALUE:
+          return true;
+        default:
+          return false;
+      }
+    }
     case Item::FUNC_ITEM: {
       // Block functions, mostly, but let some through.
       auto *func = down_cast<const Item_func *>(item);
