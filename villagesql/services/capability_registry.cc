@@ -204,7 +204,7 @@ void register_builtin_capabilities() {
   // with MySQL; on_depopulate unregisters them on extension unload.
   register_capability(VEF_PREVIEW_SYS_VAR_NAME,
                       {.vtable = preview_sys_var_vtable(),
-                       .vtable_hash = "ver-1",
+                       .vtable_hash = "ver-2",
                        .capability_config_hash = "ver-1",
                        .on_populate = on_populate_sys_var,
                        .on_depopulate = on_depopulate_sys_var});

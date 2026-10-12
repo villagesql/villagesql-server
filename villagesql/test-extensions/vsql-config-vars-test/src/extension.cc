@@ -148,6 +148,26 @@ void write_max_items_impl(IntArg value, IntResult out) {
           : 0);
 }
 
+// Sets a named variable from a string, reaching the string overload of
+// SYS_VARS.set(). That overload serves STRING, BOOL, DOUBLE and ENUM; an INT
+// variable is only settable through the long long overload, so naming one
+// here must fail rather than coerce the text to a number.
+// Returns 1 if the set reported an error, 0 if it reported success.
+void write_var_str_impl(StringArg var_name, StringArg value, IntResult out) {
+  if (var_name.is_null() || value.is_null()) {
+    out.set(1);
+    return;
+  }
+  // set() takes NUL-terminated strings for the C ABI; a StringArg hands back
+  // a view that need not be one, so copy both.
+  const std::string var_name_str(var_name.value());
+  const std::string value_str(value.value());
+  out.set(SYS_VARS.set("vsql_config_vars_test", var_name_str.c_str(), nullptr,
+                       value_str)
+              ? 1
+              : 0);
+}
+
 // Reads the label variable via SYS_VARS.get() to exercise the get path.
 // Returns NULL if the get fails.
 void read_label_impl(StringResult out) {
@@ -178,6 +198,11 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_func<&write_max_items_impl>("write_max_items")
                   .returns(INT)
                   .param(INT)
+                  .build())
+        .func(make_func<&write_var_str_impl>("write_var_str")
+                  .returns(INT)
+                  .param(STRING)
+                  .param(STRING)
                   .build())
         .func(make_func<&read_label_impl>("read_label")
                   .returns(STRING)
