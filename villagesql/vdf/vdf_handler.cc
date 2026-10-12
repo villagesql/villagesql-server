@@ -70,6 +70,11 @@ bool vdf_handler::returns_string() const {
          m_udf->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING;
 }
 
+bool vdf_handler::returns_real() const {
+  return m_udf && m_udf->vdf_func_desc &&
+         m_udf->vdf_func_desc->signature->return_type.id == VEF_TYPE_REAL;
+}
+
 bool vdf_handler::MaybeResizeBuffer(size_t needed) {
   if (needed <= m_result_buffer_size) return false;
   const size_t new_size = RoundUpResultBuffer(needed);
@@ -80,13 +85,18 @@ bool vdf_handler::MaybeResizeBuffer(size_t needed) {
   return false;
 }
 
-bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
-                             Item_result_field *func [[maybe_unused]],
+bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
                              uint arg_count, Item **arguments,
                              String *buffers) {
   m_args = arguments;
   m_buffers = buffers;
   m_arg_count = arg_count;
+
+  // resolve_type() derived a scale from the arguments, which only a classic
+  // UDF's init function corrects via initid->decimals. A VDF has none, so
+  // that scale would round the result away -- to 0 decimals over INT
+  // arguments, or over no arguments at all.
+  if (returns_real()) func->set_data_type_double();
 
   // Allocate invalues array for argument marshaling
   if (arg_count > 0) {
