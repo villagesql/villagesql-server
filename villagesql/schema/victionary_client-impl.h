@@ -140,6 +140,19 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
     return true;
   }
 
+  // find_open_table() only proves the table is open, not that this THD holds a
+  // thr_lock on it. Writing through an unlocked handler trips an assertion in
+  // handler::ha_index_init() on a debug build, and corrupts InnoDB state on a
+  // release build, so reject it here instead. This happens when a caller opens
+  // its own system table and then flushes every map, while a different
+  // subsystem has already staged entries for a table it left for
+  // Metadata_modifier::store() to lock.
+  if (should_assert_if_true(sys_table->file->get_lock_type() == F_UNLCK)) {
+    LogVSQL(ERROR_LEVEL, "%s.%s is open but not locked for writing",
+            schema_name, table_name);
+    return true;
+  }
+
   // Enable writes to all fields.
   sys_table->use_all_columns();
 
