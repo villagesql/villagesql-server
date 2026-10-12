@@ -1,11 +1,5 @@
 # Test that DROP DATABASE cleans up villagesql.custom_sp_params rows for the
 # stored procedures and functions in the dropped database.
-#
-# Two cases, because they take different paths through
-# Metadata_modifier::store(): a database holding only routines stages just
-# custom_sp_params, while one that also holds a custom-typed column stages
-# custom_columns alongside it. The two tables have to be locked together in
-# that second case, since a statement gets only one lock_tables() call.
 
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
