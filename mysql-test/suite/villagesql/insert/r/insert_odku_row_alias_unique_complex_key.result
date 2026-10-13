@@ -1,0 +1,48 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX NOT NULL,
+note VARCHAR(20),
+UNIQUE KEY uk_val (val)
+);
+INSERT INTO t1 VALUES (1, '(1,2)', 'a'), (2, '(-3,4)', 'b');
+INSERT INTO t1 VALUES (10, '(1,2)', 'new') AS n
+ON DUPLICATE KEY UPDATE note = CONCAT(t1.note, '+', n.note);
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+INSERT INTO t1 VALUES (11, '(-3,4)', 'x') AS n(i, v, s)
+ON DUPLICATE KEY UPDATE note = CONCAT(s, ':', i);
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+SELECT * FROM t1 ORDER BY id;
+id	val	note
+1	(1,2)	a+new
+2	(-3,4)	x:11
+INSERT INTO t1 VALUES (12, '(1,2)', 'y') AS n
+ON DUPLICATE KEY UPDATE note = IF(t1.val = n.val, 'same', 'diff');
+INSERT INTO t1 SET id = 13, val = '(-3,4)', note = 'z' AS n
+ON DUPLICATE KEY UPDATE note = n.note;
+INSERT INTO t1 VALUES (14, '(0,0)', 'fresh') AS n
+ON DUPLICATE KEY UPDATE note = 'never';
+SELECT * FROM t1 ORDER BY id;
+id	val	note
+1	(1,2)	same
+2	(-3,4)	z
+14	(0,0)	fresh
+INSERT INTO t1 VALUES (14, '(8,8)', 'pk') AS n
+ON DUPLICATE KEY UPDATE val = n.val, note = n.note;
+SELECT * FROM t1 ORDER BY id;
+id	val	note
+1	(1,2)	same
+2	(-3,4)	z
+14	(8,8)	pk
+INSERT INTO t1 VALUES (14, '(1,2)', 'pk') AS n
+ON DUPLICATE KEY UPDATE val = n.val;
+ERROR 23000: Duplicate entry '(1,2)' for key 't1.uk_val'
+SELECT * FROM t1 ORDER BY id;
+id	val	note
+1	(1,2)	same
+2	(-3,4)	z
+14	(8,8)	pk
+DROP TABLE t1;

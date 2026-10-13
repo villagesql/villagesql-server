@@ -1,0 +1,51 @@
+CREATE TABLE t_src (id INT PRIMARY KEY, val COMPLEX, qty INT);
+INSERT INTO t_src VALUES
+(1, '(1,1)', 10),
+(2, '(2,2)', 20),
+(3, '(1,1)', 30),
+(4, '(-0,0)', 40),
+(5, NULL, 50);
+CREATE TABLE t_dst (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val COMPLEX,
+total INT NOT NULL,
+UNIQUE KEY uk_val (val)
+);
+INSERT INTO t_dst (val, total) VALUES ('(0,0)', 1);
+INSERT INTO t_dst (val, total)
+SELECT val, qty FROM t_src ORDER BY id
+ON DUPLICATE KEY UPDATE total = total + VALUES(total);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT val, total FROM t_dst ORDER BY val, total;
+val	total
+NULL	50
+(0,0)	41
+(1,1)	40
+(2,2)	20
+INSERT INTO t_dst (val, total)
+SELECT * FROM (SELECT val, qty FROM t_src WHERE val IS NOT NULL) AS s
+ON DUPLICATE KEY UPDATE total = t_dst.total + s.qty;
+SELECT val, total FROM t_dst ORDER BY val, total;
+val	total
+NULL	50
+(0,0)	81
+(1,1)	80
+(2,2)	40
+DELETE FROM t_dst;
+INSERT IGNORE INTO t_dst (val, total) SELECT val, qty FROM t_src ORDER BY id;
+Warnings:
+Warning	1062	Duplicate entry '(1,1)' for key 't_dst.uk_val'
+SELECT val, total FROM t_dst ORDER BY val, total;
+val	total
+NULL	50
+(0,0)	40
+(1,1)	10
+(2,2)	20
+DELETE FROM t_dst;
+INSERT INTO t_dst (val, total) SELECT val, qty FROM t_src ORDER BY id;
+ERROR 23000: Duplicate entry '(1,1)' for key 't_dst.uk_val'
+SELECT COUNT(*) FROM t_dst;
+COUNT(*)
+0
+DROP TABLE t_src, t_dst;

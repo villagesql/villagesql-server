@@ -1,0 +1,24 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX2,
+cnt INT NOT NULL DEFAULT 1,
+UNIQUE KEY uk_val (val)
+);
+INSERT INTO t1 (id, val) VALUES (1, '(0,0)'), (2, '(1,-0)');
+INSERT INTO t1 (id, val) VALUES (3, '(-0,0)');
+ERROR 23000: Duplicate entry '(-0,0)' for key 't1.uk_val'
+INSERT INTO t1 (id, val) VALUES (4, '(1,0)');
+ERROR 23000: Duplicate entry '(1,0)' for key 't1.uk_val'
+INSERT INTO t1 (id, val) VALUES (5, '(-0,-0)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+INSERT IGNORE INTO t1 (id, val) VALUES (6, '(1,0)');
+affected rows: 0
+Warnings:
+Warning	1062	Duplicate entry '(1,0)' for key 't1.uk_val'
+SELECT * FROM t1 ORDER BY id;
+id	val	cnt
+1	(0,0)	2
+2	(1,-0)	1
+DROP TABLE t1;

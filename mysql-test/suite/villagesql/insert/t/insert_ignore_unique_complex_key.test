@@ -1,0 +1,45 @@
+# INSERT IGNORE where rows conflict on a UNIQUE COMPLEX column: duplicates are
+# skipped with a warning naming the custom value, and other rows are kept.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    UNIQUE KEY uk_val (val)
+);
+
+INSERT INTO t1 VALUES (1, '(1,2)'), (2, '(0,0)');
+
+# Conflicts with an existing row.
+INSERT IGNORE INTO t1 VALUES (3, '(1.0,2.0)');
+
+# Conflicts on (-0,0), which COMPLEX stores as (0,0).
+INSERT IGNORE INTO t1 VALUES (4, '(-0,0)');
+
+# Multi-row: the conflict with the table and the one within the statement are
+# skipped; the remaining rows and the NULLs are inserted.
+--enable_info
+INSERT IGNORE INTO t1 VALUES
+    (5, '(5,5)'),
+    (6, '(1,2)'),
+    (7, '(5,5)'),
+    (8, NULL),
+    (9, NULL),
+    (10, '(-5,5)');
+--disable_info
+
+SELECT * FROM t1 ORDER BY id;
+
+# Without IGNORE the same conflict is an error.
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (11, '(5,5)');
+
+# IGNORE with ON DUPLICATE KEY UPDATE: the update collides with another row's
+# value and is skipped with a warning.
+INSERT IGNORE INTO t1 VALUES (12, '(1,2)') ON DUPLICATE KEY UPDATE val = '(5,5)';
+
+SELECT * FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

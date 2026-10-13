@@ -1,0 +1,66 @@
+# INSERT ... ON DUPLICATE KEY UPDATE where the conflict is on a UNIQUE COMPLEX
+# column (single and composite keys), using VALUES() in the update list.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    cnt INT NOT NULL DEFAULT 1,
+    UNIQUE KEY uk_val (val)
+);
+
+INSERT INTO t1 (id, val) VALUES (1, '(1,2)'), (2, '(3,-4)'), (3, '(0,0)');
+
+# Conflict on uk_val only: existing row 1 is updated, id stays 1.
+INSERT INTO t1 (id, val) VALUES (10, '(1,2)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+SELECT ROW_COUNT();
+
+# Different literal spelling of the same value still conflicts.
+INSERT INTO t1 (id, val) VALUES (11, '(3.0, -4.00)') ON DUPLICATE KEY UPDATE cnt = cnt + 10;
+SELECT ROW_COUNT();
+
+# COMPLEX canonicalizes -0, so (-0,-0) conflicts with (0,0).
+INSERT INTO t1 (id, val) VALUES (12, '(-0,-0)') ON DUPLICATE KEY UPDATE cnt = cnt + 100;
+SELECT ROW_COUNT();
+
+# No conflict: new row.
+INSERT INTO t1 (id, val) VALUES (13, '(5,6)') ON DUPLICATE KEY UPDATE cnt = cnt + 1000;
+SELECT ROW_COUNT();
+
+# NULLs never conflict in a UNIQUE key.
+INSERT INTO t1 (id, val) VALUES (14, NULL), (15, NULL) ON DUPLICATE KEY UPDATE cnt = -1;
+
+# Two rows in one statement with the same value: the second updates the first.
+INSERT INTO t1 (id, val) VALUES (16, '(7,7)'), (17, '(7,7)') ON DUPLICATE KEY UPDATE cnt = cnt + VALUES(id);
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update the custom column itself via VALUES(): moves the conflicting row's key.
+INSERT INTO t1 (id, val) VALUES (1, '(9,9)') ON DUPLICATE KEY UPDATE val = VALUES(val);
+SELECT * FROM t1 WHERE id = 1;
+
+# Update that would collide with another row's unique value fails.
+--error ER_DUP_ENTRY
+INSERT INTO t1 (id, val) VALUES (1, '(1,1)') ON DUPLICATE KEY UPDATE val = '(5,6)';
+
+SELECT * FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+# Composite unique key (INT, COMPLEX): conflict needs both parts to match.
+CREATE TABLE t2 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    grp INT NOT NULL,
+    val COMPLEX NOT NULL,
+    cnt INT NOT NULL DEFAULT 1,
+    UNIQUE KEY uk_grp_val (grp, val)
+);
+
+INSERT INTO t2 (grp, val) VALUES (1, '(1,1)'), (2, '(1,1)');
+INSERT INTO t2 (grp, val) VALUES (1, '(1,1)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+INSERT INTO t2 (grp, val) VALUES (1, '(1,-1)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+INSERT INTO t2 (grp, val) VALUES (3, '(1,1)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+SELECT grp, val, cnt FROM t2 ORDER BY grp, val;
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc
