@@ -1,0 +1,61 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+(5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+CREATE VIEW v1 AS
+SELECT id, grp, val,
+RANK() OVER (PARTITION BY grp ORDER BY val) AS rnk,
+LAG(val) OVER w AS lag_v
+FROM t1 WINDOW w AS (ORDER BY id);
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`id` AS `id`,`t1`.`grp` AS `grp`,`t1`.`val` AS `val`,rank() OVER (PARTITION BY `t1`.`grp` ORDER BY `t1`.`val` )  AS `rnk`,lag(`t1`.`val`) OVER `w` AS `lag_v` from `t1` window `w` AS (ORDER BY `t1`.`id` ) 	utf8mb4	utf8mb4_0900_ai_ci
+SELECT * FROM v1 ORDER BY id;
+id	grp	val	rnk	lag_v
+1	1	(2,1)	3	NULL
+2	1	(-3,0)	1	(2,1)
+3	1	(2,1)	3	(-3,0)
+4	1	(2,-5)	2	(2,1)
+5	2	(-1,-1)	2	(2,-5)
+6	2	NULL	1	(-1,-1)
+7	2	(10,0)	4	NULL
+8	2	(-1,-1)	2	(10,0)
+SELECT id, val, lag_v FROM v1 WHERE grp = 2 ORDER BY id;
+id	val	lag_v
+5	(-1,-1)	(2,-5)
+6	NULL	(-1,-1)
+7	(10,0)	NULL
+8	(-1,-1)	(10,0)
+SELECT id, rnk FROM v1 WHERE lag_v > '(0,0)' ORDER BY id;
+id	rnk
+2	1
+4	2
+5	2
+8	2
+CREATE VIEW v2 AS SELECT id, val FROM t1 WHERE val IS NOT NULL;
+SELECT id, val, DENSE_RANK() OVER (ORDER BY val) AS drnk FROM v2 ORDER BY id;
+id	val	drnk
+1	(2,1)	4
+2	(-3,0)	1
+3	(2,1)	4
+4	(2,-5)	3
+5	(-1,-1)	2
+7	(10,0)	5
+8	(-1,-1)	2
+CREATE VIEW v3 AS
+SELECT id, val,
+NTH_VALUE(val, 2) OVER (PARTITION BY grp ORDER BY val, id) AS nth,
+MIN(val) OVER (PARTITION BY grp) AS mn
+FROM t1;
+SELECT * FROM v3 ORDER BY id;
+id	val	nth	mn
+1	(2,1)	(2,-5)	(-3,0)
+2	(-3,0)	NULL	(-3,0)
+3	(2,1)	(2,-5)	(-3,0)
+4	(2,-5)	(2,-5)	(-3,0)
+5	(-1,-1)	(-1,-1)	(-1,-1)
+6	NULL	NULL	(-1,-1)
+7	(10,0)	(-1,-1)	(-1,-1)
+8	(-1,-1)	(-1,-1)	(-1,-1)
+DROP VIEW v1, v2, v3;
+DROP TABLE t1;
