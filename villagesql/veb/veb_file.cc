@@ -1171,7 +1171,16 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
   // leak the handle with capabilities populated. kShutdown mirrors how
   // load_vef_extension rolls back a failed startup load. The unload hook runs
   // only if the load hook did, which is not the case at startup.
-  auto unload_guard = create_scope_guard([thd, registration]() {
+  //
+  // Registration below marks victionary descriptors that point into the .so,
+  // and a failure part way leaves some of those marks uncommitted. Discard
+  // them before unloading. Every extension loads in the same startup
+  // transaction, so only the marks made after this savepoint are discarded.
+  const VictionaryClient::Savepoint savepoint =
+      victionary.savepoint_all_tables(thd);
+  auto unload_guard = create_scope_guard([thd, registration, &victionary,
+                                          &savepoint]() {
+    victionary.rollback_all_tables_to(thd, savepoint);
     unload_vef_extension(
         {.reason = villagesql::services::UnloadReason::kShutdown, .thd = thd},
         *registration);
@@ -1196,14 +1205,6 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
-  // Registration below marks victionary descriptors that point into the .so
-  // for insertion, and a failure part way leaves some of those marks
-  // uncommitted. Unloading would leave them dangling, so from here a failure
-  // keeps the .so loaded.
-  // TODO(villagesql-production): discard this extension's uncommitted
-  // victionary entries on failure, then unload here too.
-  unload_guard.release();
-
   if (register_preview_capabilities(*thd, std::move(*preview), *validated,
                                     reg_error) ||
       register_validated_extension(*thd, std::move(*validated), reg_error)) {
@@ -1212,8 +1213,8 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
-  // Build the descriptor's registration by copy: the caller keeps its own
-  // copy via `*registration` so a future rollback path can unload it.
+  // Build the descriptor's registration by copy: `*registration` keeps its own
+  // copy so it is unloaded by the caller on success or unload_guard on failure.
   ExtensionRegistration desc_reg = *registration;
   if (victionary.extension_descriptors().MarkForInsertion(
           *thd, ExtensionDescriptor(
@@ -1224,6 +1225,7 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
+  unload_guard.release();
   LogVSQL(INFORMATION_LEVEL,
           "Successfully registered VEF extension '%s' from '%s'",
           extension_name.c_str(), so_path.c_str());

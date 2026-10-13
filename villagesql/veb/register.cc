@@ -21,6 +21,7 @@
 #include <set>
 #include <utility>
 
+#include "my_dbug.h"
 #include "sql/sql_class.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
@@ -73,6 +74,14 @@ bool register_validated_extension(THD &thd, ValidatedRegistration validated,
               error_out.c_str());
       return true;
     }
+
+    // Fail once, with this type already marked, to leave a partial
+    // registration behind. Disarms itself so a fallback load can succeed.
+    DBUG_EXECUTE_IF("villagesql_fail_register_after_type_mark", {
+      DBUG_SET("-d,villagesql_fail_register_after_type_mark");
+      error_out = "injected failure after marking type '" + type_name + "'";
+      return true;
+    });
 
     LogVSQL(INFORMATION_LEVEL, "Successfully registered type '%s'",
             type_name.c_str());
