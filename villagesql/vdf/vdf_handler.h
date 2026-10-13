@@ -42,6 +42,9 @@ class vdf_handler {
   // Returns true if this VDF returns a string type
   bool returns_string() const;
 
+  // Returns true if this VDF returns a real type
+  bool returns_real() const;
+
   // Lifecycle methods
   // fix_fields: Allocate buffers and call prerun. Returns true on error.
   bool fix_fields(THD *thd, Item_result_field *func, uint arg_count,
