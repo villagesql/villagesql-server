@@ -328,4 +328,28 @@ SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION no_shared_library;
 
+--echo # TRUNCATED VEB
+
+--echo # The manifest is intact but the archive ends inside lib/{name}.so
+--perl
+use strict;
+use Archive::Tar;
+
+my $veb = "$ENV{'MYSQLTEST_VARDIR'}/veb/truncated_veb.veb";
+my $tar = Archive::Tar->new();
+$tar->add_data('manifest.json', '{"name": "truncated_veb", "version": "1.0.0"}');
+$tar->add_data('lib/truncated_veb.so', 'x' x 65536);
+$tar->write($veb);
+truncate($veb, (-s $veb) / 2) or die "Can't truncate $veb: $!";
+EOF
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION truncated_veb;
+
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # No expansion or staging directory was left behind
+--error 1
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/truncated_veb
+
 --source include/villagesql/binlog_check_end.inc
