@@ -95,6 +95,7 @@
 
 #include <cassert>
 #include <cinttypes>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -687,6 +688,48 @@ void pvec_norm_sq_accumulate(NormSqState &state,
 
 void pvec_norm_sq_result(const NormSqState &state, vsql::IntResult out) {
   out.set(state);
+}
+
+// real_sqrt / real_half_pi / real_avg pin down the result scale of a
+// REAL-returning VDF. Each produces a value with a fraction from arguments
+// that carry no scale of their own -- an INT parameter, or none at all -- so a
+// result that rounds to a whole number means the scale came from the
+// arguments rather than from the declared REAL return type.
+
+static void real_sqrt_impl(vsql::IntArg n, vsql::RealResult out) {
+  if (n.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(std::sqrt(static_cast<double>(n.value())));
+}
+
+static void real_half_pi_impl(vsql::RealResult out) {
+  out.set(1.5707963267948966);
+}
+
+struct RealAvgState {
+  double sum;
+  int64_t count;
+};
+
+void real_avg_clear(RealAvgState &state) {
+  state.sum = 0;
+  state.count = 0;
+}
+
+void real_avg_accumulate(RealAvgState &state, vsql::IntArg n) {
+  if (n.is_null()) return;
+  state.sum += static_cast<double>(n.value());
+  state.count++;
+}
+
+void real_avg_result(const RealAvgState &state, vsql::RealResult out) {
+  if (state.count == 0) {
+    out.set_null();
+    return;
+  }
+  out.set(state.sum / static_cast<double>(state.count));
 }
 
 static constexpr const char kPVecTypeName[] = "PVEC";
@@ -1341,4 +1384,18 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(PVEC)
                   .clear<&pvec_norm_sq_clear>()
                   .accumulate<&pvec_norm_sq_accumulate>()
+                  .build())
+        .func(make_func<&real_sqrt_impl>("real_sqrt")
+                  .returns(REAL)
+                  .param(INT)
+                  .build())
+        .func(make_func<&real_half_pi_impl>("real_half_pi")
+                  .returns(REAL)
+                  .no_params()
+                  .build())
+        .func(make_aggregate_func<RealAvgState, &real_avg_result>("real_avg")
+                  .returns(REAL)
+                  .param(INT)
+                  .clear<&real_avg_clear>()
+                  .accumulate<&real_avg_accumulate>()
                   .build()))
