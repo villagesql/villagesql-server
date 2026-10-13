@@ -1,0 +1,33 @@
+# Scalar VDFs and COMPLEX expressions in a window's PARTITION BY and ORDER BY.
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, '(3,4)'), (2, '(-3,-4)'), (3, '(0,5)'), (4, '(1,1)'), (5, '(3,-4)'),
+  (6, NULL);
+
+# |val| is 5 for ids 1, 2, 3 and 5.
+SELECT id, val,
+  RANK() OVER (ORDER BY vsql_complex.complex_abs(val)) AS rnk_abs,
+  COUNT(*) OVER (PARTITION BY vsql_complex.complex_abs(val)) AS same_abs
+FROM t1 ORDER BY id;
+
+# Conjugate maps (3,4) and (3,-4) to each other, so ordering flips imag.
+SELECT id, val,
+  ROW_NUMBER() OVER (ORDER BY vsql_complex.complex_conjugate(val), id) AS rn
+FROM t1 ORDER BY id;
+
+SELECT id, val,
+  COUNT(*) OVER (PARTITION BY vsql_complex.complex_real(val)) AS same_re,
+  FIRST_VALUE(val) OVER (PARTITION BY vsql_complex.complex_real(val)
+                         ORDER BY val DESC) AS fv
+FROM t1 ORDER BY id;
+
+# COMPLEX-returning VDF as the partition key.
+SELECT id, val,
+  COUNT(*) OVER (PARTITION BY vsql_complex.complex_multiply(val, val)) AS sq
+FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc
