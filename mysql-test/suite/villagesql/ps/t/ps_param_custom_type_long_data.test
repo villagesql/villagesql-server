@@ -1,0 +1,10 @@
+# Run the VillageSQL client tests that need the binary protocol.
+#
+# A parameter streamed with mysql_stmt_send_long_data() cannot be driven from
+# mysqltest, so the case lives in testclients/villagesql_client_test.cc.
+
+--let $LOG_DIR= $MYSQLTEST_VARDIR/log
+
+--echo # A custom-type parameter streamed in pieces
+--exec $VILLAGESQL_CLIENT_TEST test_custom_type_long_data > $LOG_DIR/villagesql_client_test.out.log 2>&1
+--echo # OK
