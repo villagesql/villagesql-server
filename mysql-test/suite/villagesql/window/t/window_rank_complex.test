@@ -1,0 +1,38 @@
+# Ranking window functions ordered by a COMPLEX column, with ties, negative
+# values (byte order differs from COMPLEX::compare order) and a NULL.
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+  (5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+
+SELECT id, val,
+  RANK() OVER w AS rnk,
+  DENSE_RANK() OVER w AS drnk,
+  PERCENT_RANK() OVER w AS prnk,
+  CUME_DIST() OVER w AS cdist
+FROM t1 WINDOW w AS (ORDER BY val)
+ORDER BY id;
+
+SELECT id, val,
+  RANK() OVER (ORDER BY val DESC) AS rnk,
+  DENSE_RANK() OVER (ORDER BY val DESC) AS drnk
+FROM t1 ORDER BY id;
+
+SELECT id, grp, val,
+  RANK() OVER (PARTITION BY grp ORDER BY val) AS rnk,
+  DENSE_RANK() OVER (PARTITION BY grp ORDER BY val) AS drnk
+FROM t1 ORDER BY id;
+
+# id breaks ties so bucket assignment is deterministic.
+SELECT id, val, NTILE(3) OVER (ORDER BY val, id) AS bucket
+FROM t1 ORDER BY id;
+
+# Rank within partitions keyed by the COMPLEX value itself.
+SELECT id, val, RANK() OVER (PARTITION BY val ORDER BY id) AS rnk
+FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc
