@@ -1,0 +1,93 @@
+#
+# Setup test data
+#
+CREATE TABLE t3 (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO t3 VALUES (1, '[1,0,0]'), (2, '[0,2,0]');
+CREATE TABLE t4 (id INT PRIMARY KEY, vec TVECTOR(3) NULL);
+#
+# Test 1: an integer literal is rejected
+#
+INSERT INTO t3 VALUES (9, 42);
+ERROR HY000: Incorrect TVECTOR value: '42' for column 'vec' at row 1
+#
+# Test 2: an integer parameter, the same value through EXECUTE
+#
+PREPARE p FROM 'INSERT INTO t3 VALUES (9, ?)';
+SET @n = 42;
+EXECUTE p USING @n;
+ERROR HY000: Incorrect TVECTOR value: '42' for column 'vec' at row 1
+# The table still reads back
+SELECT id, vec FROM t3 ORDER BY id;
+id	vec
+1	[1,0,0]
+2	[0,2,0]
+#
+# Test 3: a double parameter
+#
+SET @d = 1.5e0;
+EXECUTE p USING @d;
+ERROR HY000: Incorrect TVECTOR value: '1.5' for column 'vec' at row 1
+#
+# Test 4: a decimal parameter
+#
+SET @m = 1.5;
+EXECUTE p USING @m;
+ERROR HY000: Incorrect TVECTOR value: '1.5' for column 'vec' at row 1
+#
+# Test 5: a string parameter still encodes
+#
+SET @s = '[1,2,3]';
+EXECUTE p USING @s;
+SELECT id, vec FROM t3 ORDER BY id;
+id	vec
+1	[1,0,0]
+2	[0,2,0]
+9	[1,2,3]
+#
+# Test 6: a string parameter whose dimension does not match the column
+#
+# The encoder rejects the value, so this fails differently from a
+# parameter that never reaches it.
+SET @w = '[1,1]';
+EXECUTE p USING @w;
+ERROR HY000: Incorrect TVECTOR value: '[1,1]' for column 'vec' at row 1
+DEALLOCATE PREPARE p;
+#
+# Test 7: a NULL parameter where the same statement last took a string
+#
+PREPARE pn FROM 'INSERT INTO t4 VALUES (?, ?)';
+SET @i = 1;
+SET @z = '[4,5,6]';
+EXECUTE pn USING @i, @z;
+SET @i = 2;
+SET @z = NULL;
+EXECUTE pn USING @i, @z;
+SELECT id, vec FROM t4 ORDER BY id;
+id	vec
+1	[4,5,6]
+2	NULL
+DEALLOCATE PREPARE pn;
+#
+# Test 8: a NULL parameter into a NOT NULL column
+#
+PREPARE pnn FROM 'INSERT INTO t3 VALUES (11, ?)';
+SET @z = NULL;
+EXECUTE pnn USING @z;
+ERROR 23000: Column 'vec' cannot be null
+DEALLOCATE PREPARE pnn;
+#
+# Test 9: a non-string parameter in UPDATE
+#
+PREPARE u FROM 'UPDATE t3 SET vec = ? WHERE id = 1';
+EXECUTE u USING @n;
+ERROR HY000: Incorrect TVECTOR value: '42' for column 'vec' at row 1
+SELECT id, vec FROM t3 ORDER BY id;
+id	vec
+1	[1,0,0]
+2	[0,2,0]
+9	[1,2,3]
+DEALLOCATE PREPARE u;
+#
+# Cleanup
+#
+DROP TABLE t3, t4;

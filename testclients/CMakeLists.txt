@@ -1,5 +1,6 @@
 # Copyright (c) 2006, 2026, Oracle and/or its affiliates.
-# 
+#    Copyright (c) 2026 VillageSQL Contributors
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
 # as published by the Free Software Foundation.
@@ -32,6 +33,15 @@ IF(MY_COMPILER_IS_GNU AND CMAKE_BUILD_TYPE_UPPER STREQUAL "RELWITHDEBINFO")
   ADD_COMPILE_FLAGS(mysql_client_test.cc
     COMPILE_FLAGS "-Wno-error=format-truncation")
 ENDIF()
+
+MYSQL_ADD_EXECUTABLE(villagesql_client_test villagesql_client_test.cc
+  COMPONENT Test)
+TARGET_LINK_LIBRARIES(villagesql_client_test mysqlclient extra::rapidjson)
+
+# mysql_client_fw.cc defines its helpers static, so the ones this file does
+# not call are reported unused.
+ADD_COMPILE_FLAGS(villagesql_client_test.cc
+  COMPILE_FLAGS "-Wno-unused-function")
 
 IF(WITH_UNIT_TESTS)
   MYSQL_ADD_EXECUTABLE(bug25714 bug25714.cc SKIP_INSTALL EXCLUDE_FROM_PGO)
