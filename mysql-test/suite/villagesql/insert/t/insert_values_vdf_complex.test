@@ -1,0 +1,48 @@
+# Scalar VDF calls as inserted values: VALUES (multi-row and ROW()), SET, a
+# reference to an earlier column in the same row, and NULL arguments.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    a COMPLEX,
+    b COMPLEX,
+    re DOUBLE,
+    mag DOUBLE
+);
+
+INSERT INTO t1 (id, a, b) VALUES
+    (1, vsql_complex.complex_add('(1,2)', '(3,4)'), vsql_complex.complex_conjugate('(1,2)')),
+    (2, vsql_complex.complex_multiply('(0,1)', '(0,1)'), vsql_complex.complex_subtract('(0,0)', '(-0,5)'));
+
+INSERT INTO t1 (id, a, b) VALUES
+    ROW(3, vsql_complex.complex_divide('(4,2)', '(2,0)'), NULL);
+
+INSERT INTO t1 SET id = 4, a = vsql_complex.complex_add('(1,1)', '(-1,-1)'),
+    re = vsql_complex.complex_real('(2.5,7)'), mag = vsql_complex.complex_abs('(3,4)');
+
+# Later columns can use earlier ones from the same row.
+INSERT INTO t1 (id, a, b, re, mag) VALUES
+    (5, '(6,-8)', vsql_complex.complex_conjugate(a),
+     vsql_complex.complex_real(b), vsql_complex.complex_abs(a));
+INSERT INTO t1 SET id = 6, a = '(1,2)', b = vsql_complex.complex_multiply(a, a);
+
+# NULL arguments give NULL.
+INSERT INTO t1 (id, a, re) VALUES
+    (7, vsql_complex.complex_add(NULL, '(1,1)'), vsql_complex.complex_imag(NULL));
+
+# A string user variable is not a string constant: rejected unless converted.
+SET @c = '(10,-10)';
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t1 (id, a) VALUES (8, vsql_complex.complex_conjugate(@c));
+INSERT INTO t1 (id, a) VALUES (8, vsql_complex.complex_conjugate(vsql_complex.COMPLEX::from_string(@c)));
+
+# A user variable assigned from a COMPLEX value.
+SET @d = (SELECT a FROM t1 WHERE id = 1);
+INSERT INTO t1 (id, a) VALUES (9, vsql_complex.complex_conjugate(@d));
+SET @c = NULL, @d = NULL;
+
+SELECT * FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc
