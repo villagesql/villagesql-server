@@ -4,6 +4,10 @@
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
+--echo #
+--echo # Case 1: database with routines only.
+--echo #
+
 CREATE DATABASE test_sp_params_db;
 USE test_sp_params_db;
 
@@ -40,6 +44,61 @@ SELECT db_name, sp_name, param_name, type_name
   FROM villagesql.custom_sp_params
   WHERE db_name = 'test_sp_params_db'
   ORDER BY sp_name, param_name;
+
+--echo #
+--echo # Case 2: database with routines and a custom-typed column, so that
+--echo # custom_sp_params and custom_columns both have rows staged for deletion
+--echo # in the same statement.
+--echo #
+
+CREATE DATABASE test_sp_params_tbl_db;
+USE test_sp_params_tbl_db;
+
+delimiter //;
+CREATE PROCEDURE p1(IN input_val COMPLEX, OUT output_val COMPLEX)
+BEGIN
+  SET output_val = input_val;
+END//
+
+CREATE FUNCTION f1(input_val COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+  RETURN input_val;
+END//
+delimiter ;//
+
+CREATE TABLE t1 (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0, 2.0)');
+
+# Verify both system tables have rows for this database.
+--source include/villagesql/internal_schema_test.inc
+SELECT db_name, sp_name, param_name, type_name
+  FROM villagesql.custom_sp_params
+  WHERE db_name = 'test_sp_params_tbl_db'
+  ORDER BY sp_name, param_name;
+
+SELECT db_name, table_name, column_name, type_name
+  FROM villagesql.custom_columns
+  WHERE db_name = 'test_sp_params_tbl_db'
+  ORDER BY table_name, column_name;
+
+USE test;
+
+DROP DATABASE test_sp_params_tbl_db;
+
+# Verify database no longer exists.
+SHOW DATABASES LIKE 'test_sp_params_tbl_db';
+
+# Verify the rows in both system tables are gone.
+--source include/villagesql/internal_schema_test.inc
+SELECT db_name, sp_name, param_name, type_name
+  FROM villagesql.custom_sp_params
+  WHERE db_name = 'test_sp_params_tbl_db'
+  ORDER BY sp_name, param_name;
+
+SELECT db_name, table_name, column_name, type_name
+  FROM villagesql.custom_columns
+  WHERE db_name = 'test_sp_params_tbl_db'
+  ORDER BY table_name, column_name;
 
 --source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc

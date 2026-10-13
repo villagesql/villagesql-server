@@ -1070,6 +1070,33 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   return false;
 }
 
+// Append a villagesql system table to thd->lex->query_tables and return the
+// new Table_ref. The table is only staged here: Metadata_modifier::store()
+// finds it again by walking query_tables, and locks every staged table in the
+// single lock_tables() call a statement is allowed.
+static Table_ref *stage_system_table(THD *thd, const char *table_name) {
+  Table_ref *tref =
+      new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                                    table_name, TL_WRITE, MDL_SHARED_WRITE);
+  if (!tref) return nullptr;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
+  thd->lex->add_to_query_tables(tref);
+  return tref;
+}
+
+// Open the chain of staged system tables starting at `first` without locking
+// them. On success *opened receives the number of tables opened.
+static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
+                                      uint *opened) {
+  DML_prelocking_strategy strategy;
+  uint counter = 0;
+  if (open_tables(thd, &first, &counter, flags, &strategy)) {
+    villagesql_error("Cannot open VillageSQL system tables", MYF(0));
+    return true;
+  }
+  *opened = counter;
+  return false;
+}
+
 bool Metadata_modifier::add_system_tables(THD *thd, bool marked_column,
                                           bool marked_index) {
   if (should_assert_if_null(thd)) {
@@ -1082,34 +1109,22 @@ bool Metadata_modifier::add_system_tables(THD *thd, bool marked_column,
   // participate in the same lock scope. If the calling DDL does not lock
   // query tables, these tables are locked explicitly before writing in
   // Metadata_modifier::store().
-  auto add_table = [&](const char *table_name) {
-    Table_ref *tref =
-        new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
-                                      table_name, TL_WRITE, MDL_SHARED_WRITE);
-    thd->lex->add_to_query_tables(tref);
-    return tref;
-  };
-
   Table_ref *first = nullptr;
   if (marked_column) {
-    first = add_table(SchemaManager::COLUMNS_TABLE_NAME);
+    first = stage_system_table(thd, SchemaManager::COLUMNS_TABLE_NAME);
+    if (!first) return true;
   }
   if (marked_index) {
-    Table_ref *idx = add_table(SchemaManager::INDEXES_TABLE_NAME);
+    Table_ref *idx = stage_system_table(thd, SchemaManager::INDEXES_TABLE_NAME);
+    if (!idx) return true;
     if (!first) first = idx;
-    (void)add_table(SchemaManager::INDEX_COLUMNS_TABLE_NAME);
+    if (!stage_system_table(thd, SchemaManager::INDEX_COLUMNS_TABLE_NAME))
+      return true;
   }
 
   if (!first) return false;
 
-  DML_prelocking_strategy strategy;
-  uint counter = 0;
-  if (open_tables(thd, &first, &counter, MYF(0), &strategy)) {
-    villagesql_error("Cannot open VillageSQL system tables", MYF(0));
-    return true;
-  }
-  system_tables_opened_ = counter;
-  return false;
+  return open_staged_system_tables(thd, first, MYF(0), &system_tables_opened_);
 }
 
 bool Metadata_modifier::lock_and_apply(THD *thd) {
@@ -1317,11 +1332,13 @@ bool Metadata_modifier::store(THD *thd) {
   // Check if anything is marked for write across all VillageSQL system tables.
   bool has_columns = false;
   bool has_custom_indexes = false;
+  bool has_sp_params = false;
   {
     auto guard = vclient.get_read_lock();
     has_columns = vclient.columns().has_uncommitted(thd);
     has_custom_indexes = vclient.custom_indexes().has_uncommitted(thd);
-    if (!has_columns && !has_custom_indexes) {
+    has_sp_params = vclient.sp_params().has_uncommitted(thd);
+    if (!has_columns && !has_custom_indexes && !has_sp_params) {
       assert(!vclient.custom_index_columns().has_uncommitted(thd));
       return false;
     }
@@ -1360,6 +1377,9 @@ bool Metadata_modifier::store(THD *thd) {
       if (chain(SchemaManager::INDEXES_TABLE_NAME)) return true;
       if (chain(SchemaManager::INDEX_COLUMNS_TABLE_NAME)) return true;
     }
+    if (has_sp_params && chain(SchemaManager::SP_PARAMS_TABLE_NAME))
+      return true;
+    assert(lock_count == count_global_tables(lock_first));
 
     if (lock_tables(thd, lock_first, lock_count, MYSQL_LOCK_IGNORE_TIMEOUT)) {
       villagesql_error("Cannot lock VillageSQL system tables", MYF(0));
@@ -1480,6 +1500,8 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
     assert(!vclient.columns().has_uncommitted(thd));
     assert(!vclient.properties().has_uncommitted(thd));
     assert(!vclient.extensions().has_uncommitted(thd));
+    assert(!vclient.custom_indexes().has_uncommitted(thd));
+    assert(!vclient.custom_index_columns().has_uncommitted(thd));
   }
   if (!any_custom) return false;
 
@@ -1498,9 +1520,17 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
   return vclient.write_all_uncommitted_entries(thd);
 }
 
-// Delete every custom_sp_params row matching prefix and persist the removals.
+// Delete every custom_sp_params row matching prefix.
+//
+// With lock_and_flush the rows are written before returning. Without it they
+// are only staged, and the caller must reach Metadata_modifier::store(), which
+// locks custom_sp_params together with every other VillageSQL system table the
+// statement staged. DROP DATABASE needs the staged form, because a statement
+// gets only one lock_tables() call and mysql_rm_table_no_locks() has already
+// left custom_columns open and waiting for it.
 static bool DeleteCustomSpParamsByPrefix(THD *thd,
-                                         const SpParamKeyPrefix &prefix) {
+                                         const SpParamKeyPrefix &prefix,
+                                         bool lock_and_flush) {
   auto &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) return false;
 
@@ -1521,21 +1551,37 @@ static bool DeleteCustomSpParamsByPrefix(THD *thd,
     }
   }
 
-  Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
-                            SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
-                            MDL_SHARED_WRITE);
-  if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
-    return true;
-  return vclient.write_all_uncommitted_entries(thd);
+  if (lock_and_flush) {
+    Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                              SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                              MDL_SHARED_WRITE);
+    if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
+      return true;
+    return vclient.write_all_uncommitted_entries(thd);
+  }
+
+  Table_ref *sp_params_tbl =
+      stage_system_table(thd, SchemaManager::SP_PARAMS_TABLE_NAME);
+  if (!sp_params_tbl) return true;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
+
+  uint opened = 0;
+  return open_staged_system_tables(thd, sp_params_tbl,
+                                   MYSQL_LOCK_IGNORE_TIMEOUT, &opened);
 }
 
 bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+  // DROP PROCEDURE / FUNCTION stages nothing else, so custom_sp_params is the
+  // only table write_all_uncommitted_entries() can touch.
   return DeleteCustomSpParamsByPrefix(
-      thd, SpParamKeyPrefix(name->m_db.str, name->m_name.str));
+      thd, SpParamKeyPrefix(name->m_db.str, name->m_name.str),
+      /*lock_and_flush=*/true);
 }
 
 bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name) {
-  return DeleteCustomSpParamsByPrefix(thd, SpParamKeyPrefix(db_name));
+  // Staged, not flushed: mysql_rm_db()'s Metadata_modifier::store() call locks
+  // and writes this together with custom_columns.
+  return DeleteCustomSpParamsByPrefix(thd, SpParamKeyPrefix(db_name),
+                                      /*lock_and_flush=*/false);
 }
 
 }  // namespace villagesql
