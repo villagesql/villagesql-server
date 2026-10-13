@@ -38,6 +38,7 @@
 #include "sql/mem_root_array.h"
 #include "sql/statement/ed_connection.h"
 #include "sql/strfunc.h"
+#include "sql/thd_raii.h"
 #include "sql_string.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
@@ -184,12 +185,22 @@ bool vef_auth_account_unknown(vef_auth_ctx_t *ctx) {
 // THD via store_globals(), so capture the connection's THD first and restore it
 // after -- otherwise, once ~Auto_THD frees its THD, the rest of
 // acl_authenticate runs with current_thd still pointing at that freed THD.
+//
+// Provisioning is never written to the binary log. The account and its roles
+// belong to an external source of truth -- the identity provider the VEF auth
+// method authenticated against -- and this server is only materializing what
+// that source already says. Replicating it would push one server's local
+// materialization down the chain as though a DBA had granted it, so every
+// replica would carry accounts and grants that no longer track the IdP and
+// that nothing here revokes. Each server provisions for itself, from the same
+// source, when an account first logs in to it.
 static bool provision_run(const std::string &sql) {
   THD *const conn_thd = current_thd;
   bool failed = false;
   {
     Auto_THD provisioner;
     provisioner.thd->security_context()->skip_grants();
+    const Disable_binlog_guard disable_binlog(provisioner.thd);
     Ed_connection conn(provisioner.thd);
     MYSQL_LEX_STRING s;
     lex_string_strmake(provisioner.thd->mem_root, &s, sql.c_str(),
