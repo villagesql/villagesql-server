@@ -117,9 +117,31 @@ constexpr std::string_view kPrefixOk = "OK ";
 constexpr std::string_view kDecodeFail = "DECODE_FAIL";
 constexpr std::string_view kEncodeFail = "ENCODE_FAIL";
 
+// Sentinels for the three non-VALUE results an encode VDF can return. Each
+// exercises a distinct outcome the server is meant to tell apart: SQL NULL,
+// a warning carrying the extension's own text, and an error carrying it.
+constexpr std::string_view kEncodeNull = "ENCODE_NULL";
+constexpr std::string_view kEncodeWarn = "ENCODE_WARN";
+constexpr std::string_view kEncodeError = "ENCODE_ERROR";
+
 void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   if (from == kEncodeFail) {
     return;  // encode failure - wrapper default warning surfaces
+  }
+
+  if (from == kEncodeNull) {
+    out.set_null();  // the value is SQL NULL, not a failure
+    return;
+  }
+
+  if (from == kEncodeWarn) {
+    out.warning("fault_blob: encode warning sentinel");
+    return;
+  }
+
+  if (from == kEncodeError) {
+    out.error("fault_blob: encode error sentinel");
+    return;
   }
 
   auto buf = out.buffer();
@@ -141,7 +163,8 @@ void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   // Unrecognised prefix - crash loudly so tests cannot silently pass bad input.
   assert(false &&
          "fault_blob_encode: unrecognised prefix (expected 'OK ', "
-         "'DECODE_FAIL', or 'ENCODE_FAIL')");
+         "'DECODE_FAIL', 'ENCODE_FAIL', 'ENCODE_NULL', 'ENCODE_WARN', or "
+         "'ENCODE_ERROR')");
   abort();
 }
 
