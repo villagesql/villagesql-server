@@ -332,20 +332,9 @@ class TypeParametersTest : public ::testing::Test {
 
 TEST_F(TypeParametersTest, EmptyByDefault) {
   villagesql::TypeParameters params;
+  EXPECT_FALSE(params.has_error());
   EXPECT_TRUE(params.empty());
   EXPECT_EQ(params.str(), "");
-}
-
-TEST_F(TypeParametersTest, ConstructFromCanonicalString) {
-  villagesql::TypeParameters params("dimension=1536");
-  EXPECT_FALSE(params.empty());
-  EXPECT_EQ(params.str(), "dimension=1536");
-}
-
-TEST_F(TypeParametersTest, ConstructFromCanonicalMultiple) {
-  villagesql::TypeParameters params("dimension=1536,metric=cosine");
-  EXPECT_FALSE(params.empty());
-  EXPECT_EQ(params.str(), "dimension=1536,metric=cosine");
 }
 
 TEST_F(TypeParametersTest, FromRawEmpty) {
@@ -425,16 +414,21 @@ TEST_F(TypeParametersTest, FromRawCommaHandling) {
 }
 
 TEST_F(TypeParametersTest, Equality) {
-  villagesql::TypeParameters a("dimension=1536");
-  villagesql::TypeParameters b("dimension=1536");
-  villagesql::TypeParameters c("dimension=3");
+  villagesql::TypeParameters a =
+      villagesql::TypeParameters::from_raw("dimension=1536");
+  villagesql::TypeParameters b =
+      villagesql::TypeParameters::from_raw("dimension=1536");
+  villagesql::TypeParameters c =
+      villagesql::TypeParameters::from_raw("dimension=3");
   EXPECT_EQ(a, b);
   EXPECT_FALSE(a == c);
 }
 
 TEST_F(TypeParametersTest, Ordering) {
-  villagesql::TypeParameters a("dimension=1536");
-  villagesql::TypeParameters b("dimension=3");
+  villagesql::TypeParameters a =
+      villagesql::TypeParameters::from_raw("dimension=1536");
+  villagesql::TypeParameters b =
+      villagesql::TypeParameters::from_raw("dimension=3");
   // "dimension=1536" < "dimension=3" (string comparison)
   EXPECT_TRUE(a < b);
 }
@@ -447,7 +441,8 @@ TEST_F(TypeParametersTest, EmptyEntries) {
 }
 
 TEST_F(TypeParametersTest, SingleEntry) {
-  villagesql::TypeParameters params("dimension=1536");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536");
   EXPECT_EQ(params.count(), 1u);
   ASSERT_NE(params.key_data(), nullptr);
   ASSERT_NE(params.value_data(), nullptr);
@@ -456,7 +451,8 @@ TEST_F(TypeParametersTest, SingleEntry) {
 }
 
 TEST_F(TypeParametersTest, MultipleEntries) {
-  villagesql::TypeParameters params("dimension=1536,metric=cosine");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
   EXPECT_EQ(params.count(), 2u);
   ASSERT_NE(params.key_data(), nullptr);
   ASSERT_NE(params.value_data(), nullptr);
@@ -477,32 +473,35 @@ TEST_F(TypeParametersTest, ToJsonEmptyIsEmptyObject) {
 // only accepts quoted values. params_to_json() quotes index parameters for the
 // same reason.
 TEST_F(TypeParametersTest, ToJsonSingleEntry) {
-  villagesql::TypeParameters params("dimension=1536");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536");
   EXPECT_EQ(params.to_json(), R"({"dimension":"1536"})");
 }
 
 TEST_F(TypeParametersTest, ToJsonMultipleEntries) {
-  villagesql::TypeParameters params("dimension=1536,metric=cosine");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
   EXPECT_EQ(params.to_json(), R"({"dimension":"1536","metric":"cosine"})");
 }
 
 TEST_F(TypeParametersTest, ToJsonKeepsEmptyValue) {
-  villagesql::TypeParameters params("metric=");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("metric=");
   EXPECT_EQ(params.to_json(), R"({"metric":""})");
 }
 
-// A canonical string is always "k=v,..."; a bare token with no '=' can only be
-// built by the explicit constructor, and to_json() drops it rather than
-// emitting a key with no value.
-TEST_F(TypeParametersTest, ToJsonDropsTokenWithoutSeparator) {
-  villagesql::TypeParameters params("metric");
-  EXPECT_EQ(params.to_json(), "{}");
+// A name without a value must not be silently dropped.
+TEST_F(TypeParametersTest, RejectsTokenWithoutValue) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("metric");
+  EXPECT_TRUE(params.has_error());
 }
 
 // '=' inside a value survives: the canonical form splits on the first '=' only,
 // and to_json() does the same.
 TEST_F(TypeParametersTest, ToJsonKeepsEqualsInsideValue) {
-  villagesql::TypeParameters params("a=x=y");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("a=x=y");
   EXPECT_EQ(params.to_json(), R"({"a":"x=y"})");
 }
 
@@ -523,6 +522,13 @@ TEST_F(TypeParametersTest, FromJsonCanonicalizesOrderAndCase) {
   villagesql::TypeParameters params = villagesql::TypeParameters::from_json(
       R"({"metric":"COSINE","DIMENSION":"1536"})");
   EXPECT_EQ(params.str(), "dimension=1536,metric=cosine");
+  // Both factories must produce the same cache key and JSON representation.
+  auto raw = villagesql::TypeParameters::from_raw(
+      " Metric = COSINE , DIMENSION = 1536 ");
+  ASSERT_FALSE(params.has_error());
+  ASSERT_FALSE(raw.has_error());
+  EXPECT_EQ(params, raw);
+  EXPECT_EQ(params.to_json(), raw.to_json());
 }
 
 TEST_F(TypeParametersTest, FromJsonToleratesWhitespace) {
@@ -531,20 +537,13 @@ TEST_F(TypeParametersTest, FromJsonToleratesWhitespace) {
   EXPECT_EQ(params.str(), "dimension=1536");
 }
 
-// The parser skips over ':' rather than requiring it, so a missing colon is
-// accepted. This is due to the parser's behavior.
-TEST_F(TypeParametersTest, FromJsonAcceptsMissingColon) {
-  villagesql::TypeParameters params =
-      villagesql::TypeParameters::from_json(R"({"a""1"})");
-  EXPECT_EQ(params.str(), "a=1");
-}
-
 // Round trip is the property the storage layer depends on.
 TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
   for (const char *canonical :
        {"", "dimension=1536", "dimension=1536,metric=cosine",
         "metric=", "dimension=3,metric=", "a=x=y"}) {
-    villagesql::TypeParameters original(canonical);
+    villagesql::TypeParameters original =
+        villagesql::TypeParameters::from_raw(canonical);
     villagesql::TypeParameters restored =
         villagesql::TypeParameters::from_json(original.to_json());
     EXPECT_EQ(restored, original) << "canonical form: " << canonical;
@@ -552,56 +551,116 @@ TEST_F(TypeParametersTest, JsonRoundTripsCanonicalParams) {
   }
 }
 
-// A value the parser cannot read stops the parse, and everything after it is
-// dropped with no diagnostic. Dropping one that determines storage size is
-// caught later by CheckFieldLengthMatchesType; dropping one that does not is
-// not caught at all.
-//
-// TODO(villagesql-general): from_json() should reject malformed input rather
-// than reading what it can and dropping the rest, so a column cannot load
-// with fewer parameters than it holds. It is lenient in the other direction
-// too, accepting input a JSON parser would refuse, such as a missing ':'.
-TEST_F(TypeParametersTest, FromJsonStopsAtUnquotedValue) {
-  // Non-string value in the only pair: nothing is recovered.
+// Reject bad stored parameters instead of loading only the readable parts.
+TEST_F(TypeParametersTest, FromJsonRejectsMalformedMetadata) {
+  for (const char *json :
+       {// Values must be strings, even when they look like numbers.
+        R"({"dimension":1536})",
+        // A bad later value must fail the whole object.
+        R"({"a":"1","b":2})",
+        // Missing object braces.
+        R"("a":"1")",
+        // Unclosed key or value.
+        R"({"a)", R"({"a":"1)",
+        // Missing colon between the key and value.
+        R"({"a""1"})",
+        // The JSON escape becomes an embedded NUL after parsing.
+        R"({"a":"x\u0000y"})",
+        // A comma in a key would split it into separate parameters.
+        R"({"a,b":"x"})"}) {
+    EXPECT_TRUE(villagesql::TypeParameters::from_json(json).has_error())
+        << json;
+  }
+}
+
+// Quotes, backslashes, newlines and Unicode must survive JSON storage.
+TEST_F(TypeParametersTest, JsonRoundTripsEscapedUtf8) {
+  auto original = villagesql::TypeParameters::from_raw("a=É😀\"\\\n");
+  ASSERT_FALSE(original.has_error());
+  auto restored = villagesql::TypeParameters::from_json(original.to_json());
+  EXPECT_FALSE(restored.has_error());
+  EXPECT_EQ(restored, original);
+}
+
+// Invalid text must not reach the ABI's NUL-terminated parameter strings.
+TEST_F(TypeParametersTest, RejectsMalformedUtf8AndNulBeforeAbi) {
+  for (const std::string &raw :
+       {// NUL inside the value; the explicit length keeps it in the string.
+        std::string("a=x\0y", 5),
+        // Latin1 é, which is not valid UTF-8.
+        std::string("a=\xe9"),
+        // '/' encoded with two bytes instead of one (overlong UTF-8).
+        std::string("a=\xc0\xaf"),
+        // U+D800 is a surrogate, which UTF-8 does not allow.
+        std::string("a=\xed\xa0\x80"),
+        // U+110000 is above Unicode's maximum code point, U+10FFFF.
+        std::string("a=\xf4\x90\x80\x80")}) {
+    SCOPED_TRACE(::testing::PrintToString(raw));
+    auto params = villagesql::TypeParameters::from_raw(raw);
+    EXPECT_TRUE(params.has_error());
+    EXPECT_EQ(params.count(), 0U);
+    EXPECT_EQ(params.key_data(), nullptr);
+    EXPECT_EQ(params.value_data(), nullptr);
+  }
+}
+
+// Copying or moving invalid parameters must preserve their error.
+TEST_F(TypeParametersTest, ValidationErrorSurvivesCopyAndMove) {
+  // NUL, an empty value, and duplicate names fail different validation checks.
+  for (const std::string &raw :
+       {std::string("a=x\0y", 5), std::string("a="), std::string("a=1,a=2")}) {
+    SCOPED_TRACE(::testing::PrintToString(raw));
+    auto params = villagesql::TypeParameters::from_raw(raw);
+    const std::string error = params.validation_error();
+    ASSERT_TRUE(params.has_error());
+    ASSERT_FALSE(error.empty());
+
+    auto copy = params;
+    EXPECT_TRUE(copy.has_error());
+    EXPECT_EQ(copy.validation_error(), error);
+    auto moved = std::move(copy);
+    EXPECT_TRUE(moved.has_error());
+    EXPECT_EQ(moved.validation_error(), error);
+
+    villagesql::TypeParameters assigned;
+    assigned = params;
+    EXPECT_TRUE(assigned.has_error());
+    EXPECT_EQ(assigned.validation_error(), error);
+    villagesql::TypeParameters move_assigned;
+    move_assigned = std::move(assigned);
+    EXPECT_TRUE(move_assigned.has_error());
+    EXPECT_EQ(move_assigned.validation_error(), error);
+
+    // Replacing invalid parameters with valid ones must clear the old error.
+    villagesql::TypeParameters valid =
+        villagesql::TypeParameters::from_raw("a=1");
+    moved = valid;
+    EXPECT_FALSE(moved.has_error());
+    move_assigned = std::move(valid);
+    EXPECT_FALSE(move_assigned.has_error());
+  }
+}
+
+// Names that differ only by case or accents count as duplicates.
+TEST_F(TypeParametersTest, DuplicateKeysUseParameterCollation) {
+  for (const char *raw : {"Metric=a,metric=b", "resume=a,résumé=b",
+                          "e=a,é=b,e=c", "resume=a,z=c,résumé=b"}) {
+    EXPECT_NE(villagesql::TypeParameters::from_raw(raw).validation_error().find(
+                  "duplicate parameter"),
+              std::string::npos);
+  }
+  // The same rule applies when loading stored JSON.
   EXPECT_TRUE(
-      villagesql::TypeParameters::from_json(R"({"dimension":1536})").empty());
-
-  // Non-string value in a later pair: the earlier pairs survive, the rest do
-  // not.
-  EXPECT_EQ(villagesql::TypeParameters::from_json(R"({"a":"1","b":2})").str(),
-            "a=1");
+      villagesql::TypeParameters::from_json(R"({"resume":"a","résumé":"b"})")
+          .has_error());
 }
 
-TEST_F(TypeParametersTest, FromJsonReturnsEmptyForMalformedInput) {
-  // No object at all.
-  EXPECT_TRUE(villagesql::TypeParameters::from_json(R"("a":"1")").empty());
-  // Unterminated key.
-  EXPECT_TRUE(villagesql::TypeParameters::from_json(R"({"a)").empty());
-  // Unterminated value.
-  EXPECT_TRUE(villagesql::TypeParameters::from_json(R"({"a":"1)").empty());
-}
-
-// to_json() writes values verbatim, so a value containing a double quote
-// produces JSON that from_json() cannot read back: the value is truncated at
-// the embedded quote and every later pair is dropped. Reachable from SQL via
-// TYPE('a=x"y'), though the malformed JSON is then rejected by the
-// type_parameters column, so today this surfaces as a confusing JSON parse
-// error rather than a bad row.
-//
-// TODO(villagesql-production): escape '"' and '\' in to_json() and unescape
-// them in from_json(), the way params_to_json() already does for index
-// parameters. Until then a value's legal characters are limited by the
-// serialization rather than by what the extension accepts, which is a
-// restriction extension authors have no way to discover. The expectations
-// below should become a round trip validation once it is fixed.
-TEST_F(TypeParametersTest, JsonDoesNotEscapeQuotesInValues) {
-  villagesql::TypeParameters original(R"(a=x"y)");
-  EXPECT_EQ(original.to_json(), R"({"a":"x"y"})");
-
-  villagesql::TypeParameters restored =
-      villagesql::TypeParameters::from_json(original.to_json());
-  EXPECT_EQ(restored.str(), "a=x");
-  EXPECT_FALSE(restored == original);
+// Trimming, lowercasing and sorting must preserve accents and emoji.
+TEST_F(TypeParametersTest, PreservesNormalizationPolicy) {
+  auto params =
+      villagesql::TypeParameters::from_raw(" MÉTRIC = COSINE , label = É😀 ");
+  EXPECT_FALSE(params.has_error());
+  EXPECT_EQ(params.str(), "label=é😀,métric=cosine");
 }
 
 // key_data()/value_data() hand the ABI arrays of const char* that point into
@@ -609,7 +668,8 @@ TEST_F(TypeParametersTest, JsonDoesNotEscapeQuotesInValues) {
 // tests below read through those accessors afterwards, which is the only way
 // the rebuild is observable.
 TEST_F(TypeParametersTest, CopyConstructorRebuildsAbiPointers) {
-  villagesql::TypeParameters source("dimension=1536,metric=cosine");
+  villagesql::TypeParameters source =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
   villagesql::TypeParameters copy(source);
 
   ASSERT_EQ(copy.count(), 2u);
@@ -624,8 +684,10 @@ TEST_F(TypeParametersTest, CopyConstructorRebuildsAbiPointers) {
 }
 
 TEST_F(TypeParametersTest, CopyAssignmentRebuildsAbiPointers) {
-  villagesql::TypeParameters source("dimension=1536,metric=cosine");
-  villagesql::TypeParameters target("dimension=3");
+  villagesql::TypeParameters source =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
+  villagesql::TypeParameters target =
+      villagesql::TypeParameters::from_raw("dimension=3");
   target = source;
 
   ASSERT_EQ(target.count(), 2u);
@@ -640,7 +702,8 @@ TEST_F(TypeParametersTest, CopyAssignmentRebuildsAbiPointers) {
 }
 
 TEST_F(TypeParametersTest, MoveConstructorRebuildsAbiPointers) {
-  villagesql::TypeParameters source("dimension=1536,metric=cosine");
+  villagesql::TypeParameters source =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
   villagesql::TypeParameters moved(std::move(source));
 
   ASSERT_EQ(moved.count(), 2u);
@@ -650,8 +713,10 @@ TEST_F(TypeParametersTest, MoveConstructorRebuildsAbiPointers) {
 }
 
 TEST_F(TypeParametersTest, MoveAssignmentRebuildsAbiPointers) {
-  villagesql::TypeParameters source("dimension=1536,metric=cosine");
-  villagesql::TypeParameters target("dimension=3");
+  villagesql::TypeParameters source =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
+  villagesql::TypeParameters target =
+      villagesql::TypeParameters::from_raw("dimension=3");
   target = std::move(source);
 
   ASSERT_EQ(target.count(), 2u);
@@ -666,7 +731,8 @@ TEST_F(TypeParametersTest, MoveAssignmentRebuildsAbiPointers) {
 TEST_F(TypeParametersTest, AbiPointersSurviveSourceDestruction) {
   villagesql::TypeParameters copy;
   {
-    villagesql::TypeParameters source("dimension=1536,metric=cosine");
+    villagesql::TypeParameters source =
+        villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
     copy = source;
   }
 
@@ -678,7 +744,8 @@ TEST_F(TypeParametersTest, AbiPointersSurviveSourceDestruction) {
 }
 
 TEST_F(TypeParametersTest, SelfAssignmentLeavesEntriesIntact) {
-  villagesql::TypeParameters params("dimension=1536,metric=cosine");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
   villagesql::TypeParameters &alias = params;
   params = alias;
 
@@ -732,7 +799,8 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_ok_fd));
-  villagesql::TypeParameters params("dimension=1536");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
   villagesql::TypeContext ctx = make_context(key, &desc);
@@ -753,7 +821,8 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_fail_fd));
-  villagesql::TypeParameters params("dimension=1536");
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
   villagesql::TypeContext ctx = make_context(key, &desc);
@@ -837,10 +906,10 @@ TEST_F(TypeContextTest, DifferentParametersAreNotCompatible) {
       villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeContextKey key_3(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      villagesql::TypeParameters("dimension=3"));
+      villagesql::TypeParameters::from_raw("dimension=3"));
   villagesql::TypeContextKey key_4(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      villagesql::TypeParameters("dimension=4"));
+      villagesql::TypeParameters::from_raw("dimension=4"));
   villagesql::TypeContext v3 = make_context(key_3, &desc);
   villagesql::TypeContext v4 = make_context(key_4, &desc);
   EXPECT_FALSE(v3.is_compatible_with(v4));
@@ -862,10 +931,10 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithKnown) {
       villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeContextKey key_unknown(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      villagesql::TypeParameters(""));
+      villagesql::TypeParameters::from_raw(""));
   villagesql::TypeContextKey key_4(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      villagesql::TypeParameters("dimension=4"));
+      villagesql::TypeParameters::from_raw("dimension=4"));
   villagesql::TypeContext v_unknown = make_context(key_unknown, &desc);
   villagesql::TypeContext v4 = make_context(key_4, &desc);
   EXPECT_FALSE(v_unknown.is_compatible_with(v4));
@@ -887,10 +956,10 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
       villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeContextKey key_unknown(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      villagesql::TypeParameters(""));
+      villagesql::TypeParameters::from_raw(""));
   villagesql::TypeContextKey key_unknown2(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      villagesql::TypeParameters(""));
+      villagesql::TypeParameters::from_raw(""));
   villagesql::TypeContext v_unknown = make_context(key_unknown, &desc);
   villagesql::TypeContext v_unknown2 = make_context(key_unknown2, &desc);
   EXPECT_TRUE(v_unknown.is_compatible_with(v_unknown2));
@@ -1054,7 +1123,7 @@ static villagesql::TypeContextKey context_key(const char *type_name,
                                               const char *canonical_params) {
   return villagesql::TypeContextKey(
       villagesql::TypeDescriptorKey(type_name, "test_ext", "1.0.0"),
-      villagesql::TypeParameters(canonical_params));
+      villagesql::TypeParameters::from_raw(canonical_params));
 }
 
 // The key is what the victionary stores a TypeContext under, so its normalized
@@ -1086,10 +1155,10 @@ TEST_F(TypeContextTest, KeyAppendsParametersAfterADot) {
 TEST_F(TypeContextTest, KeyComparisonUsesTheNormalizedForm) {
   villagesql::TypeContextKey lower(
       villagesql::TypeDescriptorKey("vvector", "test_ext", "1.0.0"),
-      villagesql::TypeParameters("dimension=3"));
+      villagesql::TypeParameters::from_raw("dimension=3"));
   villagesql::TypeContextKey upper(
       villagesql::TypeDescriptorKey("VVECTOR", "TEST_EXT", "1.0.0"),
-      villagesql::TypeParameters("dimension=3"));
+      villagesql::TypeParameters::from_raw("dimension=3"));
   villagesql::TypeContextKey other = context_key("VVECTOR", "dimension=4");
 
   EXPECT_TRUE(lower == upper);
