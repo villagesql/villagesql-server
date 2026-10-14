@@ -1274,6 +1274,24 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   return false;
 }
 
+// Leave a field decodable after an encode produced no value, so that a row
+// kept under IGNORE or in non-strict mode can still be read back. A nullable
+// field takes SQL NULL, a NOT NULL one the type's intrinsic default, mirroring
+// the 0 or '' a built-in type stores for a value it cannot parse.
+//
+// This only writes the field. Whether the row survives at all is the caller's
+// to report, through the status it returns.
+//
+// Deliberately not set_field_to_null_with_conversions(): that reports a NULL
+// going into a NOT NULL column, and a bad value has already pushed 1366.
+void StoreFallbackForFailedEncode(Field *field) {
+  if (field->is_nullable()) {
+    field->set_null();
+    return;
+  }
+  StoreCustomFieldIntrinsicDefault(field);
+}
+
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                     Field *to_field) {
   assert(!from_field->has_type_context());
@@ -1294,7 +1312,10 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
       case EncodeStatus::kOom:
         return TYPE_ERR_OOM;
       case EncodeStatus::kErrorRaised:
+        return TYPE_ERR_BAD_VALUE;
       case EncodeStatus::kBadValue:
+        // A warning is already pushed; leave the field readable.
+        StoreFallbackForFailedEncode(to_field);
         return TYPE_ERR_BAD_VALUE;
     }
   }
@@ -1314,7 +1335,10 @@ type_conversion_status EncodeAndStoreStringToCustomField(
       case EncodeStatus::kOom:
         return TYPE_ERR_OOM;
       case EncodeStatus::kErrorRaised:
+        return TYPE_ERR_BAD_VALUE;
       case EncodeStatus::kBadValue:
+        // A warning is already pushed; leave the field readable.
+        StoreFallbackForFailedEncode(field);
         return TYPE_ERR_BAD_VALUE;
     }
   }

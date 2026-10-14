@@ -7059,7 +7059,10 @@ type_conversion_status Item::save_in_field_inner(Field *field,
           case villagesql::EncodeStatus::kOom:
             return TYPE_ERR_OOM;
           case villagesql::EncodeStatus::kErrorRaised:
+            return TYPE_ERR_BAD_VALUE;
           case villagesql::EncodeStatus::kBadValue:
+            // A warning is already pushed; leave the field readable.
+            villagesql::StoreFallbackForFailedEncode(field);
             return TYPE_ERR_BAD_VALUE;
         }
       }
@@ -7117,7 +7120,10 @@ type_conversion_status Item_string::save_in_field_inner(Field *field,
         case villagesql::EncodeStatus::kOom:
           return TYPE_ERR_OOM;
         case villagesql::EncodeStatus::kErrorRaised:
+          return TYPE_ERR_BAD_VALUE;
         case villagesql::EncodeStatus::kBadValue:
+          // A warning is already pushed; leave the field readable.
+          villagesql::StoreFallbackForFailedEncode(field);
           return TYPE_ERR_BAD_VALUE;
       }
     }

@@ -1,0 +1,68 @@
+# An encode that cannot parse its input reaches the field through five
+# different callers, and each one decides what the field is left holding. This
+# covers the four that go through a store path, using the vsql_test_only
+# FAULT_BLOB type, whose encode treats "ENCODE_WARN" as a value it cannot
+# parse.
+#
+# A bad value that does not abort the statement stores SQL NULL, or the type's
+# intrinsic default where the column is NOT NULL, mirroring the 0 or '' a
+# built-in type stores for a value it cannot parse. Storing nothing would
+# leave the field holding whatever it contained before: either the previous
+# value, silently keeping the row unchanged, or bytes that do not decode when
+# the column had none.
+#
+# Strict mode still rejects the statement, so each case uses IGNORE to keep
+# the row and read it back.
+#
+# extension_encode_result_types.test covers which encode result is which; this
+# covers what the bad-value result stores.
+
+INSTALL EXTENSION vsql_test_only;
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+
+# Item_string: a literal, overwriting a value the row already held.
+INSERT INTO t1 VALUES (1, 'OK one');
+UPDATE IGNORE t1 SET val = 'ENCODE_WARN' WHERE id = 1;
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+
+# Item::save_in_field_inner: a user variable is read at execution rather than
+# folded into a literal, so it takes the generic caller.
+SET @v = 'ENCODE_WARN';
+INSERT IGNORE INTO t1 VALUES (2, @v);
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 2;
+
+# Item_param: a prepared statement parameter.
+PREPARE ps FROM 'INSERT IGNORE INTO t1 VALUES (?, ?)';
+SET @id = 3, @v = 'ENCODE_WARN';
+EXECUTE ps USING @id, @v;
+SHOW WARNINGS;
+DEALLOCATE PREPARE ps;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 3;
+
+# TryEncodeStringFieldToCustom: a field-to-field copy, with a good row
+# alongside the bad one.
+CREATE TABLE src (id INT, s VARCHAR(32));
+INSERT INTO src VALUES (4, 'ENCODE_WARN'), (5, 'OK five');
+INSERT IGNORE INTO t1 SELECT id, s FROM src;
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (4, 5) ORDER BY id;
+DROP TABLE src;
+
+# A NOT NULL column takes the type's intrinsic default instead of SQL NULL.
+CREATE TABLE t2 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+INSERT IGNORE INTO t2 VALUES (1, 'ENCODE_WARN');
+SHOW WARNINGS;
+SELECT id, val FROM t2 WHERE id = 1;
+
+# The whole table reads back, which is what failed before: one undecodable
+# row made every later read of the column fail.
+SELECT COUNT(*) AS readable_rows FROM t1;
+
+DROP TABLE t1;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;

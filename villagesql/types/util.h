@@ -408,6 +408,11 @@ extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
 // sets a user-visible error and returns TYPE_ERR_BAD_VALUE.
 extern type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field);
 
+// Leave a custom type field decodable after an encode produced no value, so a
+// row kept under IGNORE or in non-strict mode can still be read back. Writes
+// the field only; the caller still reports the failure through its own status.
+extern void StoreFallbackForFailedEncode(Field *field);
+
 // Encode and store a string value into a custom type field during LOAD DATA /
 // LOAD XML, applying strict/non-strict/IGNORE semantics. Returns true on error.
 extern bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
