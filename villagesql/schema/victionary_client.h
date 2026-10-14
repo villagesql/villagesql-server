@@ -505,19 +505,19 @@ class SystemTableMap {
 
   // A position in this THD's uncommitted operations. rollback_to() discards
   // the operations marked after it and keeps the earlier ones.
-  struct Savepoint {
+  struct SavepointPosition {
     uint elements;
   };
 
   // Requires read or write lock
-  Savepoint savepoint(THD *thd) const {
+  SavepointPosition savepoint(THD *thd) const {
     assert_read_or_write_lock_held();
     auto thd_it = m_uncommitted.find(thd);
     return {thd_it == m_uncommitted.end() ? 0 : thd_it->second.elements};
   }
 
   // Requires write lock
-  void rollback_to(THD *thd, Savepoint savepoint) {
+  void rollback_to(THD *thd, SavepointPosition savepoint) {
     assert_write_lock_held();
     if (!thd) return;
 
@@ -958,19 +958,21 @@ class VictionaryClient {
   // the earlier ones, so a failed step can be undone without discarding the
   // rest of the transaction.
   struct Savepoint {
-    SystemTableMap<PropertyEntry>::Savepoint properties;
-    SystemTableMap<ColumnEntry>::Savepoint columns;
-    SystemTableMap<SpParamEntry>::Savepoint sp_params;
-    SystemTableMap<ExtensionEntry>::Savepoint extensions;
-    ExtensionObjectMap<TypeDescriptor>::Savepoint type_descriptors;
-    ExtensionObjectMap<ExtensionDescriptor>::Savepoint extension_descriptors;
-    ExtensionObjectMap<TypeContext>::Savepoint type_contexts;
-    ExtensionObjectMap<FuncDescriptor>::Savepoint funcs;
-    ExtensionObjectMap<IndexContext>::Savepoint index_contexts;
-    SystemTableMap<IndexEntry>::Savepoint custom_indexes;
-    SystemTableMap<IndexColumnEntry>::Savepoint custom_index_columns;
-    ExtensionObjectMap<IndexTypeDescriptor>::Savepoint index_type_descriptors;
-    ExtensionObjectMap<IndexProfileDescriptor>::Savepoint
+    SystemTableMap<PropertyEntry>::SavepointPosition properties;
+    SystemTableMap<ColumnEntry>::SavepointPosition columns;
+    SystemTableMap<SpParamEntry>::SavepointPosition sp_params;
+    SystemTableMap<ExtensionEntry>::SavepointPosition extensions;
+    ExtensionObjectMap<TypeDescriptor>::SavepointPosition type_descriptors;
+    ExtensionObjectMap<ExtensionDescriptor>::SavepointPosition
+        extension_descriptors;
+    ExtensionObjectMap<TypeContext>::SavepointPosition type_contexts;
+    ExtensionObjectMap<FuncDescriptor>::SavepointPosition funcs;
+    ExtensionObjectMap<IndexContext>::SavepointPosition index_contexts;
+    SystemTableMap<IndexEntry>::SavepointPosition custom_indexes;
+    SystemTableMap<IndexColumnEntry>::SavepointPosition custom_index_columns;
+    ExtensionObjectMap<IndexTypeDescriptor>::SavepointPosition
+        index_type_descriptors;
+    ExtensionObjectMap<IndexProfileDescriptor>::SavepointPosition
         index_profile_descriptors;
   };
 
