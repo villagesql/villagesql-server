@@ -22,6 +22,7 @@
 
 #include <string>
 
+#include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 
@@ -121,6 +122,25 @@ class IndexTypeDescriptor {
     return key_.extension_version();
   }
   const vef_type_index_intf_t &intf() const { return intf_; }
+
+  // True when this index type takes WITH (...) parameters, which means it has
+  // both a parse function and an options struct: registration rejects one
+  // without the other. When false, the parameters the user wrote are persisted
+  // as they are and no options struct is built.
+  bool has_parameters() const { return intf_.parse != nullptr; }
+
+  // Hand `in` to the index type's parse function, which completes the
+  // parameters and builds its options struct from the completed set.
+  //
+  // params_out receives the completed set, canonicalized; options_out receives
+  // intf().options_size bytes. Either may be null when the caller does not
+  // want it, but the index type is always given both, so it cannot tell its
+  // two callers apart. A no-op when the index type takes no parameters.
+  //
+  // error_msg must have room for VEF_MAX_ERROR_LEN bytes.
+  // Returns true on error, with error_msg filled.
+  bool parse(const TypeParameters &in, TypeParameters *params_out,
+             void *options_out, size_t options_size, char *error_msg) const;
 
  private:
   IndexTypeDescriptorKey key_;

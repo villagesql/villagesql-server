@@ -329,6 +329,18 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
         return std::nullopt;
       }
 
+      // An index type either takes WITH (...) parameters or it does not:
+      // parse completes them and builds the options struct, and options_size
+      // says how big that struct is, so neither is meaningful alone.
+      if ((intf->parse != nullptr) != (intf->options_size > 0)) {
+        error_out = std::string("index type '") + reg_entry.name +
+                    "': parse and options_size must be set together or left "
+                    "unset together";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
       result.index_types.emplace_back(
           IndexTypeDescriptorKey(reg_entry.name, extension_name,
                                  extension_version),

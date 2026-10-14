@@ -16,13 +16,10 @@
 
 #include "villagesql/schema/systable/custom_indexes.h"
 
-#include <memory>
+#include <cstring>
 #include <string>
 
-#include "include/sql_string.h"
 #include "scope_guard.h"
-#include "sql-common/json_dom.h"
-#include "sql-common/json_error_handler.h"
 #include "sql/field.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
@@ -211,30 +208,37 @@ bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
   return false;
 }
 
-std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
-  Json_object_ptr obj(new (std::nothrow) Json_object());
-  if (!obj) return "{}";
-
-  // Parameters are stored in Json_object using a std::map ordered by
-  // Json_key_comparator (length first, then memcmp), producing a
-  // deterministic canonical serialization order.
+std::string index_with_params_to_raw(
+    const Mem_root_array<IndexWithParam> &params) {
+  std::string raw;
   for (const IndexWithParam &p : params) {
-    std::string key(p.key.str, p.key.length);
-    // TypeParameters::from_json() only accepts quoted string values (per its
-    // documented contract), so encode numeric WITH-clause values as JSON
-    // strings too, rather than bare JSON numbers.
-    std::string value = p.is_string
-                            ? std::string(p.value.str.str, p.value.str.length)
-                            : std::to_string(p.value.num);
-    Json_dom_ptr val(new (std::nothrow) Json_string(value));
-    if (!val || obj->add_alias(key, std::move(val))) return "{}";  // OOM
+    if (!raw.empty()) raw += ',';
+    raw.append(p.key.str, p.key.length);
+    raw += '=';
+    if (p.is_string) {
+      raw.append(p.value.str.str, p.value.str.length);
+    } else {
+      raw += std::to_string(p.value.num);
+    }
   }
+  return raw;
+}
 
-  Json_wrapper wrapper(obj.release());
-  StringBuffer<256> buf;
-  if (wrapper.to_string(&buf, false, "params_to_json", JsonDepthErrorHandler))
-    return "{}";
-  return std::string(buf.ptr(), buf.length());
+bool index_params_removed(const TypeParameters &before,
+                          const TypeParameters &after, std::string *error) {
+  for (unsigned int i = 0; i < before.count(); i++) {
+    const char *key = before.key_data()[i];
+    bool found = false;
+    for (unsigned int j = 0; j < after.count() && !found; j++) {
+      found = strcmp(key, after.key_data()[j]) == 0;
+    }
+    if (!found) {
+      *error = std::string("resolve_params removed parameter '") + key +
+               "'; parameters may be added or changed but not removed";
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace villagesql

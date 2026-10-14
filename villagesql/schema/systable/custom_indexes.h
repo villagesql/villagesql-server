@@ -21,6 +21,7 @@
 #include <string>
 
 #include "sql/key_spec.h"
+#include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/identifier_names.h"
 
 struct TABLE;
@@ -149,12 +150,21 @@ struct TableTraits<IndexEntry> {
   static bool delete_from_table(TABLE &table, const IndexEntry &entry);
 };
 
-// Serialize a WITH-clause parameter list to a JSON object string.
-// Mirrors TypeParameters::to_json() for the index parameter pipeline.
-// Numeric params (is_string=false) are emitted unquoted; string/identifier
-// params are emitted quoted with backslash and double-quote escaping.
-// An empty list produces "{}".
-std::string params_to_json(const Mem_root_array<IndexWithParam> &params);
+// Serialize a WITH (...) clause into the raw "k=v,k=v" form that
+// TypeParameters::from_raw() understands. Numeric values are rendered as
+// decimal strings, so the numeric/string distinction the grammar made is not
+// preserved; nothing downstream relies on it, because every value is stored as
+// a JSON string and the render path re-derives "numeric" from an all-digits
+// test. Keys and values are left exactly as written: from_raw() lowercases
+// them, sorts them, and reports anything malformed through has_error().
+std::string index_with_params_to_raw(
+    const Mem_root_array<IndexWithParam> &params);
+
+// An index type's resolve_params may add parameters or change their values,
+// but dropping one would silently discard what the user asked for.
+// Returns true with *error set if any key in before is missing from after.
+bool index_params_removed(const TypeParameters &before,
+                          const TypeParameters &after, std::string *error);
 
 }  // namespace villagesql
 

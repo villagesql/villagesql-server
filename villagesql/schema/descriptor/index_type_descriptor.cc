@@ -15,6 +15,9 @@
 
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 
+#include <cstdio>
+#include <vector>
+
 #include "villagesql/schema/identifier_names.h"
 
 namespace villagesql {
@@ -32,5 +35,49 @@ IndexTypeDescriptorKey::IndexTypeDescriptorKey(std::string index_type_name,
 IndexTypeDescriptor::IndexTypeDescriptor(IndexTypeDescriptorKey key,
                                          vef_type_index_intf_t intf)
     : key_(std::move(key)), intf_(intf) {}
+
+bool IndexTypeDescriptor::parse(const TypeParameters &in,
+                                TypeParameters *params_out, void *options_out,
+                                size_t options_size, char *error_msg) const {
+  if (intf_.parse == nullptr) {
+    if (params_out != nullptr) *params_out = in;
+    return false;
+  }
+
+  const vef_type_params_t params = {in.count(), in.key_data(), in.value_data()};
+
+  // The index type is always handed both out-parameters, so it cannot tell
+  // the CREATE INDEX caller from the index-open one. Stand in for whichever
+  // one this caller does not want.
+  std::vector<unsigned char> scratch_options;
+  if (options_out == nullptr) {
+    scratch_options.assign(options_size, 0);
+    options_out = scratch_options.data();
+  }
+
+  char buf[VEF_MAX_TYPE_PARAMS_STRING_LEN];
+  vef_inferred_type_params_t out = {buf, sizeof(buf), 0, false};
+  if (intf_.parse(&params, &out, options_out, error_msg, VEF_MAX_ERROR_LEN))
+    return true;
+
+  // Retrying with a bigger buffer would give a parse function that is not
+  // idempotent a second shot at options_out, so an overflow is an error.
+  if (out.overflow) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "parse produced %zu bytes of parameters, more than the %d byte "
+             "limit",
+             out.actual_len, VEF_MAX_TYPE_PARAMS_STRING_LEN);
+    return true;
+  }
+
+  // write_params_to() does not null-terminate; actual_len is the length.
+  // from_raw() re-canonicalizes, so the comparison the callers make is
+  // between canonical forms and not between two serializations that order
+  // their keys by different rules.
+  if (params_out != nullptr)
+    *params_out =
+        TypeParameters::from_raw(std::string(out.buf, out.actual_len));
+  return false;
+}
 
 }  // namespace villagesql

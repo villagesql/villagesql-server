@@ -313,24 +313,29 @@ typedef struct {
   };
 } vef_invalue_v1_t;
 
-// Type parameters for a concrete type instantiation (e.g., dimension=1536).
+// A canonical parameter set, passed from the server to an extension.
 // Keys are sorted alphabetically; values are in the same order so that
-// keys[i] pairs with values[i]. count == 0 for non-parameterized or
-// non-custom types.
+// keys[i] pairs with values[i].
+//
+// Used for the parameters of a concrete type instantiation (e.g.,
+// dimension=1536), where count == 0 for non-parameterized or non-custom types,
+// and for the WITH (...) parameters of a custom index.
 typedef struct {
   unsigned int count;
   const char *const *keys;
   const char *const *values;
 } vef_type_params_t;
 
-// Server-supplied output channel for at-parse-time (fix_fields) inference of
-// from_string parameters from a constant string literal. The SDK wrapper
-// writes the canonical "k=v,k=v" form of the inferred params here when the
-// extension's parameterized from_string transitions MaybeParams<P> from
-// unknown to known during the call.
+// Server-supplied output channel for a canonical "k=v,k=v" parameter string
+// the extension produces.
 //
-// Used only on the constant-string inference path. NULL on the normal
-// row-time path; see vef_vdf_result_t::out_type_params.
+// Two paths use it. On at-parse-time (fix_fields) inference of from_string
+// parameters from a constant string literal, the SDK wrapper writes the
+// inferred params here when the extension's parameterized from_string
+// transitions MaybeParams<P> from unknown to known during the call; it is NULL
+// on the normal row-time path, see vef_vdf_result_t::out_type_params. A custom
+// index type's parse writes the completed WITH (...) parameters here, where it
+// is never NULL.
 //
 // Overflow contract (snprintf-style): the wrapper always sets actual_len to
 // the number of bytes that *would* have been written. If actual_len exceeds

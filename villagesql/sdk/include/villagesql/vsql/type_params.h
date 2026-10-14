@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -26,6 +27,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -33,6 +35,16 @@
 #include <villagesql/abi/types.h>
 
 namespace vsql {
+
+// Builds a params map from the ABI's parallel key/value arrays.
+inline std::map<std::string, std::string> map_from_params(
+    const vef_type_params_t &raw) {
+  std::map<std::string, std::string> m;
+  for (unsigned i = 0; i < raw.count; ++i) {
+    m.emplace(raw.keys[i], raw.values[i]);
+  }
+  return m;
+}
 
 // MaybeParams<P> carries a parameterized type's parsed parameters in either
 // "known" or "unknown" state. It is the first argument to from_string for
@@ -158,7 +170,7 @@ class TypeParamsCache {
   const T &get(const vef_type_params_t &raw, ParseFn &&parse_fn) {
     std::string key = key_from_raw(raw);
     if (const T *hit = lookup(key)) return *hit;
-    return insert(std::move(key), parse_fn(map_from_raw(raw)));
+    return insert(std::move(key), parse_fn(map_from_params(raw)));
   }
 
  private:
@@ -252,14 +264,6 @@ class TypeParamsCache {
     return key;
   }
 
-  static std::map<std::string, std::string> map_from_raw(
-      const vef_type_params_t &raw) {
-    std::map<std::string, std::string> m;
-    for (unsigned i = 0; i < raw.count; ++i) {
-      m.emplace(raw.keys[i], raw.values[i]);
-    }
-    return m;
-  }
 };
 
 // Returns the single shared TypeParamsCache<T> for this .so extension

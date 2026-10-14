@@ -525,23 +525,53 @@ typedef bool (*vef_type_index_scan_restore_func_t)(
 //   cursor - Pointer to the cursor to destroy; set to NULL on return.
 typedef void (*vef_type_index_scan_end_func_t)(vef_index_cursor_ref_t *cursor);
 
-// One key=value parameter from a WITH (...) clause on a custom index.
-// Both strings are null-terminated. Numeric literal values (e.g. M = 16) are
-// represented as their decimal string ("16").
-typedef struct {
-  const char *key;
-  const char *value;
-} vef_index_param_t;
-
-// Parse and validate WITH (...) parameters at CREATE INDEX time.
-// The server calls this before creating the index entry. The extension fills
-// options_out (server-allocated, options_size bytes) with the validated result,
-// which the server then passes as index_ctx->options to create().
-// Returns false on success, true on error (writes to error_msg).
-typedef bool (*vef_type_index_parse_func_t)(const vef_index_param_t *params,
-                                            uint32_t count, void *options_out,
-                                            char *error_msg,
-                                            uint32_t error_msg_len);
+// Complete and parse a custom index's WITH (...) parameters.
+//
+// The server calls this from two places, with an identical argument shape so
+// the index type has no mode flag to branch on and the two callers cannot
+// disagree:
+//
+//   - once per index while executing CREATE INDEX or ALTER TABLE ... ADD
+//     INDEX, where the server adopts *params_out as the set it persists and
+//     discards options_out;
+//   - every time the index is opened, where the server keeps options_out and
+//     requires *params_out to equal the set it has stored.
+//
+// Parameters:
+//   params        - the parameters recorded for this index, canonicalized:
+//                   keys lowercased and sorted
+//   params_out    - never NULL. The complete set, including every default this
+//                   index type would otherwise apply, written as the canonical
+//                   "key=value,key=value" form. Follows the
+//                   vef_inferred_type_params_t contract: always set actual_len
+//                   to the length the full string would need, and set overflow
+//                   when it did not fit.
+//   options_out   - never NULL; options_size zeroed bytes to fill. The server
+//                   passes the result as index_ctx->options to create() and
+//                   load(). It may discard an options struct it asked for
+//                   without any teardown call, so the struct must be trivially
+//                   copyable and trivially destructible and must not own
+//                   anything.
+//   error_msg     - Output: error description on failure
+//   error_msg_len - length of error message buffer
+//
+// Must be a fixpoint on its own output, because SHOW CREATE TABLE renders the
+// parameters this produced and replaying that DDL feeds them straight back in:
+// completing the returned set must return that same set. Fill in a parameter
+// that is missing, never overwrite one that is present, and validate a value
+// the same way whether it came from the user or from a previous run of this
+// function. To reject an unwanted parameter, return an error.
+//
+// The server holds internal locks across this call, so it must not call back
+// into the server.
+//
+// Optional. NULL, together with options_size 0, means the index type takes no
+// WITH (...) parameters at all.
+// Returns false on success, true on error (writes to error_msg); on error both
+// *params_out and options_out are undefined and the server ignores them.
+typedef bool (*vef_type_index_parse_func_t)(
+    const vef_type_params_t *params, vef_inferred_type_params_t *params_out,
+    void *options_out, char *error_msg, uint32_t error_msg_len);
 
 // Index type interface version constants.
 #define VEF_INDEX_TYPE_INTF_VERSION_1 1
@@ -591,9 +621,10 @@ typedef struct {
   vef_type_index_scan_restore_func_t scan_restore;
   vef_type_index_scan_end_func_t scan_end;
 
-  // WITH (...) parameter parsing. Set options_size to sizeof(Options) and
-  // parse to the validation function. Both must be zero/NULL together; either
-  // both are set or neither is.
+  // WITH (...) parameter completion and parsing. Set options_size to the size
+  // of the options struct and parse to the function that completes the
+  // parameters and builds it. An index type either takes WITH (...) parameters
+  // or it does not, so both are set together or left unset together.
   uint32_t options_size;
   vef_type_index_parse_func_t parse;
 
