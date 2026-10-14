@@ -1,0 +1,51 @@
+##############################################################################
+#
+# Test cases that fail running vanilla MySQL 8.4.11.
+#
+# A new instance of this disabled-mysql-Maj.Min.Pat-fails.def should be created
+# each time the baseline code for the codebase is updated.
+#
+# This disabled-mysql-8.4.11-fails.def was generated 14-Oct-2026 at  6:04PM CDT.
+# This disabled test file is based on a debug build of the mysql-8.4.11 tag.
+#
+# This file should be generated from a new vendor clone, using the
+# villagesql/bld_tools/prepare_codebase_failures.sh script
+#
+# villagesql/bld_tools/prepare_codebase_failures.sh mysql-8.4.11 ~/Projects/mysql/git/mysql-8.4
+#
+##############################################################################
+auth_sec.key_gen_acc_to_sec_level : BUG#0 Known failure in MySQL 8.4.11
+auth_sec.openssl_cert_generation_subject : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.init_innodb : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_c_count_not_zero : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_c_stats : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_i_40-44 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_id_3 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_id_900 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_insert_select_2 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_iud_rollback-multi-50 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_replace_7-8 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_s_select-uncommitted : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_sc_select-limit-nolimit_4 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_sc_select-same_2 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_sc_sum_total : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_u_10-19 : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_u_10-19_nolimit : BUG#0 Known failure in MySQL 8.4.11
+engines/rr_trx.rr_u_4 : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_blob : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_blob_nocompress : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_crash : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_crash_blob : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_crash_blob_nocompress : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_crash_nocompress : BUG#0 Known failure in MySQL 8.4.11
+innodb_stress.innodb_stress_nocompress : BUG#0 Known failure in MySQL 8.4.11
+large_tests.innodb_innochecksum_3gb : BUG#0 Known failure in MySQL 8.4.11
+lock_order.cycle : BUG#0 Known failure in MySQL 8.4.11
+main.keyring_migration_password : BUG#0 Known failure in MySQL 8.4.11
+main.ssl_cache : BUG#0 Known failure in MySQL 8.4.11
+main.ssl_cache_openssl1_0 : BUG#0 Known failure in MySQL 8.4.11
+main.ssl_cache_tls13 : BUG#0 Known failure in MySQL 8.4.11
+main.ssl_verify_identity : BUG#0 Known failure in MySQL 8.4.11
+max_parts.partition_max_parts_hash_innodb : BUG#0 Known failure in MySQL 8.4.11
+x.ssl_verify_identity : BUG#0 Known failure in MySQL 8.4.11

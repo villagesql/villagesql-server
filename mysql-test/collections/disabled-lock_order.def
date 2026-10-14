@@ -1,2 +1,0 @@
-# The lock_order.cycle test requires a server built with -DWITH_LOCK_ORDER=ON.
-lock_order.cycle : BUG#0 VillageSQL - Needs a server built with -DWITH_LOCK_ORDER=ON
