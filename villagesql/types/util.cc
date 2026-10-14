@@ -194,10 +194,10 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
 
   TypeParameters parameters =
       TypeParameters::from_json(column_entry->type_parameters);
-  const std::string validation = parameters.validation_error();
-  if (!validation.empty()) {
+  const std::string validation_error = parameters.validation_error();
+  if (!validation_error.empty()) {
     villagesql_error("Invalid stored type parameters: %s", MYF(0),
-                     validation.c_str());
+                     validation_error.c_str());
     return true;
   }
   TypeContextKey type_context_key(type_descriptor_key, parameters);
@@ -264,10 +264,10 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   TypeParameters parameters =
       TypeParameters::from_json(index_entry->index_type_parameters);
-  const std::string validation = parameters.validation_error();
-  if (!validation.empty()) {
+  const std::string validation_error = parameters.validation_error();
+  if (!validation_error.empty()) {
     villagesql_error("Invalid stored type parameters: %s", MYF(0),
-                     validation.c_str());
+                     validation_error.c_str());
     return true;
   }
   IndexContextKey ctx_key(type_key, std::move(parameters));
@@ -1955,10 +1955,10 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
   if (out_return.actual_len > 0 && out_return_params != nullptr) {
     *out_return_params = TypeParameters::from_raw(
         std::string(return_buf, out_return.actual_len));
-    const std::string validation = out_return_params->validation_error();
-    if (!validation.empty()) {
+    const std::string validation_error = out_return_params->validation_error();
+    if (!validation_error.empty()) {
       villagesql_error("Invalid inferred return parameters: %s", MYF(0),
-                       validation.c_str());
+                       validation_error.c_str());
       return true;
     }
   }
@@ -1974,10 +1974,11 @@ static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
     if (out_args[i].actual_len > 0) {
       (*out_arg_params)[i] = TypeParameters::from_raw(
           std::string(out_args[i].buf, out_args[i].actual_len));
-      const std::string validation = (*out_arg_params)[i].validation_error();
-      if (!validation.empty()) {
+      const std::string validation_error =
+          (*out_arg_params)[i].validation_error();
+      if (!validation_error.empty()) {
         villagesql_error("Invalid inferred argument parameters: %s", MYF(0),
-                         validation.c_str());
+                         validation_error.c_str());
         return true;
       }
     }
@@ -2193,10 +2194,10 @@ bool InjectCustomSpParams(
                             param_entry->extension_version);
       TypeParameters parameters =
           TypeParameters::from_json(param_entry->type_parameters);
-      const std::string validation = parameters.validation_error();
-      if (!validation.empty()) {
+      const std::string validation_error = parameters.validation_error();
+      if (!validation_error.empty()) {
         villagesql_error("Invalid stored routine type parameters: %s", MYF(0),
-                         validation.c_str());
+                         validation_error.c_str());
         return true;
       }
       TypeContextKey tck(tdk, std::move(parameters));

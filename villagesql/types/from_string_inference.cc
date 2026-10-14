@@ -167,10 +167,10 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
   *out_inferred = TypeParameters::from_raw(
       std::string(inferred_workspace.buf, inferred_workspace.actual_len));
 
-  const std::string validation = out_inferred->validation_error();
-  if (!validation.empty()) {
+  const std::string validation_error = out_inferred->validation_error();
+  if (!validation_error.empty()) {
     villagesql_error("Invalid inferred type parameters: %s", MYF(0),
-                     validation.c_str());
+                     validation_error.c_str());
     return true;
   }
 

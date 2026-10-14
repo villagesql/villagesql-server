@@ -419,10 +419,10 @@ struct TableTraits<TypeContext> {
   static std::shared_ptr<TypeContext> create(const TypeContextKey &key,
                                              const TypeDescriptor *descriptor) {
     if (!descriptor) return std::shared_ptr<TypeContext>();
-    const std::string validation = key.parameters().validation_error();
-    if (!validation.empty()) {
+    const std::string validation_error = key.parameters().validation_error();
+    if (!validation_error.empty()) {
       villagesql_error("Invalid type parameters: %s", MYF(0),
-                       validation.c_str());
+                       validation_error.c_str());
       return {};
     }
     // Use new directly: make_shared constructs via the allocator which doesn't
