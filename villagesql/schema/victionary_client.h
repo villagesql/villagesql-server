@@ -497,16 +497,50 @@ class SystemTableMap {
 
     auto thd_it = m_uncommitted.find(thd);
     if (thd_it != m_uncommitted.end()) {
-      // Delete all pending operations
-      PendingOperation<EntryType> *op = thd_it->second.first;
-      while (op) {
-        PendingOperation<EntryType> *next_op = op->next;
-        delete op;
-        op = next_op;
-      }
+      delete_operations(thd_it->second.first);
     }
 
     m_uncommitted.erase(thd);
+  }
+
+  // A position in this THD's uncommitted operations. rollback_to() discards
+  // the operations marked after it and keeps the earlier ones.
+  struct SavepointPosition {
+    uint elements;
+  };
+
+  // Requires read or write lock
+  SavepointPosition savepoint(THD *thd) const {
+    assert_read_or_write_lock_held();
+    auto thd_it = m_uncommitted.find(thd);
+    return {thd_it == m_uncommitted.end() ? 0 : thd_it->second.elements};
+  }
+
+  // Requires write lock
+  void rollback_to(THD *thd, SavepointPosition savepoint) {
+    assert_write_lock_held();
+    if (!thd) return;
+
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end()) {
+      assert(savepoint.elements == 0);
+      return;
+    }
+
+    UncommittedList &list = thd_it->second;
+    assert(list.elements >= savepoint.elements);
+    if (savepoint.elements == 0) {
+      rollback(thd);
+      return;
+    }
+
+    // Cut the list after the last operation the savepoint keeps.
+    PendingOperation<EntryType> *last_kept = list.first;
+    for (uint i = 1; i < savepoint.elements; i++) last_kept = last_kept->next;
+    delete_operations(last_kept->next);
+    last_kept->next = nullptr;
+    list.next = &last_kept->next;
+    list.elements = savepoint.elements;
   }
 
   // ===== Bulk operations =====
@@ -769,15 +803,18 @@ class SystemTableMap {
   // THD. Used by clear() and the destructor; does not assert the lock so it is
   // safe to call during teardown.
   void delete_all_uncommitted() {
-    for (auto &[thd, list] : m_uncommitted) {
-      PendingOperation<EntryType> *op = list.first;
-      while (op) {
-        PendingOperation<EntryType> *next_op = op->next;
-        delete op;
-        op = next_op;
-      }
-    }
+    for (auto &[_, list] : m_uncommitted) delete_operations(list.first);
     m_uncommitted.clear();
+  }
+
+  // Delete the heap-allocated PendingOperation nodes from `op` to the end of
+  // its list. Does not update the list that held them.
+  static void delete_operations(PendingOperation<EntryType> *op) {
+    while (op) {
+      PendingOperation<EntryType> *next_op = op->next;
+      delete op;
+      op = next_op;
+    }
   }
 
   // Note: No locks - parent VictionaryClient's lock protects all access
@@ -915,6 +952,34 @@ class VictionaryClient {
 
   // Rollback all uncommitted entries across all tables for this transaction
   void rollback_all_tables(THD *thd);
+
+  // A position in this THD's uncommitted entries across all tables.
+  // rollback_all_tables_to() discards the entries marked after it and keeps
+  // the earlier ones, so a failed step can be undone without discarding the
+  // rest of the transaction.
+  struct Savepoint {
+    SystemTableMap<PropertyEntry>::SavepointPosition properties;
+    SystemTableMap<ColumnEntry>::SavepointPosition columns;
+    SystemTableMap<SpParamEntry>::SavepointPosition sp_params;
+    SystemTableMap<ExtensionEntry>::SavepointPosition extensions;
+    ExtensionObjectMap<TypeDescriptor>::SavepointPosition type_descriptors;
+    ExtensionObjectMap<ExtensionDescriptor>::SavepointPosition
+        extension_descriptors;
+    ExtensionObjectMap<TypeContext>::SavepointPosition type_contexts;
+    ExtensionObjectMap<FuncDescriptor>::SavepointPosition funcs;
+    ExtensionObjectMap<IndexContext>::SavepointPosition index_contexts;
+    SystemTableMap<IndexEntry>::SavepointPosition custom_indexes;
+    SystemTableMap<IndexColumnEntry>::SavepointPosition custom_index_columns;
+    ExtensionObjectMap<IndexTypeDescriptor>::SavepointPosition
+        index_type_descriptors;
+    ExtensionObjectMap<IndexProfileDescriptor>::SavepointPosition
+        index_profile_descriptors;
+  };
+
+  // savepoint_all_tables() requires at least the read lock;
+  // rollback_all_tables_to() requires the write lock.
+  Savepoint savepoint_all_tables(THD *thd) const;
+  void rollback_all_tables_to(THD *thd, const Savepoint &savepoint);
 
   // Write all uncommitted entries to their backing system tables
   // Must be called BEFORE transaction commits so writes are part of txn
