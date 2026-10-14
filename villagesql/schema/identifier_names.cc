@@ -130,6 +130,12 @@ std::string index_name_match_sql(const std::string &vsql_name,
   return folded_match_sql(vsql_name, dd_name);
 }
 
+bool type_parameter_names_equal(std::string_view a, std::string_view b) {
+  return my_strnncoll(type_parameter_collation(),
+                      reinterpret_cast<const uchar *>(a.data()), a.size(),
+                      reinterpret_cast<const uchar *>(b.data()), b.size()) == 0;
+}
+
 const CHARSET_INFO *type_parameter_collation() {
   return &my_charset_utf8mb4_0900_ai_ci;
 }
