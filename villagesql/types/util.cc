@@ -650,6 +650,21 @@ static String *EncodeForItem(Item *item, const String &from, bool &is_valid) {
   return encoder->encode(from, is_valid);
 }
 
+// Push the warning for a value the type would not accept. Consistent with
+// MySQL built-in types: the caller decides whether to promote it to an error.
+// 'value' is what the converter was given, so the message names what the user
+// wrote rather than the bytes their charset encoded it as.
+static void ReportBadCustomFieldValue(const Field *field, const String &value) {
+  const TypeContext *tc = field->get_type_context();
+  THD *thd = current_thd;
+  const ErrConvString errmsg(value.ptr(), value.length(), value.charset());
+  const Diagnostics_area *da = thd->get_stmt_da();
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
+      errmsg.ptr(), field->field_name, da->current_row_for_condition());
+}
+
 String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
   assert(field->has_type_context());
 
@@ -658,23 +673,34 @@ String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
     is_valid = true;  // OOM, my_error already called
     return nullptr;
   }
-  String *encoded = encoder->encode(from, is_valid);
-  if (encoded == nullptr) {
-    if (is_valid) return nullptr;  // OOM, my_error already called
-    // Encoding failed - invalid value for custom type
-    // Always push a warning (consistent with MySQL built-in types)
-    // Caller decides whether to also promote to error
-    const TypeContext *tc = field->get_type_context();
-    THD *thd = current_thd;
-    const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
-    const Diagnostics_area *da = thd->get_stmt_da();
-    push_warning_printf(thd, Sql_condition::SL_WARNING,
-                        ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-                        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-                        tc->type_name().c_str(), errmsg.ptr(),
-                        field->field_name, da->current_row_for_condition());
-    return nullptr;
+
+  // from_string receives the value in utf8mb4, so a type's converter knows
+  // what encoding it is reading. Whether the value is then valid stays the
+  // type's call. Input already in utf8mb4 needs nothing, which is the usual
+  // case since that is the default connection charset.
+  if (from.needs_conversion(&my_charset_utf8mb4_bin)) {
+    String converted;
+    uint errors = 0;
+    if (converted.copy(from.ptr(), from.length(), from.charset(),
+                       &my_charset_utf8mb4_bin, &errors)) {
+      is_valid = true;  // OOM, my_error already called
+      return nullptr;
+    }
+    if (errors != 0) {
+      // Malformed in the charset it claims to be; nothing valid to parse.
+      is_valid = false;
+      ReportBadCustomFieldValue(field, converted);
+      return nullptr;
+    }
+    String *encoded = encoder->encode(converted, is_valid);
+    if (encoded == nullptr && !is_valid) {
+      ReportBadCustomFieldValue(field, converted);
+    }
+    return encoded;
   }
+
+  String *encoded = encoder->encode(from, is_valid);
+  if (encoded == nullptr && !is_valid) ReportBadCustomFieldValue(field, from);
   return encoded;
 }
 

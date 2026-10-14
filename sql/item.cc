@@ -4318,7 +4318,12 @@ type_conversion_status Item_param::save_in_field_inner(Field *field,
       return TYPE_OK;
     case MYSQL_TYPE_VARCHAR: {
       if (field->has_type_context()) {
-        return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+        // str_value holds the bytes tagged binary whatever the parameter's
+        // charset (see set_str), which is fine for a store that copies bytes
+        // but not for a custom type, whose converter reads them as text.
+        // collation_actual() is the charset they are actually in.
+        String value(str_value.ptr(), str_value.length(), collation_actual());
+        return villagesql::EncodeAndStoreStringToCustomField(value, field);
       }
       return field->store(str_value.ptr(), str_value.length(),
                           str_value.charset());
