@@ -1900,12 +1900,12 @@ static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
 // true on error (error already raised).
-static bool CallBindTypesHook(const vef_bind_types_func_t bind_and_check,
-                              vef_context_t &ctx, const char *func_name,
-                              uint arg_count, Item **args,
-                              std::vector<TypeParameters> *out_arg_params,
-                              std::vector<std::string> *out_arg_type_names,
-                              TypeParameters *out_return_params) {
+static bool CallBindTypesHook(
+    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
+    const char *func_name, uint arg_count, Item **args,
+    std::vector<TypeParameters> *out_arg_params,
+    TypeParameters *out_return_params,
+    std::vector<std::string> *out_arg_type_names = nullptr) {
   std::vector<vef_type_t> arg_types(arg_count);
   std::vector<char *> const_values(arg_count, nullptr);
   std::vector<size_t> const_lengths(arg_count, 0);
@@ -2135,8 +2135,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // have.
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, &hook_arg_type_names,
-                          out_return_params)) {
+                          &hook_arg_params, out_return_params,
+                          &hook_arg_type_names)) {
       return true;
     }
     // Parameters are only ever applied to an argument that has a type, and a
@@ -2186,11 +2186,10 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   // it sees what pass 1 resolved, and the params it decides are what
   // pass 2 applies.
   if (has_bind_hook && !varargs) {
-    // nullptr: a fixed-arity signature already declares every argument's type,
-    // so the hook is not offered the type-name channel.
+    // The type-name argument is left at its default: a fixed-arity signature
+    // already declares every argument's type, so the hook has nothing to name.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, /*out_arg_type_names=*/nullptr,
-                          out_return_params)) {
+                          &hook_arg_params, out_return_params)) {
       return true;
     }
   }

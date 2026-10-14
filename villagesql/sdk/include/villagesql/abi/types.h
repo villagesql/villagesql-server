@@ -690,32 +690,35 @@ typedef struct {
   // "k=v,k=v" params for any argument it wants to resolve and leaves
   // actual_len == 0 for the rest.
   //
-  // This is how a hook resolves an argument the server could not - typically
+  // This is how a hook resolves an argument the server could not, typically
   // a string literal written where a parameterized custom type is expected,
   // which has no sibling to borrow parameters from once a hook switches the
   // built-in propagation off. Arguments left at 0 keep whatever the server
-  // worked out. nullptr when the server did not offer the channel; when
+  // worked out. nullptr when the server did not supply the array; when
   // non-nullptr, every one of its arg_count entries is non-nullptr.
   vef_inferred_type_params_t **out_arg_params;
 
   // OPTIONAL OUTPUT, varargs only: the custom type an argument should be
-  // read as. buf carries the type name -- the same struct and the same
-  // overflow contract as out_arg_params, but holding a name rather than
-  // "k=v,k=v", sized VEF_MAX_TYPE_NAME_LEN. actual_len == 0 leaves the
-  // server's own inference for that argument in place.
+  // read as. buf carries the type name. Same struct and same overflow contract
+  // as out_arg_params, but holding a name rather than "k=v,k=v", sized
+  // VEF_MAX_TYPE_NAME_LEN. actual_len == 0 leaves the server's own inference
+  // for that argument in place.
   //
   // A fixed-arity function has no use for this: its signature already says
-  // what each argument must be, and the server offers the channel only for a
+  // what each argument must be, so the server supplies this array only for a
   // varargs call, where there is no signature to say so. A bare '[1,2,3]'
   // written among a varargs function's arguments is otherwise just a string,
   // because nothing declares that it should become a custom type.
   //
   // What it can do is narrower than the name suggests. An argument that
-  // already carries a type -- a column, a nested VDF's result, a CAST -- is
-  // only *checked* against the declared name, and the call is rejected if
-  // they disagree; the hook cannot reinterpret such an argument. Naming a
-  // type is effective only for an argument the server could not type at all,
-  // which in practice means a string constant.
+  // already carries a type (a column, or a nested VDF's result) is only
+  // *checked* against the declared name, and the call is rejected if they
+  // disagree; the hook cannot reinterpret such an argument. Naming a type is
+  // effective only for an argument the server could not type at all, today a
+  // string constant.
+  // TODO(villagesql-general): revisit that last clause when #400 lands. An
+  // explicitly typed literal will arrive already typed, so it moves into the
+  // checked-only case above; the rule itself still holds.
   //
   // Declaring a name here makes out_arg_params[i] the sole source of that
   // argument's parameters, and the two travel together: parameters written
@@ -723,7 +726,7 @@ typedef struct {
   // a varargs call has no signature the type could come from and the argument
   // would otherwise stay untyped. The name must be a type registered by this
   // same extension; anything else aborts the statement. nullptr when the
-  // server did not offer the channel; when non-nullptr, every one of its
+  // server did not supply the array; when non-nullptr, every one of its
   // arg_count entries is non-nullptr.
   vef_inferred_type_params_t **out_arg_types;
 } vef_bind_types_result_t;

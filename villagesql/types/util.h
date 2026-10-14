@@ -420,8 +420,6 @@ extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 
 // The VEF type of a VDF argument: VEF_TYPE_CUSTOM when the Item carries a
 // TypeContext, otherwise derived from its SQL result type.
-// Note DECIMAL_RESULT lands in VEF_TYPE_STRING, which is why a decimal
-// literal reaches an extension as a string rather than a number.
 extern vef_type_id InferArgTypeId(const Item *item);
 
 // Validate VDF arguments against function signature and convert string

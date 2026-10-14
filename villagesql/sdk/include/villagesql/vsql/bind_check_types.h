@@ -65,17 +65,13 @@ class BindArgType {
   bool has_params() const { return params_ != nullptr && params_->count > 0; }
 
   // This argument's parameters as your own params struct, or nullptr when they
-  // are not known. P must be the type registered with
+  // are not known (or not registered). P must be the type registered with
   // .params<P, &P::parse, &P::to_strings>() on the type builder.
-  //
-  // Also returns nullptr when no custom type registered P, rather than
-  // dereferencing the cache's null parse function. A fixed-arity function is
-  // caught at registration by check_params_cache_bound, but that check is
-  // only derived for typed argument lists, so a varargs hook has no other
-  // safety net.
   template <typename P>
   const P *params() const {
     if (!has_params()) return nullptr;
+    // P comes from extension, thus check that the param struct P is registered
+    // with that extension.
     if (!type_params_cache_for<P>().is_bound()) return nullptr;
     return &type_params_cache_for<P>().get(*params_);
   }
@@ -148,9 +144,9 @@ class BindResult {
     write_name(r_->out_arg_types[i], type_name);
   }
 
-  // The two halves of typing a constant argument in one gesture: what it
-  // should be read as, and the parameters to read it with. Prefer this over
-  // calling set_arg_type() and set_arg() separately.
+  // The two halves of typing a constant argument in one call: what it should
+  // be read as, and the parameters to read it with. Prefer this over calling
+  // set_arg_type() and set_arg() separately.
   template <typename P>
   void set_arg(size_t i, const char *type_name, const P &p) {
     set_arg_type(i, type_name);
