@@ -810,6 +810,9 @@ void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
   // Convert to the output charset. MySQL's dictionary type description uses
   // utf8mb3; the separately stored parameter JSON keeps the full UTF-8 text.
   out->append(name.c_str(), name.length(), type_parameter_collation());
+  // A converting append NUL-terminates its worst-case reservation, not the
+  // text, so terminate here for callers that use c_ptr().
+  (void)out->c_ptr_quick();
 }
 
 // Appends "extension_name.name", quoting each half.
