@@ -20,20 +20,17 @@
 #include <cassert>
 #include <cerrno>
 #include <cstdlib>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
-
-#include "my_rapidjson_size_t.h"
-
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
 
 #include "mysql/strings/m_ctype.h"
 #include "sql/strfunc.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/identifier_names.h"
+#include "villagesql/schema/systable/helpers.h"
 #include "villagesql/types/special_vdf_call.h"
 
 namespace villagesql {
@@ -344,7 +341,7 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
   // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
   // re-serialize. Use the same charset for both lowercasing and sort order.
   const CHARSET_INFO *cs = type_parameter_collation();
-  std::vector<std::pair<std::string, std::string>> pairs;
+  StringPairs pairs;
   size_t start = 0;
   // <= visits an empty token after a trailing comma, so it becomes a nameless
   // parameter. This does not cause an out-of-bounds read: when start == size(),
@@ -401,49 +398,42 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
 }
 
 std::string TypeParameters::to_json() const {
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  writer.StartObject();
-  for (size_t i = 0; i < keys_.size(); ++i) {
-    writer.Key(keys_[i].data(), keys_[i].size());
-    writer.String(values_[i].data(), values_[i].size());
+  // keys_/values_ are already the parsed form of str_, so serialize those
+  // rather than re-splitting the canonical string.
+  StringPairs pairs;
+  pairs.reserve(keys_.size());
+  for (size_t i = 0; i < keys_.size(); i++) {
+    pairs.emplace_back(keys_[i], values_[i]);
   }
-  writer.EndObject();
-  return {buffer.GetString(), buffer.GetSize()};
+  return json_object_from_pairs(pairs);
 }
 
 TypeParameters TypeParameters::from_json(const std::string &json) {
-  if (json.empty()) return TypeParameters();
-  rapidjson::Document document;
-  document.Parse<rapidjson::kParseValidateEncodingFlag>(json.data(),
-                                                        json.size());
-  if (document.HasParseError() || !document.IsObject())
+  StringPairs pairs;
+  if (json_object_to_pairs(json, &pairs))
     return invalid("invalid type parameter JSON object");
 
   // Validate the parameters and count the bytes needed for "key=value,...".
   size_t raw_size = 0;
-  for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it) {
-    if (!it->value.IsString())
-      return invalid("type parameter values must be strings");
-    std::string_view key(it->name.GetString(), it->name.GetStringLength());
-    std::string_view value(it->value.GetString(), it->value.GetStringLength());
+  for (const auto &[key, value] : pairs) {
     if (const char *error = text_error(key)) return invalid(error);
     if (const char *error = text_error(value)) return invalid(error);
     // TODO(villagesql-general): Support commas in parameter values in both
     // the server and SDK parsers/serializers.
-    if (key.find_first_of(",=") != std::string_view::npos ||
-        value.find(',') != std::string_view::npos)
+    if (key.find_first_of(",=") != std::string::npos ||
+        value.find(',') != std::string::npos)
       return invalid("invalid delimiter in stored type parameters");
     raw_size += key.size() + value.size() + 2;  // key=value,
   }
 
+  // Rebuild the raw form so from_raw() applies canonical order and casing.
   std::string raw;
   raw.reserve(raw_size);
-  for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it) {
+  for (const auto &[key, value] : pairs) {
     if (!raw.empty()) raw += ',';
-    raw.append(it->name.GetString(), it->name.GetStringLength());
+    raw += key;
     raw += '=';
-    raw.append(it->value.GetString(), it->value.GetStringLength());
+    raw += value;
   }
   return from_raw(raw);
 }
