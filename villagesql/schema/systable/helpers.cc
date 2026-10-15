@@ -19,16 +19,23 @@
 #include <algorithm>
 #include <cctype>
 #include <initializer_list>
+#include <map>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 #include "lex_string.h"
 #include "my_base.h"
 #include "mysql/strings/m_ctype.h"
+#include "sql-common/json_dom.h"
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/statement/ed_connection.h"
 #include "sql/table.h"
+#include "sql_string.h"
+#include "template_utils.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql {
@@ -40,6 +47,58 @@ int read_row_for_update(TABLE &table, const uchar *key_buf) {
 
   store_record(&table, record[1]);
   return 0;
+}
+
+std::string json_object_from_pairs(const StringPairs &pairs) {
+  // Json_key_comparator gives the member order a Json_object would, and
+  // assignment drops all but the last value for a key, as add_alias() does.
+  std::map<std::string, std::string, Json_key_comparator> members;
+  for (const auto &[key, value] : pairs) members[key] = value;
+
+  // Assembled here rather than via Json_wrapper::to_string(), which reads
+  // current_thd to bound the result against max_allowed_packet, which is a
+  // limit these parameters cannot reach, and a dependency that makes the call
+  // unusable without a session.
+  StringBuffer<256> buf;
+  buf.set_charset(&my_charset_utf8mb4_bin);
+  if (buf.append('{')) return "{}";
+  bool first = true;
+  for (const auto &[key, value] : members) {
+    if (!first && buf.append(", ", 2)) return "{}";
+    first = false;
+    if (double_quote(key.data(), key.length(), &buf) || buf.append(": ", 2) ||
+        double_quote(value.data(), value.length(), &buf))
+      return "{}";
+  }
+  if (buf.append('}')) return "{}";
+  return std::string(buf.ptr(), buf.length());
+}
+
+bool json_object_to_pairs(const std::string &json, StringPairs *out) {
+  if (json.empty()) {
+    out->clear();
+    return false;
+  }
+
+  // The caller decides what a parse failure means, so report it through the
+  // return value rather than raising here.
+  Json_dom_ptr dom = Json_dom::parse(
+      json.data(), json.length(), [](const char *, size_t) {}, [] {});
+  if (dom == nullptr || dom->json_type() != enum_json_type::J_OBJECT)
+    return true;
+
+  const Json_object *obj = down_cast<const Json_object *>(dom.get());
+  StringPairs pairs;
+  pairs.reserve(obj->cardinality());
+  for (const auto &member : *obj) {
+    if (member.second->json_type() != enum_json_type::J_STRING) return true;
+    const Json_string *str =
+        down_cast<const Json_string *>(member.second.get());
+    pairs.emplace_back(member.first, str->value());
+  }
+
+  *out = std::move(pairs);
+  return false;
 }
 
 void read_string_field(Field *f, std::string &out) {
