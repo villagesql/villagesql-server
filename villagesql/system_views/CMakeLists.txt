@@ -17,6 +17,10 @@
 
 SET(VILLAGESQL_SYSTEM_VIEWS_SOURCES
   columns.cc
+  custom_index_columns.cc
+  custom_indexes.cc
+  extension_index_profiles.cc
+  extension_index_types.cc
   extension_registration.cc
   extensions.cc
   statistics.cc
