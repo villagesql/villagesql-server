@@ -725,8 +725,7 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
 
   const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
-  // Reject dropping a system schema and village schema except for system
-  // threads.
+  // Reject dropping a system or villagesql schema except for system threads.
   if (!thd->is_dd_system_thread() &&
       (dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str)) ||
        villagesql::is_villagesql_schema(db.str))) {

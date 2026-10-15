@@ -1,10 +1,4 @@
-# The 'villagesql' schema holds the victionary, so DROP DATABASE on it leaves
-# the server with custom columns, routine parameters and installed extensions
-# it can no longer read. Worse, the datadir no longer starts: the next restart
-# reads the missing schema as a first-time installation, enters the server
-# upgrade path, and aborts there with "Unknown database 'villagesql'". ALTER is
-# rejected for the same reason, matching how the server already protects the
-# 'mysql' schema.
+# The 'villagesql' schema cannot be altered or dropped.
 
 --echo # DROP is rejected, with and without IF EXISTS, and under DROP SCHEMA.
 --error ER_NO_SYSTEM_SCHEMA_ACCESS
