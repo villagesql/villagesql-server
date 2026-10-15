@@ -15,10 +15,19 @@ Staging directories left behind: 0
 # A failed re-expansion leaves the existing expansion in place.
 DROP TABLE test_staged;
 Expansion directory present before the failed re-expansion
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) INTO @repaired_before
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
 SET SESSION debug='+d,villagesql_veb_fail_extraction';
 INSTALL EXTENSION vsql_complex;
 ERROR HY000: VEB expansion failed for 'vsql_complex'
 SET SESSION debug='-d,villagesql_veb_fail_extraction';
+# The failed repair was not counted
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) - @repaired_before AS repaired_delta
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+repaired_delta
+0
 Existing expansion survived the failure: yes
 Staging directories left behind: 0
 # Nothing was destroyed; retry now succeeds
