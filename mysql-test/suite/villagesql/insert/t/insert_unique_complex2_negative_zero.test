@@ -1,5 +1,6 @@
-# UNIQUE key on COMPLEX2, which stores -0 as is but compares it equal to 0.
-# The key must follow the type's comparison, so (-0,0) conflicts with (0,0).
+# UNIQUE key on COMPLEX2, to ensure that the comparison function is being used,
+# not just comparing the raw data. COMPLEX2 stores -0 as is but compares it
+# equal to 0, so (-0,0) conflicts with (0,0).
 
 --source include/villagesql/install_complex_extension.inc
 
