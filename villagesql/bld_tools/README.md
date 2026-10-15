@@ -50,6 +50,7 @@ concerns helps avoid ambiguity and confusion.
 | `mtr_extract_tests.sh`           | List the `suite.testname` of each failed or unstable test in an MTR XML result file.                               |
 | `package_dev_server.sh`          | Package a completed build as a dev-server tarball.                                                                 |
 | `prepare_codebase_failures.sh`   | Build a vendor MySQL tag, run full MTR, and write its failing tests to `mysql-test/collections/disabled-<tag>-fails.def`. |
+| `prepare_fts_report.sh`          | Print the Slack payload (JSON) reporting a Full Test Suite run: stage ladder, failed MTR tests, and run details.   |
 | `prepare_github_release.sh`      | Create the draft GitHub release for a tag from the release note committed at it.                                   |
 | `prepare_release_notes.sh`       | Finalize a draft release note against the current HEAD and commit it.                                              |
 | `setup_build_env.sh`             | Install the build host's toolchain by dispatching to the matching per-OS script.                     |

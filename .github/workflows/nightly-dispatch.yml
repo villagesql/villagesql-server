@@ -161,6 +161,7 @@ jobs:
             -f ref="$REF" \
             -f build-type=debug \
             -f platform=linux-x86_64 \
+            -f slack_notify=true \
             -f artifact-prefix=nightly-full-debug
           echo "Started full-test-suite (debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
 
