@@ -683,10 +683,7 @@ static inline void row_purge_remove_multi_sec_if_poss(purge_node_t *node,
       break;
     }
 
-    // VillageSQL: a custom index does its own maintenance in the extension;
-    // exclude it from generic secondary-index maintenance, as for DICT_FTS.
-    if (node->index->type != DICT_FTS &&
-        !villagesql::innodb::Custom_index::is_custom(node->index)) {
+    if (node->index->type != DICT_FTS) {
       if (node->index->is_multi_value()) {
         row_purge_remove_multi_sec_if_poss(node, heap, false);
       } else {
@@ -1304,10 +1301,7 @@ bool purge_node_t::validate_pcur() {
     return (true);
   }
 
-  // VillageSQL: a custom index does its own maintenance in the extension and
-  // has no clustered pcur to validate, as for DICT_FTS.
-  if (index->type == DICT_FTS ||
-      villagesql::innodb::Custom_index::is_custom(index)) {
+  if (index->type == DICT_FTS) {
     return (true);
   }
 
