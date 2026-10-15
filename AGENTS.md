@@ -61,7 +61,8 @@ make -j14
 rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_DEBUG=1 -DWITH_SHOW_PARSE_TREE=1
 make -j14
 
-# macOS build that carries its own copy of the OpenSSL libraries
+# macOS: name the OpenSSL 3 directory. Homebrew's unversioned openssl is
+# now OpenSSL 4, which the server does not build against.
 rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_SSL="$(brew --prefix openssl@3)"
 make -j14
 ```
