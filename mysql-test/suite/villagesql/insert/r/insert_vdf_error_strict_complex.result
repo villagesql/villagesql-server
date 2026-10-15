@@ -1,3 +1,7 @@
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
 CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX NOT NULL);
 INSERT INTO t2 VALUES (1, '(1,1)');
@@ -20,3 +24,4 @@ SELECT * FROM t2 ORDER BY id;
 id	val
 1	(1,1)
 DROP TABLE t1, t2;
+SET sql_mode = @saved_sql_mode;
