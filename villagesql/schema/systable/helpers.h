@@ -20,6 +20,8 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "my_inttypes.h"
 
@@ -74,6 +76,19 @@ inline ParsedQualifiedName parse_qualified_name(std::string_view name) {
 // that compares equal, so a record[1] holding anything but the row just read
 // drops columns from the update with no error.
 int read_row_for_update(TABLE &table, const uchar *key_buf);
+
+// JSON object form of a parameter set, shared by the type_parameters and
+// index_type_parameters columns so escaping is implemented once. Values are
+// always JSON strings; callers render their own types to text first.
+using StringPairs = std::vector<std::pair<std::string, std::string>>;
+
+// Keys are ordered by length then bytes, so the output is deterministic.
+// Returns "{}" on allocation failure.
+std::string json_object_from_pairs(const StringPairs &pairs);
+
+// Returns true if the input is not an object of strings, leaving *out
+// untouched. Empty input or "{}" succeeds with no pairs.
+bool json_object_to_pairs(const std::string &json, StringPairs *out);
 
 // Helper functions for reading a value from a Field.
 void read_string_field(Field *f, std::string &out);
