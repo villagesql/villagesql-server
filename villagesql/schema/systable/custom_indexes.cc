@@ -18,11 +18,10 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
-#include "include/sql_string.h"
 #include "scope_guard.h"
-#include "sql-common/json_dom.h"
-#include "sql-common/json_error_handler.h"
 #include "sql/field.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
@@ -212,29 +211,19 @@ bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
 }
 
 std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
-  Json_object_ptr obj(new (std::nothrow) Json_object());
-  if (!obj) return "{}";
+  StringPairs pairs;
+  pairs.reserve(params.size());
 
-  // Parameters are stored in Json_object using a std::map ordered by
-  // Json_key_comparator (length first, then memcmp), producing a
-  // deterministic canonical serialization order.
   for (const IndexWithParam &p : params) {
-    std::string key(p.key.str, p.key.length);
-    // TypeParameters::from_json() only accepts quoted string values (per its
-    // documented contract), so encode numeric WITH-clause values as JSON
-    // strings too, rather than bare JSON numbers.
-    std::string value = p.is_string
-                            ? std::string(p.value.str.str, p.value.str.length)
-                            : std::to_string(p.value.num);
-    Json_dom_ptr val(new (std::nothrow) Json_string(value));
-    if (!val || obj->add_alias(key, std::move(val))) return "{}";  // OOM
+    // Numbers become JSON strings: json_object_to_pairs() rejects a non-string
+    // member.
+    pairs.emplace_back(std::string(p.key.str, p.key.length),
+                       p.is_string
+                           ? std::string(p.value.str.str, p.value.str.length)
+                           : std::to_string(p.value.num));
   }
 
-  Json_wrapper wrapper(obj.release());
-  StringBuffer<256> buf;
-  if (wrapper.to_string(&buf, false, "params_to_json", JsonDepthErrorHandler))
-    return "{}";
-  return std::string(buf.ptr(), buf.length());
+  return json_object_from_pairs(pairs);
 }
 
 }  // namespace villagesql

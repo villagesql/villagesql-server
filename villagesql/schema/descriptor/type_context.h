@@ -120,9 +120,13 @@ class TypeParameters {
 
   // JSON serialization for storage in the villagesql.custom_columns table
   // (which has a JSON column for type_parameters).
-  // to_json(): "" → "{}", "k=v" → {"k":"v"}, "a=1,b=2" → {"a":"1","b":"2"}
+  // to_json(): "" -> "{}", "k=v" -> {"k": "v"}. Keys and values are
+  // JSON-escaped. Key order is JSON's, not canonical; from_json()
+  // re-canonicalizes.
   std::string to_json() const;
-  // from_json(): inverse of to_json()
+  // from_json(): inverse of to_json(), and reads what params_to_json() writes.
+  // Sets validation_error() if the input is not an object of strings or the
+  // parameters are not valid.
   static TypeParameters from_json(const std::string &json);
 
   bool operator==(const TypeParameters &other) const {
