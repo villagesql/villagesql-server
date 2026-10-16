@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_test_only;
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1);
+PREPARE s FROM 'SELECT vsql_test_only.prerun_counted() FROM t1';
+SET SESSION debug = '+d,vdf_fail_after_prerun';
+SELECT vsql_test_only.prerun_counted();
+ERROR HY001: Out of memory; restart server and try again (needed 0 bytes)
+SELECT vsql_test_only.prerun_live_states() AS live_after_select;
+live_after_select
+0
+PREPARE bad FROM 'SELECT vsql_test_only.prerun_counted()';
+ERROR HY001: Out of memory; restart server and try again (needed 0 bytes)
+SELECT vsql_test_only.prerun_live_states() AS live_after_prepare;
+live_after_prepare
+0
+EXECUTE s;
+ERROR HY001: Out of memory; restart server and try again (needed 0 bytes)
+SELECT vsql_test_only.prerun_live_states() AS live_after_reprepare;
+live_after_reprepare
+0
+SET SESSION debug = '-d,vdf_fail_after_prerun';
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_test_only;

@@ -272,8 +272,14 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
 
     // Store user_data for subsequent calls
     m_vdf_args.user_data = prerun_result.user_data;
+    m_active = true;
 
     // Handle buffer size request
+    DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
+      my_error(ER_OUTOFMEMORY, MYF(0),
+               static_cast<int>(prerun_result.result_buffer_size));
+      return true;
+    });
     if (MaybeResizeBuffer(prerun_result.result_buffer_size)) return true;
   }
 

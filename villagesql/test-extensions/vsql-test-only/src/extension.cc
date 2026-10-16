@@ -700,6 +700,33 @@ void int_sum_all_impl(vsql::VarArgs args, vsql::IntResult out) {
   out.set(total);
 }
 
+// prerun_counted and prerun_live_states let a test check that postrun runs
+// for every prerun that stored state. prerun_counted's prerun allocates a
+// PrerunProbeState and increments live_prerun_states. Its postrun frees the
+// state and decrements the count. prerun_live_states() reads the count, which
+// must be 0 after any statement, failed or not.
+struct PrerunProbeState {};
+
+static int64_t live_prerun_states = 0;
+
+void prerun_counted_prerun(vsql::PrerunArgs, vsql::PrerunResult result) {
+  ++live_prerun_states;
+  result.set_user_data(new PrerunProbeState{});
+}
+
+void prerun_probe_postrun(vsql::PostrunArgs args) {
+  args.delete_state<PrerunProbeState>();
+  --live_prerun_states;
+}
+
+void prerun_probe_impl(const PrerunProbeState &, vsql::IntResult out) {
+  out.set(live_prerun_states);
+}
+
+void prerun_live_states_impl(vsql::IntResult out) {
+  out.set(live_prerun_states);
+}
+
 using NormSqState = int64_t;
 
 void pvec_norm_sq_clear(NormSqState &state) { state = 0; }
@@ -1406,6 +1433,16 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(INT)
                   .varargs()
                   .prerun<&int_sum_all_prerun>()
+                  .build())
+        .func(make_func<&prerun_probe_impl>("prerun_counted")
+                  .returns(INT)
+                  .no_params()
+                  .prerun<&prerun_counted_prerun>()
+                  .postrun<&prerun_probe_postrun>()
+                  .build())
+        .func(make_func<&prerun_live_states_impl>("prerun_live_states")
+                  .returns(INT)
+                  .no_params()
                   .build())
         .func(make_aggregate_func<NormSqState, &pvec_norm_sq_result>(
                   "pvec_norm_sq")
