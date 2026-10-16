@@ -1,0 +1,48 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+(5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+CREATE PROCEDURE p_lag(IN g INT)
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE v_id INT;
+DECLARE v_prev COMPLEX;
+DECLARE cur CURSOR FOR
+SELECT id, LAG(val) OVER (ORDER BY val, id) FROM t1 WHERE grp = g;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+OPEN cur;
+read_loop: LOOP
+FETCH cur INTO v_id, v_prev;
+IF done THEN LEAVE read_loop; END IF;
+SELECT v_id, v_prev;
+END LOOP;
+CLOSE cur;
+END|
+CREATE FUNCTION f_rank(p_id INT) RETURNS INT READS SQL DATA
+BEGIN
+RETURN (SELECT rnk FROM
+(SELECT id, RANK() OVER (ORDER BY val) AS rnk FROM t1) AS d
+WHERE id = p_id);
+END|
+CALL p_lag(1);
+v_id	v_prev
+2	NULL
+v_id	v_prev
+4	(-3,0)
+v_id	v_prev
+1	(2,-5)
+v_id	v_prev
+3	(2,1)
+SELECT id, f_rank(id) AS rnk FROM t1 ORDER BY id;
+id	rnk
+1	6
+2	2
+3	6
+4	5
+5	3
+6	1
+7	8
+8	3
+DROP FUNCTION f_rank;
+DROP PROCEDURE p_lag;
+DROP TABLE t1;
