@@ -121,6 +121,11 @@ pipx ensurepath   # adds ~/.local/bin to PATH in your shell startup file; open a
 
    # Or for a debug build (recommended for development)
    cmake "$HOME/villagesql-server" -DWITH_DEBUG=1
+
+   # On macOS, add the OpenSSL 3 directory. Homebrew's unversioned openssl
+   # is now OpenSSL 4, which the server does not build against.
+   cmake "$HOME/villagesql-server" -DWITH_DEBUG=1 \
+       -DWITH_SSL="$(brew --prefix openssl@3)"
    ```
 
 5. **Build:**
@@ -282,8 +287,7 @@ The full roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
 **OpenSSL not found:**
 
-Install the OpenSSL development package. cmake locates it without any further
-configuration.
+Install the OpenSSL development package.
 
 ```bash
 # macOS with Homebrew
@@ -293,8 +297,10 @@ brew install openssl@3
 sudo apt-get install libssl-dev
 ```
 
-On macOS you can instead name the OpenSSL directory. That builds a server which
-carries its own copy of the OpenSSL libraries, so it keeps working when Homebrew
+On Linux cmake finds it with no further configuration. On macOS you must also
+name the directory, because Homebrew's unversioned `openssl` is now OpenSSL 4
+and the server does not build against it. Naming it also makes the build carry
+its own copy of the OpenSSL libraries, so it keeps working when Homebrew
 upgrades OpenSSL:
 
 ```bash
