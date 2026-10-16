@@ -1,0 +1,54 @@
+INSTALL EXTENSION vsql_test_only;
+CREATE TABLE t1 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_null.dat' INTO TABLE t1;
+SELECT id, val, val IS NULL AS is_null FROM t1 ORDER BY id;
+id	val	is_null
+1	OK one	0
+2	NULL	1
+3	OK three	0
+DROP TABLE t1;
+CREATE TABLE t2 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_null.dat' INTO TABLE t2;
+ERROR 22004: Column set to default value; NULL supplied to NOT NULL column 'val' at row 2
+SELECT COUNT(*) AS rows_in_t2 FROM t2;
+rows_in_t2
+0
+DROP TABLE t2;
+CREATE TABLE t3 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+SET @@session.sql_mode = '';
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_null.dat' INTO TABLE t3;
+Warnings:
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val' at row 2
+SET @@session.sql_mode = DEFAULT;
+SELECT id, val FROM t3 ORDER BY id;
+id	val
+1	OK one
+2	OK default
+3	OK three
+DROP TABLE t3;
+CREATE TABLE t4 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_null.dat' IGNORE INTO TABLE t4;
+Warnings:
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val' at row 2
+SELECT id, val FROM t4 ORDER BY id;
+id	val
+1	OK one
+2	OK default
+3	OK three
+DROP TABLE t4;
+CREATE TABLE t5 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_error.dat' INTO TABLE t5;
+ERROR HY000: fault_blob: encode error sentinel
+SHOW WARNINGS;
+Level	Code	Message
+Error	3219	fault_blob: encode error sentinel
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_error.dat' IGNORE INTO TABLE t5;
+ERROR HY000: fault_blob: encode error sentinel
+SHOW WARNINGS;
+Level	Code	Message
+Error	3219	fault_blob: encode error sentinel
+SELECT COUNT(*) AS rows_in_t5 FROM t5;
+rows_in_t5
+0
+DROP TABLE t5;
+UNINSTALL EXTENSION vsql_test_only;

@@ -7048,12 +7048,20 @@ type_conversion_status Item::save_in_field_inner(Field *field,
 
     // For custom types, encode the string value before storing
     if (!has_type_context() && field->has_type_context()) {
-      bool is_valid = false;
+      villagesql::EncodeStatus status = villagesql::EncodeStatus::kBadValue;
       String *encoded =
-          villagesql::EncodeStringForField(field, *result, is_valid);
+          villagesql::EncodeStringForField(field, *result, status);
       if (encoded == nullptr) {
         str_value.set_quick(nullptr, 0, cs);
-        return is_valid ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+        switch (status) {
+          case villagesql::EncodeStatus::kNull:
+            return set_field_to_null_with_conversions(field, no_conversions);
+          case villagesql::EncodeStatus::kOom:
+            return TYPE_ERR_OOM;
+          case villagesql::EncodeStatus::kErrorRaised:
+          case villagesql::EncodeStatus::kBadValue:
+            return TYPE_ERR_BAD_VALUE;
+        }
       }
       result = encoded;
       cs = &my_charset_bin;
@@ -7090,7 +7098,8 @@ type_conversion_status Item::save_in_field_inner(Field *field,
   return field->store(nr, unsigned_flag);
 }
 
-type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
+type_conversion_status Item_string::save_in_field_inner(Field *field,
+                                                        bool no_conversions) {
   assert(fixed);
   if (!has_type_context() && field->has_type_context()) {
     // Treat this Item as if it were a custom type.
@@ -7098,11 +7107,19 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
     this->set_type_context(tc);
 
     // Encode str_value into a new representation, based on the type.
-    bool is_oom = false;
+    villagesql::EncodeStatus status = villagesql::EncodeStatus::kBadValue;
     String *encoded =
-        villagesql::EncodeStringForField(field, str_value, is_oom);
+        villagesql::EncodeStringForField(field, str_value, status);
     if (encoded == nullptr) {
-      return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+      switch (status) {
+        case villagesql::EncodeStatus::kNull:
+          return set_field_to_null_with_conversions(field, no_conversions);
+        case villagesql::EncodeStatus::kOom:
+          return TYPE_ERR_OOM;
+        case villagesql::EncodeStatus::kErrorRaised:
+        case villagesql::EncodeStatus::kBadValue:
+          return TYPE_ERR_BAD_VALUE;
+      }
     }
 
     // Now re-cache the new version. The repertoire must match the encoded

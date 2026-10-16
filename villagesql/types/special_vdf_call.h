@@ -198,6 +198,11 @@ class SpecialVdfCall {
   const char *name() const { return fd_->name; }
   // Error message from the last invoke() call.
   const char *error_msg() const { return error_msg_; }
+  // Result type the VDF set on the last invoke() call. When invoke() returns
+  // nullopt this says why: VEF_RESULT_NULL for an explicit SQL NULL,
+  // VEF_RESULT_WARNING or VEF_RESULT_ERROR for a failure described by
+  // error_msg(). Callers that treat every nullopt alike can ignore it.
+  vef_return_value_type_t result_type() const { return result_type_; }
   // Alternate output buffer set by the VDF in the last StringResult invoke(),
   // or nullptr if the VDF used the caller-provided buffer.
   const char *alt_str_buf() const { return alt_str_buf_; }
@@ -214,13 +219,7 @@ class SpecialVdfCall {
     vef_vdf_result_t result = {};
     result.error_msg = error_msg_;
     result.type = VEF_RESULT_VALUE;
-    fd_->vdf(&ctx_, &vdf_args_, &result);
-    if (result.type != VEF_RESULT_VALUE) {
-      if (error_msg_[0] == '\0')
-        snprintf(error_msg_, VEF_MAX_ERROR_LEN,
-                 "VDF returned unexpected result type");
-      return std::nullopt;
-    }
+    if (call_vdf(result)) return std::nullopt;
     return result.int_value;
   }
 
@@ -242,13 +241,7 @@ class SpecialVdfCall {
     result.alt_str_buf = &alt_str_buf_;
     result.type_params = {result_init_.count, result_init_.keys,
                           result_init_.values};
-    fd_->vdf(&ctx_, &vdf_args_, &result);
-    if (result.type != VEF_RESULT_VALUE) {
-      if (error_msg_[0] == '\0')
-        snprintf(error_msg_, VEF_MAX_ERROR_LEN,
-                 "VDF returned unexpected result type");
-      return std::nullopt;
-    }
+    if (call_vdf(result)) return std::nullopt;
     return result.actual_len;
   }
 
@@ -270,17 +263,25 @@ class SpecialVdfCall {
     result.alt_bin_buf = &alt_bin_buf_;
     result.type_params = {result_init_.count, result_init_.keys,
                           result_init_.values};
-    fd_->vdf(&ctx_, &vdf_args_, &result);
-    if (result.type != VEF_RESULT_VALUE) {
-      if (error_msg_[0] == '\0')
-        snprintf(error_msg_, VEF_MAX_ERROR_LEN,
-                 "VDF returned unexpected result type");
-      return std::nullopt;
-    }
+    if (call_vdf(result)) return std::nullopt;
     return result.actual_len;
   }
 
  private:
+  // Calls the VDF with a result the caller has already pointed at its own
+  // buffers, then records the result type. Returns true when the VDF produced
+  // no value, in which case error_msg() describes why unless the result was
+  // an explicit NULL.
+  bool call_vdf(vef_vdf_result_t &result) {
+    fd_->vdf(&ctx_, &vdf_args_, &result);
+    result_type_ = result.type;
+    if (result.type == VEF_RESULT_VALUE) return false;
+    if (error_msg_[0] == '\0' && result.type != VEF_RESULT_NULL)
+      snprintf(error_msg_, VEF_MAX_ERROR_LEN,
+               "VDF returned unexpected result type");
+    return true;
+  }
+
   void init_arg_slots(typename ArgTags::init_t... init_args) {
     if (ctx_.protocol >= VEF_PROTOCOL_3) {
       unsigned int i = 0;
@@ -309,6 +310,7 @@ class SpecialVdfCall {
   vef_vdf_args_t vdf_args_{};
   typename ResultTag::init_t result_init_{};
   char error_msg_[VEF_MAX_ERROR_LEN]{};
+  vef_return_value_type_t result_type_{VEF_RESULT_VALUE};
   char *alt_str_buf_{nullptr};
   unsigned char *alt_bin_buf_{nullptr};
 };
