@@ -21,6 +21,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 
@@ -114,10 +115,22 @@ static vef_thread_handle_t *create_thread_handle(const char *thread_name) {
     return nullptr;
   }
 
+  // Allocate the handle before the THD: once the THD is registered with PFS
+  // and the THD manager, only destroy_thread_handle() can tear it down in the
+  // right order.
+  auto *handle = new (std::nothrow) vef_thread_handle_t;
+  if (handle == nullptr) {
+    LogVSQL(ERROR_LEVEL, "thread_worker: failed to allocate handle for '%s'",
+            thread_name);
+    my_thread_end();
+    return nullptr;
+  }
+
   THD *thd = new (std::nothrow) THD;
   if (thd == nullptr) {
     LogVSQL(ERROR_LEVEL, "thread_worker: failed to allocate THD for '%s'",
             thread_name);
+    delete handle;
     my_thread_end();
     return nullptr;
   }
@@ -158,18 +171,6 @@ static vef_thread_handle_t *create_thread_handle(const char *thread_name) {
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
   thd_manager->add_thd(thd);
   thd_manager->inc_thread_running();
-
-  auto *handle = new (std::nothrow) vef_thread_handle_t;
-  if (handle == nullptr) {
-    thd_manager->remove_thd(thd);
-    thd_manager->dec_thread_running();
-    thd->release_resources();
-    delete thd;
-    my_thread_end();
-    LogVSQL(ERROR_LEVEL, "thread_worker: failed to allocate handle for '%s'",
-            thread_name);
-    return nullptr;
-  }
 
   handle->thd = thd;
   mysql_mutex_init(key_mutex_vef_sleep, &handle->sleep_mutex,
@@ -294,6 +295,9 @@ static void thread_main(WorkerState *state) {
   vef_thread_handle_t *handle = create_thread_handle(thread_name_buf);
   state->handle.store(handle, std::memory_order_release);
 
+  // TODO(villagesql-preview): when handle is null, nothing undoes the ENABLE
+  // that worker_start() already ran. DISABLE always gets a real handle today,
+  // so calling it with a null one would change the thread_worker ABI contract.
   if (handle != nullptr) {
     // ENABLE was already called synchronously in worker_start; just loop.
     while (true) {
@@ -332,7 +336,17 @@ static void worker_start(WorkerState *state) {
                     desc->work_fn(VEF_WAKEUP_ENABLE, nullptr, desc->arg));
 
   state->handle.store(kHandlePending, std::memory_order_relaxed);
-  state->thread = std::thread(thread_main, state);
+  // Catch rather than propagate: on_enabled_change() has released
+  // LOCK_global_system_variables around this call, and an exception would
+  // skip re-acquiring it.
+  // TODO(villagesql-preview): undo the ENABLE above here too (see
+  // thread_main()).
+  try {
+    state->thread = std::thread(thread_main, state);
+  } catch (const std::system_error &e) {
+    LogVSQL(ERROR_LEVEL, "thread_worker: failed to start thread for '%s': %s",
+            state->extension_name.c_str(), e.what());
+  }
 }
 
 static void worker_stop(WorkerState *state) {
