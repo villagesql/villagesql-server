@@ -192,6 +192,9 @@ typedef enum : unsigned int {
                    //   calls the extension's load and unload hooks with its
                    //   capabilities populated, rather than the extension
                    //   running them itself inside vef_register/vef_unregister.
+                   // + hidden_from_sql on vef_func_desc_t: an extension may
+                   //   keep a VDF out of SQL while a type still uses it as one
+                   //   of its operations.
 } vef_protocol_t;
 
 // =============================================================================
@@ -830,6 +833,13 @@ typedef struct {
   // and compute the return type's parameters, bypassing the built-in
   // disambiguation rules. See vef_bind_types_func_t.
   vef_bind_types_func_t bind_and_check_types;
+
+  // protocol >= VEF_PROTOCOL_4
+  // When true, the server keeps this VDF out of the SQL function registry and
+  // information_schema. A type can still name it as one of its operations
+  // (compare, hash, ...). Negative so that a zero-initialized descriptor stays
+  // SQL-callable.
+  bool hidden_from_sql;
 } vef_func_desc_t;
 
 // =============================================================================
@@ -927,7 +937,8 @@ typedef struct {
   //   decode_vdf_name: (CUSTOM(this type)) -> STRING
   //   compare_vdf_name: (CUSTOM(this type), CUSTOM(this type)) -> INT
   //   hash_vdf_name: (CUSTOM(this type)) -> INT
-  // The named VDFs are also registered as callable SQL functions.
+  // The named VDFs are also registered as callable SQL functions, unless their
+  // descriptor sets hidden_from_sql.
   const char *encode_vdf_name;
   const char *decode_vdf_name;
   const char *compare_vdf_name;

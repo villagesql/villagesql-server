@@ -31,6 +31,15 @@
 #include "villagesql/sql/custom_vdf.h"
 #include "villagesql/sql/func_lookup.h"
 
+static bool is_hidden_type_method(std::string_view method_name) {
+  return method_name == "compare" || method_name == "hash" ||
+         method_name == "int_to_params" || method_name == "resolve_params";
+}
+
+static bool is_sql_callable_type_method(std::string_view method_name) {
+  return method_name == "from_string" || method_name == "to_string";
+}
+
 // Emit a targeted error when a '::' function name fails lookup.
 // Checks whether the type prefix is unknown, the method suffix is invalid,
 // or the type/method combination simply has no '::' VDF registered.
@@ -67,20 +76,16 @@ static void emit_type_method_error(std::string_view ext_name,
     return;
   }
 
-  static const char *valid_methods[] = {"from_string", "to_string", "compare",
-                                        "hash"};
-  bool is_valid_method = false;
-  for (const char *m : valid_methods) {
-    if (method_name == m) {
-      is_valid_method = true;
-      break;
-    }
+  if (is_hidden_type_method(method_name)) {
+    villagesql_error("Type '%s' method '%s' is not SQL-callable", MYF(0),
+                     type_name.c_str(), method_name.c_str());
+    return;
   }
 
-  if (!is_valid_method) {
+  if (!is_sql_callable_type_method(method_name)) {
     villagesql_error(
         "Unknown method '%s' for type '%s'. Valid methods: from_string, "
-        "to_string, compare, hash",
+        "to_string",
         MYF(0), method_name.c_str(), type_name.c_str());
     return;
   }

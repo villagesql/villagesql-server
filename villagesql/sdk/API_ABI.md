@@ -36,6 +36,8 @@ files in `villagesql/sdk/include/villagesql/*.h` NOT including the subdirectory
 - **Automatic protocol awareness**: `VEF_GENERATE_ENTRY_POINTS` sets the max
   protocol the extension will negotiate
 - **Lifecycle hooks**: `.prerun()`, `.postrun()` for per-query setup/teardown
+- **SQL visibility**: `.sql_callable(false)` keeps a VDF out of SQL and
+  `information_schema` while a type can still use it as one of its operations
 
 The API translates idiomatic C++ into the correct ABI calls. The key mechanism
 is the `Wrapper` template in `func_builder.h`, which converts typed C++
@@ -110,6 +112,11 @@ protocol 1.
 **Structs nested inline** (not accessed through a pointer) require special care
 as any changes to the size will impact the layout of the struct that contains
 it.
+
+Protocol 4 appends `hidden_from_sql` to `vef_func_desc_t`. It is a negative
+flag so that a zero-initialized descriptor stays SQL-callable. The C++ API
+exposes the positive `.sql_callable(bool)` builder setting and translates it to
+the ABI field.
 
 ## How the API and ABI Evolve Together
 

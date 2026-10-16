@@ -1523,4 +1523,57 @@ TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultNameIgnoredForV1) {
   EXPECT_TRUE(result->funcs[0].is_callable_from_sql());
 }
 
+// A protocol-4 func marked hidden_from_sql is omitted from the SQL registry
+// while its siblings stay visible.
+TEST_F(ValidateExtensionRegistrationTest, HiddenFromSqlFuncSkipped) {
+  vef_type_t ret = {VEF_TYPE_STRING, nullptr};
+  vef_signature_t sig = {0, nullptr, ret};
+  vef_func_desc_t hidden = make_scalar_func("hidden_func", &sig);
+  hidden.protocol = VEF_PROTOCOL_4;
+  hidden.hidden_from_sql = true;
+  vef_func_desc_t visible = make_scalar_func("visible_func", &sig);
+  visible.protocol = VEF_PROTOCOL_4;
+  vef_func_desc_t *funcs[] = {&hidden, &visible};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_4;
+  reg.deprecated_extension_name = "my_ext";
+  reg.func_count = 2;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(error.empty());
+  ASSERT_EQ(result->funcs.size(), 1u);
+  EXPECT_EQ(result->funcs[0].function_name(), "visible_func");
+}
+
+// hidden_from_sql is a PROTOCOL_4 field: it must not be read when the
+// negotiated protocol is older, even if the descriptor happens to set it.
+TEST_F(ValidateExtensionRegistrationTest, HiddenFromSqlIgnoredBelowV4) {
+  vef_type_t ret = {VEF_TYPE_STRING, nullptr};
+  vef_signature_t sig = {0, nullptr, ret};
+  vef_func_desc_t fd = make_scalar_func("my_func", &sig);
+  fd.protocol = VEF_PROTOCOL_4;
+  fd.hidden_from_sql = true;
+  vef_func_desc_t *funcs[] = {&fd};
+
+  vef_registration_t reg = {};
+  reg.protocol = VEF_PROTOCOL_4;
+  reg.deprecated_extension_name = "my_ext";
+  reg.func_count = 1;
+  reg.funcs = funcs;
+
+  std::string error;
+  auto result = villagesql::veb::parse_extension_registration(
+      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+
+  ASSERT_TRUE(result.has_value());
+  ASSERT_EQ(result->funcs.size(), 1u);
+  EXPECT_EQ(result->funcs[0].function_name(), "my_func");
+}
+
 }  // namespace villagesql_unittest

@@ -205,6 +205,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.sql_callable_ = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -230,6 +231,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.sql_callable_ = sql_callable_;
     return next;
   }
 
@@ -251,6 +253,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.sql_callable_ = sql_callable_;
     return next;
   }
 
@@ -310,6 +313,12 @@ class FuncBuilder {
     return *this;
   }
 
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &sql_callable(
+      bool callable) {
+    sql_callable_ = callable;
+    return *this;
+  }
+
   template <auto Hook>
   constexpr FuncBuilder<Func, NumParams, Mode, true> prerun() const {
     static_assert(detail::is_typed_prerun<Hook>(),
@@ -324,6 +333,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.sql_callable_ = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -441,6 +451,7 @@ class FuncBuilder {
     meta.buffer_size = buffer_size_;
     meta.max_result_length = max_result_length_;
     meta.deterministic = deterministic_;
+    meta.sql_callable = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
@@ -458,7 +469,9 @@ class FuncBuilder {
         prerun_(nullptr),
         postrun_(nullptr),
         deterministic_(false),
-        bind_(nullptr) {}
+        bind_(nullptr),
+
+        sql_callable_(true) {}
 
   const char *name_;
   const char *return_type_;
@@ -469,6 +482,7 @@ class FuncBuilder {
   vef_postrun_func_t postrun_;
   bool deterministic_;
   vef_bind_types_func_t bind_;
+  bool sql_callable_;
 
   template <auto F, size_t M, ParamMode N, bool HP>
   friend class FuncBuilder;
@@ -506,6 +520,7 @@ class AggFuncBuilder {
     next.clear_ = clear_;
     next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
+    next.sql_callable_ = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -546,6 +561,12 @@ class AggFuncBuilder {
     return *this;
   }
 
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
+  sql_callable(bool callable) {
+    sql_callable_ = callable;
+    return *this;
+  }
+
   // void(State&) — first parameter must match the State type declared in
   // make_aggregate_func<State, ...>. Sets HasClear on the returned builder so
   // build() can static_assert that both clear and accumulate were configured.
@@ -569,6 +590,7 @@ class AggFuncBuilder {
     next.clear_ = &detail::agg_clear_wrapper<State, Fn>;
     next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
+    next.sql_callable_ = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -610,6 +632,7 @@ class AggFuncBuilder {
     next.accumulate_ =
         &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
     next.deterministic_ = deterministic_;
+    next.sql_callable_ = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -639,6 +662,7 @@ class AggFuncBuilder {
     meta.buffer_size = buffer_size_;
     meta.max_result_length = max_result_length_;
     meta.deterministic = deterministic_;
+    meta.sql_callable = sql_callable_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
@@ -657,6 +681,7 @@ class AggFuncBuilder {
         buffer_size_(0),
         max_result_length_(0),
         deterministic_(false),
+        sql_callable_(true),
         clear_(nullptr),
         accumulate_(nullptr) {}
 
@@ -666,6 +691,7 @@ class AggFuncBuilder {
   size_t buffer_size_;
   size_t max_result_length_;
   bool deterministic_;
+  bool sql_callable_;
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
 

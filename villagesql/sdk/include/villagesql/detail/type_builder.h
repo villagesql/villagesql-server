@@ -117,6 +117,13 @@ struct TypeBuilderState {
   void (*params_to_strings_init_fn)() = nullptr;
 };
 
+// Copies a type operation's function descriptor with its SQL visibility set.
+template <typename Func>
+constexpr Func make_embedded_func(Func func, bool sql_callable) {
+  func.sql_callable_ = sql_callable;
+  return func;
+}
+
 }  // namespace detail
 }  // namespace vsql
 

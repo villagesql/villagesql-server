@@ -1,0 +1,35 @@
+# Test SQL visibility of vsql builder VDFs: type-operation defaults,
+# explicit per-method overrides, and the .sql_callable(false) builder knob.
+
+INSTALL EXTENSION vsql_tarray_test;
+
+--echo # Visible helpers stay callable from SQL.
+CREATE TABLE t1 (val vsql_tarray_test.TARRAY(3));
+INSERT INTO t1 VALUES ('[1,2,3]');
+SELECT vsql_tarray_test.TARRAY::to_string(val) AS roundtrip FROM t1;
+
+--echo # compare is hidden by default; this extension explicitly opts it in.
+SELECT vsql_tarray_test.TARRAY::compare(val, val) AS cmp FROM t1;
+
+--echo # Hidden parameterized helpers are not SQL-callable.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tarray_test.TARRAY::int_to_params(3) AS params_str;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tarray_test.TARRAY::resolve_params('max_size=3,type=float') AS resolved;
+
+--echo # Standalone VDFs registered with .sql_callable(false) are hidden too.
+--error ER_SP_DOES_NOT_EXIST
+SELECT vsql_tarray_test.tarray_dim_hidden(val) FROM t1;
+
+--echo # Hidden VDFs are omitted from information_schema.
+SELECT jt.name
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
+JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
+  name VARCHAR(64) PATH '$.name'
+)) AS jt
+WHERE EXTENSION_NAME = 'vsql_tarray_test'
+ORDER BY jt.name;
+
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_tarray_test;

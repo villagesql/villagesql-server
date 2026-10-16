@@ -29,6 +29,9 @@ Concretely:
 - `stable_sdk/v{N}/` snapshots are the frozen ABI surface for protocol N.
   An extension compiled against a frozen snapshot must continue to load on
   all future server versions.
+- Protocol 4 appends `hidden_from_sql` to `vef_func_desc_t`. The server reads
+  it only when the negotiated protocol is 4 or newer, so older and
+  zero-initialized descriptors stay SQL-callable.
 - Headers under `abi/preview/` expose preview-capability ABIs and follow
   the preview-capability rules in [../preview/README.md](../preview/README.md).
 
