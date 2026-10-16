@@ -1,0 +1,27 @@
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t2 VALUES (1, '(1,1)');
+INSERT INTO t1 VALUES (1, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+ERROR HY000: VDF error in function 'complex_divide': division by 0
+INSERT INTO t2 VALUES (2, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+ERROR HY000: VDF error in function 'complex_divide': division by 0
+INSERT INTO t1 VALUES (3, '(1,1)'), (4, vsql_complex.complex_divide('(1,1)', '(-0,0)'));
+ERROR HY000: VDF error in function 'complex_divide': division by 0
+INSERT INTO t1 SET id = 5, val = vsql_complex.complex_divide('(1,1)', '(0,0)');
+ERROR HY000: VDF error in function 'complex_divide': division by 0
+INSERT INTO t1 SELECT id + 10, vsql_complex.complex_divide(val, '(0,0)') FROM t2;
+ERROR HY000: VDF error in function 'complex_divide': division by 0
+INSERT INTO t2 VALUES (1, '(0,0)') AS n
+ON DUPLICATE KEY UPDATE val = vsql_complex.complex_divide(t2.val, n.val);
+ERROR HY000: VDF error in function 'complex_divide': division by 0
+SELECT * FROM t1 ORDER BY id;
+id	val
+SELECT * FROM t2 ORDER BY id;
+id	val
+1	(1,1)
+DROP TABLE t1, t2;
+SET sql_mode = @saved_sql_mode;

@@ -1,0 +1,38 @@
+# VDF calls in the ON DUPLICATE KEY UPDATE assignment list, combining the old
+# value with the new row via VALUES() and via a row alias.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL,
+    mag DOUBLE
+);
+
+INSERT INTO t1 (id, val) VALUES (1, '(1,1)'), (2, '(2,-2)');
+
+# Accumulate with VALUES(); id 3 is new and keeps its inserted value.
+INSERT INTO t1 (id, val) VALUES (1, '(10,0)'), (2, '(0,10)'), (3, '(5,5)')
+  ON DUPLICATE KEY UPDATE val = vsql_complex.complex_add(val, VALUES(val));
+SELECT * FROM t1 ORDER BY id;
+
+# Accumulate with a row alias, and derive a second column from the result.
+INSERT INTO t1 (id, val) VALUES (1, '(0,1)'), (3, '(-5,-5)') AS n
+  ON DUPLICATE KEY UPDATE val = vsql_complex.complex_multiply(t1.val, n.val),
+                          mag = vsql_complex.complex_abs(t1.val);
+SELECT * FROM t1 ORDER BY id;
+
+# SET form with an alias.
+INSERT INTO t1 SET id = 2, val = '(1,0)' AS n
+  ON DUPLICATE KEY UPDATE val = vsql_complex.complex_conjugate(t1.val);
+SELECT * FROM t1 ORDER BY id;
+
+# A failing VDF in the update under IGNORE stores the intrinsic default (0,0).
+# Strict mode is covered by insert_vdf_error_strict_complex.
+INSERT IGNORE INTO t1 (id, val) VALUES (1, '(0,0)') AS n
+  ON DUPLICATE KEY UPDATE val = vsql_complex.complex_divide(t1.val, n.val);
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc
