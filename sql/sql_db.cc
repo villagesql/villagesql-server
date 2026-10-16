@@ -105,6 +105,7 @@
 #include "strmake.h"
 #include "strxmov.h"
 #include "typelib.h"
+#include "villagesql/schema/util.h"
 #include "villagesql/sql/metadata_modifier.h"
 
 /*
@@ -516,9 +517,10 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
 bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   DBUG_TRACE;
 
-  // Reject altering the system schema except for system threads.
+  // Reject altering a system or villagesql schema except for system threads.
   if (!thd->is_dd_system_thread() &&
-      dd::get_dictionary()->is_dd_schema_name(db)) {
+      (dd::get_dictionary()->is_dd_schema_name(db) ||
+       villagesql::is_villagesql_schema(db))) {
     my_error(ER_NO_SYSTEM_SCHEMA_ACCESS, MYF(0), db);
     return true;
   }
@@ -723,9 +725,10 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
 
   const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
-  // Reject dropping the system schema except for system threads.
+  // Reject dropping a system or villagesql schema except for system threads.
   if (!thd->is_dd_system_thread() &&
-      dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str))) {
+      (dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str)) ||
+       villagesql::is_villagesql_schema(db.str))) {
     my_error(ER_NO_SYSTEM_SCHEMA_ACCESS, MYF(0), db.str);
     return true;
   }
