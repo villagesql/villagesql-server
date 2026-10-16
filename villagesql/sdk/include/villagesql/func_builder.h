@@ -176,6 +176,8 @@ struct FromStringWrapper {
       return;
     }
 
+    // do not wrap this in VDF_EXCEPTIONS_TRY, will not compile abi
+    // TODO(villagesql-general): can this be wrapped, ever?
     size_t length;
     bool failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
                        arg.str_len, &length);

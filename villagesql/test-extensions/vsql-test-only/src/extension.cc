@@ -101,7 +101,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -115,15 +117,24 @@ constexpr int64_t kFaultBlobSize = 16;
 
 constexpr std::string_view kPrefixOk = "OK ";
 constexpr std::string_view kDecodeFail = "DECODE_FAIL";
+constexpr std::string_view kDecodeThrow = "DECODE_THROW";
 constexpr std::string_view kEncodeFail = "ENCODE_FAIL";
+constexpr std::string_view kEncodeThrow = "ENCODE_THROW";
+constexpr std::string_view kCompareThrow = "COMPARE_THROW";
+constexpr std::string_view kHashThrow = "HASH_THROW";
 
 void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   if (from == kEncodeFail) {
     return;  // encode failure - wrapper default warning surfaces
   }
 
+  if (from == kEncodeThrow) {
+    throw std::runtime_error("fault_blob_encode throw");
+  }
+
   auto buf = out.buffer();
-  if (from.substr(0, kPrefixOk.size()) == kPrefixOk || from == kDecodeFail) {
+  if (from.substr(0, kPrefixOk.size()) == kPrefixOk || from == kDecodeFail ||
+      from == kDecodeThrow || from == kCompareThrow || from == kHashThrow) {
     if (from.size() > buf.size()) return;  // input too long
     memset(buf.data(), 0, buf.size());
     memcpy(buf.data(), from.data(), from.size());
@@ -141,7 +152,8 @@ void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   // Unrecognised prefix - crash loudly so tests cannot silently pass bad input.
   assert(false &&
          "fault_blob_encode: unrecognised prefix (expected 'OK ', "
-         "'DECODE_FAIL', or 'ENCODE_FAIL')");
+         "'DECODE_FAIL', 'DECODE_THROW', 'ENCODE_FAIL', 'ENCODE_THROW',"
+         "'HASH_THROW', or 'COMPARE_THROW'");
   abort();
 }
 
@@ -161,6 +173,10 @@ void fault_blob_decode(vsql::CustomArg in, vsql::StringResult out) {
     return;  // decode failure - this is the path under test
   }
 
+  if (stored == kDecodeThrow) {
+    throw std::runtime_error("fault_blob_decode throw");
+  }
+
   auto buf = out.buffer();
   if (buf.size() < len) {
     return;  // error: output buffer too small
@@ -173,12 +189,34 @@ void fault_blob_decode(vsql::CustomArg in, vsql::StringResult out) {
 int fault_blob_compare(vsql::CustomArg a, vsql::CustomArg b) {
   auto va = a.value();
   auto vb = b.value();
+
+  if (kCompareThrow.size() <= va.size() &&
+      0 == memcmp(va.data(), kCompareThrow.data(), kCompareThrow.size())) {
+    throw std::runtime_error("fault_blob_compare throw");
+  }
+
+  if (kCompareThrow.size() <= vb.size() &&
+      0 == memcmp(vb.data(), kCompareThrow.data(), kCompareThrow.size())) {
+    throw std::runtime_error("fault_blob_compare throw");
+  }
+
   size_t cmp_len = va.size() < vb.size() ? va.size() : vb.size();
   int r = memcmp(va.data(), vb.data(), cmp_len);
   if (r != 0) return r;
   if (va.size() < vb.size()) return -1;
   if (va.size() > vb.size()) return 1;
   return 0;
+}
+
+// not a real hash, but sufficient for throw test
+size_t fault_blob_hash(vsql::CustomArg in) {
+  auto va = in.value();
+  if (kHashThrow.size() <= va.size() &&
+      0 == memcmp(va.data(), kHashThrow.data(), kHashThrow.size())) {
+    throw std::runtime_error("fault_blob_hash throw");
+  }
+
+  return static_cast<size_t>(*va.data());
 }
 
 constexpr int64_t kNoDefaultSize = 4;
@@ -426,6 +464,7 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .from_string<&fault_blob_encode>()
                                 .to_string<&fault_blob_decode>()
                                 .compare<&fault_blob_compare>()
+                                .hash<&fault_blob_hash>()
                                 .build();
 
 constexpr auto NO_DEFAULT_TYPE = vsql::make_type<kNoDefaultTypeName>()

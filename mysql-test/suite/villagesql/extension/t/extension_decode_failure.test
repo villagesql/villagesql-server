@@ -5,20 +5,30 @@
 #
 #   "OK <payload>"  - encodes and decodes successfully
 #   "DECODE_FAIL"   - encodes successfully but decode fails on read
+#   "DECODE_THROW"  - encodes successfully but decode fails on read
 #   "ENCODE_FAIL"   - encode fails immediately, value is never stored
+#   "ENCODE_THROW"  - encode fails immediately, value is never stored
+#   "HASH_THROW"    - GROUP BY causes throw, currently only logged
+#   "COMPARE_THROW" - ORDER BY causes throw, currently only logged
 #
 # Test coverage:
 #   1. Normal INSERT/SELECT round-trip with "OK" values.
 #   2. "DECODE_FAIL" rows: SELECT returns an error and logs the failure.
-#   3. Mixing healthy and decode-failing rows in the same query: error on the bad row.
-#   4. "ENCODE_FAIL": INSERT is rejected with an error.
+#   3. "DECODE_THROW" rows: SELECT returns an error and logs the failure.
+#   4. Mixing healthy and decode-failing rows in the same query: error on the bad row.
 #   5. UPDATE overwriting a DECODE_FAIL row with a good value: row becomes readable.
-#   6. UPDATE overwriting a good row with DECODE_FAIL: value is stored, SELECT returns error.
+#   6. UPDATE overwriting a DECODE_THROW row with a good value: row becomes readable.
+#   7. Test GROUP BY before and after adding HASH_THROW row
+#   8. Test ORDER BY before and after adding COMPARE_THROW row
+#   9. UPDATE overwriting a good row with DECODE_FAIL: value is stored, SELECT returns error.
+#  10. "ENCODE_FAIL": INSERT is rejected with an error.
+#  11. "ENCODE_THROW": INSERT is rejected with an error.
 
 INSTALL EXTENSION vsql_test_only;
 
 call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
 call mtr.add_suppression("VillageSQL.*Extension error decoding column.*FAULT_BLOB");
+call mtr.add_suppression("VillageSQL.*VDF threw an exception.*throw");
 
 --echo # Verify extension is installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
@@ -40,6 +50,9 @@ SELECT id, val FROM t1 ORDER BY id;
 --echo # Insert a value that will fail on decode
 INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
 
+--echo # Insert a value that will throw on decode
+INSERT INTO t1 VALUES (5, 'DECODE_THROW');
+
 # Record log file position before first decode failure.
 --source include/villagesql/decode_failure_log_init.inc
 
@@ -49,6 +62,17 @@ SELECT id, val FROM t1 WHERE id = 4;
 
 --echo # Verify the failure was logged
 --source include/villagesql/decode_failure_log_print.inc
+
+--echo # SELECT the decode-throw row alone: returns an error
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id, val FROM t1 WHERE id = 5;
+
+--echo # Verify the failure was logged
+--replace_result fault_blob_decode "fault blob decode"
+--source include/villagesql/decode_failure_log_print.inc
+
+--echo # UPDATE: overwrite the DECODE_THROW row with a good value
+UPDATE t1 SET val = 'OK fixed' WHERE id = 5;
 
 --echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
 --error ER_VILLAGESQL_GENERIC_ERROR
@@ -62,6 +86,27 @@ UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
 
 --echo # The previously-failing row should now decode successfully
 SELECT id, val FROM t1 ORDER BY id;
+
+--echo # First show weird hash function works
+SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
+
+--echo # Second insert throw row and retest
+INSERT INTO t1 VALUES (6, 'HASH_THROW');
+SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
+
+--echo # Verify the failure was logged (two ERRORs)
+--replace_result fault_blob_hash "fault blob hash"
+--source include/villagesql/decode_failure_log_print.inc
+
+--echo # Insert a value that will throw on compare
+INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
+
+# TODO(villagesql-general): no error reported to client
+SELECT id, val FROM t1 ORDER BY val;
+
+# TODO(villagesql-general): three log lines written, need test
+--replace_result fault_blob_compare "fault blob compare"
+--source include/villagesql/decode_failure_log_print.inc
 
 --echo # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
@@ -89,6 +134,9 @@ INSERT INTO t2 VALUES (2, 'ENCODE_FAIL');
 
 --echo # Only the successful row was stored
 SELECT id, val FROM t2 ORDER BY id;
+
+--error 1366
+INSERT INTO t2 VALUES (3, 'ENCODE_THROW');
 
 DROP TABLE t2;
 
