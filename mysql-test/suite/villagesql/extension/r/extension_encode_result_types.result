@@ -74,6 +74,85 @@ ERROR 23000: Column 'val' cannot be null
 SELECT COUNT(*) AS rows_in_t2 FROM t2;
 rows_in_t2
 0
+INSERT IGNORE INTO t2 VALUES (2, 'ENCODE_NULL');
+Warnings:
+Warning	1048	Column 'val' cannot be null
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1048	Column 'val' cannot be null
+INSERT INTO t2 VALUES (3, 'OK three');
+UPDATE IGNORE t2 SET val = 'ENCODE_NULL' WHERE id = 3;
+Warnings:
+Warning	1048	Column 'val' cannot be null
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1048	Column 'val' cannot be null
+SET @@session.sql_mode = '';
+INSERT INTO t2 VALUES (4, 'ENCODE_NULL');
+ERROR 23000: Column 'val' cannot be null
+SET @@session.sql_mode = DEFAULT;
+SET @@session.sql_mode = '';
+INSERT INTO t2 VALUES (5, 'OK five'), (6, 'ENCODE_NULL');
+Warnings:
+Warning	1048	Column 'val' cannot be null
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1048	Column 'val' cannot be null
+SET @@session.sql_mode = DEFAULT;
+INSERT INTO t2 VALUES (7, 'OK seven'), (8, 'ENCODE_NULL');
+ERROR 23000: Column 'val' cannot be null
+SELECT id, val, val IS NULL AS is_null FROM t2 ORDER BY id;
+id	val	is_null
+2		0
+3		0
+5	OK five	0
+6		0
+SET @v = 'ENCODE_NULL';
+INSERT INTO t1 VALUES (20, @v);
+SET @v = 'ENCODE_ERROR';
+INSERT INTO t1 VALUES (21, @v);
+ERROR HY000: fault_blob: encode error sentinel
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 20;
+id	val	is_null
+20	NULL	1
+PREPARE ps FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 22, @v = 'ENCODE_NULL';
+EXECUTE ps USING @id, @v;
+SET @id = 23, @v = 'ENCODE_ERROR';
+EXECUTE ps USING @id, @v;
+ERROR HY000: fault_blob: encode error sentinel
+DEALLOCATE PREPARE ps;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 22;
+id	val	is_null
+22	NULL	1
+CREATE TABLE src (id INT, s VARCHAR(32));
+INSERT INTO src VALUES (24, 'ENCODE_NULL'), (25, 'OK twentyfive');
+INSERT INTO t1 SELECT id, s FROM src;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (24, 25) ORDER BY id;
+id	val	is_null
+24	NULL	1
+25	OK twentyfive	0
+UPDATE src SET s = 'ENCODE_ERROR' WHERE id = 24;
+INSERT INTO t1 SELECT id + 100, s FROM src;
+ERROR HY000: fault_blob: encode error sentinel
+SELECT COUNT(*) AS rows_from_failed_select FROM t1 WHERE id > 100;
+rows_from_failed_select
+0
+DROP TABLE src;
+INSERT INTO t1 VALUES (26, 'OK twentysix'), (27, 'ENCODE_NULL');
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (26, 27) ORDER BY id;
+id	val	is_null
+26	OK twentysix	0
+27	NULL	1
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+val vsql_test_only.FAULT_BLOB DEFAULT 'ENCODE_NULL'
+);
+INSERT INTO t3 (id) VALUES (1);
+SELECT id, val IS NULL AS is_null FROM t3;
+id	is_null
+1	1
+DROP TABLE t3;
 DROP TABLE t1;
 DROP TABLE t2;
 UNINSTALL EXTENSION vsql_test_only;

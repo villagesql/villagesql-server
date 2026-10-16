@@ -1292,18 +1292,7 @@ type_conversion_status EncodeAndStoreStringToCustomField(
   if (encoded == nullptr) {
     switch (status) {
       case EncodeStatus::kNull:
-        if (field->is_nullable()) {
-          field->set_null();
-          return TYPE_OK;
-        }
-        // NOT NULL: reject as for an explicit NULL, and if the row is let
-        // through, store the type's intrinsic default rather than zero bytes.
-        {
-          const type_conversion_status st =
-              field->check_constraints(ER_BAD_NULL_ERROR);
-          if (st != TYPE_OK) return st;
-        }
-        return StoreCustomFieldIntrinsicDefault(field);
+        return set_field_to_null_with_conversions(field, false);
       case EncodeStatus::kOom:
         return TYPE_ERR_OOM;
       case EncodeStatus::kErrorRaised:
@@ -1370,14 +1359,20 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
   }
   switch (status) {
     case EncodeStatus::kNull:
-      if (field->is_nullable()) {
-        field->set_null();
+      // Mirror a literal \N in the input: mark the field NULL and leave the
+      // NOT NULL decision to the row-level check once the row is complete,
+      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
+      // would satisfy that check and let a NOT NULL column through.
+      if (!field->is_nullable() && thd->lex->is_ignore()) {
+        // IGNORE keeps the row, so give it the type's intrinsic default
+        // rather than zero bytes, as the \N path does.
+        if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
+        field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
+                           1);
         return false;
       }
-      // NOT NULL: reject as for an explicit NULL, and if the row is let
-      // through, store the type's intrinsic default rather than zero bytes.
-      if (field->check_constraints(ER_BAD_NULL_ERROR) != TYPE_OK) return true;
-      return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
+      field->set_null();
+      return false;
     case EncodeStatus::kOom:
       return true;
     case EncodeStatus::kErrorRaised:
