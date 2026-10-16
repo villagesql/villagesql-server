@@ -1297,7 +1297,7 @@ type_conversion_status EncodeAndStoreStringToCustomField(
         return TYPE_ERR_OOM;
       case EncodeStatus::kErrorRaised:
       case EncodeStatus::kBadValue:
-        return TYPE_WARN_OUT_OF_RANGE;
+        return TYPE_ERR_BAD_VALUE;
     }
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
@@ -1374,8 +1374,8 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
       field->set_null();
       return false;
     case EncodeStatus::kOom:
-      return true;
     case EncodeStatus::kErrorRaised:
+      return true;
     case EncodeStatus::kBadValue:
       break;  // handled below: whether this fails the row depends on the mode
   }
