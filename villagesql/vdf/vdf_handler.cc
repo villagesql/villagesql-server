@@ -246,6 +246,9 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
         if (tc != nullptr) {
           arg_types[i].id = VEF_TYPE_CUSTOM;
           arg_types[i].custom_type = tc->type_name().c_str();
+        } else if (m_args[i]->type() == Item::NULL_ITEM) {
+          arg_types[i].id = VEF_TYPE_NULL;
+          arg_types[i].custom_type = nullptr;
         } else {
           arg_types[i].id = villagesql::InferArgTypeId(m_args[i]);
           arg_types[i].custom_type = nullptr;
@@ -396,6 +399,12 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
           invalues[i].str_value = arg_str->ptr();
           invalues[i].str_len = arg_str->length();
         }
+        break;
+      }
+      case VEF_TYPE_NULL: {
+        invalues[i].is_null = true;
+        invalues[i].str_value = nullptr;
+        invalues[i].str_len = 0;
         break;
       }
       case VEF_TYPE_CUSTOM:

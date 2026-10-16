@@ -68,6 +68,7 @@ class PrerunArgType {
   bool is_real() const { return t_->id == VEF_TYPE_REAL; }
   bool is_str() const { return t_->id == VEF_TYPE_STRING; }
   bool is_custom() const { return t_->id == VEF_TYPE_CUSTOM; }
+  bool is_null() const { return t_->id == VEF_TYPE_NULL; }
 
   // For CUSTOM types: the unqualified type name (no extension prefix).
   // Empty string_view for non-CUSTOM types.
