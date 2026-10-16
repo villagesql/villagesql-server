@@ -651,44 +651,62 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
   return encoder;
 }
 
-// Encode from for item's custom type. Returns the encoded String* on success.
-// On failure returns nullptr; is_valid=true means OOM (my_error already
-// called), is_valid=false means invalid value for the type.
-static String *EncodeForItem(Item *item, const String &from, bool &is_valid) {
+// Encode from for item's custom type. Returns the encoded String*, or nullptr
+// with status saying why.
+static String *EncodeForItem(Item *item, const String &from,
+                             EncodeStatus &status) {
   TypeEncoder *encoder = GetTypeEncoderFor(item);
   if (encoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  return encoder->encode(from, is_valid);
+  EncodeOutcome outcome;
+  String *encoded = encoder->encode(from, outcome);
+  if (encoded == nullptr) status = EncodeStatus::kBadValue;
+  return encoded;
 }
 
-String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
+String *EncodeStringForField(Field *field, const String &from,
+                             EncodeStatus &status) {
   assert(field->has_type_context());
 
   TypeEncoder *encoder = GetTypeEncoderFor(field);
   if (encoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  String *encoded = encoder->encode(from, is_valid);
-  if (encoded == nullptr) {
-    if (is_valid) return nullptr;  // OOM, my_error already called
-    // Encoding failed - invalid value for custom type
-    // Always push a warning (consistent with MySQL built-in types)
-    // Caller decides whether to also promote to error
-    const TypeContext *tc = field->get_type_context();
-    THD *thd = current_thd;
-    const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
-    const Diagnostics_area *da = thd->get_stmt_da();
-    push_warning_printf(thd, Sql_condition::SL_WARNING,
-                        ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-                        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-                        tc->type_name().c_str(), errmsg.ptr(),
-                        field->field_name, da->current_row_for_condition());
+  EncodeOutcome outcome;
+  String *encoded = encoder->encode(from, outcome);
+  if (encoded != nullptr) return encoded;
+
+  // set_null() states a value rather than reporting a bad one.
+  if (outcome.is_null()) {
+    status = EncodeStatus::kNull;
     return nullptr;
   }
-  return encoded;
+
+  // error() aborts the statement with the extension's own message.
+  if (outcome.result_type == VEF_RESULT_ERROR && outcome.has_message()) {
+    villagesql_error("%s", MYF(0), outcome.message);
+    status = EncodeStatus::kErrorRaised;
+    return nullptr;
+  }
+
+  const TypeContext *tc = field->get_type_context();
+  THD *thd = current_thd;
+  // Encoding failed - invalid value for custom type
+  // Always push a warning (consistent with MySQL built-in types)
+  // Caller decides whether to also promote to error
+  // TODO(villagesql-general): an extension's own warning() message is dropped
+  // here; only the standard 1366 reaches the user.
+  const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
+  const Diagnostics_area *da = thd->get_stmt_da();
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
+      errmsg.ptr(), field->field_name, da->current_row_for_condition());
+  status = EncodeStatus::kBadValue;
+  return nullptr;
 }
 
 // Lazily allocate a TypeDecoder for field, reused for all subsequent decodes.
@@ -894,10 +912,10 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
     return false;  // NULL value, nothing to encode
   }
 
-  bool is_valid = true;
-  String *encoded = EncodeForItem(item, *str_val, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeForItem(item, *str_val, status);
   if (encoded == nullptr) {
-    if (!is_valid) {
+    if (status == EncodeStatus::kBadValue) {
       const ErrConvString errmsg(str_val->ptr(), str_val->length(),
                                  str_item->collation.collation);
       my_error(ER_WRONG_VALUE, MYF(0), tc.type_name().c_str(), errmsg.ptr());
@@ -1267,10 +1285,18 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
     return set_field_to_null_with_conversions(to_field, false);
   }
 
-  bool is_oom = false;
-  String *encoded = EncodeStringForField(to_field, *str, is_oom);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(to_field, *str, status);
   if (encoded == nullptr) {
-    return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+    switch (status) {
+      case EncodeStatus::kNull:
+        return set_field_to_null_with_conversions(to_field, false);
+      case EncodeStatus::kOom:
+        return TYPE_ERR_OOM;
+      case EncodeStatus::kErrorRaised:
+      case EncodeStatus::kBadValue:
+        return TYPE_ERR_BAD_VALUE;
+    }
   }
 
   to_field->set_notnull();
@@ -1279,20 +1305,28 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
 
 type_conversion_status EncodeAndStoreStringToCustomField(
     const String &str_value, Field *field) {
-  bool is_valid = true;
-  String *encoded = EncodeStringForField(field, str_value, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(field, str_value, status);
   if (encoded == nullptr) {
-    return is_valid ? TYPE_ERR_OOM : TYPE_WARN_OUT_OF_RANGE;
+    switch (status) {
+      case EncodeStatus::kNull:
+        return set_field_to_null_with_conversions(field, false);
+      case EncodeStatus::kOom:
+        return TYPE_ERR_OOM;
+      case EncodeStatus::kErrorRaised:
+      case EncodeStatus::kBadValue:
+        return TYPE_ERR_BAD_VALUE;
+    }
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
 String *EncodeStringForCustomParam(Item *item, const String &str_value,
                                    bool &null_value) {
-  bool is_valid = true;
-  String *encoded = EncodeForItem(item, str_value, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeForItem(item, str_value, status);
   if (encoded == nullptr) {
-    if (!is_valid) {
+    if (status == EncodeStatus::kBadValue) {
       // Invalid value for custom type
       const TypeContext *tc = item->get_type_context();
       const ErrConvString errmsg(str_value.ptr(), str_value.length(),
@@ -1301,8 +1335,8 @@ String *EncodeStringForCustomParam(Item *item, const String &str_value,
                        tc->qualified_name().c_str(), errmsg.ptr(),
                        item->item_name.ptr());
     }
-
-    // else OOM - my_error already called
+    // kErrorRaised has already raised its own diagnostic.
+    // Signal "no string" to val_str() the usual way.
     null_value = true;
     return nullptr;
   }
@@ -1335,13 +1369,34 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
 
 bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
                                    const String &input_str) {
-  bool is_valid = false;
-  String *encoded = EncodeStringForField(field, input_str, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(field, input_str, status);
   if (encoded != nullptr) {
     field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
     return false;
   }
-  if (is_valid) return true;  // OOM case
+  switch (status) {
+    case EncodeStatus::kNull:
+      // Mirror a literal \N in the input: mark the field NULL and leave the
+      // NOT NULL decision to the row-level check once the row is complete,
+      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
+      // would satisfy that check and let a NOT NULL column through.
+      if (!field->is_nullable() && thd->lex->is_ignore()) {
+        // IGNORE keeps the row, so give it the type's intrinsic default
+        // rather than zero bytes, as the \N path does.
+        if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
+        field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
+                           1);
+        return false;
+      }
+      field->set_null();
+      return false;
+    case EncodeStatus::kOom:
+    case EncodeStatus::kErrorRaised:
+      return true;
+    case EncodeStatus::kBadValue:
+      break;  // handled below: whether this fails the row depends on the mode
+  }
   if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
     // EncodeStringForField already pushed a warning; promote to error
     my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),

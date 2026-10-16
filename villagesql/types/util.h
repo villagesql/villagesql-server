@@ -188,12 +188,30 @@ extern bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
                                               const char *new_db,
                                               const char *new_table);
 
+// Why an encode for a custom type field produced no value. Only meaningful
+// when EncodeStringForField returned nullptr.
+enum class EncodeStatus {
+  // The encode called set_null(): store SQL NULL for this field.
+  kNull,
+  // The encode produced nothing usable, most often because the input did not
+  // parse as this type. Nothing is final: the caller decides whether this is
+  // an error, and reports it.
+  kBadValue,
+  // The encode called error(): the statement fails with the extension's own
+  // message, already raised. Propagate the failure without adding another.
+  kErrorRaised,
+  // Out of memory, already reported. Kept apart from kErrorRaised so callers
+  // can return TYPE_ERR_OOM for it alone.
+  kOom,
+};
+
 // Encodes a string for storage in a custom type field, with error reporting.
-// The TypeContext and field name are taken from the field itself. On error,
-// returns nullptr; if is_valid is false the value was invalid (warning
-// pushed), otherwise OOM.
+// The TypeContext and field name are taken from the field itself. Returns the
+// encoded String*, or nullptr with status saying why. On kBadValue a warning
+// has been pushed, so the caller only has to decide whether to promote it to
+// an error.
 extern String *EncodeStringForField(Field *field, const String &from,
-                                    bool &is_valid);
+                                    EncodeStatus &status);
 
 // Decode [data, data+len) for the given TypeContext without caching any state.
 // Use this for one-shot decodes outside the row-reading hot path (e.g. query
