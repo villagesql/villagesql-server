@@ -38,6 +38,17 @@
 // need to reach for prerun or postrun, please come talk to us so we can
 // understand your use case.
 //
+// Prerun runs on the session's thread while the statement is resolved, and
+// postrun runs when that statement ends. A prepared statement runs the pair
+// at PREPARE and again on every EXECUTE, in the default schema that was
+// current at PREPARE. Read session state that stays fixed for the statement
+// in prerun, such as the default schema or the privilege user, through the
+// MySQL services in villagesql/preview/mysql_services.h. Stash it in
+// user_data, or fail the statement with PrerunResult::error(). Postrun does
+// not run after an error, so free anything stashed before reporting one.
+// Inside a stored routine, prerun sees the routine's schema. Under SQL
+// SECURITY DEFINER, it also sees the definer's security context.
+//
 // TODO(villagesql-general): add a typed-state mechanism (working name
 // `.state<T>()` on FuncBuilder) so extensions can declare a per-statement
 // state type and have the SDK manage its lifetime automatically — no
