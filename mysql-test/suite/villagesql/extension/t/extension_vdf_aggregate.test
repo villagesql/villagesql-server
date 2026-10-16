@@ -137,10 +137,10 @@ CREATE TABLE t_empty_str (id INT PRIMARY KEY, name VARCHAR(20));
 SELECT agg_vdf_ext.vdf_concat(name) AS result FROM t_empty_str;
 DROP TABLE t_empty_str;
 
-# Regression test for #612: a STRING-returning aggregate VDF must report a
-# utf8mb4 charset, not binary. Otherwise the mysql client treats the result as
-# binary and displays it as hex (0x...). The scalar VDF STRING path already
-# sets utf8mb4_bin; this verifies the aggregate path does too.
+# A STRING-returning aggregate VDF must report a utf8mb4 charset, not binary.
+# Otherwise the mysql client treats the result as binary and displays it as
+# hex (0x...). The scalar VDF STRING path already sets utf8mb4_bin; this
+# verifies the aggregate path does too.
 SELECT CHARSET(agg_vdf_ext.vdf_concat(category)) AS concat_charset FROM t1;
 SELECT COLLATION(agg_vdf_ext.vdf_concat(category)) AS concat_collation FROM t1;
 
@@ -171,6 +171,55 @@ SELECT category,
 FROM t1
 GROUP BY category
 ORDER BY category;
+
+# Regression test for #1317: IS NULL must be true on an aggregate VDF that
+# returns NULL. Item_sum::is_null() reads the cached null_value without
+# evaluating the item, and the UDF aggregate path never set it, so IS NULL
+# answered 0 while the value itself printed as NULL. IFNULL, COALESCE and
+# <=> NULL evaluate the item and were always right -- they are included here
+# so a regression shows up as a disagreement between the columns.
+
+# Empty table: no row is ever accumulated, so the result is NULL.
+CREATE TABLE t_empty (id INT PRIMARY KEY, val INT, name VARCHAR(20));
+SELECT vdf_sum(val) AS v,
+       vdf_sum(val) IS NULL AS is_null,
+       vdf_sum(val) IS NOT NULL AS is_not_null,
+       vdf_sum(val) <=> NULL AS null_safe_eq,
+       IFNULL(vdf_sum(val), -1) AS ifnull_v,
+       COALESCE(vdf_sum(val), -1) AS coalesce_v
+FROM t_empty;
+
+# The STRING and raw-ABI aggregates return NULL over the same empty table.
+SELECT vdf_concat(name) IS NULL AS concat_is_null,
+       vdf_max(val) IS NULL AS max_is_null
+FROM t_empty;
+DROP TABLE t_empty;
+
+# A group whose values are all NULL: accumulate runs but contributes nothing.
+CREATE TABLE t_allnull (id INT PRIMARY KEY, val INT, category VARCHAR(20));
+INSERT INTO t_allnull VALUES (1, NULL, 'A'), (2, NULL, 'A'), (3, 30, 'B');
+SELECT category,
+       vdf_sum(val) AS v,
+       vdf_sum(val) IS NULL AS is_null,
+       vdf_max(val) IS NULL AS max_is_null
+FROM t_allnull
+GROUP BY category
+ORDER BY category;
+
+# HAVING ... IS NULL must keep the all-NULL group and drop the other.
+SELECT category, vdf_sum(val) AS v
+FROM t_allnull
+GROUP BY category
+HAVING vdf_sum(val) IS NULL
+ORDER BY category;
+
+# ... and HAVING ... IS NOT NULL the reverse.
+SELECT category, vdf_sum(val) AS v
+FROM t_allnull
+GROUP BY category
+HAVING vdf_sum(val) IS NOT NULL
+ORDER BY category;
+DROP TABLE t_allnull;
 
 # Cleanup
 DROP TABLE t1;
