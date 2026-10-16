@@ -1,0 +1,48 @@
+# INSERT ... SELECT into a table with a UNIQUE COMPLEX column, with
+# ON DUPLICATE KEY UPDATE and with IGNORE.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_src (id INT PRIMARY KEY, val COMPLEX, qty INT);
+INSERT INTO t_src VALUES
+    (1, '(1,1)', 10),
+    (2, '(2,2)', 20),
+    (3, '(1,1)', 30),
+    (4, '(-0,0)', 40),
+    (5, NULL, 50);
+
+CREATE TABLE t_dst (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    val COMPLEX,
+    total INT NOT NULL,
+    UNIQUE KEY uk_val (val)
+);
+INSERT INTO t_dst (val, total) VALUES ('(0,0)', 1);
+
+# Duplicates from the source and against the target are folded into one row.
+INSERT INTO t_dst (val, total)
+  SELECT val, qty FROM t_src ORDER BY id
+  ON DUPLICATE KEY UPDATE total = total + VALUES(total);
+SELECT val, total FROM t_dst ORDER BY val, total;
+
+# Same with a row alias over a derived table.
+INSERT INTO t_dst (val, total)
+  SELECT * FROM (SELECT val, qty FROM t_src WHERE val IS NOT NULL) AS s
+  ON DUPLICATE KEY UPDATE total = t_dst.total + s.qty;
+SELECT val, total FROM t_dst ORDER BY val, total;
+
+DELETE FROM t_dst;
+
+# INSERT IGNORE ... SELECT: first row wins for each value.
+INSERT IGNORE INTO t_dst (val, total) SELECT val, qty FROM t_src ORDER BY id;
+SELECT val, total FROM t_dst ORDER BY val, total;
+
+# Without IGNORE the same statement fails and inserts nothing.
+DELETE FROM t_dst;
+--error ER_DUP_ENTRY
+INSERT INTO t_dst (val, total) SELECT val, qty FROM t_src ORDER BY id;
+SELECT COUNT(*) FROM t_dst;
+
+DROP TABLE t_src, t_dst;
+
+--source include/villagesql/uninstall_complex_extension.inc
