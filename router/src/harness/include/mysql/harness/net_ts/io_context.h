@@ -1,5 +1,6 @@
 /*
   Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+  Copyright (c) 2026 VillageSQL Contributors
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -548,7 +549,7 @@ class io_context : public execution_context {
       for (auto cur = pending_timers_.begin(); cur != pending_timers_.end();
            cur = pending_timers_.begin()) {
         // extract and then destroy it.
-        pending_timers_.extract(cur);
+        (void)pending_timers_.extract(cur);
       }
     }
 
