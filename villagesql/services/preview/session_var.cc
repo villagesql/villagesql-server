@@ -28,13 +28,13 @@
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_system_variable.h"
-#include "mysql/service_plugin_registry.h"
 #include "sql/current_thd.h"
 #include "sql/set_var.h"
 #include "sql/sql_class.h"
 #include "sql/sql_plugin_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/session_var.h"
+#include "villagesql/services/plugin_registry.h"
 
 // Definition of the ABI's opaque handle (forward-declared in
 // abi/preview/session_var.h at global scope). Holds only the per-session
@@ -113,8 +113,8 @@ char *read_session_var_string(const void *cap, const char *name) {
   const std::string extension_name = extension_name_for_cap(cap);
   if (extension_name.empty()) return nullptr;
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return nullptr;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return nullptr;
 
   char *result = nullptr;
   {
@@ -149,7 +149,6 @@ char *read_session_var_string(const void *cap, const char *name) {
     }
   }
 
-  mysql_plugin_registry_release(registry);
   return result;
 }
 
@@ -270,8 +269,8 @@ bool on_populate_session_var(const PopulateContext &ctx,
     return false;
   const std::string extension_name(ctx.extension_name);
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
+  PluginRegistry registry;
+  if (!registry.is_valid()) {
     error_message = "on_populate_session_var: failed to acquire registry";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
     return true;
@@ -283,7 +282,6 @@ bool on_populate_session_var(const PopulateContext &ctx,
     error_message =
         "on_populate_session_var: component_sys_variable_register unavailable";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
-    mysql_plugin_registry_release(registry);
     return true;
   }
 
@@ -327,7 +325,6 @@ bool on_populate_session_var(const PopulateContext &ctx,
       error_message = std::string("Failed to register session variable '") +
                       v->name + "' for extension '" + extension_name + "'";
       rollback_registered_vars(registry, extension_name, ctx.capability_config);
-      mysql_plugin_registry_release(registry);
       return true;
     }
 
@@ -342,7 +339,6 @@ bool on_populate_session_var(const PopulateContext &ctx,
             extension_name.c_str());
   }
 
-  mysql_plugin_registry_release(registry);
   return false;
 }
 
@@ -367,8 +363,8 @@ void on_depopulate_session_var(const DepopulateContext &ctx) {
 
   if (var_names.empty()) return;
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return;
 
   my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
       "component_sys_variable_unregister", registry);
@@ -376,8 +372,6 @@ void on_depopulate_session_var(const DepopulateContext &ctx) {
     for (const auto &name : var_names)
       unreg_svc->unregister_variable(extension_name.c_str(), name.c_str());
   }
-
-  mysql_plugin_registry_release(registry);
 }
 
 }  // namespace villagesql::services

@@ -16,7 +16,6 @@
 
 #include "villagesql/schema/systable/custom_columns.h"
 
-#include "scope_guard.h"
 #include "sql/field.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
@@ -115,22 +114,8 @@ bool TableTraits<ColumnEntry>::update_in_table(TABLE &table,
   field[2]->store(lookup_key.column().c_str(), lookup_key.column().length(),
                   &my_charset_utf8mb4_bin);
 
-  // Build the index key from the populated fields
-  uchar key_buf[MAX_KEY_LENGTH];
-  key_copy(key_buf, table.record[0], table.key_info,
-           table.key_info->key_length);
-
-  // Find the row using index read
-  int error = table.file->ha_index_init(0, false);
-  if (error) {
-    LogVSQL(ERROR_LEVEL, "Failed to init index for update: error %d", error);
-    return true;
-  }
-
-  auto index_end_guard =
-      create_scope_guard([&table]() { table.file->ha_index_end(); });
-
-  error = read_row_for_update(table, key_buf);
+  RowLookup row(table, 0);
+  int error = row.read_for_update();
   if (error) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for update: error %d", error);
     return true;
@@ -174,23 +159,8 @@ bool TableTraits<ColumnEntry>::delete_from_table(TABLE &table,
   field[2]->store(entry.column_name().c_str(), entry.column_name().length(),
                   &my_charset_utf8mb4_bin);
 
-  // Build the index key from the populated fields
-  uchar key_buf[MAX_KEY_LENGTH];
-  key_copy(key_buf, table.record[0], table.key_info,
-           table.key_info->key_length);
-
-  // Find the row using index read
-  int error = table.file->ha_index_init(0, false);
-  if (error) {
-    LogVSQL(ERROR_LEVEL, "Failed to init index for delete: error %d", error);
-    return true;
-  }
-
-  auto index_end_guard =
-      create_scope_guard([&table]() { table.file->ha_index_end(); });
-
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  RowLookup row(table, 0);
+  int error = row.read();
   if (error) {
     if (error == HA_ERR_KEY_NOT_FOUND) {
       // Row doesn't exist - this is OK for delete
