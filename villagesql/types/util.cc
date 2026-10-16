@@ -644,7 +644,7 @@ static String *EncodeForItem(Item *item, const String &from,
                              EncodeStatus &status) {
   TypeEncoder *encoder = GetTypeEncoderFor(item);
   if (encoder == nullptr) {
-    status = EncodeStatus::kErrorRaised;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
   EncodeOutcome outcome;
@@ -659,7 +659,7 @@ String *EncodeStringForField(Field *field, const String &from,
 
   TypeEncoder *encoder = GetTypeEncoderFor(field);
   if (encoder == nullptr) {
-    status = EncodeStatus::kErrorRaised;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
   EncodeOutcome outcome;
@@ -1271,6 +1271,8 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
     switch (status) {
       case EncodeStatus::kNull:
         return set_field_to_null_with_conversions(to_field, false);
+      case EncodeStatus::kOom:
+        return TYPE_ERR_OOM;
       case EncodeStatus::kErrorRaised:
       case EncodeStatus::kBadValue:
         return TYPE_ERR_BAD_VALUE;
@@ -1300,8 +1302,9 @@ type_conversion_status EncodeAndStoreStringToCustomField(
           if (st != TYPE_OK) return st;
         }
         return StoreCustomFieldIntrinsicDefault(field);
-      case EncodeStatus::kErrorRaised:
+      case EncodeStatus::kOom:
         return TYPE_ERR_OOM;
+      case EncodeStatus::kErrorRaised:
       case EncodeStatus::kBadValue:
         return TYPE_WARN_OUT_OF_RANGE;
     }
@@ -1373,8 +1376,9 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
       // through, store the type's intrinsic default rather than zero bytes.
       if (field->check_constraints(ER_BAD_NULL_ERROR) != TYPE_OK) return true;
       return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
-    case EncodeStatus::kErrorRaised:
+    case EncodeStatus::kOom:
       return true;
+    case EncodeStatus::kErrorRaised:
     case EncodeStatus::kBadValue:
       break;  // handled below: whether this fails the row depends on the mode
   }

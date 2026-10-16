@@ -197,9 +197,12 @@ enum class EncodeStatus {
   // parse as this type. Nothing is final: the caller decides whether this is
   // an error, and reports it.
   kBadValue,
-  // A diagnostic has already been raised, for OOM or because the encode
-  // called error(). Propagate the failure without adding another.
+  // The encode called error(): the statement fails with the extension's own
+  // message, already raised. Propagate the failure without adding another.
   kErrorRaised,
+  // Out of memory, already reported. Kept apart from kErrorRaised so callers
+  // can return TYPE_ERR_OOM for it alone.
+  kOom,
 };
 
 // Encodes a string for storage in a custom type field, with error reporting.

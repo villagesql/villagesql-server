@@ -7055,8 +7055,9 @@ type_conversion_status Item::save_in_field_inner(Field *field,
         switch (status) {
           case villagesql::EncodeStatus::kNull:
             return set_field_to_null_with_conversions(field, no_conversions);
-          case villagesql::EncodeStatus::kErrorRaised:
+          case villagesql::EncodeStatus::kOom:
             return TYPE_ERR_OOM;
+          case villagesql::EncodeStatus::kErrorRaised:
           case villagesql::EncodeStatus::kBadValue:
             return TYPE_ERR_BAD_VALUE;
         }
@@ -7096,7 +7097,8 @@ type_conversion_status Item::save_in_field_inner(Field *field,
   return field->store(nr, unsigned_flag);
 }
 
-type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
+type_conversion_status Item_string::save_in_field_inner(Field *field,
+                                                        bool no_conversions) {
   assert(fixed);
   if (!has_type_context() && field->has_type_context()) {
     // Treat this Item as if it were a custom type.
@@ -7110,9 +7112,10 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
     if (encoded == nullptr) {
       switch (status) {
         case villagesql::EncodeStatus::kNull:
-          return set_field_to_null_with_conversions(field, false);
-        case villagesql::EncodeStatus::kErrorRaised:
+          return set_field_to_null_with_conversions(field, no_conversions);
+        case villagesql::EncodeStatus::kOom:
           return TYPE_ERR_OOM;
+        case villagesql::EncodeStatus::kErrorRaised:
         case villagesql::EncodeStatus::kBadValue:
           return TYPE_ERR_BAD_VALUE;
       }
