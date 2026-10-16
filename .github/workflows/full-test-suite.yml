@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: 'linux-x86_64'
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -51,6 +56,11 @@ on:
           - linux-aarch64
           - macos-arm64
         default: linux-x86_64
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   # Turn the platform name into a runs-on value.
@@ -102,6 +112,16 @@ jobs:
     permissions:
       contents: read
 
+    # Stage outcomes for the notify job. A stage that never ran reports as
+    # an empty string.
+    outputs:
+      checkout: ${{ steps.checkout.outcome }}
+      build: ${{ steps.build.outcome }}
+      standard_tests: ${{ steps.standard_tests.outcome }}
+      big_tests: ${{ steps.big_tests.outcome }}
+      all_suites: ${{ steps.all_suites.outcome }}
+      commit: ${{ steps.checkout.outputs.commit }}
+
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
       BUILD_DIR: ${{ github.workspace }}/build
@@ -119,6 +139,7 @@ jobs:
         echo "Artifact prefix: $ARTIFACT_PREFIX"
 
     - name: Checkout code
+      id: checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         ref: ${{ env.REF }}
@@ -174,15 +195,18 @@ jobs:
         retention-days: 7
 
     - name: Build VillageSQL
+      id: build
       working-directory: ./source
       run: "$SOURCE_DIR/villagesql/bld_tools/build_server.sh"
 
     - name: Run standard tests (unit, integration with only suite village)
+      id: standard_tests
       uses: ./source/.github/actions/run-tests
       with:
         artifact-name: ${{ env.ARTIFACT_PREFIX }}-logs-${{ github.run_number }}
 
     - name: Run big tests
+      id: big_tests
       uses: ./source/.github/actions/run-tests
       with:
         run-unit-tests: false
@@ -190,9 +214,92 @@ jobs:
         artifact-name: ${{ env.ARTIFACT_PREFIX }}-big-test-logs-${{ github.run_number }}
 
     - name: Run all test suites (excluding VillageSQL)
+      id: all_suites
       uses: ./source/.github/actions/run-tests
       with:
         run-unit-tests: false
         run-all-suites: true
         skip-suite: village
         artifact-name: ${{ env.ARTIFACT_PREFIX }}-all-suites-logs-${{ github.run_number }}
+
+    # Each test stage overwrites the MTR report, and the ladder stops at the
+    # first failure, so this is the report of the stage that failed.
+    - name: Upload MTR report for Slack
+      if: always() && inputs.slack_notify
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: fts-slack-mtr-report
+        path: ${{ env.BUILD_DIR }}/mysql-test-report.xml
+        if-no-files-found: ignore
+        retention-days: 1
+
+  # A separate job, so a failed checkout of `ref` is still reported: the report
+  # script comes from this workflow's own revision.
+  notify:
+    name: Slack Notification
+    needs: [resolve-platform, build-and-test]
+    if: always() && inputs.slack_notify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout report scripts
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        fetch-depth: 1
+        sparse-checkout: |
+          villagesql/bld_tools/
+          villagesql/scripts/
+
+    - name: Download MTR report
+      # Absent when no test stage ran; the script reports that case.
+      continue-on-error: true
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: fts-slack-mtr-report
+        path: report/
+
+    - name: Prepare report
+      env:
+        STATUS: ${{ needs.build-and-test.result }}
+        PLATFORM: ${{ inputs.platform }}
+        BUILD_TYPE: ${{ inputs.build-type }}
+        CHECKOUT: ${{ needs.build-and-test.outputs.checkout }}
+        BUILD: ${{ needs.build-and-test.outputs.build }}
+        STANDARD_TESTS: ${{ needs.build-and-test.outputs.standard_tests }}
+        BIG_TESTS: ${{ needs.build-and-test.outputs.big_tests }}
+        ALL_SUITES: ${{ needs.build-and-test.outputs.all_suites }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        BRANCH: ${{ inputs.ref }}
+        COMMIT: ${{ needs.build-and-test.outputs.commit }}
+        TRIGGER: ${{ github.event_name }}
+      run: |
+        if ! command -v xmllint >/dev/null; then
+          sudo apt-get update -qq
+          sudo apt-get install -y libxml2-utils
+        fi
+
+        villagesql/bld_tools/prepare_fts_report.sh \
+          --status "$STATUS" \
+          --platform "$PLATFORM" \
+          --build-type "$BUILD_TYPE" \
+          --stage "Checkout code=$CHECKOUT" \
+          --stage "Build VillageSQL=$BUILD" \
+          --test-stage "Run standard tests=$STANDARD_TESTS" \
+          --test-stage "Run big tests=$BIG_TESTS" \
+          --test-stage "Run all test suites (not vsql)=$ALL_SUITES" \
+          --xml report/mysql-test-report.xml \
+          --run-url "$RUN_URL" \
+          --branch "$BRANCH" \
+          --commit "$COMMIT" \
+          --trigger "$TRIGGER" \
+          > fts-report.json
+        jq . fts-report.json
+
+    - name: Send Slack notification
+      uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+      with:
+        webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+        webhook-type: incoming-webhook
+        payload-file-path: fts-report.json
