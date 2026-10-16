@@ -1,0 +1,29 @@
+Creating extension vdf_postrun_leak using SDK...
+Created vdf_postrun_leak.veb
+INSTALL EXTENSION vdf_postrun_leak;
+# Baseline
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+vdf_postrun_leak.postrun_count() AS post,
+vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+0	0	0
+SET SESSION debug='+d,vdf_fail_after_prerun';
+SELECT vdf_postrun_leak.leak_probe() AS probe;
+ERROR HY000: Out of memory; check if mysqld or some other process uses all available memory; if not, you may have to use 'ulimit' to allow mysqld to use more memory or you can add more swap space
+SET SESSION debug='-d,vdf_fail_after_prerun';
+# After forced failure
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+vdf_postrun_leak.postrun_count() AS post,
+vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+1	1	0
+# Happy path: prerun+postrun pair normally, no leak
+SELECT vdf_postrun_leak.leak_probe() AS probe;
+probe
+1
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+vdf_postrun_leak.postrun_count() AS post,
+vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+2	2	0
+UNINSTALL EXTENSION vdf_postrun_leak;
