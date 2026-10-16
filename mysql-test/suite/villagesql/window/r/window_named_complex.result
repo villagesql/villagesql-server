@@ -1,0 +1,48 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+(5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+SELECT id, grp, val,
+RANK() OVER w_ord AS rnk,
+LAG(val) OVER w_ord AS lag_v,
+MAX(val) OVER w_grp AS mx
+FROM t1
+WINDOW w_grp AS (PARTITION BY grp), w_ord AS (w_grp ORDER BY val, id)
+ORDER BY id;
+id	grp	val	rnk	lag_v	mx
+1	1	(2,1)	3	(2,-5)	(2,1)
+2	1	(-3,0)	1	NULL	(2,1)
+3	1	(2,1)	4	(2,1)	(2,1)
+4	1	(2,-5)	2	(-3,0)	(2,1)
+5	2	(-1,-1)	2	NULL	(10,0)
+6	2	NULL	1	NULL	(10,0)
+7	2	(10,0)	4	(-1,-1)	(10,0)
+8	2	(-1,-1)	3	(-1,-1)	(10,0)
+SELECT id, val,
+MIN(val) OVER (w ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS mn3
+FROM t1 WINDOW w AS (ORDER BY id)
+ORDER BY id;
+id	val	mn3
+1	(2,1)	(-3,0)
+2	(-3,0)	(-3,0)
+3	(2,1)	(-3,0)
+4	(2,-5)	(-1,-1)
+5	(-1,-1)	(-1,-1)
+6	NULL	(-1,-1)
+7	(10,0)	(-1,-1)
+8	(-1,-1)	(-1,-1)
+SELECT id, val,
+ROW_NUMBER() OVER (ORDER BY val, id) AS rn_asc,
+ROW_NUMBER() OVER (ORDER BY val DESC, id) AS rn_desc,
+FIRST_VALUE(val) OVER (ORDER BY id DESC) AS fv_last_id
+FROM t1 ORDER BY id;
+id	val	rn_asc	rn_desc	fv_last_id
+1	(2,1)	6	2	(-1,-1)
+2	(-3,0)	2	7	(-1,-1)
+3	(2,1)	7	3	(-1,-1)
+4	(2,-5)	5	4	(-1,-1)
+5	(-1,-1)	3	5	(-1,-1)
+6	NULL	1	8	(-1,-1)
+7	(10,0)	8	1	(-1,-1)
+8	(-1,-1)	4	6	(-1,-1)
+DROP TABLE t1;
