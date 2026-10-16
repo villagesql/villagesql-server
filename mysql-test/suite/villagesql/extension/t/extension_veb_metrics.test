@@ -1,0 +1,68 @@
+# Test that VillageSQL global status variables are registered and counted.
+#
+# Villagesql_veb_cache_repaired is the first consumer of the status-variable
+# facility in villagesql/common/metrics.cc, and this test covers the whole
+# path: the variable is published through the status_variable_registration
+# service, visible in SHOW GLOBAL STATUS and performance_schema, and updated
+# when the event it names actually happens.
+#
+# The event is an expansion rebuilt because its cached .so was unusable, which
+# expand_veb_to_directory() raises on a running server, so the counter can be
+# read back afterwards.
+
+call mtr.add_suppression("has no usable .so");
+
+--echo # The variable is registered and visible
+SELECT COUNT(*) = 1 AS registered
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+
+# Install once for an expansion to damage; UNINSTALL leaves it on disk.
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc
+
+let MYSQLD_DATADIR= `SELECT @@datadir`;
+
+# Baseline rather than an absolute value: the counter is process-wide and
+# other tests sharing this server may have moved it already.
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) INTO @before
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+die "expected one expansion dir under $ext_dir, found: @subdirs"
+  unless scalar(@subdirs) == 1;
+
+# Make the cached .so unusable so the next INSTALL re-expands. Unlink before
+# recreating: after UNINSTALL, glibc's dlclose commonly leaves the library in
+# the process link map, and truncating the file under that live mapping
+# invalidates its pages, so the next dlopen of the same path resolves to the
+# poisoned mapping and dlsym dies with SIGBUS.
+my $cached_so = "$ext_dir/$subdirs[0]/lib/vsql_complex.so";
+unlink($cached_so) or die "Can't unlink $cached_so: $!";
+open(my $fh, '>', $cached_so) or die $!;
+close($fh);
+print "Replaced cached .so with a zero-length file\n";
+EOF
+
+--echo # Re-installing rebuilds the damaged expansion
+# INSTALL expands, dlopens and registers before it returns, so its success is
+# already proof that the rebuild produced a loadable .so.
+--source include/villagesql/install_complex_extension.inc
+
+--echo # The repair counter moved by exactly one
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) - @before AS repaired_delta
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+
+--echo # And SHOW GLOBAL STATUS reports the same counter
+--replace_column 2 <count>
+SHOW GLOBAL STATUS LIKE 'Villagesql_veb_cache_repaired';
+
+--source include/villagesql/uninstall_complex_extension.inc

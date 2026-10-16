@@ -1,0 +1,22 @@
+call mtr.add_suppression("has no usable .so");
+# The variable is registered and visible
+SELECT COUNT(*) = 1 AS registered
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+registered
+1
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) INTO @before
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+Replaced cached .so with a zero-length file
+# Re-installing rebuilds the damaged expansion
+# The repair counter moved by exactly one
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) - @before AS repaired_delta
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+repaired_delta
+1
+# And SHOW GLOBAL STATUS reports the same counter
+SHOW GLOBAL STATUS LIKE 'Villagesql_veb_cache_repaired';
+Variable_name	Value
+Villagesql_veb_cache_repaired	<count>
