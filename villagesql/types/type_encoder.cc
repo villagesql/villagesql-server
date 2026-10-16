@@ -58,29 +58,27 @@ bool TypeEncoder::Init() {
   return false;
 }
 
-String *TypeEncoder::encode(const String &from, bool &is_valid) {
-  is_valid = true;
+String *TypeEncoder::encode(const String &from, EncodeOutcome &outcome) {
+  outcome = EncodeOutcome{};
 
   if (vdf_call_.has_value()) {
     auto r =
         vdf_call_->invoke(from, pointer_cast<uchar *>(buffer_), buffer_size_);
     if (!r) {
-      // TODO(villagesql-general): log warnings for errors
-      is_valid = false;
+      outcome.result_type = vdf_call_->result_type();
+      outcome.message = vdf_call_->error_msg();
       return nullptr;
     }
 
     if (vdf_call_->alt_bin_buf() != nullptr) {
       // TODO(villagesql-beta): support the extension returning alternate
       // buffers
-      is_valid = false;
       return nullptr;
     }
 
     // TODO(villagesql-beta): report an error or warning when the VDF overruns
     // the buffer rather than silently returning invalid
     if (*r > buffer_size_) {
-      is_valid = false;
       return nullptr;
     }
 
@@ -91,11 +89,9 @@ String *TypeEncoder::encode(const String &from, bool &is_valid) {
     size_t actual_length = 0;
     if (fn_(pointer_cast<uchar *>(buffer_), buffer_size_, from.ptr(),
             from.length(), &actual_length)) {
-      is_valid = false;
       return nullptr;
     }
     if (should_assert_if_false(actual_length <= buffer_size_)) {
-      is_valid = false;
       return nullptr;
     }
     result_.set(buffer_, actual_length, &my_charset_bin);
