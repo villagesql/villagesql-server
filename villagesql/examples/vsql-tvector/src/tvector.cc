@@ -1053,14 +1053,6 @@ void tvector_sum_all_bind(vsql::BindArgs args, vsql::BindResult out) {
       // A TVECTOR nobody worked the parameters out for. TVECTOR::from_string()
       // of a non-constant is how one usually arises: the text differs per row,
       // so the dimension is not a resolution-time fact at all.
-      //
-      // Supplying them here is possible and wrong. A hook can only answer with
-      // one dimension, and no single dimension is true for every row. Totalling
-      // would survive a wrong one, since it walks the bytes it is handed and
-      // never reads the dimension, but the declared type is a claim about the
-      // value that everything downstream reads, and such a value cannot even be
-      // printed: to_string does read the dimension. Refusing is the honest
-      // answer.
       out.error(arg_error(i, "is a TVECTOR with unknown type parameters"));
       return;
     }

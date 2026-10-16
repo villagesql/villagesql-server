@@ -772,7 +772,7 @@ struct LenParam {
 
   // Only the bind-hook fixtures near the bottom of this file set this, to make
   // to_strings emit more than the server's parameter buffer can hold. Left at
-  // 0 the serialized form is exactly what it was, so the ten types sharing
+  // 0 the serialized form is exactly what it was, so the types sharing
   // LenParam are unaffected.
   int64_t pad_len = 0;
 
@@ -1350,7 +1350,7 @@ constexpr auto BAD_DECODE_BUF =
 //
 // The server cannot trust what a hook hands back, since the answers come from
 // an extension, so it validates them. These five functions each break one of
-// those rules, because nothing a well-written hook does can reach the checks:
+// those rules:
 //
 //   bad_bind_return_overflow   return parameters longer than the server's
 //                              buffer
