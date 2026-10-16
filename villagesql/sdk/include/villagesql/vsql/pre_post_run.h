@@ -32,6 +32,10 @@
 // postrun is responsible for freeing it. PostrunArgs::delete_state<T>() is
 // the typed convenience for the common case of `new T{}` + `delete`.
 //
+// A VDF with prerun or postrun cannot be used in a generated column, DEFAULT
+// expression, CHECK constraint, or functional index, because those are
+// resolved once per table open rather than once per statement.
+//
 // Prerun and postrun can be a cumbersome API. The func builder already handles
 // the simple cases (e.g. type checking for functions with fixed args and
 // allocating fixed buffer sizes), and we want to cover more. If you find you

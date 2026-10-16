@@ -1,0 +1,39 @@
+INSTALL EXTENSION vsql_test_only;
+# CHECK constraint
+CREATE TABLE t_check (a INT, CHECK (vsql_test_only.state_probe(a) > 0));
+ERROR HY000: An expression of a check constraint 't_check_chk_1' contains disallowed function: state_probe.
+CREATE TABLE t_check (a INT);
+ALTER TABLE t_check ADD CHECK (vsql_test_only.state_probe(a) > 0);
+ERROR HY000: An expression of a check constraint 't_check_chk_1' contains disallowed function: state_probe.
+DROP TABLE t_check;
+# Stored generated column
+CREATE TABLE t_stored (a INT, g INT AS (vsql_test_only.state_probe(a)) STORED);
+ERROR HY000: Expression of generated column 'g' contains a disallowed function: state_probe.
+# Virtual generated column
+CREATE TABLE t_virtual (a INT, g INT AS (vsql_test_only.state_probe(a)) VIRTUAL);
+ERROR HY000: Expression of generated column 'g' contains a disallowed function: state_probe.
+# DEFAULT expression
+CREATE TABLE t_default (a INT, d INT DEFAULT (vsql_test_only.state_probe(7)));
+ERROR HY000: Default value expression of column 'd' contains a disallowed function: state_probe.
+# Functional index
+CREATE TABLE t_index (a INT, INDEX ((vsql_test_only.state_probe(a))));
+ERROR HY000: Expression of functional index 'functional_index' contains a disallowed function.
+# The VDF still works in a plain statement
+CREATE TABLE t (a INT);
+INSERT INTO t VALUES (1), (2);
+SELECT vsql_test_only.state_probe(a) AS n FROM t ORDER BY a;
+n
+1
+2
+SELECT vsql_test_only.state_probe(a) AS n FROM t ORDER BY a;
+n
+1
+2
+DROP TABLE t;
+SELECT vsql_test_only.state_probe_dead_calls() AS dead_calls;
+dead_calls
+0
+SELECT vsql_test_only.state_probe_live() AS live_after;
+live_after
+0
+UNINSTALL EXTENSION vsql_test_only;

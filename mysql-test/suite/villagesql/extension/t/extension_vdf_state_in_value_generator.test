@@ -1,0 +1,55 @@
+# A VDF with prerun or postrun is rejected in a value generator (CHECK
+# constraint, generated column, DEFAULT expression, functional index) even
+# when it is deterministic.
+#
+# A value generator's Items are resolved once, when the TABLE is opened, so
+# prerun would run once per open. Every statement end cleans those Items up,
+# which runs postrun and frees the state, but the next statement reuses the
+# TABLE from the cache without resolving it again and would call the VDF with
+# the user_data of a state postrun already freed.
+#
+# vsql_test_only.state_probe(n) is deterministic and returns n. Its prerun
+# registers the state it allocates and its postrun unregisters and frees it.
+# The VDF counts a call whose state is not registered, and
+# state_probe_dead_calls() reads that count. It must stay 0, and so must
+# state_probe_live() once the statements are over.
+# vdf_deterministic_constraint covers the deterministic VDF without hooks that
+# a CHECK constraint accepts.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # CHECK constraint
+--error ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED
+CREATE TABLE t_check (a INT, CHECK (vsql_test_only.state_probe(a) > 0));
+CREATE TABLE t_check (a INT);
+--error ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED
+ALTER TABLE t_check ADD CHECK (vsql_test_only.state_probe(a) > 0);
+DROP TABLE t_check;
+
+--echo # Stored generated column
+--error ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED
+CREATE TABLE t_stored (a INT, g INT AS (vsql_test_only.state_probe(a)) STORED);
+
+--echo # Virtual generated column
+--error ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED
+CREATE TABLE t_virtual (a INT, g INT AS (vsql_test_only.state_probe(a)) VIRTUAL);
+
+--echo # DEFAULT expression
+--error ER_DEFAULT_VAL_GENERATED_NAMED_FUNCTION_IS_NOT_ALLOWED
+CREATE TABLE t_default (a INT, d INT DEFAULT (vsql_test_only.state_probe(7)));
+
+--echo # Functional index
+--error ER_FUNCTIONAL_INDEX_FUNCTION_IS_NOT_ALLOWED
+CREATE TABLE t_index (a INT, INDEX ((vsql_test_only.state_probe(a))));
+
+--echo # The VDF still works in a plain statement
+CREATE TABLE t (a INT);
+INSERT INTO t VALUES (1), (2);
+SELECT vsql_test_only.state_probe(a) AS n FROM t ORDER BY a;
+SELECT vsql_test_only.state_probe(a) AS n FROM t ORDER BY a;
+DROP TABLE t;
+
+SELECT vsql_test_only.state_probe_dead_calls() AS dead_calls;
+SELECT vsql_test_only.state_probe_live() AS live_after;
+
+UNINSTALL EXTENSION vsql_test_only;
