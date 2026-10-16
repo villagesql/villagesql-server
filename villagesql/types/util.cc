@@ -651,16 +651,69 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
   return encoder;
 }
 
+// Encode from with the type's from_string, converting it to utf8mb4 first if
+// it is in another charset. from_string parses text, so it needs to know which
+// charset the bytes are in. Converting does not decide validity: the type still
+// accepts or rejects the value.
+//
+// converted is storage owned by the caller for the converted copy. *given is
+// set to the string from_string actually received (from or *converted), so an
+// error message can quote the value as the user wrote it.
+//
+// Returns the encoded value, or nullptr on failure. On failure, is_valid=true
+// means out of memory (my_error already called), and is_valid=false means the
+// type rejected the value or the value was not valid in its own charset.
+static String *EncodeAsUtf8mb4(TypeEncoder *encoder, const String &from,
+                               String *converted, const String **given,
+                               bool &is_valid) {
+  *given = &from;
+  if (!from.needs_conversion(&my_charset_utf8mb4_bin)) {
+    return encoder->encode(from, is_valid);
+  }
+  uint errors = 0;
+  if (converted->copy(from.ptr(), from.length(), from.charset(),
+                      &my_charset_utf8mb4_bin, &errors)) {
+    is_valid = true;  // OOM, my_error already called
+    return nullptr;
+  }
+  *given = converted;
+  if (errors != 0) {
+    // Malformed in the charset it claims to be; nothing valid to parse.
+    is_valid = false;
+    return nullptr;
+  }
+  return encoder->encode(*converted, is_valid);
+}
+
 // Encode from for item's custom type. Returns the encoded String* on success.
 // On failure returns nullptr; is_valid=true means OOM (my_error already
-// called), is_valid=false means invalid value for the type.
-static String *EncodeForItem(Item *item, const String &from, bool &is_valid) {
+// called), is_valid=false means invalid value for the type. The value is
+// converted to utf8mb4 first, into converted, and *given is set to the string
+// the type received.
+static String *EncodeForItem(Item *item, const String &from, String *converted,
+                             const String **given, bool &is_valid) {
+  *given = &from;
   TypeEncoder *encoder = GetTypeEncoderFor(item);
   if (encoder == nullptr) {
     is_valid = true;  // OOM, my_error already called
     return nullptr;
   }
-  return encoder->encode(from, is_valid);
+  return EncodeAsUtf8mb4(encoder, from, converted, given, is_valid);
+}
+
+// Push the warning for a value the type would not accept. Consistent with
+// MySQL built-in types: the caller decides whether to promote it to an error.
+// 'value' is what the converter was given, so the message names what the user
+// wrote rather than the bytes their charset encoded it as.
+static void ReportBadCustomFieldValue(const Field *field, const String &value) {
+  const TypeContext *tc = field->get_type_context();
+  THD *thd = current_thd;
+  const ErrConvString errmsg(value.ptr(), value.length(), value.charset());
+  const Diagnostics_area *da = thd->get_stmt_da();
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
+      errmsg.ptr(), field->field_name, da->current_row_for_condition());
 }
 
 String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
@@ -671,23 +724,12 @@ String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
     is_valid = true;  // OOM, my_error already called
     return nullptr;
   }
-  String *encoded = encoder->encode(from, is_valid);
-  if (encoded == nullptr) {
-    if (is_valid) return nullptr;  // OOM, my_error already called
-    // Encoding failed - invalid value for custom type
-    // Always push a warning (consistent with MySQL built-in types)
-    // Caller decides whether to also promote to error
-    const TypeContext *tc = field->get_type_context();
-    THD *thd = current_thd;
-    const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
-    const Diagnostics_area *da = thd->get_stmt_da();
-    push_warning_printf(thd, Sql_condition::SL_WARNING,
-                        ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-                        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-                        tc->type_name().c_str(), errmsg.ptr(),
-                        field->field_name, da->current_row_for_condition());
-    return nullptr;
-  }
+
+  String converted;
+  const String *given = nullptr;
+  String *encoded =
+      EncodeAsUtf8mb4(encoder, from, &converted, &given, is_valid);
+  if (encoded == nullptr && !is_valid) ReportBadCustomFieldValue(field, *given);
   return encoded;
 }
 
@@ -895,11 +937,13 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
   }
 
   bool is_valid = true;
-  String *encoded = EncodeForItem(item, *str_val, is_valid);
+  String converted;
+  const String *given = nullptr;
+  String *encoded = EncodeForItem(item, *str_val, &converted, &given, is_valid);
   if (encoded == nullptr) {
     if (!is_valid) {
-      const ErrConvString errmsg(str_val->ptr(), str_val->length(),
-                                 str_item->collation.collation);
+      const ErrConvString errmsg(given->ptr(), given->length(),
+                                 given->charset());
       my_error(ER_WRONG_VALUE, MYF(0), tc.type_name().c_str(), errmsg.ptr());
     }
     return true;
@@ -1290,13 +1334,16 @@ type_conversion_status EncodeAndStoreStringToCustomField(
 String *EncodeStringForCustomParam(Item *item, const String &str_value,
                                    bool &null_value) {
   bool is_valid = true;
-  String *encoded = EncodeForItem(item, str_value, is_valid);
+  String converted;
+  const String *given = nullptr;
+  String *encoded =
+      EncodeForItem(item, str_value, &converted, &given, is_valid);
   if (encoded == nullptr) {
     if (!is_valid) {
       // Invalid value for custom type
       const TypeContext *tc = item->get_type_context();
-      const ErrConvString errmsg(str_value.ptr(), str_value.length(),
-                                 str_value.charset());
+      const ErrConvString errmsg(given->ptr(), given->length(),
+                                 given->charset());
       villagesql_error("Incorrect %s value: '%s' for parameter '%s'", MYF(0),
                        tc->qualified_name().c_str(), errmsg.ptr(),
                        item->item_name.ptr());

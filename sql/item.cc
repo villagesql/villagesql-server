@@ -4319,7 +4319,16 @@ type_conversion_status Item_param::save_in_field_inner(Field *field,
       return TYPE_OK;
     case MYSQL_TYPE_VARCHAR: {
       if (field->has_type_context()) {
-        return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+        // set_str() labels the bytes binary, and convert_value() relabels them
+        // (converting if needed) only for a string-typed parameter. Bytes still
+        // labelled binary are in the charset they arrived in,
+        // collation_source(). A custom type's converter reads them as text, so
+        // it needs that charset.
+        const CHARSET_INFO *cs = str_value.charset() == &my_charset_bin
+                                     ? collation_source()
+                                     : str_value.charset();
+        String value(str_value.ptr(), str_value.length(), cs);
+        return villagesql::EncodeAndStoreStringToCustomField(value, field);
       }
       return field->store(str_value.ptr(), str_value.length(),
                           str_value.charset());
@@ -4479,8 +4488,16 @@ String *Item_param::val_str(String *str) {
   switch (data_type_actual()) {
     case MYSQL_TYPE_VARCHAR: {
       if (has_type_context()) {
-        return villagesql::EncodeStringForCustomParam(this, str_value_ptr,
-                                                      null_value);
+        // set_str() labels the bytes binary, and convert_value() relabels them
+        // (converting if needed) only for a string-typed parameter. Bytes still
+        // labelled binary are in the charset they arrived in,
+        // collation_source(). A custom type's converter reads them as text, so
+        // it needs that charset.
+        const CHARSET_INFO *cs = str_value_ptr.charset() == &my_charset_bin
+                                     ? collation_source()
+                                     : str_value_ptr.charset();
+        String value(str_value_ptr.ptr(), str_value_ptr.length(), cs);
+        return villagesql::EncodeStringForCustomParam(this, value, null_value);
       }
       return &str_value_ptr;
     }
