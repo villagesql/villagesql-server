@@ -1,0 +1,11 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1,1)'), (2, '(-2,3)'), (3, NULL);
+SELECT id, val,
+LAG(val, 1, '(9,9)') OVER (ORDER BY id) AS lag_s,
+LEAD(val, 1, '(-9,9)') OVER (ORDER BY id) AS lead_s
+FROM t1 ORDER BY id;
+id	val	lag_s	lead_s
+1	(1,1)	(9,9)	(-2,3)
+2	(-2,3)	(1,1)	NULL
+3	NULL	(-2,3)	(-9,9)
+DROP TABLE t1;
