@@ -17,10 +17,10 @@ SHOW WARNINGS;
 Level	Code	Message
 Error	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
 INSERT INTO t1 VALUES (3, 'ENCODE_ERROR');
-ERROR HY000: VillageSQL: fault_blob: encode error sentinel
+ERROR HY000: fault_blob: encode error sentinel
 SHOW WARNINGS;
 Level	Code	Message
-Error	3219	VillageSQL: fault_blob: encode error sentinel
+Error	3219	fault_blob: encode error sentinel
 INSERT IGNORE INTO t1 VALUES (4, 'ENCODE_NULL');
 SHOW WARNINGS;
 Level	Code	Message
@@ -31,10 +31,10 @@ SHOW WARNINGS;
 Level	Code	Message
 Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
 INSERT IGNORE INTO t1 VALUES (6, 'ENCODE_ERROR');
-ERROR HY000: VillageSQL: fault_blob: encode error sentinel
+ERROR HY000: fault_blob: encode error sentinel
 SHOW WARNINGS;
 Level	Code	Message
-Error	3219	VillageSQL: fault_blob: encode error sentinel
+Error	3219	fault_blob: encode error sentinel
 SELECT id, val, val IS NULL AS is_null FROM t1 ORDER BY id;
 id	val	is_null
 1	NULL	1
@@ -51,10 +51,10 @@ SHOW WARNINGS;
 Level	Code	Message
 Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
 INSERT INTO t1 VALUES (9, 'ENCODE_ERROR');
-ERROR HY000: VillageSQL: fault_blob: encode error sentinel
+ERROR HY000: fault_blob: encode error sentinel
 SHOW WARNINGS;
 Level	Code	Message
-Error	3219	VillageSQL: fault_blob: encode error sentinel
+Error	3219	fault_blob: encode error sentinel
 SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id >= 7 ORDER BY id;
 id	val	is_null
 7	NULL	1

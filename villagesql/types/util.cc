@@ -674,7 +674,7 @@ String *EncodeStringForField(Field *field, const String &from,
 
   // error() aborts the statement with the extension's own message.
   if (outcome.result_type == VEF_RESULT_ERROR && outcome.has_message()) {
-    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0), outcome.message);
+    villagesql_error("%s", MYF(0), outcome.message);
     status = EncodeStatus::kErrorRaised;
     return nullptr;
   }
@@ -684,6 +684,8 @@ String *EncodeStringForField(Field *field, const String &from,
   // Encoding failed - invalid value for custom type
   // Always push a warning (consistent with MySQL built-in types)
   // Caller decides whether to also promote to error
+  // TODO(villagesql-general): an extension's own warning() message is dropped
+  // here; only the standard 1366 reaches the user.
   const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
   const Diagnostics_area *da = thd->get_stmt_da();
   push_warning_printf(
