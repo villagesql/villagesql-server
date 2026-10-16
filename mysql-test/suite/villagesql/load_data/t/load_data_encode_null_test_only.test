@@ -45,7 +45,8 @@ SELECT COUNT(*) AS rows_in_t2 FROM t2;
 DROP TABLE t2;
 
 # The same with strict mode off: a warning, and the row keeps the type's
-# intrinsic default rather than being rejected.
+# intrinsic default rather than being rejected. FAULT_BLOB declares a
+# recognizable default, so the stored value shows it was applied.
 CREATE TABLE t3 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
 SET @@session.sql_mode = '';
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
@@ -67,9 +68,11 @@ CREATE TABLE t5 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --error ER_VILLAGESQL_GENERIC_ERROR
 eval LOAD DATA INFILE '$errorfile' INTO TABLE t5;
+SHOW WARNINGS;
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --error ER_VILLAGESQL_GENERIC_ERROR
 eval LOAD DATA INFILE '$errorfile' IGNORE INTO TABLE t5;
+SHOW WARNINGS;
 SELECT COUNT(*) AS rows_in_t5 FROM t5;
 DROP TABLE t5;
 

@@ -23,7 +23,7 @@ SET @@session.sql_mode = DEFAULT;
 SELECT id, val FROM t3 ORDER BY id;
 id	val
 1	OK one
-2	
+2	OK default
 3	OK three
 DROP TABLE t3;
 CREATE TABLE t4 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
@@ -33,14 +33,20 @@ Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val'
 SELECT id, val FROM t4 ORDER BY id;
 id	val
 1	OK one
-2	
+2	OK default
 3	OK three
 DROP TABLE t4;
 CREATE TABLE t5 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
 LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_error.dat' INTO TABLE t5;
 ERROR HY000: fault_blob: encode error sentinel
+SHOW WARNINGS;
+Level	Code	Message
+Error	3219	fault_blob: encode error sentinel
 LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_error.dat' IGNORE INTO TABLE t5;
 ERROR HY000: fault_blob: encode error sentinel
+SHOW WARNINGS;
+Level	Code	Message
+Error	3219	fault_blob: encode error sentinel
 SELECT COUNT(*) AS rows_in_t5 FROM t5;
 rows_in_t5
 0

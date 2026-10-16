@@ -103,10 +103,10 @@ INSERT INTO t2 VALUES (7, 'OK seven'), (8, 'ENCODE_NULL');
 ERROR 23000: Column 'val' cannot be null
 SELECT id, val, val IS NULL AS is_null FROM t2 ORDER BY id;
 id	val	is_null
-2		0
-3		0
+2	OK default	0
+3	OK default	0
 5	OK five	0
-6		0
+6	OK default	0
 SET @v = 'ENCODE_NULL';
 INSERT INTO t1 VALUES (20, @v);
 SET @v = 'ENCODE_ERROR';
@@ -153,6 +153,11 @@ SELECT id, val IS NULL AS is_null FROM t3;
 id	is_null
 1	1
 DROP TABLE t3;
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+val vsql_test_only.FAULT_BLOB NOT NULL DEFAULT 'ENCODE_NULL'
+);
+ERROR 42000: Invalid default value for 'val'
 DROP TABLE t1;
 DROP TABLE t2;
 UNINSTALL EXTENSION vsql_test_only;

@@ -84,8 +84,8 @@ INSERT INTO t2 VALUES (1, 'ENCODE_NULL');
 SELECT COUNT(*) AS rows_in_t2 FROM t2;
 
 # Under IGNORE the statement is not aborted and the column takes the type's
-# intrinsic default. FAULT_BLOB encodes the empty string as all zeros, which
-# is what the default is built from.
+# intrinsic default, which FAULT_BLOB declares as a recognizable value so it
+# cannot be confused with a stored empty string.
 INSERT IGNORE INTO t2 VALUES (2, 'ENCODE_NULL');
 SHOW WARNINGS;
 INSERT INTO t2 VALUES (3, 'OK three');
@@ -100,9 +100,9 @@ SET @@session.sql_mode = '';
 INSERT INTO t2 VALUES (4, 'ENCODE_NULL');
 SET @@session.sql_mode = DEFAULT;
 
-# A multi-row insert where one row encodes to NULL. Rows after the first are
-# downgraded to a warning, so the NOT NULL column takes the intrinsic default
-# and the statement completes.
+# A multi-row insert where one row encodes to NULL. A NULL into a NOT NULL
+# column is downgraded to a warning once the statement inserts more than one
+# row, so the column takes the intrinsic default and the statement completes.
 SET @@session.sql_mode = '';
 INSERT INTO t2 VALUES (5, 'OK five'), (6, 'ENCODE_NULL');
 SHOW WARNINGS;
@@ -160,6 +160,15 @@ CREATE TABLE t3 (
 INSERT INTO t3 (id) VALUES (1);
 SELECT id, val IS NULL AS is_null FROM t3;
 DROP TABLE t3;
+
+# The same DEFAULT on a NOT NULL column is rejected at CREATE TABLE: storing
+# the default passes no_conversions, so the encode's SQL NULL cannot fall back
+# to the intrinsic default and the column has no valid default to record.
+--error ER_INVALID_DEFAULT
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB NOT NULL DEFAULT 'ENCODE_NULL'
+);
 
 DROP TABLE t1;
 DROP TABLE t2;

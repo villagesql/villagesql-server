@@ -117,6 +117,11 @@ constexpr std::string_view kPrefixOk = "OK ";
 constexpr std::string_view kDecodeFail = "DECODE_FAIL";
 constexpr std::string_view kEncodeFail = "ENCODE_FAIL";
 
+// The value stored for a NOT NULL column that takes the intrinsic default.
+// Deliberately not the empty string, so a test can tell the default apart from
+// a stored empty value: both would otherwise be all-zero bytes.
+constexpr std::string_view kIntrinsicDefault = "OK default";
+
 // Sentinels for the three non-VALUE results an encode VDF can return. Each
 // exercises a distinct outcome the server is meant to tell apart: SQL NULL,
 // a warning carrying the extension's own text, and an error carrying it.
@@ -449,6 +454,7 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .from_string<&fault_blob_encode>()
                                 .to_string<&fault_blob_decode>()
                                 .compare<&fault_blob_compare>()
+                                .intrinsic_default_str(kIntrinsicDefault.data())
                                 .build();
 
 constexpr auto NO_DEFAULT_TYPE = vsql::make_type<kNoDefaultTypeName>()
