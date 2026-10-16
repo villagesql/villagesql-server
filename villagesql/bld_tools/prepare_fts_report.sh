@@ -35,8 +35,8 @@ Print the Slack payload (JSON) that reports a Full Test Suite run.
 
 Options:
   --status RESULT         Overall result of the run: success, failure,
-                          cancelled, or skipped (anything but success or
-                          cancelled is reported as failed).
+                          cancelled, or skipped.  Any other value is
+                          reported as given.
   --platform NAME         Platform tested, e.g. linux-x86_64.
   --build-type TYPE       Build type tested, e.g. debug.
   --stage LABEL=OUTCOME   A build stage, in ladder order.  Repeatable.
@@ -58,29 +58,25 @@ Example:
 EOF
 }
 
-# Print the icon for a step outcome.
-# Args: outcome
-outcome_icon() {
+# Set icon, word, label, and color for a GitHub result.  A stage line uses
+# word; the header uses label.  An unknown result keeps its own value as its
+# word and label.
+# Args: result
+outcome_attrs() {
     case "$1" in
-        success) echo "✅" ;;
-        failure) echo "❌" ;;
-        *)       echo "⚠️" ;;
-    esac
-}
-
-# Print the word reported for a step outcome.
-# Args: outcome
-outcome_word() {
-    case "$1" in
-        failure) echo "fail" ;;
-        *)       echo "$1" ;;
+        success)   icon="✅"; word=success;   label=passed;    color="#36a64f" ;;
+        failure)   icon="❌"; word=fail;      label=failed;    color="#cc0000" ;;
+        cancelled) icon="⚠️"; word=cancelled; label=cancelled; color="#daa520" ;;
+        *)         icon="⚠️"; word="$1";      label="$1";      color="#daa520" ;;
     esac
 }
 
 # Print one report line: icon, label in mono, and outcome.
 # Args: label outcome
 item_line() {
-    printf '%s `%s`: %s\n' "$(outcome_icon "$2")" "$1" "$(outcome_word "$2")"
+    local icon word label color
+    outcome_attrs "$2"
+    printf '%s `%s`: %s\n' "$icon" "$1" "$word"
 }
 
 # Print the failed tests in xml_file, one item line each, up to max.  A
@@ -165,14 +161,10 @@ main() {
 
     command -v jq >/dev/null || die "Missing dependency: jq"
 
-    local label emoji color
-    case "$status" in
-        success)   label=passed;    emoji="✅"; color="#36a64f" ;;
-        cancelled) label=cancelled; emoji="⚠️"; color="#daa520" ;;
-        *)         label=failed;    emoji="❌"; color="#cc0000" ;;
-    esac
+    local icon word label color
+    outcome_attrs "$status"
 
-    local header="$emoji $TITLE $label"
+    local header="$icon $TITLE $label"
     if [[ -n "$platform" || -n "$build_type" ]]; then
         local detail="$platform${platform:+${build_type:+, }}$build_type"
         header="$header ($detail)"
