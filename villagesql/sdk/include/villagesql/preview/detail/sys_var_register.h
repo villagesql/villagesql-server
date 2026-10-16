@@ -28,7 +28,7 @@ struct CapabilityTraits<::vsql::preview_sys_var::SysVarCapability<N>> {
   static constexpr const char *kCppTypeName =
       "vsql::preview_sys_var::SysVarCapability";
   using CapabilityConfigType = vef_sys_var_descriptor_list_t;
-  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kVtableHash = "ver-2";
   static constexpr const char *kCapabilityConfigHash = "ver-1";
 
   static constexpr void *vtable_destination(

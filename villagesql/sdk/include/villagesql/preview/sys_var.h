@@ -25,11 +25,11 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <villagesql/abi/preview/sys_var.h>
 #include <villagesql/abi/types.h>
@@ -233,26 +233,36 @@ class SysVarCapability
     descriptor_list.var_count = static_cast<uint32_t>(N);
   }
 
-  // Get a system variable value.
+  // Get a system variable value, as a string whatever its declared type.
+  //
+  // For a STRING variable this is the only safe way to read one: the server
+  // owns the buffer and frees it when the variable is updated, so reading the
+  // storage pointer directly races with a concurrent SET. The value is copied
+  // out under the server's lock. A variable of any other type can be read
+  // straight from its storage global, which is a plain word.
   //
   // extension_name: extension name as registered (e.g. "vsql_my_ext")
   // var_name:       variable name without extension prefix (e.g. "threshold")
   // out:            on success, set to the current value as a string
   //
   // Returns false on success, true on error.
-  bool get(std::string_view extension_name, std::string_view var_name,
+  bool get(const char *extension_name, const char *var_name,
            std::string &out) const {
     if (abi_ == nullptr || abi_->get == nullptr) return true;
     void *val = nullptr;
     size_t val_len = 0;
-    if (abi_->get(extension_name.data(), var_name.data(), &val, &val_len))
-      return true;
+    if (abi_->get(extension_name, var_name, &val, &val_len)) return true;
     out.assign(static_cast<const char *>(val), val_len);
     free(val);
     return false;
   }
 
   // Set an INT system variable.
+  //
+  // Always write through set() rather than assigning the storage global: the
+  // server applies the declared range, honours scope, and runs any on_change
+  // callback. Only a read of a non-STRING variable may go straight to the
+  // global.
   //
   // extension_name: extension name as registered (e.g. "vsql_my_ext")
   // var_name:       variable name without extension prefix (e.g. "threshold")
@@ -261,22 +271,30 @@ class SysVarCapability
   //                 "PERSIST_ONLY" → persist only; running value unchanged
   //
   // Returns false on success, true on error.
-  bool set(std::string_view extension_name, std::string_view var_name,
-           const char *scope, long long value) const {
-    if (abi_ == nullptr || abi_->set == nullptr) return true;
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%lld", value);
-    return abi_->set(extension_name.data(), var_name.data(), scope, buf);
+  // Templated on the integral type so a literal 0 picks this overload rather
+  // than being ambiguous with the const char * one below, which 0 also
+  // converts to.
+  template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+  bool set(const char *extension_name, const char *var_name, const char *scope,
+           T value) const {
+    if (abi_ == nullptr || abi_->set_int == nullptr) return true;
+    return abi_->set_int(extension_name, var_name, scope,
+                         static_cast<long long>(value));
   }
 
-  // Set a STRING system variable.
-  bool set(std::string_view extension_name, std::string_view var_name,
-           const char *scope, std::string_view value) const {
+  // Set a STRING, BOOL, DOUBLE or ENUM system variable. An ENUM is set by
+  // name. An INT variable is set by the overload above; it cannot be set
+  // from a string.
+  bool set(const char *extension_name, const char *var_name, const char *scope,
+           const char *value) const {
     if (abi_ == nullptr || abi_->set == nullptr) return true;
-    // ABI requires null-terminated string; string_view may not be.
-    std::string val_str(value);
-    return abi_->set(extension_name.data(), var_name.data(), scope,
-                     val_str.c_str());
+    return abi_->set(extension_name, var_name, scope, value);
+  }
+
+  // Convenience overload for a value the caller holds as a std::string.
+  bool set(const char *extension_name, const char *var_name, const char *scope,
+           const std::string &value) const {
+    return set(extension_name, var_name, scope, value.c_str());
   }
 
   // Read by the server's on_populate callback. Public so CapabilityTraits
