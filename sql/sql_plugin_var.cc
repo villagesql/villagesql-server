@@ -141,22 +141,7 @@ bool plugin_var_memalloc_session_update(THD *thd, SYS_VAR *var, char **dest,
         list_add(vars->dynamic_variables_allocs, element);
   }
 
-  // TODO(villagesql-rebase): proposed upstream fix for mysql/mysql-server#721
-  // (SET SESSION on a component THD-local string var crashed). A THD-local
-  // MEMALLOC string initially inherits the global value, which is not
-  // necessarily allocated here (a component may provide a string literal as
-  // its default), so it must not be treated as a LIST allocation. Find an
-  // existing allocation in the THD's ownership list before removing it. Not
-  // yet merged upstream (trunk still has the old cast); drop once it lands.
-  if (*dest) {
-    for (LIST *element = vars->dynamic_variables_allocs; element;
-         element = element->next) {
-      if (static_cast<void *>(element + 1) == *dest) {
-        old_element = element;
-        break;
-      }
-    }
-  }
+  if (*dest) old_element = (LIST *)(*dest - sizeof(LIST));
 
   if (var)
     var->update(thd, var, (void **)dest, (const void *)&value);
