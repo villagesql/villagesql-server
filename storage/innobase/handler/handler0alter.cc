@@ -426,8 +426,10 @@ static UNIV_COLD void my_error_innodb(
       my_error(ER_TABLESPACE_EXISTS, MYF(0), table);
       break;
     case DB_VILLAGESQL_ERROR:
-      villagesql_error("%s", MYF(0),
-                       check_trx_exists(current_thd)->detailed_error);
+      villagesql_error(
+          "InnoDB: Custom type operation failed. See server"
+          " error log for details.",
+          MYF(0));
       break;
 #ifdef UNIV_DEBUG
     case DB_SUCCESS:
