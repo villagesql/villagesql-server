@@ -28,11 +28,11 @@
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
-#include "mysql/service_plugin_registry.h"
 #include "sql/persisted_variable.h"
 #include "sql/sql_plugin_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
+#include "villagesql/services/plugin_registry.h"
 #include "villagesql/services/sys_var_access.h"
 
 namespace villagesql::services {
@@ -198,8 +198,8 @@ static bool sys_var_set(const char *component_name, const char *name,
     if (!found) return true;
   }
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return true;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return true;
 
   bool result = true;
 
@@ -259,7 +259,6 @@ static bool sys_var_set(const char *component_name, const char *name,
     }
   }
 
-  mysql_plugin_registry_release(registry);
   return result;
 }
 
@@ -275,8 +274,8 @@ bool on_populate_sys_var(const PopulateContext &ctx,
   // always be available when an extension is installed, but can be absent
   // during early startup or late shutdown if the component infrastructure has
   // not yet initialised (or has already been torn down).
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
+  PluginRegistry registry;
+  if (!registry.is_valid()) {
     error_message = "on_populate_sys_var: failed to acquire registry";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
     return true;
@@ -288,7 +287,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
     error_message =
         "on_populate_sys_var: component_sys_variable_register unavailable";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
-    mysql_plugin_registry_release(registry);
     return true;
   }
 
@@ -455,7 +453,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
                                            name.c_str());
         }
       }
-      mysql_plugin_registry_release(registry);
       return true;
     }
 
@@ -464,7 +461,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
             extension_name.c_str());
   }
 
-  mysql_plugin_registry_release(registry);
   return false;
 }
 
@@ -532,8 +528,8 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
     }
   }
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return;
 
   my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
       "component_sys_variable_unregister", registry);
@@ -542,8 +538,6 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
       unreg_svc->unregister_variable(extension_name.c_str(), name.c_str());
     }
   }
-
-  mysql_plugin_registry_release(registry);
 }
 
 }  // namespace villagesql::services

@@ -22,7 +22,6 @@
 #include <string>
 #include <utility>
 
-#include "scope_guard.h"
 #include "sql/field.h"
 #include "sql/sql_base.h"
 #include "sql/table.h"
@@ -358,30 +357,14 @@ bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
   const ExtensionKey &lookup_key =
       old_key.str().empty() ? entry.key() : old_key;
 
-  // Build index scan on primary key (extension_name)
-  uchar key_buf[MAX_KEY_LENGTH];
-
-  // Set up the key for index scan
+  // Set up the key for the primary key (extension_name) lookup
   Field **field = table.field;
   field[0]->store(lookup_key.extension_name().c_str(),
                   lookup_key.extension_name().length(),
                   &my_charset_utf8mb4_bin);
 
-  // Copy the key for index read
-  key_copy(key_buf, table.record[0], table.key_info,
-           table.key_info->key_length);
-
-  // Find the row using index read
-  int error = table.file->ha_index_init(0, false);
-  if (error) {
-    LogVSQL(ERROR_LEVEL, "Failed to init index for update: error %d", error);
-    return true;
-  }
-
-  auto index_end_guard =
-      create_scope_guard([&table]() { table.file->ha_index_end(); });
-
-  error = read_row_for_update(table, key_buf);
+  RowLookup row(table, 0);
+  int error = row.read_for_update();
   if (should_assert_if_true(error)) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for update: error %d", error);
     return true;
@@ -416,30 +399,13 @@ bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
 
 bool TableTraits<ExtensionEntry>::delete_from_table(
     TABLE &table, const ExtensionEntry &entry) {
-  // Build index scan on primary key (extension_name)
-  uchar key_buf[MAX_KEY_LENGTH];
-
-  // Set up the key for index scan
+  // Set up the key for the primary key (extension_name) lookup
   Field **field = table.field;
   field[0]->store(entry.extension_name().c_str(),
                   entry.extension_name().length(), &my_charset_utf8mb4_bin);
 
-  // Copy the key for index read
-  key_copy(key_buf, table.record[0], table.key_info,
-           table.key_info->key_length);
-
-  // Find the row using index read
-  int error = table.file->ha_index_init(0, false);
-  if (error) {
-    LogVSQL(ERROR_LEVEL, "Failed to init index for delete: error %d", error);
-    return true;
-  }
-
-  auto index_end_guard =
-      create_scope_guard([&table]() { table.file->ha_index_end(); });
-
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  RowLookup row(table, 0);
+  int error = row.read();
   if (error) {
     if (error == HA_ERR_KEY_NOT_FOUND) {
       // Row doesn't exist - this is OK for delete

@@ -21,7 +21,6 @@
 #include <utility>
 #include <vector>
 
-#include "scope_guard.h"
 #include "sql/field.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
@@ -113,21 +112,8 @@ bool TableTraits<IndexEntry>::update_in_table(TABLE &table,
   field[3]->store(lookup_key.index_name().c_str(),
                   lookup_key.index_name().length(), &my_charset_utf8mb4_bin);
 
-  uchar key_buf[MAX_KEY_LENGTH];
-  key_copy(key_buf, table.record[0], &table.key_info[1],
-           table.key_info[1].key_length);
-
-  int error = table.file->ha_index_init(1, false);
-  if (error) {
-    LogVSQL(ERROR_LEVEL, "Failed to init index for index update: error %d",
-            error);
-    return true;
-  }
-
-  auto index_end_guard =
-      create_scope_guard([&table]() { table.file->ha_index_end(); });
-
-  error = read_row_for_update(table, key_buf);
+  RowLookup row(table, 1);
+  int error = row.read_for_update();
   if (error) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for index update: error %d",
             error);
@@ -173,22 +159,8 @@ bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
   field[3]->store(entry.index_name().c_str(), entry.index_name().length(),
                   &my_charset_utf8mb4_bin);
 
-  uchar key_buf[MAX_KEY_LENGTH];
-  key_copy(key_buf, table.record[0], &table.key_info[1],
-           table.key_info[1].key_length);
-
-  int error = table.file->ha_index_init(1, false);
-  if (error) {
-    LogVSQL(ERROR_LEVEL, "Failed to init index for index delete: error %d",
-            error);
-    return true;
-  }
-
-  auto index_end_guard =
-      create_scope_guard([&table]() { table.file->ha_index_end(); });
-
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  RowLookup row(table, 1);
+  int error = row.read();
   if (error) {
     if (error == HA_ERR_KEY_NOT_FOUND) {
       LogVSQL(WARNING_LEVEL, "Custom index row not found for delete: %s.%s.%s",
