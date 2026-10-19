@@ -1,6 +1,6 @@
-# Test that make_func catches a missing typed result wrapper at build time.
+# Test that make_func catches a missing typed result at build time.
 
 --let $extension_name = vdf_signature_missing_result
 --let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_signature_missing_result.cc
---let $build_failure_grep = make_func: C++ function must have one typed result wrapper
+--let $build_failure_grep = make_func: C++ function must have one typed result value
 --source include/villagesql/create_extension_sdk_expect_build_failure.inc

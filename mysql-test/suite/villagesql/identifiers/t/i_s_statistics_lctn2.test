@@ -1,0 +1,53 @@
+# At lower_case_table_names=2 statements are lowercased while the data
+# dictionary keeps the CREATE-time case, so the I_S.STATISTICS join against
+# villagesql.custom_indexes must be case-insensitive. This is the index-side
+# counterpart of i_s_columns_lctn2.test: without the case-insensitive join a
+# mixed-case table would fail to match and INDEX_TYPE would fall back to BTREE.
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+--source include/have_case_insensitive_file_system.inc
+--source include/have_lowercase2.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE DATABASE MixedDb;
+USE MixedDb;
+
+CREATE TABLE MixedTab (
+  id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b dummy_type_vector,
+  INDEX MixedIdx (a) USING EXTENDED(dummy_index_hnsw)
+);
+
+--echo # --- Stored rows: db and table names lowercased, index name as entered ---
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- I_S.STATISTICS resolves the custom type across the case difference ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME;
+
+--echo # --- SHOW INDEX: same view definition ---
+--replace_column 7 # 8 # 9 # 10 #
+SHOW INDEX FROM MixedTab;
+
+--echo # --- Index added by a statement spelled in a different case ---
+ALTER TABLE mixedtab ADD INDEX MixedIdx2 (b) USING EXTENDED(dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+--replace_column 7 # 8 # 9 # 10 #
+SHOW INDEX FROM MixedTab;
+
+--echo # --- Cleanup ---
+DROP DATABASE MixedDb;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

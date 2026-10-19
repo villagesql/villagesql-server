@@ -20,14 +20,9 @@
 // compatibility and will be removed before Beta. Use the C++ API in
 // <villagesql/vsql.h> instead.
 
-// =============================================================================
-// Extension Builder - Registration via Fluent Builder API
-// =============================================================================
-//
 // This file provides the ExtensionBuilder for registering functions and types.
-// For the main extension authoring header with full documentation, see
-// extension.h instead.
-//
+// For the current extension-authoring API and documentation, see
+// <villagesql/vsql.h> instead.
 
 #include <string_view>
 #include <tuple>

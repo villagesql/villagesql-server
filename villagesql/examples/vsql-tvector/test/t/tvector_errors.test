@@ -41,6 +41,9 @@ CREATE TABLE t_err (v TVECTOR(''));
 #
 # Test: String params - missing '=' sign
 #
+# The token names a parameter but supplies no value, so it is rejected as a
+# valueless parameter before TVECTOR's resolve_params is consulted.
+#
 ########################################################################
 
 --error ER_PARSE_ERROR

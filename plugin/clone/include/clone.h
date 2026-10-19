@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,11 +41,13 @@ Clone Plugin: Common objects and interfaces
 #include "mysql/components/services/backup_lock_service.h"
 #include "mysql/components/services/clone_protocol_service.h"
 #include "mysql/components/services/log_builtins.h"
+#include "villagesql/services/vsql_clone_protocol_service.h"
 #include "violite.h"
 
 extern SERVICE_TYPE(registry) * mysql_service_registry;
 extern SERVICE_TYPE(mysql_backup_lock) * mysql_service_mysql_backup_lock;
 extern SERVICE_TYPE(clone_protocol) * mysql_service_clone_protocol;
+extern SERVICE_TYPE(vsql_clone_protocol) * mysql_service_vsql_clone_protocol;
 extern SERVICE_TYPE(log_builtins) * log_bi;
 extern SERVICE_TYPE(log_builtins_string) * log_bs;
 
@@ -185,6 +188,23 @@ typedef enum Type_Command_Response : uchar {
 
   /** Additional configuration : introduced in version 0x0102 */
   COM_RES_CONFIG_V3,
+
+  // TODO(villagesql-rebase): VillageSQL response types use explicit values in a
+  // range well above upstream's, to reduce the chance of colliding with new
+  // upstream COM_RES_* values on a rebase. As of the 8.4 base upstream assigns
+  // these sequentially from 1 (highest is COM_RES_CONFIG_V4 = 9) with sentinels
+  // COM_RES_COMPLETE = 99 / COM_RES_ERROR = 100; 50 leaves a wide gap under 99.
+  // This is a heuristic, not a guarantee against future collisions. The
+  // assigned value must remain stable once released; adjusting it would break
+  // the protocol. If upstream later claims this value, use the negotiated
+  // VillageSQL protocol version (which tells us the peer speaks VillageSQL) to
+  // translate the response type on both client and server sides via a
+  // translation table. Keep new VillageSQL response types here.
+  /** VillageSQL extension payload (opaque; produced/validated by
+  villagesql/veb). Sent when the negotiated VillageSQL clone version supports it
+  (see villagesql/clone/vsql_clone_protocol.h); independent of the upstream
+  protocol version. */
+  COM_RES_EXTENSION = 50,
 
   /** End of response data */
   COM_RES_COMPLETE = 99,

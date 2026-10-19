@@ -15,7 +15,7 @@ ss int,
 );
 SHOW FIELDS FROM builtin_with_complex;
 Field	Type	Null	Key	Default	Extra
-ss	vsql_complex.COMPLEX	YES		NULL	
+ss	int	YES		NULL	
 ß	vsql_complex.COMPLEX	YES		NULL	
 DROP TABLE builtin_with_complex;
 CREATE TABLE complex_with_builtin (
@@ -25,6 +25,24 @@ ss int
 SHOW FIELDS FROM complex_with_builtin;
 Field	Type	Null	Key	Default	Extra
 ß	vsql_complex.COMPLEX	YES		NULL	
-ss	vsql_complex.COMPLEX	YES		NULL	
+ss	int	YES		NULL	
 DROP TABLE complex_with_builtin;
+CREATE TABLE custom_type_columns (
+ß COMPLEX,
+ss COMPLEX
+);
+SHOW FIELDS FROM custom_type_columns;
+Field	Type	Null	Key	Default	Extra
+ß	vsql_complex.COMPLEX	YES		NULL	
+ss	vsql_complex.COMPLEX	YES		NULL	
+DROP TABLE custom_type_columns;
+CREATE TABLE custom_type_columns_alter (
+ss COMPLEX
+);
+ALTER TABLE custom_type_columns_alter ADD COLUMN (ß COMPLEX);
+SHOW FIELDS FROM custom_type_columns_alter;
+Field	Type	Null	Key	Default	Extra
+ss	vsql_complex.COMPLEX	YES		NULL	
+ß	vsql_complex.COMPLEX	YES		NULL	
+DROP TABLE custom_type_columns_alter;
 DROP DATABASE test_collation;

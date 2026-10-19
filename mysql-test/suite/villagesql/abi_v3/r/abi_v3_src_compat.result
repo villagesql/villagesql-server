@@ -37,7 +37,7 @@ NULL
 # Doubles the input value
 SELECT abi_v3_test.real_double(1.5) AS result;
 result
-3.0
+3
 # NULL input -> NULL output (RealResult::set_null)
 SELECT abi_v3_test.real_double(NULL) AS result;
 result

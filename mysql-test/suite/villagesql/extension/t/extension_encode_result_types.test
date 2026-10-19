@@ -1,0 +1,175 @@
+# Regression test for #1338: an encode VDF's non-VALUE results were collapsed
+# into one undifferentiated failure, and its message was lost.
+#
+# Uses the vsql_test_only FAULT_BLOB type, whose encode is steered by a
+# sentinel in the input string:
+#
+#   "ENCODE_NULL"  - encode calls out.set_null()
+#   "ENCODE_WARN"  - encode calls out.warning("fault_blob: encode warning ...")
+#   "ENCODE_ERROR" - encode calls out.error("fault_blob: encode error ...")
+#
+# set_null() stores SQL NULL. error() aborts the statement carrying the
+# extension's own message. warning() is still treated as a bad value, because
+# the SDK pre-sets that result before calling a from_string and so a
+# deliberate out.warning() cannot be told apart from an extension that
+# early-returned on a parse failure.
+#
+# Before the fix all three gave ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) in
+# strict mode and a message-less warning under INSERT IGNORE, never NULL.
+#
+# The later half of the test runs the same sentinels through each caller that
+# reaches an encode, since they do not all take the same route into it.
+
+INSTALL EXTENSION vsql_test_only;
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB
+);
+
+# The session is strict by default; the non-strict half is exercised below.
+SELECT @@session.sql_mode LIKE '%STRICT_TRANS_TABLES%' AS is_strict;
+
+# The column is nullable, so set_null() stores SQL NULL rather than failing.
+INSERT INTO t1 VALUES (1, 'ENCODE_NULL');
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1 VALUES (2, 'ENCODE_WARN');
+SHOW WARNINGS;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t1 VALUES (3, 'ENCODE_ERROR');
+SHOW WARNINGS;
+
+# Under IGNORE a bad value warns instead of failing the statement, but an
+# encode error still aborts: it is the extension's way of saying that
+# continuing is unsafe, and the scalar VDF path does not consult IGNORE either.
+INSERT IGNORE INTO t1 VALUES (4, 'ENCODE_NULL');
+SHOW WARNINGS;
+INSERT IGNORE INTO t1 VALUES (5, 'ENCODE_WARN');
+SHOW WARNINGS;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT IGNORE INTO t1 VALUES (6, 'ENCODE_ERROR');
+SHOW WARNINGS;
+
+SELECT id, val, val IS NULL AS is_null FROM t1 ORDER BY id;
+
+# Only the bad-value case depends on strictness.
+SET @@session.sql_mode = '';
+INSERT INTO t1 VALUES (7, 'ENCODE_NULL');
+SHOW WARNINGS;
+INSERT INTO t1 VALUES (8, 'ENCODE_WARN');
+SHOW WARNINGS;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t1 VALUES (9, 'ENCODE_ERROR');
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id >= 7 ORDER BY id;
+SET @@session.sql_mode = DEFAULT;
+
+# UPDATE reaches the encode through a different caller.
+INSERT INTO t1 VALUES (10, 'OK ten');
+UPDATE t1 SET val = 'ENCODE_NULL' WHERE id = 10;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 10;
+
+# A NOT NULL column rejects set_null() as it would an explicit NULL.
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB NOT NULL
+);
+--error ER_BAD_NULL_ERROR
+INSERT INTO t2 VALUES (1, 'ENCODE_NULL');
+SELECT COUNT(*) AS rows_in_t2 FROM t2;
+
+# Under IGNORE the statement is not aborted and the column takes the type's
+# intrinsic default, which FAULT_BLOB declares as a recognizable value so it
+# cannot be confused with a stored empty string.
+INSERT IGNORE INTO t2 VALUES (2, 'ENCODE_NULL');
+SHOW WARNINGS;
+INSERT INTO t2 VALUES (3, 'OK three');
+UPDATE IGNORE t2 SET val = 'ENCODE_NULL' WHERE id = 3;
+SHOW WARNINGS;
+
+# Non-strict mode alone does not downgrade it: a single-row INSERT of NULL
+# into a NOT NULL column is ER_BAD_NULL_ERROR in every mode, as it is for a
+# built-in type.
+SET @@session.sql_mode = '';
+--error ER_BAD_NULL_ERROR
+INSERT INTO t2 VALUES (4, 'ENCODE_NULL');
+SET @@session.sql_mode = DEFAULT;
+
+# A multi-row insert where one row encodes to NULL. A NULL into a NOT NULL
+# column is downgraded to a warning once the statement inserts more than one
+# row, so the column takes the intrinsic default and the statement completes.
+SET @@session.sql_mode = '';
+INSERT INTO t2 VALUES (5, 'OK five'), (6, 'ENCODE_NULL');
+SHOW WARNINGS;
+SET @@session.sql_mode = DEFAULT;
+
+# The same multi-row insert in strict mode fails instead.
+--error ER_BAD_NULL_ERROR
+INSERT INTO t2 VALUES (7, 'OK seven'), (8, 'ENCODE_NULL');
+
+SELECT id, val, val IS NULL AS is_null FROM t2 ORDER BY id;
+
+# A user variable is read at execution, not folded into a literal, so it
+# reaches the encode through Item::save_in_field_inner rather than the
+# Item_string caller the plain literals above use.
+SET @v = 'ENCODE_NULL';
+INSERT INTO t1 VALUES (20, @v);
+SET @v = 'ENCODE_ERROR';
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t1 VALUES (21, @v);
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 20;
+
+# A prepared statement parameter reaches the encode through Item_param.
+PREPARE ps FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 22, @v = 'ENCODE_NULL';
+EXECUTE ps USING @id, @v;
+SET @id = 23, @v = 'ENCODE_ERROR';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE ps USING @id, @v;
+DEALLOCATE PREPARE ps;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 22;
+
+# INSERT ... SELECT copies field to field, reaching the encode through yet
+# another caller, with one good row alongside the bad one.
+CREATE TABLE src (id INT, s VARCHAR(32));
+INSERT INTO src VALUES (24, 'ENCODE_NULL'), (25, 'OK twentyfive');
+INSERT INTO t1 SELECT id, s FROM src;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (24, 25) ORDER BY id;
+
+# error() on the same path aborts the statement, writing neither row.
+UPDATE src SET s = 'ENCODE_ERROR' WHERE id = 24;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t1 SELECT id + 100, s FROM src;
+SELECT COUNT(*) AS rows_from_failed_select FROM t1 WHERE id > 100;
+DROP TABLE src;
+
+# A multi-row insert where only one row encodes to NULL.
+INSERT INTO t1 VALUES (26, 'OK twentysix'), (27, 'ENCODE_NULL');
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (26, 27) ORDER BY id;
+
+# A column DEFAULT is encoded when the row omits the column.
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB DEFAULT 'ENCODE_NULL'
+);
+INSERT INTO t3 (id) VALUES (1);
+SELECT id, val IS NULL AS is_null FROM t3;
+DROP TABLE t3;
+
+# The same DEFAULT on a NOT NULL column is rejected at CREATE TABLE: storing
+# the default passes no_conversions, so the encode's SQL NULL cannot fall back
+# to the intrinsic default and the column has no valid default to record.
+--error ER_INVALID_DEFAULT
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB NOT NULL DEFAULT 'ENCODE_NULL'
+);
+
+DROP TABLE t1;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;

@@ -16,29 +16,29 @@
 
 #include "villagesql/schema/descriptor/func_descriptor.h"
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 namespace villagesql {
 
 FuncKeyPrefix::FuncKeyPrefix(std::string function_name)
     : function_name_(std::move(function_name)),
-      normalized_prefix_(normalize_extension_name(function_name_) + ".") {}
+      normalized_prefix_(canonical_extension_name(function_name_) + ".") {}
 
 FuncKeyPrefix::FuncKeyPrefix(std::string function_name,
                              std::string extension_name)
     : function_name_(std::move(function_name)),
       extension_name_(std::move(extension_name)),
       normalized_prefix_(
-          normalize_extension_name(function_name_) + "." +
+          canonical_extension_name(function_name_) + "." +
           (extension_name_.empty()
                ? ""
-               : normalize_extension_name(extension_name_) + ".")) {}
+               : canonical_extension_name(extension_name_) + ".")) {}
 
 FuncKey::FuncKey(std::string function_name, std::string extension_name)
     : function_name_(std::move(function_name)),
       extension_name_(std::move(extension_name)),
-      normalized_key_(normalize_extension_name(function_name_) + "." +
-                      normalize_extension_name(extension_name_)) {}
+      normalized_key_(canonical_extension_name(function_name_) + "." +
+                      canonical_extension_name(extension_name_)) {}
 
 FuncDescriptor::FuncDescriptor(FuncKey key, std::string extension_version,
                                const vef_func_desc_t *func_desc,

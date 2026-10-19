@@ -472,7 +472,8 @@ inline Error Segment::create(Space::Ref space, uint8_t num_segments,
 }
 
 inline Segment::Ref Segment::get_header(Page &root_page, size_t seg_no) {
-  assert(root_page.is_loaded(Page::Latch::EXCLUSIVE));
+  assert(root_page.is_loaded(Page::Latch::EXCLUSIVE) ||
+         root_page.is_loaded(Page::Latch::SHARED_EXCLUSIVE));
   if (!root_page.is_loaded()) return nullptr;
 
   uint8_t num_segments = root_page.read_num_segments();

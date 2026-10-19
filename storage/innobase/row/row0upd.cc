@@ -80,6 +80,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "dict0dd.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
+#include "villagesql/services/capability_registry.h"
 #endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_HOTBACKUP
@@ -487,7 +489,19 @@ void row_upd_rec_in_place(
 
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(!index->table->skip_alter_undo);
-  ut_d(update->validate_for_index(index));
+
+#ifdef UNIV_DEBUG
+  /* For compact-format rows, and for versioned ROW_FORMAT=REDUNDANT rows,
+  index metadata is still needed to interpret field layout correctly.
+  For ROW_FORMAT=REDUNDANT rows without versioning, the record itself
+  contains enough information to interpret the layout, so the in-place
+  update code below does not need `index` to be fully shaped like `update`.
+  In recovery this corresponds to the dummy-index case with n_def == 0, so
+  skip validate_for_index() only there. */
+  if (index->n_def || rec_offs_comp(offsets) || rec_old_is_versioned(rec)) {
+    ut_d(update->validate_for_index(index));
+  }
+#endif /* UNIV_DEBUG */
 
   if (rec_offs_comp(offsets)) {
     /* Keep the INSTANT/VERSION bit of prepared physical record */
@@ -3104,6 +3118,40 @@ func_exit:
   ut_ad(lock_trx_has_rec_x_lock(thr, index->table, pcur->get_block(),
                                 page_rec_get_heap_no(rec)));
 
+  // VillageSQL: reject custom-index DML the server cannot yet service, before
+  // the clustered record is modified below so there is nothing to undo: an
+  // UPDATE that changes an index ordering field, and a DELETE against a
+  // REF_LOOKUP index. A REF_LOOKUP index identifies entries by an opaque
+  // key_ref the server does not yet persist, so on delete it cannot tell the
+  // extension which entry to drop. A payload-only UPDATE
+  // (UPD_NODE_NO_ORD_CHANGE) and a DELETE against a non-REF_LOOKUP index are
+  // left to proceed.
+  // TODO(villagesql-indexing): support key_ref persistence (enables REF_LOOKUP
+  // DELETE), and ord-change UPDATE.
+  if (vsql_allow_preview_extensions &&
+      (node->is_delete || !(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE))) {
+    for (const dict_index_t *sec = index->next(); sec != nullptr;
+         sec = sec->next()) {
+      if (villagesql::innodb::Custom_index::is_custom(sec)) {
+        if (node->is_delete && !(sec->custom_index->interface().storage_props &
+                                 VEF_INDEX_STORAGE_REF_LOOKUP)) {
+          continue;
+        }
+        // Reason is set on the trx (not logged) so the client sees it via the
+        // DB_VILLAGESQL_ERROR mapping in convert_error_code_to_mysql.
+        trx_set_detailed_error(
+            trx, node->is_delete
+                     ? "DELETE on a table with a custom index (USING EXTENDED)"
+                       " is not supported yet."
+                     : "UPDATE that changes an indexed column on a table with a"
+                       " custom index (USING EXTENDED) is not supported yet.");
+        mtr_commit(&mtr);
+        err = DB_VILLAGESQL_ERROR;
+        goto exit_func;
+      }
+    }
+  }
+
   /* NOTE: the following function calls will also commit mtr */
 
   if (node->is_delete) {
@@ -3242,7 +3290,10 @@ static dberr_t row_upd(upd_node_t *node, /*!< in: row update node */
       break;
     }
 
-    if (node->index->type != DICT_FTS) {
+    // VillageSQL: a custom index does its own maintenance in the extension;
+    // exclude it from generic secondary-index maintenance, as for DICT_FTS.
+    if (node->index->type != DICT_FTS &&
+        !villagesql::innodb::Custom_index::is_custom(node->index)) {
       err = row_upd_sec_step(node, thr);
 
       if (err != DB_SUCCESS) {

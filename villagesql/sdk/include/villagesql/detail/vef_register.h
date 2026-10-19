@@ -51,6 +51,14 @@ struct has_max_result_length<
     T, std::void_t<decltype(std::declval<const T &>().max_result_length())>>
     : std::true_type {};
 
+// Same idiom for bind(): only the typed builder can declare a
+// bind_and_check_types hook, so the legacy builder is not asked for one.
+template <typename T, typename = void>
+struct has_bind : std::false_type {};
+template <typename T>
+struct has_bind<T, std::void_t<decltype(std::declval<const T &>().bind())>>
+    : std::true_type {};
+
 template <typename FuncData, size_t Index>
 __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     const FuncData &func_data) {
@@ -85,6 +93,11 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   desc.deterministic = func_data.deterministic();
   desc.clear = func_data.clear();
   desc.accumulate = func_data.accumulate();
+  if constexpr (has_bind<FuncData>::value) {
+    desc.bind_and_check_types = func_data.bind();
+  } else {
+    desc.bind_and_check_types = nullptr;
+  }
 
   return &desc;
 }
@@ -424,15 +437,22 @@ vef_registration_t *vef_register_impl(
   reg.required_capabilities =
       RequiredCapabilityCount > 0 ? required_capability_reqs : nullptr;
 
-  // Run the extension-side init callback now that the extension has passed all
-  // validation and is being accepted. Placed here (not at function entry) so it
-  // never runs for a rejected extension. It runs in the extension process with
-  // no server access — see ExtensionBuilder::on_init(). Guarded by has_init_fn
-  // so builders that predate these hooks still compile.
+  // Hand the extension-side init / deinit callbacks to the server rather than
+  // running them here. The server calls on_init once every required capability
+  // is populated, and on_deinit before it depopulates them, so both see live
+  // capabilities and registered system variables — none of which exist yet at
+  // this point. Guarded by has_init_fn so builders that predate these hooks
+  // still compile.
   if constexpr (has_init_fn<Ext>::value) {
-    if constexpr (Ext::kInitFn != nullptr) {
-      Ext::kInitFn();
-    }
+    // The hooks are registered as a pair. A lone on_deinit tears down setup
+    // that never happened, and a lone on_init is usually a forgotten teardown;
+    // an extension that genuinely needs no teardown can register an empty
+    // on_deinit and say so.
+    static_assert((Ext::kInitFn == nullptr) == (Ext::kDeinitFn == nullptr),
+                  "on_init() and on_deinit() must be registered together; "
+                  "register the missing one, empty if it has no work to do");
+    reg.on_init = Ext::kInitFn;
+    reg.on_deinit = Ext::kDeinitFn;
   }
 
   initialized = true;

@@ -27,6 +27,7 @@
 #include <string>
 #include <utility>
 
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/types/storage.h"
@@ -53,17 +54,17 @@ struct TypeDescriptorKeyPrefix {
   // Query by type name only
   explicit TypeDescriptorKeyPrefix(std::string type_name)
       : type_name_(std::move(type_name)),
-        normalized_prefix_(normalize_type_name(type_name_) + ".") {}
+        normalized_prefix_(canonical_type_name(type_name_) + ".") {}
 
   // Query by type name + optional extension name
   TypeDescriptorKeyPrefix(std::string type_name, std::string extension_name)
       : type_name_(std::move(type_name)),
         extension_name_(std::move(extension_name)),
         normalized_prefix_(
-            normalize_type_name(type_name_) + "." +
+            canonical_type_name(type_name_) + "." +
             (extension_name_.empty()
                  ? ""
-                 : normalize_extension_name(extension_name_) + ".")) {}
+                 : canonical_extension_name(extension_name_) + ".")) {}
 
   const std::string &str() const { return normalized_prefix_; }
 
@@ -85,6 +86,17 @@ struct TypeDescriptorKeyPrefix {
 // Format: "normalized_type_name.normalized_extension_name.normalized_version"
 // Stores original component values for display, plus normalized key for
 // lookups.
+// Components are joined with '.' and are not escaped, so distinct component
+// tuples can produce the same key. The version is last here, but TypeContextKey
+// appends parameters after it, which makes it an interior component there.
+//
+// TODO(villagesql-production): build these keys with join_key_components(),
+// which escapes '.' and '\' inside each component, the way ColumnKey, IndexKey
+// and SpParamKey already do (see "Fix dotted identifier collisions"). The same
+// applies to IndexTypeDescriptorKey, IndexProfileDescriptorKey, FuncKey,
+// ExtensionDescriptorKey, TypeContextKey and IndexContextKey. These keys are
+// in-memory victionary keys and are not persisted, so the format can change
+// without an upgrade path.
 struct TypeDescriptorKey {
  public:
   TypeDescriptorKey() = default;

@@ -1,0 +1,148 @@
+# Which KNN query shapes are served by the custom index, and which fall back to a
+# plain scan + sort. In every case the rows returned must be correct; the plan
+# (a custom index distance scan vs. a Sort) is what varies.
+#
+# Routes to the index: a single ASC "ORDER BY <distance>(v, const) LIMIT k",
+# with the field and the constant in either argument order.
+# Falls back to scan + sort: DESC ordering, no LIMIT, and a distance between two
+# columns (not a column vs. a constant).
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo #
+--echo # === Shapes that route to the index ===
+--echo #
+
+--echo # 1. field first, constant second: routes.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # 2. constant first, field second (swapped args): also routes.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance('[1,0,0,0]', v) LIMIT 3;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance('[1,0,0,0]', v) LIMIT 3;
+
+--echo # 3. LIMIT larger than the table: routes, returns every row in order.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 100;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 100;
+
+--echo #
+--echo # === Shapes that fall back to a plain scan + sort ===
+--echo #
+
+--echo # 4. DESC ordering (farthest first): the index serves nearest-first only,
+--echo # so this falls back. Rows must still be correctly ordered farthest-first.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 3;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 3;
+
+--echo # 5. No LIMIT: falls back; all rows returned nearest-first.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]');
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]');
+
+--echo # 6. Distance between two columns, but one side is pinned to a single row
+--echo # by WHERE a.id = 1: the optimizer folds a.v to a constant, so this becomes
+--echo # a genuine "column vs constant" KNN over b and DOES route to the index.
+--echo # The nearest b rows to a.v ([1,0,0,0]) come back.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT a.id AS aid, b.id AS bid
+FROM t a, t b
+WHERE a.id = 1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
+SELECT a.id AS aid, b.id AS bid
+FROM t a, t b
+WHERE a.id = 1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
+
+--echo # 7. WHERE predicate alongside ORDER BY distance: the KNN ordering still
+--echo # routes; the predicate selects a subset of the ordered rows.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+WHERE id > 2
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t
+WHERE id > 2
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # 8. LIMIT with OFFSET: skips the nearest OFFSET rows, returns the next.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 OFFSET 2;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 OFFSET 2;
+
+--echo # 9. Distance between two columns with NEITHER side constant-foldable (a
+--echo # self-join over all rows): not a column-vs-constant KNN, so it does NOT
+--echo # route and falls back to a plain sort over the pairwise distances.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT a.id AS aid, b.id AS bid
+FROM t a JOIN t b ON a.id < b.id
+ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
+--sorted_result
+SELECT a.id AS aid, b.id AS bid
+FROM t a JOIN t b ON a.id < b.id
+ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
+
+--echo #
+--echo # === Differential check: an unindexed column gives the same answer ===
+--echo #
+
+CREATE TABLE t_noidx (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+INSERT INTO t_noidx SELECT id, v FROM t;
+
+--echo # No index: the same KNN query is served by a plain scan + sort and must
+--echo # return the identical rows as the indexed table (shape 1 above).
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t_noidx
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t_noidx
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+DROP TABLE t_noidx;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

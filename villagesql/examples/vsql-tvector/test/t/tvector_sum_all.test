@@ -1,0 +1,260 @@
+# tvector_sum_all: (TVECTOR or number ...) -> REAL
+#
+# Hook has to decide, argument by argument, what it is looking at.
+# Four outcomes:
+#
+#   a TVECTOR with params       typed by the server from a column, and its
+#                               parameters came with it
+#   INT or REAL                 typed by the server from the Item
+#   a string constant           nothing typed it, and a varargs call has no
+#                               signature to take a type from, so the hook
+#                               names TVECTOR itself
+#   a TVECTOR without params    refused: the parameters are a per-row fact,
+#                               so there is nothing truthful to declare
+#
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
+CREATE TABLE v2 (id INT PRIMARY KEY, v TVECTOR(2));
+CREATE TABLE d2 (id INT PRIMARY KEY, v TVECTOR('dimension=2,type=double'));
+INSERT INTO v3 VALUES (1, '[1,2,3]');
+INSERT INTO v2 VALUES (1, '[10,20]');
+INSERT INTO d2 VALUES (1, '[100,200]');
+
+########################################################################
+#
+# 1. Each kind on its own.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_sum_all(v) AS vector_only FROM v3;
+SELECT vsql_tvector.tvector_sum_all(7) AS int_only;
+SELECT vsql_tvector.tvector_sum_all(2.5e0) AS real_only;
+SELECT vsql_tvector.tvector_sum_all('[4,5]') AS literal_only;
+
+--echo # 2.5e0 above is a REAL, but a bare 2.5 is a DECIMAL, and the server has
+--echo # no VEF type for decimals: an extension is handed one as a string. So
+--echo # the hook sees a string that is not a vector literal and refuses it.
+--echo # Writing 2.5e0, or CAST(2.5 AS DOUBLE), makes it a REAL.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(2.5) AS decimal_literal;
+SELECT vsql_tvector.tvector_sum_all(CAST(2.5 AS DOUBLE)) AS decimal_cast;
+
+########################################################################
+#
+# 2. Mixed. A plain number stays a number and a literal becomes a vector,
+#    in the same call.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_sum_all(v, 100) AS vector_and_int FROM v3;
+SELECT vsql_tvector.tvector_sum_all(v, '[4,5]') AS vector_and_literal FROM v3;
+SELECT vsql_tvector.tvector_sum_all(7, '[4,5]') AS int_and_literal;
+
+--echo # All three kinds at once: 1+2+3, then 100, then 4+5, then 0.5
+SELECT vsql_tvector.tvector_sum_all(v, 100, '[4,5]', 0.5e0) AS all_three FROM v3;
+
+########################################################################
+#
+# 3. Position independence. The same arguments in different orders must give
+#    the same answer: a hook that mishandled an index would produce a
+#    plausible number rather than an error, so only this catches it.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_sum_all(v, 100, '[4,5]') AS order_a FROM v3;
+SELECT vsql_tvector.tvector_sum_all('[4,5]', v, 100) AS order_b FROM v3;
+SELECT vsql_tvector.tvector_sum_all(100, '[4,5]', v) AS order_c FROM v3;
+
+########################################################################
+#
+# 4. Element widths stay per-argument: each vector is decoded at its own
+#    width, and a bare literal falls back to float.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_sum_all(a.v, b.v, c.v) AS float_and_double
+FROM v3 a, v2 b, d2 c;
+
+SELECT vsql_tvector.tvector_sum_all(c.v, '[1,2]', 1) AS double_literal_int
+FROM d2 c;
+
+--echo # A lone literal has nothing to inherit an element width from, so it is
+--echo # read as float, the same width tvector_from_string infers.
+SELECT vsql_tvector.tvector_sum_all('[1.5,2.5]') AS lone_literal;
+
+--echo # The return really is a REAL, not a custom type: it takes part in
+--echo # ordinary arithmetic and comparison.
+SELECT vsql_tvector.tvector_sum_all(v) / 2 AS halved FROM v3;
+SELECT vsql_tvector.tvector_sum_all(v) > 5 AS gt_five FROM v3;
+
+########################################################################
+#
+# 5. Every route by which a typed argument can arrive, in one call.
+#
+#      1  concat()           nested call; its own hook computed the params
+#      2  '[4,5]'            string literal; nothing typed it, so this hook does
+#      3  a.v                column; the server typed it
+#      4  from_string('..')  nested call; params inferred from its constant
+#      5  100                plain number; left alone
+#
+#    Only the second is this hook's work. The rest were settled by the time it
+#    ran, which is the point: a hook that re-typed them would be wrong, and one
+#    that mixed up an index would produce a number rather than an error.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_sum_all(
+         vsql_tvector.tvector_concat(a.v, b.v),
+         '[4,5]',
+         a.v,
+         vsql_tvector.TVECTOR::from_string('[7,8]'),
+         100) AS every_route
+FROM v3 a, v2 b;
+
+########################################################################
+#
+# 6. A TVECTOR with unknown type parameters.
+#
+#    TVECTOR::from_string() of a column produces one: the type is settled,
+#    but the parameters come from the text in each row, so there is no
+#    resolution-time answer for the hook to give. It refuses rather than
+#    declare a dimension that would be false for most rows.
+#
+########################################################################
+
+CREATE TABLE s (id INT PRIMARY KEY, t VARCHAR(64));
+INSERT INTO s VALUES (1,'[1,2,3]'),(2,'[10,20]'),(3,'[5]');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id, vsql_tvector.tvector_sum_all(vsql_tvector.TVECTOR::from_string(t))
+       AS unknown_params
+FROM s ORDER BY id;
+
+DROP TABLE s;
+
+########################################################################
+#
+# 7. NULL propagates, whichever kind of argument carries it.
+#
+########################################################################
+
+INSERT INTO v3 VALUES (2, NULL);
+SELECT id, vsql_tvector.tvector_sum_all(v, 1) AS s FROM v3 ORDER BY id;
+
+--echo # A NULL *literal* is refused, though, and the hook has no way to allow
+--echo # it: a hook is shown types, not values, so the literal NULL and a
+--echo # non-constant string look identical to it, both being a string with no
+--echo # constant value. The NULL column above is a different thing: it carries a
+--echo # TypeContext, so it is a TVECTOR that happens to be NULL this row.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(v, NULL) AS null_literal FROM v3 WHERE id = 1;
+
+########################################################################
+#
+# 8. What the hook refuses.
+#
+########################################################################
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all() AS none;
+
+--echo # A string that is not a vector literal.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(v, 'nope') AS c FROM v3;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(v, '[]') AS c FROM v3;
+
+--echo # Too many elements. The hook counts them.
+--let $max = 4096
+--let $at_limit = `SELECT CONCAT('[', REPEAT('1,', $max - 1), '1]')`
+--let $over_limit = `SELECT CONCAT('[', REPEAT('1,', $max), '1]')`
+
+--echo # At the limit: 4096 elements, each 1.
+--disable_query_log
+eval SELECT vsql_tvector.tvector_sum_all('$at_limit') AS at_limit;
+--enable_query_log
+
+--echo # One over: refused, naming the argument and the limit.
+--disable_query_log
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval SELECT vsql_tvector.tvector_sum_all('$over_limit') AS over_limit;
+--enable_query_log
+
+--echo # A constant expression is not the same as a literal.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(v, CONCAT('[1,', '2]')) AS c FROM v3;
+
+SELECT vsql_tvector.tvector_sum_all(v, id) AS with_int_column FROM v3 WHERE id = 1;
+
+--echo # Malformed literals. The hook parses each element while counting them,
+--echo # so all of these are refused at resolution time, before any row is read
+--echo # and whatever else the call contains.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[x,2,4]') AS bad_first;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[1,x,4]') AS bad_middle;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[1,,2]') AS empty_element;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[1,2') AS unterminated;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[1,2]x') AS trailing_junk;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[ ]') AS whitespace_only;
+
+--echo # Quoted elements, as someone used to JSON might write.
+--echo # sees ['x',2] and ["x",2].
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[''x'',2]') AS single_quoted_element;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('["x",2]') AS double_quoted_element;
+
+--echo # Quoting a number does not help either: it is the quote that stops the
+--echo # parse, not the thing inside it.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[''1'',2]') AS quoted_number;
+
+--echo # A bad literal is refused even when a perfectly good column sits beside
+--echo # it, since the hook has to settle every argument before any of them.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(v, '[x,2,4]') AS bad_with_column FROM v3;
+
+--echo # Values the vector cannot hold. These are well-formed literals, so the
+--echo # message says what is wrong with the value rather than calling the
+--echo # whole thing unparseable. The width matters: these are refused here
+--echo # because a literal in this function is read as float.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[1e400]') AS beyond_double;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[1e300]') AS beyond_float;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[-1e300]') AS beyond_float_negative;
+
+--echo # strtod and strtof accept these spellings, so without the check a
+--echo # single one of them would quietly poison every sum it took part in.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[nan,1]') AS not_a_number;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all('[inf]') AS infinity;
+
+--echo # Underflow is not an error. An element too small for a float becomes
+--echo # zero, which is ordinary floating point rather than a value the vector
+--echo # cannot hold.
+SELECT vsql_tvector.tvector_sum_all('[1e-50,1]') AS underflow;
+
+DROP TABLE v3;
+DROP TABLE v2;
+DROP TABLE d2;
+UNINSTALL EXTENSION vsql_tvector;

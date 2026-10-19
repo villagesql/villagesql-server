@@ -134,9 +134,9 @@ jobs:
       UPLOAD_SDK: ${{ inputs.upload_sdk && '1' || '0' }}
       # SPOOKY ACTION AT A DISTANCE: Resolve the release/-dev decision once, at
       # job scope, so every step sees the same value. Scripts that re-derive the
-      # version from VSQL_VERSION (get_sdk.sh, package_dev_server.sh) key off
-      # this env var; leave it unset and they fall back to VSQL_VERSION file's
-      # 'dev' suffix regardless of release_build.
+      # version from VSQL_VERSION key off this env var; leave it unset and they
+      # fall back to VSQL_VERSION file's 'dev' suffix regardless of
+      # release_build.
       VSQL_PRE_RELEASE_VERSION: ${{ !inputs.release_build && 'dev' || '' }}
 
     steps:
@@ -189,17 +189,16 @@ jobs:
         if: env.BUILD_BUNDLED_EXTENSIONS == '1' && inputs.os == 'macos'
         run: source/scripts/setup_macos_ext_deps.sh
 
-      - name: Build the dev server
+      - name: Clear previous build outputs
         run: |
-          EXTRA_FLAGS="-DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp/boost -DVSQL_PRE_RELEASE_VERSION=${VSQL_PRE_RELEASE_VERSION}"
-          if [ "${{ inputs.os }}" = "macos" ]; then
-            EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl)"
-          fi
+          # Start clean rather than trusting a later job to clean up after us.
+          # Other workflows build in this same workspace, and the artifacts
+          # here are version-named, so leftovers accumulate beside ours and
+          # the upload globs below would ship both.
+          rm -rf "${BUILD_DIR:?}" "${OUTPUT_DIR:?}"
 
-          SOURCE_DIR="$SOURCE_DIR" \
-          BUILD_DIR="$BUILD_DIR" \
-          CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS" \
-            source/villagesql/bld_tools/build_ci.sh
+      - name: Build the dev server
+        run: source/villagesql/bld_tools/build_server.sh
 
       - name: Run unit tests
         if: env.RUN_UNIT_TESTS == '1'

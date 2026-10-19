@@ -33,8 +33,13 @@ vsql_add_test_extension(vsql-thread-worker-test        vsql_thread_worker_test)
 vsql_add_test_extension(vsql-preview-ping-no-cap-test  vsql_preview_ping_no_cap_test)
 vsql_add_test_extension(vsql-preview-ping-v2-test      vsql_preview_ping_v2_test)
 vsql_add_test_extension(vsql-sys-var-rollback-test     vsql_sys_var_rollback_test)
+vsql_add_test_extension(vsql-session-var-test          vsql_session_var_test)
 vsql_add_test_extension(vsql-noop-test                 vsql_noop_test)
 vsql_add_test_extension(vsql-on-init-test              vsql_on_init_test)
+vsql_add_test_extension(vsql-deinit-only-test          vsql_deinit_only_test)
+vsql_add_test_extension(vsql-init-only-test            vsql_init_only_test)
+vsql_add_test_extension(vsql-ext-index-test            vsql_ext_index_test)
+vsql_add_test_extension(vsql-exceptions-test           vsql_exceptions_test)
 
 # mysql_services capability test extensions consume raw MySQL component
 # services, so they need MySQL headers (MYSQL_HEADERS flag).
@@ -66,6 +71,17 @@ vsql_add_test_extension(update-test-v1                 update_test  VERSION 1.0.
 vsql_add_test_extension(update-test-v1.1               update_test  VERSION 1.1.0)
 vsql_add_test_extension(update-test-v1.2               update_test  VERSION 1.2.0)
 vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.0)
+
+# update_length_test v1 installable + four target variants exercise the
+# retained-type storage-length pre-check: v1.1 shrinks and v1.2 grows a
+# variable-length type's max_persisted_length, v1.3 turns a fixed-length type
+# variable-length, and v1.4 turns a variable-length type fixed-length. They are
+# separate VEBs because the pre-check stops at the first incompatible type.
+vsql_add_test_extension(update-length-test-v1          update_length_test  VERSION 1.0.0)
+vsql_add_test_extension(update-length-test-v1.1        update_length_test  VERSION 1.1.0)
+vsql_add_test_extension(update-length-test-v1.2        update_length_test  VERSION 1.2.0)
+vsql_add_test_extension(update-length-test-v1.3        update_length_test  VERSION 1.3.0)
+vsql_add_test_extension(update-length-test-v1.4        update_length_test  VERSION 1.4.0)
 
 # update_schema_test v1/v2 exercise on-disk representation migration across
 # ALTER EXTENSION ... AT RESTART: v1 registers MYTYPE (4-byte int), v2 keeps

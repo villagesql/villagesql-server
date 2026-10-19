@@ -27,7 +27,10 @@
 #include "mysql/plugin_auth_common.h"
 #include "mysqld_error.h"
 #include "sql/auth/auth_common.h"
+#include "sql/auth/auth_internal.h"
+#include "sql/auth/sql_auth_cache.h"
 #include "sql/auth/sql_authentication.h"
+#include "sql/auth/sql_authorization.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/auto_thd.h"
 #include "sql/current_thd.h"
@@ -35,10 +38,11 @@
 #include "sql/mem_root_array.h"
 #include "sql/statement/ed_connection.h"
 #include "sql/strfunc.h"
+#include "sql/thd_raii.h"
 #include "sql_string.h"
 #include "strmake.h"
 #include "villagesql/include/error.h"
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/auth.h"
 
 // The VEF auth ctx is just the connection's MPVIO_EXT. The extension handler
@@ -181,12 +185,22 @@ bool vef_auth_account_unknown(vef_auth_ctx_t *ctx) {
 // THD via store_globals(), so capture the connection's THD first and restore it
 // after -- otherwise, once ~Auto_THD frees its THD, the rest of
 // acl_authenticate runs with current_thd still pointing at that freed THD.
+//
+// Provisioning is never written to the binary log. The account and its roles
+// belong to an external source of truth -- the identity provider the VEF auth
+// method authenticated against -- and this server is only materializing what
+// that source already says. Replicating it would push one server's local
+// materialization down the chain as though a DBA had granted it, so every
+// replica would carry accounts and grants that no longer track the IdP and
+// that nothing here revokes. Each server provisions for itself, from the same
+// source, when an account first logs in to it.
 static bool provision_run(const std::string &sql) {
   THD *const conn_thd = current_thd;
   bool failed = false;
   {
     Auto_THD provisioner;
     provisioner.thd->security_context()->skip_grants();
+    const Disable_binlog_guard disable_binlog(provisioner.thd);
     Ed_connection conn(provisioner.thd);
     MYSQL_LEX_STRING s;
     lex_string_strmake(provisioner.thd->mem_root, &s, sql.c_str(),
@@ -220,6 +234,17 @@ static void grant_staged_role(const char *staged,
   (void)provision_run(grant);
 }
 
+// REVOKE one role (an already-quoted `role_id`) from `account_id`. The mirror
+// of grant_staged_role; a failing revoke is logged and skipped, not fatal.
+static void revoke_staged_role(const std::string &role_id,
+                               const std::string &account_id) {
+  std::string revoke = "REVOKE ";
+  revoke.append(role_id);
+  revoke.append(" FROM ");
+  revoke.append(account_id);
+  (void)provision_run(revoke);
+}
+
 void vef_auth_request_provision(vef_auth_ctx_t *ctx, const char *account,
                                 const char *const *roles, uint32_t n_roles) {
   if (account == nullptr || account[0] == '\0') return;
@@ -245,13 +270,21 @@ void vef_auth_request_provision(vef_auth_ctx_t *ctx, const char *account,
   mpvio->vef_auth_info.vef_provision_request = req;
 }
 
+const char *vef_auth_client_plugin(vef_auth_ctx_t *ctx) {
+  // The client-plugin name the client advertised for this connection, cached on
+  // the handshake context. Set before the handler's first read, so it is
+  // available throughout the handler call.
+  const char *p = ctx->mpvio->cached_client_reply.plugin;
+  return p != nullptr ? p : "";
+}
+
 const vef_auth_ops_t g_vef_auth_ops = {
     VEF_PREVIEW_AUTH_ABI_VERSION,  vef_auth_read_packet,
     vef_auth_write_packet,         vef_auth_user_name,
     vef_auth_auth_string,          vef_auth_host_or_ip,
     vef_auth_set_authenticated_as, vef_auth_set_external_user,
     vef_auth_set_active_roles,     vef_auth_account_unknown,
-    vef_auth_request_provision};
+    vef_auth_request_provision,    vef_auth_client_plugin};
 
 }  // namespace
 
@@ -369,7 +402,7 @@ bool on_populate_auth(const PopulateContext &ctx, std::string &error_message) {
     return true;
   }
 
-  const std::string normalized = normalize_extension_name(cc->name);
+  const std::string normalized = canonical_extension_name(cc->name);
   const std::string ext(ctx.extension_name);
 
   std::lock_guard<std::mutex> lock(g_mu);
@@ -414,7 +447,7 @@ void on_depopulate_auth(const DepopulateContext &ctx) {
 const vef_auth_cc_t *find_auth_method(std::string_view method_name) {
   if (method_name.empty()) return nullptr;
   const std::string normalized =
-      normalize_extension_name(std::string(method_name));
+      canonical_extension_name(std::string(method_name));
   std::lock_guard<std::mutex> lock(g_mu);
   for (const auto &m : g_methods) {
     if (m.method_name == normalized) return m.cc;
@@ -444,6 +477,103 @@ std::string auth_method_for_unknown_accounts() {
   return (chosen != nullptr && chosen->name != nullptr)
              ? std::string(chosen->name)
              : std::string();
+}
+
+static vef_auth_roles_mode_t method_roles_mode(std::string_view method_name) {
+  const std::string normalized =
+      canonical_extension_name(std::string(method_name));
+  std::lock_guard<std::mutex> lock(g_mu);
+  // Queried live so it reflects the extension's runtime sysvar. A method with
+  // no roles_mode callback defaults to activate-only (the DBA owns grants).
+  for (const auto &m : g_methods) {
+    if (m.method_name == normalized) {
+      if (m.cc != nullptr && m.cc->roles_mode != nullptr)
+        return m.cc->roles_mode();
+      return VEF_AUTH_ROLES_ACTIVATE;
+    }
+  }
+  return VEF_AUTH_ROLES_ACTIVATE;
+}
+
+void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
+                                 const char *acl_user_host) {
+  const VefAuthState *state = mpvio->vef_auth_info.vef_auth_state;
+  if (state == nullptr) return;  // handler staged no role set at all
+
+  // ACTIVATE grants/revokes nothing here; the staged set only drives
+  // activation.
+  const char *const method = mpvio->acl_user_plugin.str;
+  if (method == nullptr) return;
+  const vef_auth_roles_mode_t mode = method_roles_mode(method);
+  if (mode == VEF_AUTH_ROLES_ACTIVATE) return;
+
+  if (acl_user_authid == nullptr || acl_user_authid[0] == '\0') return;
+  const std::string account_id =
+      Auth_id(acl_user_authid, strlen(acl_user_authid),
+              acl_user_host != nullptr ? acl_user_host : "%",
+              acl_user_host != nullptr ? strlen(acl_user_host) : 1)
+          .auth_str();
+
+  // GRANT the claimed roles (both GRANT and SYNC do this).
+  for (const char *staged : state->roles) grant_staged_role(staged, account_id);
+
+  if (mode != VEF_AUTH_ROLES_SYNC) return;
+
+  // SYNC additionally makes the staged set authoritative: revoke every granted
+  // role the token did not claim (empty claim revokes all) -- the token issuer
+  // is the sole source of truth, so even a DBA's out-of-band grant is revoked.
+  //
+  // Exception: DEFAULT roles are never revoked. Provisioning sets no default,
+  // so a default present is a deliberate operator ALTER USER ... DEFAULT ROLE;
+  // and REVOKE would strip it from mysql.default_roles, silently dropping that
+  // pin.
+  //
+  // Normalize the staged names to the same quoted key form grant_staged_role
+  // uses, so they diff exactly against the granted/default keys below.
+  std::vector<std::string> staged_keys;
+  staged_keys.reserve(state->roles.size());
+  for (const char *staged : state->roles) {
+    if (staged == nullptr || staged[0] == '\0') continue;
+    const auto [role_name, role_host] = get_authid_from_quoted_string(staged);
+    staged_keys.push_back(Auth_id(role_name.c_str(), role_name.length(),
+                                  role_host.c_str(), role_host.length())
+                              .auth_str());
+  }
+
+  // Enumerate the account's currently granted roles and its default roles from
+  // the in-memory role graph, under a short ACL read lock. These read global
+  // state, so they need the lock; we copy out the keys and drop the lock before
+  // running any REVOKE DDL (which re-takes ACL locks on its own THD).
+  List_of_granted_roles granted;
+  std::vector<std::string> default_keys;
+  {
+    LEX_USER user;
+    user.user = {acl_user_authid, strlen(acl_user_authid)};
+    user.host = {acl_user_host != nullptr ? acl_user_host : "%",
+                 acl_user_host != nullptr ? strlen(acl_user_host) : 1};
+    Acl_cache_lock_guard acl_cache_lock(current_thd,
+                                        Acl_cache_lock_mode::READ_MODE);
+    if (!acl_cache_lock.lock(/*raise_error=*/false)) return;
+    get_granted_roles(&user, &granted);
+    List_of_auth_id_refs defaults;
+    get_default_roles(create_authid_from(&user), defaults);
+    default_keys.reserve(defaults.size());
+    for (const Auth_id_ref &d : defaults)
+      default_keys.push_back(
+          Auth_id(d.first.str, d.first.length, d.second.str, d.second.length)
+              .auth_str());
+  }
+
+  for (const auto &[role, with_admin] : granted) {
+    const std::string role_id = role.auth_str();
+    const bool claimed = std::find(staged_keys.begin(), staged_keys.end(),
+                                   role_id) != staged_keys.end();
+    const bool is_default = std::find(default_keys.begin(), default_keys.end(),
+                                      role_id) != default_keys.end();
+    // Revoke iff the token did not claim it AND it is not an operator-pinned
+    // default role.
+    if (!claimed && !is_default) revoke_staged_role(role_id, account_id);
+  }
 }
 
 std::optional<bool> handle_vef_user_bind(std::string_view method_name,
@@ -490,6 +620,10 @@ static bool try_vef_authenticate(const vef_auth_cc_t *cc, MPVIO_EXT *mpvio) {
   // driving the handler: the handler's first read_packet triggers the handshake
   // change-plugin request that reads it back via mpvio_client_plugin_name().
   mpvio->vef_auth_info.vef_client_auth_plugin = cc->client_auth_plugin;
+  // Stash the method's accept-offer predicate (may be null) so the negotiation
+  // that first read triggers can ask this method whether the client's offered
+  // plugin is acceptable as-is.
+  mpvio->vef_auth_info.vef_accepts_client_plugin = cc->accepts_client_plugin;
 
   // Run the extension's authenticator over an ops table on this MPVIO_EXT.
   vef_auth_ctx_t ctx{mpvio};

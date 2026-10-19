@@ -230,7 +230,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON col.collation_id=coll.id
   JOIN mysql.character_sets cs ON coll.character_set_id= cs.id
-  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=sch.name AND vcc.table_name=tbl.name AND vcc.column_name=col.name WHERE 
+  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vcc.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vcc.column_name)=LOWER(CONVERT(col.name USING utf8mb4) COLLATE utf8mb4_bin) WHERE 
   INTERNAL_GET_VIEW_WARNING_OR_ERROR(sch.name,tbl.name, tbl.type, tbl.options)
   AND CAN_ACCESS_COLUMN(sch.name, tbl.name, col.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, col.hidden NOT IN ('Visible', 'User'), col.options)
@@ -264,7 +264,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON col.collation_id=coll.id
   JOIN mysql.character_sets cs ON coll.character_set_id= cs.id
-  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=sch.name AND vcc.table_name=tbl.name AND vcc.column_name=col.name WHERE 
+  LEFT JOIN villagesql.custom_columns vcc ON vcc.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vcc.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vcc.column_name)=LOWER(CONVERT(col.name USING utf8mb4) COLLATE utf8mb4_bin) WHERE 
   INTERNAL_GET_VIEW_WARNING_OR_ERROR(sch.name,tbl.name, tbl.type, tbl.options)
   AND CAN_ACCESS_COLUMN(sch.name, tbl.name, col.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, col.hidden NOT IN ('Visible', 'User'), col.options)
@@ -384,8 +384,8 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   CAN_ACCESS_EVENT(sch.name)
 ");
 CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EXTENSIONS AS SELECT 
-  ext.extension_name AS EXTENSION_NAME,
-  ext.extension_version AS EXTENSION_VERSION,
+  ext.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
+  ext.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
   JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.target_version')) AS PENDING_VERSION,
   JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.requested_at')) AS PENDING_REQUESTED_AT,
   JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error')) AS PENDING_LAST_ERROR,
@@ -393,8 +393,8 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   villagesql.extensions ext
 
 INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema.EXTENSIONS AS SELECT 
-  ext.extension_name AS EXTENSION_NAME,
-  ext.extension_version AS EXTENSION_VERSION,
+  ext.extension_name COLLATE utf8mb4_0900_ai_ci AS EXTENSION_NAME,
+  ext.extension_version COLLATE utf8mb4_0900_ai_ci AS EXTENSION_VERSION,
   JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.target_version')) AS PENDING_VERSION,
   JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.requested_at')) AS PENDING_REQUESTED_AT,
   JSON_UNQUOTE(JSON_EXTRACT(ext.pending_action, '$.last_error')) AS PENDING_LAST_ERROR,
@@ -951,7 +951,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
   IF (col.is_nullable = 1, 'YES','') AS NULLABLE,
-  CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END  AS INDEX_TYPE,
+  COALESCE(UPPER(vci.index_type_name), CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END, '')  AS INDEX_TYPE,
   IF (idx.type = 'PRIMARY' OR idx.type = 'UNIQUE',     '',IF(INTERNAL_KEYS_DISABLED(tbl.options),'disabled', '')) AS COMMENT,
   idx.comment AS INDEX_COMMENT,
   IF (idx.is_visible, 'YES', 'NO') AS IS_VISIBLE,
@@ -965,6 +965,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   JOIN mysql.schemata sch ON tbl.schema_id=sch.id
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON tbl.collation_id=coll.id
+  LEFT JOIN villagesql.custom_indexes vci ON vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vci.index_name)=LOWER(CONVERT(idx.name USING utf8mb4) COLLATE utf8mb4_bin)
   LEFT JOIN mysql.index_stats stat  ON tbl.name=stat.table_name AND sch.name=stat.schema_name AND idx.name=stat.index_name AND col.name=stat.column_name WHERE 
   CAN_ACCESS_TABLE(sch.name, tbl.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden OR icu.hidden, idx.options)
@@ -983,7 +984,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
   IF (col.is_nullable = 1, 'YES','') AS NULLABLE,
-  CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END  AS INDEX_TYPE,
+  COALESCE(UPPER(vci.index_type_name), CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END, '')  AS INDEX_TYPE,
   IF (idx.type = 'PRIMARY' OR idx.type = 'UNIQUE',     '',IF(INTERNAL_KEYS_DISABLED(tbl.options),'disabled', '')) AS COMMENT,
   idx.comment AS INDEX_COMMENT,
   IF (idx.is_visible, 'YES', 'NO') AS IS_VISIBLE,
@@ -997,6 +998,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   JOIN mysql.schemata sch ON tbl.schema_id=sch.id
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON tbl.collation_id=coll.id
+  LEFT JOIN villagesql.custom_indexes vci ON vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vci.index_name)=LOWER(CONVERT(idx.name USING utf8mb4) COLLATE utf8mb4_bin)
   LEFT JOIN mysql.index_stats stat  ON tbl.name=stat.table_name AND sch.name=stat.schema_name AND idx.name=stat.index_name AND col.name=stat.column_name WHERE 
   CAN_ACCESS_TABLE(sch.name, tbl.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden OR icu.hidden, idx.options)
@@ -1113,7 +1115,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
   IF (col.is_nullable = 1, 'YES','') AS NULLABLE,
-  CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END  AS INDEX_TYPE,
+  COALESCE(UPPER(vci.index_type_name), CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END, '')  AS INDEX_TYPE,
   IF (idx.type = 'PRIMARY' OR idx.type = 'UNIQUE',     '',IF(INTERNAL_KEYS_DISABLED(tbl.options),'disabled', '')) AS COMMENT,
   idx.comment AS INDEX_COMMENT,
   IF (idx.is_visible, 'YES', 'NO') AS IS_VISIBLE,
@@ -1125,6 +1127,7 @@ CREATE OR REPLACE DEFINER=`mysql.infoschema`@`localhost` VIEW information_schema
   JOIN mysql.schemata sch ON tbl.schema_id=sch.id
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON tbl.collation_id=coll.id
+  LEFT JOIN villagesql.custom_indexes vci ON vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vci.index_name)=LOWER(CONVERT(idx.name USING utf8mb4) COLLATE utf8mb4_bin)
   LEFT JOIN mysql.index_stats stat  ON tbl.name=stat.table_name AND sch.name=stat.schema_name AND idx.name=stat.index_name AND col.name=stat.column_name WHERE 
   CAN_ACCESS_TABLE(sch.name, tbl.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden OR icu.hidden, idx.options)
@@ -1143,7 +1146,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   GET_DD_INDEX_SUB_PART_LENGTH(icu.length,col.type, col.char_length, col.collation_id,idx.type) AS SUB_PART,
   NULL AS PACKED,
   IF (col.is_nullable = 1, 'YES','') AS NULLABLE,
-  CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END  AS INDEX_TYPE,
+  COALESCE(UPPER(vci.index_type_name), CASE WHEN idx.type = 'SPATIAL' THEN 'SPATIAL' WHEN idx.algorithm = 'SE_PRIVATE' THEN '' ELSE idx.algorithm END, '')  AS INDEX_TYPE,
   IF (idx.type = 'PRIMARY' OR idx.type = 'UNIQUE',     '',IF(INTERNAL_KEYS_DISABLED(tbl.options),'disabled', '')) AS COMMENT,
   idx.comment AS INDEX_COMMENT,
   IF (idx.is_visible, 'YES', 'NO') AS IS_VISIBLE,
@@ -1155,6 +1158,7 @@ INSERT INTO I_S_check_table(t) VALUES ("CREATE OR REPLACE DEFINER=`mysql.infosch
   JOIN mysql.schemata sch ON tbl.schema_id=sch.id
   JOIN mysql.catalogs cat ON cat.id=sch.catalog_id
   JOIN mysql.collations coll ON tbl.collation_id=coll.id
+  LEFT JOIN villagesql.custom_indexes vci ON vci.db_name=CONVERT(sch.name USING utf8mb4) COLLATE utf8mb4_bin AND vci.table_name=CONVERT(tbl.name USING utf8mb4) COLLATE utf8mb4_bin AND LOWER(vci.index_name)=LOWER(CONVERT(idx.name USING utf8mb4) COLLATE utf8mb4_bin)
   LEFT JOIN mysql.index_stats stat  ON tbl.name=stat.table_name AND sch.name=stat.schema_name AND idx.name=stat.index_name AND col.name=stat.column_name WHERE 
   CAN_ACCESS_TABLE(sch.name, tbl.name)
   AND IS_VISIBLE_DD_OBJECT(tbl.hidden, idx.hidden OR icu.hidden, idx.options)

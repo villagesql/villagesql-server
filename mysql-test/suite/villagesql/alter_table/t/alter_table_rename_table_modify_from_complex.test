@@ -1,0 +1,30 @@
+# ALTER TABLE ... RENAME TO combined with MODIFY COLUMN converting a custom
+# column to a string type.
+#
+# Converting away from a custom type deletes the column's victionary row,
+# while the table rename restages that same row under the new table name.
+# Both operations have to agree on which row they mean.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, c3 COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+--source include/villagesql/query_custom_columns.inc
+
+ALTER TABLE t1 RENAME TO t2, MODIFY COLUMN c3 VARCHAR(100);
+
+# The column is no longer custom, so it owns no victionary row under either
+# table name.
+--source include/villagesql/query_custom_columns.inc
+SHOW CREATE TABLE t2;
+SELECT * FROM t2;
+
+DROP TABLE t2;
+--source include/villagesql/query_custom_columns.inc
+
+# Reusing the old table and column name must not collide with a leftover row.
+CREATE TABLE t1 (c3 COMPLEX);
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

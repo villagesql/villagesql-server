@@ -16,9 +16,11 @@
 
 #include "villagesql/types/util.h"
 
+#include <cctype>
 #include <cinttypes>
 #include <map>
 #include <optional>
+#include <span>
 
 #include "lex_string.h"
 #include "my_alloc.h"
@@ -41,6 +43,7 @@
 #include "sql/sp_pcontext.h"
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
+#include "sql/sql_show.h"  // append_identifier
 #include "sql/sql_udf.h"
 #include "sql/table.h"
 #include "sql/visible_fields.h"
@@ -51,6 +54,7 @@
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_columns.h"
 #include "villagesql/schema/systable/custom_index_columns.h"
@@ -146,17 +150,18 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   std::string column_name(field->field_name);
   ColumnKey col_key(db_name, table_name, column_name);
 
-  // User-created temporary tables are never in the victionary. If session
-  // metadata has an entry for this column, inject it and return.
-  if (share.tmp_table != NO_TMP_TABLE &&
-      thd->villagesql_tmp_metadata != nullptr) {
+  // User-created temporary tables are never in the victionary; their custom
+  // columns live only in the session map. Consult only it, never the
+  // victionary: the victionary is keyed on (db, table, column) and would return
+  // a same-named base table's custom type for a shadowing temporary column.
+  // share.tmp_table can't be used to detect this (still INTERNAL_TMP_TABLE
+  // during the fill); see is_user_tmp_table.
+  if (share.is_user_tmp_table) {
+    if (thd->villagesql_tmp_metadata == nullptr) return false;
     const TypeContext *tc = thd->villagesql_tmp_metadata->get(col_key.str());
-    if (tc != nullptr) {
-      field->set_type_context(tc);
-      return CheckFieldLengthMatchesType(field, tc);
-    }
-    // Fall through to victionary for type injection and field length
-    // validation.
+    if (tc == nullptr) return false;
+    field->set_type_context(tc);
+    return CheckFieldLengthMatchesType(field, tc);
   }
 
   auto &vclient = VictionaryClient::instance();
@@ -190,6 +195,12 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
 
   TypeParameters parameters =
       TypeParameters::from_json(column_entry->type_parameters);
+  const std::string validation_error = parameters.validation_error();
+  if (!validation_error.empty()) {
+    villagesql_error("Invalid stored type parameters: %s", MYF(0),
+                     validation_error.c_str());
+    return true;
+  }
   TypeContextKey type_context_key(type_descriptor_key, parameters);
 
   const TypeContext *tc = vclient.type_contexts().acquire_or_create(
@@ -225,6 +236,20 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   std::string table_name(share.table_name.str, share.table_name.length);
   std::string index_name(keyinfo->name);
+
+  // An ALTER TABLE rebuild opens the table under a #sql-xxx name that matches
+  // nothing in the victionary. Resolve against the real target table instead;
+  // its entries (unchanged ones committed, added/redefined ones staged
+  // uncommitted) are all keyed under the real name and visible to get() below.
+  // TODO(villagesql-general): investigate a cleaner way to bridge the #sql-xxx
+  // temp name, e.g. staging the rebuild table's victionary entries uncommitted
+  // and unstaging them before commit, as explored for custom-type ALTER.
+  if (is_alter_rebuild_table(share) &&
+      !thd->villagesql_alter_target_table.empty()) {
+    db_name = thd->villagesql_alter_target_db;
+    table_name = thd->villagesql_alter_target_table;
+  }
+
   IndexKey idx_key(db_name, table_name, index_name);
 
   auto &vclient = VictionaryClient::instance();
@@ -254,6 +279,12 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   TypeParameters parameters =
       TypeParameters::from_json(index_entry->index_type_parameters);
+  const std::string validation_error = parameters.validation_error();
+  if (!validation_error.empty()) {
+    villagesql_error("Invalid stored type parameters: %s", MYF(0),
+                     validation_error.c_str());
+    return true;
+  }
   IndexContextKey ctx_key(type_key, std::move(parameters));
 
   const IndexContext *ic = vclient.index_contexts().acquire_or_create(
@@ -268,7 +299,7 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
   // Inject per-column profile into each KEY_PART_INFO.
   std::vector<const IndexColumnEntry *> col_entries =
-      vclient.GetColumnsForIndex(index_entry->index_id);
+      vclient.GetColumnsForIndex(thd, index_entry->index_id);
   for (const IndexColumnEntry *col_entry : col_entries) {
     uint32_t pos = col_entry->key_position();
     if (pos >= keyinfo->user_defined_key_parts) {
@@ -306,6 +337,78 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
 
 namespace {
 
+// The new table's column at index idx, from the ALTER's create list (matches
+// the KEY_PART_INFO::fieldnr numbering used for the prepared keys).
+const Create_field *new_field_at(Alter_info *alter_info, uint idx) {
+  List_iterator_fast<Create_field> it(alter_info->create_list);
+  const Create_field *field = nullptr;
+  for (uint i = 0; (field = it++) != nullptr && i < idx; i++);
+  return field;
+}
+
+// The new table's primary key, or nullptr if it has none.
+const KEY *find_new_primary_key(const KEY *key_info, uint key_count) {
+  for (uint i = 0; i < key_count; i++) {
+    if (key_info[i].name != nullptr &&
+        my_strcasecmp(system_charset_info, key_info[i].name, "PRIMARY") == 0) {
+      return &key_info[i];
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+bool alter_changes_pk_of_custom_indexed_table(const TABLE *old_table,
+                                              Alter_info *alter_info,
+                                              const KEY *new_key_info,
+                                              uint new_key_count) {
+  // The table must actually have a custom index.
+  bool has_custom_index = false;
+  for (uint i = 0; i < old_table->s->keys; i++) {
+    if (old_table->key_info[i].custom_index_context != nullptr) {
+      has_custom_index = true;
+      break;
+    }
+  }
+  if (!has_custom_index) {
+    return false;
+  }
+
+  const KEY *old_pk = (old_table->s->primary_key < old_table->s->keys)
+                          ? &old_table->key_info[old_table->s->primary_key]
+                          : nullptr;
+  const KEY *new_pk = find_new_primary_key(new_key_info, new_key_count);
+  const uint old_count = old_pk != nullptr ? old_pk->user_defined_key_parts : 0;
+  const uint new_count = new_pk != nullptr ? new_pk->user_defined_key_parts : 0;
+
+  // A changed column count (including gaining or losing the primary key) is a
+  // change.
+  if (old_count != new_count) {
+    return true;
+  }
+
+  // Compare the primary key's columns in order: a column is changed if it is a
+  // different column (by name) or its definition changed (Field::is_equal, the
+  // same test ALTER uses to decide a column type/length change). The old key's
+  // fields are bound; the new key's are resolved from the ALTER's create list
+  // (its KEY_PART_INFO::field pointers are not bound at this point).
+  for (uint i = 0; i < new_count; i++) {
+    const Field *old_field = old_pk->key_part[i].field;
+    const Create_field *new_field =
+        new_field_at(alter_info, new_pk->key_part[i].fieldnr);
+    if (old_field == nullptr || new_field == nullptr ||
+        my_strcasecmp(system_charset_info, old_field->field_name,
+                      new_field->field_name) != 0 ||
+        old_field->is_equal(new_field) != IS_EQUAL_YES) {
+      return true;
+    }
+  }
+  return false;
+}
+
+namespace {
+
 // Look up the TypeDescriptor for a (possibly extension-qualified) type name.
 // REQUIRES: caller holds the victionary read or write lock.
 // Returns true on internal failure. A type that simply isn't found returns
@@ -332,11 +435,27 @@ bool resolve_type_descriptor_locked(VictionaryClient &vclient,
   std::vector<const TypeDescriptor *> results =
       vclient.type_descriptors().get_prefix_committed(prefix);
 
-  if (should_assert_if_true(results.size() > 1)) {
+  // An unqualified name matches several types when more than one installed
+  // extension registers a type with that name. That is a user error.
+  if (results.size() > 1) {
     if (!current_thd->is_error()) {
+      // Adjust for ", ". Safe from underflow since results.size() > 1.
+      size_t total_size = 2 * (results.size() - 1);
+      for (size_t i = 0; i < results.size(); ++i) {
+        total_size += results[i]->extension_name().size();
+      }
+      std::string extensions;
+      extensions.reserve(total_size);
+      extensions.append(results[0]->extension_name());
+      for (size_t i = 1; i < results.size(); ++i) {
+        extensions.append(", ");
+        extensions.append(results[i]->extension_name());
+      }
       villagesql_error(
-          "Failed to resolve type %.*s; VictionaryClient not initialized",
-          MYF(0), static_cast<int>(type_name.size()), type_name.data());
+          "Ambiguous type '%.*s' - provided by multiple extensions: %s. "
+          "Use qualified name (extension.type).",
+          MYF(0), static_cast<int>(type_name.size()), type_name.data(),
+          extensions.c_str());
     }
     return true;
   }
@@ -532,44 +651,62 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
   return encoder;
 }
 
-// Encode from for item's custom type. Returns the encoded String* on success.
-// On failure returns nullptr; is_valid=true means OOM (my_error already
-// called), is_valid=false means invalid value for the type.
-static String *EncodeForItem(Item *item, const String &from, bool &is_valid) {
+// Encode from for item's custom type. Returns the encoded String*, or nullptr
+// with status saying why.
+static String *EncodeForItem(Item *item, const String &from,
+                             EncodeStatus &status) {
   TypeEncoder *encoder = GetTypeEncoderFor(item);
   if (encoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  return encoder->encode(from, is_valid);
+  EncodeOutcome outcome;
+  String *encoded = encoder->encode(from, outcome);
+  if (encoded == nullptr) status = EncodeStatus::kBadValue;
+  return encoded;
 }
 
-String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
+String *EncodeStringForField(Field *field, const String &from,
+                             EncodeStatus &status) {
   assert(field->has_type_context());
 
   TypeEncoder *encoder = GetTypeEncoderFor(field);
   if (encoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  String *encoded = encoder->encode(from, is_valid);
-  if (encoded == nullptr) {
-    if (is_valid) return nullptr;  // OOM, my_error already called
-    // Encoding failed - invalid value for custom type
-    // Always push a warning (consistent with MySQL built-in types)
-    // Caller decides whether to also promote to error
-    const TypeContext *tc = field->get_type_context();
-    THD *thd = current_thd;
-    const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
-    const Diagnostics_area *da = thd->get_stmt_da();
-    push_warning_printf(thd, Sql_condition::SL_WARNING,
-                        ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-                        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-                        tc->type_name().c_str(), errmsg.ptr(),
-                        field->field_name, da->current_row_for_condition());
+  EncodeOutcome outcome;
+  String *encoded = encoder->encode(from, outcome);
+  if (encoded != nullptr) return encoded;
+
+  // set_null() states a value rather than reporting a bad one.
+  if (outcome.is_null()) {
+    status = EncodeStatus::kNull;
     return nullptr;
   }
-  return encoded;
+
+  // error() aborts the statement with the extension's own message.
+  if (outcome.result_type == VEF_RESULT_ERROR && outcome.has_message()) {
+    villagesql_error("%s", MYF(0), outcome.message);
+    status = EncodeStatus::kErrorRaised;
+    return nullptr;
+  }
+
+  const TypeContext *tc = field->get_type_context();
+  THD *thd = current_thd;
+  // Encoding failed - invalid value for custom type
+  // Always push a warning (consistent with MySQL built-in types)
+  // Caller decides whether to also promote to error
+  // TODO(villagesql-general): an extension's own warning() message is dropped
+  // here; only the standard 1366 reaches the user.
+  const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
+  const Diagnostics_area *da = thd->get_stmt_da();
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
+      errmsg.ptr(), field->field_name, da->current_row_for_condition());
+  status = EncodeStatus::kBadValue;
+  return nullptr;
 }
 
 // Lazily allocate a TypeDecoder for field, reused for all subsequent decodes.
@@ -688,7 +825,69 @@ bool DecodeStringForItem(Item *item, const String &from, String *out) {
 
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
   const std::string &name = tc.qualified_name();
-  out->append(name.c_str(), name.length());
+  // Convert to the output charset. MySQL's dictionary type description uses
+  // utf8mb3; the separately stored parameter JSON keeps the full UTF-8 text.
+  out->append(name.c_str(), name.length(), type_parameter_collation());
+  // A converting append NUL-terminates its worst-case reservation, not the
+  // text, so terminate here for callers that use c_ptr().
+  (void)out->c_ptr_quick();
+}
+
+// Appends "extension_name.name", quoting each half.
+static void AppendQualifiedIndexName(const THD *thd,
+                                     const std::string &extension,
+                                     const std::string &name, String *out) {
+  append_identifier(thd, out, extension.c_str(), extension.length());
+  out->append('.');
+  append_identifier(thd, out, name.c_str(), name.length());
+}
+
+static void AppendIndexParamValue(const char *value, String *out) {
+  const size_t len = strlen(value);
+  bool numeric = len > 0;
+  // std::isdigit() takes an int that must be representable as unsigned char;
+  // a plain char is signed here, so a non-ASCII byte would pass a negative
+  // value and the behavior would be undefined.
+  for (size_t i = 0; i < len && numeric; i++)
+    numeric = std::isdigit(static_cast<unsigned char>(value[i]));
+
+  if (numeric)
+    out->append(value, len);
+  else
+    append_unescaped(out, value, len);
+}
+
+void AppendCustomIndexProfile(const THD *thd,
+                              const IndexProfileDescriptor *profile,
+                              String *out) {
+  if (profile == nullptr) return;
+
+  out->append(' ');
+  AppendQualifiedIndexName(thd, profile->extension_name(),
+                           profile->profile_name(), out);
+}
+
+void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
+                           String *out) {
+  if (index_ctx == nullptr) return;
+
+  out->append(STRING_WITH_LEN(" USING EXTENDED("));
+  AppendQualifiedIndexName(thd, index_ctx->extension_name(),
+                           index_ctx->index_type_name(), out);
+  out->append(')');
+
+  const TypeParameters &params = index_ctx->parameters();
+  if (params.empty()) return;
+
+  out->append(STRING_WITH_LEN(" WITH ("));
+  for (unsigned int i = 0; i < params.count(); i++) {
+    if (i != 0) out->append(STRING_WITH_LEN(", "));
+    const char *key = params.key_data()[i];
+    append_identifier(thd, out, key, strlen(key));
+    out->append(STRING_WITH_LEN(" = "));
+    AppendIndexParamValue(params.value_data()[i], out);
+  }
+  out->append(')');
 }
 
 bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
@@ -713,10 +912,10 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
     return false;  // NULL value, nothing to encode
   }
 
-  bool is_valid = true;
-  String *encoded = EncodeForItem(item, *str_val, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeForItem(item, *str_val, status);
   if (encoded == nullptr) {
-    if (!is_valid) {
+    if (status == EncodeStatus::kBadValue) {
       const ErrConvString errmsg(str_val->ptr(), str_val->length(),
                                  str_item->collation.collation);
       my_error(ER_WRONG_VALUE, MYF(0), tc.type_name().c_str(), errmsg.ptr());
@@ -877,8 +1076,22 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
     case Item::STRING_ITEM:
     case Item::NULL_ITEM:
     case Item::DEFAULT_VALUE_ITEM:
-    case Item::PARAM_ITEM:
       return true;
+    case Item::PARAM_ITEM: {
+      // Only a parameter carrying string bytes can be encoded; an integer,
+      // real, decimal or temporal value would reach the field in its own
+      // representation, never the type's. Bytes streamed with
+      // mysql_stmt_send_long_data() arrive as one string value, and NULL is
+      // stored as NULL, subject to the column's nullability.
+      switch (down_cast<const Item_param *>(item)->param_state()) {
+        case Item_param::NULL_VALUE:
+        case Item_param::STRING_VALUE:
+        case Item_param::LONG_DATA_VALUE:
+          return true;
+        default:
+          return false;
+      }
+    }
     case Item::FUNC_ITEM: {
       // Block functions, mostly, but let some through.
       auto *func = down_cast<const Item_func *>(item);
@@ -1072,10 +1285,18 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
     return set_field_to_null_with_conversions(to_field, false);
   }
 
-  bool is_oom = false;
-  String *encoded = EncodeStringForField(to_field, *str, is_oom);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(to_field, *str, status);
   if (encoded == nullptr) {
-    return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+    switch (status) {
+      case EncodeStatus::kNull:
+        return set_field_to_null_with_conversions(to_field, false);
+      case EncodeStatus::kOom:
+        return TYPE_ERR_OOM;
+      case EncodeStatus::kErrorRaised:
+      case EncodeStatus::kBadValue:
+        return TYPE_ERR_BAD_VALUE;
+    }
   }
 
   to_field->set_notnull();
@@ -1084,20 +1305,28 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
 
 type_conversion_status EncodeAndStoreStringToCustomField(
     const String &str_value, Field *field) {
-  bool is_valid = true;
-  String *encoded = EncodeStringForField(field, str_value, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(field, str_value, status);
   if (encoded == nullptr) {
-    return is_valid ? TYPE_ERR_OOM : TYPE_WARN_OUT_OF_RANGE;
+    switch (status) {
+      case EncodeStatus::kNull:
+        return set_field_to_null_with_conversions(field, false);
+      case EncodeStatus::kOom:
+        return TYPE_ERR_OOM;
+      case EncodeStatus::kErrorRaised:
+      case EncodeStatus::kBadValue:
+        return TYPE_ERR_BAD_VALUE;
+    }
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
 String *EncodeStringForCustomParam(Item *item, const String &str_value,
                                    bool &null_value) {
-  bool is_valid = true;
-  String *encoded = EncodeForItem(item, str_value, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeForItem(item, str_value, status);
   if (encoded == nullptr) {
-    if (!is_valid) {
+    if (status == EncodeStatus::kBadValue) {
       // Invalid value for custom type
       const TypeContext *tc = item->get_type_context();
       const ErrConvString errmsg(str_value.ptr(), str_value.length(),
@@ -1106,8 +1335,8 @@ String *EncodeStringForCustomParam(Item *item, const String &str_value,
                        tc->qualified_name().c_str(), errmsg.ptr(),
                        item->item_name.ptr());
     }
-
-    // else OOM - my_error already called
+    // kErrorRaised has already raised its own diagnostic.
+    // Signal "no string" to val_str() the usual way.
     null_value = true;
     return nullptr;
   }
@@ -1140,13 +1369,34 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
 
 bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
                                    const String &input_str) {
-  bool is_valid = false;
-  String *encoded = EncodeStringForField(field, input_str, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(field, input_str, status);
   if (encoded != nullptr) {
     field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
     return false;
   }
-  if (is_valid) return true;  // OOM case
+  switch (status) {
+    case EncodeStatus::kNull:
+      // Mirror a literal \N in the input: mark the field NULL and leave the
+      // NOT NULL decision to the row-level check once the row is complete,
+      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
+      // would satisfy that check and let a NOT NULL column through.
+      if (!field->is_nullable() && thd->lex->is_ignore()) {
+        // IGNORE keeps the row, so give it the type's intrinsic default
+        // rather than zero bytes, as the \N path does.
+        if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
+        field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
+                           1);
+        return false;
+      }
+      field->set_null();
+      return false;
+    case EncodeStatus::kOom:
+    case EncodeStatus::kErrorRaised:
+      return true;
+    case EncodeStatus::kBadValue:
+      break;  // handled below: whether this fails the row depends on the mode
+  }
   if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
     // EncodeStringForField already pushed a warning; promote to error
     my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
@@ -1443,47 +1693,97 @@ void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
   }
 }
 
-void ClearAlterCustomFields(THD *thd) {
-  thd->villagesql_alter_custom_fields.clear();
+void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table) {
+  if (should_assert_if_null(thd) || should_assert_if_null(old_table)) {
+    LogVSQL(ERROR_LEVEL, "null argument in SetAlterTargetForCustomIndexes");
+    return;
+  }
+  thd->villagesql_alter_target_db.assign(old_table->s->db.str,
+                                         old_table->s->db.length);
+  thd->villagesql_alter_target_table.assign(old_table->s->table_name.str,
+                                            old_table->s->table_name.length);
 }
 
-bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
-                                    std::string_view extension_name,
-                                    uint arg_count, Item **args,
-                                    const vef_signature_t *signature,
-                                    TypeParameters *out_return_params) {
-  // Varargs: skip both arg-count and per-arg type validation. The function's
-  // prerun hook is responsible for inspecting arg_count and arg_types and
-  // rejecting calls it does not accept.
-  if (signature->param_count == VEF_PARAM_VARARGS) {
-    return false;
+bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
+                                     KEY_CREATE_INFO *key_create_info) {
+  const IndexContext *cic = key_info->custom_index_context;
+  if (cic == nullptr) return false;
+
+  char *type = strmake_root(thd->mem_root, cic->index_type_name().c_str(),
+                            cic->index_type_name().length());
+  char *ext = strmake_root(thd->mem_root, cic->extension_name().c_str(),
+                           cic->extension_name().length());
+  // On allocation failure, fail rather than leave custom_index_type with a null
+  // str and nonzero length: is_custom_index() would read it as null and rebuild
+  // the index as an ordinary one -- the exact loss this carry prevents.
+  if (type == nullptr || ext == nullptr) {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
+             cic->index_type_name().length() + cic->extension_name().length());
+    return true;
   }
+  key_create_info->custom_index_type = {type, cic->index_type_name().length()};
+  key_create_info->custom_index_extension = {ext,
+                                             cic->extension_name().length()};
+  // TODO(villagesql-indexing): also carry the index's WITH parameters. The
+  // rebuilt key keeps its type and extension but not custom_index_params, so a
+  // CREATE TABLE ... LIKE of a custom index loses its WITH clause (the ALTER
+  // rebuild path is unaffected, as it does not re-register the index).
+  return false;
+}
+
+void ClearAlterCustomContext(THD *thd) {
+  thd->villagesql_alter_custom_fields.clear();
+  thd->villagesql_alter_target_db.clear();
+  thd->villagesql_alter_target_table.clear();
+}
+
+// Params observed for one qualified base name, plus the index of the argument
+// they came from, so conflicts can name both argument positions.
+struct KnownEntry {
+  const TypeParameters *params;
+  uint arg_index;
+};
+
+// Does pass 1 over arguments: validate the argument count and each argument's
+// base type, and collect the type parameters observed per qualified base name.
+//
+// out_known_params == nullptr means a bind_and_check_types hook decides the
+// parameters: nothing is collected and differing sibling params are not an
+// error.
+//
+// expected_types is what each argument is required to be: signature->params
+// for a fixed-arity function, or the types a bind_and_check_types hook
+// declared for a varargs one.
+// Returns true on error (error already raised).
+static bool ValidateVDFArguments(
+    const char *func_name, std::string_view extension_name, uint arg_count,
+    Item **args, std::span<const vef_type_t> expected_types,
+    std::map<std::string, KnownEntry> *out_known_params) {
+  // Passing nullptr switches off parameter sharing between arguments: nothing
+  // is collected for pass 2 to propagate, and two arguments of the same custom
+  // type are no longer required to agree.
+  const bool collect_shared_params = (out_known_params != nullptr);
 
   // Validate argument count matches signature
-  if (arg_count != signature->param_count) {
+  if (arg_count != expected_types.size()) {
     villagesql_error(
         "Cannot initialize function '%s': wrong number of arguments "
         "(expected %u, got %u)",
-        MYF(0), func_name, signature->param_count, arg_count);
+        MYF(0), func_name, static_cast<uint>(expected_types.size()), arg_count);
     return true;
   }
 
   // Pass 1: Validate base type matches for args that already have a
   // TypeContext, and collect known TypeParameters per qualified base name.
-  // This enables type disambiguation rule 1 (TD1): when multiple args share the
-  // same custom type, known params from one arg propagate to args that lack
-  // params.
+  // Args of the same custom type must have the same params, so known params
+  // from one arg propagate to args of that type that lack params.
   //
   // known_params maps qbn -> (TypeParameters*, first_arg_index) so that
   // conflicts can be reported with both argument positions.
-  struct KnownEntry {
-    const TypeParameters *params;
-    uint arg_index;
-  };
   std::map<std::string, KnownEntry> known_params;
 
   for (uint i = 0; i < arg_count; i++) {
-    const vef_type_t &expected_type = signature->params[i];
+    const vef_type_t &expected_type = expected_types[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
@@ -1504,11 +1804,15 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
       return true;
     }
 
-    // If this arg has known (non-unknown) params, record them for TD1.
-    if (!tc->is_unknown()) {
+    // Record this argument's parameters so pass 2 can give them to an argument
+    // of the same custom type that has none of its own.
+    if (!tc->is_unknown() && collect_shared_params) {
       auto it = known_params.find(expected_qbn);
       if (it != known_params.end()) {
-        // Another arg already provided params for this type. They must match.
+        // Another argument of this type already supplied parameters, so the
+        // two must agree. (A bind_and_check_types hook skips this block
+        // altogether and may give same-typed arguments differing parameters,
+        // because it decides what they mean.)
         if (!(tc->parameters() == *it->second.params)) {
           villagesql_error(
               "Cannot initialize function '%s': conflicting type parameters "
@@ -1523,10 +1827,41 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     }
   }
 
-  // Pass 2: Resolve unknown params and convert string constants. For each
-  // custom-type arg that needs params, use TD1 (known_params from pass 1).
+  if (out_known_params != nullptr) {
+    *out_known_params = std::move(known_params);
+  }
+  return false;
+}
+
+// Pass 2: Resolve unknown params and convert string constants, applying the
+// parameters pass 1 collected. This never decides parameters itself -- an empty
+// known_params simply means there is nothing to propagate, so a parameterized
+// type that needs them errors out.
+static bool ConvertVDFArguments(
+    THD *thd, const char *func_name, std::string_view extension_name,
+    uint arg_count, Item **args, std::span<const vef_type_t> expected_types,
+    const std::map<std::string, KnownEntry> &known_params,
+    const std::vector<TypeParameters> &hook_arg_params) {
+  // The two sources are alternatives: the server fills known_params when it
+  // works the parameters out itself, a bind_and_check_types hook fills
+  // hook_arg_params when it does, and the caller only ever runs one of them.
+  // They are keyed differently because of how each is decided, i.e.
+  // known_params by type name, since one answer is shared across every argument
+  // of that type; hook_arg_params by argument index, since the hook is asked
+  // about each argument separately.
+  assert(known_params.empty() || hook_arg_params.empty());
+
+  // The hook's answer for one argument, or null if the hook did not supply one
+  // (either because there is no hook, or because it left this argument alone).
+  auto params_for_arg = [&](uint i) -> const TypeParameters * {
+    if (i < hook_arg_params.size() && !hook_arg_params[i].empty()) {
+      return &hook_arg_params[i];
+    }
+    return nullptr;
+  };
+
   for (uint i = 0; i < arg_count; i++) {
-    const vef_type_t &expected_type = signature->params[i];
+    const vef_type_t &expected_type = expected_types[i];
     if (expected_type.id != VEF_TYPE_CUSTOM) continue;
     if (args[i]->type() == Item::NULL_ITEM) continue;
 
@@ -1540,22 +1875,38 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     if (tc != nullptr && !tc->is_unknown()) continue;
 
     // Case 2: Arg has a TypeContext but with unknown params (e.g., from an
-    // inner VDF that returned an unknown-params type). Re-acquire with the
-    // known params if available via TD1.
+    // inner VDF that returned an unknown-params type). Re-acquire using
+    // whichever source is in play -- the hook's answer for this argument, or
+    // the answer shared across arguments of its type (the server's built-in
+    // disambiguation rules).
     if (tc != nullptr && tc->is_unknown()) {
-      auto it = known_params.find(expected_qbn);
-      if (it != known_params.end()) {
+      const TypeParameters *params{nullptr};
+      if (!hook_arg_params.empty()) {
+        params = params_for_arg(i);
+      } else {
+        auto it = known_params.find(expected_qbn);
+        if (it != known_params.end()) params = it->second.params;
+      }
+      if (params != nullptr) {
         const TypeContext *resolved_tc = nullptr;
         if (ResolveTypeToContext(extension_name, expected_type.custom_type,
-                                 *it->second.params, *thd->mem_root,
-                                 resolved_tc)) {
+                                 *params, *thd->mem_root, resolved_tc)) {
           return true;
         }
-        if (resolved_tc != nullptr) {
-          args[i]->set_type_context(resolved_tc);
+        if (resolved_tc == nullptr) {
+          // Defensive. The name was resolved in BuildVarargsExpectedTypes
+          // (varargs) or comes from the compiled signature (fixed arity), and
+          // pass 1 matched it against this argument's own type, so it should
+          // always resolve here.
+          villagesql_error(
+              "Cannot initialize function '%s': custom type '%s' not found for "
+              "argument %u",
+              MYF(0), func_name, expected_type.custom_type, i + 1);
+          return true;
         }
+        args[i]->set_type_context(resolved_tc);
       } else {
-        // No known params available for this type. Error.
+        // Neither the hook nor the built-in rules could supply params.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -1565,15 +1916,29 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
       continue;
     }
 
-    // Case 3: Arg is a constant string — implicit conversion.
-    if (args[i]->type() == Item::STRING_ITEM &&
-        args[i]->const_for_execution()) {
-      // Use known params from TD1 if available, otherwise empty (correct for
-      // non-parameterized types).
+    // Case 3: Arg is a constant string, or a prepared-statement parameter —
+    // implicit conversion.
+    //
+    // A parameter has no value here, so only its type context is set:
+    // InjectAndEncodeCustomType encodes a constant string in place and leaves
+    // any other Item alone, and Item_param::val_str encodes whatever value
+    // each EXECUTE supplies.
+    if (args[i]->type() == Item::PARAM_ITEM ||
+        (args[i]->type() == Item::STRING_ITEM &&
+         args[i]->const_for_execution())) {
+      // Take the params from whichever source is in play -- the hook's answer
+      // for this argument, or the answer shared across arguments of its type
+      // (the server's built-in disambiguation rules). Neither supplying any
+      // leaves them empty, which is the complete and correct answer for a
+      // non-parameterized type.
       TypeParameters resolved_params;
-      auto it = known_params.find(expected_qbn);
-      if (it != known_params.end()) {
-        resolved_params = *it->second.params;
+      if (const TypeParameters *hook_params = params_for_arg(i)) {
+        resolved_params = *hook_params;
+      } else {
+        auto it = known_params.find(expected_qbn);
+        if (it != known_params.end()) {
+          resolved_params = *it->second.params;
+        }
       }
 
       const TypeContext *type_ctx = nullptr;
@@ -1614,17 +1979,355 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return true;
   }
 
-  // Type disambiguation rule 2 (TD2): If the return type is a parameterized
-  // custom type, infer its params from args of the same type.
-  if (out_return_params != nullptr &&
-      signature->return_type.id == VEF_TYPE_CUSTOM &&
-      signature->return_type.custom_type != nullptr) {
-    const std::string return_qbn = make_qualified_base_name(
-        extension_name, signature->return_type.custom_type);
-    auto it = known_params.find(return_qbn);
-    if (it != known_params.end()) {
-      *out_return_params = *it->second.params;
+  return false;
+}
+
+// The built-in disambiguation rule for the return type: if the return type is
+// a parameterized custom type, its params are copied from an argument of the
+// same type.
+static void InferVDFReturnParams(
+    std::string_view extension_name, const vef_signature_t &signature,
+    const std::map<std::string, KnownEntry> &known_params,
+    TypeParameters *out_return_params) {
+  if (signature.return_type.id != VEF_TYPE_CUSTOM ||
+      signature.return_type.custom_type == nullptr) {
+    return;
+  }
+  const std::string return_qbn = make_qualified_base_name(
+      extension_name, signature.return_type.custom_type);
+  auto it = known_params.find(return_qbn);
+  if (it != known_params.end()) {
+    *out_return_params = *it->second.params;
+  }
+}
+
+// Buffer for one canonical "k=v,k=v" params string.
+static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+
+// Invokes a function's bind_and_check_types hook.
+// Fills out_arg_params[i] for each argument the hook resolved (left empty where
+// it had nothing to say) and *out_return_params for the return type. Returns
+// true on error (error already raised).
+static bool CallBindTypesHook(
+    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
+    const char *func_name, uint arg_count, Item **args,
+    std::vector<TypeParameters> *out_arg_params,
+    TypeParameters *out_return_params,
+    std::vector<std::string> *out_arg_type_names = nullptr) {
+  std::vector<vef_type_t> arg_types(arg_count);
+  std::vector<char *> const_values(arg_count, nullptr);
+  std::vector<size_t> const_lengths(arg_count, 0);
+  std::vector<vef_type_params_t> arg_params(arg_count, vef_type_params_t{});
+  std::vector<String> const_store(arg_count);
+
+  // The ABI passes both of these as arrays of pointers rather than as the
+  // structs themselves.
+  std::vector<const vef_type_t *> arg_type_slots(arg_count);
+  std::vector<const vef_type_params_t *> arg_param_slots(arg_count);
+  for (uint i = 0; i < arg_count; i++) {
+    arg_type_slots[i] = &arg_types[i];
+    arg_param_slots[i] = &arg_params[i];
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    const auto *tc = args[i]->get_type_context();
+    if (tc != nullptr) {
+      arg_types[i].id = VEF_TYPE_CUSTOM;
+      arg_types[i].custom_type = tc->type_name().c_str();
+      // Expose this argument's resolved params so the hook can implement its
+      // own params/return type disambiguation logic. The arrays live on the
+      // TypeContext and stay valid for this call.
+      if (!tc->is_unknown()) {
+        const auto &params = tc->parameters();
+        arg_params[i] = {params.count(), params.key_data(),
+                         params.value_data()};
+      }
+    } else {
+      arg_types[i].id = InferArgTypeId(args[i]);
+      arg_types[i].custom_type = nullptr;
     }
+    // Provide constant string values where available
+    if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
+      String *v = args[i]->val_str(&const_store[i]);
+      if (v != nullptr && !args[i]->null_value) {
+        const_values[i] = const_cast<char *>(v->ptr());
+        const_lengths[i] = v->length();
+      }
+    }
+  }
+
+  // One output slot per argument, plus one for the return type. The ABI hands
+  // the hook an array of pointers rather than the slots themselves.
+  std::vector<vef_inferred_type_params_t> out_args(arg_count);
+  std::vector<vef_inferred_type_params_t *> out_arg_slots(arg_count);
+  std::vector<char> arg_bufs(arg_count * kBindParamsBufLen);
+  for (uint i = 0; i < arg_count; i++) {
+    out_args[i] = {};
+    out_args[i].buf = arg_bufs.data() + i * kBindParamsBufLen;
+    out_args[i].max_buf_len = kBindParamsBufLen;
+    out_arg_slots[i] = &out_args[i];
+  }
+
+  // The type-name channel is offered only for a varargs call:
+  // a fixed-arity signature already says what each argument
+  // must be.
+  const bool offer_arg_types = out_arg_type_names != nullptr && arg_count > 0;
+  std::vector<vef_inferred_type_params_t> out_names;
+  std::vector<vef_inferred_type_params_t *> out_name_slots;
+  std::vector<char> name_bufs;
+  if (offer_arg_types) {
+    out_names.resize(arg_count);
+    out_name_slots.resize(arg_count);
+    name_bufs.resize(arg_count * VEF_MAX_TYPE_NAME_LEN);
+    for (uint i = 0; i < arg_count; i++) {
+      out_names[i].buf = name_bufs.data() + i * VEF_MAX_TYPE_NAME_LEN;
+      out_names[i].max_buf_len = VEF_MAX_TYPE_NAME_LEN;
+      out_name_slots[i] = &out_names[i];
+    }
+  }
+
+  char return_buf[kBindParamsBufLen];
+  char err_msg[VEF_MAX_ERROR_LEN] = {0};
+  vef_inferred_type_params_t out_return{};
+
+  vef_bind_types_args_t bt_args{};
+  bt_args.arg_count = arg_count;
+  bt_args.arg_types = arg_type_slots.data();
+  bt_args.const_values = const_values.data();
+  bt_args.const_lengths = const_lengths.data();
+  bt_args.arg_params = arg_param_slots.data();
+
+  vef_bind_types_result_t bt_result{};
+  bt_result.type = VEF_RESULT_VALUE;
+  bt_result.error_msg = err_msg;
+  out_return.buf = return_buf;
+  out_return.max_buf_len = sizeof(return_buf);
+  bt_result.out_return_params = &out_return;
+  bt_result.out_arg_params = arg_count > 0 ? out_arg_slots.data() : nullptr;
+  bt_result.out_arg_types = offer_arg_types ? out_name_slots.data() : nullptr;
+
+  bind_and_check(&ctx, &bt_args, &bt_result);
+
+  // Only VEF_RESULT_VALUE is success.
+  if (bt_result.type != VEF_RESULT_VALUE) {
+    villagesql_error("Cannot initialize function '%s': %s", MYF(0), func_name,
+                     err_msg[0] ? err_msg : "bind_and_check_types failed");
+    return true;
+  }
+  if (out_return.overflow) {
+    villagesql_error(
+        "Cannot initialize function '%s': bind_and_check_types return params "
+        "buffer overflow",
+        MYF(0), func_name);
+    return true;
+  }
+  if (out_return.actual_len > 0 && out_return_params != nullptr) {
+    *out_return_params = TypeParameters::from_raw(
+        std::string(return_buf, out_return.actual_len));
+    const std::string validation_error = out_return_params->validation_error();
+    if (!validation_error.empty()) {
+      villagesql_error("Invalid inferred return parameters: %s", MYF(0),
+                       validation_error.c_str());
+      return true;
+    }
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if (out_args[i].overflow) {
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types params "
+          "buffer overflow for argument %u",
+          MYF(0), func_name, i + 1);
+      return true;
+    }
+    if (out_args[i].actual_len > 0) {
+      (*out_arg_params)[i] = TypeParameters::from_raw(
+          std::string(out_args[i].buf, out_args[i].actual_len));
+      const std::string validation_error =
+          (*out_arg_params)[i].validation_error();
+      if (!validation_error.empty()) {
+        villagesql_error("Invalid inferred argument parameters: %s", MYF(0),
+                         validation_error.c_str());
+        return true;
+      }
+    }
+
+    if (!offer_arg_types) continue;
+    if (out_names[i].overflow) {
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types type name too "
+          "long for argument %u",
+          MYF(0), func_name, i + 1);
+      return true;
+    }
+    if (out_names[i].actual_len > 0) {
+      (*out_arg_type_names)[i] =
+          std::string(out_names[i].buf, out_names[i].actual_len);
+    }
+  }
+  return false;
+}
+
+vef_type_id InferArgTypeId(const Item *item) {
+  if (item->get_type_context() != nullptr) return VEF_TYPE_CUSTOM;
+  switch (item->result_type()) {
+    case REAL_RESULT:
+      return VEF_TYPE_REAL;
+    case INT_RESULT:
+      return VEF_TYPE_INT;
+    default:
+      return VEF_TYPE_STRING;
+  }
+}
+
+// Turns a varargs hook's answers into the expected-type array the two passes
+// consume. A type the hook named is looked up rather than trusted; an
+// argument the hook stayed silent about keeps the type it already carries.
+//
+// name_store owns the names, and out_expected points into it.
+// Returns true on error (already raised).
+static bool BuildVarargsExpectedTypes(
+    const char *func_name, std::string_view extension_name, uint arg_count,
+    Item **args, const std::vector<std::string> &hook_names,
+    std::vector<std::string> *name_store,
+    std::vector<vef_type_t> *out_expected) {
+  for (uint i = 0; i < arg_count; i++) {
+    if (hook_names[i].empty()) {
+      // The hook said nothing, so the argument stands as the server already
+      // typed it.
+      const auto *tc = args[i]->get_type_context();
+      if (tc != nullptr) (*name_store)[i] = tc->type_name();
+      continue;
+    }
+
+    // The name is extension-supplied, so look it up rather than trust it.
+    const TypeDescriptor *td = nullptr;
+    if (ResolveTypeDescriptor(extension_name, hook_names[i], td)) return true;
+    if (td == nullptr) {
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types named unknown "
+          "custom type '%s' for argument %u",
+          MYF(0), func_name, hook_names[i].c_str(), i + 1);
+      return true;
+    }
+    // Copy the canonical spelling: the read lock is gone once we return, and
+    // an UNINSTALL EXTENSION could free the registry entry behind it.
+    (*name_store)[i] = td->type_name();
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if ((*name_store)[i].empty()) {
+      // Not a custom argument, so record what it actually is.
+      (*out_expected)[i] = {InferArgTypeId(args[i]), nullptr};
+    } else {
+      (*out_expected)[i] = {VEF_TYPE_CUSTOM, (*name_store)[i].c_str()};
+    }
+  }
+  return false;
+}
+
+bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
+                                    std::string_view extension_name,
+                                    uint arg_count, Item **args,
+                                    const vef_signature_t *signature,
+                                    TypeParameters *out_return_params,
+                                    const vef_bind_types_func_t bind_and_check,
+                                    vef_context_t &ctx) {
+  const bool has_bind_hook = nullptr != bind_and_check;
+  const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
+
+  // Varargs without a hook: skip both arg-count and per-arg type validation.
+  // The function's prerun hook is responsible for inspecting arg_count and
+  // arg_types and rejecting calls it does not accept.
+  if (varargs && !has_bind_hook) return false;
+
+  // Backing store for a varargs expected-type array.
+  std::vector<std::string> name_store;
+  std::vector<vef_type_t> varargs_expected;
+
+  // One slot per argument for whatever the hook resolves; left empty when
+  // there is no hook.
+  std::vector<TypeParameters> hook_arg_params;
+  if (has_bind_hook) hook_arg_params.resize(arg_count);
+
+  if (varargs) {
+    // Varargs runs the hook first, because there is no signature to check
+    // arguments against and the hook supplies what signature->params would
+    // have.
+    std::vector<std::string> hook_arg_type_names(arg_count);
+    if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
+                          &hook_arg_params, out_return_params,
+                          &hook_arg_type_names)) {
+      return true;
+    }
+    // Parameters are only ever applied to an argument that has a type, and a
+    // varargs call has no signature to take one from. Thus, a hook cannot
+    // supply parameters without also naming the type.
+    for (uint i = 0; i < arg_count; i++) {
+      if (hook_arg_params[i].empty() || !hook_arg_type_names[i].empty()) {
+        continue;
+      }
+      villagesql_error(
+          "Cannot initialize function '%s': bind_and_check_types supplied type "
+          "parameters for argument %u without naming its type",
+          MYF(0), func_name, i + 1);
+      return true;
+    }
+
+    name_store.resize(arg_count);
+    varargs_expected.resize(arg_count);
+    if (BuildVarargsExpectedTypes(func_name, extension_name, arg_count, args,
+                                  hook_arg_type_names, &name_store,
+                                  &varargs_expected)) {
+      return true;
+    }
+  }
+
+  // What each argument is required to be.
+  const std::span<const vef_type_t> expected_types =
+      varargs ? std::span<const vef_type_t>{varargs_expected}
+              : std::span<const vef_type_t>{signature->params,
+                                            signature->param_count};
+
+  // A bind_and_check_types hook replaces the built-in type disambiguation
+  // rules. Passing nullptr is the off switch: known_params stays empty, so
+  // pass 1 collects nothing and no longer requires arguments of the same
+  // custom type to agree, and pass 2 has nothing to propagate between them.
+  // Pass 2 still does the rest of its job -- encoding string literals,
+  // rejecting arguments that are neither a custom value nor a literal, and
+  // applying whatever the hook decided below.
+  std::map<std::string, KnownEntry> known_params;
+  if (ValidateVDFArguments(func_name, extension_name, arg_count, args,
+                           expected_types,
+                           has_bind_hook ? nullptr : &known_params)) {
+    return true;
+  }
+
+  // Fixed arity runs the hook here. The hook sits between the passes:
+  // it sees what pass 1 resolved, and the params it decides are what
+  // pass 2 applies.
+  if (has_bind_hook && !varargs) {
+    // The type-name argument is left at its default: a fixed-arity signature
+    // already declares every argument's type, so the hook has nothing to name.
+    if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
+                          &hook_arg_params, out_return_params)) {
+      return true;
+    }
+  }
+
+  if (ConvertVDFArguments(thd, func_name, extension_name, arg_count, args,
+                          expected_types, known_params, hook_arg_params)) {
+    return true;
+  }
+
+  // Nothing left to work out: the hook already supplied the return type's
+  // params, so skip the built-in rule below. A varargs call always has a hook
+  // by the time it reaches here, so what follows is fixed-arity only.
+  if (has_bind_hook) return false;
+
+  if (out_return_params != nullptr) {
+    InferVDFReturnParams(extension_name, *signature, known_params,
+                         out_return_params);
   }
 
   return false;
@@ -1766,8 +2469,7 @@ bool InjectCustomSpParams(
       // are plain SQL types with no entry — only custom-typed ones match.
       const SpParamEntry *param_entry = nullptr;
       for (const SpParamEntry *entry : sp_params) {
-        if (my_strcasecmp(system_charset_info, cdef->field_name,
-                          entry->param_name().c_str()) == 0) {
+        if (column_names_equal(cdef->field_name, entry->param_name())) {
           param_entry = entry;
           break;
         }
@@ -1780,8 +2482,15 @@ bool InjectCustomSpParams(
 
       TypeDescriptorKey tdk(param_entry->type_name, param_entry->extension_name,
                             param_entry->extension_version);
-      TypeContextKey tck(
-          tdk, TypeParameters::from_json(param_entry->type_parameters));
+      TypeParameters parameters =
+          TypeParameters::from_json(param_entry->type_parameters);
+      const std::string validation_error = parameters.validation_error();
+      if (!validation_error.empty()) {
+        villagesql_error("Invalid stored routine type parameters: %s", MYF(0),
+                         validation_error.c_str());
+        return true;
+      }
+      TypeContextKey tck(tdk, std::move(parameters));
 
       if (!vclient.type_contexts().get_committed(tck)) needs_create = true;
 
@@ -1833,8 +2542,9 @@ bool InjectCustomSpParams(
       // The Item_field delegates has_type_context() to its field pointer, but
       // set_type_context() on the Item base caches it for non-field items
       // (Item_sp_variable) that call get_type_context() on this_item().
-      // TODO(villagesql-ga): Once Item_field delegates set_type_context() to
-      // its underlying Field, this call can be dropped for field-backed items.
+      // TODO(villagesql-general): Once Item_field delegates set_type_context()
+      // to its underlying Field, this call can be dropped for field-backed
+      // items.
       if (var_items.array() && var_items[m.field_idx]) {
         var_items[m.field_idx]->set_type_context(tc_ref.get());
       }

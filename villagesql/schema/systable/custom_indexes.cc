@@ -18,11 +18,10 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
-#include "include/sql_string.h"
 #include "scope_guard.h"
-#include "sql-common/json_dom.h"
-#include "sql-common/json_error_handler.h"
 #include "sql/field.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
@@ -101,38 +100,22 @@ bool TableTraits<IndexEntry>::write_to_table(TABLE &table,
 
 bool TableTraits<IndexEntry>::update_in_table(TABLE &table,
                                               const IndexEntry &entry,
-                                              const std::string &old_key) {
-  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
-
-  // Parse natural key "db.table.index_name"
-  size_t first_dot = lookup_key.find('.');
-  size_t second_dot = lookup_key.find('.', first_dot + 1);
-  if (should_assert_if_true(first_dot == std::string::npos ||
-                            second_dot == std::string::npos)) {
-    LogVSQL(ERROR_LEVEL, "Invalid key format for index update: %s",
-            lookup_key.c_str());
-    return true;
-  }
-
-  std::string old_db = lookup_key.substr(0, first_dot);
-  std::string old_table =
-      lookup_key.substr(first_dot + 1, second_dot - first_dot - 1);
-  std::string old_index = lookup_key.substr(second_dot + 1);
+                                              const IndexKey &old_key) {
+  const IndexKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   Field **field = table.field;
 
   // Set fields[1-3] for natural unique key lookup (key_info[1])
-  field[1]->store(old_db.c_str(), old_db.length(), &my_charset_utf8mb4_bin);
-  field[2]->store(old_table.c_str(), old_table.length(),
+  field[1]->store(lookup_key.db().c_str(), lookup_key.db().length(),
                   &my_charset_utf8mb4_bin);
-  field[3]->store(old_index.c_str(), old_index.length(),
+  field[2]->store(lookup_key.table().c_str(), lookup_key.table().length(),
                   &my_charset_utf8mb4_bin);
+  field[3]->store(lookup_key.index_name().c_str(),
+                  lookup_key.index_name().length(), &my_charset_utf8mb4_bin);
 
   uchar key_buf[MAX_KEY_LENGTH];
   key_copy(key_buf, table.record[0], &table.key_info[1],
            table.key_info[1].key_length);
-
-  store_record(&table, record[1]);
 
   int error = table.file->ha_index_init(1, false);
   if (error) {
@@ -144,8 +127,7 @@ bool TableTraits<IndexEntry>::update_in_table(TABLE &table,
   auto index_end_guard =
       create_scope_guard([&table]() { table.file->ha_index_end(); });
 
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  error = read_row_for_update(table, key_buf);
   if (error) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for index update: error %d",
             error);
@@ -229,29 +211,19 @@ bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
 }
 
 std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
-  Json_object_ptr obj(new (std::nothrow) Json_object());
-  if (!obj) return "{}";
+  StringPairs pairs;
+  pairs.reserve(params.size());
 
-  // Parameters are stored in Json_object using a std::map ordered by
-  // Json_key_comparator (length first, then memcmp), producing a
-  // deterministic canonical serialization order.
   for (const IndexWithParam &p : params) {
-    std::string key(p.key.str, p.key.length);
-    Json_dom_ptr val;
-    if (p.is_string) {
-      val.reset(new (std::nothrow) Json_string(
-          std::string(p.value.str.str, p.value.str.length)));
-    } else {
-      val.reset(new (std::nothrow) Json_uint(p.value.num));
-    }
-    if (!val || obj->add_alias(key, std::move(val))) return "{}";  // OOM
+    // Numbers become JSON strings: json_object_to_pairs() rejects a non-string
+    // member.
+    pairs.emplace_back(std::string(p.key.str, p.key.length),
+                       p.is_string
+                           ? std::string(p.value.str.str, p.value.str.length)
+                           : std::to_string(p.value.num));
   }
 
-  Json_wrapper wrapper(obj.release());
-  StringBuffer<256> buf;
-  if (wrapper.to_string(&buf, false, "params_to_json", JsonDepthErrorHandler))
-    return "{}";
-  return std::string(buf.ptr(), buf.length());
+  return json_object_from_pairs(pairs);
 }
 
 }  // namespace villagesql

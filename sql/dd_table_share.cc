@@ -2300,6 +2300,14 @@ bool open_table_def(THD *thd, TABLE_SHARE *share, const dd::Table &table_def) {
   thd->mem_root = &share->mem_root;  // Needed for make_field()++
   share->blob_fields = 0;            // HACK
 
+  // VillageSQL: Record whether this DD table is a user-created temporary table
+  // before filling columns. fill_columns_from_dd calls MaybeInjectCustomType,
+  // which uses this to consult the session-local metadata map (never the
+  // victionary) for user temporary tables. The DD object is the authoritative
+  // source: dd::create_tmp_table sets is_temporary() for CREATE TEMPORARY
+  // TABLE, while base tables and ALTER #sql rebuild intermediates do not.
+  share->is_user_tmp_table = table_def.is_temporary();
+
   // Fill the TABLE_SHARE with details.
   bool error = (fill_share_from_dd(thd, share, &table_def) ||
                 fill_columns_from_dd(thd, share, &table_def) ||

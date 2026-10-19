@@ -1,0 +1,54 @@
+# A pending update whose target fails to register part way through at
+# restart must leave nothing of the target behind. Registration marks the
+# target's descriptors in the victionary before it fails, and those marks point
+# into the target .so. Startup has to discard them and unload the target
+# .so before falling back to the current version. Every extension loads in
+# the same startup transaction, so only the target's marks should be dropped.
+#
+# The failure injection needs a debug build. It fires once, after v2's
+# COUNTER type is marked, then disarms so the v1 fallback can load.
+--source include/have_debug.inc
+
+call mtr.add_suppression("pending update to version .* not applied");
+call mtr.add_suppression("injected failure after marking type");
+call mtr.add_suppression("Failed to register extension 'update_test'");
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
+
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+
+# Verbosity 3 logs the unregister call that shows the target .so unloaded.
+--let $restart_parameters = restart: --debug=d,villagesql_fail_register_after_type_mark --log-error-verbosity=3
+--source include/restart_mysqld.inc
+
+# The apply was rolled back: still on 1.0.0, with the failure recorded.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# counter_double resolves to v1 (returns N*2), not v2 (N*3).
+SELECT id, update_test.counter_double(val) AS doubled FROM t ORDER BY id;
+
+# The restart-time precheck also opens and closes the target, so count only
+# what follows the injected failure. The v1 fallback stays loaded.
+--let $assert_text = The target .so was unloaded after its registration failed
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = Calling vef_unregister for extension .*update_test
+--let $assert_count = 1
+--let $assert_only_after = injected failure after marking type
+--source include/assert_grep.inc
+
+# The update is still pending, so a restart without the injection retries
+# it. The failed attempt left nothing behind to block it. counter_double now
+# resolves to v2 (returns N*3).
+--let $restart_parameters = restart:
+--source include/restart_mysqld.inc
+
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+SELECT id, update_test.counter_double(val) AS doubled FROM t ORDER BY id;
+
+DROP TABLE t;
+UNINSTALL EXTENSION update_test;

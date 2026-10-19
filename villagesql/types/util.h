@@ -32,11 +32,14 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
+class Alter_info;
 class Create_field;
 class Field;
 class Item;
 class Item_func;
 enum class enum_sp_type;
+class KEY;
+class KEY_CREATE_INFO;
 struct MEM_ROOT;
 struct ORDER;
 class sp_pcontext;
@@ -71,6 +74,15 @@ extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
 // Only operates on committed entries (existing tables opened from DD).
 // Returns true on error, false on success (including when not a custom index).
 extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo);
+
+// True if the ALTER changes the primary key of a table that has a custom
+// (USING EXTENDED) index -- its column set, order, or any column's definition.
+// old_table is the table being altered; new_key_info/new_key_count are the
+// prepared keys for the new table and alter_info describes the column changes.
+extern bool alter_changes_pk_of_custom_indexed_table(const TABLE *old_table,
+                                                     Alter_info *alter_info,
+                                                     const KEY *new_key_info,
+                                                     uint new_key_count);
 
 // Injects custom TypeContexts into SP variable fields for a stored procedure
 // by looking up villagesql.custom_sp_params. Restores custom type information
@@ -144,8 +156,22 @@ extern void RemoveTmpTableMetadata(THD *thd, TABLE *table);
 extern void PrepareAlterCustomFields(THD *thd,
                                      const List<Create_field> &create_list);
 
-// Clear thd->villagesql_alter_custom_fields.
-extern void ClearAlterCustomFields(THD *thd);
+// Stash old_table's real (db, table) on the THD so MaybeInjectCustomIndex can
+// resolve the #sql-xxx rebuild table's custom indexes against the victionary
+// under the real name. Called from mysql_alter_table before the rebuild table
+// is opened.
+extern void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table);
+
+// Carry a custom (USING EXTENDED) index's type and extension names from the old
+// key's IndexContext onto key_create_info, so key_create_info.is_custom_index()
+// stays true for the rebuilt key (the names are copied onto thd->mem_root).
+// No-op when key_info is not a custom index. Returns true on error (OOM, with
+// my_error raised), false on success.
+extern bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
+                                            KEY_CREATE_INFO *key_create_info);
+
+// Clear thd->villagesql_alter_custom_fields and the alter target name stash.
+extern void ClearAlterCustomContext(THD *thd);
 
 // Check if any column in a create_list has a custom type.
 // Used to determine if we need to regenerate the CREATE TABLE statement
@@ -162,12 +188,30 @@ extern bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
                                               const char *new_db,
                                               const char *new_table);
 
+// Why an encode for a custom type field produced no value. Only meaningful
+// when EncodeStringForField returned nullptr.
+enum class EncodeStatus {
+  // The encode called set_null(): store SQL NULL for this field.
+  kNull,
+  // The encode produced nothing usable, most often because the input did not
+  // parse as this type. Nothing is final: the caller decides whether this is
+  // an error, and reports it.
+  kBadValue,
+  // The encode called error(): the statement fails with the extension's own
+  // message, already raised. Propagate the failure without adding another.
+  kErrorRaised,
+  // Out of memory, already reported. Kept apart from kErrorRaised so callers
+  // can return TYPE_ERR_OOM for it alone.
+  kOom,
+};
+
 // Encodes a string for storage in a custom type field, with error reporting.
-// The TypeContext and field name are taken from the field itself. On error,
-// returns nullptr; if is_valid is false the value was invalid (warning
-// pushed), otherwise OOM.
+// The TypeContext and field name are taken from the field itself. Returns the
+// encoded String*, or nullptr with status saying why. On kBadValue a warning
+// has been pushed, so the caller only has to decide whether to promote it to
+// an error.
 extern String *EncodeStringForField(Field *field, const String &from,
-                                    bool &is_valid);
+                                    EncodeStatus &status);
 
 // Decode [data, data+len) for the given TypeContext without caching any state.
 // Use this for one-shot decodes outside the row-reading hot path (e.g. query
@@ -188,6 +232,18 @@ extern bool DecodeStringForItem(Item *item, const String &from, String *out);
 
 // Appends "extension_name.type_name" to the given String.
 extern void AppendFullyQualifiedName(const TypeContext &tc, String *out);
+
+// Appends the custom index profile bound to a key part, as
+// " extension_name.profile_name", for SHOW CREATE TABLE.
+extern void AppendCustomIndexProfile(const THD *thd,
+                                     const IndexProfileDescriptor *profile,
+                                     String *out);
+
+// Appends " USING EXTENDED(extension_name.index_type_name)" for a custom
+// index, followed by " WITH (key = value, ...)" when it was instantiated with
+// parameters. Appends nothing when index_ctx is nullptr (a regular key).
+extern void AppendCustomIndexType(const THD *thd, const IndexContext *index_ctx,
+                                  String *out);
 
 // Compute hash for a custom type value. Returns nullopt if no custom hash is
 // registered for this type (binary hash is safe in that case).
@@ -380,19 +436,25 @@ extern bool TryImplicitCastToCustom(Item *item, const TypeContext &tc);
 // Returns false on success, true on error (with my_error already called)
 extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 
+// The VEF type of a VDF argument: VEF_TYPE_CUSTOM when the Item carries a
+// TypeContext, otherwise derived from its SQL result type.
+extern vef_type_id InferArgTypeId(const Item *item);
+
 // Validate VDF arguments against function signature and convert string
 // constants to custom types where appropriate. Applies type disambiguation
 // rules to the arguments (args of the same custom type share params) to resolve
 // unknown type parameters. If out_return_params is non-null and the return type
 // is a parameterized custom type, writes the resolved TypeParameters for the
 // return type (inferred from args via the rule that the return parameters are
-// the same as those matching arguements of the same abstract type). Returns
-// false on success, true on error.
-extern bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
-                                           std::string_view extension_name,
-                                           uint arg_count, Item **args,
-                                           const vef_signature_t *signature,
-                                           TypeParameters *out_return_params);
+// the same as those matching arguements of the same abstract type).
+// When a bind_and_check_types hook is provided, that hook replaces the
+// otherwise automatically applied type disambiguation rules. Returns false on
+// success, true on error.
+extern bool ValidateAndConvertVDFArguments(
+    THD *thd, const char *func_name, std::string_view extension_name,
+    uint arg_count, Item **args, const vef_signature_t *signature,
+    TypeParameters *out_return_params,
+    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.

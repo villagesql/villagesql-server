@@ -1,0 +1,113 @@
+# KNN over a custom (USING EXTENDED) index on a table whose COMPOSITE primary
+# key mixes fixed- and variable-length column types, with a variable-length
+# column FIRST and fixed/variable columns interleaved. The index stores every
+# primary-key part at insert (pkey_columns, HAS_ROW_REF) and returns all of them
+# at scan_fetch; the server resolves the owning row by a clustered lookup on the
+# full key (handler::custom_index_pkey_to_row). A regression that dropped or
+# reordered any part would resolve to the wrong row or fail the lookup.
+#
+# Fixed vs variable length in InnoDB is NOT the SQL type name: CHAR(n) latin1 is
+# fixed, CHAR(n) utf8mb4 is variable (COMPACT stores multibyte CHAR variable-
+# length). Both appear in this key, and a variable-length column comes first and
+# is interleaved with fixed ones -- so resolution must resume a fixed-field read
+# immediately after a variable one.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+
+# Composite PK, variable-length column first, fixed/variable interleaved:
+#   k_vc  VARCHAR(75) utf8mb4  variable
+#   k_ti  TINYINT              fixed
+#   k_cu  CHAR(8) utf8mb4      variable
+#   k_bi  BIGINT               fixed
+#   k_vb  VARBINARY(70)        variable
+#   k_cl  CHAR(10) latin1      fixed
+#   k_bin BINARY(16)           fixed
+CREATE TABLE docs (
+  k_vc  VARCHAR(75) CHARACTER SET utf8mb4 NOT NULL,
+  k_ti  TINYINT                           NOT NULL,
+  k_cu  CHAR(8) CHARACTER SET utf8mb4      NOT NULL,
+  k_bi  BIGINT                            NOT NULL,
+  k_vb  VARBINARY(70)                     NOT NULL,
+  k_cl  CHAR(10) CHARACTER SET latin1      NOT NULL,
+  k_bin BINARY(16)                        NOT NULL,
+  vec   KVECTOR                           NOT NULL,
+  tag   VARCHAR(16),
+  PRIMARY KEY (k_vc, k_ti, k_cu, k_bi, k_vb, k_cl, k_bin)
+);
+
+CREATE INDEX idx_vec ON docs (vec)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+# Three rows with distinct composite keys and distinct vectors. The key columns
+# carry deliberately awkward bytes:
+#   - embedded NUL bytes in VARBINARY (a C-string-style reader would truncate)
+#   - VARBINARY bytes that look like a 4-byte length prefix (0x00000004...)
+#   - a VARCHAR whose bytes equal another row's, disambiguated only by later
+#     parts (so a dropped/reordered part collapses rows)
+#   - CHAR with a trailing space and an all-NUL BINARY(16)
+#   - integer extremes (min/max TINYINT and BIGINT, and 0)
+INSERT INTO docs VALUES
+  (REPEAT('e', 75), -128, REPEAT(_utf8mb4 'x', 8), -9223372036854775808,
+   0x0000000441424344, 'alpha', 0x00112233445566778899AABBCCDDEEFF,
+   '[1,2,3,4]', 'one');
+INSERT INTO docs VALUES
+  (REPEAT(_utf8mb4 '€', 25), 127, 'short', 9223372036854775807,
+   0x41004200430044, 'beta ', 0x00000000000000000000000000000000,
+   '[5,6,7,8]', 'two');
+INSERT INTO docs VALUES
+  ('', 0, REPEAT(_utf8mb4 'y', 8), 0,
+   0x00, 'gamma', 0x0102030405060708090A0B0C0D0E0F10,
+   '[9,1,2,3]', 'three');
+# Same k_vc and k_ti as row 'two', diverging only at k_cu and beyond: proves the
+# whole key (not a prefix) is stored and returned.
+INSERT INTO docs VALUES
+  (REPEAT(_utf8mb4 '€', 25), 127, 'other', 9223372036854775807,
+   0xFF, 'delta', 0x0F0E0D0C0B0A09080706050403020100,
+   '[4,3,2,1]', 'four');
+
+# All four rows are stored and read back by their composite key.
+SELECT k_ti, k_bi, k_cl, tag FROM docs FORCE INDEX (PRIMARY)
+  ORDER BY tag;
+
+# The KNN query must be served BY the custom index (a distance scan, no
+# filesort) -- a full scan + sort would return correct rows without ever
+# exercising the multi-part row-reference path.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT tag FROM docs
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+             KVECTOR::from_string('[5,6,7,8]'))
+  LIMIT 1;
+
+# Query vector is exactly row 'two' ([5,6,7,8]): the whole composite key
+# round-trips through the returned reference to resolve that row.
+SELECT tag FROM docs
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+             KVECTOR::from_string('[5,6,7,8]'))
+  LIMIT 1;
+
+SELECT tag FROM docs
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+             KVECTOR::from_string('[1,2,3,4]'))
+  LIMIT 1;
+
+# All four, each resolved to its correct row: 'two' and 'four' share k_vc, k_ti
+# and k_bi and diverge only at k_cu, so a prefix-only key would collapse them.
+--sorted_result
+SELECT tag FROM docs
+  ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+             KVECTOR::from_string('[1,2,3,4]'))
+  LIMIT 4;
+
+# The custom index scan executed: begin once, fetch once per returned row.
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS scan_begins;
+SELECT vsql_knn_index_test.kvec_scan_fetch_count() AS scan_fetches;
+
+DROP TABLE docs;
+UNINSTALL EXTENSION vsql_knn_index_test;

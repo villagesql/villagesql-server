@@ -396,11 +396,12 @@ class SystemTableMap {
            op_type == OperationType::UPDATE);
 
     // Create shared_ptr for the entry
-    // TODO(villagesql-ga): what happens if the underlying allocation fails? It
-    // probably throws an exception and crashes, but we should validate that. If
-    // that's the behavior, we either need to wrap make_shared<> or else come up
-    // with a nothrow alternative that achieves the same result. This would help
-    // us more consistently handle OOM conditions.
+    // TODO(villagesql-production): what happens if the underlying allocation
+    // fails? It probably throws an exception and crashes, but we should
+    // validate that. If that's the behavior, we either need to wrap
+    // make_shared<> or else come up with a nothrow alternative that achieves
+    // the same result. This would help us more consistently handle OOM
+    // conditions.
     auto entry_ptr = std::make_shared<EntryType>(std::move(entry));
     if (should_assert_if_null(entry_ptr)) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(EntryType));
@@ -496,16 +497,50 @@ class SystemTableMap {
 
     auto thd_it = m_uncommitted.find(thd);
     if (thd_it != m_uncommitted.end()) {
-      // Delete all pending operations
-      PendingOperation<EntryType> *op = thd_it->second.first;
-      while (op) {
-        PendingOperation<EntryType> *next_op = op->next;
-        delete op;
-        op = next_op;
-      }
+      delete_operations(thd_it->second.first);
     }
 
     m_uncommitted.erase(thd);
+  }
+
+  // A position in this THD's uncommitted operations. rollback_to() discards
+  // the operations marked after it and keeps the earlier ones.
+  struct SavepointPosition {
+    uint elements;
+  };
+
+  // Requires read or write lock
+  SavepointPosition savepoint(THD *thd) const {
+    assert_read_or_write_lock_held();
+    auto thd_it = m_uncommitted.find(thd);
+    return {thd_it == m_uncommitted.end() ? 0 : thd_it->second.elements};
+  }
+
+  // Requires write lock
+  void rollback_to(THD *thd, SavepointPosition savepoint) {
+    assert_write_lock_held();
+    if (!thd) return;
+
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end()) {
+      assert(savepoint.elements == 0);
+      return;
+    }
+
+    UncommittedList &list = thd_it->second;
+    assert(list.elements >= savepoint.elements);
+    if (savepoint.elements == 0) {
+      rollback(thd);
+      return;
+    }
+
+    // Cut the list after the last operation the savepoint keeps.
+    PendingOperation<EntryType> *last_kept = list.first;
+    for (uint i = 1; i < savepoint.elements; i++) last_kept = last_kept->next;
+    delete_operations(last_kept->next);
+    last_kept->next = nullptr;
+    list.next = &last_kept->next;
+    list.elements = savepoint.elements;
   }
 
   // ===== Bulk operations =====
@@ -560,6 +595,63 @@ class SystemTableMap {
       result.push_back(it->second.get());
       ++it;
     }
+    return result;
+  }
+
+  // Get all entries matching a prefix that are visible to this THD: committed
+  // entries with any uncommitted operations for this THD overlaid (inserts add,
+  // updates replace, deletes hide). Needed during DDL, where the rows staged by
+  // the current statement are not yet committed.
+  // REQUIRES: Caller must hold read lock
+  // WARNING: Returned pointers are only valid while lock is held
+  template <typename T = EntryType>
+  std::vector<const EntryType *> get_prefix(
+      THD *thd, const typename T::key_prefix_type &prefix) const {
+    assert_read_or_write_lock_held();
+    const std::string &prefix_str = prefix.str();
+    if (prefix_str.empty()) return {};
+    if (!thd) return get_prefix_committed<T>(prefix);
+
+    auto thd_it = m_uncommitted.find(thd);
+    if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+      return get_prefix_committed<T>(prefix);
+    }
+
+    std::string upper = prefix_str;
+    upper.back() = upper.back() + 1;
+    auto in_range = [&](const std::string &k) {
+      return k >= prefix_str && k < upper;
+    };
+
+    // Walk staged ops in order; the most recent op per key wins. A nullptr
+    // entry means the key is hidden (DELETE, or the old key of a rename).
+    std::map<std::string, const EntryType *> staged;
+    for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
+         op = op->next) {
+      if (op->op_type == OperationType::UPDATE) {
+        const std::string &old_key = op->key.str();
+        if (!old_key.empty() && in_range(old_key)) staged[old_key] = nullptr;
+      }
+      const std::string &k = op->entry ? op->entry->key().str() : op->key.str();
+      if (in_range(k)) staged[k] = op->entry.get();
+    }
+
+    std::map<std::string, const EntryType *> merged;
+    for (auto it = m_committed.lower_bound(prefix_str);
+         it != m_committed.end() && it->first < upper; ++it) {
+      merged[it->first] = it->second.get();
+    }
+    for (const auto &[key, entry] : staged) {
+      if (entry == nullptr) {
+        merged.erase(key);
+      } else {
+        merged[key] = entry;
+      }
+    }
+
+    std::vector<const EntryType *> result;
+    result.reserve(merged.size());
+    for (const auto &[key, entry] : merged) result.push_back(entry);
     return result;
   }
 
@@ -711,15 +803,18 @@ class SystemTableMap {
   // THD. Used by clear() and the destructor; does not assert the lock so it is
   // safe to call during teardown.
   void delete_all_uncommitted() {
-    for (auto &[thd, list] : m_uncommitted) {
-      PendingOperation<EntryType> *op = list.first;
-      while (op) {
-        PendingOperation<EntryType> *next_op = op->next;
-        delete op;
-        op = next_op;
-      }
-    }
+    for (auto &[_, list] : m_uncommitted) delete_operations(list.first);
     m_uncommitted.clear();
+  }
+
+  // Delete the heap-allocated PendingOperation nodes from `op` to the end of
+  // its list. Does not update the list that held them.
+  static void delete_operations(PendingOperation<EntryType> *op) {
+    while (op) {
+      PendingOperation<EntryType> *next_op = op->next;
+      delete op;
+      op = next_op;
+    }
   }
 
   // Note: No locks - parent VictionaryClient's lock protects all access
@@ -838,6 +933,12 @@ class VictionaryClient {
   std::vector<const IndexColumnEntry *> GetColumnsForIndex(
       uint64_t index_id) const;
 
+  // Same, but also sees the rows staged (uncommitted) by this THD. Use this on
+  // DDL paths, where the index and its column bindings are staged together and
+  // are not yet committed.
+  std::vector<const IndexColumnEntry *> GetColumnsForIndex(
+      THD *thd, uint64_t index_id) const;
+
   // Allocate a unique index_id for a new custom index. The counter is
   // initialized at startup from MAX(index_id) in custom_indexes so the
   // returned value is safe to use as the physical primary key before
@@ -851,6 +952,34 @@ class VictionaryClient {
 
   // Rollback all uncommitted entries across all tables for this transaction
   void rollback_all_tables(THD *thd);
+
+  // A position in this THD's uncommitted entries across all tables.
+  // rollback_all_tables_to() discards the entries marked after it and keeps
+  // the earlier ones, so a failed step can be undone without discarding the
+  // rest of the transaction.
+  struct Savepoint {
+    SystemTableMap<PropertyEntry>::SavepointPosition properties;
+    SystemTableMap<ColumnEntry>::SavepointPosition columns;
+    SystemTableMap<SpParamEntry>::SavepointPosition sp_params;
+    SystemTableMap<ExtensionEntry>::SavepointPosition extensions;
+    ExtensionObjectMap<TypeDescriptor>::SavepointPosition type_descriptors;
+    ExtensionObjectMap<ExtensionDescriptor>::SavepointPosition
+        extension_descriptors;
+    ExtensionObjectMap<TypeContext>::SavepointPosition type_contexts;
+    ExtensionObjectMap<FuncDescriptor>::SavepointPosition funcs;
+    ExtensionObjectMap<IndexContext>::SavepointPosition index_contexts;
+    SystemTableMap<IndexEntry>::SavepointPosition custom_indexes;
+    SystemTableMap<IndexColumnEntry>::SavepointPosition custom_index_columns;
+    ExtensionObjectMap<IndexTypeDescriptor>::SavepointPosition
+        index_type_descriptors;
+    ExtensionObjectMap<IndexProfileDescriptor>::SavepointPosition
+        index_profile_descriptors;
+  };
+
+  // savepoint_all_tables() requires at least the read lock;
+  // rollback_all_tables_to() requires the write lock.
+  Savepoint savepoint_all_tables(THD *thd) const;
+  void rollback_all_tables_to(THD *thd, const Savepoint &savepoint);
 
   // Write all uncommitted entries to their backing system tables
   // Must be called BEFORE transaction commits so writes are part of txn

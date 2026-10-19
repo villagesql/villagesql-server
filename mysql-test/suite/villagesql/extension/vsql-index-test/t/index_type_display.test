@@ -1,0 +1,58 @@
+# INDEX_TYPE must name the extension's index type for a custom index.
+#
+# A custom index is created with the storage engine's default algorithm, so the
+# data dictionary records BTREE for it. Reporting that verbatim asserts the
+# index is ordered, range-scannable and usable for ORDER BY, none of which holds
+# for a custom index. INFORMATION_SCHEMA.STATISTICS and SHOW INDEX are driven by
+# the same view definition (STATISTICS and the hidden SHOW_STATISTICS), so both
+# are checked here. A plain B-tree on the same table must still report BTREE.
+#
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b INT,
+  INDEX idx_custom (a) USING EXTENDED(dummy_index_hnsw),
+  INDEX idx_btree (b)
+);
+
+--echo # --- INFORMATION_SCHEMA.STATISTICS ---
+SELECT INDEX_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1'
+ORDER BY INDEX_NAME;
+
+--echo # --- SHOW INDEX: same definition, via the hidden SHOW_STATISTICS view ---
+--replace_column 7 # 8 # 9 # 10 #
+SHOW INDEX FROM t1;
+
+--echo # --- SHOW KEYS and SHOW INDEXES are synonyms of SHOW INDEX ---
+# All three are the same grammar rule (show_keys_stmt), so they cannot diverge
+# today. Pinned anyway because the aliases are user facing.
+--replace_column 7 # 8 # 9 # 10 #
+SHOW KEYS FROM t1 WHERE Key_name = 'idx_custom';
+--replace_column 7 # 8 # 9 # 10 #
+SHOW INDEXES FROM t1 WHERE Key_name = 'idx_custom';
+
+--echo # --- Dropping the custom index reverts INDEX_TYPE to the engine default ---
+DROP INDEX idx_custom ON t1;
+SELECT INDEX_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1'
+ORDER BY INDEX_NAME;
+
+--echo # --- Cleanup ---
+DROP TABLE t1;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

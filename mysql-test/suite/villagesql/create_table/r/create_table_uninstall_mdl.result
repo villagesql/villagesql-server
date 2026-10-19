@@ -36,6 +36,13 @@ ORDER BY LOCK_STATUS;
 OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
 EXTENSION	NULL	vsql_complex	SHARED	GRANTED
 EXTENSION	NULL	vsql_complex	EXCLUSIVE	PENDING
+# Connection default: Check the blocked session's wait event.
+SELECT EVENT_NAME, OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME,
+OPERATION
+FROM performance_schema.events_waits_current
+WHERE OBJECT_TYPE = 'EXTENSION';
+EVENT_NAME	OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	INDEX_NAME	OPERATION
+wait/lock/metadata/sql/mdl	EXTENSION	NULL	vsql_complex	NULL	metadata lock
 # Connection default: Signal CREATE TABLE to continue
 SET DEBUG_SYNC= 'now SIGNAL continue_create';
 # Connection con1: Reaping CREATE TABLE (should succeed)

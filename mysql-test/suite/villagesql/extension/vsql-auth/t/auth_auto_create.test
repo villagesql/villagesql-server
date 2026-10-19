@@ -12,6 +12,9 @@ call mtr.add_suppression("routing unknown accounts");
 
 INSTALL EXTENSION vsql_auth_test;
 
+# Opt the method into handling unknown accounts (off by default).
+SET GLOBAL vsql_auth_test.auto_create = ON;
+
 # The DBA owns roles; the token only causes an existing role to be granted (the
 # same no-escalation stance as set_active_roles), so pre-create it.
 CREATE ROLE vsql_role_granted;

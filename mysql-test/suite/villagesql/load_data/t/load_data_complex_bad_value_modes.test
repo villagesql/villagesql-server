@@ -37,8 +37,7 @@ let $null_notnull_strict_error = 1263; # ER_WARN_NULL_TO_NOTNULL
 
 # --- with DEFAULT ---
 # Note: VillageSQL (like MySQL for builtins) currently ignores the user-defined
-# DEFAULT for bad values and stores the intrinsic default (0,0) instead.
-# TODO(villagesql-beta): fix to use user-defined DEFAULT.
+# DEFAULT for bad values and stores the intrinsic default instead.
 let $col_def = COMPLEX DEFAULT '(100,100)';
 let $type_default = (100,100);
 let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD

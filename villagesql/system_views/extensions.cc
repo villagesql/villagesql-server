@@ -46,11 +46,12 @@ const Extensions &Extensions::instance() { return *s_instance; }
 Extensions::Extensions(const dd::String_type &n) {
   m_target_def.set_view_name(n);
 
-  // SELECT fields
+  // SELECT fields. Without the COLLATE the columns inherit utf8mb4_bin
+  // from the table, making user comparisons against them case-sensitive.
   m_target_def.add_field(FIELD_EXTENSION_NAME, "EXTENSION_NAME",
-                         "ext.extension_name");
+                         "ext.extension_name COLLATE utf8mb4_0900_ai_ci");
   m_target_def.add_field(FIELD_EXTENSION_VERSION, "EXTENSION_VERSION",
-                         "ext.extension_version");
+                         "ext.extension_version COLLATE utf8mb4_0900_ai_ci");
   // Pending-action projection. PendingAction supplies the SQL expressions
   // that yield each logical field, so the underlying storage shape stays
   // encapsulated. The columns are NULL when no action is pending.

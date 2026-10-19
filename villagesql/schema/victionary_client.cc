@@ -71,7 +71,9 @@ bool VictionaryClient::init(THD *thd) {
     return true;
   }
 
-  if (should_assert_if_true(reload_all_tables(thd))) {
+  // Bad table contents (e.g. duplicate canonical keys) are a datadir
+  // fault, not a code bug, so no assert.
+  if (reload_all_tables(thd)) {
     LogVSQL(ERROR_LEVEL, "Failed to load all villagesql tables");
     return true;
   }
@@ -179,6 +181,45 @@ void VictionaryClient::rollback_all_tables(THD *thd) {
   m_custom_index_columns.rollback(thd);
   m_index_type_descriptors.rollback(thd);
   m_index_profile_descriptors.rollback(thd);
+}
+
+VictionaryClient::Savepoint VictionaryClient::savepoint_all_tables(
+    THD *thd) const {
+  assert_read_or_write_lock_held();
+  return {
+      .properties = m_properties.savepoint(thd),
+      .columns = m_columns.savepoint(thd),
+      .sp_params = m_sp_params.savepoint(thd),
+      .extensions = m_extensions.savepoint(thd),
+      .type_descriptors = m_type_descriptors.savepoint(thd),
+      .extension_descriptors = m_extension_descriptors.savepoint(thd),
+      .type_contexts = m_type_contexts.savepoint(thd),
+      .funcs = m_funcs.savepoint(thd),
+      .index_contexts = m_index_contexts.savepoint(thd),
+      .custom_indexes = m_custom_indexes.savepoint(thd),
+      .custom_index_columns = m_custom_index_columns.savepoint(thd),
+      .index_type_descriptors = m_index_type_descriptors.savepoint(thd),
+      .index_profile_descriptors = m_index_profile_descriptors.savepoint(thd)};
+}
+
+void VictionaryClient::rollback_all_tables_to(THD *thd,
+                                              const Savepoint &savepoint) {
+  assert_write_lock_held();
+
+  m_properties.rollback_to(thd, savepoint.properties);
+  m_columns.rollback_to(thd, savepoint.columns);
+  m_sp_params.rollback_to(thd, savepoint.sp_params);
+  m_extensions.rollback_to(thd, savepoint.extensions);
+  m_type_descriptors.rollback_to(thd, savepoint.type_descriptors);
+  m_extension_descriptors.rollback_to(thd, savepoint.extension_descriptors);
+  m_type_contexts.rollback_to(thd, savepoint.type_contexts);
+  m_funcs.rollback_to(thd, savepoint.funcs);
+  m_index_contexts.rollback_to(thd, savepoint.index_contexts);
+  m_custom_indexes.rollback_to(thd, savepoint.custom_indexes);
+  m_custom_index_columns.rollback_to(thd, savepoint.custom_index_columns);
+  m_index_type_descriptors.rollback_to(thd, savepoint.index_type_descriptors);
+  m_index_profile_descriptors.rollback_to(thd,
+                                          savepoint.index_profile_descriptors);
 }
 
 bool VictionaryClient::write_all_uncommitted_entries(THD *thd) {
@@ -305,6 +346,12 @@ std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
   if (!m_initialized.load()) return {};
   return m_custom_index_columns.get_prefix_committed(
       IndexColumnKeyPrefix(index_id));
+}
+
+std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
+    THD *thd, uint64_t index_id) const {
+  if (!m_initialized.load()) return {};
+  return m_custom_index_columns.get_prefix(thd, IndexColumnKeyPrefix(index_id));
 }
 
 void VictionaryClient::init_index_id_counter() {

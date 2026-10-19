@@ -35,7 +35,7 @@ extern char opt_veb_dir[FN_REFLEN];
 // the setup work (VEB resolution, MDL acquisition, victionary access); the
 // dispatch flags below select which path runs.
 //
-// TODO(villagesql-beta): evaluate giving `ALTER EXTENSION` its own
+// TODO(villagesql-general): evaluate giving `ALTER EXTENSION` its own
 // `enum_sql_command` value. Today both INSTALL and ALTER report as
 // `SQLCOM_INSTALL_EXTENSION` in the slow query log, audit log, and
 // performance_schema statement events; they should be distinguishable.

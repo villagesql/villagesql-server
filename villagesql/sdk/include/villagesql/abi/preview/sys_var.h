@@ -53,6 +53,11 @@ typedef enum {
   VEF_VAR_INT = 1,
   VEF_VAR_DOUBLE = 2,
   VEF_VAR_STR = 3,
+  // An enumeration: the value is one of a fixed list of names, stored as a
+  // zero-based index into that list. Reads/writes as the name (e.g.
+  // SET GLOBAL ext.mode = 'sync'), so the server validates the value at SET
+  // time -- an unlisted name is rejected. Backed by an unsigned long index.
+  VEF_VAR_ENUM = 4,
 } vef_var_type_t;
 
 // Passed to on_change callbacks when a variable is SET.
@@ -68,10 +73,22 @@ typedef struct {
     // For VEF_VAR_STR: points to the newly allocated string. Valid for the
     // duration of the callback; do not retain the pointer.
     const char *str_val;
+    // For VEF_VAR_ENUM: the zero-based index of the selected name in the
+    // variable's name list (as passed to make_enum).
+    unsigned long enum_val;
   };
 } vef_sys_var_change_t;
 
 // Callback invoked after the server writes a new value for a system variable.
+//
+// Runs while the server holds its global system-variable lock, which has two
+// consequences. Reading or writing another of this extension's variables
+// through its storage pointer is safe and immediately visible to other
+// sessions, because the server reads those under the same lock. But anything
+// that re-enters the server to touch a system variable will deadlock on that
+// lock: do not call sys_var get/set, do not execute SQL, and do not wait on a
+// thread that does either. Keep the callback short and non-blocking; use a
+// thread_worker if the work needs SQL or can block.
 typedef void (*vef_sys_var_on_change_func_t)(const vef_sys_var_change_t *);
 
 // TODO(villagesql-beta): rename vef_sys_var_desc_t to vef_sys_var_cc_t
@@ -113,6 +130,18 @@ typedef struct {
       char **value_ptr;
       const char *def_val;
     } str;
+    struct {
+      // Backing storage: holds the zero-based index of the selected name.
+      unsigned long *value_ptr;
+      // Default value, as an index into `names`.
+      unsigned long def_val;
+      // NULL-terminated list of allowed names (the enumeration's values). The
+      // array and each string must outlive the extension (typically static),
+      // as the server builds a TYPELIB pointing at them at registration.
+      const char *const *names;
+      // Number of names (excluding the terminating NULL).
+      uint32_t name_count;
+    } enumeration;
   };
 } vef_sys_var_desc_t;
 

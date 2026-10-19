@@ -19,6 +19,7 @@ SET(VILLAGESQL_SYSTEM_VIEWS_SOURCES
   columns.cc
   extension_registration.cc
   extensions.cc
+  statistics.cc
 )
 
 # Object library for compilation into sql_main (avoids circular dependencies)

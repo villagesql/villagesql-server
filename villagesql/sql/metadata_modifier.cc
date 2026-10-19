@@ -37,10 +37,10 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_sp_params.h"
 #include "villagesql/schema/systable/extensions.h"
-#include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/sql/custom_vdf.h"
@@ -50,7 +50,7 @@
 namespace villagesql {
 
 Metadata_modifier::AlterGuard::~AlterGuard() {
-  ClearAlterCustomFields(thd_);
+  ClearAlterCustomContext(thd_);
   if (armed_) rollback(thd_);
 }
 
@@ -105,12 +105,9 @@ bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
     // For CREATE ... SELECT statement, field redefinition is possible.
     bool duplicate = false;
     for (const ColumnEntry &entry : to_add_) {
-      if ((my_strcasecmp(system_charset_info, create_field.field_name,
-                         entry.column_name().c_str()) == 0) &&
-          (my_strcasecmp(system_charset_info, db_name,
-                         entry.db_name().c_str()) == 0) &&
-          (my_strcasecmp(system_charset_info, table_name,
-                         entry.table_name().c_str()) == 0)) {
+      if (column_names_equal(create_field.field_name, entry.column_name()) &&
+          database_names_equal(db_name, entry.db_name()) &&
+          table_names_equal(table_name, entry.table_name())) {
         duplicate = true;
         break;
       }
@@ -157,8 +154,8 @@ static const EntryType *resolve_unique_descriptor(const Map &map,
 // sets out_* on success. Returns true and sets a villagesql_error if the column
 // type cannot be determined or no default profile is registered for the pair.
 // REQUIRES: Caller must hold vclient read lock.
-// TODO(villagesql): string parameters here (and normalize_type_name /
-// normalize_extension_name) should use std::string_view; requires updating the
+// TODO(villagesql): string parameters here (and canonical_type_name /
+// canonical_extension_name) should use std::string_view; requires updating the
 // downstream helpers consistently.
 static bool find_default_profile(VictionaryClient &vclient,
                                  const Alter_info *alter_info, const char *db,
@@ -179,7 +176,7 @@ static bool find_default_profile(VictionaryClient &vclient,
     bool being_dropped = false;
     for (const Alter_drop *drop : alter_info->drop_list) {
       if (drop->type == Alter_drop::COLUMN &&
-          my_strcasecmp(system_charset_info, drop->name, field_name) == 0) {
+          column_names_equal(drop->name, field_name)) {
         being_dropped = true;
         break;
       }
@@ -197,8 +194,7 @@ static bool find_default_profile(VictionaryClient &vclient,
     // a custom_type_context using the field's SQL type name.
     for (const Create_field &field : alter_info->create_list) {
       if (field.custom_type_context &&
-          my_strcasecmp(system_charset_info, field.field_name, field_name) ==
-              0) {
+          column_names_equal(field.field_name, field_name)) {
         col_type_name = field.custom_type_context->type_name();
         col_ext_name = field.custom_type_context->extension_name();
         assert(!col_ext_name.empty());
@@ -217,23 +213,23 @@ static bool find_default_profile(VictionaryClient &vclient,
   // profiles. A secondary map in VictionaryClient keyed by (type_name,
   // index_type_name) would make it faster. Currently justified by small profile
   // counts and DDL-only call site.
-  const std::string norm_col = normalize_type_name(col_type_name);
-  const std::string norm_col_ext = normalize_extension_name(col_ext_name);
-  const std::string norm_idx = normalize_type_name(index_type_name);
+  const std::string norm_col = canonical_type_name(col_type_name);
+  const std::string norm_col_ext = canonical_extension_name(col_ext_name);
+  const std::string norm_idx = canonical_type_name(index_type_name);
   const std::string norm_index_type_ext =
-      normalize_extension_name(index_type_ext_name);
+      canonical_extension_name(index_type_ext_name);
   for (const IndexProfileDescriptor *pd :
        vclient.index_profile_descriptors().get_all_committed()) {
     if (!pd->default_for_type()) continue;
-    if (normalize_type_name(pd->type_name()) != norm_col) continue;
+    if (canonical_type_name(pd->type_name()) != norm_col) continue;
     assert(!pd->type_ref().extension_name().empty());
-    if (normalize_extension_name(pd->type_ref().extension_name()) !=
+    if (canonical_extension_name(pd->type_ref().extension_name()) !=
         norm_col_ext)
       continue;
-    if (normalize_type_name(pd->index_type_name()) != norm_idx) continue;
+    if (canonical_type_name(pd->index_type_name()) != norm_idx) continue;
     assert(!norm_index_type_ext.empty());
     assert(!pd->index_type_ref().extension_name().empty());
-    if (normalize_extension_name(pd->index_type_ref().extension_name()) !=
+    if (canonical_extension_name(pd->index_type_ref().extension_name()) !=
         norm_index_type_ext)
       continue;
     out_profile_name = pd->profile_name();
@@ -324,8 +320,7 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
             bool being_dropped = false;
             for (const Alter_drop *drop : alter_info->drop_list) {
               if (drop->type == Alter_drop::COLUMN &&
-                  my_strcasecmp(system_charset_info, drop->name, field_name) ==
-                      0) {
+                  column_names_equal(drop->name, field_name)) {
                 being_dropped = true;
                 break;
               }
@@ -338,8 +333,7 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
           if (col_type_name.empty()) {
             for (const Create_field &field : alter_info->create_list) {
               if (field.custom_type_context &&
-                  my_strcasecmp(system_charset_info, field.field_name,
-                                field_name) == 0) {
+                  column_names_equal(field.field_name, field_name)) {
                 col_type_name = field.custom_type_context->type_name();
                 col_ext_name = field.custom_type_context->extension_name();
                 break;
@@ -347,10 +341,10 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
             }
           }
           if (col_type_name.empty() ||
-              normalize_type_name(col_type_name) !=
-                  normalize_type_name(prof_desc->type_name()) ||
-              normalize_extension_name(col_ext_name) !=
-                  normalize_extension_name(
+              canonical_type_name(col_type_name) !=
+                  canonical_type_name(prof_desc->type_name()) ||
+              canonical_extension_name(col_ext_name) !=
+                  canonical_extension_name(
                       prof_desc->type_ref().extension_name())) {
             villagesql_error(
                 "Column '%s' is not of type '%s' (extension '%s') required"
@@ -427,16 +421,15 @@ bool Metadata_modifier::remove_columns(THD *thd [[maybe_unused]],
   for (const ColumnEntry *entry : custom_columns) {
     if (!entry) continue;
 
-    to_remove_.emplace_back(
-        ColumnKey(db_name, table_name, entry->column_name()));
+    to_remove_.emplace_back(entry->key());
   }
 
   return false;
 }
 
-bool Metadata_modifier::rename_columns_table(THD *thd [[maybe_unused]],
-                                             Table_name old_name,
-                                             Table_name new_name) {
+bool Metadata_modifier::rename_columns_table(
+    THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
+    const std::unordered_set<std::string> *skip_columns) {
   if (should_assert_if_null(old_name.first) ||
       should_assert_if_null(old_name.second) ||
       should_assert_if_null(new_name.first) ||
@@ -470,6 +463,12 @@ bool Metadata_modifier::rename_columns_table(THD *thd [[maybe_unused]],
 
   for (const ColumnEntry *old_col : custom_columns) {
     if (!old_col) continue;
+
+    // The caller stages its own operation for these, keyed by new_name
+    // already. Renaming them here too would race that operation for the row.
+    if (skip_columns != nullptr &&
+        skip_columns->count(canonical_column_name(old_col->column_name())) > 0)
+      continue;
 
     ColumnEntry new_entry(ColumnKey(new_db, new_table, old_col->column_name()),
                           old_col->extension_name, old_col->extension_version,
@@ -508,19 +507,47 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
     return false;
   }
 
-  // 0. Handle ALTER TABLE RENAME - update all custom columns with new table
-  // name
+  // The names the table carries once this ALTER completes. Every entry
+  // describing the post-ALTER state is keyed by these, so that an ALTER which
+  // renames the table and changes its columns in one statement files the
+  // changed columns under the name the table ends up with. Deletions are the
+  // exception: they keep the stored entry's key, since the row on disk still
+  // holds the old name when the delete probes for it.
+  const bool renaming_table = (alter_info->flags & Alter_info::ALTER_RENAME) &&
+                              alter_info->new_table_name.str != nullptr;
+  const char *new_db_name = (renaming_table && alter_info->new_db_name.str)
+                                ? alter_info->new_db_name.str
+                                : db_name;
+  const char *new_table_name =
+      renaming_table ? alter_info->new_table_name.str : table_name;
+
+  // Columns this statement names explicitly. Each gets its own operation
+  // below, already keyed by the new table name, so the bulk rename in step 0
+  // has to leave them alone. Removals are applied before renames, so a bulk
+  // rename of a row that a drop or a change has already claimed would find
+  // nothing to update.
+  std::unordered_set<std::string> columns_with_own_op;
+  for (const Alter_drop *drop : alter_info->drop_list) {
+    if (drop->type == Alter_drop::COLUMN)
+      columns_with_own_op.insert(canonical_column_name(drop->name));
+  }
+  for (const Alter_column *alter : alter_info->alter_list) {
+    if (alter->change_type() == Alter_column::Type::RENAME_COLUMN)
+      columns_with_own_op.insert(canonical_column_name(alter->name));
+  }
+  for (const Create_field &field : alter_info->create_list) {
+    if (field.change)
+      columns_with_own_op.insert(canonical_column_name(field.change));
+  }
+
+  // 0. Handle ALTER TABLE RENAME - move the custom columns that this
+  // statement does not otherwise touch to the new table name
   // This must be done before acquiring the read lock since
   // rename_columns_table() acquires its own lock
-  if ((alter_info->flags & Alter_info::ALTER_RENAME) &&
-      alter_info->new_table_name.str) {
-    const char *new_db =
-        alter_info->new_db_name.str ? alter_info->new_db_name.str : db_name;
-    const char *new_table = alter_info->new_table_name.str;
+  if (renaming_table) {
+    Table_name new_name = {new_db_name, new_table_name};
 
-    Table_name new_name = {new_db, new_table};
-
-    if (rename_columns_table(thd, db_table, new_name)) {
+    if (rename_columns_table(thd, db_table, new_name, &columns_with_own_op)) {
       return true;
     }
   }
@@ -537,15 +564,26 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   // Build a set of custom column names for fast lookup
   std::unordered_set<std::string> custom_column_names;
   for (const ColumnEntry *col : custom_columns) {
-    custom_column_names.insert(normalize_column_name(col->column_name()));
+    custom_column_names.insert(canonical_column_name(col->column_name()));
   }
   existing_custom_count_ = custom_column_names.size();
+
+  // Deletions must carry the stored entry's key: the disk probe uses its
+  // as-entered components, and the statement may spell the name with
+  // different case.
+  auto find_custom_column = [&custom_columns](const char *name) {
+    for (const ColumnEntry *col : custom_columns) {
+      if (column_names_equal(col->column_name(), name)) return col;
+    }
+    return static_cast<const ColumnEntry *>(nullptr);
+  };
 
   // 1. Handle DROP COLUMN - delete from custom_columns if custom type
   for (const Alter_drop *drop : alter_info->drop_list) {
     if (drop->type == Alter_drop::COLUMN) {
-      if (custom_column_names.count(normalize_column_name(drop->name))) {
-        to_remove_.emplace_back(ColumnKey(db_name, table_name, drop->name));
+      const ColumnEntry *entry = find_custom_column(drop->name);
+      if (entry) {
+        to_remove_.emplace_back(entry->key());
       }
     }
   }
@@ -553,12 +591,12 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   // 2. Handle RENAME COLUMN - update custom_columns entry
   for (const Alter_column *alter : alter_info->alter_list) {
     if (alter->change_type() == Alter_column::Type::RENAME_COLUMN) {
-      if (custom_column_names.count(normalize_column_name(alter->name))) {
+      if (custom_column_names.count(canonical_column_name(alter->name))) {
         // Find the existing entry to get full metadata
         const ColumnEntry *old_entry_ptr = nullptr;
         for (const ColumnEntry *col : custom_columns) {
-          if (normalize_column_name(col->column_name()) ==
-              normalize_column_name(alter->name)) {
+          if (canonical_column_name(col->column_name()) ==
+              canonical_column_name(alter->name)) {
             old_entry_ptr = col;
             break;
           }
@@ -567,7 +605,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         if (old_entry_ptr) {
           // Create new entry with renamed column
           ColumnEntry new_entry(
-              ColumnKey(db_name, table_name, alter->m_new_name),
+              ColumnKey(new_db_name, new_table_name, alter->m_new_name),
               old_entry_ptr->extension_name, old_entry_ptr->extension_version,
               old_entry_ptr->type_name, old_entry_ptr->type_parameters);
 
@@ -583,7 +621,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
       if (!field.change) continue;
       bool is_custom_type = (field.custom_type_context != nullptr);
       bool was_custom_type =
-          custom_column_names.count(normalize_column_name(field.change));
+          custom_column_names.count(canonical_column_name(field.change));
 
       if (!was_custom_type && is_custom_type) {
         // Non-custom → custom: not allowed. Use explicit conversion functions.
@@ -620,39 +658,42 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
     bool is_custom_type = (field.custom_type_context != nullptr);
     bool was_custom_type =
         field.change &&
-        custom_column_names.count(normalize_column_name(field.change));
+        custom_column_names.count(canonical_column_name(field.change));
 
     if (field.change) {
       // This is MODIFY COLUMN or CHANGE COLUMN
       if (was_custom_type && !is_custom_type) {
         // Changing FROM custom TO non-custom - delete entry
-        to_remove_.emplace_back(ColumnKey(db_name, table_name, field.change));
+        to_remove_.emplace_back(find_custom_column(field.change)->key());
       } else if (!was_custom_type && is_custom_type) {
         // Changing FROM non-custom TO custom - insert entry
-        to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
-                             field.custom_type_context->extension_name(),
-                             field.custom_type_context->extension_version(),
-                             field.custom_type_context->type_name(),
-                             field.custom_type_context->parameters().to_json());
+        to_add_.emplace_back(
+            ColumnKey(new_db_name, new_table_name, field.field_name),
+            field.custom_type_context->extension_name(),
+            field.custom_type_context->extension_version(),
+            field.custom_type_context->type_name(),
+            field.custom_type_context->parameters().to_json());
       } else if (was_custom_type && is_custom_type) {
         // Changing FROM custom TO custom - use delete-then-insert pattern
         // Note: Apply removals before additions
         // See Metadata_modifier::mark_victionary_modifications()
-        to_remove_.emplace_back(ColumnKey(db_name, table_name, field.change));
+        to_remove_.emplace_back(find_custom_column(field.change)->key());
 
-        to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
-                             field.custom_type_context->extension_name(),
-                             field.custom_type_context->extension_version(),
-                             field.custom_type_context->type_name(),
-                             field.custom_type_context->parameters().to_json());
+        to_add_.emplace_back(
+            ColumnKey(new_db_name, new_table_name, field.field_name),
+            field.custom_type_context->extension_name(),
+            field.custom_type_context->extension_version(),
+            field.custom_type_context->type_name(),
+            field.custom_type_context->parameters().to_json());
       }
     } else if (is_custom_type) {
       // This is ADD COLUMN with custom type - insert entry
-      to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
-                           field.custom_type_context->extension_name(),
-                           field.custom_type_context->extension_version(),
-                           field.custom_type_context->type_name(),
-                           field.custom_type_context->parameters().to_json());
+      to_add_.emplace_back(
+          ColumnKey(new_db_name, new_table_name, field.field_name),
+          field.custom_type_context->extension_name(),
+          field.custom_type_context->extension_version(),
+          field.custom_type_context->type_name(),
+          field.custom_type_context->parameters().to_json());
     }
   }
   return false;
@@ -671,14 +712,14 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
   std::unordered_set<std::string> dropping;
   for (const Alter_drop *drop : alter_info->drop_list) {
     if (drop->type == Alter_drop::KEY)
-      dropping.insert(normalize_index_name(drop->name));
+      dropping.insert(canonical_index_name(drop->name));
   }
   if (dropping.empty()) return false;
 
   auto guard = vclient.get_read_lock();
   for (const IndexEntry *entry :
        vclient.GetCustomIndexesForTable(db, table_name)) {
-    if (!entry || !dropping.count(normalize_index_name(entry->index_name())))
+    if (!entry || !dropping.count(canonical_index_name(entry->index_name())))
       continue;
 
     // Queue child column rows for deletion before the parent index row.
@@ -741,7 +782,7 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   // Lambda to add MDL request for an extension (if not already added)
   auto add_mdl_request = [&](const std::string &ext_name) -> bool {
     if (ext_name.empty() ||
-        seen_extensions.count(normalize_extension_name(ext_name))) {
+        seen_extensions.count(canonical_extension_name(ext_name))) {
       return false;  // Already processed or empty
     }
 
@@ -757,7 +798,7 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
     MDL_REQUEST_INIT(new_request, MDL_key::EXTENSION, "",
                      normalized_name.c_str(), MDL_SHARED, MDL_STATEMENT);
     mdl_requests.push_front(new_request);
-    seen_extensions.insert(normalize_extension_name(ext_name));
+    seen_extensions.insert(canonical_extension_name(ext_name));
     return false;
   };
 
@@ -1029,6 +1070,33 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   return false;
 }
 
+// Append a villagesql system table to thd->lex->query_tables and return the
+// new Table_ref. The table is only staged here: Metadata_modifier::store()
+// finds it again by walking query_tables, and locks every staged table in the
+// single lock_tables() call a statement is allowed.
+static Table_ref *stage_system_table(THD *thd, const char *table_name) {
+  Table_ref *tref =
+      new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                                    table_name, TL_WRITE, MDL_SHARED_WRITE);
+  if (!tref) return nullptr;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
+  thd->lex->add_to_query_tables(tref);
+  return tref;
+}
+
+// Open the chain of staged system tables starting at `first` without locking
+// them. On success *opened receives the number of tables opened.
+static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
+                                      uint *opened) {
+  DML_prelocking_strategy strategy;
+  uint counter = 0;
+  if (open_tables(thd, &first, &counter, flags, &strategy)) {
+    villagesql_error("Cannot open VillageSQL system tables", MYF(0));
+    return true;
+  }
+  *opened = counter;
+  return false;
+}
+
 bool Metadata_modifier::add_system_tables(THD *thd, bool marked_column,
                                           bool marked_index) {
   if (should_assert_if_null(thd)) {
@@ -1041,40 +1109,43 @@ bool Metadata_modifier::add_system_tables(THD *thd, bool marked_column,
   // participate in the same lock scope. If the calling DDL does not lock
   // query tables, these tables are locked explicitly before writing in
   // Metadata_modifier::store().
-  auto add_table = [&](const char *table_name) {
-    Table_ref *tref =
-        new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
-                                      table_name, TL_WRITE, MDL_SHARED_WRITE);
-    thd->lex->add_to_query_tables(tref);
-    return tref;
-  };
-
   Table_ref *first = nullptr;
   if (marked_column) {
-    first = add_table(SchemaManager::COLUMNS_TABLE_NAME);
+    first = stage_system_table(thd, SchemaManager::COLUMNS_TABLE_NAME);
+    if (!first) return true;
   }
   if (marked_index) {
-    Table_ref *idx = add_table(SchemaManager::INDEXES_TABLE_NAME);
+    Table_ref *idx = stage_system_table(thd, SchemaManager::INDEXES_TABLE_NAME);
+    if (!idx) return true;
     if (!first) first = idx;
-    (void)add_table(SchemaManager::INDEX_COLUMNS_TABLE_NAME);
+    if (!stage_system_table(thd, SchemaManager::INDEX_COLUMNS_TABLE_NAME))
+      return true;
   }
 
   if (!first) return false;
 
-  DML_prelocking_strategy strategy;
-  uint counter = 0;
-  if (open_tables(thd, &first, &counter, MYF(0), &strategy)) {
-    villagesql_error("Cannot open VillageSQL system tables", MYF(0));
-    return true;
-  }
-  system_tables_opened_ = counter;
-  return false;
+  return open_staged_system_tables(thd, first, MYF(0), &system_tables_opened_);
 }
 
 bool Metadata_modifier::lock_and_apply(THD *thd) {
   // Early return if no modifications are pending.
   if (!has_entries()) {
     return false;
+  }
+
+  // Custom type operations write to the villagesql system tables, which are not
+  // in the user's locked-tables list. Opening them under LOCK TABLES would fail
+  // deep inside open_tables() with a confusing ER_TABLE_NOT_LOCKED naming the
+  // internal 'custom_columns' table. Reject up front with a clear message.
+  // TODO(villagesql-general): Support custom type table operations under LOCK
+  // TABLES by opening the villagesql system tables the way the data dictionary
+  // opens its own tables during DDL (via an attachable transaction, which
+  // detaches locked_tables_mode), instead of requiring the user to lock them.
+  if (thd->locked_tables_mode == LTM_LOCK_TABLES) {
+    villagesql_error(
+        "Custom type table operations are not supported under LOCK TABLES.",
+        MYF(0));
+    return true;
   }
 
   // DEBUG_SYNC point for testing MDL synchronization with UNINSTALL EXTENSION
@@ -1261,11 +1332,13 @@ bool Metadata_modifier::store(THD *thd) {
   // Check if anything is marked for write across all VillageSQL system tables.
   bool has_columns = false;
   bool has_custom_indexes = false;
+  bool has_sp_params = false;
   {
     auto guard = vclient.get_read_lock();
     has_columns = vclient.columns().has_uncommitted(thd);
     has_custom_indexes = vclient.custom_indexes().has_uncommitted(thd);
-    if (!has_columns && !has_custom_indexes) {
+    has_sp_params = vclient.sp_params().has_uncommitted(thd);
+    if (!has_columns && !has_custom_indexes && !has_sp_params) {
       assert(!vclient.custom_index_columns().has_uncommitted(thd));
       return false;
     }
@@ -1304,6 +1377,9 @@ bool Metadata_modifier::store(THD *thd) {
       if (chain(SchemaManager::INDEXES_TABLE_NAME)) return true;
       if (chain(SchemaManager::INDEX_COLUMNS_TABLE_NAME)) return true;
     }
+    if (has_sp_params && chain(SchemaManager::SP_PARAMS_TABLE_NAME))
+      return true;
+    assert(lock_count == count_global_tables(lock_first));
 
     if (lock_tables(thd, lock_first, lock_count, MYSQL_LOCK_IGNORE_TIMEOUT)) {
       villagesql_error("Cannot lock VillageSQL system tables", MYF(0));
@@ -1424,6 +1500,8 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
     assert(!vclient.columns().has_uncommitted(thd));
     assert(!vclient.properties().has_uncommitted(thd));
     assert(!vclient.extensions().has_uncommitted(thd));
+    assert(!vclient.custom_indexes().has_uncommitted(thd));
+    assert(!vclient.custom_index_columns().has_uncommitted(thd));
   }
   if (!any_custom) return false;
 
@@ -1431,7 +1509,7 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
   // table's uncommitted map for this THD before touching any open TABLE*, so
   // other system tables (columns, properties, extensions) are skipped safely
   // because no entries were marked for them on this code path.
-  // TODO(villagesql-beta) Evaluate change the API in the future to allow
+  // TODO(villagesql-general) Evaluate change the API in the future to allow
   // committing only from a subset of tables and asserting the others have
   // nothing pending.
   Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
@@ -1442,11 +1520,20 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
   return vclient.write_all_uncommitted_entries(thd);
 }
 
-bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+// Delete every custom_sp_params row matching prefix.
+//
+// With lock_and_flush the rows are written before returning. Without it they
+// are only staged, and the caller must reach Metadata_modifier::store(), which
+// locks custom_sp_params together with every other VillageSQL system table the
+// statement staged. DROP DATABASE needs the staged form, because a statement
+// gets only one lock_tables() call and mysql_rm_table_no_locks() has already
+// left custom_columns open and waiting for it.
+static bool DeleteCustomSpParamsByPrefix(THD *thd,
+                                         const SpParamKeyPrefix &prefix,
+                                         bool lock_and_flush) {
   auto &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) return false;
 
-  SpParamKeyPrefix prefix(name->m_db.str, name->m_name.str);
   std::vector<SpParamKey> keys_to_delete;
   {
     auto guard = vclient.get_read_lock();
@@ -1464,12 +1551,37 @@ bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
     }
   }
 
-  Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
-                            SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
-                            MDL_SHARED_WRITE);
-  if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
-    return true;
-  return vclient.write_all_uncommitted_entries(thd);
+  if (lock_and_flush) {
+    Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                              SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                              MDL_SHARED_WRITE);
+    if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
+      return true;
+    return vclient.write_all_uncommitted_entries(thd);
+  }
+
+  Table_ref *sp_params_tbl =
+      stage_system_table(thd, SchemaManager::SP_PARAMS_TABLE_NAME);
+  if (!sp_params_tbl) return true;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
+
+  uint opened = 0;
+  return open_staged_system_tables(thd, sp_params_tbl,
+                                   MYSQL_LOCK_IGNORE_TIMEOUT, &opened);
+}
+
+bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+  // DROP PROCEDURE / FUNCTION stages nothing else, so custom_sp_params is the
+  // only table write_all_uncommitted_entries() can touch.
+  return DeleteCustomSpParamsByPrefix(
+      thd, SpParamKeyPrefix(name->m_db.str, name->m_name.str),
+      /*lock_and_flush=*/true);
+}
+
+bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name) {
+  // Staged, not flushed: mysql_rm_db()'s Metadata_modifier::store() call locks
+  // and writes this together with custom_columns.
+  return DeleteCustomSpParamsByPrefix(thd, SpParamKeyPrefix(db_name),
+                                      /*lock_and_flush=*/false);
 }
 
 }  // namespace villagesql

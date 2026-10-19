@@ -5336,8 +5336,12 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
     return true;
   }
 
+  // VillageSQL: custom indexes are not subject to the column-length limit.
+  // The custom index implementation is responsible for any key-size constraints
+  // it may need to impose.
   if (key_part_length > file->max_key_part_length(create_info) &&
-      key->type != KEYTYPE_FULLTEXT) {
+      key->type != KEYTYPE_FULLTEXT &&
+      !key->key_create_info.is_custom_index()) {
     key_part_length = file->max_key_part_length(create_info);
     if (key->type == KEYTYPE_MULTIPLE) {
       /* not a critical problem */
@@ -7676,8 +7680,12 @@ static bool prepare_key(
   }
   key_info->actual_flags = key_info->flags;
 
+  // VillageSQL: custom indexes are not subject to the column-length limit.
+  // The custom index implementation is responsible for any key-size constraints
+  // it may need to impose.
   if (key_info->key_length > file->max_key_length() &&
-      key->type != KEYTYPE_FULLTEXT) {
+      key->type != KEYTYPE_FULLTEXT &&
+      !key->key_create_info.is_custom_index()) {
     my_error(ER_TOO_LONG_KEY, MYF(0), file->max_key_length());
     if (thd->is_error())  // May be silenced - see Bug#20629014
       return true;
@@ -15394,6 +15402,12 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         key_create_info.m_secondary_engine_attribute =
             key_info->secondary_engine_attribute;
 
+      // VillageSQL: carry a custom (USING EXTENDED) index's identity onto the
+      // rebuilt key so it is re-created as a custom index, not an ordinary one.
+      if (villagesql::MaybeCarryCustomIndexForRebuild(thd, key_info,
+                                                      &key_create_info))
+        return true;
+
       for (const Alter_index_visibility *alter_index_visibility :
            alter_info->alter_index_visibility_list) {
         const char *name = alter_index_visibility->name();
@@ -17108,15 +17122,18 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
   }
 
+  // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
+  // rolls back victionary modifications unless disarmed after a successful
+  // store(). Constructed before process_alter so that a failure inside
+  // process_alter, after it has staged victionary modifications, still rolls
+  // them back.
+  villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
+
   // VillageSQL: Track custom columns and acquire necessary MDL locks.
   if (villagesql::Metadata_modifier::process_alter(
           thd, create_info, table_list, alter_info, &alter_ctx.tables_opened)) {
     return true;
   }
-  // VillageSQL: Clears villagesql_alter_custom_fields on all exit paths and
-  // rolls back victionary modifications unless disarmed after a successful
-  // store().
-  villagesql::Metadata_modifier::AlterGuard vsql_alter_guard(thd);
 
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
@@ -17642,6 +17659,21 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
             table_list->table_name, new_db_type, table_def))
       goto err_new_table_cleanup;
   }
+
+  // TODO(villagesql-indexing): changing the primary key of a table with a
+  // custom index is not supported yet
+  if (villagesql::alter_changes_pk_of_custom_indexed_table(
+          table, alter_info, key_info, key_count)) {
+    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0),
+             "Changing the primary key of a table with a USING EXTENDED index "
+             "is not supported");
+    goto err_new_table_cleanup;
+  }
+
+  // VillageSQL: stash the real target table name so the #sql-xxx rebuild table
+  // can resolve its custom indexes against the victionary under that name (the
+  // #sql-xxx name matches nothing there).
+  villagesql::SetAlterTargetForCustomIndexes(thd, table);
 
   if (alter_info->requested_algorithm !=
       Alter_info::ALTER_TABLE_ALGORITHM_COPY) {

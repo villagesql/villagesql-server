@@ -1152,8 +1152,9 @@ static void replace_space_name_in_file_name(dd::Tablespace_file *dd_file,
 @param[in,out]  name    name to convert */
 static void to_lower(std::string &name) { innobase_casedn_str(name.data()); }
 
-dberr_t dd_update_table_and_partitions_after_dir_change(dd::Object_id object_id,
-                                                        std::string path) {
+dberr_t dd_update_table_and_partitions_after_dir_change(
+    dd::Object_id object_id, std::string path,
+    const Dirs_in_datadir &dirs_in_datadir) {
   THD *thd = current_thd;
   dd::cache::Dictionary_client *client = dd::get_dd_client(thd);
   dd::cache::Dictionary_client::Auto_releaser releaser(client);
@@ -1198,10 +1199,11 @@ dberr_t dd_update_table_and_partitions_after_dir_change(dd::Object_id object_id,
     ut_o(return DB_ERROR);
   }
 
-  std::string dd_table_name{dd_table->table().name()};
-  Fil_path fpath{path};
+  const auto pos = path.find_last_of(Fil_path::SEPARATOR);
+  ut_ad(pos != std::string::npos);
+  path.resize(pos);
 
-  bool set_true = !MySQL_datadir_path.is_ancestor(fpath);
+  bool set_true = !dirs_in_datadir.contains(path);
   if (!dd_table_is_partitioned(*dd_table)) {
     /* Set the DATA DIRECTORY FLAG to true for dd table if ibd file is moved to
     directory other than default data dir. Remove the flag if moved from
@@ -1975,6 +1977,18 @@ void dd_visit_keys_with_too_long_parts(
     if (!(key.flags & (HA_SPATIAL | HA_FULLTEXT))) {
       for (unsigned i = 0; i < key.user_defined_key_parts; i++) {
         const KEY_PART_INFO *key_part = &key.key_part[i];
+        // VillageSQL: custom indexes are not subject to the column-length
+        // limit. The custom index implementation is responsible for any
+        // key-size constraints it may need to impose.
+        // TODO(villagesql-indexing): this runs against a table definition that
+        // is not fully initialized, so the key's custom-index context/profile
+        // is not yet attached. Detect the custom index by its externally-stored
+        // key column as a workaround; switch to the custom-index context once
+        // it is reliably available here.
+        if (key_part->field != nullptr &&
+            key_part->field->has_external_storage()) {
+          continue;
+        }
         if (max_part_len < key_part->length) {
           visitor(key);
           continue;

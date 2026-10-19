@@ -42,6 +42,27 @@ class Village_system_table_intact : public Table_check_intact {
 
   THD *thd() { return m_thd; }
 
+  // Base-class check() verifies the charset name only; identifier lookups
+  // also depend on the collation.
+  bool check_with_collation(THD *thd, TABLE *table,
+                            const TABLE_FIELD_DEF *table_def) {
+    if (check(thd, table, table_def)) return true;
+    for (Field **field = table->field; *field; field++) {
+      if (!(*field)->has_charset()) continue;
+      const CHARSET_INFO *cs = (*field)->charset();
+      if (cs != &my_charset_utf8mb4_bin) {
+        report_error(0,
+                     "Incorrect collation for column %s.%s.%s: found %s, "
+                     "expected %s",
+                     table->s->db.str, table->s->table_name.str,
+                     (*field)->field_name, cs->m_coll_name,
+                     my_charset_utf8mb4_bin.m_coll_name);
+        return true;
+      }
+    }
+    return false;
+  }
+
  protected:
   void report_error(uint code, const char *fmt, ...) override
       MY_ATTRIBUTE((format(printf, 3, 4))) {

@@ -1,0 +1,64 @@
+# Identifiers may contain dots. Victionary update and delete operations must
+# locate rows by the key components, not by re-splitting the dot-joined key
+# string.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE dotted_db;
+USE dotted_db;
+
+CREATE TABLE `my.table` (
+    `col.one` vsql_complex.COMPLEX,
+    plain INT
+);
+
+SHOW FIELDS FROM `my.table`;
+
+# Column rename updates the victionary row keyed by the dotted names.
+ALTER TABLE `my.table` RENAME COLUMN `col.one` TO `col.two`;
+SHOW FIELDS FROM `my.table`;
+
+# Table rename rewrites the keys of all column rows for the table.
+RENAME TABLE `my.table` TO `renamed.table`;
+SHOW FIELDS FROM `renamed.table`;
+
+DROP TABLE `renamed.table`;
+
+# Two tables whose dot-joined names read the same ("my.table" + "col.one" vs
+# "my.table.col" + "one") are distinct objects; both must survive a restart.
+CREATE TABLE `my.table` (`col.one` vsql_complex.COMPLEX);
+CREATE TABLE `my.table.col` (`one` vsql_complex.COMPLEX);
+
+--source include/restart_mysqld.inc
+
+USE dotted_db;
+SHOW FIELDS FROM `my.table`;
+SHOW FIELDS FROM `my.table.col`;
+
+DROP TABLE `my.table`, `my.table.col`;
+
+# Backslashes must be escaped in the key too: with dot-only escaping,
+# "a\" + "b.c" and "a.b\" + "c" would join to the same key.
+CREATE TABLE `a\` (`b.c` vsql_complex.COMPLEX, plain INT);
+CREATE TABLE `a.b\` (`c` vsql_complex.COMPLEX);
+
+--source include/restart_mysqld.inc
+
+USE dotted_db;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+
+# Rename and drop must update only the intended table's row; the colliding
+# table's column keeps its type.
+ALTER TABLE `a\` RENAME COLUMN `b.c` TO `b\c`;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+
+ALTER TABLE `a\` DROP COLUMN `b\c`;
+SHOW FIELDS FROM `a\`;
+SHOW FIELDS FROM `a.b\`;
+
+DROP TABLE `a\`, `a.b\`;
+DROP DATABASE dotted_db;
+
+--source include/villagesql/uninstall_complex_extension.inc

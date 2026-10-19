@@ -26,7 +26,7 @@
 # CMAKE_PREFIX_PATH points to the extracted SDK directory.
 # The SDK name should not include the code base.
 
-set(SDK_VERSION "${VSQL_VERSION_STRING}")
+set(SDK_VERSION "${VSQL_ABBR_VERSION}")
 set(SDK_NAME "villagesql-extension-sdk-${VSQL_ABBR_VERSION}")
 set(SDK_STAGING_DIR "${CMAKE_BINARY_DIR}/${SDK_NAME}")
 
@@ -106,6 +106,16 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${STABLE_SDK_DIR}/include/villagesql"
     "${SDK_STAGING_DIR}/include/villagesql"
+
+  # Overwrite the snapshot's frozen sdk_version.h with one generated from the
+  # release version (like villagesql_config's @SDK_VERSION@), so an extension
+  # built against the shipped SDK reports the version it was actually built from
+  # rather than the value pinned in the frozen v3 snapshot. (The frozen value is
+  # only seen when building directly against stable_sdk/v3, as the abi_v3 tests
+  # do.)
+  COMMAND ${CMAKE_COMMAND} -E copy
+    "${CMAKE_BINARY_DIR}/sdk/include/villagesql/sdk_version.h"
+    "${SDK_STAGING_DIR}/include/villagesql/"
 
   # Copy dev (unstable) SDK headers (all subdirectories picked up automatically)
   COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -191,6 +201,7 @@ IF(NOT WITHOUT_SERVER)
   vsql_add_test_extension(vsql-test-only          vsql_test_only)
   vsql_add_test_extension(vsql-storage-test       vsql_storage_test)
   vsql_add_test_extension(vsql-index-test         vsql_index_test)
+  vsql_add_test_extension(vsql-knn-index-test     vsql_knn_index_test)
 
   include(test-extensions/CMakeLists.txt)
 ENDIF()

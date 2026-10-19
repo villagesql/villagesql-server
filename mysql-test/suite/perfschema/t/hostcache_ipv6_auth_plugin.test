@@ -32,7 +32,7 @@ set global debug= "+d,vio_peer_addr_fake_ipv6,getnameinfo_fake_ipv6,getaddrinfo_
 uninstall plugin test_plugin_server;
 
 --disable_query_log
---error ER_PLUGIN_IS_NOT_LOADED
+--error ER_VILLAGESQL_GENERIC_ERROR
 connect (con2,"::1",plug,plug_dest,test,$MASTER_MYPORT,,,auth_test_plugin);
 --enable_query_log
 
@@ -40,7 +40,7 @@ connect (con2,"::1",plug,plug_dest,test,$MASTER_MYPORT,,,auth_test_plugin);
 --source ../include/hostcache_dump.inc
 
 --disable_query_log
---error ER_PLUGIN_IS_NOT_LOADED
+--error ER_VILLAGESQL_GENERIC_ERROR
 connect (con3,"::1",plug,plug_dest,test,$MASTER_MYPORT,,,auth_test_plugin);
 --enable_query_log
 

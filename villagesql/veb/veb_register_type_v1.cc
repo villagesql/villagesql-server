@@ -37,7 +37,33 @@ namespace veb {
 std::optional<TypeDescriptor> build_type_descriptor_v1(
     const vef_type_desc_t *td, const std::string &type_name,
     const std::string &extension_name, const std::string &extension_version) {
-  // 1. Resolve encode / decode / compare (required).
+  // 0. A protocol-1 type is always a fixed footprint: v1 has no resolve_params
+  // to discover a length at DDL time (-1) and no variable_length flag, so
+  // persisted_length must be positive. The v3 and v4 builders enforce this for
+  // their own descriptors.
+  if (td->persisted_length <= 0) {
+    LogVSQL(ERROR_LEVEL,
+            "Type '%s' in extension '%s' has invalid persisted_length %lld "
+            "(must be > 0)",
+            type_name.c_str(), extension_name.c_str(),
+            static_cast<long long>(td->persisted_length));
+    return std::nullopt;
+  }
+
+  // 1. Resolve encode / decode / compare (required). Protocol 1 has no VDF-name
+  // alternative, so the pointers themselves must be present.
+  if (td->encode_func == nullptr || td->decode_func == nullptr ||
+      td->compare_func == nullptr) {
+    LogVSQL(ERROR_LEVEL,
+            "Type '%s' in extension '%s' is missing a required function: "
+            "encode_func%s, decode_func%s, compare_func%s",
+            type_name.c_str(), extension_name.c_str(),
+            td->encode_func == nullptr ? " (NULL)" : "",
+            td->decode_func == nullptr ? " (NULL)" : "",
+            td->compare_func == nullptr ? " (NULL)" : "");
+    return std::nullopt;
+  }
+
   EncodeFunction encode_fn(td->encode_func);
   DecodeFunction decode_fn(td->decode_func);
   CompareFunction compare_fn(td->compare_func);

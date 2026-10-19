@@ -21,7 +21,7 @@
 #include <string>
 
 #include "sql/key_spec.h"
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 struct TABLE;
 
@@ -39,8 +39,11 @@ struct IndexKeyPrefix {
       : db_(std::move(db_name)),
         table_(std::move(table_name)),
         normalized_prefix_(
-            normalize_database_name(db_) + "." +
-            (table_.empty() ? "" : normalize_table_name(table_) + ".")) {}
+            join_key_components({canonical_database_name(db_)}) + "." +
+            (table_.empty()
+                 ? ""
+                 : join_key_components({canonical_table_name(table_)}) + ".")) {
+  }
 
   const std::string &str() const { return normalized_prefix_; }
   const std::string &db() const { return db_; }
@@ -62,9 +65,9 @@ struct IndexKey {
       : db_(std::move(db_name)),
         table_(std::move(table_name)),
         index_(std::move(index_name)),
-        normalized_key_(normalize_database_name(db_) + "." +
-                        normalize_table_name(table_) + "." +
-                        normalize_index_name(index_)) {}
+        normalized_key_(join_key_components({canonical_database_name(db_),
+                                             canonical_table_name(table_),
+                                             canonical_index_name(index_)})) {}
 
   const std::string &str() const { return normalized_key_; }
 
@@ -142,15 +145,14 @@ struct TableTraits<IndexEntry> {
   static bool read_from_table(TABLE &table, IndexEntry &entry);
   static bool write_to_table(TABLE &table, const IndexEntry &entry);
   static bool update_in_table(TABLE &table, const IndexEntry &entry,
-                              const std::string &old_key);
+                              const IndexKey &old_key);
   static bool delete_from_table(TABLE &table, const IndexEntry &entry);
 };
 
-// Serialize a WITH-clause parameter list to a JSON object string.
-// Mirrors TypeParameters::to_json() for the index parameter pipeline.
-// Numeric params (is_string=false) are emitted unquoted; string/identifier
-// params are emitted quoted with backslash and double-quote escaping.
-// An empty list produces "{}".
+// Serialize a WITH-clause parameter list to the same JSON form
+// TypeParameters::to_json() produces and from_json() reads back. Numeric
+// params are rendered to text and emitted as JSON strings, like every other
+// value. An empty list produces "{}".
 std::string params_to_json(const Mem_root_array<IndexWithParam> &params);
 
 }  // namespace villagesql

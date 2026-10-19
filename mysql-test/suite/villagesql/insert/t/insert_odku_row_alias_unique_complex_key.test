@@ -1,0 +1,55 @@
+# INSERT ... AS alias ON DUPLICATE KEY UPDATE where the conflict is on a UNIQUE
+# COMPLEX column; the update reads the new row through the alias. The VALUES()
+# form is covered by insert_odku_unique_complex_key.
+# Notes: 'origN' is the original row N, 'insN' is the note on the INSERT of id N.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL,
+    note VARCHAR(20),
+    UNIQUE KEY uk_val (val)
+);
+
+INSERT INTO t1 VALUES (1, '(1,2)', 'orig1'), (2, '(-3,4)', 'orig2');
+
+# Row alias: conflict on uk_val, note taken from the new row.
+INSERT INTO t1 VALUES (10, '(1,2)', 'ins10') AS n
+  ON DUPLICATE KEY UPDATE note = CONCAT(t1.note, '+', n.note);
+SELECT ROW_COUNT();
+
+# Row alias with column aliases.
+INSERT INTO t1 VALUES (11, '(-3,4)', 'ins11') AS n(i, v, s)
+  ON DUPLICATE KEY UPDATE note = CONCAT(s, ':', i);
+SELECT ROW_COUNT();
+SELECT * FROM t1 ORDER BY id;
+
+# Comparing old and new custom values in the update expression.
+INSERT INTO t1 VALUES (12, '(1,2)', 'ins12') AS n
+  ON DUPLICATE KEY UPDATE note = IF(t1.val = n.val, 'same', 'diff');
+
+# SET form with a row alias.
+INSERT INTO t1 SET id = 13, val = '(-3,4)', note = 'ins13' AS n
+  ON DUPLICATE KEY UPDATE note = n.note;
+
+# No conflict: inserted as is.
+INSERT INTO t1 VALUES (14, '(0,0)', 'ins14') AS n
+  ON DUPLICATE KEY UPDATE note = 'upd14';
+
+SELECT * FROM t1 ORDER BY id;
+
+# Replace the custom value with the alias's value after a conflict on the PK.
+INSERT INTO t1 VALUES (14, '(8,8)', 'ins14pk') AS n
+  ON DUPLICATE KEY UPDATE val = n.val, note = n.note;
+SELECT * FROM t1 ORDER BY id;
+
+# Taking the alias's value when it collides with a different row fails.
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (14, '(1,2)', 'ins14dup') AS n
+  ON DUPLICATE KEY UPDATE val = n.val;
+
+SELECT * FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

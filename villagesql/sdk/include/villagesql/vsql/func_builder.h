@@ -19,13 +19,8 @@
 // New-style (vsql) function builder.
 //
 // This file provides the typed C++ function registration API. Functions must
-// use typed argument and result wrappers (IntArg, RealArg, StringArg,
-// CustomArg, etc.) rather than raw ABI types (vef_context_t*, vef_invalue_t*,
-// vef_vdf_result_t*).
-//
-// Raw vef_vdf_func_t function pointers and the deprecated vef_context_t* first
-// parameter style are rejected at compile time. Use villagesql/func_builder.h
-// (the v1 API) if you need to register raw ABI functions.
+// use typed arguments and results (IntArg, RealArg, StringArg,
+// CustomArg, etc.).
 //
 // For full usage documentation see villagesql/vsql.h.
 
@@ -38,6 +33,7 @@
 #include <tuple>
 #include <type_traits>
 
+#include <villagesql/vsql/bind_check_types.h>
 #include <villagesql/vsql/func_types.h>
 #include <villagesql/vsql/pre_post_run.h>
 #include <villagesql/vsql/type_params.h>
@@ -62,6 +58,9 @@ using IntToTypeParamsFunc = bool (*)(int64_t value,
                                      char *error_msg);
 
 // resolve_params: validates type parameters and computes storage sizes.
+// The server pre-validates the map, so every key is non-empty, appears exactly
+// once, and has a non-empty value. What the keys mean, and which are required,
+// is entirely up to the type.
 using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
              vsql::ResolvedTypeParams *result, char *error_msg);
@@ -72,6 +71,9 @@ using ResolveTypeParamsFunc =
 // becomes the canonical parameter string persisted for the type. The rewrite
 // must be idempotent: resolving the rewritten params again must yield the same
 // params and storage sizes.
+// The rewrite may add keys and change values, but it must not erase a key or
+// blank out a value: the server rejects the DDL rather than silently dropping
+// a parameter the user wrote. To reject an unwanted key, return an error.
 using ResolveTypeParamsMutableFunc =
     bool (*)(std::map<std::string, std::string> &params,
              vsql::ResolvedTypeParams *result, char *error_msg);
@@ -113,7 +115,7 @@ using TypeEncodeFunc = void (*)(std::string_view from, CustomResult out);
 // MaybeParams<P> so that the type can be correctly carried through the rest
 // of the SQL statement.
 //
-// The result wrapper is plain CustomResult (not CustomResultWith<P>) because
+// The result is plain CustomResult (not CustomResultWith<P>) because
 // params come from the MaybeParams<P>& argument.
 template <typename P>
 using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
@@ -121,7 +123,7 @@ using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
 
 // Decode: custom -> string. The function reports its outcome by calling
 // out.set_length(n), out.set(sv), out.set_null(), out.warning(msg), or
-// out.error(msg). If none is called the wrapper falls back to a default
+// out.error(msg). If none is called then the result falls back to a default
 // "failed to decode value" ERROR.
 using TypeDecodeFunc = void (*)(CustomArg in, StringResult out);
 // Parameterized variant: params come from the CustomArgWith<P> input.
@@ -202,6 +204,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -226,11 +229,12 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     return next;
   }
 
   // Declare a varargs VDF. The function signature must be
-  //   void(vsql::VarArgs, ResultWrapper)
+  //   void(vsql::VarArgs, TypedResult)
   // The prerun hook is responsible for validating argument count and types.
   // Mutually exclusive with .no_params() / .param(TYPE).
   constexpr FuncBuilder<Func, 0, ParamMode::kVarargs, HasPrerun> varargs()
@@ -246,6 +250,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     return next;
   }
 
@@ -285,6 +290,26 @@ class FuncBuilder {
     return *this;
   }
 
+  // Install a type binding/checking hook. Called once at resolution time,
+  // before any row is read, to work out the return type's parameters -- and,
+  // where needed, individual arguments' -- when the built-in rules cannot.
+  //
+  // Use it when the relationship between argument and return parameters is
+  // something the defaults cannot express (e.g. pvec_concat(PVEC(M), PVEC(N))
+  // -> PVEC(M+N)), or when the return parameters come from a constant argument
+  // value (e.g. TYPEID('user') -> typeid(prefix=user)).
+  //
+  //   void my_hook(vsql::BindArgs args, vsql::BindResult out);
+  template <auto Hook>
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &
+  bind_and_check_types() {
+    static_assert(detail::is_typed_bind<Hook>(),
+                  "bind_and_check_types<Hook>(): Hook must be void(BindArgs, "
+                  "BindResult). Raw ABI signatures are not accepted.");
+    bind_ = &detail::typed_bind_wrapper<Hook>;
+    return *this;
+  }
+
   template <auto Hook>
   constexpr FuncBuilder<Func, NumParams, Mode, true> prerun() const {
     static_assert(detail::is_typed_prerun<Hook>(),
@@ -298,6 +323,7 @@ class FuncBuilder {
     next.prerun_ = &detail::typed_prerun_wrapper<Hook>;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -326,7 +352,7 @@ class FuncBuilder {
     using ReturnType = typename detail::FuncReturnType<decltype(Func)>::type;
     static_assert(std::is_void_v<ReturnType>,
                   "make_func: C++ function must return void and set the SQL "
-                  "result through the final typed result wrapper parameter");
+                  "result through the final typed result parameter");
 
     // Detect state-style signatures: first parameter is `void*` or any
     // lvalue reference (State& / const State&). Aggregate result-shape
@@ -348,9 +374,9 @@ class FuncBuilder {
       meta.is_varargs = true;
     } else if constexpr (has_state_param) {
       // Shapes:
-      //   void(State&, TypedArgs..., ResultWrapper)     — typed state, mutable
-      //   void(const State&, TypedArgs..., ResultWrapper) — typed state, const
-      //   void(void*, TypedArgs..., ResultWrapper)      — raw state
+      //   void(State&, TypedArgs..., TypedResult)     — typed state, mutable
+      //   void(const State&, TypedArgs..., TypedResult) — typed state, const
+      //   void(void*, TypedArgs..., TypedResult)      — raw state
       static_assert(HasPrerun,
                     "VDF declares state (State& or void*) but no prerun is "
                     "configured. user_data would be nullptr at every call. "
@@ -359,7 +385,7 @@ class FuncBuilder {
       static_assert(std::tuple_size_v<AllParams> == NumParams + 2,
                     "make_func: state-style VDF must have one State (or "
                     "void*) parameter, then the declared SQL parameters, "
-                    "then a typed result wrapper");
+                    "then a typed result");
       // TODO(villagesql-beta): also run args/result shape and runtime
       // signature checks (declared .param/.returns vs C++ wrappers) for
       // state-style VDFs. Today these run only for stateless shapes.
@@ -379,20 +405,19 @@ class FuncBuilder {
       }
     } else {
       using Shape = detail::func_signature_shape<AllParams, NumParams>;
-      static_assert(
-          std::tuple_size_v<AllParams> == NumParams + 1,
-          "make_func: C++ function must have one typed result wrapper "
-          "after the declared SQL parameters; check the number of "
-          ".param(TYPE) calls");
+      static_assert(std::tuple_size_v<AllParams> == NumParams + 1,
+                    "make_func: C++ function must have one typed result value "
+                    "after the declared SQL parameters; check the number of "
+                    ".param(TYPE) calls");
       static_assert(
           std::tuple_size_v<AllParams> != NumParams + 1 || Shape::args_ok,
           "make_func: every C++ function parameter before the result "
-          "must be a typed argument wrapper such as IntArg, RealArg, "
-          "StringArg, CustomArg, or CustomArgWith<P>");
+          "must be a typed argument such as IntArg, RealArg, StringArg, "
+          "CustomArg, or CustomArgWith<P>");
       static_assert(
           std::tuple_size_v<AllParams> != NumParams + 1 || Shape::result_ok,
           "make_func: final C++ function parameter must be a typed "
-          "result wrapper such as IntResult, RealResult, StringResult, "
+          "result such as IntResult, RealResult, StringResult, "
           "CustomResult, or CustomResultWith<P>");
       if constexpr (std::tuple_size_v<AllParams> == NumParams + 1 &&
                     Shape::args_ok && Shape::result_ok) {
@@ -410,6 +435,7 @@ class FuncBuilder {
 
     meta.prerun = prerun_;
     meta.postrun = postrun_;
+    meta.bind = bind_;
     meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
@@ -431,7 +457,8 @@ class FuncBuilder {
         max_result_length_(0),
         prerun_(nullptr),
         postrun_(nullptr),
-        deterministic_(false) {}
+        deterministic_(false),
+        bind_(nullptr) {}
 
   const char *name_;
   const char *return_type_;
@@ -441,6 +468,7 @@ class FuncBuilder {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   bool deterministic_;
+  vef_bind_types_func_t bind_;
 
   template <auto F, size_t M, ParamMode N, bool HP>
   friend class FuncBuilder;
@@ -571,7 +599,7 @@ class AggFuncBuilder {
         std::tuple_size_v<Params> != NumParams + 1 ||
             detail::accumulate_signature_shape<Params, NumParams>::args_ok,
         "accumulate: every C++ parameter after State& must be a typed argument "
-        "wrapper such as IntArg, RealArg, StringArg, CustomArg, or "
+        "such as IntArg, RealArg, StringArg, CustomArg, or "
         "CustomArgWith<P>");
     AggFuncBuilder<State, Func, NumParams, HasClear, true> next;
     next.name_ = name_;
@@ -598,7 +626,7 @@ class AggFuncBuilder {
     using UniquePTuple = typename detail::unique_params_types<AllParams>::type;
 
     detail::FuncWithMetadata meta{};
-    // void(const State&, ResultWrapper).
+    // void(const State&, TypedResult).
     using ResultWrapper = std::tuple_element_t<1, AllParams>;
     meta.f =
         &detail::AggResultWithOutputWrapper<State, ResultWrapper, Func>::invoke;
@@ -654,13 +682,80 @@ class AggFuncBuilder {
 
 // make_aggregate_func<State, &result_fn>("name")
 //
-// Entry point for aggregate VDFs. State is the per-group accumulation type.
-// The result function must be: void(const State&, ResultWrapper)
-// where ResultWrapper is one of IntResult, RealResult, StringResult,
-// CustomResult, or CustomResultWith<P>.
+// Entry point for aggregate VDFs. Aggregate VDFs (like SQL SUM, COUNT, etc.)
+// accumulate state across rows within each GROUP BY group, then return a
+// final result per group. State is the per-group accumulation type; it is
+// explicit, and all three callback signatures are validated against it at
+// compile time.
 //
-// prerun/postrun are auto-generated: prerun allocates State via
-// value-initialization, postrun deletes it.
+// The result function always uses an output parameter, consistent with normal
+// VDFs. All three callbacks follow the same pattern:
+//
+//   void my_clear(State &s)                     // reset state
+//   void my_acc(State &s, TypedArg v, ...)      // accumulate one row
+//   void my_result(const State &s, TypedResult out)  // produce final value
+//
+// The result function must be void(const State&, TypedResult) where
+// TypedResult is one of IntResult, RealResult, StringResult, CustomResult, or
+// CustomResultWith<P>. Use out.set_null() to return SQL NULL.
+//
+// How it works:
+//   - prerun/postrun are auto-generated: prerun allocates State via
+//     value-initialization, postrun deletes it.
+//   - .clear<&fn>()      void(State&)
+//   - .accumulate<&fn>() void(State&, TypedArgs...) — TypedArgs deduced from
+//     the function signature (IntArg, StringArg, CustomArg, etc.).
+//     Call .accumulate() after all .param(TYPE) calls.
+//
+// Example — nullable integer sum:
+//
+//   using SumState = std::optional<long long>;
+//
+//   void my_clear(SumState &s) { s = std::nullopt; }
+//   void my_acc(SumState &s, IntArg v) {
+//     if (!v.is_null()) s = s.value_or(0) + v.value();
+//   }
+//   void my_result(const SumState &s, IntResult out) {
+//     if (!s.has_value()) { out.set_null(); return; }
+//     out.set(s.value());
+//   }
+//
+//   make_aggregate_func<SumState, &my_result>("my_sum")
+//       .returns(INT)
+//       .param(INT)
+//       .clear<&my_clear>()
+//       .accumulate<&my_acc>()
+//       .build()
+//
+// Example — non-nullable count:
+//
+//   using CountState = long long;
+//   void count_clear(CountState &s) { s = 0; }
+//   void count_acc(CountState &s, IntArg v) { if (!v.is_null()) ++s; }
+//   void count_result(const CountState &s, IntResult out) { out.set(s); }
+//
+//   make_aggregate_func<CountState, &count_result>("my_count")
+//       .returns(INT).param(INT)
+//       .clear<&count_clear>().accumulate<&count_acc>()
+//       .build()
+//
+// Example — aggregate returning a custom (binary) type:
+//
+//   using SumState = std::optional<MyType>;
+//   void my_clear(SumState &s)            { s = std::nullopt; }
+//   void my_acc(SumState &s, CustomArg v) { /* update s */ }
+//   void my_result(const SumState &s, CustomResult out) {
+//     if (!s.has_value()) { out.set_null(); return; }
+//     store_mytype(out.buffer().data(), s.value());
+//     out.set_length(kMyTypeSize);
+//   }
+//
+//   make_aggregate_func<SumState, &my_result>("my_agg")
+//       .returns(MYTYPE).param(MYTYPE)
+//       .clear<&my_clear>().accumulate<&my_acc>()
+//       .build()
+//
+// See aggregate_vdf.cc in the test suite for complete examples.
 template <typename State, auto Func>
 constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
   using AllParams = typename detail::FuncParamTypes<decltype(Func)>::type;
@@ -669,7 +764,7 @@ constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
       std::is_void_v<ReturnType> &&
           detail::is_agg_result_for_state<State, AllParams>::value,
       "make_aggregate_func: result function must be "
-      "void(const State&, ResultWrapper) where ResultWrapper is IntResult, "
+      "void(const State&, TypedResult) where TypedResult is IntResult, "
       "RealResult, StringResult, CustomResult, or CustomResultWith<P>");
   AggFuncBuilder<State, Func, 0> builder;
   builder.name_ = name;

@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,18 +33,40 @@
 
 #define COPYRIGHT_NOTICE_CURRENT_YEAR "2026"
 
+// The VillageSQL copyright line shown alongside Oracle's in the startup banner
+// and --help output of every VillageSQL binary. It is tied to
+// COPYRIGHT_NOTICE_CURRENT_YEAR so the year follows whatever upstream bumps
+// that constant to rather than going stale on its own.
+//
+// At least one caller passes the surrounding notice straight to fprintf as a
+// format string (mysql_secure_installation), so this must never contain a '%'.
+//
+// This file is listed in the villint-ignore of the commit that added these
+// lines: clang-format would reflow Oracle's hand-aligned text below, and the
+// alignment is kept byte-identical to upstream on purpose. Re-apply the
+// villint-ignore if you edit this file.
+#define VILLAGESQL_WELCOME_COPYRIGHT_LINE                                      \
+  "Copyright (c) " COPYRIGHT_NOTICE_CURRENT_YEAR " VillageSQL Contributors\n"
+
+// The same line indented for the copyright comment block that the build-time
+// generators write into generated sources. Three spaces is what villint.sh
+// produces for hand-written files, so generated headers match the tree.
+#define VILLAGESQL_SOURCE_COPYRIGHT_LINE "   " VILLAGESQL_WELCOME_COPYRIGHT_LINE
+
 /*
   This define specifies copyright notice which is displayed by every MySQL
   program on start, or on help screen.
 */
 #define ORACLE_WELCOME_COPYRIGHT_NOTICE(first_year)                            \
   (strcmp(first_year, COPYRIGHT_NOTICE_CURRENT_YEAR)                           \
-       ? "Copyright (c) " first_year ", " COPYRIGHT_NOTICE_CURRENT_YEAR        \
+       ? VILLAGESQL_WELCOME_COPYRIGHT_LINE                                     \
+         "Copyright (c) " first_year ", " COPYRIGHT_NOTICE_CURRENT_YEAR        \
          ", "                                                                  \
          "Oracle and/or its affiliates.\n\nOracle is a "                       \
          "registered trademark of Oracle Corporation and/or its\naffiliates. " \
          "Other names may be trademarks of their respective\nowners.\n"        \
-       : "Copyright (c) " first_year                                           \
+       : VILLAGESQL_WELCOME_COPYRIGHT_LINE                                     \
+         "Copyright (c) " first_year                                           \
          ", Oracle and/or its affiliates."                                     \
          "\n\nOracle is a registered trademark of "                            \
          "Oracle Corporation and/or its\naffiliates. Other names may be "      \
@@ -85,9 +108,11 @@
   (strcmp(first_year, COPYRIGHT_NOTICE_CURRENT_YEAR)                       \
        ? "/* Copyright (c) " first_year ", " COPYRIGHT_NOTICE_CURRENT_YEAR \
          ", Oracle and/or its affiliates.\n"                               \
+         VILLAGESQL_SOURCE_COPYRIGHT_LINE                                  \
          "\n" ORACLE_GPL_LICENSE_TEXT                                      \
        : "/* Copyright (c) " first_year                                    \
          ", Oracle and/or its affiliates.\n"                               \
+         VILLAGESQL_SOURCE_COPYRIGHT_LINE                                  \
          "\n" ORACLE_GPL_LICENSE_TEXT)
 
 #define ORACLE_GPL_FOSS_LICENSE_TEXT                                          \
@@ -125,9 +150,11 @@
   (strcmp(first_year, COPYRIGHT_NOTICE_CURRENT_YEAR)                       \
        ? "/* Copyright (c) " first_year ", " COPYRIGHT_NOTICE_CURRENT_YEAR \
          ", Oracle and/or its affiliates.\n"                               \
+         VILLAGESQL_SOURCE_COPYRIGHT_LINE                                  \
          "\n" ORACLE_GPL_FOSS_LICENSE_TEXT                                 \
        : "/* Copyright (c) " first_year                                    \
          ", Oracle and/or its affiliates.\n"                               \
+         VILLAGESQL_SOURCE_COPYRIGHT_LINE                                  \
          "\n" ORACLE_GPL_FOSS_LICENSE_TEXT)
 
 #endif /* _welcome_copyright_notice_h_ */

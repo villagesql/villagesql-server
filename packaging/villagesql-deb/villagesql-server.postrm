@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # The data directory is NOT removed on purge. VillageSQL is commonly
+        # installed over an existing MySQL data directory, and silently
+        # deleting a database on package purge is not recoverable. Removing
+        # /var/lib/mysql is left to the administrator.
+        ;;
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

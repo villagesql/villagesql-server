@@ -1,0 +1,34 @@
+# Window functions over COMPLEX inside derived tables and CTEs, ordered by a
+# COMPLEX window result, and over GROUP BY results.
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+  (5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+
+# Smallest value per group via a derived table.
+SELECT grp, id, val FROM (
+  SELECT grp, id, val, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val, id) AS rn
+  FROM t1 WHERE val IS NOT NULL) AS d
+WHERE rn = 1 ORDER BY grp;
+
+# Same through a CTE, keeping the COMPLEX window result.
+WITH c AS (
+  SELECT id, val, LAG(val) OVER (ORDER BY id) AS prev FROM t1)
+SELECT id, val, prev FROM c WHERE prev IS NOT NULL AND val > prev ORDER BY id;
+
+# Outer ORDER BY on a COMPLEX window result.
+SELECT id, LEAD(val) OVER (ORDER BY id) AS nxt FROM t1 ORDER BY nxt, id;
+
+# Window over grouped rows.
+SELECT grp, MIN(val) AS mn, MAX(val) AS mx,
+  RANK() OVER (ORDER BY MAX(val) DESC) AS rnk
+FROM t1 GROUP BY grp ORDER BY grp;
+
+SELECT val, COUNT(*) AS n, ROW_NUMBER() OVER (ORDER BY val) AS rn
+FROM t1 GROUP BY val ORDER BY val;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

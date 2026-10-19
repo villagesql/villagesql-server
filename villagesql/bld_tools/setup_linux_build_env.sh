@@ -15,28 +15,44 @@ fi
 
 APT_OPTS=(-o Acquire::Retries=5)
 $SUDO apt-get "${APT_OPTS[@]}" update
+# Add packages to the list lexicographically
 $SUDO apt-get "${APT_OPTS[@]}" install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    libssl-dev \
-    pkg-config \
-    bison \
-    libncurses5-dev \
-    libaio-dev \
-    libmecab-dev \
-    libnuma-dev \
-    libjson-perl \
-    libz-dev \
-    g++ \
-    make \
-    git \
-    curl \
     bash \
-    valgrind \
-    libtirpc-dev \
+    bison \
+    build-essential \
     ccache \
-    perl \
-    openssl \
+    cmake \
+    curl \
+    g++ \
+    git \
+    jq \
+    libaio-dev \
     libdbd-mysql-perl \
-    zip \
-    unzip
+    libjson-perl \
+    libmecab-dev \
+    libncurses5-dev \
+    libnuma-dev \
+    libssl-dev \
+    libtirpc-dev \
+    libz-dev \
+    llvm \
+    make \
+    mold \
+    openssl \
+    perl \
+    pkg-config \
+    sudo \
+    unzip \
+    valgrind \
+    zip
+
+# Sanitizers symbolize through an unversioned llvm-symbolizer on PATH. It does
+# not help with dlopen'd plugins -- the tsan workflow resolves those itself.
+if ! command -v llvm-symbolizer >/dev/null 2>&1; then
+    VERSIONED=$(ls -1 /usr/bin/llvm-symbolizer-* 2>/dev/null | sort -V | tail -1)
+    if [[ -n "$VERSIONED" ]]; then
+        $SUDO ln -sf "$VERSIONED" /usr/bin/llvm-symbolizer
+    fi
+fi
+
+command -v llvm-symbolizer || echo "WARNING: no llvm-symbolizer; sanitizer reports will be less readable"

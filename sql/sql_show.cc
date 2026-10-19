@@ -2276,10 +2276,14 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         packet->append_parenthesized((long)key_part->length /
                                      key_part->field->charset()->mbmaxlen);
       }
+      villagesql::AppendCustomIndexProfile(thd, key_part->custom_index_profile,
+                                           packet);
       if (key_part->key_part_flag & HA_REVERSE_SORT)
         packet->append(STRING_WITH_LEN(" DESC"));
     }
     packet->append(')');
+    villagesql::AppendCustomIndexType(thd, key_info->custom_index_context,
+                                      packet);
     store_key_options(thd, packet, table, key_info);
     if (key_info->parser) {
       LEX_CSTRING *parser_name = plugin_name(key_info->parser);

@@ -95,24 +95,45 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
                                              uint32_t key_pos, bool is_primary);
 
 // Resolve a column reference to column data.
-// The caller pre-allocates col_data; the server fills in its data pointer and
-// length to reference the stored column value.
+// key_pos is the 0-based index key column the reference belongs to; its column
+// must be held in extension-managed column storage.
+// The caller sets col_data->data to a buffer of col_data->length bytes, at
+// least the column's maximum key length as reported by
+// vef_index_max_key_len_fn. The server copies the stored value into that
+// buffer and sets col_data->length to the value length.
+// The server reads the value under a mini-transaction of its own, so the
+// extension must not call this while holding page latches in a mini-transaction
+// it started.
 // Returns false on success, true on error (writes to error_msg).
-typedef bool (*vef_index_col_ref_to_data_fn)(vef_index_ref_t index_ref,
-                                             vef_storage_col_ref_t col_ref,
-                                             vef_storage_col_data_t *col_data,
-                                             char *error_msg,
-                                             uint32_t error_msg_len);
+typedef bool (*vef_index_col_ref_to_data_fn)(
+    vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
+    vef_storage_col_data_t *col_data, char *error_msg, uint32_t error_msg_len);
 
 // Derive a stable column reference from column data.
+// key_pos is the 0-based index key column col_data holds a value of; its column
+// must be held in extension-managed column storage.
 // col_data must describe a value that was previously inserted into column
-// storage; the server computes the stable col_ref for that stored value.
+// storage; the server computes the stable col_ref for that stored value. This
+// call does not read the column storage.
 // Returns false on success, true on error (writes to error_msg).
 typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
+                                             uint32_t key_pos,
                                              vef_storage_col_data_t col_data,
                                              vef_storage_col_ref_t *col_ref,
                                              char *error_msg,
                                              uint32_t error_msg_len);
+
+// Report the registered name of the function bound to a profile helper, so the
+// extension can resolve a native fast-path ONCE (at index open) instead of
+// dispatching through helper_fn per call. Writes the name the extension gave to
+// make_index_function (for the profile bound to key column key_pos, at helper
+// fn_id) into name_buf, NUL-terminated and truncated to name_buf_len. This lets
+// a hot inner loop (e.g. HNSW distance) map the metric to a native function
+// pointer and skip the per-call VDF marshalling. Returns false on success, true
+// on error / no such binding (writes to error_msg).
+typedef bool (*vef_index_helper_fn_name_fn)(
+    vef_index_ref_t index_ref, uint32_t key_pos, uint32_t fn_id, char *name_buf,
+    uint32_t name_buf_len, char *error_msg, uint32_t error_msg_len);
 
 // Call a helper function from the index profile by its registered ID.
 // An index profile is declared by the extension when registering an index type.
@@ -166,6 +187,12 @@ typedef struct {
   // Valid only during the create() call; NULL for all other calls and when
   // the index type declared no options.
   const void *options;
+
+  // Report the registered name of a profile helper's bound function, so the
+  // extension can bind a native fast-path once instead of dispatching per call.
+  // Always non-NULL. Appended at the end so an older reader sees an unchanged
+  // prefix.
+  vef_index_helper_fn_name_fn helper_fn_name_fn;
 
 } vef_index_ctx_t;
 
@@ -675,7 +702,8 @@ typedef struct {
   // Bitmask of VEF_INDEX_ORDERING_* flags indicating supported scan directions.
   uint8_t ordering;
   // 1 if this is the default profile for the type when no profile is named at
-  // CREATE INDEX time.
+  // CREATE INDEX time. At most one profile per (type_name, index_type_name)
+  // pair may set this; registration rejects an extension that declares two.
   uint8_t default_for_type;
 } vef_index_profile_reg_t;
 

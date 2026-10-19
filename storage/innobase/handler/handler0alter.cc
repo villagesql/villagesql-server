@@ -426,10 +426,8 @@ static UNIV_COLD void my_error_innodb(
       my_error(ER_TABLESPACE_EXISTS, MYF(0), table);
       break;
     case DB_VILLAGESQL_ERROR:
-      villagesql_error(
-          "InnoDB: Custom type operation failed. See server"
-          " error log for details.",
-          MYF(0));
+      villagesql_error("%s", MYF(0),
+                       check_trx_exists(current_thd)->detailed_error);
       break;
 #ifdef UNIV_DEBUG
     case DB_SUCCESS:
@@ -1106,8 +1104,8 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
         } else if (villagesql::innodb::Custom_column::
                        alter_add_drop_with_extended_storage(ha_alter_info,
                                                             table)) {
-          // TODO(villagesql-ga): Support INSTANT ALTER for custom columns with
-          // extended storage.
+          // TODO(villagesql-general): Support INSTANT ALTER for custom columns
+          // with extended storage.
           if (is_instant_requested) {
             villagesql_error(
                 "ALGORITHM=INSTANT is not supported for columns "
@@ -1301,6 +1299,23 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
     ha_alter_info->unsupported_reason =
         innobase_get_err_msg(ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS);
     online = false;
+  }
+
+  /* VillageSQL: a custom (USING EXTENDED) index is built with the table locked,
+  not online. Building it online would allocate a modification log and leave the
+  index in ONLINE_INDEX_CREATION; nothing replays that log into a custom index,
+  so its status would never advance to ONLINE_INDEX_COMPLETE and the commit
+  would assert. Keyed on the index itself, not on the column's storage: a custom
+  index can be built over an ordinary in-row column.
+  TODO(villagesql-indexing): allow online builds once a custom index can consume
+  a replayed DML row-log, exposed as a declared per-index capability. */
+  for (uint i = 0; i < ha_alter_info->index_add_count; i++) {
+    const KEY *key =
+        &ha_alter_info->key_info_buffer[ha_alter_info->index_add_buffer[i]];
+    if (key->custom_index_context != nullptr) {
+      online = false;
+      break;
+    }
   }
 
   // Extended custom column storage holds DML operations during table rebuild.
@@ -2762,6 +2777,7 @@ static void innobase_create_index_def(const TABLE *altered_table,
     index_def->m_fields[0].m_col_no = key->key_part[0].fieldnr - num_v;
     index_def->m_fields[0].m_prefix_len = 0;
     index_def->m_fields[0].m_is_v_col = false;
+    index_def->m_fields[0].m_custom_index_profile = nullptr;
 
     /* Currently only ascending order is supported in spatial
     index. */
@@ -3186,6 +3202,7 @@ index for FTS index */
     index_def->m_fields->m_prefix_len = 0;
     index_def->m_fields->m_is_ascending = true;
     index_def->m_fields->m_is_v_col = false;
+    index_def->m_fields->m_custom_index_profile = nullptr;
     index_def->m_ind_type = DICT_UNIQUE;
     ut_ad(!rebuild || !add_fts_doc_id ||
           fts_doc_id_col <= altered_table->s->fields);
@@ -5176,8 +5193,15 @@ error_handling:
       my_error(ER_TABLE_CANT_HANDLE_SPKEYS, MYF(0));
       break;
     case DB_VILLAGESQL_ERROR:
-      ut_ad(ctx->trx->error_state == DB_VILLAGESQL_ERROR);
-      villagesql_error("%s", MYF(0), ctx->trx->detailed_error);
+      if (ctx->trx->error_state == DB_VILLAGESQL_ERROR &&
+          *ctx->trx->detailed_error != 0) {
+        villagesql_error("%s", MYF(0), ctx->trx->detailed_error);
+      } else {
+        villagesql_error(
+            "InnoDB: Custom type operation failed. See server"
+            " error log for details.",
+            MYF(0));
+      }
       break;
     default:
       my_error_innodb(error, table_name, user_table->flags);
@@ -5664,6 +5688,13 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
       assert(!(key->flags & HA_KEYFLAG_MASK &
                ~(HA_FULLTEXT | HA_PACK_KEY | HA_BINARY_PACK_KEY)));
       add_fts_idx = true;
+      continue;
+    }
+
+    // VillageSQL: custom indexes are not subject to the column-length limit.
+    // The custom index implementation is responsible for any key-size
+    // constraints it may need to impose.
+    if (key->custom_index_context != nullptr) {
       continue;
     }
 

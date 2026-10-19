@@ -102,6 +102,7 @@
 #include "sql/table.h"                                  // MYSQL_SYSTEM_SCHEMA
 #include "villagesql/system_views/columns.h"
 #include "villagesql/system_views/extensions.h"
+#include "villagesql/system_views/statistics.h"
 
 using namespace dd::tables;
 
@@ -300,10 +301,14 @@ void System_views::init() {
   register_view<dd::system_views::Schemata>(is);
   register_view<dd::system_views::Schemata_extensions>(is);
   register_view<dd::system_views::Show_statistics>(is);
+  // Override the definition after villagesql is up
+  register_view<villagesql::system_views::Show_statistics>(non_dd_based_is);
   register_view<dd::system_views::St_spatial_reference_systems>(is);
   register_view<dd::system_views::St_units_of_measure>(is);
   register_view<dd::system_views::St_geometry_columns>(is);
   register_view<dd::system_views::Statistics>(is);
+  // Override the definition after villagesql is up
+  register_view<villagesql::system_views::Statistics>(non_dd_based_is);
   register_view<dd::system_views::Table_constraints>(is);
   register_view<dd::system_views::Table_constraints_extensions>(is);
   register_view<dd::system_views::Tables>(is);

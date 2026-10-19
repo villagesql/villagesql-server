@@ -46,111 +46,101 @@ For quick installation, visit [villagesql.com/install](https://villagesql.com/in
 
 ### Prerequisites
 
-- **CMake** (3.14.6 or higher; macOS requires 3.19 or higher)
-- **C++17 Compiler** (GCC 10+ or Clang 14+)
-- **OpenSSL 3.0+**
-- **Bison** (3.0 or higher)
-- **pkg-config**
-- **ncurses development libraries**
-- **libtirpc and rpcsvc-proto**
+- **Git**
+- **A supported platform**: Debian or Ubuntu Linux, or macOS with Homebrew
 
-#### Installing Dependencies
+The build also needs a C++20 compiler, CMake 3.14.6 or newer (3.19 on macOS),
+Bison 3.0.4 or newer, OpenSSL 3, and several development libraries. Step 2
+below installs all of them.
 
-**Linux (Debian/Ubuntu):**
+To contribute a change, you also need clang-format for the linter,
+`./scripts/villint.sh`. Every pull request must pass the linter, so run it
+before each commit. Step 2 does not install clang-format. The linter needs one
+exact clang-format version, and it refuses any other. Homebrew and Linux
+package managers ship whatever version they currently carry, so do not install
+clang-format from them. Install the exact version with `pipx`:
+
 ```bash
-sudo apt install cmake libssl-dev libncurses5-dev pkg-config bison \
-                 libtirpc-dev rpcsvc-proto build-essential zlib1g-dev
-```
+# macOS with Homebrew
+brew install pipx
 
-**macOS (Homebrew):**
-```bash
-brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
+# Linux (Ubuntu/Debian)
+sudo apt-get install pipx
+
+# Both
+pipx install "clang-format==22.1.*"
+pipx ensurepath   # adds ~/.local/bin to PATH in your shell startup file; open a new shell after
 ```
 
 ### Build Steps (Linux & macOS)
 
-> **Note:** Linux users should use `$HOME` for paths. macOS users should use `~` (tilde) for paths.
+> **Note:** These steps are the same on Linux and macOS. Paths use `$HOME`
+> rather than `~` because the shell only expands `~` at the start of a word:
+> `--datadir=~/mysql-data/data` reaches `mysqld` as a directory literally named
+> `~`, and the server aborts. Quoting `"$HOME/..."` keeps the path in one piece
+> if your home directory name contains a space.
 
-1. **Clone the repository:**
+1. **Clone the repository into `$HOME`:**
+
+   The steps below assume the clone is at `$HOME/villagesql-server`. If you put
+   it elsewhere, use that path in step 4.
+
    ```bash
+   cd "$HOME"
    git clone --depth 1 https://github.com/villagesql/villagesql-server.git
-   cd villagesql-server
    ```
 
-2. **Create a build directory (outside the repository):**
+2. **Install the build dependencies:**
 
-   **Linux:**
    ```bash
-   mkdir -p $HOME/build/villagesql
-   cd $HOME/build/villagesql
+   cd "$HOME/villagesql-server"
+   villagesql/bld_tools/setup_build_env.sh
    ```
 
-   **macOS:**
+   The script detects the operating system and runs
+   `villagesql/bld_tools/setup_linux_build_env.sh` or
+   `villagesql/bld_tools/setup_macos_build_env.sh`. Those two scripts are the
+   definitive dependency lists, and VillageSQL CI installs from the same ones.
+   On Linux the script uses `apt-get` and asks for `sudo`; on macOS it uses
+   Homebrew. On a Linux distribution that is not Debian or Ubuntu, read
+   `villagesql/bld_tools/setup_linux_build_env.sh` and install the equivalent
+   packages with your own package manager.
+
+3. **Create a build directory (outside the repository):**
+
    ```bash
-   mkdir -p ~/build/villagesql
-   cd ~/build/villagesql
+   mkdir -p "$HOME/build/villagesql"
+   cd "$HOME/build/villagesql"
    ```
 
-3. **Configure with CMake:**
+4. **Configure with CMake:**
 
-   **Linux:**
-   ```bash
-   # Standard build
-   cmake $HOME/villagesql-server -DWITH_SSL=system
-
-   # Or for a debug build (recommended for development)
-   cmake $HOME/villagesql-server -DWITH_DEBUG=1 -DWITH_SSL=system
-   ```
-
-   **macOS:**
    ```bash
    # Standard build
-   cmake ~/villagesql-server -DWITH_SSL=system
+   cmake "$HOME/villagesql-server"
 
    # Or for a debug build (recommended for development)
-   cmake ~/villagesql-server -DWITH_DEBUG=1 -DWITH_SSL=system
+   cmake "$HOME/villagesql-server" -DWITH_DEBUG=1
+
+   # On macOS, add the OpenSSL 3 directory. Homebrew's unversioned openssl
+   # is now OpenSSL 4, which the server does not build against.
+   cmake "$HOME/villagesql-server" -DWITH_DEBUG=1 \
+       -DWITH_SSL="$(brew --prefix openssl@3)"
    ```
 
-4. **Build:**
+5. **Build:**
    ```bash
    make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
-5. **Initialize and Start the Server:**
+   This builds every target, including the `mysql` client that step 6 uses to
+   connect. A build limited to the `mysqld` target leaves step 6 with no client.
 
-   **Linux:**
+6. **Initialize and Start the Server:**
+
    ```bash
    # Create the data directory
-   mkdir -p $HOME/mysql-data/data
-
-   # Initialize the data directory (insecure mode for development)
-   bin/mysqld --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
-
-   # Start the server (runs in foreground, use Ctrl-C to stop)
-   bin/mysqld --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
-
-   # In a new terminal, connect using the client
-   $HOME/build/villagesql/bin/mysql -u root
-
-   # Verify the installation
-   $HOME/build/villagesql/bin/mysql -u root -e "SELECT VERSION()"
-   ```
-
-   **Running as root (Docker or sudo):**
-
-   If running as root (e.g., in Docker), MySQL requires the `--user=root` flag:
-   ```bash
-   # Initialize as root
-   bin/mysqld --user=root --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
-
-   # Start as root
-   bin/mysqld --user=root --gdb --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
-   ```
-
-   **macOS:**
-   ```bash
-   # Create the data directory
-   mkdir -p ~/mysql-data/data
+   mkdir -p "$HOME/mysql-data/data"
 
    # Initialize the data directory (insecure mode for development)
    bin/mysqld --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
@@ -159,13 +149,24 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    bin/mysqld --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
 
    # In a new terminal, connect using the client
-   ~/build/villagesql/bin/mysql -u root
+   "$HOME/build/villagesql/bin/mysql" -u root
 
    # Verify the installation
-   ~/build/villagesql/bin/mysql -u root -e "SELECT VERSION()"
+   "$HOME/build/villagesql/bin/mysql" -u root -e "SELECT VERSION()"
    ```
 
-   *Note: `--initialize-insecure` creates a root user with no password for development. The `--gdb` flag installs a signal handler that allows you to Ctrl-C to quit the server. For production, use `--initialize` instead (generates a temporary password) and refer to [MySQL 8.4 initialization documentation](https://dev.mysql.com/doc/refman/8.4/en/data-directory-initialization.html) for secure setup.*
+   **Running as root (Docker or sudo):**
+
+   If running as root (e.g., in Docker), MySQL requires the `--user=root` flag:
+   ```bash
+   # Initialize as root
+   bin/mysqld --user=root --initialize-insecure --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
+
+   # Start as root
+   bin/mysqld --user=root --gdb --datadir="$HOME/mysql-data/data" --basedir="$HOME/build/villagesql"
+   ```
+
+   *Note: `--initialize-insecure` creates a root user with no password for development. The `--gdb` flag unblocks `SIGINT` so you can Ctrl-C to quit the server; it also suppresses the crash backtrace and cancels `--core-file`. For production, use `--initialize` instead (generates a temporary password) and refer to [MySQL 8.4 initialization documentation](https://dev.mysql.com/doc/refman/8.4/en/data-directory-initialization.html) for secure setup.*
 
    **Setting up users and permissions:**
    ```sql
@@ -178,45 +179,20 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
    **Verify the new user:**
 
-   **Linux:**
    ```bash
-   $HOME/build/villagesql/bin/mysql -u myuser -p -e "SELECT USER()"
-   ```
-
-   **macOS:**
-   ```bash
-   ~/build/villagesql/bin/mysql -u myuser -p -e "SELECT USER()"
+   "$HOME/build/villagesql/bin/mysql" -u myuser -p -e "SELECT USER()"
    ```
 
 ### Running Tests
 
 Verify your build with the test suite:
 
-**Linux:**
 ```bash
 # From your build directory
-cd $HOME/build/villagesql
+cd "$HOME/build/villagesql"
 
-# Run all VillageSQL tests including sub-suites
-mysql-test/mysql-test-run.pl --do-suite=villagesql --parallel=auto
-
-# Run a specific test
-mysql-test/mysql-test-run.pl villagesql.my_test_name
-
-# Update test results after making changes
-mysql-test/mysql-test-run.pl --record villagesql.my_test_name
-
-# Run VillageSQL unit tests
-make -j $(getconf _NPROCESSORS_ONLN) villagesql-unit-tests && ctest -L villagesql
-```
-
-**macOS:**
-```bash
-# From your build directory
-cd ~/build/villagesql
-
-# Run all VillageSQL tests including sub-suites
-mysql-test/mysql-test-run.pl --do-suite=villagesql --parallel=auto
+# Run all VillageSQL tests including sub-suites (unit tests run separately)
+mysql-test/mysql-test-run.pl --do-suite=villagesql --nounit-tests --parallel=auto
 
 # Run a specific test
 mysql-test/mysql-test-run.pl villagesql.my_test_name
@@ -303,30 +279,32 @@ VillageSQL provides a C++ SDK and a Rust SDK for building high-performance exten
 
 ## Roadmap
 
-Priority items are listed below. The full roadmap can be found at [villagesql.com/roadmap](https://villagesql.com/roadmap).
-
-- [ ] **Custom Index Types:** Support for extension-defined index types. Standard B-tree indexing of custom-typed columns already works. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
-- [ ] **Variable Length Custom Types:** Support for custom types with variable storage size. ([#13](https://github.com/villagesql/villagesql-server/issues/13))
-- [ ] **Extension Upgrades Without a Restart:** `ALTER EXTENSION <name> VERSION '<v>' AT RESTART` applies a version change at the next restart today; applying one to a running server does not. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
-- [ ] **Full Built-in Aggregate Support:** Investigating support for built-in aggregate functions (SUM, AVG, etc.) with custom types. COUNT(DISTINCT), MIN, and MAX work today. Extensions can implement custom aggregates via VDF Aggregates. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
-- [ ] **Startup Install Flag:** Automatic extension installation on server startup. ([#17](https://github.com/villagesql/villagesql-server/issues/17))
-- [ ] **Windows Support:** Native Windows compilation and .dll support. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
-- [ ] **Analytical Capabilities:** Embedded analytical engines (e.g., DuckDB integration).
-- [ ] **Fully-Managed Cloud Service:** VillageSQL as a managed database offering.
+The full roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
 ## Troubleshooting
 
 ### Build Failures
 
 **OpenSSL not found:**
+
+Install the OpenSSL development package.
+
 ```bash
 # macOS with Homebrew
 brew install openssl@3
-cmake ~/villagesql-server -DWITH_SSL=/opt/homebrew/opt/openssl@3
 
 # Linux (Ubuntu/Debian)
 sudo apt-get install libssl-dev
-cmake ~/villagesql-server -DWITH_SSL=system
+```
+
+On Linux cmake finds it with no further configuration. On macOS you must also
+name the directory, because Homebrew's unversioned `openssl` is now OpenSSL 4
+and the server does not build against it. Naming it also makes the build carry
+its own copy of the OpenSSL libraries, so it keeps working when Homebrew
+upgrades OpenSSL:
+
+```bash
+cmake "$HOME/villagesql-server" -DWITH_SSL="$(brew --prefix openssl@3)"
 ```
 
 **Bison version too old:**
@@ -344,7 +322,7 @@ sudo apt-get install bison
 **Can't connect to server:**
 - Check that `mysqld` is running: `pgrep -a mysqld` or `ps aux | grep mysqld`
 - Verify socket path matches between server and client
-- Check error log in your data directory (e.g., `~/mysql-data/data/*.err`)
+- Check error log in your data directory (e.g., `$HOME/mysql-data/data/*.err`)
 
 **Port already in use:**
 If you see "Bind on TCP/IP port: Address already in use", either stop the existing MySQL instance or specify a different port:

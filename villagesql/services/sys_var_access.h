@@ -32,6 +32,15 @@ struct SysVarDesc {
   bool def_val;
   // Called after the server writes a new value. May be null.
   // var_name is the variable name without the extension prefix.
+  //
+  // Runs with LOCK_global_system_variables held, as MySQL calls sys var update
+  // functions (see sys_var::update and sys_var_pluginvar::global_update). A
+  // callback may therefore read or write another variable's storage directly,
+  // but must not call anything that re-acquires that mutex (reading a sys var
+  // through the component service, creating a THD, or running SQL) and must
+  // not wait on a thread that does. A callback that needs to block has to
+  // release the mutex around the blocking part and re-acquire it before
+  // returning, the way event_scheduler_update() does in sql/sys_vars.cc.
   void (*on_change)(const char *var_name, bool new_val);
 };
 

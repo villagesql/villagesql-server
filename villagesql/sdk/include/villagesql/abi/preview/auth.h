@@ -61,6 +61,25 @@ extern "C" {
 // Maximum length of an auth-method name (bytes, excluding NUL).
 #define VEF_AUTH_MAX_NAME_LEN 64
 
+// How the server reconciles the roles a method stages (via set_active_roles)
+// with the roles the resolved account actually holds. Queried live per login
+// via the roles_mode callback, so it can reflect a runtime sysvar.
+typedef enum {
+  // Activate-only (default): the staged roles are used solely to activate roles
+  // the account already holds, grant-checked -- a claimed role that is not
+  // granted is skipped. The token can never grant or escalate; the DBA owns
+  // grants.
+  VEF_AUTH_ROLES_ACTIVATE = 0,
+  // Additive grant: additionally GRANT each staged role the account was not
+  // granted, so a token claiming a role takes effect. Never revokes.
+  VEF_AUTH_ROLES_GRANT = 1,
+  // Authoritative sync: the staged set becomes the account's exact granted set
+  // -- GRANT the ones it lacks AND REVOKE every currently-granted role not in
+  // the staged set (an empty staged set revokes all). For deployments where the
+  // token issuer (IdP) is the sole source of truth for the account's roles.
+  VEF_AUTH_ROLES_SYNC = 2,
+} vef_auth_roles_mode_t;
+
 // Result of an authentication attempt. There is deliberately NO "maybe"/fail-
 // open value: the server treats anything that is not VEF_AUTH_OK as a denial.
 typedef enum {
@@ -156,6 +175,14 @@ typedef struct {
   // copied.
   void (*request_provision)(vef_auth_ctx_t *ctx, const char *account,
                             const char *const *roles, uint32_t n_roles);
+
+  // The name of the client-side auth plugin the connection actually used (as
+  // advertised by the client), e.g. "mysql_clear_password" or
+  // "authentication_openid_connect_client". Lets a handler pick how to parse
+  // the credential packet by which client plugin produced it, instead of
+  // sniffing packet bytes (different client plugins frame the credential
+  // differently). Empty if unknown. Valid for the duration of the handler call.
+  const char *(*client_auth_plugin)(vef_auth_ctx_t *ctx);
 } vef_auth_ops_t;
 
 // The handler the extension implements. Invoked synchronously on the connecting
@@ -188,6 +215,26 @@ typedef struct {
   // -> access denied". At most one registered method may return true at a time;
   // the server routes normally (as if none opted in) if more than one does.
   bool (*auto_create_unknown_accounts)(void);
+  // Optional callback: how the server reconciles the roles this method stages
+  // via set_active_roles() with the (already-existing) account's granted roles
+  // -- see vef_auth_roles_mode_t. ACTIVATE only activates already-granted
+  // roles; GRANT also grants a claimed role the account lacks; SYNC makes the
+  // staged set authoritative (grant the missing, revoke every other granted
+  // role). Independent of auto_create_unknown_accounts: this governs roles on
+  // existing accounts, that governs provisioning unknown ones. QUERIED LIVE per
+  // login, so it can reflect a runtime sysvar. NULL keeps the activate-only
+  // default (the DBA owns grants; a token can only activate roles already
+  // granted).
+  vef_auth_roles_mode_t (*roles_mode)(void);
+  // Optional callback: return true if this method can parse a credential
+  // delivered by the client plugin named `offered` as-is, so the server accepts
+  // it without switching to client_auth_plugin. Returning false (or a nullptr
+  // callback) forces a change-plugin switch to client_auth_plugin -- the client
+  // resends the credential verbatim -- so a naive client still connects.
+  // Queried during handshake negotiation, before the handler's first read, so
+  // it must be a pure predicate (no packet I/O, no blocking, no side effects).
+  // `offered` is the raw client-supplied plugin name.
+  bool (*accepts_client_plugin)(const char *offered);
 } vef_auth_cc_t;
 
 // Server-side vtable. Version first, matching the other preview capabilities.

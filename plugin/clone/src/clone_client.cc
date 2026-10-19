@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,9 +33,12 @@ Clone Plugin: Client implementation
 #include "plugin/clone/include/clone_os.h"
 
 #include "my_byteorder.h"
-#include "my_systime.h"  // my_sleep()
+#include "my_systime.h"      // my_sleep()
+#include "sql/sql_plugin.h"  // For check_valid_path() only.
 #include "sql/sql_thd_internal_api.h"
 #include "sql_string.h"
+
+#include "villagesql/clone/vsql_clone_protocol.h"
 
 /* Namespace for all clone data types */
 namespace myclone {
@@ -1010,6 +1014,10 @@ bool Client::plugin_is_loadable(std::string &so_name) {
     return false;
   }
 
+  if (check_valid_path(so_name.c_str(), so_name.length())) {
+    return false;
+  }
+
   std::string path(configs[0].second);
   path.append("/");
   path.append(so_name);
@@ -1076,6 +1084,17 @@ int Client::validate_remote_params() {
     /* Donor plugin is not there in recipient. */
     my_error(ER_CLONE_PLUGIN_MATCH, MYF(0), plugin_name.c_str());
     last_error = ER_CLONE_PLUGIN_MATCH;
+  }
+
+  // VillageSQL: validate donor extensions are available on the recipient.
+  char ext_error[MYSYS_ERRMSG_SIZE];
+  ext_error[0] = '\0';
+  auto &ext_payload = m_parameters.m_extensions;
+  if (mysql_service_vsql_clone_protocol->mysql_vsql_clone_validate_extensions(
+          get_thd(), reinterpret_cast<const uchar *>(ext_payload.data()),
+          ext_payload.length(), ext_error, sizeof(ext_error))) {
+    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0), ext_error);
+    last_error = ER_VILLAGESQL_GENERIC_ERROR;
   }
 
   /* Validate character sets */
@@ -1158,6 +1177,10 @@ int Client::add_plugin_with_so(const uchar *packet, size_t length) {
   auto err = extract_key_value(packet, length, plugin);
 
   if (err == 0) {
+    DBUG_EXECUTE_IF("clone_inject_invalid_donor_plugin_so", {
+      plugin.first.assign("clone_path_traversal");
+      plugin.second.assign("../clone_path_traversal.so");
+    });
     m_parameters.m_plugins_with_so.push_back(plugin);
   }
   return (err);
@@ -1171,6 +1194,11 @@ int Client::add_charset(const uchar *packet, size_t length) {
     m_parameters.m_charsets.push_back(charset_name);
   }
   return (err);
+}
+
+// VillageSQL: store the opaque extension payload verbatim.
+int Client::add_extensions(const uchar *packet, size_t length) {
+  return extract_string(packet, length, m_parameters.m_extensions);
 }
 
 void Client::use_other_configs() {
@@ -1347,8 +1375,9 @@ int Client::serialize_ack_cmd(size_t &buf_len) {
 }
 
 int Client::serialize_init_cmd(size_t &buf_len) {
-  /* Add length of protocol Version */
-  buf_len = sizeof(m_share->m_protocol_version);
+  /* Add length of protocol Version. Sized from the value type, not the atomic
+  itself, whose size the standard does not tie to it. */
+  buf_len = sizeof(decltype(m_share->m_protocol_version)::value_type);
 
   /* Add length for DDL timeout value */
   buf_len += 4;
@@ -1367,7 +1396,9 @@ int Client::serialize_init_cmd(size_t &buf_len) {
   }
 
   /* Store version */
-  int4store(buf_ptr, m_share->m_protocol_version);
+  // VillageSQL: carry our clone version in the reserved high bits of the word.
+  int4store(buf_ptr, villagesql::clone::encode_version_word(
+                         m_share->m_protocol_version));
   buf_ptr += 4;
 
   /* Store DDL timeout value. Default is no lock. */
@@ -1524,6 +1555,10 @@ int Client::handle_response(const uchar *packet, size_t length, int in_err,
       err = add_charset(packet, length);
       break;
 
+    case COM_RES_EXTENSION:
+      err = add_extensions(packet, length);
+      break;
+
     case COM_RES_LOCS:
       /* Skip applying locator for restart */
       if (!skip_loc && in_err == 0) {
@@ -1675,18 +1710,26 @@ int Client::set_locators(const uchar *buffer, size_t length) {
 int Client::set_descriptor(const uchar *buffer, size_t length) {
   int err = 0;
 
+  if (length == 0) {
+    return ER_CLONE_PROTOCOL;
+  }
   /* Get Storage Engine */
   auto db_type = static_cast<enum legacy_db_type>(*buffer);
   ++buffer;
   length--;
 
+  if (length == 0) {
+    return ER_CLONE_PROTOCOL;
+  }
   /* Get Locator Index */
   auto loc_index = *buffer;
   ++buffer;
   length--;
-
-  auto loc = &m_share->m_storage_vec[loc_index];
-  auto hton = loc->m_hton;
+  if (loc_index >= m_share->m_storage_vec.size()) {
+    return ER_CLONE_PROTOCOL;
+  }
+  auto *loc = &m_share->m_storage_vec[loc_index];
+  auto *hton = loc->m_hton;
 
   if (hton->db_type != db_type) {
     err = ER_CLONE_PROTOCOL;

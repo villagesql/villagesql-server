@@ -1645,6 +1645,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
                           NullS))
       return nullptr;
     new (hash_key) KEY();
+    new (hash_kpi) KEY_PART_INFO();
     table->key_info = share->key_info = hash_key;
     share->key_parts = 1;
     hash_key->table = table;
@@ -1756,6 +1757,8 @@ TABLE *create_duplicate_weedout_tmp_table(THD *thd, uint uniq_tuple_length_arg,
     return nullptr;
   }
   new (keyinfo) KEY();
+  new (&key_part_info[0]) KEY_PART_INFO();
+  new (&key_part_info[1]) KEY_PART_INFO();
 
   /* STEP 3: Create TABLE description */
   new (table) TABLE;
@@ -2892,6 +2895,13 @@ bool create_ondisk_from_heap(THD *thd, TABLE *wtable, int error,
     thd_proc_info(thd, (!strcmp(save_proc_info, "Copying to tmp table")
                             ? "Copying to tmp table on disk"
                             : save_proc_info));
+
+  /*
+    Reading from the in-memory table clears wtable's not-started state, so reset
+    it here.
+  */
+  wtable->set_not_started();
+
   return false;
 
 err_after_open:

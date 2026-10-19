@@ -45,6 +45,7 @@ enum Type {
   INT = VEF_VAR_INT,
   DOUBLE = VEF_VAR_DOUBLE,
   STR = VEF_VAR_STR,
+  ENUM = VEF_VAR_ENUM,
 };
 
 // Typed wrapper around vef_sys_var_change_t passed to on_change callbacks.
@@ -61,10 +62,14 @@ class SysVarChange {
   bool is_int() const { return c_->type == VEF_VAR_INT; }
   bool is_real() const { return c_->type == VEF_VAR_DOUBLE; }
   bool is_str() const { return c_->type == VEF_VAR_STR; }
+  bool is_enum() const { return c_->type == VEF_VAR_ENUM; }
 
   IntArg as_int() const { return IntArg(&v_); }
   RealArg as_real() const { return RealArg(&v_); }
   StringArg as_str() const { return StringArg(&v_); }
+  // The selected enum value, as a zero-based index into the variable's name
+  // list (the order passed to make_enum). Valid only when is_enum().
+  unsigned long as_enum() const { return c_->enum_val; }
 
  private:
   static vef_invalue_t make_invalue(const vef_sys_var_change_t *c) {
@@ -83,6 +88,9 @@ class SysVarChange {
         v.str_value = c->str_val;
         v.str_len = c->str_val ? strlen(c->str_val) : 0;
         break;
+      case VEF_VAR_ENUM:
+        v.int_value = static_cast<long long>(c->enum_val);
+        break;
     }
     return v;
   }
@@ -91,18 +99,28 @@ class SysVarChange {
   vef_invalue_t v_;
 };
 
-// Aggregate descriptor for a single system variable. Use brace-init:
+// Aggregate descriptor for a single system variable. Construct one with the
+// type-specific factory functions declared below -- make_bool(), make_int(),
+// make_double(), make_str() -- not by brace-init: the storage pointer and the
+// default value live in an anonymous union whose first member is the bool pair,
+// so a braced initializer list cannot reach the int, double or string members.
 //
-//   {sv::BOOL,   "enabled",      "Enable feature",   &g_enabled,   true}
-//   {sv::INT,    "threshold_ms", "Threshold in ms",  &g_threshold, 1000, 0,
-//   3600000} {sv::DOUBLE, "ratio",        "Ratio", &g_ratio,     1.0,
-//   0.0, 10.0} {sv::STR,    "log_file",     "Log file path",    &g_log_file,
-//   "/tmp/myext.log"}
+//   sv::make_int("threshold_ms", "Threshold in ms", &g_threshold, 1000, 0,
+//                3600000)
 //
-// To register an on_change callback, use .on_change<&fn>() on the descriptor:
+// To register an on_change callback, chain .on_change<&fn>() onto the
+// descriptor a factory returns:
 //
-//   {sv::INT, "threshold_ms", "Threshold", &g_threshold, 1000, 0, 3600000}
+//   sv::make_int("threshold_ms", "Threshold", &g_threshold, 1000, 0, 3600000)
 //       .on_change<&my_on_change>()
+//
+// The callback runs while the server holds its global system-variable lock, so
+// it must stay short and non-blocking. Reading or writing another of this
+// extension's variables through its storage pointer is safe and immediately
+// visible to other sessions. Calling sys var get/set, running SQL, or waiting
+// on a thread that does either deadlocks on that lock; do that work in a
+// thread_worker instead. See vef_sys_var_on_change_func_t in
+// villagesql/abi/preview/sys_var.h.
 struct SysVarDescriptor {
   Type type;
   const char *name;
@@ -128,6 +146,12 @@ struct SysVarDescriptor {
       char **value_ptr;
       const char *def_val;
     } str;
+    struct {
+      unsigned long *value_ptr;
+      unsigned long def_val;
+      const char *const *names;
+      uint32_t name_count;
+    } enumeration;
   };
   vef_sys_var_on_change_func_t on_change_fn = nullptr;
 
@@ -153,9 +177,9 @@ struct SysVarDescriptor {
 //   namespace sv = vsql::preview_sys_var;
 //
 //   static auto g_sys_vars = sv::make_capability({
-//       {sv::BOOL, "enabled",      "Enable feature",  &g_enabled,   true},
-//       {sv::INT,  "threshold_ms", "Threshold in ms", &g_threshold, 1000, 0,
-//       3600000}});
+//       sv::make_bool("enabled", "Enable feature", &g_enabled, true),
+//       sv::make_int("threshold_ms", "Threshold in ms", &g_threshold, 1000, 0,
+//                    3600000)});
 //
 //   VEF_GENERATE_ENTRY_POINTS(
 //       make_extension()
@@ -195,6 +219,12 @@ class SysVarCapability
         case STR:
           descs_[i].str.value_ptr = descs[i].str.value_ptr;
           descs_[i].str.def_val = descs[i].str.def_val;
+          break;
+        case ENUM:
+          descs_[i].enumeration.value_ptr = descs[i].enumeration.value_ptr;
+          descs_[i].enumeration.def_val = descs[i].enumeration.def_val;
+          descs_[i].enumeration.names = descs[i].enumeration.names;
+          descs_[i].enumeration.name_count = descs[i].enumeration.name_count;
           break;
       }
       ptrs_[i] = &descs_[i];
@@ -317,6 +347,14 @@ inline SysVarDescriptor make_double(const char *name, const char *comment,
   return d;
 }
 
+// The server owns the storage a STR variable points at and frees the old buffer
+// on SET, so dereferencing value_ptr races a concurrent SET. Read a string
+// variable with SysVarCapability::get(), which asks the server under its lock
+// and returns a copy. Scalars are written in place and can be read directly.
+//
+// TODO(villagesql-preview): give the capability a cached string accessor that
+// primes from get() at load and refreshes from on_change, so the safe read is
+// also the cheap one and extensions stop hand-rolling the same cache.
 inline SysVarDescriptor make_str(const char *name, const char *comment,
                                  char **value_ptr, const char *def_val) {
   SysVarDescriptor d;
@@ -326,6 +364,43 @@ inline SysVarDescriptor make_str(const char *name, const char *comment,
   d.str.value_ptr = value_ptr;
   d.str.def_val = def_val;
   return d;
+}
+
+// Enum variable: the value is one of `names` (a fixed, ordered list), stored in
+// `*value_ptr` as its zero-based index. Reads/writes as the name, so the server
+// validates the value at SET time -- an unlisted name is rejected (unlike a
+// free-form make_str). `def_val` is the default index. `names` and its strings
+// must outlive the extension (typically a static array), as the server keeps a
+// TYPELIB pointing at them; `name_count` excludes any trailing NULL.
+//
+//   static const char *const MODE_NAMES[] = {"off", "on", "sync"};
+//   static unsigned long g_mode = 0;  // default "off"
+//   sv::make_enum("mode", "Operating mode", &g_mode, MODE_NAMES, 3, 0)
+inline SysVarDescriptor make_enum(const char *name, const char *comment,
+                                  unsigned long *value_ptr,
+                                  const char *const *names, uint32_t name_count,
+                                  unsigned long def_val) {
+  SysVarDescriptor d;
+  d.type = ENUM;
+  d.name = name;
+  d.comment = comment;
+  d.enumeration.value_ptr = value_ptr;
+  d.enumeration.def_val = def_val;
+  d.enumeration.names = names;
+  d.enumeration.name_count = name_count;
+  return d;
+}
+
+// Convenience overload deducing name_count from a static array:
+//   static const char *const MODE_NAMES[] = {"off", "on", "sync"};
+//   sv::make_enum("mode", "Operating mode", &g_mode, MODE_NAMES, 0)
+template <size_t N>
+inline SysVarDescriptor make_enum(const char *name, const char *comment,
+                                  unsigned long *value_ptr,
+                                  const char *const (&names)[N],
+                                  unsigned long def_val) {
+  return make_enum(name, comment, value_ptr, names, static_cast<uint32_t>(N),
+                   def_val);
 }
 
 // Factory: deduces N from the array size.

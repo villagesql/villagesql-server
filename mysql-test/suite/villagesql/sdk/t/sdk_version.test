@@ -1,0 +1,50 @@
+# SDK Version Test
+#
+# Builds the shipped SDK template against the freshly-built SDK — once for each
+# ABI (stable include/ and dev include-dev/) — and verifies that the extension
+# reports this build's version as its sdk_version.
+#
+# The SDK is built from the same server build, so an extension compiled against
+# it must report the server's release version. This catches a stale/frozen
+# sdk_version being shipped in either ABI of the SDK package.
+#
+# This test requires the SDK tarball to be built first (make sdk).
+# Requires: cmake in PATH, C++ compiler in PATH
+
+--echo # SDK Version Test
+
+# @@villagesql_server_version includes the code base as a prefix, separated from
+# the abbreviated version by an underscore (e.g. "mysql-8.4_0.0.5"); the SDK
+# directory name uses the abbreviated version.
+--let $veb_dir = `SELECT @@veb_dir`
+--let $build_dir = `SELECT @@basedir`
+--let $sdk_abbr = `SELECT SUBSTRING_INDEX(@@villagesql_server_version, '_', -1)`
+--let $test_dir = $MYSQLTEST_VARDIR/tmp/sdk_version_test
+--let $sdk_dir_name = villagesql-extension-sdk-$sdk_abbr
+--let $sdk_tarball = $build_dir/$sdk_dir_name.tar.gz
+--let $sdk_dir = $test_dir/$sdk_dir_name
+
+--exec test -f "$sdk_tarball" || (echo "SDK tarball not found. Run 'make sdk' first." && echo "Looked for: $sdk_tarball" && exit 1)
+--echo Found SDK tarball
+
+--exec rm -rf $test_dir
+--exec mkdir -p $test_dir
+--echo # Extract SDK tarball
+# unset LD_PRELOAD so tar does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds (see include/villagesql/create_extension_sdk.inc).
+--exec unset LD_PRELOAD && tar -xzf $sdk_tarball -C $test_dir
+
+--echo # === Stable ABI (SDK include/) ===
+--let $abi_label = stable
+--let $abi_build_dir = build_stable
+--let $abi_cmake_arg =
+--source sdk_version.inc
+
+--echo # === Dev ABI (SDK include-dev/) ===
+--let $abi_label = dev
+--let $abi_build_dir = build_dev
+--let $abi_cmake_arg = -DVSQL_USE_DEV_ABI=ON
+--source sdk_version.inc
+
+--echo # Cleanup
+--exec rm -rf $test_dir

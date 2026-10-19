@@ -1,0 +1,7 @@
+{
+  "name": "vsql_session_var_test",
+  "version": "0.0.1",
+  "description": "VillageSQL extension testing session-scoped (THD-local) system variables",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

@@ -78,13 +78,56 @@ bool load_veb_manifest(const std::string &name, std::string &version);
 //         lib/
 //           my_extension.so
 //
-// If .veb_expansion_cache/{name}/{sha256}/ already exists, skips extraction
+// Extraction goes to .veb_expansion_cache/{name}/.tmp.{sha256}/ and is renamed
+// to {sha256}/ once the tree is on stable storage, so a {sha256} directory is
+// never half-written and an expansion that fails partway leaves any previous
+// one intact. If {sha256}/ already exists and holds a loadable .so, extraction
+// is skipped.
+//
 // Returns false on success, true on error
-// On success, expanded_path contains full path and sha256_hash contains hash
+// On success, expanded_path contains full path, sha256_hash contains hash, and
+// the expansion holds a non-empty lib/{name}.so.
+//
+// A VEB carrying no such file is rejected here rather than on the load step,
+// because here the tree has just been extracted and the absence can be reported
+// against the package. open_vef_extension() is given only a path, so it cannot
+// tell a bad package from a damaged cache; it asserts on this guarantee
+// instead.
 bool expand_veb_to_directory(const std::string &name,
                              const std::string &veb_version,
                              std::string &expanded_path,
                              std::string &sha256_hash);
+
+// The structural version of the clone extension payload (see
+// serialize_installed_extensions). Bump if the JSON envelope changes shape.
+const int CLONE_EXTENSION_PAYLOAD_FORMAT = 1;
+
+// Serialize the currently installed extensions into an opaque, self-describing
+// payload for transport. Used by the clone donor: the clone plugin carries this
+// payload verbatim to the recipient without interpreting it. The encoding is
+// private to villagesql/veb. The envelope carries:
+//   - format: CLONE_EXTENSION_PAYLOAD_FORMAT (envelope structure version)
+//   - server_version: donor VillageSQL build version (GetBuildVersion())
+//   - schema_version: donor villagesql.* schema version
+//   - extensions: array of {name, version, veb_sha256}
+// Returns the empty string when nothing is installed. Taken under the
+// victionary read lock.
+std::string serialize_installed_extensions();
+
+// Validate that every extension described by a payload produced by
+// serialize_installed_extensions() is available on THIS server, applying the
+// same existence/version/sha256 bar as load_installed_extensions() at startup
+// (so "validation passes" <=> "startup will succeed"). Used by the clone
+// recipient during the handshake, before any data is transferred.
+//
+// Returns false on success (all extensions available). On the first failure
+// returns true and, if error_message is non-null, writes a human-readable
+// diagnostic to it. Any diagnostic-area error raised by the underlying VEB
+// helpers is suppressed so the caller can surface a single error of its own;
+// the reason is still reported via error_message. `thd` is used only for that
+// suppression. An empty payload is valid and returns false.
+bool validate_cloned_extensions(THD *thd, const std::string &payload,
+                                std::string *error_message);
 
 // Load all installed extensions from villagesql.extensions table
 // Called during server startup after VictionaryClient initialization
@@ -140,6 +183,21 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
 void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
                           const ExtensionRegistration &registration);
 
+// Call the extension's own load / unload hooks (the builder's on_init() and
+// on_deinit()). Both are no-ops for an extension that declares no hook or was
+// built before the hooks existed.
+//
+// on_init runs after the extension's capabilities are populated and on_deinit
+// before they are depopulated, so an extension sees the same live capabilities
+// in both. load_vef_extension and unload_vef_extension already call these; the
+// shutdown path calls run_extension_on_deinit directly because it depopulates
+// capabilities and unloads the .so in two separate phases.
+//
+// The pair is symmetric: the unload hook runs only for a registration that
+// reached the load hook, and each call runs at most once per load.
+void run_extension_on_init(const vef_registration_t *reg);
+void run_extension_on_deinit(const vef_registration_t *reg);
+
 // Open the .so and call vef_register: dlopen, look up the entry-point
 // symbols, invoke vef_register, validate the returned protocol. Does NOT
 // run any capability populate hooks. The caller observes only what the
@@ -157,6 +215,40 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
 bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
                         std::string &error_message);
+
+// Checks the registration returned by vef_register against the invariants
+// every consumer of it relies on, so that each one is stated and enforced
+// once here rather than rediscovered (or forgotten) downstream:
+//
+//   - funcs[] and types[] hold exactly func_count/type_count non-NULL
+//     descriptors. Consumers walk these arrays on the count alone --
+//     parse_extension_registration(), RunUpdatePreCheck() and the
+//     extension_registration system view.
+//   - every function descriptor is callable and describable: it has a name,
+//     a vdf pointer, a signature, a params array matching its param_count,
+//     and a named type wherever it declares VEF_TYPE_CUSTOM. validate.cc
+//     dereferences signature unconditionally, vdf_handler calls vdf with no
+//     NULL check, and the CUSTOM type name is otherwise only guarded by a
+//     debug assert in types/util.cc.
+//   - every type descriptor has a name and a positive
+//     max_decode_buffer_length. RunUpdatePreCheck reads the name to decide
+//     which types a target version keeps, and TypeDecoder allocates the
+//     buffer size.
+//
+// Only protocol-1 fields are read, so this applies to every extension
+// regardless of the protocol it declares.
+//
+// This is what a registration must *be*, not what a server will accept from
+// it: semantic rules (identifier legality, aggregate callback pairing,
+// duplicate names, buffer lengths) stay in parse_extension_registration(),
+// which has the extension name and protocol context to report them well.
+//
+// Called by open_vef_extension(); exposed for unit testing.
+//
+// Returns false when the registration is well formed, true on error (a
+// message is written to error_message).
+bool check_vef_registration(const vef_registration_t *registration,
+                            std::string &error_message);
 
 // Symmetric counterpart to open_vef_extension: vef_unregister + dlclose, no
 // capability depopulate. Pair with open_vef_extension. Calling this on a

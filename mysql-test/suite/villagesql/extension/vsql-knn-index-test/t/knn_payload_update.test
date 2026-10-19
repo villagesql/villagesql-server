@@ -1,0 +1,69 @@
+# Updating a non-vector column does not disturb the KNN index.
+#
+# After updating only the payload column, the KNN query returns the same rows in
+# the same order (the vectors are unchanged) and the new payload value, and no
+# index insert is triggered.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+
+CREATE TABLE t (
+  id      INT PRIMARY KEY,
+  v       KVECTOR,
+  payload VARCHAR(32)
+);
+
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]', 'one'),
+  (2, '[0,1,0,0]', 'two'),
+  (3, '[0,0,1,0]', 'three'),
+  (4, '[1,1,0,0]', 'four'),
+  (5, '[2,0,0,0]', 'five');
+
+--echo # KNN is served by the index (custom index distance scan, no filesort).
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id, payload
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')
+LIMIT 5;
+
+--echo # Baseline order and payloads.
+SELECT id, payload
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')
+LIMIT 5;
+
+SELECT vsql_knn_index_test.kvec_insert_count() AS inserts_before_update;
+
+UPDATE t SET payload = 'ONE-UPDATED' WHERE id = 1;
+
+--echo # A payload-only update triggers no index insert.
+SELECT vsql_knn_index_test.kvec_insert_count() AS inserts_after_update;
+
+--echo # Same order, row 1 shows the new payload.
+SELECT id, payload
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')
+LIMIT 5;
+
+UPDATE t SET payload = 'THREE-UPDATED' WHERE id = 3;
+
+SELECT vsql_knn_index_test.kvec_insert_count() AS inserts_after_second_update;
+
+--echo # Both updated payloads are reflected; order unchanged.
+SELECT id, payload
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')
+LIMIT 5;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,48 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE DATABASE MixedDb;
+USE MixedDb;
+CREATE TABLE MixedTab (
+id INT PRIMARY KEY,
+a dummy_type_vector,
+b dummy_type_vector,
+INDEX MixedIdx (a) USING EXTENDED(dummy_index_hnsw)
+);
+# --- Stored rows: db and table names lowercased, index name as entered ---
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+mixedtab	MixedIdx	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- I_S.STATISTICS resolves the custom type across the case difference ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	INDEX_TYPE
+MixedDb	MixedTab	MixedIdx	DUMMY_INDEX_HNSW
+MixedDb	MixedTab	PRIMARY	BTREE
+# --- SHOW INDEX: same view definition ---
+SHOW INDEX FROM MixedTab;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+MixedTab	0	PRIMARY	1	id	A	#	#	#	#	BTREE			YES	NULL
+MixedTab	1	MixedIdx	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
+# --- Index added by a statement spelled in a different case ---
+ALTER TABLE mixedtab ADD INDEX MixedIdx2 (b) USING EXTENDED(dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+mixeddb	mixedtab	MixedIdx2	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+mixedtab	MixedIdx	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+mixedtab	MixedIdx2	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW INDEX FROM MixedTab;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+mixedtab	0	PRIMARY	1	id	A	#	#	#	#	BTREE			YES	NULL
+mixedtab	1	MixedIdx	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
+mixedtab	1	MixedIdx2	1	b	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
+# --- Cleanup ---
+DROP DATABASE MixedDb;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

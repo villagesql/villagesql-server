@@ -99,6 +99,10 @@ class StatementEventArgs {
   uint64_t read_rnd() const { return a_->read_rnd; }
   uint64_t read_rnd_next() const { return a_->read_rnd_next; }
 
+  const char *client_pid() const { return a_->client_pid; }
+  const char *client_name() const { return a_->client_name; }
+  const char *program_name() const { return a_->program_name; }
+
  private:
   const vef_statement_event_args_t *a_;
 };

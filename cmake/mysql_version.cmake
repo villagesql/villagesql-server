@@ -80,7 +80,7 @@ MACRO(GET_MYSQL_VERSION)
     MESSAGE(FATAL_ERROR "MYSQL_VERSION_MATURITY can be set to INNOVATION or LTS.")
   ENDIF()
 
-  # TODO(villagesql-ga): figure out our strategy for LTS and numbering.
+  # TODO(villagesql-production): figure out our strategy for LTS and numbering.
   ## Versions like 8.0.x, 8.4.x, and x.7.y (x > 8) should be LTS
   # IF ((MAJOR_VERSION EQUAL "8" AND MINOR_VERSION EQUAL "0" AND PATCH_VERSION GREATER "34") OR
   #     (MAJOR_VERSION EQUAL "8" AND MINOR_VERSION EQUAL "4") OR

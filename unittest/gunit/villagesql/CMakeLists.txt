@@ -22,13 +22,24 @@ SET(VILLAGESQL_UNIT_TESTS
   abi_v2_check-t
   custom_indexes-t
   identifier_names-t
+  pending_action-t
   semver-t
+  storage_page_latch-t
   type_builder-t
   type_context-t
   type_descriptor-t
+  type_params-t
   validate-t
+  veb_file-t
   victionary_client-t
 )
+
+# Memcheck runs these 20-50x slower, well past the normal 300s budget.
+IF(WITH_VALGRIND)
+  SET(VILLAGESQL_TEST_TIMEOUT 3000)
+ELSE()
+  SET(VILLAGESQL_TEST_TIMEOUT 300)
+ENDIF()
 
 # Helper macro to add VillageSQL unit tests
 # Note: We use a custom villagesql_test_main.cc instead of gunit_small to avoid
@@ -67,7 +78,7 @@ MACRO(ADD_VILLAGESQL_TEST test_name)
 
   # Set test properties for CTest
   SET_TESTS_PROPERTIES(${test_name} PROPERTIES
-    TIMEOUT 300
+    TIMEOUT ${VILLAGESQL_TEST_TIMEOUT}
     LABELS "villagesql"
   )
 ENDMACRO()
@@ -77,9 +88,26 @@ FOREACH(test_name ${VILLAGESQL_UNIT_TESTS})
   ADD_VILLAGESQL_TEST(${test_name})
 ENDFOREACH()
 
+# custom_type_item tests need the full server initialization supplied by
+# gunit_large.
+MYSQL_ADD_EXECUTABLE(custom_type_item-t custom_type_item-t.cc
+  COMPONENT Test
+  ENABLE_EXPORTS
+  EXCLUDE_FROM_ALL
+  SKIP_INSTALL
+  LINK_LIBRARIES gunit_large server_unittest_library
+  DEPENDENCIES GenError ${GTEST_LIBRARIES}
+  ADD_TEST custom_type_item-t
+  ADD_GCOV_TEST custom_type_item-t
+)
+SET_TESTS_PROPERTIES(custom_type_item-t PROPERTIES
+  TIMEOUT ${VILLAGESQL_TEST_TIMEOUT}
+  LABELS "villagesql"
+)
+
 # Custom target to build all VillageSQL unit tests
 ADD_CUSTOM_TARGET(villagesql-unit-tests
-  DEPENDS ${VILLAGESQL_UNIT_TESTS}
+  DEPENDS ${VILLAGESQL_UNIT_TESTS} custom_type_item-t
 )
 
 # Also add them to the main test-unit dependencies if we're building unit tests

@@ -80,8 +80,8 @@
 //     DEFAULT_STR_TYPE, DEFAULT_VDF_TYPE, DEFAULT_PARAM_TYPE(N),
 //     BAD_DEFAULT_LEN_TYPE.
 //
-//   Parameter-bound test types (see block comment further down):
-//     OVERSIZED_PARAM_TYPE(N).
+//   Parameter-bound and rewrite test types (see block comment further down):
+//     OVERSIZED_PARAM_TYPE(N), ADD_PARAM_TYPE(N), DROP_PARAM_TYPE(N).
 //
 //   Storage-size boundary test type (see block comment further down):
 //     MAX_WIDTH_FIELD.
@@ -95,6 +95,7 @@
 
 #include <cassert>
 #include <cinttypes>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -116,9 +117,36 @@ constexpr std::string_view kPrefixOk = "OK ";
 constexpr std::string_view kDecodeFail = "DECODE_FAIL";
 constexpr std::string_view kEncodeFail = "ENCODE_FAIL";
 
+// The value stored for a NOT NULL column that takes the intrinsic default.
+// Deliberately not the empty string, so a test can tell the default apart from
+// a stored empty value: both would otherwise be all-zero bytes.
+constexpr std::string_view kIntrinsicDefault = "OK default";
+
+// Sentinels for the three non-VALUE results an encode VDF can return. Each
+// exercises a distinct outcome the server is meant to tell apart: SQL NULL,
+// a warning carrying the extension's own text, and an error carrying it.
+constexpr std::string_view kEncodeNull = "ENCODE_NULL";
+constexpr std::string_view kEncodeWarn = "ENCODE_WARN";
+constexpr std::string_view kEncodeError = "ENCODE_ERROR";
+
 void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   if (from == kEncodeFail) {
     return;  // encode failure - wrapper default warning surfaces
+  }
+
+  if (from == kEncodeNull) {
+    out.set_null();  // the value is SQL NULL, not a failure
+    return;
+  }
+
+  if (from == kEncodeWarn) {
+    out.warning("fault_blob: encode warning sentinel");
+    return;
+  }
+
+  if (from == kEncodeError) {
+    out.error("fault_blob: encode error sentinel");
+    return;
   }
 
   auto buf = out.buffer();
@@ -140,7 +168,8 @@ void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   // Unrecognised prefix - crash loudly so tests cannot silently pass bad input.
   assert(false &&
          "fault_blob_encode: unrecognised prefix (expected 'OK ', "
-         "'DECODE_FAIL', or 'ENCODE_FAIL')");
+         "'DECODE_FAIL', 'ENCODE_FAIL', 'ENCODE_NULL', 'ENCODE_WARN', or "
+         "'ENCODE_ERROR')");
   abort();
 }
 
@@ -213,7 +242,7 @@ struct NoDefaultParams {
   static NoDefaultParams parse(
       const std::map<std::string, std::string> &params) {
     auto it = params.find("length");
-    return NoDefaultParams{std::stoll(it->second)};
+    return NoDefaultParams{std::strtoll(it->second.c_str(), nullptr, 0)};
   }
 
   static void to_strings(const NoDefaultParams &p,
@@ -243,7 +272,7 @@ bool no_default_resolve_params(const std::map<std::string, std::string> &params,
              "NO_DEFAULT_PARAM_TYPE length is required");
     return true;
   }
-  int64_t length = std::stoll(it->second);
+  int64_t length = std::strtoll(it->second.c_str(), nullptr, 0);
   if (length <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "NO_DEFAULT_PARAM_TYPE length must be positive");
@@ -270,7 +299,7 @@ bool no_default_var_resolve_params(
              "NO_DEFAULT_VAR_PARAM_TYPE length is required");
     return true;
   }
-  int64_t length = std::stoll(it->second);
+  int64_t length = std::strtoll(it->second.c_str(), nullptr, 0);
   if (length <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "NO_DEFAULT_VAR_PARAM_TYPE length must be positive");
@@ -311,7 +340,7 @@ struct LargeDecodeParams {
   static LargeDecodeParams parse(
       const std::map<std::string, std::string> &params) {
     auto it = params.find("length");
-    return LargeDecodeParams{std::stoll(it->second)};
+    return LargeDecodeParams{std::strtoll(it->second.c_str(), nullptr, 0)};
   }
 
   static void to_strings(const LargeDecodeParams &p,
@@ -341,7 +370,7 @@ bool large_decode_resolve_params(
              "LARGE_DECODE_TYPE length is required");
     return true;
   }
-  int64_t length = std::stoll(it->second);
+  int64_t length = std::strtoll(it->second.c_str(), nullptr, 0);
   if (length <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "LARGE_DECODE_TYPE length must be positive");
@@ -425,6 +454,7 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .from_string<&fault_blob_encode>()
                                 .to_string<&fault_blob_decode>()
                                 .compare<&fault_blob_compare>()
+                                .intrinsic_default_str(kIntrinsicDefault.data())
                                 .build();
 
 constexpr auto NO_DEFAULT_TYPE = vsql::make_type<kNoDefaultTypeName>()
@@ -499,7 +529,7 @@ struct PVecParams {
 
   static PVecParams parse(const std::map<std::string, std::string> &params) {
     auto it = params.find("dimension");
-    return PVecParams{std::stoll(it->second)};
+    return PVecParams{std::strtoll(it->second.c_str(), nullptr, 0)};
   }
 
   static void to_strings(const PVecParams &p,
@@ -527,7 +557,7 @@ bool pvec_resolve_params(const std::map<std::string, std::string> &params,
     snprintf(err, VEF_MAX_ERROR_LEN, "PVEC requires dimension parameter");
     return true;
   }
-  int64_t dim = std::stoll(it->second);
+  int64_t dim = std::strtoll(it->second.c_str(), nullptr, 0);
   if (dim <= 0 || dim > kPVecMaxDim) {
     snprintf(err, VEF_MAX_ERROR_LEN, "PVEC dimension must be 1..%" PRId64,
              kPVecMaxDim);
@@ -689,6 +719,48 @@ void pvec_norm_sq_result(const NormSqState &state, vsql::IntResult out) {
   out.set(state);
 }
 
+// real_sqrt / real_half_pi / real_avg pin down the result scale of a
+// REAL-returning VDF. Each produces a value with a fraction from arguments
+// that carry no scale of their own -- an INT parameter, or none at all -- so a
+// result that rounds to a whole number means the scale came from the
+// arguments rather than from the declared REAL return type.
+
+static void real_sqrt_impl(vsql::IntArg n, vsql::RealResult out) {
+  if (n.is_null()) {
+    out.set_null();
+    return;
+  }
+  out.set(std::sqrt(static_cast<double>(n.value())));
+}
+
+static void real_half_pi_impl(vsql::RealResult out) {
+  out.set(1.5707963267948966);
+}
+
+struct RealAvgState {
+  double sum;
+  int64_t count;
+};
+
+void real_avg_clear(RealAvgState &state) {
+  state.sum = 0;
+  state.count = 0;
+}
+
+void real_avg_accumulate(RealAvgState &state, vsql::IntArg n) {
+  if (n.is_null()) return;
+  state.sum += static_cast<double>(n.value());
+  state.count++;
+}
+
+void real_avg_result(const RealAvgState &state, vsql::RealResult out) {
+  if (state.count == 0) {
+    out.set_null();
+    return;
+  }
+  out.set(state.sum / static_cast<double>(state.count));
+}
+
 static constexpr const char kPVecTypeName[] = "PVEC";
 
 constexpr auto PVEC =
@@ -727,14 +799,26 @@ constexpr int64_t kParamTestSize = 4;
 struct LenParam {
   int64_t length;
 
+  // Only the bind-hook fixtures near the bottom of this file set this, to make
+  // to_strings emit more than the server's parameter buffer can hold. Left at
+  // 0 the serialized form is exactly what it was, so the types sharing
+  // LenParam are unaffected.
+  int64_t pad_len = 0;
+
   static LenParam parse(const std::map<std::string, std::string> &params) {
     auto it = params.find("length");
-    return LenParam{it == params.end() ? 0 : std::stoll(it->second)};
+    auto pad = params.find("pad");
+    return LenParam{
+        it == params.end() ? 0 : std::strtoll(it->second.c_str(), nullptr, 0),
+        pad == params.end() ? 0 : static_cast<int64_t>(pad->second.size())};
   }
 
   static void to_strings(const LenParam &p,
                          std::map<std::string, std::string> &out) {
     out["length"] = std::to_string(p.length);
+    if (p.pad_len > 0) {
+      out["pad"] = std::string(static_cast<size_t>(p.pad_len), 'x');
+    }
   }
 };
 
@@ -1058,11 +1142,19 @@ constexpr auto BAD_DEFAULT_LEN_TYPE =
         .intrinsic_default_str("SHORT")
         .build();
 
-// ---- Parameter-bound test types ------------------------------------------
+// ---- Parameter-bound and rewrite test types -----------------------------
 //
 //   OVERSIZED_PARAM_TYPE(N) - resolve_params resolves a persisted_length larger
 //                             than max_persisted_length; exercises the DDL-time
 //                             upper-bound check.
+//   ADD_PARAM_TYPE(N)       - uses the MUTATING resolve_params overload to fill
+//                             in a missing 'mode' default, so the server adopts
+//                             the enlarged set as canonical. Adding keys is
+//                             accepted.
+//   DROP_PARAM_TYPE(N)      - uses the MUTATING overload to erase every key
+//                             other than 'length'. Removing a parameter is
+//                             rejected at DDL time, so this type only works
+//                             when there is nothing to erase.
 
 // OVERSIZED_PARAM_TYPE: resolves to twice its max_persisted_length.
 constexpr int64_t kOversizedResolved = kParamTestSize * 2;
@@ -1088,7 +1180,55 @@ bool oversized_resolve_params(const std::map<std::string, std::string> &params,
   return false;
 }
 
+// ADD_PARAM_TYPE: mutating resolve_params that fills in a 'mode' default when
+// the user did not supply one. The enlarged map is what the server adopts as
+// canonical.
+bool add_int_to_params(int64_t value,
+                       std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool add_resolve_params(std::map<std::string, std::string> &params,
+                        vsql::ResolvedTypeParams *result, char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "ADD_PARAM_TYPE requires length");
+    return true;
+  }
+  if (params.find("mode") == params.end()) params["mode"] = "fast";
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
+// DROP_PARAM_TYPE: mutating resolve_params that erases any key other than
+// 'length'. Erasing one the user wrote is rejected by the server.
+bool drop_int_to_params(int64_t value,
+                        std::map<std::string, std::string> &params, char *) {
+  params["length"] = std::to_string(value);
+  return false;
+}
+
+bool drop_resolve_params(std::map<std::string, std::string> &params,
+                         vsql::ResolvedTypeParams *result, char *error_msg) {
+  if (params.find("length") == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "DROP_PARAM_TYPE requires length");
+    return true;
+  }
+  for (auto it = params.begin(); it != params.end();) {
+    if (it->first != "length")
+      it = params.erase(it);
+    else
+      ++it;
+  }
+  result->persisted_length = kParamTestSize;
+  result->max_decode_buffer_length = 16;
+  return false;
+}
+
 static constexpr const char kOversizedParamTypeName[] = "OVERSIZED_PARAM_TYPE";
+static constexpr const char kAddParamTypeName[] = "ADD_PARAM_TYPE";
+static constexpr const char kDropParamTypeName[] = "DROP_PARAM_TYPE";
 
 constexpr auto OVERSIZED_PARAM_TYPE =
     vsql::make_type<kOversizedParamTypeName>()
@@ -1098,6 +1238,32 @@ constexpr auto OVERSIZED_PARAM_TYPE =
         .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
         .int_to_params<&oversized_int_to_params>()
         .resolve_params<&oversized_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto ADD_PARAM_TYPE =
+    vsql::make_type<kAddParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&add_int_to_params>()
+        .resolve_params<&add_resolve_params>()
+        .from_string<&param_test_encode>()
+        .to_string<&param_test_decode>()
+        .compare<&param_test_compare>()
+        .build();
+
+constexpr auto DROP_PARAM_TYPE =
+    vsql::make_type<kDropParamTypeName>()
+        .persisted_length(-1)
+        .max_decode_buffer_length(16)
+        .max_persisted_length(kParamTestSize)
+        .params<LenParam, &LenParam::parse, &LenParam::to_strings>()
+        .int_to_params<&drop_int_to_params>()
+        .resolve_params<&drop_resolve_params>()
         .from_string<&param_test_encode>()
         .to_string<&param_test_decode>()
         .compare<&param_test_compare>()
@@ -1209,6 +1375,76 @@ constexpr auto BAD_DECODE_BUF =
         .compare<&param_test_compare>()
         .build();
 
+// Misbehaving bind_and_check_types hooks.
+//
+// The server cannot trust what a hook hands back, since the answers come from
+// an extension, so it validates them. These five functions each break one of
+// those rules:
+//
+//   bad_bind_return_overflow   return parameters longer than the server's
+//                              buffer
+//   bad_bind_arg_overflow      the same for an argument's parameters
+//   bad_bind_name_too_long     a type name longer than the server's buffer
+//   bad_bind_unknown_type      a type name that no type in this extension has
+//   bad_bind_params_no_type    parameters for an argument whose type the hook
+//                              never named, which a variadic call has no
+//                              signature to supply
+//
+// All five are variadic. The last three have to be: the server only offers a
+// hook the chance to name argument types when there is no signature to take
+// them from.
+//
+// Each hook misbehaves on the LAST argument rather than the first, so the
+// "argument N" in each message is something the test can actually check.
+//
+// None of the function bodies ever run: every one of these hooks fails the
+// statement while it is still being resolved.
+
+constexpr int64_t kBindPadOverflow = VEF_MAX_TYPE_PARAMS_STRING_LEN + 1;
+
+void bad_bind_unreachable(vsql::VarArgs, vsql::IntResult out) {
+  out.set(0);  // unreachable: the hook always rejects the statement
+}
+
+void bad_bind_return_overflow_impl(vsql::VarArgs,
+                                   vsql::CustomResultWith<LenParam> out) {
+  auto buf = out.buffer();  // unreachable, as above
+  if (!buf.empty()) buf[0] = 0;
+  out.set_length(0);
+}
+
+void bad_bind_return_overflow_bind(vsql::BindArgs, vsql::BindResult out) {
+  out.set_return(LenParam{4, kBindPadOverflow});
+}
+
+void bad_bind_arg_overflow_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Names a real type as well, so the parameters are what is wrong with this
+  // call and not the missing name.
+  out.set_arg(args.size() - 1, LENIENT_PARAM_TYPE,
+              LenParam{4, kBindPadOverflow});
+}
+
+void bad_bind_name_too_long_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Longer than VEF_MAX_TYPE_NAME_LEN. No parameters are set, so the name is
+  // the only thing wrong here.
+  const std::string too_long(VEF_MAX_TYPE_NAME_LEN + 1, 'T');
+  out.set_arg_type(args.size() - 1, too_long.c_str());
+}
+
+void bad_bind_unknown_type_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Short enough to fit the buffer, so this reaches the name lookup.
+  out.set_arg_type(args.size() - 1, "NO_SUCH_TYPE_XYZ");
+}
+
+void bad_bind_params_no_type_bind(vsql::BindArgs args, vsql::BindResult out) {
+  if (args.size() == 0) return;
+  // Parameters that fit, with no set_arg_type to say what they belong to.
+  out.set_arg(args.size() - 1, LenParam{4, 0});
+}
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -1232,8 +1468,10 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(DEFAULT_VDF_TYPE)
         .type(DEFAULT_PARAM_TYPE)
         .type(BAD_DEFAULT_LEN_TYPE)
-        // Parameter-bound test types
+        // Parameter-bound and rewrite test types
         .type(OVERSIZED_PARAM_TYPE)
+        .type(ADD_PARAM_TYPE)
+        .type(DROP_PARAM_TYPE)
         // Storage-size boundary test type
         .type(MAX_WIDTH_FIELD)
         .type(VAR_SETS_PERSISTED)
@@ -1256,4 +1494,46 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(PVEC)
                   .clear<&pvec_norm_sq_clear>()
                   .accumulate<&pvec_norm_sq_accumulate>()
+                  .build())
+        .func(make_func<&real_sqrt_impl>("real_sqrt")
+                  .returns(REAL)
+                  .param(INT)
+                  .build())
+        .func(make_func<&real_half_pi_impl>("real_half_pi")
+                  .returns(REAL)
+                  .no_params()
+                  .build())
+        .func(make_aggregate_func<RealAvgState, &real_avg_result>("real_avg")
+                  .returns(REAL)
+                  .param(INT)
+                  .clear<&real_avg_clear>()
+                  .accumulate<&real_avg_accumulate>()
+                  .build())
+        // Hooks that break the rules the server checks. See the block comment
+        // above their definitions.
+        .func(make_func<&bad_bind_return_overflow_impl>(
+                  "bad_bind_return_overflow")
+                  .returns(LENIENT_PARAM_TYPE)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_return_overflow_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_arg_overflow")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_arg_overflow_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_name_too_long")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_name_too_long_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_unknown_type")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_unknown_type_bind>()
+                  .build())
+        .func(make_func<&bad_bind_unreachable>("bad_bind_params_no_type")
+                  .returns(INT)
+                  .varargs()
+                  .bind_and_check_types<&bad_bind_params_no_type_bind>()
                   .build()))

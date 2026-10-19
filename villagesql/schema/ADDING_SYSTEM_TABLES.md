@@ -14,16 +14,28 @@ CREATE TABLE IF NOT EXISTS villagesql.your_table (
   data_field VARCHAR(64) NOT NULL COMMENT 'Data field',
   PRIMARY KEY (key_field)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-ROW_FORMAT=DYNAMIC
+ROW_FORMAT=DYNAMIC STATS_PERSISTENT=0
 COMMENT='Description of your table';
 ```
 
 **Important**: Use VARCHAR(64) for string fields in keys to be consistent with other VillageSQL tables.
 This is because there's a limit on key size that affects system tables.
 
+**Important**: Include `STATS_PERSISTENT=0`, as the `mysql.*` system tables do.
+System tables are small, so a single write puts them over InnoDB's 10%-modified
+threshold for background statistics recalculation, and the stats thread takes
+MDL on the table. During startup that MDL can collide with
+`dd::reset_tables_and_tablespaces()`, which locks every cached table with a
+one-year lock wait — losing that race hangs the server on boot.
+
 ### Create Entry and Key Structs (villagesql/schema/systable/your_table.h)
 
 Create the Key/KeyPrefix struct and Entry struct following the pattern from properties.h or extensions.h:
+
+Store identifier components as entered; build the normalized key with the
+`canonical_*` functions from `villagesql/schema/identifier_names.h`, which is
+the single home for identifier collation rules. Never pick a collation in the
+key struct itself.
 
 ```cpp
 // Key struct with normalization
@@ -33,7 +45,7 @@ struct YourTableKey {
 
   explicit YourTableKey(std::string name)
       : name_(std::move(name)),
-        normalized_key_(normalize_your_field_name(name_)) {}
+        normalized_key_(canonical_your_field_name(name_)) {}
 
   const std::string &str() const { return normalized_key_; }
 
@@ -107,7 +119,7 @@ struct TableTraits<YourTableEntry> {
   static bool read_from_table(TABLE &table, YourTableEntry &entry);
   static bool write_to_table(TABLE &table, const YourTableEntry &entry);
   static bool update_in_table(TABLE &table, const YourTableEntry &entry,
-                              const std::string &old_key);
+                              const YourTableKey &old_key);
   static bool delete_from_table(TABLE &table, const YourTableEntry &entry);
 };
 ```

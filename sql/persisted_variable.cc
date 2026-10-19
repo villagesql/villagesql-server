@@ -1251,8 +1251,8 @@ bool Persisted_variables_cache::set_persisted_options(
       4. Directly from mysql_component_sys_variable_imp::register_variable().
 
          mysql_component_sys_variable_imp::register_variable() holds
-         LOCK_plugin and LOCK_system_variables_hash for us, so,
-         we suppress double locks with Is_already_locked::YES.
+         LOCK_system_variables_hash for us, so, we suppress double locks
+         with Is_already_locked::YES.
 
        Note: Is_single_thread::YES implies Is_already_locked::YES,
        so, Is_already_locked is "YES" here unconditionally.

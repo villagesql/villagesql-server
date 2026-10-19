@@ -1,0 +1,31 @@
+# Copyright (c) 2026 VillageSQL Contributors
+#
+# Log rotation for the VillageSQL error log.
+#
+# copytruncate is used deliberately. Rotating with "create" requires telling a
+# running server to reopen its log, which means FLUSH ERROR LOGS over an
+# authenticated connection -- and logrotate has no credentials. copytruncate
+# needs no connection at all, at the cost of a small race window in which log
+# lines written between the copy and the truncate are lost.
+#
+# If you would rather rotate losslessly, store credentials with
+# mysql_config_editor(1) and replace copytruncate with:
+#
+#     create 640 mysql mysql
+#     postrotate
+#         if test -x /usr/bin/mysqladmin && /usr/bin/mysqladmin ping &>/dev/null
+#         then
+#             /usr/bin/mysqladmin flush-logs
+#         fi
+#     endscript
+#
+/var/log/mysqld.log {
+        su mysql mysql
+        daily
+        rotate 7
+        missingok
+        notifempty
+        compress
+        delaycompress
+        copytruncate
+}

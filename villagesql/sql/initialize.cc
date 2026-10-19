@@ -28,6 +28,7 @@
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/mysqld.h"
+#include "sql/opt_costconstantcache.h"
 #include "sql/sd_notify.h"
 #include "sql/sys_vars.h"
 #include "sql/thd_raii.h"
@@ -39,6 +40,7 @@
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/services/capability_registry.h"
+#include "villagesql/sql/sys_view_metadata.h"
 #include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
@@ -245,6 +247,13 @@ static bool do_init_extension_infrastructure(THD *thd) {
     return true;
   }
 
+  // Repair the sys view metadata that installing the VillageSQL
+  // INFORMATION_SCHEMA overrides rewrote. Best effort by design: it logs its
+  // own failures and never fails startup, because the metadata is display only
+  // and the likeliest failure is upstream drift rather than a broken
+  // dictionary.
+  refresh_sys_view_metadata(thd);
+
   // Load installed extensions from villagesql.extensions table
   // This validates manifests and cleans up orphaned expansion directories
   if (villagesql::veb::load_installed_extensions(thd)) {
@@ -288,9 +297,19 @@ bool init_extension_infrastructure() {
   // The initialization code may update table settings, in order to avoid
   // locking and avoid asserts in the locking code, run on a bootstrap dd system
   // thread.
-  if (bootstrap::run_bootstrap_thread(nullptr, nullptr,
-                                      &do_init_extension_infrastructure,
-                                      SYSTEM_THREAD_DD_INITIALIZE)) {
+  //
+  // The optimizer cost model is not initialized at this point in startup --
+  // init_server_components() tears it down after each bootstrap DDL phase and
+  // only brings it up for good later. refresh_sys_view_metadata() re-creates
+  // ALGORITHM=TEMPTABLE sys views, and create_tmp_table() reaches into the cost
+  // model, so bracket the thread the same way init_server_components() does.
+  init_optimizer_cost_module(true);
+  const bool init_failed = bootstrap::run_bootstrap_thread(
+      nullptr, nullptr, &do_init_extension_infrastructure,
+      SYSTEM_THREAD_DD_INITIALIZE);
+  delete_optimizer_cost_module();
+
+  if (init_failed) {
     LogVSQL(ERROR_LEVEL, "Failed to initialize");
     sysd::notify("STATUS=VillageSQL initialization unsuccessful\n");
     return true;
@@ -298,6 +317,29 @@ bool init_extension_infrastructure() {
 
   sysd::notify("STATUS=VillageSQL initialization successful\n");
   return false;
+}
+
+void run_extension_init_hooks() {
+  VictionaryClient &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return;
+
+  // A hook may run SQL or set one of its own variables, either of which can
+  // take the VictionaryClient lock, so collect the registrations under the
+  // read lock and release it before calling out to the extension. The set is
+  // stable: this runs before the server accepts connections, so no
+  // INSTALL/UNINSTALL EXTENSION can mutate it.
+  std::vector<const vef_registration_t *> targets;
+  {
+    auto guard = vclient.get_read_lock();
+    for (const ExtensionDescriptor *desc :
+         vclient.extension_descriptors().get_all_committed()) {
+      const veb::ExtensionRegistration &reg = desc->registration();
+      if (should_assert_if_null(reg.registration)) continue;
+      targets.push_back(reg.registration);
+    }
+  }
+
+  for (const vef_registration_t *reg : targets) veb::run_extension_on_init(reg);
 }
 
 void depopulate_extension_capabilities() {
@@ -365,6 +407,9 @@ void depopulate_extension_capabilities() {
     LogVSQL(INFORMATION_LEVEL,
             "Depopulating capabilities for extension '%s' version '%s'",
             target.name.c_str(), target.version.c_str());
+    // The extension's unload hook runs first so it still has its capabilities.
+    // Phase 2 only dlcloses, which is too late for a hook to do anything.
+    veb::run_extension_on_deinit(target.registration);
     services::depopulate_capabilities(
         {.reason = services::UnloadReason::kShutdown}, target.registration);
   }

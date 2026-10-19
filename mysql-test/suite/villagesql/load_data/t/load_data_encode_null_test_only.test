@@ -1,0 +1,81 @@
+# LOAD DATA where the encode calls set_null(), rather than the file holding a
+# literal \N. The two reach the field through different paths: \N never gets
+# to the encoder, while this does, so LoadEncodeAndStoreCustomField decides
+# what to store.
+#
+# Uses the vsql_test_only FAULT_BLOB type, whose encode returns SQL NULL for
+# the input "ENCODE_NULL".
+#
+# The expectations follow what a built-in type does for a literal \N: LOAD DATA
+# reports ER_WARN_NULL_TO_NOTNULL (1263) on a NOT NULL column, as an error in
+# strict mode and a warning otherwise, storing the default. This differs from
+# INSERT, which gives ER_BAD_NULL_ERROR (1048) in every mode.
+
+INSTALL EXTENSION vsql_test_only;
+
+--write_file $MYSQLTEST_VARDIR/tmp/encode_null.dat
+1	OK one
+2	ENCODE_NULL
+3	OK three
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/encode_error.dat
+1	OK one
+2	ENCODE_ERROR
+3	OK three
+EOF
+
+let $datafile = $MYSQLTEST_VARDIR/tmp/encode_null.dat;
+let $errorfile = $MYSQLTEST_VARDIR/tmp/encode_error.dat;
+
+# A nullable column takes SQL NULL, in either mode.
+CREATE TABLE t1 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$datafile' INTO TABLE t1;
+SELECT id, val, val IS NULL AS is_null FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+# A NOT NULL column in strict mode, where a literal \N gives
+# ER_WARN_NULL_TO_NOTNULL (1263) and loads nothing.
+CREATE TABLE t2 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_WARN_NULL_TO_NOTNULL
+eval LOAD DATA INFILE '$datafile' INTO TABLE t2;
+SELECT COUNT(*) AS rows_in_t2 FROM t2;
+DROP TABLE t2;
+
+# The same with strict mode off: a warning, and the row keeps the type's
+# intrinsic default rather than being rejected. FAULT_BLOB declares a
+# recognizable default, so the stored value shows it was applied.
+CREATE TABLE t3 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+SET @@session.sql_mode = '';
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$datafile' INTO TABLE t3;
+SET @@session.sql_mode = DEFAULT;
+SELECT id, val FROM t3 ORDER BY id;
+DROP TABLE t3;
+
+# IGNORE behaves as non-strict does for this case.
+CREATE TABLE t4 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$datafile' IGNORE INTO TABLE t4;
+SELECT id, val FROM t4 ORDER BY id;
+DROP TABLE t4;
+
+# An encode calling error() aborts the load with the extension's own message,
+# and IGNORE does not downgrade it.
+CREATE TABLE t5 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD DATA INFILE '$errorfile' INTO TABLE t5;
+SHOW WARNINGS;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD DATA INFILE '$errorfile' IGNORE INTO TABLE t5;
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_in_t5 FROM t5;
+DROP TABLE t5;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/encode_error.dat
+--remove_file $MYSQLTEST_VARDIR/tmp/encode_null.dat
+UNINSTALL EXTENSION vsql_test_only;

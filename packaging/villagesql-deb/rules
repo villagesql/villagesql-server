@@ -1,0 +1,90 @@
+#!/usr/bin/make -f
+# Copyright (c) 2026 VillageSQL Contributors
+#
+# debian/rules for VillageSQL Server.
+
+export DH_VERBOSE=1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# Parallelism is left to debhelper, which honours DEB_BUILD_OPTIONS=parallel=N
+# as Debian policy requires. Passing an explicit -j here would override that
+# and ignore the builder's setting.
+
+# Depends note: villagesql-server deliberately does NOT depend on lsb-base.
+# lsb-base exists only to provide /lib/lsb/init-functions for SysV init
+# scripts; these packages are systemd-only (dh_installsystemd, mysqld.service,
+# no init script). It is still present on bookworm/trixie/noble/resolute but is
+# a legacy compatibility package on a deprecation path, so depending on it
+# would be a future breakage for no benefit.
+
+# Build-Depends note: cmake/systemd.cmake needs systemd.pc, or configure aborts
+# with "Package 'systemd', required by 'virtual:world', not found".
+# libsystemd-dev does NOT ship it. Which package does depends on the release:
+#   Ubuntu 24.04 / 26.04, Debian 13 : systemd-dev  (split out in systemd 253)
+#   Debian 12 (systemd 252)         : systemd      (/usr/share/pkgconfig/systemd.pc)
+# Hence the "systemd-dev | systemd" alternative in Build-Depends -- naming only
+# systemd-dev makes the source package unbuildable on Debian 12.
+
+%:
+	dh $@ --buildsystem=cmake
+
+# INSTALL_LAYOUT=DEB owns the install paths. Only INSTALL_LIBDIR is overridden,
+# to place the shared client library in the multiarch directory as Debian
+# policy requires; INSTALL_PLUGINDIR (/usr/lib/mysql/plugin) and INSTALL_VEBDIR
+# (/usr/lib/mysql/veb) are deliberately left at the layout defaults so they
+# match the compiled-in veb_dir and plugin_dir the server looks in.
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DINSTALL_LAYOUT=DEB \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DBUILD_CONFIG=mysql_release \
+		-DINSTALL_LIBDIR=lib/$(DEB_HOST_MULTIARCH) \
+		-DSYSCONFDIR=/etc/mysql \
+		-DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
+		-DWITH_BOOST=$(CURDIR)/extra/boost \
+		-DWITH_SSL=system \
+		-DWITH_ZLIB=system \
+		-DWITH_SYSTEMD=1 \
+		-DWITH_UNIT_TESTS=0 \
+		-DFEATURE_SET=community \
+		-DCOMPILATION_COMMENT="VillageSQL Server - GPL" \
+		-DWITH_NDB=OFF \
+		-DWITHOUT_NDBCLUSTER_STORAGE_ENGINE=1 \
+		-DWITH_ROUTER=OFF
+# NDB Cluster and MySQL Router both default to ON in this tree. Upstream ships
+# them as separate products and so does VillageSQL, so they are off here.
+# Leaving them on costs a large amount of build time and then leaves unpackaged
+# ndbd/ndb_mgmd/mysqlrouter artifacts that no binary package claims.
+
+# The upstream test suite is not run at package build time: it needs to start a
+# server, which is not available in a build chroot. Run it separately with
+# mysql-test-run.pl against the installed packages.
+override_dh_auto_test:
+
+override_dh_installsystemd:
+	dh_installsystemd --name=mysqld --no-start --no-enable
+
+# List anything the build installed that no binary package claims. This is the
+# debhelper analogue of rpm's check-files. Kept at --list-missing (warn) rather
+# than --fail-missing so a stray upstream file does not break the build; review
+# the reported list whenever the upstream tree changes.
+override_dh_missing:
+	dh_missing --list-missing
+
+# mysqld links bundled protobuf/abseil objects out of /usr/lib/mysql/private.
+# Those are private to the server and must not appear in the shlibs Depends of
+# any package, nor be scanned for Provides.
+override_dh_shlibdeps:
+	dh_shlibdeps -l/usr/lib/mysql/private -Xlibprotobuf -Xlibabsl -- --ignore-missing-info
+
+override_dh_auto_install:
+	dh_auto_install
+	# Remove SysV artefacts: these packages are systemd-managed.
+	rm -f debian/tmp/usr/share/mysql-*/mysql.server
+	rm -f debian/tmp/usr/share/mysql-*/mysqld_multi.server
+	# Static archives are not shipped; the client library is shared-only.
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libmysqlclient.a
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libmysqlservices.a

@@ -1,0 +1,84 @@
+CREATE TABLE test_fidelity (
+id INT PRIMARY KEY,
+original TVECTOR(4),
+restored TVECTOR(4)
+);
+CREATE TABLE test_fidelity_d (
+id INT PRIMARY KEY,
+original TVECTOR('dimension=4,type=double'),
+restored TVECTOR('dimension=4,type=double')
+);
+INSERT INTO test_fidelity (id, original) VALUES
+(1, '[1.2345679,0.1234567,9.876543,-99.12345]'),
+(2, '[3.1415927,2.7182818,1.6180340,0.5772157]'),
+(3, '[3.4028235e38,1.1754944e-38,-3.4028235e38,1.4012985e-45]');
+INSERT INTO test_fidelity_d (id, original) VALUES
+(1, '[0.6666666666666666,3.141592653589793,2.718281828459045,1.0778787]'),
+(2, '[1.7976931348623157e308,2.2250738585072014e-308,-99.12345678901234,0.000123456789012345]');
+UPDATE test_fidelity SET restored = '[1.2345679,0.1234567,9.876543,-99.12345]' WHERE id = 1;
+UPDATE test_fidelity SET restored = '[3.1415927,2.7182817,1.618034,0.5772157]' WHERE id = 2;
+UPDATE test_fidelity SET restored = '[3.4028235e+38,1.1754944e-38,-3.4028235e+38,1e-45]' WHERE id = 3;
+UPDATE test_fidelity_d SET restored = '[0.6666666666666666,3.141592653589793,2.718281828459045,1.0778787]' WHERE id = 1;
+UPDATE test_fidelity_d SET restored = '[1.7976931348623157e+308,2.2250738585072014e-308,-99.12345678901234,0.000123456789012345]' WHERE id = 2;
+SELECT id,
+vsql_tvector.tvector_dot_product(original, restored)
+= vsql_tvector.tvector_dot_product(original, original) AS float_roundtrips
+FROM test_fidelity ORDER BY id;
+id	float_roundtrips
+1	1
+2	1
+3	1
+SELECT id,
+vsql_tvector.tvector_dot_product(original, restored)
+= vsql_tvector.tvector_dot_product(original, original) AS double_roundtrips
+FROM test_fidelity_d ORDER BY id;
+id	double_roundtrips
+1	1
+2	1
+SELECT COUNT(*) AS float_rows_that_did_not_round_trip
+FROM test_fidelity
+WHERE vsql_tvector.tvector_dot_product(original, restored)
+<> vsql_tvector.tvector_dot_product(original, original);
+float_rows_that_did_not_round_trip
+0
+SELECT COUNT(*) AS double_rows_that_did_not_round_trip
+FROM test_fidelity_d
+WHERE vsql_tvector.tvector_dot_product(original, restored)
+<> vsql_tvector.tvector_dot_product(original, original);
+double_rows_that_did_not_round_trip
+0
+DROP TABLE test_fidelity, test_fidelity_d;
+CREATE TABLE test_widest (
+id INT PRIMARY KEY,
+v1 TVECTOR(1),
+v3 TVECTOR(3),
+v16 TVECTOR(16)
+);
+INSERT INTO test_widest VALUES (1,
+'[-1.00000075e-36]',
+'[-1.00000075e-36,-1.00000075e-36,-1.00000075e-36]',
+'[-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36]');
+SELECT id, v1 FROM test_widest;
+id	v1
+1	[-1.00000075e-36]
+SELECT id, v3 FROM test_widest;
+id	v3
+1	[-1.00000075e-36,-1.00000075e-36,-1.00000075e-36]
+SELECT id, v16 FROM test_widest;
+id	v16
+1	[-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36,-1.00000075e-36]
+CREATE TABLE test_widest_d (
+id INT PRIMARY KEY,
+v1 TVECTOR('dimension=1,type=double'),
+v3 TVECTOR('dimension=3,type=double')
+);
+INSERT INTO test_widest_d VALUES (1,
+'[-1.7976931348623157e308]',
+'[-1.7976931348623157e308,-1.7976931348623157e308,-1.7976931348623157e308]');
+SELECT id, v1 FROM test_widest_d;
+id	v1
+1	[-1.7976931348623157e+308]
+SELECT id, v3 FROM test_widest_d;
+id	v3
+1	[-1.7976931348623157e+308,-1.7976931348623157e+308,-1.7976931348623157e+308]
+DROP TABLE test_widest, test_widest_d;

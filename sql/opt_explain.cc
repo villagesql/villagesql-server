@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -115,9 +116,12 @@ static bool mysql_explain_query_expression(THD *explain_thd,
                                            const THD *query_thd,
                                            Query_expression *unit);
 
-const char *join_type_str[] = {
-    "UNKNOWN", "system", "const",    "eq_ref",      "ref",        "ALL",
-    "range",   "index",  "fulltext", "ref_or_null", "index_merge"};
+// VillageSQL: "index_distance" (last) is JT_INDEX_DISTANCE, the KNN
+// custom-index scan; the rest are upstream, order matches enum join_type.
+const char *join_type_str[] = {"UNKNOWN",     "system",      "const",
+                               "eq_ref",      "ref",         "ALL",
+                               "range",       "index",       "fulltext",
+                               "ref_or_null", "index_merge", "index_distance"};
 
 static const enum_query_type cond_print_flags =
     enum_query_type(QT_ORDINARY | QT_SHOW_SELECT_NUMBER);

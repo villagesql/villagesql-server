@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3445,6 +3446,12 @@ bool make_join_readinfo(JOIN *join, uint no_jbuf_after) {
           table->set_keyread(true);
           table->covering_keys.set_bit(tab->ft_func()->key);
         }
+        break;
+      case JT_INDEX_DISTANCE:
+        // VillageSQL: KNN custom-index distance scan. Like JT_FT, it is a
+        // specialized access method driven by its own iterator (via
+        // QEP_TAB::access_path()); no keyread, index-condition pushdown, or
+        // generic scan-statistics setup applies here.
         break;
       default:
         DBUG_PRINT("error", ("Table type %d found",

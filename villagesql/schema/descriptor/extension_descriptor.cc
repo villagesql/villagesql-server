@@ -16,7 +16,7 @@
 
 #include "villagesql/schema/descriptor/extension_descriptor.h"
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 namespace villagesql {
 
@@ -24,7 +24,7 @@ ExtensionDescriptorKey::ExtensionDescriptorKey(std::string extension_name,
                                                std::string extension_version)
     : extension_name_(std::move(extension_name)),
       extension_version_(std::move(extension_version)),
-      normalized_key_(normalize_extension_name(extension_name_) + "." +
-                      normalize_extension_name(extension_version_)) {}
+      normalized_key_(canonical_extension_name(extension_name_) + "." +
+                      canonical_extension_name(extension_version_)) {}
 
 }  // namespace villagesql

@@ -16,11 +16,10 @@
 #ifndef VILLAGESQL_VSQL_PRE_POST_RUN_H
 #define VILLAGESQL_VSQL_PRE_POST_RUN_H
 
-// Typed wrappers for the per-statement lifecycle hooks (prerun and postrun).
+// Per-statement lifecycle hooks (prerun and postrun).
 //
 // Extension authors register hooks via .prerun<&fn>() / .postrun<&fn>() on
-// the func builder. Only the typed signatures are accepted; the SDK
-// installs wrappers that adapt to the raw ABI:
+// the func builder.
 //
 //   prerun:  void(PrerunArgs, PrerunResult)
 //   postrun: void(PostrunArgs)
@@ -33,12 +32,13 @@
 // postrun is responsible for freeing it. PostrunArgs::delete_state<T>() is
 // the typed convenience for the common case of `new T{}` + `delete`.
 //
-// vef_postrun_result_t is currently empty in the ABI, so there is no
-// PostrunResult wrapper. If/when the result struct gains fields, a typed
-// wrapper class will be added and the postrun signature will become
-// `void(PostrunArgs, PostrunResult)`.
+// Prerun and postrun can be a cumbersome API. The func builder already handles
+// the simple cases (e.g. type checking for functions with fixed args and
+// allocating fixed buffer sizes), and we want to cover more. If you find you
+// need to reach for prerun or postrun, please come talk to us so we can
+// understand your use case.
 //
-// TODO(villagesql-beta): add a typed-state mechanism (working name
+// TODO(villagesql-general): add a typed-state mechanism (working name
 // `.state<T>()` on FuncBuilder) so extensions can declare a per-statement
 // state type and have the SDK manage its lifetime automatically — no
 // matched prerun/postrun pair required just to free state. Implementable
@@ -90,7 +90,7 @@ class PrerunArgs {
     return PrerunArgType(&a_->arg_types[i]);
   }
 
-  // TODO(villagesql-beta): expose const_at(i) returning the serialized
+  // TODO(villagesql-general): expose const_at(i) returning the serialized
   // literal bytes for constant arguments. Blocked on vdf_handler.cc
   // populating vef_prerun_args_t::const_values / const_lengths; today both
   // are unconditionally nullptr at the prerun call site.

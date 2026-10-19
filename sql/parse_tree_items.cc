@@ -270,7 +270,7 @@ bool PTI_function_call_generic_ident_sys::do_itemize(Parse_context *pc,
       *res = Create_udf_func::s_singleton.create(thd, udf, opt_udf_expr_list);
     } else {
       // Try unqualified VDF lookup before stored functions
-      // TODO(villagesql-beta): Move VDF resolution after Stored functions
+      // TODO(villagesql-beta): Move VDF resolution after stored functions?
       bool vdf_error = false;
       if (try_itemize_unqualified_vdf(pc, ident, opt_udf_expr_list, res,
                                       &vdf_error)) {
@@ -300,7 +300,7 @@ bool PTI_function_call_generic_2d::do_itemize(Parse_context *pc, Item **res) {
   if (super::do_itemize(pc, res)) return true;
 
   // First, try to resolve as a custom VDF (extension.function)
-  // TODO(villagesql-beta): Move VDF resolution after Stored functions
+  // TODO(villagesql-beta): Move VDF resolution after stored functions?
   bool vdf_error;
   if (try_itemize_custom_vdf(pc, db, func, opt_expr_list, res, &vdf_error)) {
     return vdf_error;  // Handled as VDF

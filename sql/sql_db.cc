@@ -105,6 +105,7 @@
 #include "strmake.h"
 #include "strxmov.h"
 #include "typelib.h"
+#include "villagesql/schema/util.h"
 #include "villagesql/sql/metadata_modifier.h"
 
 /*
@@ -516,9 +517,10 @@ bool mysql_create_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
 bool mysql_alter_db(THD *thd, const char *db, HA_CREATE_INFO *create_info) {
   DBUG_TRACE;
 
-  // Reject altering the system schema except for system threads.
+  // Reject altering a system or villagesql schema except for system threads.
   if (!thd->is_dd_system_thread() &&
-      dd::get_dictionary()->is_dd_schema_name(db)) {
+      (dd::get_dictionary()->is_dd_schema_name(db) ||
+       villagesql::is_villagesql_schema(db))) {
     my_error(ER_NO_SYSTEM_SCHEMA_ACCESS, MYF(0), db);
     return true;
   }
@@ -723,9 +725,10 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
 
   const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
-  // Reject dropping the system schema except for system threads.
+  // Reject dropping a system or villagesql schema except for system threads.
   if (!thd->is_dd_system_thread() &&
-      dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str))) {
+      (dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str)) ||
+       villagesql::is_villagesql_schema(db.str))) {
     my_error(ER_NO_SYSTEM_SCHEMA_ACCESS, MYF(0), db.str);
     return true;
   }
@@ -846,6 +849,11 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
       const Disable_binlog_guard binlog_guard(thd);
       error = Events::drop_schema_events(thd, *schema);
       error = (error || sp_drop_db_routines(thd, *schema));
+      // VillageSQL: delete custom type metadata for the dropped routines.
+      // sp_drop_db_routines bypasses the per-routine DROP path that would
+      // otherwise clean up villagesql.custom_sp_params.
+      error =
+          (error || villagesql::DeleteCustomSpParamsForDatabase(thd, db.str));
     }
     thd->pop_internal_handler();
 
@@ -1351,6 +1359,11 @@ static inline bool cmp_db_names(const char *db1_name, const char *db2_name) {
   store the name of the database, and this led to memory corruption:
   a stack pointer set by Stored Procedures was used by replication after
   the stack address was long gone.
+
+  Note: This function is also used by the replication applier thread via
+  Query_log_event::do_apply_event() when PRIVILEGE_CHECKS_USER is enabled.
+  Since no explicit USE statement is issued in this context, it must
+  explicitly refresh the database-specific privileges.
 
   @return Operation status
     @retval false Success

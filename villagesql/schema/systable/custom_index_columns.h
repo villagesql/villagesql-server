@@ -119,7 +119,7 @@ struct TableTraits<IndexColumnEntry> {
   static bool read_from_table(TABLE &table, IndexColumnEntry &entry);
   static bool write_to_table(TABLE &table, const IndexColumnEntry &entry);
   static bool update_in_table(TABLE &table, const IndexColumnEntry &entry,
-                              const std::string &old_key);
+                              const IndexColumnKey &old_key);
   static bool delete_from_table(TABLE &table, const IndexColumnEntry &entry);
 };
 

@@ -1,0 +1,41 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_ext_index_test;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a  ext_index_wide_blob,
+b  ext_index_wide_blob,
+INDEX idx_a (a ext_index_default) USING EXTENDED(ext_index)
+);
+INSERT INTO t1 (id) VALUES (1), (2), (3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `b` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 DROP INDEX idx_a,
+ADD INDEX idx_a (b ext_index_default) USING EXTENDED(ext_index),
+FORCE, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `b` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`b` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COUNT(*) AS rows_total FROM t1;
+rows_total
+3
+INSERT INTO t1 (id) VALUES (4);
+SELECT COUNT(*) AS rows_after_insert FROM t1;
+rows_after_insert
+4
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_ext_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

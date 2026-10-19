@@ -17,8 +17,10 @@
 #include "villagesql/veb/validate.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_set>
 
@@ -73,29 +75,35 @@ std::optional<ValidatedRegistration> parse_extension_registration(
   ValidatedRegistration result;
   const vef_registration_t *reg = ext_reg.registration;
 
+  // VDF names claimed by a type as its intrinsic default
+  std::set<std::string> intrinsic_default_vdf_names;
+
+  // check_vef_registration() has already established that the counts match the
+  // arrays and that every descriptor is non-NULL, named and structurally
+  // complete, so the loops below index and dereference them directly.
+  assert(reg == nullptr || reg->func_count == 0 || reg->funcs != nullptr);
+  assert(reg == nullptr || reg->type_count == 0 || reg->types != nullptr);
+
   if (reg != nullptr && reg->type_count > 0) {
     LogVSQL(INFORMATION_LEVEL,
             "Validating %d types from extension '%s' version '%s'",
             reg->type_count, extension_name.c_str(), extension_version.c_str());
 
     for (unsigned int i = 0; i < reg->type_count; i++) {
+      // Non-NULL, named, and with a usable max_decode_buffer_length: see the
+      // precondition in validate.h.
       const vef_type_desc_t *td = reg->types[i];
-      if (td == nullptr || td->name == nullptr) {
-        error_out = "NULL type descriptor at index " + std::to_string(i);
-        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                error_out.c_str());
-        return std::nullopt;
-      }
-
       std::string type_name(td->name);
 
-      if (td->max_decode_buffer_length <= 0) {
-        error_out =
-            "type '" + type_name + "' must set max_decode_buffer_length";
-        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                error_out.c_str());
-        return std::nullopt;
-      }
+      // TODO(villagesql-production): validate the characters in names coming
+      // from the extension: type names here, and index type, index profile and
+      // VDF names below. INSTALL EXTENSION already validates extension names
+      // this way. A name containing '.' breaks two things:
+      // parse_qualified_name() splits a profile's type reference on the first
+      // dot, and the victionary keys join their components with an unescaped
+      // '.' (see the TODO on TypeDescriptorKey, which tracks the escaping fix
+      // separately. That is needed regardless, since the version component is
+      // not validated either).
 
       bool is_v4 = td->protocol >= VEF_PROTOCOL_4 &&
                    ext_reg.negotiated_protocol >= VEF_PROTOCOL_4;
@@ -118,6 +126,11 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // declare max_persisted_length, and a parameterized type's resolved
       // persisted_length is checked against it at DDL time, so bounding the
       // declared values bounds every parameterization.
+      // TODO(villagesql-general): address lingering issues for variable_length:
+      // 1. Incorrect log message for transitions from fixed -> variable and
+      //    variable -> fixed.
+      // 2. Variable length -> Variable length should be rejected if the new
+      //    length is smaller.
       const int64_t declared_length =
           std::max(maybe_descriptor->persisted_length(),
                    maybe_descriptor->max_persisted_length());
@@ -133,6 +146,9 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         return std::nullopt;
       }
 
+      if ((is_v4 || is_v3) && td->intrinsic_default_vdf_name != nullptr)
+        intrinsic_default_vdf_names.insert(td->intrinsic_default_vdf_name);
+
       result.types.push_back(std::move(*maybe_descriptor));
     }
   }
@@ -142,18 +158,15 @@ std::optional<ValidatedRegistration> parse_extension_registration(
             reg->func_count, extension_name.c_str());
 
     for (unsigned int i = 0; i < reg->func_count; i++) {
+      // Non-NULL, named, and carrying a signature: see the precondition in
+      // validate.h.
       const vef_func_desc_t *func_desc = reg->funcs[i];
-      if (func_desc == nullptr || func_desc->name == nullptr) {
-        error_out = "NULL VDF descriptor at index " + std::to_string(i);
-        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
-                error_out.c_str());
-        return std::nullopt;
-      }
-
       std::string func_name(func_desc->name);
 
-      // clear/accumulate fields were added in PROTOCOL_3; older extensions
-      // don't initialize them so we must not read them.
+      // clear/accumulate were added in PROTOCOL_3. The negotiated protocol is
+      // the only gate needed: check_vef_registration() has already rejected a
+      // descriptor declaring less than its registration, so a v3+ negotiation
+      // means this descriptor really has these fields.
       if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_3) {
         bool has_clear = (func_desc->clear != nullptr);
         bool has_accumulate = (func_desc->accumulate != nullptr);
@@ -246,6 +259,15 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         }
       }
       break;
+    }
+  }
+
+  // Close the SQL route to every VDF a type claims as its intrinsic default.
+  // A name that resolves to no function has already failed validation in the
+  // type builder, so each name here matches exactly one entry.
+  for (FuncDescriptor &func : result.funcs) {
+    if (intrinsic_default_vdf_names.count(func.function_name()) > 0) {
+      func.set_not_callable_from_sql();
     }
   }
 

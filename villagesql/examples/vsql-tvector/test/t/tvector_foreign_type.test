@@ -1,0 +1,75 @@
+# What the variadic hooks do with a custom type that is not a TVECTOR.
+#
+# A hook may only read an argument's type parameters as its own once it knows
+# the argument really is its type. Asking for TVectorParams gets an answer
+# whatever the value is, because the SDK caches parsed parameters by the C++
+# struct and never compares type names, so another type's parameters would be
+# read as a dimension and an element width.
+#
+# Only a variadic hook has to check. A fixed-arity one is handed arguments the
+# server has already compared against the signature, which is the third case
+# below.
+#
+# The protection is not symmetric, and the asymmetry is why the hooks check
+# rather than leaning on the server:
+#
+#   another extension's type   the server qualifies an unnamed argument's type
+#                              with the CALLING extension's name, so the names
+#                              disagree and it is rejected. That happens after
+#                              the hook has run, though.
+#   a second type of our own   the qualified names would agree and nothing
+#                              would reject it. Only the hook can tell.
+#
+# The second case is the dangerous one and the one this file cannot reach:
+# vsql_tvector has a single parameterized type. What is testable here is that
+# the hooks refuse before reading anything, which is what also closes it.
+
+INSTALL EXTENSION vsql_tvector;
+INSTALL EXTENSION vsql_bitfield_test;
+
+# BITFIELD's parameters are keyed 'max_number_of_bits', with no 'dimension'
+# for TVectorParams::parse to find. A bare declaration is enough: its
+# resolve_params writes the default back, so the column carries real
+# parameters rather than none.
+CREATE TABLE bits (id INT PRIMARY KEY, b vsql_bitfield_test.BITFIELD);
+INSERT INTO bits VALUES (1, '1010');
+
+CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO v3 VALUES (1, '[1,2,3]');
+
+########################################################################
+#
+# 1. Variadic, hook does the checking.
+#
+########################################################################
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_concat_all(a.v, b.b) AS c FROM v3 a, bits b;
+
+--echo # First argument, to show the position is reported rather than assumed.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_concat_all(b.b, a.v) AS c FROM v3 a, bits b;
+
+--echo # tvector_sum_all checks in its own loop, so the wording differs. Which
+--echo # message appears says which guard fired.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_sum_all(a.v, b.b) AS c FROM v3 a, bits b;
+
+########################################################################
+#
+# 2. Fixed arity, the server does the checking.
+#
+#    tvector_concat declares TVECTOR parameters, so the argument is compared
+#    against the signature before its hook is called. Note the error names
+#    both types in full, which a hook could not: a hook is shown the bare
+#    type name, without the extension it came from.
+#
+########################################################################
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_concat(a.v, b.b) AS c FROM v3 a, bits b;
+
+DROP TABLE bits;
+DROP TABLE v3;
+UNINSTALL EXTENSION vsql_bitfield_test;
+UNINSTALL EXTENSION vsql_tvector;

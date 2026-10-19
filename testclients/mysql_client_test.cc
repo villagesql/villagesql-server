@@ -7482,7 +7482,7 @@ static void test_explain_bug() {
                            : MYSQL_TYPE_VAR_STRING,
                        nullptr, nullptr, "", 64);
 
-  // TODO(villagesql-ga): database name is no longer 'information_schema
+  // TODO(villagesql-general): database name is no longer 'information_schema
   // on the type field because it is a derived field.
   verify_prepare_field(result, 1, "Type", "Type", MYSQL_TYPE_BLOB, nullptr,
                        nullptr, "", 0);

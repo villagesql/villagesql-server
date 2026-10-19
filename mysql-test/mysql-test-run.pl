@@ -3007,6 +3007,26 @@ sub mysql_client_test_arguments() {
   return mtr_args2str($exe, @$args);
 }
 
+sub villagesql_client_test_arguments() {
+  my $exe;
+  # villagesql_client_test executable may _not_ exist
+  $exe = mtr_exe_maybe_exists("$path_client_bindir/villagesql_client_test");
+  return "" unless $exe;
+
+  my $args;
+  mtr_init_args(\$args);
+  if ($opt_valgrind_mysqltest) {
+    valgrind_arguments($args, \$exe);
+  }
+
+  mtr_add_arg($args, "--defaults-file=%s", $path_config_file);
+  mtr_add_arg($args, "--testcase");
+  mtr_add_arg($args, "--vardir=$opt_vardir");
+  client_debug_arg($args, "villagesql_client_test");
+
+  return mtr_args2str($exe, @$args);
+}
+
 sub mysqlxtest_arguments() {
   my $exe;
   # mysqlxtest executable may _not_ exist
@@ -3347,6 +3367,7 @@ sub environment_setup {
   $ENV{'MYSQL_BINLOG'}        = client_arguments("mysqlbinlog");
   $ENV{'MYSQL_CHECK'}         = client_arguments("mysqlcheck");
   $ENV{'MYSQL_CLIENT_TEST'}   = mysql_client_test_arguments();
+  $ENV{'VILLAGESQL_CLIENT_TEST'} = villagesql_client_test_arguments();
   $ENV{'MYSQL_DUMP'}          = mysqldump_arguments(".1");
   $ENV{'MYSQL_DUMP_SLAVE'}    = mysqldump_arguments(".2");
   $ENV{'MYSQL_IMPORT'}        = client_arguments("mysqlimport");

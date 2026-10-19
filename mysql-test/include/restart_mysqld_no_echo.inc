@@ -12,25 +12,8 @@ if (!$restart_parameters)
   let $restart_parameters = restart;
 }
 
-# Write file to make mysql-test-run.pl expect the "crash", but don't start
-# it until it's told to
---let $_server_id= `SELECT @@server_id`
---let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
-
-# Allow restarting different server than the one currently
-# connected to, actually one where suffix is not .serverid but
-# .serverid.clusterid
-if ($mysqld_name)
-{
-  let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/$mysqld_name.expect;
-  # echo expect_file_name: $_expect_file_name;
-}
---exec echo "wait" > $_expect_file_name
-
-# Send shutdown to the connected server.
-shutdown_server;
-
---source include/wait_until_disconnected.inc
+# VillageSQL: was an inline copy of this, with an unscaled bare shutdown_server.
+--source include/shutdown_mysqld.inc
 
 # Write file to make mysql-test-run.pl start up the server again
 --exec echo "$restart_parameters" > $_expect_file_name

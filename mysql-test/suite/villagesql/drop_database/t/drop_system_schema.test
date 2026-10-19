@@ -1,0 +1,38 @@
+# The 'villagesql' schema cannot be altered or dropped.
+
+--echo # DROP is rejected, with and without IF EXISTS, and under DROP SCHEMA.
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+DROP DATABASE villagesql;
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+DROP DATABASE IF EXISTS villagesql;
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+DROP SCHEMA villagesql;
+
+--echo # The name is matched case-insensitively.
+# The error names the schema as written, and whether the server lower-cases it
+# first depends on lower_case_table_names, so normalize the name.
+--replace_result VillageSQL villagesql
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+DROP DATABASE VillageSQL;
+
+--echo # ALTER is rejected too, including the options that would wedge the
+--echo # schema without removing it.
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+ALTER DATABASE villagesql CHARACTER SET latin1;
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+ALTER DATABASE villagesql READ ONLY = 1;
+
+--echo # CREATE is "database exists" error.
+--error ER_DB_CREATE_EXISTS
+CREATE DATABASE villagesql;
+CREATE DATABASE IF NOT EXISTS villagesql;
+
+--echo # The schema is intact: the victionary-backed I_S views still resolve.
+SELECT COUNT(*) >= 0 AS ok FROM INFORMATION_SCHEMA.EXTENSIONS;
+SHOW DATABASES LIKE 'villagesql';
+
+--echo # The 'mysql' schema keeps the protection it already had.
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+DROP DATABASE mysql;
+--error ER_NO_SYSTEM_SCHEMA_ACCESS
+ALTER DATABASE mysql CHARACTER SET latin1;

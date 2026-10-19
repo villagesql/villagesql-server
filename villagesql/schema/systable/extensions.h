@@ -21,10 +21,15 @@
 #include <string>
 #include <string_view>
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 // Forward declarations
 struct TABLE;
+
+// Forward declarations for friend classes
+namespace villagesql_unittest {
+class PendingActionTest;
+}
 
 namespace villagesql {
 
@@ -107,6 +112,9 @@ class PendingAction {
   static bool Deserialize(const std::string &raw, PendingAction &out,
                           std::string &error_message);
 
+  // Friend classes
+  friend class villagesql_unittest::PendingActionTest;
+
   // Internal layout is private. Field names and JSON shape may change
   // without breaking callers as long as the public getters keep returning
   // semantically equivalent values.
@@ -127,7 +135,7 @@ struct ExtensionKey {
 
   explicit ExtensionKey(std::string name)
       : extension_name_(std::move(name)),
-        normalized_key_(normalize_extension_name(extension_name_)) {}
+        normalized_key_(canonical_extension_name(extension_name_)) {}
 
   const std::string &str() const { return normalized_key_; }
 
@@ -212,7 +220,7 @@ struct TableTraits<ExtensionEntry> {
   // set in old_key; otherwise, entry.key() is used.
   // Returns false on success, true on error
   static bool update_in_table(TABLE &table, const ExtensionEntry &entry,
-                              const std::string &old_key);
+                              const ExtensionKey &old_key);
 
   // Delete an ExtensionEntry from villagesql.extensions table
   // Returns false on success, true on error

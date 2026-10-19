@@ -10,6 +10,8 @@ INSTALL EXTENSION vsql_config_vars_test;
 --echo # Verify defaults
 SELECT @@global.vsql_config_vars_test.max_items;
 SELECT @@global.vsql_config_vars_test.label;
+--echo # Enum default is 'grant' (index 1), shown by name
+SELECT @@global.vsql_config_vars_test.mode;
 SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
 
 --echo # Change both variables
@@ -24,6 +26,10 @@ SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
 --echo # Persist one variable so it survives restart
 SET PERSIST vsql_config_vars_test.max_items = 99;
 
+--echo # Persist the enum too, so we exercise a persisted enum being re-applied
+--echo # at registration on restart (stored by name in mysqld-auto.cnf)
+SET PERSIST vsql_config_vars_test.mode = 'sync';
+
 --echo # Restart server (extension is reinstated from villagesql.extensions)
 --let $veb_dir = `SELECT @@veb_dir`
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
@@ -36,8 +42,12 @@ SELECT @@global.vsql_config_vars_test.max_items;
 --echo # Non-persisted variable should be back to default
 SELECT @@global.vsql_config_vars_test.label;
 
---echo # Clean up persisted value
+--echo # Persisted enum should have survived restart (still 'sync')
+SELECT @@global.vsql_config_vars_test.mode;
+
+--echo # Clean up persisted values
 RESET PERSIST vsql_config_vars_test.max_items;
+RESET PERSIST vsql_config_vars_test.mode;
 
 --echo # Read max_items via VDF (reads storage global directly)
 SELECT vsql_config_vars_test.read_max_items();
@@ -55,6 +65,41 @@ SELECT vsql_config_vars_test.read_label();
 SET GLOBAL vsql_config_vars_test.label = 'via_get';
 SELECT vsql_config_vars_test.read_label();
 
+--echo #
+--echo # Enum variable (mode): set by name, validated at SET time, stored as an
+--echo # index. read_mode() returns the stored index; last_mode_change() returns
+--echo # the index the on_change callback last saw.
+--echo #
+--echo # Set by name; SELECT returns the name, read_mode() returns the index,
+--echo # and the on_change callback fires with the same index (1 = grant)
+SET GLOBAL vsql_config_vars_test.mode = 'grant';
+SELECT @@global.vsql_config_vars_test.mode;
+SELECT vsql_config_vars_test.read_mode();
+SELECT vsql_config_vars_test.last_mode_change();
+
+--echo # Set by index; the server maps it back to the name, on_change sees 2
+SET GLOBAL vsql_config_vars_test.mode = 2;
+SELECT @@global.vsql_config_vars_test.mode;
+SELECT vsql_config_vars_test.read_mode();
+SELECT vsql_config_vars_test.last_mode_change();
+
+--echo # Set back to index 0 (activate)
+SET GLOBAL vsql_config_vars_test.mode = 0;
+SELECT @@global.vsql_config_vars_test.mode;
+SELECT vsql_config_vars_test.read_mode();
+
+--echo # An unlisted value is rejected at SET time (the point of enum vs string)
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL vsql_config_vars_test.mode = 'bogus';
+--echo # The rejected SET left the value unchanged (still activate / index 0)
+SELECT @@global.vsql_config_vars_test.mode;
+SELECT vsql_config_vars_test.read_mode();
+
+--echo # An out-of-range index is rejected too
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL vsql_config_vars_test.mode = 99;
+SELECT @@global.vsql_config_vars_test.mode;
+
 --echo # Uninstall extension
 UNINSTALL EXTENSION vsql_config_vars_test;
 
@@ -63,6 +108,8 @@ UNINSTALL EXTENSION vsql_config_vars_test;
 SELECT @@global.vsql_config_vars_test.max_items;
 --error ER_UNKNOWN_SYSTEM_VARIABLE
 SELECT @@global.vsql_config_vars_test.label;
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_config_vars_test.mode;
 
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

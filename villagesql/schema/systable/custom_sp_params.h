@@ -19,7 +19,7 @@
 
 #include <string>
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/schema/identifier_names.h"
 
 // Forward declarations
 struct TABLE;
@@ -37,17 +37,24 @@ inline constexpr const char *SP_RETURNS_SENTINEL = "@returns";
 
 // Prefix key for querying all params of a stored procedure/function.
 // Format: "normalized_db.normalized_sp_name."
+// If sp_name is empty, produces "normalized_db." to match all sp params in that
+// database (used for DROP DATABASE cleanup).
 struct SpParamKeyPrefix {
  public:
   SpParamKeyPrefix(std::string db_name, std::string sp_name)
       : db_(std::move(db_name)),
         sp_name_(std::move(sp_name)),
-        normalized_prefix_(normalize_database_name(db_) + "." +
-                           normalize_table_name(sp_name_) + ".") {}
+        normalized_prefix_(
+            join_key_components({canonical_database_name(db_)}) + "." +
+            (sp_name_.empty()
+                 ? ""
+                 : join_key_components({canonical_table_name(sp_name_)}) +
+                       ".")) {}
 
-  // TODO(villagesql-beta): Add a db-only constructor (no sp_name) to support
-  // bulk deletion of all sp params for a given database, needed for DROP
-  // DATABASE cleanup.
+  // Db-only prefix matching all sp params in the given database.
+  explicit SpParamKeyPrefix(std::string db_name)
+      : SpParamKeyPrefix(std::move(db_name), std::string()) {}
+
   const std::string &str() const { return normalized_prefix_; }
 
   const std::string &db() const { return db_; }
@@ -69,9 +76,9 @@ struct SpParamKey {
       : db_(std::move(db_name)),
         sp_name_(std::move(sp_name)),
         param_(std::move(param_name)),
-        normalized_key_(normalize_database_name(db_) + "." +
-                        normalize_table_name(sp_name_) + "." +
-                        normalize_column_name(param_)) {}
+        normalized_key_(join_key_components({canonical_database_name(db_),
+                                             canonical_table_name(sp_name_),
+                                             canonical_column_name(param_)})) {}
 
   const std::string &str() const { return normalized_key_; }
 
@@ -142,7 +149,7 @@ struct TableTraits<SpParamEntry> {
   static bool write_to_table(TABLE &table, const SpParamEntry &entry);
 
   static bool update_in_table(TABLE &table, const SpParamEntry &entry,
-                              const std::string &old_key);
+                              const SpParamKey &old_key);
 
   static bool delete_from_table(TABLE &table, const SpParamEntry &entry);
 };

@@ -1,0 +1,52 @@
+# Auto-grant-role for the vsql::preview::auth capability: with a method's
+# auto_grant enabled, a login whose token-staged roles the account was not
+# granted causes the server to grant them; with auto_grant off, those roles are
+# skipped. The same login runs under each setting so the flag is the only
+# difference.
+#
+# The vsql_auth_test extension exposes auto_grant as a sysvar. The token arrives
+# via mysql_clear_password, so each login uses the CLEARTEXT connect option.
+
+# With auto_grant OFF the login requests roles the account lacks; the server
+# refuses to activate each and logs a warning to the error log. That warning
+# never reaches the client (it is server-side only, so it is not in this test's
+# output either way); the suppression just keeps MTR from failing the run over
+# an "unexpected" error-log line.
+call mtr.add_suppression("VEF auth: role .* is not granted; skipping");
+
+INSTALL EXTENSION vsql_auth_test;
+
+# The "-token-roles" token stages two roles, vsql_role_granted and
+# vsql_role_denied (see kTokenRoles in the vsql-auth-test extension). Neither is
+# granted to the account up front, so with auto_grant OFF both are skipped and
+# with auto_grant ON both get granted to the proxied account.
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+CREATE ROLE vsql_role_granted;
+CREATE ROLE vsql_role_denied;
+
+# auto_grant OFF: the staged roles are neither granted nor activated.
+--connect(off_con, localhost, auth_user, vsql-auth-test-token-roles, , , , CLEARTEXT)
+SELECT CURRENT_ROLE();
+--connection default
+--disconnect off_con
+SHOW GRANTS FOR vsql_auth_test_user;
+
+# auto_grant ON: the same login grants the staged roles and activates them.
+SET GLOBAL vsql_auth_test.auto_grant = ON;
+--connect(on_con, localhost, auth_user, vsql-auth-test-token-roles, , , , CLEARTEXT)
+SELECT CURRENT_ROLE();
+--connection default
+--disconnect on_con
+
+# The grants persist (auto_grant is additive, not just session activation).
+SHOW GRANTS FOR vsql_auth_test_user;
+
+SET GLOBAL vsql_auth_test.auto_grant = OFF;
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;
+DROP ROLE vsql_role_granted;
+DROP ROLE vsql_role_denied;
+UNINSTALL EXTENSION vsql_auth_test;

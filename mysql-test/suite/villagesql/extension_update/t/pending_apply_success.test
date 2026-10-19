@@ -8,14 +8,35 @@
 # happened and that dependent custom_columns rows were rewritten to the
 # new extension_version (otherwise the type would resolve against a
 # stale version).
+#
+# A stored procedure with a COUNTER parameter is included for the same
+# reason, covering the other dependency the upgrade has to rewrite:
+# villagesql.custom_sp_params rows.
+
+--source include/villagesql/internal_schema_test.inc
 
 INSTALL EXTENSION update_test VERSION '1.0.0';
 
 CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
 INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
 
+delimiter //;
+CREATE PROCEDURE p_counter(IN c update_test.COUNTER)
+BEGIN
+  SELECT c AS param_value, update_test.counter_double(c) AS doubled;
+END//
+delimiter ;//
+
 # Before the update, SELECT renders via v1.to_string.
 SELECT id, val FROM t ORDER BY id;
+
+# The procedure parameter renders through the same v1 to_string.
+CALL p_counter('10');
+
+# The parameter's dependency row points at the installed version.
+SELECT db_name, sp_name, param_name, extension_name, extension_version,
+       type_name
+  FROM villagesql.custom_sp_params ORDER BY db_name, sp_name, param_name;
 
 ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
 
@@ -32,5 +53,16 @@ SELECT extension_name, extension_version, pending_version, pending_last_error
 # Same on-disk bytes, now rendered via v2.to_string.
 SELECT id, val FROM t ORDER BY id;
 
+# Same for the procedure parameter: rendering via v2 means the parameter
+# resolved against the new version rather than the stale 1.0.0.
+CALL p_counter('10');
+
+# The dependency row was rewritten to the target version.
+--source include/villagesql/internal_schema_test.inc
+SELECT db_name, sp_name, param_name, extension_name, extension_version,
+       type_name
+  FROM villagesql.custom_sp_params ORDER BY db_name, sp_name, param_name;
+
+DROP PROCEDURE p_counter;
 DROP TABLE t;
 UNINSTALL EXTENSION update_test;

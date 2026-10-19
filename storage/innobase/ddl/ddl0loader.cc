@@ -301,8 +301,10 @@ dberr_t Loader::load() noexcept {
 
   for (auto builder : m_builders) {
     ut_a(builder->get_state() == Builder::State::ADD);
-    /* RTrees are built during the scan phase, using row by row insert. */
-    if (!builder->is_spatial_index()) {
+    /* RTrees, and VillageSQL custom (USING EXTENDED) indexes, are built during
+    the scan phase using row-by-row insert, not the sort-merge path, so they get
+    no merge task. */
+    if (!builder->is_spatial_index() && !builder->is_custom_index()) {
       builder->set_next_state();
       add_task(Task{builder});
     }

@@ -8,7 +8,7 @@ ERROR 42000: You have an error in your SQL syntax; check the manual that corresp
 CREATE TABLE t_err (v TVECTOR(''));
 ERROR 42000: Empty parameter string for type 'vsql_tvector.TVECTOR' near 'TVECTOR(''))' at line 1
 CREATE TABLE t_err (v TVECTOR('invalid'));
-ERROR 42000: Invalid parameter string for type 'vsql_tvector.TVECTOR' near 'TVECTOR('invalid'))' at line 1
+ERROR 42000: Type 'vsql_tvector.TVECTOR': parameter 'invalid' has no value near 'TVECTOR('invalid'))' at line 1
 CREATE TABLE t_err (v TVECTOR('dimension=0'));
 ERROR 42000: TVECTOR: dimension must be in 1..4096, got 0 near 'TVECTOR('dimension=0'))' at line 1
 CREATE TABLE t_err (v TVECTOR('unknown_key=5'));

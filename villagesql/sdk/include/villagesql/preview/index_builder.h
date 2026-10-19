@@ -240,6 +240,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdio>
 #include <new>
 #include <type_traits>
@@ -411,16 +412,36 @@ class Index {
                    result);
   }
 
-  bool get_key_data(IndexScanKey::KeyPartRef key_ref,
+  // Reads the value key_ref points to for the key column at key_pos. key_data
+  // must point at a buffer of key_data->length bytes, at least
+  // get_max_col_len(key_pos); on success key_data->length is the value length.
+  // Must not be called while holding page latches.
+  bool get_key_data(uint32_t key_pos, IndexScanKey::KeyPartRef key_ref,
                     IndexScanKey::KeyPartData *key_data) const {
-    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_ref, key_data,
+    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_pos, key_ref, key_data,
                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
-  bool get_key_ref(IndexScanKey::KeyPartData key_data,
+  // Derives the column reference for a value of the key column at key_pos that
+  // is already in the column store, e.g. a key column handed to insert().
+  bool get_key_ref(uint32_t key_pos, IndexScanKey::KeyPartData key_data,
                    IndexScanKey::KeyPartRef *key_ref) const {
-    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_data, key_ref,
+    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_pos, key_data, key_ref,
                                    tl_error_msg, ERROR_MSG_SIZE);
+  }
+
+  // Report the registered name of the function bound to helper fn_id for the
+  // profile of key column key_pos. Lets a hot inner loop resolve a native
+  // fast-path once (matching this name against its own registered functions)
+  // instead of dispatching through helper() per call. Writes into name_buf;
+  // returns false on success, true on error (get_error() for details).
+  bool helper_fn_name(uint32_t key_pos, uint32_t fn_id, char *name_buf,
+                      uint32_t name_buf_len) const {
+    // The server populates helper_fn_name_fn unconditionally for every custom
+    // index (init_index_ctx); it is never null on a live index context.
+    assert(ctx_.helper_fn_name_fn != nullptr);
+    return ctx_.helper_fn_name_fn(ctx_.index_ref, key_pos, fn_id, name_buf,
+                                  name_buf_len, tl_error_msg, ERROR_MSG_SIZE);
   }
 
   const char *get_error() const { return tl_error_msg; }
@@ -1125,7 +1146,41 @@ struct IndexProfileDesc {
   bool default_for_type;
 };
 
+namespace detail {
+
+// Which of the once-only setters a profile chain has already used. The set is
+// carried in IndexProfileBuilder's type, so calling one of them twice is a
+// compile error instead of a silent overwrite of the earlier value.
+// with_function() and with_helper() are additive and are not tracked here.
+enum : uint32_t {
+  kProfileHasType = 1u << 0,
+  kProfileHasIndexType = 1u << 1,
+  kProfileHasOrdering = 1u << 2,
+};
+
+}  // namespace detail
+
+// Builds one index profile. Chain the setters and call build():
+//
+//   make_index_profile("my_hnsw_l2")
+//       .for_type(kMyType)
+//       .using_index(kMyIndex)
+//       .with_function(1, MY_L2_FN)
+//       .ordering(Index::Ordering::ASC)
+//       .build();
+//
+// for_type(), using_index() and ordering() may each be called at most once;
+// for_type() and using_index() are required. The setters are rvalue-qualified
+// because each returns a builder of a different type, so the chain has to be
+// a single expression. To build from a named builder, move it:
+// std::move(b).build().
+template <uint32_t Set = 0>
 class IndexProfileBuilder {
+  template <uint32_t>
+  friend class IndexProfileBuilder;
+
+  using Self = IndexProfileBuilder<Set>;
+
  public:
   explicit IndexProfileBuilder(const char *name) {
     desc_.name = name;
@@ -1135,46 +1190,65 @@ class IndexProfileBuilder {
     desc_.default_for_type = false;
   }
 
-  IndexProfileBuilder &for_type(const char *type_name) {
+  IndexProfileBuilder<Set | detail::kProfileHasType> for_type(
+      const char *type_name) && {
+    static_assert(!(Set & detail::kProfileHasType),
+                  "index profile: for_type() called more than once");
     desc_.type_name = type_name;
-    return *this;
+    return IndexProfileBuilder<Set | detail::kProfileHasType>(std::move(desc_));
   }
 
-  IndexProfileBuilder &using_index(const char *index_type_name) {
+  IndexProfileBuilder<Set | detail::kProfileHasIndexType> using_index(
+      const char *index_type_name) && {
+    static_assert(!(Set & detail::kProfileHasIndexType),
+                  "index profile: using_index() called more than once");
     desc_.index_type_name = index_type_name;
-    return *this;
+    return IndexProfileBuilder<Set | detail::kProfileHasIndexType>(
+        std::move(desc_));
   }
 
   // Bind fn_id to a user-visible SQL function. The optimizer may generate an
   // index scan plan for calls to this function. fn_ids must be unique within
   // the functions list.
-  IndexProfileBuilder &with_function(uint32_t fn_id,
-                                     const IndexFunctionDesc &fn) {
+  Self &&with_function(uint32_t fn_id, const IndexFunctionDesc &fn) && {
     desc_.functions.push_back({fn_id, fn});
-    return *this;
+    return std::move(*this);
   }
 
   // Bind fn_id to a helper function invoked only by the index implementation
   // via vef_index_ctx_t.helper_fn. fn_ids are independent of the functions
   // sequence and must be unique within the helpers list.
-  IndexProfileBuilder &with_helper(uint32_t fn_id,
-                                   const IndexFunctionDesc &fn) {
+  Self &&with_helper(uint32_t fn_id, const IndexFunctionDesc &fn) && {
     desc_.helpers.push_back({fn_id, fn});
-    return *this;
+    return std::move(*this);
   }
 
-  IndexProfileBuilder &ordering(Index::Ordering ord) {
+  IndexProfileBuilder<Set | detail::kProfileHasOrdering> ordering(
+      Index::Ordering ord) && {
+    static_assert(!(Set & detail::kProfileHasOrdering),
+                  "index profile: ordering() called more than once");
     desc_.ordering = static_cast<uint8_t>(ord);
-    return *this;
+    return IndexProfileBuilder<Set | detail::kProfileHasOrdering>(
+        std::move(desc_));
   }
 
   // When true, this profile is used if no profile is named at CREATE INDEX.
-  IndexProfileBuilder &default_for_type(bool is_default) {
+  // At most one profile may be the default for a given (data type, index type)
+  // pair; an extension that declares two is rejected at registration.
+  // TODO(villagesql-indexing): Once the names an extension supplies are
+  // validated (see the TODO(villagesql-production) in veb/validate.cc),
+  // revisit checking this at compile time too. Restricting names to ASCII
+  // would allow a constexpr matcher to work.
+  Self &&default_for_type(bool is_default) && {
     desc_.default_for_type = is_default;
-    return *this;
+    return std::move(*this);
   }
 
-  IndexProfileDesc build() {
+  IndexProfileDesc build() && {
+    static_assert(Set & detail::kProfileHasType,
+                  "index profile: for_type() must be called before build()");
+    static_assert(Set & detail::kProfileHasIndexType,
+                  "index profile: using_index() must be called before build()");
     auto by_fn_id = [](const IndexProfileFunctionBinding &a,
                        const IndexProfileFunctionBinding &b) {
       return a.fn_id < b.fn_id;
@@ -1185,11 +1259,14 @@ class IndexProfileBuilder {
   }
 
  private:
+  explicit IndexProfileBuilder(IndexProfileDesc &&desc)
+      : desc_(std::move(desc)) {}
+
   IndexProfileDesc desc_;
 };
 
-inline IndexProfileBuilder make_index_profile(const char *name) {
-  return IndexProfileBuilder(name);
+inline IndexProfileBuilder<> make_index_profile(const char *name) {
+  return IndexProfileBuilder<>(name);
 }
 
 // ===========================================================================

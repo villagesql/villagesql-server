@@ -1,0 +1,89 @@
+name: Build cmake extension VEB
+description: >
+  Download the SDK, clone a cmake VillageSQL extension, build its .veb against
+  that SDK, and copy it into the dev server's lib/veb. Runs as steps inside the
+  caller's job, so it reads PACKAGE_DIR from the job env and writes EXT_ROOT
+  back to it for the later test steps.
+
+inputs:
+  platform:
+    description: Platform id, used to select the sdk-<platform> artifact.
+    required: true
+  url:
+    description: Extension repository to clone.
+    required: true
+  branch:
+    description: Branch or tag to check out; empty for the repo default.
+    required: false
+    default: ''
+  abi:
+    description: ABI to build against (stable or dev).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download SDK
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: sdk-${{ inputs.platform }}
+        path: artifacts/
+
+    - name: Extract SDK
+      shell: bash
+      run: |
+        # A multi-match glob turns the extras into tar member names, which
+        # fails as an unreadable "Not found in archive". Check the count so a
+        # mis-packed artifact names itself.
+        shopt -s nullglob
+        tarballs=(artifacts/villagesql-extension-sdk-*.tar.gz)
+        if [[ ${#tarballs[@]} -ne 1 ]]; then
+          echo "::error::Expected one SDK tarball in artifacts/, found ${#tarballs[@]}: ${tarballs[*]}"
+          exit 1
+        fi
+        mkdir -p sdk
+        tar xzf "${tarballs[0]}" -C sdk
+        sdk_dirs=(sdk/villagesql-extension-sdk-*/)
+        if [[ ${#sdk_dirs[@]} -ne 1 ]]; then
+          echo "::error::Expected one SDK directory in sdk/, found ${#sdk_dirs[@]}: ${sdk_dirs[*]}"
+          exit 1
+        fi
+        echo "SDK_DIR=$PWD/${sdk_dirs[0]%/}" >> "$GITHUB_ENV"
+
+    - name: Clone extension
+      shell: bash
+      run: |
+        # Self-hosted runners reuse the workspace; wipe any stale clone. The
+        # build tree goes too: every extension configures into the same
+        # ext-build/ from the same -S path, so CMake would reuse the previous
+        # extension's cache, including its resolved OpenSSL paths.
+        rm -rf extension ext-build
+        CLONE_ARGS=(--depth=1)
+        [[ -n "${{ inputs.branch }}" ]] && CLONE_ARGS+=(--branch "${{ inputs.branch }}")
+        git clone "${CLONE_ARGS[@]}" ${{ inputs.url }} extension/
+        # C++ extensions live at the repo root.
+        echo "EXT_ROOT=extension" >> "$GITHUB_ENV"
+
+    - name: Build extension VEB
+      shell: bash
+      run: |
+        NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
+        # openssl@3 is keg-only on macOS and Homebrew's unversioned `openssl`
+        # now resolves to openssl@4. Name the prefix so find_package(OpenSSL)
+        # cannot pick a different OpenSSL than the server links.
+        # TODO(villagesql-general): drop this once the SDK's cmake config
+        # declares the OpenSSL the server was built against, so extensions
+        # get it in local builds too and not just here.
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          export OPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+        fi
+        DEV_ABI_FLAG=""
+        [ "${{ inputs.abi }}" = "dev" ] && DEV_ABI_FLAG="-DVSQL_USE_DEV_ABI=ON"
+        cmake -S "$EXT_ROOT"/ -B ext-build/ \
+          -DVillageSQL_SDK_DIR="$SDK_DIR" \
+          -DCMAKE_BUILD_TYPE=Release \
+          $DEV_ABI_FLAG
+        cmake --build ext-build/ --parallel "$NCORES"
+        # Copy the built VEB into the dev server's extension directory.
+        find ext-build/ -maxdepth 1 -name "*.veb" \
+          -exec cp {} "$PACKAGE_DIR/lib/veb/" \;

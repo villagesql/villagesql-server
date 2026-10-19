@@ -113,12 +113,27 @@ class SchemaManager {
    * constant. If an upgrade is needed, it runs version-specific migration
    * functions and updates the stored version.
    *
+   * Fails if the stored version names a different code base than the running
+   * build, since upgrading across code bases is not supported.
+   *
    * @param[in]  thd   Thread handle.
    *
    * @retval false  ON SUCCESS
    * @retval true   ON FAILURE
    */
   static bool upgrade_villagesql_schema(THD *thd);
+
+  /**
+   * Run upgrade_villagesql_schema() in its own bootstrap thread.
+   *
+   * Used with --upgrade=MINIMAL, which skips upgrade_system_schemas() where
+   * the upgrades normally run. VillageSQL system tables are dictionary
+   * state, so they are upgraded even in MINIMAL mode.
+   *
+   * @retval false  ON SUCCESS
+   * @retval true   ON FAILURE
+   */
+  static bool run_villagesql_upgrades_standalone();
 
   /**
    * Returns true iff the version of the schema stored in the database

@@ -14,9 +14,11 @@ This is VillageSQL Server, a fork of MySQL 8.4.6 LTS that adds VillageSQL Extens
 - [Adding SQL Commands](Docs/ADDING_SQL_COMMANDS.md) - Complete checklist for adding new SQL commands to the parser
 - [Adding System Tables](villagesql/schema/ADDING_SYSTEM_TABLES.md) - Guide for adding new VillageSQL system tables to victionary
 - [Error Handling](Docs/ERROR_HANDLING.md) - strategies for handling errors in VillageSQL and the boundary with MySQL
+- [Writing MTR Tests](Docs/WRITING_MTR_TESTS.md) - Conventions for VillageSQL mysql-test suites, e.g. the shared `include/villagesql/` helpers, how to mark a test that cannot pass yet, and stopping/restarting the server
 - [CI Build Cache](.github/CI_BUILD_CACHE.md) - How CI build caching works, known issues, and diagnostics
 - [VEF SDK Overview](villagesql/sdk/README.md) - The extension SDK, protocol versions, and how to stabilize a protocol
 - [VEF API vs ABI](villagesql/sdk/API_ABI.md) - The API/ABI distinction and the rules for evolving each compatibly
+- [Merging Upstream](Docs/merging/HOW_TO_MERGE.md) - How to merge an Oracle MySQL release into VillageSQL, the files that conflict every time, and the checks nothing will remind you to run
 
 **When changing the VEF framework** (anything under `villagesql/sdk/`, especially
 the ABI in `villagesql/sdk/include/villagesql/abi/types.h`), update the SDK
@@ -59,12 +61,9 @@ make -j14
 rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_DEBUG=1 -DWITH_SHOW_PARSE_TREE=1
 make -j14
 
-# Maintainer build (strict warnings)
-rm CMakeCache.txt; cmake $SOURCE_HOME -DMYSQL_MAINTAINER_MODE=ON
-make -j14
-
-# macOS with specific SSL
-rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_SSL=/opt/homebrew/opt/openssl@3
+# macOS: name the OpenSSL 3 directory. Homebrew's unversioned openssl is
+# now OpenSSL 4, which the server does not build against.
+rm CMakeCache.txt; cmake $SOURCE_HOME -DWITH_SSL="$(brew --prefix openssl@3)"
 make -j14
 ```
 
@@ -81,10 +80,10 @@ cd $BUILD_HOME
 ./mysql-test/mysql-test-run.pl --parallel=auto
 
 # Run ALL VillageSQL tests including sub-suites (alter_table, create_table, etc.)
-./mysql-test/mysql-test-run.pl --do-suite=village --nounit-tests --parallel=auto
+./mysql-test/mysql-test-run.pl --do-suite=villagesql --nounit-tests --parallel=auto
 
 # Run VillageSQL tests including "big" tests (longer running)
-./mysql-test/mysql-test-run.pl --do-suite=village --nounit-tests  --parallel=auto --big-test
+./mysql-test/mysql-test-run.pl --do-suite=villagesql --nounit-tests  --parallel=auto --big-test
 
 # Run specific VillageSQL sub-suite
 ./mysql-test/mysql-test-run.pl --suite=villagesql/alter_table --parallel=auto
@@ -170,9 +169,23 @@ Use `./scripts/villint.sh` to lint changed files in your PR/branch. It runs clan
 
 For additional options, see `./scripts/villint.sh --help`.
 
+The linter needs one exact clang-format version, and it refuses any other. Homebrew and Linux package managers ship whatever version they currently carry, so do not install clang-format from them. Install the exact version with `pipx`:
+
+```bash
+# macOS
+brew install pipx
+
+# Linux (Ubuntu/Debian)
+sudo apt-get install pipx
+
+# Both
+pipx install "clang-format==22.1.*"
+pipx ensurepath   # adds ~/.local/bin to PATH in your shell startup file; open a new shell after
+```
+
 ## Architecture Overview
 
-TODO(villagesql-ga): Add VillageSQL-specific architecture documentation covering:
+TODO(villagesql-general): Add VillageSQL-specific architecture documentation covering:
 - Extension framework architecture
 - Custom type system design
 - Victionary caching layer
@@ -211,16 +224,19 @@ When adding VillageSQL features:
 - For header guards, use `// HEADER_GUARD_NAME_H` at the `#endif`
 - All todos in the code that we add should look like `// TODO(villagesql): <thing to do>`
   - Use subareas for categorization:
+    - `TODO(villagesql-back-to-mysql):` - Required for downgrade safety / vanilla MySQL
     - `TODO(villagesql-beta):` - Must handle before Beta Release (0.1.0)
-    - `TODO(villagesql-preview):` - Related to preview capability system
-    - `TODO(villagesql-ga):` - Must handle before General Availability (1.0.0)
-    - `TODO(villagesql-performance):` - Performance optimization possibility
-    - `TODO(villagesql-rebase):` - Check during MySQL version rebases
+    - `TODO(villagesql-blob):` - Needed to support blobs as underlying storage for custom types
+    - `TODO(villagesql-charset):` - Potential CHARSET_INFO issues/inconsistencies
     - `TODO(villagesql-crash):` - Known crash
-    - `TODO(villagesql-windows):` - Known problems with supporting Windows
-    - `TODO(villagesql-indexing):` - Related to indexing work
-    - `TODO(villagesql-back-to-mysql):` - Required for downgrade safety / vanilla MySQL compatibility
+    - `TODO(villagesql-general):` - Must handle before General Availability (1.0.0)
+    - `TODO(villagesql-indexing):` - Related to custom indexing work
+    - `TODO(villagesql-performance):` - Performance optimization possibility
+    - `TODO(villagesql-preview):` - Related to preview capability system
+    - `TODO(villagesql-production):` - Must handle for "production readiness"
+    - `TODO(villagesql-rebase):` - Check during MySQL version rebases
     - `TODO(villagesql-rust):` - Related to the Rust SDK / Rust extension support
+    - `TODO(villagesql-windows):` - Known problems with supporting Windows
 - Avoid `/* */` style comments except for copyright headers
 - Do NOT use section separator comments (e.g., `// ===== Serialization =====`) - they're hard to maintain and add little value
 - Do NOT add explanatory comments on #include lines (e.g., `#include "my_sys.h" // my_ok, my_printf_error`) - they're hard to maintain

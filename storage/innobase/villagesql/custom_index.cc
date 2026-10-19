@@ -18,22 +18,30 @@
 #include <sql_const.h>
 
 #include <array>
+#include <cstdio>
 #include <memory>
 #include <new>
-#include <type_traits>
 #include <vector>
 
+#include "custom_column.h"
+#include "custom_index_helper_fn_name.h"
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
+#include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
+#include "storage/innobase/include/mtr0mtr.h"
+#include "storage/innobase/include/trx0sys.h"
+#include "storage/innobase/include/trx0trx.h"
 #include "storage/innobase/include/univ.i"
+#include "storage/innobase/villagesql/custom_column.h"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/types/util.h"
+#include "villagesql/veb/veb_file.h"
 
 namespace villagesql {
 namespace innodb {
@@ -60,48 +68,39 @@ static const vef_index_profile_fn_binding_t *find_fn_binding(
   return nullptr;
 }
 
-template <typename InvalueType>
 static void fill_custom_invalue(const vef_storage_col_data_t &col_data,
-                                const TypeContext *tc, InvalueType &v) {
+                                const TypeContext *tc, vef_invalue_t &v) {
   v.type = VEF_TYPE_CUSTOM;
   v.is_null = col_data.data == nullptr;
   v.bin_value = col_data.data;
   v.bin_len = col_data.length;
-  if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
-    if (tc != nullptr) {
-      const TypeParameters &params = tc->parameters();
-      v.type_params = {params.count(), params.key_data(), params.value_data()};
-    } else {
-      v.type_params = {0, nullptr, nullptr};
-    }
+  if (tc != nullptr) {
+    const TypeParameters &params = tc->parameters();
+    v.type_params = {params.count(), params.key_data(), params.value_data()};
+  } else {
+    v.type_params = {0, nullptr, nullptr};
   }
 }
 
-template <typename InvalueType>
 static bool call_vdf(const vef_index_profile_fn_binding_t &binding,
                      const TypeContext *tc, const void *const *args,
                      uint32_t nargs, vef_vdf_result_t *vdf_result) {
-  std::array<InvalueType, MAX_PROFILE_FN_ARGS> invalues{};
+  std::array<vef_invalue_t, MAX_PROFILE_FN_ARGS> invalues{};
+  std::array<vef_invalue_t *, MAX_PROFILE_FN_ARGS> invalue_ptrs{};
   for (uint32_t i = 0; i < nargs; i++) {
     const auto *col_data = static_cast<const vef_storage_col_data_t *>(args[i]);
     fill_custom_invalue(*col_data, tc, invalues[i]);
+    invalue_ptrs[i] = &invalues[i];
   }
 
   vef_context_t ctx{};
-  ctx.protocol = binding.protocol;
+  ctx.protocol = veb::vef_server_protocol_version;
 
   vef_vdf_args_t vdf_args{};
   vdf_args.value_count = nargs;
+  vdf_args.values = invalue_ptrs.data();
 
-  if constexpr (std::is_same_v<InvalueType, vef_invalue_v1_t>) {
-    vdf_args.values_v1 = invalues.data();
-    binding.vdf(&ctx, &vdf_args, vdf_result);
-  } else {
-    std::array<vef_invalue_t *, MAX_PROFILE_FN_ARGS> invalue_ptrs{};
-    for (uint32_t i = 0; i < nargs; i++) invalue_ptrs[i] = &invalues[i];
-    vdf_args.values = invalue_ptrs.data();
-    binding.vdf(&ctx, &vdf_args, vdf_result);
-  }
+  binding.vdf(&ctx, &vdf_args, vdf_result);
   return vdf_result->type == VEF_RESULT_VALUE;
 }
 
@@ -126,8 +125,12 @@ static void call_profile_binding(const dict_index_t *index, uint32_t key_pos,
   vef_vdf_result_t vdf_result{};
   vdf_result.error_msg = error_msg;
 
-  ut_a(binding.protocol >= VEF_PROTOCOL_3);
-  bool ok = call_vdf<vef_invalue_t>(binding, tc, args, nargs, &vdf_result);
+  // binding.protocol is the minimum protocol the binding can be called at, so
+  // this server must be new enough to meet it. veb/validate.cc has no
+  // equivalent check, but every binding that reaches here came from an
+  // extension the server already accepted at load time.
+  ut_a(binding.protocol <= veb::vef_server_protocol_version);
+  bool ok = call_vdf(binding, tc, args, nargs, &vdf_result);
   if (!ok) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
@@ -189,6 +192,127 @@ static uint32_t vef_index_max_key_len_impl(vef_index_ref_t index_ref,
   return max_size;
 }
 
+// The key_pos'th key column of the index. Column references only address
+// columns held in extension-managed column storage; returns nullptr and fills
+// error_msg for any other column.
+static const dict_col_t *ref_column(const dict_index_t *index, uint32_t key_pos,
+                                    char *error_msg, uint32_t error_msg_len) {
+  if (key_pos >= index->n_user_defined_cols) {
+    ut_ad(false);
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len,
+               "Key position %u is out of range for index %s with %u key "
+               "columns",
+               key_pos, index->name(),
+               static_cast<uint32_t>(index->n_user_defined_cols));
+    }
+    return nullptr;
+  }
+
+  const dict_col_t *col = index->get_field(key_pos)->col;
+  if (!col->stored_by_extn()) {
+    ut_ad(false);
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len,
+               "Column %s at key position %u of index %s is not in extension "
+               "managed column storage",
+               index->table->get_col_name(col->ind), key_pos, index->name());
+    }
+    return nullptr;
+  }
+  return col;
+}
+
+// Reads the value a column reference points to out of the column store into the
+// caller's buffer. The extension gets the same layout as any other value of the
+// custom type: the reference header followed by the data held by the store.
+// Runs its own mini-transaction, so the extension must not call this while
+// holding page latches in a mini-transaction of its own.
+static bool vef_index_col_ref_to_data_impl(
+    vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
+    vef_storage_col_data_t *col_data, char *error_msg, uint32_t error_msg_len) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  const dict_col_t *col = ref_column(index, key_pos, error_msg, error_msg_len);
+  if (col == nullptr) return true;
+
+  if (col_ref == Custom_column::EMPTY_REF) {
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len, "Empty column reference for column %s",
+               index->table->get_col_name(col->ind));
+    }
+    return true;
+  }
+
+  constexpr uint32_t ref_size =
+      static_cast<uint32_t>(dfield_t::extended_ref_size());
+  const uint32_t value_len = col->len;
+  ut_a(value_len > ref_size);
+
+  if (col_data->data == nullptr || col_data->length < value_len) {
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len,
+               "Buffer of %u bytes is too small for column %s, %u bytes needed",
+               col_data->length, index->table->get_col_name(col->ind),
+               value_len);
+    }
+    return true;
+  }
+
+  auto *value = const_cast<byte *>(col_data->data);
+  mach_write_to_8(value, col_ref);
+
+  dberr_t err = Custom_column::fetch(index->table, col, value + ref_size,
+                                     value_len - ref_size, value, ref_size);
+  if (err != DB_SUCCESS) {
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len,
+               "Failed to fetch column %s from column storage",
+               index->table->get_col_name(col->ind));
+    }
+    return true;
+  }
+
+  col_data->length = value_len;
+  return false;
+}
+
+// Extracts the column reference from a stored value of an extension-managed
+// column. Every such value carries its reference in the header, so this needs
+// no column store lookup.
+static bool vef_index_col_data_to_ref_impl(vef_index_ref_t index_ref,
+                                           uint32_t key_pos,
+                                           vef_storage_col_data_t col_data,
+                                           vef_storage_col_ref_t *col_ref,
+                                           char *error_msg,
+                                           uint32_t error_msg_len) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  const dict_col_t *col = ref_column(index, key_pos, error_msg, error_msg_len);
+  if (col == nullptr) return true;
+
+  constexpr uint32_t ref_size =
+      static_cast<uint32_t>(dfield_t::extended_ref_size());
+  if (col_data.data == nullptr || col_data.length < ref_size) {
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len,
+               "Column %s value of %u bytes carries no reference header",
+               index->table->get_col_name(col->ind), col_data.length);
+    }
+    return true;
+  }
+
+  *col_ref = mach_read_from_8(col_data.data);
+
+  if (*col_ref == Custom_column::EMPTY_REF) {
+    if (error_msg != nullptr && error_msg_len > 0) {
+      snprintf(error_msg, error_msg_len,
+               "Column %s value is not in column storage yet",
+               index->table->get_col_name(col->ind));
+    }
+    return true;
+  }
+  return false;
+}
+
 // Calls intf.parse to validate the WITH (...) parameters. Allocates the
 // options struct on index->heap, writes the parsed result into it, and sets
 // *options_out to point to it. No-op (leaves *options_out unchanged) when
@@ -238,8 +362,20 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->options = nullptr;
+  ctx->helper_fn_name_fn = vef_index_helper_fn_name_impl;
 
   const auto &intf = index->custom_index->interface();
+
+  // Column reference conversion is only meaningful for an index type that
+  // stores column references in its entries.
+  if (intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) {
+    ctx->col_ref_to_data_fn = vef_index_col_ref_to_data_impl;
+    ctx->col_data_to_ref_fn = vef_index_col_data_to_ref_impl;
+  } else {
+    ctx->col_ref_to_data_fn = nullptr;
+    ctx->col_data_to_ref_fn = nullptr;
+  }
+
   return parse_index_options(index, intf, &ctx->options);
 }
 
@@ -402,8 +538,9 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error creating custom index storage: " << error_msg;
+    if (trx_t *trx = trx_rw_is_active(trx_id, false)) {
+      trx_set_detailed_error(trx, error_msg);
+    }
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -425,8 +562,9 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error dropping custom index storage: " << error_msg;
+    if (trx_t *trx = trx_rw_is_active(trx_id, false)) {
+      trx_set_detailed_error(trx, error_msg);
+    }
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
@@ -437,8 +575,10 @@ static vef_storage_col_data_t to_col_data(const dfield_t *field) {
   if (dfield_is_null(field)) {
     return {nullptr, 0};
   }
+  // Pass ref_length=false to use total length for extended storage columns
+  // while setting data length for index entries.
   return {static_cast<const unsigned char *>(dfield_get_data(field)),
-          static_cast<uint32_t>(dfield_get_len(field))};
+          static_cast<uint32_t>(dfield_get_len(field, false))};
 }
 
 dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,

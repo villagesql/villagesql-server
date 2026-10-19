@@ -29,8 +29,12 @@ COPY villagesql/bld_tools/setup_linux_build_env.sh /tmp/
 RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/*
 
 # Copy source tree (excluding docker/ so script changes don't invalidate the
-# expensive server build cache)
-COPY --exclude=docker . /source
+# expensive server build cache). COPY --exclude is a labs-channel feature, so
+# it needs the syntax directive at the top of this file; without it the build
+# uses whatever Dockerfile parser is compiled into the local daemon, and older
+# ones reject the flag.
+# COPY --exclude=docker . /source
+COPY . /source
 
 # Build and install
 # VSQL_PRE_RELEASE_VERSION defaults to "dev"; set to "" for release builds

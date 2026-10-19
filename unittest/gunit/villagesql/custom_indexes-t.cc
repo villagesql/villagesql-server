@@ -252,4 +252,107 @@ TEST_F(CustomIndexesVictionaryTest, IndexOnlyHasUncommittedOnIndexMaps) {
   client_->rollback_all_tables(fake_thd);
 }
 
+// The THD-aware GetColumnsForIndex must see rows staged by this THD (the DDL
+// case, where index and column rows are staged together and not yet committed),
+// while the committed-only variant must not.
+TEST_F(CustomIndexesVictionaryTest, GetColumnsForIndexSeesUncommitted) {
+  // Use fake THD pointers for testing that are 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xB018);
+  THD *other_thd = reinterpret_cast<THD *>(0xB020);
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd,
+        IndexColumnEntry(IndexColumnKey(77, 0), "c0", "ext", "1.0", "prof0"));
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd,
+        IndexColumnEntry(IndexColumnKey(77, 1), "c1", "ext", "1.0", "prof1"));
+
+    auto staged = client_->GetColumnsForIndex(fake_thd, 77);
+    ASSERT_EQ(staged.size(), 2u);
+    EXPECT_EQ(staged[0]->column_name, "c0");
+    EXPECT_EQ(staged[1]->column_name, "c1");
+
+    // Committed-only view and other sessions see nothing.
+    EXPECT_TRUE(client_->GetColumnsForIndex(77).empty());
+    EXPECT_TRUE(client_->GetColumnsForIndex(other_thd, 77).empty());
+    EXPECT_TRUE(client_->GetColumnsForIndex(fake_thd, 7).empty());
+  }
+
+  client_->rollback_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_TRUE(client_->GetColumnsForIndex(fake_thd, 77).empty());
+  }
+}
+
+// A staged delete must hide the committed row from this THD's view, but not
+// from the committed-only view or from other sessions.
+TEST_F(CustomIndexesVictionaryTest, GetColumnsForIndexHidesStagedDelete) {
+  // Use fake THD pointers for testing that are 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xB028);
+  THD *other_thd = reinterpret_cast<THD *>(0xB030);
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd,
+        IndexColumnEntry(IndexColumnKey(88, 0), "c0", "ext", "1.0", "prof0"));
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd,
+        IndexColumnEntry(IndexColumnKey(88, 1), "c1", "ext", "1.0", "prof1"));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->custom_index_columns().MarkForDeletion(*fake_thd,
+                                                    IndexColumnKey(88, 0));
+
+    auto visible = client_->GetColumnsForIndex(fake_thd, 88);
+    ASSERT_EQ(visible.size(), 1u);
+    EXPECT_EQ(visible[0]->column_name, "c1");
+
+    EXPECT_EQ(client_->GetColumnsForIndex(88).size(), 2u);
+    EXPECT_EQ(client_->GetColumnsForIndex(other_thd, 88).size(), 2u);
+  }
+
+  client_->rollback_all_tables(fake_thd);
+
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->GetColumnsForIndex(fake_thd, 88).size(), 2u);
+  }
+}
+
+// Staged rows for a different index must not leak into the prefix scan, and the
+// "42." prefix must still exclude "420.*" when the staged overlay is applied.
+TEST_F(CustomIndexesVictionaryTest, GetColumnsForIndexUncommittedPrefixBounds) {
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0xB038);
+
+  {
+    auto guard = client_->get_write_lock();
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd,
+        IndexColumnEntry(IndexColumnKey(42, 0), "col_a", "ext", "1.0", "prof"));
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd, IndexColumnEntry(IndexColumnKey(420, 0), "col_b", "ext",
+                                    "1.0", "prof"));
+    client_->custom_index_columns().MarkForInsertion(
+        *fake_thd,
+        IndexColumnEntry(IndexColumnKey(4, 2), "col_c", "ext", "1.0", "prof"));
+
+    auto results = client_->GetColumnsForIndex(fake_thd, 42);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0]->column_name, "col_a");
+    EXPECT_EQ(client_->GetColumnsForIndex(fake_thd, 420).size(), 1u);
+    EXPECT_EQ(client_->GetColumnsForIndex(fake_thd, 4).size(), 1u);
+  }
+
+  client_->rollback_all_tables(fake_thd);
+}
+
 }  // namespace villagesql_unittest

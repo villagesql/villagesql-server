@@ -1,0 +1,43 @@
+call mtr.add_suppression("vsql_allow_preview_extensions");
+# A load that fails after vef_register runs neither hook: preview
+# capabilities are off, so the load fails between vef_register and the
+# point where on_init would run
+INSTALL EXTENSION vsql_config_vars_test;
+ERROR HY000: Failed to load VEF extension 'vsql_config_vars_test': extension requires preview capabilities but vsql_allow_preview_extensions is OFF
+# on_init never ran, so on_deinit must not run either: no marker file
+SET PERSIST vsql_allow_preview_extensions = ON;
+# INSTALL: the hook sees the declared defaults
+INSTALL EXTENSION vsql_config_vars_test;
+SELECT vsql_config_vars_test.init_saw_max_items();
+vsql_config_vars_test.init_saw_max_items()
+100
+SELECT vsql_config_vars_test.init_saw_label();
+vsql_config_vars_test.init_saw_label()
+default_label
+# Persist both variables, then restart with the extension installed
+SET PERSIST vsql_config_vars_test.max_items = 77;
+SET PERSIST vsql_config_vars_test.label = 'configured';
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# The shutdown half of that restart ran on_deinit, and the variable was
+# still readable through the capability
+on_deinit label=configured
+# Startup: the hook sees the persisted values, not the defaults
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+77
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+configured
+SELECT vsql_config_vars_test.init_saw_max_items();
+vsql_config_vars_test.init_saw_max_items()
+77
+SELECT vsql_config_vars_test.init_saw_label();
+vsql_config_vars_test.init_saw_label()
+configured
+RESET PERSIST vsql_config_vars_test.max_items;
+RESET PERSIST vsql_config_vars_test.label;
+# UNINSTALL runs on_deinit the same way
+UNINSTALL EXTENSION vsql_config_vars_test;
+on_deinit label=configured
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

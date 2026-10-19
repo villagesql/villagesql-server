@@ -62,11 +62,11 @@ id	val	category	amount
 1	(2,0)	Category A	100.50
 2	(10,0)	Category B	150.00
 2	(10,0)	Category B	200.75
-EXPLAIN SELECT * FROM t_perm INNER JOIN t_temp ON t_perm.val = t_temp.val;
+EXPLAIN SELECT * FROM t_perm STRAIGHT_JOIN t_temp ON t_perm.val = t_temp.val;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t_perm	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
-1	SIMPLE	t_temp	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where; Using join buffer (hash join)
+1	SIMPLE	t_perm	NULL	ALL	NULL	NULL	NULL	NULL	#	#	NULL
+1	SIMPLE	t_temp	NULL	ALL	NULL	NULL	NULL	NULL	#	#	Using where; Using join buffer (hash join)
 Warnings:
-Note	1003	/* select#1 */ select `test`.`t_perm`.`id` AS `id`,`test`.`t_perm`.`val` AS `val`,`test`.`t_perm`.`category` AS `category`,`test`.`t_temp`.`id` AS `id`,`test`.`t_temp`.`val` AS `val`,`test`.`t_temp`.`amount` AS `amount` from `test`.`t_perm` join `test`.`t_temp` where (`test`.`t_temp`.`val` = `test`.`t_perm`.`val`)
+Note	1003	/* select#1 */ select `test`.`t_perm`.`id` AS `id`,`test`.`t_perm`.`val` AS `val`,`test`.`t_perm`.`category` AS `category`,`test`.`t_temp`.`id` AS `id`,`test`.`t_temp`.`val` AS `val`,`test`.`t_temp`.`amount` AS `amount` from `test`.`t_perm` straight_join `test`.`t_temp` where (`test`.`t_temp`.`val` = `test`.`t_perm`.`val`)
 DROP TABLE t_temp;
 DROP TABLE t_perm;

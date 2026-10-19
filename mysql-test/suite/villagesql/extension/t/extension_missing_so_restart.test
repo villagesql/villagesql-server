@@ -66,12 +66,7 @@ let SEARCH_FILE= $MYSQLTEST_VARDIR/log/my_restart.err;
 --error 0,1
 --remove_file $SEARCH_FILE
 
-# Shutdown the server using the expect file mechanism
---let $_server_id= `SELECT @@server_id`
---let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
---exec echo "wait" > $_expect_file_name
---shutdown_server
---source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 # Try to start server - should fail due to missing .so file
 --error 1

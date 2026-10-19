@@ -35,7 +35,7 @@ inline void villagesql_check_error_log() {
   villagesql_error("Check error log for more info", MYF(0));
 }
 
-#define LogVSQL(severity, ...)                \
+#define LogVSQL(severity, fmt, ...)           \
   LogEvent()                                  \
       .prio(severity)                         \
       .errcode(ER_VILLAGESQL_GENERIC_MESSAGE) \
@@ -43,7 +43,7 @@ inline void villagesql_check_error_log() {
       .source_line(__LINE__)                  \
       .source_file(MY_BASENAME)               \
       .function(__FUNCTION__)                 \
-      .message_quoted("VillageSQL", ##__VA_ARGS__)
+      .message("VillageSQL: " fmt, ##__VA_ARGS__)
 
 // An "assertion" that has error handling for non-debug releases. If the
 // expected value passed in is not true, it asserts, and returns true if it

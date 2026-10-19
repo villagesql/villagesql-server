@@ -2,7 +2,7 @@ name: Extension SDK Compatibility (Reusable)
 
 # Reusable workflow that builds bundled extensions against the SDK built from a
 # given ref and runs their MTR suites. Called by:
-#   - extension-compat.yml (nightly workflow_run + manual workflow_dispatch)
+#   - extension-compat.yml (nightly dispatch + manual workflow_dispatch)
 #   - slash-commands.yml    (/testextensions on a PR)
 #
 # The SDK is compiled fresh from `ref` in build-server, and each extension is
@@ -70,18 +70,25 @@ jobs:
           EXTENSION_FILTER: ${{ inputs.extension_filter }}
           ABI_FILTER: ${{ inputs.abi_filter }}
         run: |
-          # Delegate all matrix logic to the script so it can be tested locally:
-          #   PLATFORM_FILTER=macos-arm64 ABI_FILTER=stable \
-          #     ./scripts/villagesql_build-compat-matrix.sh
-          mapfile -t MATRICES < <(./scripts/villagesql_build-compat-matrix.sh)
-          BUILD_MATRIX="${MATRICES[0]}"
-          TEST_MATRIX="${MATRICES[1]}"
+          # Matrix logic lives in villagesql/bld_matrix, so it can be run
+          # locally exactly as it runs here:
+          #   villagesql/bld_matrix/json_test_extensions.sh macos-arm64 "" stable
+          MATRIX=villagesql/bld_matrix
 
-          COUNT=$(echo "$TEST_MATRIX" | jq '.include | length')
+          BUILD_MATRIX=$("$MATRIX/json_build_matrix.sh" "$PLATFORM_FILTER")
+          TESTS=$("$MATRIX/json_test_extensions.sh" \
+            "$PLATFORM_FILTER" "$EXTENSION_FILTER" "$ABI_FILTER")
+
+          COUNT=$(jq 'length' <<<"$TESTS")
           if [ "$COUNT" -eq 0 ]; then
             echo "::error::No test jobs matched filters (platform='$PLATFORM_FILTER' extension='$EXTENSION_FILTER' abi='$ABI_FILTER'). Nothing to test."
             exit 1
           fi
+
+          # json_test_extensions.sh prints a bare array; the strategy matrix
+          # wants it under "include".
+          TEST_MATRIX=$(jq -c '{include: .}' <<<"$TESTS")
+
           echo "build-matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
           echo "test-matrix=$TEST_MATRIX" >> "$GITHUB_OUTPUT"
 
@@ -127,7 +134,9 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
-          sparse-checkout: scripts/
+          sparse-checkout: |
+            scripts/
+            .github/actions/
           ref: ${{ inputs.ref }}
 
       - name: Download dev server
@@ -136,22 +145,11 @@ jobs:
           name: devserver-${{ matrix.platform }}
           path: artifacts/
 
-      - name: Download SDK
-        if: matrix.build != 'cargo'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: sdk-${{ matrix.platform }}
-          path: artifacts/
-
-      - name: Extract dev server and SDK
+      - name: Extract dev server
         run: |
-          mkdir -p package sdk
+          mkdir -p package
           tar xzf artifacts/villagesql-dev-server-*.tar.gz -C package
           echo "PACKAGE_DIR=$(echo "$PWD"/package/villagesql-dev-server-*)" >> "$GITHUB_ENV"
-          if [ "${{ matrix.build }}" != "cargo" ]; then
-            tar xzf artifacts/villagesql-extension-sdk-*.tar.gz -C sdk
-            echo "SDK_DIR=$(echo "$PWD"/sdk/villagesql-extension-sdk-*)" >> "$GITHUB_ENV"
-          fi
 
       - name: Install build dependencies (Linux)
         if: matrix.os == 'linux'
@@ -161,49 +159,25 @@ jobs:
         if: matrix.os == 'macos'
         run: ./scripts/setup_macos_ext_deps.sh
 
-      - name: Clone extension
-        run: |
-          # Self-hosted runners reuse the workspace; wipe any stale clone.
-          rm -rf extension
-          CLONE_ARGS=(--depth=1)
-          [[ -n "${{ matrix.branch }}" ]] && CLONE_ARGS+=(--branch "${{ matrix.branch }}")
-          git clone "${CLONE_ARGS[@]}" ${{ matrix.url }} extension/
-          # Extension root within the clone. Rust examples live in a subdir;
-          # C++ extensions are at the root.
-          if [ -n "${{ matrix.path }}" ]; then
-            echo "EXT_ROOT=extension/${{ matrix.path }}" >> "$GITHUB_ENV"
-          else
-            echo "EXT_ROOT=extension" >> "$GITHUB_ENV"
-          fi
+      - name: Build cmake extension VEB
+        id: build_cmake
+        if: matrix.build == 'cmake'
+        uses: ./.github/actions/extension-compat-cmake
+        with:
+          platform: ${{ matrix.platform }}
+          url: ${{ matrix.url }}
+          branch: ${{ matrix.branch }}
+          abi: ${{ matrix.abi }}
 
-      - name: Set up Rust toolchain
+      - name: Build cargo extension VEB
+        id: build_cargo
         if: matrix.build == 'cargo'
-        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
-
-      # TODO(villagesql-rust): build the HEAD version of the SDK from the repo.
-      - name: Install cargo-vsql
-        if: matrix.build == 'cargo'
-        run: cargo install --path extension/cargo-vsql --locked
-
-      - name: Build extension VEB
-        id: build_ext
-        run: |
-          NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
-          if [ "${{ matrix.build }}" = "cargo" ]; then
-            ( cd "$EXT_ROOT" && cargo vsql package )
-            cp "extension/dist/${{ matrix.extension }}.veb" "$PACKAGE_DIR/lib/veb/"
-          else
-            DEV_ABI_FLAG=""
-            [ "${{ matrix.abi }}" = "dev" ] && DEV_ABI_FLAG="-DVSQL_USE_DEV_ABI=ON"
-            cmake -S "$EXT_ROOT"/ -B ext-build/ \
-              -DVillageSQL_SDK_DIR="$SDK_DIR" \
-              -DCMAKE_BUILD_TYPE=Release \
-              $DEV_ABI_FLAG
-            cmake --build ext-build/ --parallel "$NCORES"
-            # Copy the built VEB into the dev server's extension directory
-            find ext-build/ -maxdepth 1 -name "*.veb" \
-              -exec cp {} "$PACKAGE_DIR/lib/veb/" \;
-          fi
+        uses: ./.github/actions/extension-compat-cargo
+        with:
+          url: ${{ matrix.url }}
+          branch: ${{ matrix.branch }}
+          path: ${{ matrix.path }}
+          extension: ${{ matrix.extension }}
 
       - name: Install extension test suite
         run: |
@@ -249,7 +223,7 @@ jobs:
         run: |
           ./scripts/ci_helpers/villagesql_ext_record_result.sh \
             "${{ matrix.extension }}" "${{ matrix.abi }}" "${{ matrix.platform }}" \
-            "${{ steps.build_ext.outcome }}" "${{ steps.run_mtr.outcome }}" \
+             "${{ steps.build_cmake.outcome != 'skipped' && steps.build_cmake.outcome || steps.build_cargo.outcome }}" "${{ steps.run_mtr.outcome }}" \
             extresults
 
       - name: Upload result

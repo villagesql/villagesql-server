@@ -17,12 +17,16 @@
 #include "villagesql/veb/veb_file.h"
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <mutex>
 #include <string_view>
 #include <system_error>
+#include <unordered_set>
 #include <vector>
 
 #include "my_config.h"
@@ -62,6 +66,8 @@
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
 #include <rapidjson/error/error.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 // clang-format on
 
 namespace villagesql {
@@ -74,6 +80,93 @@ static std::string get_expansion_cache_base_path() {
   fn_format(path_buf, ".veb_expansion_cache", mysql_real_data_home, "", 0);
   return std::string(path_buf);
 }
+
+#ifndef _WIN32
+// fsync a single directory so the entries created inside it are durable.
+// Opening the directory read-only and syncing the fd is the POSIX idiom for
+// this. Failures are logged and swallowed: some filesystems (tmpfs and certain
+// overlays, e.g. the ones mysql-test-run.pl --mem uses) reject fsync on a
+// directory.
+static void sync_directory(const char *dir_path) {
+  File fd = my_open(dir_path, O_RDONLY, MYF(0));
+  if (fd < 0) {
+    LogVSQL(WARNING_LEVEL, "Could not open directory to fsync: %s (errno %d)",
+            dir_path, my_errno());
+    return;
+  }
+  if (my_sync(fd, MYF(0)) != 0) {
+    LogVSQL(WARNING_LEVEL, "Could not fsync directory: %s (errno %d)", dir_path,
+            my_errno());
+  }
+  my_close(fd, MYF(0));
+}
+
+// fsync one regular file by path so its data reaches stable storage.
+static void sync_file(const char *file_path) {
+  File fd = my_open(file_path, O_RDONLY, MYF(0));
+  if (fd < 0) {
+    LogVSQL(WARNING_LEVEL, "Could not open file to fsync: %s (errno %d)",
+            file_path, my_errno());
+    return;
+  }
+  if (my_sync(fd, MYF(0)) != 0) {
+    LogVSQL(WARNING_LEVEL, "Could not fsync file: %s (errno %d)", file_path,
+            my_errno());
+  }
+  my_close(fd, MYF(0));
+}
+
+// Force a freshly extracted VEB tree to sync to storage. Sync every regular
+// file first, then every directory (a file is durable only once both its data
+// and its containing directory entry are synced), walking from the leaf
+// expansion dir up through its ancestors to the datadir.
+static void sync_expanded_tree(const std::string &expanded_path,
+                               const std::string &name_dir,
+                               const std::string &base_path) {
+  std::error_code ec;
+  std::vector<std::string> dirs;
+  for (std::filesystem::recursive_directory_iterator
+           it(expanded_path, std::filesystem::directory_options::none, ec),
+       end;
+       !ec && it != end; it.increment(ec)) {
+    std::error_code sec;
+    std::filesystem::file_status status = it->symlink_status(sec);
+    if (sec) continue;
+    if (std::filesystem::is_directory(status)) {
+      dirs.push_back(it->path().string());
+    } else if (std::filesystem::is_regular_file(status)) {
+      sync_file(it->path().string().c_str());
+    }
+    // Symlinks and special files carry no data blocks of their own; the fsync
+    // of their parent directory persists the entry.
+  }
+  if (ec) {
+    LogVSQL(WARNING_LEVEL,
+            "Could not walk expansion tree to fsync: %s (error: %s)",
+            expanded_path.c_str(), ec.message().c_str());
+  }
+
+  // Sync directories bottom-up (leaf -> root). recursive_directory_iterator
+  // emits parents before children, so walk `dirs` in reverse to reach the
+  // deepest extracted subdirectory first, then the expansion dir and its
+  // ancestors up to the datadir. Each level's entry only becomes durable once
+  // its parent is synced, and syncing child-before-parent means a crash partway
+  // through this pass can never leave a parent entry pointing at a
+  // not-yet-durable child.
+  for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) {
+    sync_directory(it->c_str());
+  }
+  sync_directory(expanded_path.c_str());
+  sync_directory(name_dir.c_str());
+  sync_directory(base_path.c_str());
+  sync_directory(mysql_real_data_home);
+}
+#else   // _WIN32
+// TODO(villagesql-windows): Sync extension file contents to disk.
+static void sync_expanded_tree(const std::string &, const std::string &,
+                               const std::string &) {}
+static void sync_directory(const char *) {}
+#endif  // _WIN32
 
 std::string get_extension_so_path(const std::string &extension_name,
                                   const std::string &sha256) {
@@ -104,6 +197,50 @@ std::string get_extension_so_path(const std::string &extension_name,
   fn_format(path_buf, so_filename.c_str(), lib_dir.c_str(), "", 0);
 
   return std::string(path_buf);
+}
+
+// Expansion cache layout, shared by the helpers below:
+//
+//   {datadir}/.veb_expansion_cache/{name}/
+//     .tmp.{sha256}/    extraction in progress
+//     {sha256}/         committed expansion, holding lib/{name}.so
+//
+// The rename of .tmp.{sha256}/ onto {sha256}/ is the commit, and the only way
+// {sha256}/ is ever created.
+
+// Prefix marking a staging directory within {name}/.
+static constexpr const char *kStagingPrefix = ".tmp.";
+
+// True when an entry name begins with the staging prefix, marking it as
+// expansion scratch rather than a completed {sha256} expansion.
+static bool is_staging_dir_name(const std::string &entry_name) {
+  return entry_name.rfind(kStagingPrefix, 0) == 0;
+}
+
+// Path of the staging directory used to build {name_dir}/{sha256}.
+//
+// Because datadir belongs to one server, sha256 is sufficient. Presence of a
+// staging directory indicates a crash.
+static std::string make_staging_path(const std::string &name_dir,
+                                     const std::string &sha256) {
+  std::string staging_name = std::string(kStagingPrefix) + sha256;
+  char path_buf[FN_REFLEN];
+  fn_format(path_buf, staging_name.c_str(), name_dir.c_str(), "", 0);
+  return std::string(path_buf);
+}
+
+// True when the expansion cache holds a .so we can hand to dlopen: it exists,
+// it is a regular file, and it is not empty.
+//
+// Only emptiness is detectable here; a partially written but non-empty .so is
+// indistinguishable from a good one without hashing it, and dlopen rejects it.
+//
+// Note that incomplete expansion is handled separately via rename.
+static bool expanded_so_is_usable(const std::string &so_path) {
+  MY_STAT so_stat;
+  if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) return false;
+  if (!MY_S_ISREG(so_stat.st_mode)) return false;
+  return so_stat.st_size > 0;
 }
 
 bool ResolveTargetSoPath(const std::string &extension_name,
@@ -138,6 +275,12 @@ static void format_archive_file_path(char *buffer, size_t buffer_size,
                                      const char *archive_name) {
   snprintf(buffer, buffer_size, "\"%s\" inside \"%s\"", filename, archive_name);
 }
+
+// Owning handles for libarchive readers and writers.
+using ArchiveReader =
+    std::unique_ptr<struct archive, decltype(&archive_read_free)>;
+using ArchiveWriter =
+    std::unique_ptr<struct archive, decltype(&archive_write_free)>;
 
 std::string get_veb_path(const std::string &filename) {
   char path_buffer[FN_REFLEN];
@@ -276,20 +419,19 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
   }
 
   // Open archive for reading
-  struct archive *a = archive_read_new();
+  ArchiveReader a(archive_read_new(), &archive_read_free);
   if (!a) {
     villagesql_error("Failed to initialize archive reader", MYF(0));
     return true;
   }
 
-  archive_read_support_filter_all(a);
-  archive_read_support_format_tar(a);
+  archive_read_support_filter_all(a.get());
+  archive_read_support_format_tar(a.get());
 
-  int r = archive_read_open_filename(a, full_path.c_str(), 10240);
+  int r = archive_read_open_filename(a.get(), full_path.c_str(), 10240);
   if (r != ARCHIVE_OK) {
     villagesql_error("Cannot open VEB file '%s': %s", MYF(0),
-                     veb_filename.c_str(), archive_error_string(a));
-    archive_read_free(a);
+                     veb_filename.c_str(), archive_error_string(a.get()));
     return true;
   }
 
@@ -298,7 +440,7 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
   std::string manifest_content;
   struct archive_entry *entry;
 
-  while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+  while (archive_read_next_header(a.get(), &entry) == ARCHIVE_OK) {
     const char *pathname = archive_entry_pathname(entry);
 
     if (strcmp(pathname, "manifest.json") == 0) {
@@ -306,29 +448,26 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
       int64_t size = archive_entry_size(entry);
       manifest_content.resize(size);
 
-      ssize_t bytes_read = archive_read_data(a, &manifest_content[0], size);
+      ssize_t bytes_read =
+          archive_read_data(a.get(), &manifest_content[0], size);
 
       if (bytes_read < 0) {
         char error_path[512];
         format_archive_file_path(error_path, sizeof(error_path),
                                  "manifest.json", veb_filename.c_str());
         villagesql_error("Failed to read %s", MYF(0), error_path);
-        archive_read_free(a);
         return true;
       } else if (bytes_read != size) {
         char error_path[512];
         format_archive_file_path(error_path, sizeof(error_path),
                                  "manifest.json", veb_filename.c_str());
         villagesql_error("Incomplete read of %s", MYF(0), error_path);
-        archive_read_free(a);
         return true;
       }
       break;
     }
-    archive_read_data_skip(a);
+    archive_read_data_skip(a.get());
   }
-
-  archive_read_free(a);
 
   if (!manifest_found) {
     villagesql_error("manifest.json not found in VEB file '%s'", MYF(0),
@@ -389,7 +528,7 @@ bool load_veb_manifest(const std::string &name, std::string &version) {
 
   std::string manifest_name = name_value.GetString();
 
-  // TODO(villagesql-beta): Consider relaxing this requirement to allow VEB
+  // TODO(villagesql-general): Consider relaxing this requirement to allow VEB
   // filename to differ from manifest name.
   // Validate manifest name matches expected extension name (VEB basename)
   if (manifest_name != name) {
@@ -447,14 +586,35 @@ bool expand_veb_to_directory(const std::string &name,
 
   LogVSQL(INFORMATION_LEVEL, "Expansion path: %s", expanded_path.c_str());
 
-  // Check if already expanded with this SHA256
+  // Check if already expanded with this SHA256.
+  //
+  // An unusable .so here means a VEB that had none (published below, then
+  // rejected), a cache predating rename-to-commit, or damage after the fact.
+  // (Mid-expansion crash leaving .tmp.{sha256}/ is handled later). Nothing
+  // is removed until a complete replacement is staged and durable below.
   MY_STAT dir_stat;
+  bool stale_expansion = false;
   if (my_stat(expanded_path.c_str(), &dir_stat, MYF(0)) &&
       MY_S_ISDIR(dir_stat.st_mode)) {
-    LogVSQL(INFORMATION_LEVEL,
-            "Extension '%s' already expanded at %s, skipping extraction",
-            name.c_str(), expanded_path.c_str());
-    return false;  // Already expanded, success
+    std::string cached_so = get_extension_so_path(name, sha256_hash);
+    if (cached_so.empty()) {
+      villagesql_error("Failed to construct .so path for extension '%s'",
+                       MYF(0), name.c_str());
+      return true;
+    }
+
+    if (expanded_so_is_usable(cached_so)) {
+      LogVSQL(INFORMATION_LEVEL,
+              "Extension '%s' already expanded at %s, skipping extraction",
+              name.c_str(), expanded_path.c_str());
+      return false;  // Already expanded, success
+    }
+
+    LogVSQL(WARNING_LEVEL,
+            "Extension '%s' expansion at %s has no usable .so at %s; "
+            "re-expanding from the VEB",
+            name.c_str(), expanded_path.c_str(), cached_so.c_str());
+    stale_expansion = true;
   }
 
   // Create directory structure: .veb_expansion_cache/,
@@ -482,25 +642,61 @@ bool expand_veb_to_directory(const std::string &name,
     LogVSQL(INFORMATION_LEVEL, "Created directory: %s", name_dir.c_str());
   }
 
-  // Create .veb_expansion_cache/{name}/{sha256}/
-  if (my_mkdir(expanded_path.c_str(), 0755, MYF(0)) != 0) {
-    villagesql_error("Failed to create SHA256 expansion directory", MYF(0));
+  // Extract into .veb_expansion_cache/{name}/.tmp.{sha256}/ and rename it to
+  // {sha256}/ only once the whole tree is on stable storage.
+  std::string staging_path = make_staging_path(name_dir, sha256_hash);
+
+  // Any staging directory still here is from a crash during an earlier
+  // expansion, so reclaim it.
+  std::error_code ec;
+  std::filesystem::remove_all(staging_path, ec);
+
+  // Check the outcome, rather than remove_all's return. All that matters here
+  // is that the path is clear for the mkdir below.
+  if (my_stat(staging_path.c_str(), &dir_stat, MYF(0))) {
+    villagesql_error("Failed to remove stale staging directory '%s': %s",
+                     MYF(0), staging_path.c_str(),
+                     ec ? ec.message().c_str() : "still present after removal");
     return true;
   }
 
-  // Extract archive to expansion directory using libarchive
-  struct archive *a = archive_read_new();
-  struct archive *ext = archive_write_disk_new();
+  if (my_mkdir(staging_path.c_str(), 0755, MYF(0)) != 0) {
+    villagesql_error("Failed to create staging expansion directory for '%s'",
+                     MYF(0), name.c_str());
+    return true;
+  }
+
+  // On any failure from here, discard the staging directory. Any existing
+  // {sha256} expansion is untouched. Released once the tree is published.
+  auto discard_staging = create_scope_guard([&staging_path, &name_dir]() {
+    LogVSQL(INFORMATION_LEVEL, "Cleaning up failed expansion at: %s",
+            staging_path.c_str());
+    std::error_code cleanup_ec;
+    std::filesystem::remove_all(staging_path, cleanup_ec);
+    if (cleanup_ec) {
+      LogVSQL(WARNING_LEVEL,
+              "Failed to clean up staging directory: %s (error: %s)",
+              staging_path.c_str(), cleanup_ec.message().c_str());
+    }
+
+    // Drop the {name} directory too if this expansion created it and nothing
+    // else is in it. remove() only takes an empty directory, so a surviving
+    // expansion keeps it. Since that is the ordinary outcome, the error is
+    // ignored.
+    std::filesystem::remove(name_dir, cleanup_ec);
+  });
+
+  // Extract archive to expansion directory using libarchive.
+  ArchiveReader a(archive_read_new(), &archive_read_free);
+  ArchiveWriter ext(archive_write_disk_new(), &archive_write_free);
 
   if (!a || !ext) {
     villagesql_error("Failed to initialize archive handlers", MYF(0));
-    if (a) archive_read_free(a);
-    if (ext) archive_write_free(ext);
     return true;
   }
 
-  archive_read_support_filter_all(a);
-  archive_read_support_format_tar(a);
+  archive_read_support_filter_all(a.get());
+  archive_read_support_format_tar(a.get());
   // Note: We intentionally do NOT use ARCHIVE_EXTRACT_SECURE_SYMLINKS here.
   // That flag prevents extraction when the destination path traverses any
   // symlink in the filesystem, which breaks legitimate setups like tmpfs
@@ -508,15 +704,13 @@ bool expand_veb_to_directory(const std::string &name,
   // within the archive in the loop below, which addresses the actual
   // security concern of malicious symlinks in VEB content.
   archive_write_disk_set_options(
-      ext, ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_PERM |
-               ARCHIVE_EXTRACT_FFLAGS | ARCHIVE_EXTRACT_SECURE_NODOTDOT);
+      ext.get(), ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_PERM |
+                     ARCHIVE_EXTRACT_FFLAGS | ARCHIVE_EXTRACT_SECURE_NODOTDOT);
 
-  int r = archive_read_open_filename(a, full_veb_path.c_str(), 10240);
+  int r = archive_read_open_filename(a.get(), full_veb_path.c_str(), 10240);
   if (r != ARCHIVE_OK) {
     villagesql_error("Failed to open VEB archive '%s': %s", MYF(0),
-                     veb_filename.c_str(), archive_error_string(a));
-    archive_read_free(a);
-    archive_write_free(ext);
+                     veb_filename.c_str(), archive_error_string(a.get()));
     return true;
   }
 
@@ -524,8 +718,12 @@ bool expand_veb_to_directory(const std::string &name,
   bool extraction_error = false;
   struct archive_entry *entry;
 
-  while ((r = archive_read_next_header(a, &entry)) == ARCHIVE_OK) {
-    const char *current_file = archive_entry_pathname(entry);
+  while ((r = archive_read_next_header(a.get(), &entry)) == ARCHIVE_OK) {
+    // Copied, since archive_entry_set_pathname() below frees the original.
+    const char *entry_pathname = archive_entry_pathname(entry);
+    const std::string current_file_name =
+        entry_pathname != nullptr ? entry_pathname : "";
+    const char *current_file = current_file_name.c_str();
 
     // Validate file path (prevent directory traversal attacks)
     // Attack scenario: Archive contains "../../../etc/cron.d/evil" which would
@@ -591,27 +789,27 @@ bool expand_veb_to_directory(const std::string &name,
       }
     }
 
-    // Construct target path: expanded_path + current_file
+    // Construct target path: staging_path + current_file
     // Use fn_format with MY_RELATIVE_PATH to prepend directory to relative
     // paths.
     // current_file may contain subdirectories (e.g., "lib/simple_udf.so")
     char target_path_buf[FN_REFLEN];
-    if (!fn_format(target_path_buf, current_file, expanded_path.c_str(), "",
+    if (!fn_format(target_path_buf, current_file, staging_path.c_str(), "",
                    MY_RELATIVE_PATH | MY_SAFE_PATH)) {
-      // fn_format returns NULL if path is too long (>512 bytes total or >256
+      // fn_format returns nullptr if path is too long (>512 bytes total or >256
       // bytes filename)
       villagesql_error("Path or filename too long for extraction: %s/%s",
-                       MYF(0), expanded_path.c_str(), current_file);
+                       MYF(0), staging_path.c_str(), current_file);
       extraction_error = true;
       break;
     }
     archive_entry_set_pathname(entry, target_path_buf);
 
     // Write header
-    r = archive_write_header(ext, entry);
+    r = archive_write_header(ext.get(), entry);
     if (r != ARCHIVE_OK) {
       villagesql_error("Failed to write header for '%s': %s", MYF(0),
-                       current_file, archive_error_string(ext));
+                       current_file, archive_error_string(ext.get()));
       extraction_error = true;
       break;
     }
@@ -622,61 +820,98 @@ bool expand_veb_to_directory(const std::string &name,
       size_t size;
       int64_t offset;
 
-      while ((r = archive_read_data_block(a, &buff, &size, &offset)) ==
+      while ((r = archive_read_data_block(a.get(), &buff, &size, &offset)) ==
              ARCHIVE_OK) {
-        r = archive_write_data_block(ext, buff, size, offset);
+        r = archive_write_data_block(ext.get(), buff, size, offset);
         if (r != ARCHIVE_OK) {
           villagesql_error("Failed to write data for '%s': %s", MYF(0),
-                           current_file, archive_error_string(ext));
+                           current_file, archive_error_string(ext.get()));
           extraction_error = true;
           break;
         }
       }
 
       if (extraction_error) break;
+
+      // Anything but EOF means the entry's data could not be read in full,
+      // e.g. a truncated VEB.
+      if (r != ARCHIVE_EOF) {
+        villagesql_error("Failed to read data for '%s': %s", MYF(0),
+                         current_file, archive_error_string(a.get()));
+        extraction_error = true;
+        break;
+      }
     }
 
     // Finish the entry
-    r = archive_write_finish_entry(ext);
+    r = archive_write_finish_entry(ext.get());
     if (r != ARCHIVE_OK) {
       villagesql_error("Failed to finish entry for '%s': %s", MYF(0),
-                       current_file, archive_error_string(ext));
+                       current_file, archive_error_string(ext.get()));
       extraction_error = true;
       break;
     }
   }
 
-  archive_read_free(a);
-  archive_write_free(ext);
+  // The header loop ends at EOF only once the whole archive has been read.
+  if (!extraction_error && r != ARCHIVE_EOF) {
+    villagesql_error("Failed to read VEB archive '%s': %s", MYF(0),
+                     veb_filename.c_str(), archive_error_string(a.get()));
+    extraction_error = true;
+  }
+
+  // Close both archives now. Closing the writer applies the deferred directory
+  // metadata, which has to land before the tree is synced and published.
+  a.reset();
+  ext.reset();
+
+  // Force the failure path with a fully staged tree on disk.
+  DBUG_EXECUTE_IF("villagesql_veb_fail_extraction", extraction_error = true;);
 
   if (extraction_error) {
     villagesql_error("VEB expansion failed for '%s'", MYF(0), name.c_str());
+    return true;
+  }
 
-    // Clean up partial expansion directory on failure
-    // This removes the SHA256 hash subdirectory and parent name directory if
-    // empty
-    if (!expanded_path.empty()) {
-      LogVSQL(INFORMATION_LEVEL, "Cleaning up failed expansion at: %s",
-              expanded_path.c_str());
-      std::error_code ec;
-      std::filesystem::remove_all(expanded_path, ec);
-      if (ec) {
-        LogVSQL(WARNING_LEVEL,
-                "Failed to clean up expansion directory: %s (error: %s)",
-                expanded_path.c_str(), ec.message().c_str());
-      }
+  // Extraction wrote everything through the page cache only; force it to stable
+  // storage before the tree becomes reachable under its final name, so the
+  // rename below can only ever publish a complete expansion.
+  sync_expanded_tree(staging_path, name_dir, base_path);
 
-      // Also try to remove parent directory (name dir) if it's now empty
-      // Get the parent by going up one level from expanded_path
-      char parent_dir[FN_REFLEN];
-      size_t parent_len = 0;
-      dirname_part(parent_dir, expanded_path.c_str(), &parent_len);
-      parent_dir[parent_len] = '\0';
-      if (parent_len > 0) {
-        rmdir(parent_dir);  // Ignore errors - might not be empty
-      }
+  // Publish the staged tree. Removing a stale expansion is safe at this point
+  // in a way it would not have been up front: a complete, durable replacement
+  // already exists, so the worst a crash in the gap can do is leave no
+  // {sha256} directory at all, which the next expansion rebuilds.
+  if (stale_expansion) {
+    // As above, discard remove_all's return. The rename below only needs the
+    // destination gone.
+    std::filesystem::remove_all(expanded_path, ec);
+    if (my_stat(expanded_path.c_str(), &dir_stat, MYF(0))) {
+      villagesql_error(
+          "Failed to replace stale expansion '%s': %s", MYF(0),
+          expanded_path.c_str(),
+          ec ? ec.message().c_str() : "still present after removal");
+      return true;
     }
+  }
 
+  if (my_rename(staging_path.c_str(), expanded_path.c_str(), MYF(0)) != 0) {
+    villagesql_error("Failed to publish expansion for '%s' as '%s'", MYF(0),
+                     name.c_str(), expanded_path.c_str());
+    return true;
+  }
+  discard_staging.release();
+
+  // The rename is durable only once the directory holding it is synced.
+  sync_directory(name_dir.c_str());
+
+  // This tree was just built from the VEB, so a .so still missing from it is
+  // one the VEB does not carry. Make that explicit so callers can then treat a
+  // successful expansion as holding a loadable .so.
+  std::string published_so = get_extension_so_path(name, sha256_hash);
+  if (published_so.empty() || !expanded_so_is_usable(published_so)) {
+    villagesql_error("VEB for '%s' contains no usable 'lib/%s.so'", MYF(0),
+                     name.c_str(), name.c_str());
     return true;
   }
 
@@ -695,6 +930,173 @@ bool expand_veb_to_directory(const std::string &name,
 // populated on failure and should not be used by callers.
 //
 // Caller must hold the victionary write lock.
+// Resolve the veb_version selector for an extension: prefer
+// {name}-{version}.veb if present, else fall back to {name}.veb.
+static std::string resolve_veb_version(const std::string &name,
+                                       const std::string &expected_version) {
+  if (veb_file_exists(name, expected_version)) {
+    return expected_version;
+  }
+  return "";
+}
+
+// Validate that the .veb bundle for a single extension is present and matches
+// the given metadata, without loading (dlopen'ing) it: the same
+// existence/version/sha256 bar load_installed_extensions() requires at startup.
+// Returns false when it matches; true on mismatch/error with a diagnostic in
+// *error_message. Diagnostic-area errors from the VEB helpers are suppressed.
+static bool extension_matches_on_disk(THD *thd, const std::string &name,
+                                      const std::string &expected_version,
+                                      const std::string &expected_sha256,
+                                      std::string *error_message) {
+  char msg[512];
+  auto fail = [&]() {
+    if (error_message != nullptr) *error_message = msg;
+    return true;
+  };
+
+  // load_veb_manifest (and other VEB helpers) may stash a condition onto the
+  // diagnostics area via villagesql_error. Push a scratch diagnostics area so
+  // any such condition is discarded when we pop; the caller surfaces its own
+  // error from *error_message. Same idiom as the precheck block below.
+  Diagnostics_area scratch_da(false);
+  thd->push_diagnostics_area(&scratch_da);
+
+  bool result = false;
+  std::string veb_version = resolve_veb_version(name, expected_version);
+  if (!veb_file_exists(name, veb_version)) {
+    snprintf(msg, sizeof(msg), "VEB file for extension '%s' not found",
+             name.c_str());
+    result = fail();
+  } else {
+    std::string actual_version = veb_version;
+    if (load_veb_manifest(name, actual_version)) {
+      snprintf(msg, sizeof(msg),
+               "Failed to load VEB manifest for extension '%s'", name.c_str());
+      result = fail();
+    } else if (actual_version != expected_version) {
+      snprintf(msg, sizeof(msg),
+               "Extension '%s' version mismatch: expected '%s', VEB manifest "
+               "has '%s'",
+               name.c_str(), expected_version.c_str(), actual_version.c_str());
+      result = fail();
+    } else {
+      std::string veb_path = get_veb_path(make_veb_filename(name, veb_version));
+      std::string actual_sha256;
+      if (veb_path.empty() || calculate_file_sha256(veb_path, actual_sha256)) {
+        snprintf(msg, sizeof(msg),
+                 "Failed to compute SHA256 for extension '%s'", name.c_str());
+        result = fail();
+      } else if (actual_sha256 != expected_sha256) {
+        snprintf(msg, sizeof(msg),
+                 "Extension '%s' VEB file has changed: expected SHA256 '%s', "
+                 "current VEB has '%s'",
+                 name.c_str(), expected_sha256.c_str(), actual_sha256.c_str());
+        result = fail();
+      }
+    }
+  }
+
+  thd->pop_diagnostics_area();
+  return result;
+}
+
+std::string serialize_installed_extensions() {
+  VictionaryClient &victionary = VictionaryClient::instance();
+  auto lock_guard = victionary.get_read_lock();
+
+  std::vector<const ExtensionEntry *> all =
+      victionary.extensions().get_all_committed();
+  if (all.empty()) return "";
+
+  const std::string server_version = GetBuildVersion().to_string();
+  const std::string schema_version = SchemaManager::get_version().to_string();
+
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> w(sb);
+
+  auto write_string = [&](const std::string &s) {
+    w.String(s.c_str(), static_cast<rapidjson::SizeType>(s.size()));
+  };
+
+  w.StartObject();
+  w.Key("format");
+  w.Int(CLONE_EXTENSION_PAYLOAD_FORMAT);
+  w.Key("server_version");
+  write_string(server_version);
+  w.Key("schema_version");
+  write_string(schema_version);
+  w.Key("extensions");
+  w.StartArray();
+  for (const ExtensionEntry *entry : all) {
+    if (entry == nullptr) continue;
+    w.StartObject();
+    w.Key("name");
+    write_string(entry->extension_name());
+    w.Key("version");
+    write_string(entry->extension_version);
+    w.Key("veb_sha256");
+    write_string(entry->veb_sha256);
+    w.EndObject();
+  }
+  w.EndArray();
+  w.EndObject();
+
+  return sb.GetString();
+}
+
+bool validate_cloned_extensions(THD *thd, const std::string &payload,
+                                std::string *error_message) {
+  auto fail = [&](const std::string &msg) {
+    if (error_message != nullptr) *error_message = msg;
+    return true;
+  };
+
+  // Empty payload: donor had no extensions (or is an older donor). Nothing to
+  // validate.
+  if (payload.empty()) return false;
+
+  rapidjson::Document doc;
+  doc.Parse(payload.c_str());
+  if (doc.HasParseError() || !doc.IsObject() || !doc.HasMember("extensions") ||
+      !doc["extensions"].IsArray()) {
+    return fail("Malformed clone extension payload");
+  }
+
+  // Record the donor's identity for diagnostics. We do not reject on version
+  // skew yet; the payload is self-describing so enforcement can be added later.
+  const int format = doc.HasMember("format") && doc["format"].IsInt()
+                         ? doc["format"].GetInt()
+                         : 0;
+  const char *server_version =
+      doc.HasMember("server_version") && doc["server_version"].IsString()
+          ? doc["server_version"].GetString()
+          : "";
+  const char *schema_version =
+      doc.HasMember("schema_version") && doc["schema_version"].IsString()
+          ? doc["schema_version"].GetString()
+          : "";
+  LogVSQL(INFORMATION_LEVEL,
+          "Validating clone donor extensions: payload format %d, donor server "
+          "version '%s', schema version '%s'",
+          format, server_version, schema_version);
+
+  for (const auto &item : doc["extensions"].GetArray()) {
+    if (!item.IsObject() || !item.HasMember("name") ||
+        !item.HasMember("version") || !item.HasMember("veb_sha256") ||
+        !item["name"].IsString() || !item["version"].IsString() ||
+        !item["veb_sha256"].IsString()) {
+      return fail("Malformed clone extension payload");
+    }
+    if (extension_matches_on_disk(
+            thd, item["name"].GetString(), item["version"].GetString(),
+            item["veb_sha256"].GetString(), error_message)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool load_one_extension(THD *thd, const std::string &extension_name,
                                const std::string &expected_version,
                                const std::string &sha256,
@@ -703,10 +1105,8 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
 
   // Validate extension: load manifest and check version matches.
   // Prefer {name}-{version}.veb if present; fall back to {name}.veb.
-  std::string veb_version;
-  if (veb_file_exists(extension_name, expected_version)) {
-    veb_version = expected_version;
-  }
+  std::string veb_version =
+      resolve_veb_version(extension_name, expected_version);
   std::string actual_version = veb_version;
   if (load_veb_manifest(extension_name, actual_version)) {
     LogVSQL(ERROR_LEVEL, "Failed to load VEB manifest for extension '%s'",
@@ -733,11 +1133,10 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
-  // Re-expand VEB if the .so is missing from the expansion cache.
-  MY_STAT so_stat;
-  if (!my_stat(so_path.c_str(), &so_stat, MYF(0))) {
+  // Re-expand the VEB if the expansion cache has no usable .so.
+  if (!expanded_so_is_usable(so_path)) {
     LogVSQL(INFORMATION_LEVEL,
-            "Extension '%s' .so not found at '%s', re-expanding from VEB",
+            "Extension '%s' has no usable .so at '%s', re-expanding from VEB",
             extension_name.c_str(), so_path.c_str());
     std::string expanded_path;
     std::string reexpand_sha256;
@@ -767,6 +1166,27 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
+  // Unload the .so if its registration is rejected. The pending-update
+  // rollback retries with the same `*registration`, so leaving it loaded would
+  // leak the handle with capabilities populated. kShutdown mirrors how
+  // load_vef_extension rolls back a failed startup load. The unload hook runs
+  // only if the load hook did, which is not the case at startup.
+  //
+  // Registration below marks victionary descriptors that point into the .so,
+  // and a failure part way leaves some of those marks uncommitted. Discard
+  // them before unloading. Every extension loads in the same startup
+  // transaction, so only the marks made after this savepoint are discarded.
+  const VictionaryClient::Savepoint savepoint =
+      victionary.savepoint_all_tables(thd);
+  auto unload_guard = create_scope_guard([thd, registration, &victionary,
+                                          &savepoint]() {
+    victionary.rollback_all_tables_to(thd, savepoint);
+    unload_vef_extension(
+        {.reason = villagesql::services::UnloadReason::kShutdown, .thd = thd},
+        *registration);
+    *registration = ExtensionRegistration{};
+  });
+
   std::string reg_error;
   std::optional<ValidatedRegistration> validated = parse_extension_registration(
       *registration, extension_name, expected_version, reg_error);
@@ -793,8 +1213,8 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
-  // Build the descriptor's registration by copy: the caller keeps its own
-  // copy via `*registration` so a future rollback path can unload it.
+  // Build the descriptor's registration by copy: `*registration` keeps its own
+  // copy so it is unloaded by the caller on success or unload_guard on failure.
   ExtensionRegistration desc_reg = *registration;
   if (victionary.extension_descriptors().MarkForInsertion(
           *thd, ExtensionDescriptor(
@@ -805,6 +1225,7 @@ static bool load_one_extension(THD *thd, const std::string &extension_name,
     return true;
   }
 
+  unload_guard.release();
   LogVSQL(INFORMATION_LEVEL,
           "Successfully registered VEF extension '%s' from '%s'",
           extension_name.c_str(), so_path.c_str());
@@ -935,11 +1356,12 @@ bool load_installed_extensions(THD *thd) {
         // parent DA is never touched. This is MySQL's designed-for-purpose
         // mechanism for exactly this pattern.
         //
-        // TODO(villagesql-ga): consolidate internal helpers on structured
+        // TODO(villagesql-general): consolidate internal helpers on structured
         // error-string out-params and translate to villagesql_error only at
         // the SQL boundary (ALTER call site). That would remove the need
         // for this scratch DA entirely and align the internal call surface
-        // with the subprocess-precheck story.
+        // with the subprocess-precheck story. Remove the NOTE in
+        // sql_extension_update_precheck.cc mentioning this TODO.
         //
         // TODO(villagesql): load_installed_extensions has grown large;
         // break the per-extension work into a purpose-driven helper.
@@ -1159,7 +1581,7 @@ bool load_installed_extensions(THD *thd) {
           const std::string &from_version = pending.current_version;
           const std::string &to_version = pending.target_version;
 
-          // TODO(villagesql-ga): the set of extension-owned systables
+          // TODO(villagesql-general): the set of extension-owned systables
           // (columns, sp_params, custom_indexes, ...) is enumerated by
           // name at every caller that operates on an extension's rows:
           // UNINSTALL EXTENSION (delete sweep + use-count check),
@@ -1267,6 +1689,43 @@ bool load_installed_extensions(THD *thd) {
   return false;
 }
 
+// Remove every expansion staging directory inside {cache}/{name}/. Returns
+// how many were removed.
+static int remove_staging_dirs(const std::string &name_dir_path) {
+  DIR *name_dir = opendir(name_dir_path.c_str());
+  if (!name_dir) {
+    LogVSQL(WARNING_LEVEL, "Failed to open expansion directory: %s",
+            name_dir_path.c_str());
+    return 0;
+  }
+
+  int removed_count = 0;
+  struct dirent *entry;
+  while ((entry = readdir(name_dir)) != nullptr) {
+    std::string entry_name = entry->d_name;
+    if (!is_staging_dir_name(entry_name)) continue;
+
+    char staging_path_buf[FN_REFLEN];
+    fn_format(staging_path_buf, entry_name.c_str(), name_dir_path.c_str(), "",
+              0);
+
+    LogVSQL(INFORMATION_LEVEL, "Removing stale expansion staging directory: %s",
+            staging_path_buf);
+    std::error_code ec;
+    std::filesystem::remove_all(staging_path_buf, ec);
+    if (!ec) {
+      removed_count++;
+    } else {
+      LogVSQL(WARNING_LEVEL,
+              "Failed to remove staging directory: %s (error: %s)",
+              staging_path_buf, ec.message().c_str());
+    }
+  }
+
+  closedir(name_dir);
+  return removed_count;
+}
+
 void cleanup_orphaned_expansion_directories(
     const std::set<std::string> &installed_extensions) {
   LogVSQL(INFORMATION_LEVEL, "Cleaning up orphaned expansion directories");
@@ -1326,7 +1785,12 @@ void cleanup_orphaned_expansion_directories(
                 "Failed to remove orphaned directory: %s (error: %s)",
                 name_dir_path.c_str(), ec.message().c_str());
       }
+      continue;
     }
+
+    // The extension is installed, so its {name}/ directory stays. Sweep any
+    // staging directories inside it.
+    removed_count += remove_staging_dirs(name_dir_path);
   }
 
   closedir(expanded_dir);
@@ -1361,6 +1825,154 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
+// Contents of one function descriptor. Reads only protocol-1 fields, so it is
+// safe for a descriptor declaring any protocol version. `index` names the slot
+// for descriptors that have no usable name of their own.
+static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
+                            std::string &error_message) {
+  if (f->name == nullptr) {
+    error_message =
+        "invalid func descriptor: no name at index " + std::to_string(index);
+    return true;
+  }
+  if (f->vdf == nullptr) {
+    error_message =
+        std::string("VDF '") + f->name + "' has no vdf function pointer";
+    return true;
+  }
+  if (f->signature == nullptr) {
+    error_message = std::string("VDF '") + f->name + "' has no signature";
+    return true;
+  }
+
+  const vef_signature_t *sig = f->signature;
+  // params is nullptr for a varargs signature by definition; the count is a
+  // sentinel there, not a length, so nothing below it may be indexed.
+  if (sig->param_count != VEF_PARAM_VARARGS) {
+    if (sig->param_count > 0 && sig->params == nullptr) {
+      error_message = std::string("VDF '") + f->name + "' declares " +
+                      std::to_string(sig->param_count) +
+                      " params but the params array is a nullptr";
+      return true;
+    }
+    for (unsigned int i = 0; i < sig->param_count; i++) {
+      if (sig->params[i].id == VEF_TYPE_CUSTOM &&
+          sig->params[i].custom_type == nullptr) {
+        error_message = std::string("VDF '") + f->name + "' param " +
+                        std::to_string(i + 1) +
+                        " is a CUSTOM type but names no type";
+        return true;
+      }
+    }
+  }
+  if (sig->return_type.id == VEF_TYPE_CUSTOM &&
+      sig->return_type.custom_type == nullptr) {
+    error_message = std::string("VDF '") + f->name +
+                    "' returns a CUSTOM type but names no type";
+    return true;
+  }
+  return false;
+}
+
+// Contents of one type descriptor, the counterpart to check_func_desc. Covers
+// only what every protocol requires of a v1 field, which is what lets this run
+// without knowing the negotiated protocol: a name to be addressed by, and a
+// decode buffer size.
+//
+// Deliberately unexamined: persisted_length and the presence of
+// encode/decode/compare. They became protocol-dependent, so they stay with the
+// per-protocol builders that can read those fields.
+static bool check_type_desc(const vef_type_desc_t *t, unsigned int index,
+                            std::string &error_message) {
+  if (t->name == nullptr) {
+    error_message =
+        "invalid type descriptor: no name at index " + std::to_string(index);
+    return true;
+  }
+  if (t->max_decode_buffer_length <= 0) {
+    error_message = std::string("type '") + t->name +
+                    "' declares max_decode_buffer_length " +
+                    std::to_string(t->max_decode_buffer_length) +
+                    " (must be > 0)";
+    return true;
+  }
+  return false;
+}
+
+bool check_vef_registration(const vef_registration_t *registration,
+                            std::string &error_message) {
+  if (registration == nullptr) {
+    error_message = "invalid registration: nullptr";
+    return true;
+  }
+  // The SDK rejects a half-registered pair at compile time; an extension that
+  // arrives with one anyway was not built by it.
+  if (registration->protocol >= VEF_PROTOCOL_4 &&
+      (registration->on_init == nullptr) !=
+          (registration->on_deinit == nullptr)) {
+    error_message =
+        registration->on_init == nullptr
+            ? "extension registers an on_deinit hook without an on_init"
+            : "extension registers an on_init hook without an on_deinit";
+    return true;
+  }
+  // Check registration function members.
+  if (registration->func_count > 0 && registration->funcs == nullptr) {
+    error_message =
+        "invalid registration: " + std::to_string(registration->func_count) +
+        " funcs but the funcs array is a nullptr";
+    return true;
+  }
+  for (unsigned int i = 0; i < registration->func_count; i++) {
+    if (registration->funcs[i] == nullptr) {
+      error_message =
+          "invalid registration: func descriptor nullptr at index " +
+          std::to_string(i);
+      return true;
+    }
+    // The SDK stamps every function descriptor with the registration's own
+    // protocol, so a lower one means the .so did not come from a supported
+    // path: extensions are built against the C++ API, not this ABI header.
+    // Consumers gate the post-v1 fields on the descriptor's protocol, so an
+    // inconsistent pair would have them reading past what the extension
+    // allocated. Establishing it here lets those consumers gate on the
+    // negotiated protocol alone.
+    //
+    // Type descriptors are deliberately exempt: the type builder computes
+    // their protocol per feature, so a type declaring less than its
+    // registration is the normal case.
+    if (should_assert_if_false(registration->funcs[i]->protocol >=
+                               registration->protocol)) {
+      error_message =
+          "invalid registration: func descriptor at index " +
+          std::to_string(i) + " declares protocol " +
+          std::to_string(
+              static_cast<unsigned>(registration->funcs[i]->protocol)) +
+          ", below the registration's " +
+          std::to_string(static_cast<unsigned>(registration->protocol));
+      return true;
+    }
+    if (check_func_desc(registration->funcs[i], i, error_message)) return true;
+  }
+  // Check registration type members.
+  if (registration->type_count > 0 && registration->types == nullptr) {
+    error_message =
+        "invalid registration: " + std::to_string(registration->type_count) +
+        " types but the types array is a nullptr";
+    return true;
+  }
+  for (unsigned int i = 0; i < registration->type_count; i++) {
+    if (registration->types[i] == nullptr) {
+      error_message =
+          "invalid registration: type descriptor nullptr at index " +
+          std::to_string(i);
+      return true;
+    }
+    if (check_type_desc(registration->types[i], i, error_message)) return true;
+  }
+  return false;
+}
+
 bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
                         ExtensionRegistration &registration,
                         std::string &error_message) {
@@ -1371,6 +1983,12 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
   registration.registration = nullptr;
   registration.unregister_func = nullptr;
 
+  // Callers ought to have checked this. Log or assert if not.
+  if (should_assert_if_false(expanded_so_is_usable(so_path))) {
+    error_message = "so file is missing or empty: " + so_path;
+    return true;
+  }
+
   // RTLD_LOCAL ensures each extension's symbols are isolated. Without it,
   // macOS defaults to RTLD_GLOBAL, allowing the dynamic linker to coalesce
   // weak symbols (e.g. C++ template instantiations) across extensions, causing
@@ -1380,18 +1998,18 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
     error_message = "failed to load so: " + format_dlerror();
     return true;
   }
+  // Released, along with unregister_guard, once the registration is accepted.
+  auto dlclose_guard = create_scope_guard([handle]() { dlclose(handle); });
 
   auto vef_register = lookup_symbol<vef_register_func_t>(
       handle, VEF_REGISTER_FUNC_NAME, error_message);
   if (vef_register == nullptr) {
-    dlclose(handle);
     return true;
   }
 
   auto vef_unregister = lookup_symbol<vef_unregister_func_t>(
       handle, VEF_UNREGISTER_FUNC_NAME, error_message);
   if (vef_unregister == nullptr) {
-    dlclose(handle);
     return true;
   }
 
@@ -1402,20 +2020,24 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {
-    error_message = "vef_register returned NULL";
-    dlclose(handle);
+    error_message = "vef_register returned nullptr";
     return true;
   }
 
   const vef_protocol_t negotiated_protocol =
       std::min(max_protocol, reg->protocol);
 
+  // Declared after dlclose_guard, so it runs first: the extension's code must
+  // still be mapped when vef_unregister is called.
+  auto unregister_guard =
+      create_scope_guard([vef_unregister, reg, negotiated_protocol]() {
+        vef_unregister_arg_t unregister_arg = {negotiated_protocol};
+        vef_unregister(&unregister_arg, reg);
+      });
+
   if (reg->error_msg != nullptr) {
     error_message =
         std::string("vef_register returned an error: ") + reg->error_msg;
-    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
-    vef_unregister(&unregister_arg, reg);
-    dlclose(handle);
     return true;
   }
 
@@ -1426,20 +2048,27 @@ bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
     error_message = "extension uses obsolete unstable protocol version " +
                     std::to_string(reg->protocol) +
                     " (current: " + std::to_string(max_protocol) + ")";
-    vef_unregister_arg_t unregister_arg = {negotiated_protocol};
-    vef_unregister(&unregister_arg, reg);
-    dlclose(handle);
     return true;
   }
 
-  // TODO(villagesql-beta): Add more validation of the returned registration
-  // object (e.g. func/type descriptors, protocol version, null pointers).
+  // Establish the invariants every consumer of the registration relies on:
+  // funcs[] and types[] hold exactly count non-NULL descriptors, each function
+  // descriptor is callable and describable, and each type descriptor is named
+  // and decodable. What stays with the per-protocol builders is the
+  // protocol-dependent half; see check_vef_registration().
+  if (check_vef_registration(reg, error_message)) {
+    return true;
+  }
 
   LogVSQL(INFORMATION_LEVEL,
           "Successfully loaded VEF extension '%s' (protocol %d, %d funcs, %d "
           "types)",
           so_path.c_str(), negotiated_protocol, reg->func_count,
           reg->type_count);
+
+  // From here close_vef_extension() owns both cleanups.
+  unregister_guard.release();
+  dlclose_guard.release();
 
   registration.registration = reg;
   registration.negotiated_protocol = negotiated_protocol;
@@ -1462,6 +2091,43 @@ void close_vef_extension(const ExtensionRegistration &registration) {
   }
 
   dlclose(registration.dlhandle);
+}
+
+namespace {
+
+// Registrations the server has taken through the load-hook point, and which
+// are therefore owed an unload hook. Tracking it is what keeps the two hooks
+// symmetric: an extension the server rejected, or one whose startup aborted
+// before run_extension_init_hooks(), must not see an unload it was never told
+// about.
+std::mutex g_load_hook_mutex;
+std::unordered_set<const vef_registration_t *> g_load_hook_done;
+
+// True when the registration carries the hook fields at all. An extension
+// built against an older SDK has no such member for us to read, so the
+// protocol gates the field rather than the value.
+bool has_lifecycle_hooks(const vef_registration_t *reg) {
+  return reg != nullptr && reg->protocol >= VEF_PROTOCOL_4;
+}
+
+}  // namespace
+
+void run_extension_on_init(const vef_registration_t *reg) {
+  if (!has_lifecycle_hooks(reg)) return;
+  {
+    std::lock_guard<std::mutex> lock(g_load_hook_mutex);
+    if (!g_load_hook_done.insert(reg).second) return;
+  }
+  if (reg->on_init != nullptr) reg->on_init();
+}
+
+void run_extension_on_deinit(const vef_registration_t *reg) {
+  if (!has_lifecycle_hooks(reg)) return;
+  {
+    std::lock_guard<std::mutex> lock(g_load_hook_mutex);
+    if (g_load_hook_done.erase(reg) == 0) return;
+  }
+  if (reg->on_deinit != nullptr) reg->on_deinit();
 }
 
 bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
@@ -1491,6 +2157,17 @@ bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
     registration.unregister_func = nullptr;
     return true;
   }
+
+  // Capabilities are live from here, so the extension's own load hook can use
+  // them. Nothing has called into the extension's functions yet.
+  //
+  // Startup is the exception: extensions load from init_server_components(),
+  // and the server does not apply persisted system-variable values until well
+  // after that, so a hook run here would read declared defaults. The startup
+  // path runs the hooks itself once that pass is done (see
+  // run_extension_init_hooks() in villagesql/sql/initialize.h).
+  if (ctx.reason != villagesql::services::LoadReason::kStartup)
+    run_extension_on_init(registration.registration);
   return false;
 }
 
@@ -1501,6 +2178,9 @@ void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
   }
 
   if (registration.registration != nullptr) {
+    // Mirror of load: the unload hook runs while the capabilities it was
+    // handed in on_init are still populated.
+    run_extension_on_deinit(registration.registration);
     villagesql::services::depopulate_capabilities(ctx,
                                                   registration.registration);
   }

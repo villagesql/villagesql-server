@@ -104,6 +104,7 @@
 #include "strxmov.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
+#include "villagesql/services/capability_registry.h"
 
 static constexpr const size_t MAX_SYS_VAR_LENGTH{32};
 
@@ -1838,6 +1839,7 @@ bool PT_custom_index_type::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_extension = m_extension;
   // TODO(villagesql-indexing): Execute extended index type.
   DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
+  if (vsql_allow_preview_extensions) return false;
   villagesql_error("Extended Index feature not yet implemented", MYF(0));
   return true;
 }
@@ -1846,6 +1848,7 @@ bool PT_index_with_options::do_contextualize(Table_ddl_parse_context *pc) {
   pc->key_create_info->custom_index_params = m_params;
   // TODO(villagesql-indexing): Execute extended index WITH parameters.
   DBUG_EXECUTE_IF("villagesql_custom_index_proceed", return false;);
+  if (vsql_allow_preview_extensions) return false;
   villagesql_error("Extended Index feature not yet implemented", MYF(0));
   return true;
 }

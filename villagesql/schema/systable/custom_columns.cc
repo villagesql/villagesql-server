@@ -80,6 +80,10 @@ bool TableTraits<ColumnEntry>::write_to_table(TABLE &table,
                   &my_charset_utf8mb4_bin);
 
   // type_parameters (field 6)
+  // TODO(villagesql-production): check store() returns, here and in the
+  // sibling systable TableTraits. It matters most for the JSON columns:
+  // Field_json::store raises ER_INVALID_JSON_TEXT on malformed input and we
+  // go on to write the row anyway.
   field[6]->store(entry.type_parameters.c_str(), entry.type_parameters.length(),
                   &my_charset_utf8mb4_bin);
 
@@ -98,42 +102,23 @@ bool TableTraits<ColumnEntry>::write_to_table(TABLE &table,
 
 bool TableTraits<ColumnEntry>::update_in_table(TABLE &table,
                                                const ColumnEntry &entry,
-                                               const std::string &old_key) {
-  // Determine which key to use for lookup
-  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
-
-  // Parse the lookup key to get db, table, column names
-  // Key format: "db.table.column"
-  size_t first_dot = lookup_key.find('.');
-  size_t second_dot = lookup_key.find('.', first_dot + 1);
-  if (should_assert_if_true(first_dot == std::string::npos ||
-                            second_dot == std::string::npos)) {
-    LogVSQL(ERROR_LEVEL, "Invalid key format for update: %s",
-            lookup_key.c_str());
-    return true;
-  }
-
-  std::string old_db = lookup_key.substr(0, first_dot);
-  std::string old_table =
-      lookup_key.substr(first_dot + 1, second_dot - first_dot - 1);
-  std::string old_column = lookup_key.substr(second_dot + 1);
+                                               const ColumnKey &old_key) {
+  const ColumnKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   // Set up the key fields for index lookup
   Field **field = table.field;
 
-  field[0]->store(old_db.c_str(), old_db.length(), &my_charset_utf8mb4_bin);
-  field[1]->store(old_table.c_str(), old_table.length(),
+  field[0]->store(lookup_key.db().c_str(), lookup_key.db().length(),
                   &my_charset_utf8mb4_bin);
-  field[2]->store(old_column.c_str(), old_column.length(),
+  field[1]->store(lookup_key.table().c_str(), lookup_key.table().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(lookup_key.column().c_str(), lookup_key.column().length(),
                   &my_charset_utf8mb4_bin);
 
   // Build the index key from the populated fields
   uchar key_buf[MAX_KEY_LENGTH];
   key_copy(key_buf, table.record[0], table.key_info,
            table.key_info->key_length);
-
-  // Save old record for update
-  store_record(&table, record[1]);
 
   // Find the row using index read
   int error = table.file->ha_index_init(0, false);
@@ -145,8 +130,7 @@ bool TableTraits<ColumnEntry>::update_in_table(TABLE &table,
   auto index_end_guard =
       create_scope_guard([&table]() { table.file->ha_index_end(); });
 
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  error = read_row_for_update(table, key_buf);
   if (error) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for update: error %d", error);
     return true;

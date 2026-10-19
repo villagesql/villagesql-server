@@ -40,6 +40,11 @@ struct VefAuthInfo {
   // advertise/expect comes from the method's config instead of from
   // client_plugin_name(plugin). Set by the seam before invoking the handler.
   const char *vef_client_auth_plugin;
+  // The method's accepts_client_plugin callback (or null if it declared none),
+  // stashed alongside vef_client_auth_plugin so the handshake negotiation can
+  // ask the method whether the client's offered plugin is acceptable as-is
+  // without a registry lookup. Set by the seam before invoking the handler.
+  bool (*vef_accepts_client_plugin)(const char *offered);
   villagesql::services::VefAuthState *vef_auth_state;
   villagesql::services::VefProvisionRequest *vef_provision_request;
 };

@@ -1,0 +1,33 @@
+# UNIQUE key on COMPLEX2, to ensure that the comparison function is being used,
+# not just comparing the raw data. COMPLEX2 stores -0 as is but compares it
+# equal to 0, so (-0,0) conflicts with (0,0).
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX2,
+    cnt INT NOT NULL DEFAULT 1,
+    UNIQUE KEY uk_val (val)
+);
+
+INSERT INTO t1 (id, val) VALUES (1, '(0,0)'), (2, '(1,-0)');
+
+--error ER_DUP_ENTRY
+INSERT INTO t1 (id, val) VALUES (3, '(-0,0)');
+
+--error ER_DUP_ENTRY
+INSERT INTO t1 (id, val) VALUES (4, '(1,0)');
+
+INSERT INTO t1 (id, val) VALUES (5, '(-0,-0)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+SELECT ROW_COUNT();
+
+--enable_info
+INSERT IGNORE INTO t1 (id, val) VALUES (6, '(1,0)');
+--disable_info
+
+# Stored bytes are unchanged: row 1 still shows (0,0) and row 2 (1,-0).
+SELECT * FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -57,6 +57,13 @@ struct ValidatedPreviewCapabilities {
 // column storage interfaces into any types that register them.
 // No THD, no VictionaryClient — purely operates on the ExtensionRegistration.
 // Returns nullopt on error; error_out is set to a descriptive message.
+//
+// PRECONDITION: ext_reg came from open_vef_extension(), which has already
+// rejected mismatched counts, NULL descriptors, unnamed descriptors and
+// structurally incomplete ones. This function does not re-check them; it
+// validates what needs server context instead -- declared storage sizes
+// against what a column can back, per-protocol descriptor rules, and the
+// capability payloads.
 std::optional<ValidatedRegistration> parse_extension_registration(
     const ExtensionRegistration &ext_reg, const std::string &extension_name,
     const std::string &extension_version, std::string &error_out);

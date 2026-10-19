@@ -1,0 +1,56 @@
+# Custom type table DDL is not supported under LOCK TABLES.
+#
+# Custom type operations write to the villagesql system tables, which are not in
+# the user's locked-tables list, so each such DDL rejects up front with a clear
+# message and leaves the table untouched.
+
+--source include/villagesql/install_complex_extension.inc
+
+# Case 1: ALTER TABLE ADD a custom column under LOCK TABLES.
+CREATE TABLE t1 (c1 INT);
+LOCK TABLES t1 WRITE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ADD COLUMN c2 COMPLEX;
+# The rejected ALTER left the table untouched: c2 was never created.
+SHOW COLUMNS FROM t1;
+UNLOCK TABLES;
+DROP TABLE t1;
+
+# Case 2: ALTER TABLE DROP a custom column under LOCK TABLES.
+CREATE TABLE t2 (c1 INT, c2 COMPLEX);
+LOCK TABLES t2 WRITE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t2 DROP COLUMN c2;
+# The custom column is still present.
+SHOW COLUMNS FROM t2;
+UNLOCK TABLES;
+DROP TABLE t2;
+
+# Case 3: ALTER TABLE MODIFY that touches a custom column under LOCK TABLES.
+# Widening the custom column re-stages its victionary entry, which trips the
+# gate.
+CREATE TABLE t3 (c1 INT, c2 COMPLEX);
+LOCK TABLES t3 WRITE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t3 MODIFY COLUMN c2 COMPLEX NOT NULL;
+# The custom column is unchanged (still nullable).
+SHOW COLUMNS FROM t3;
+UNLOCK TABLES;
+DROP TABLE t3;
+
+# Control case: DDL that does not touch a custom type is unaffected by the gate
+# and works normally under LOCK TABLES.
+CREATE TABLE t4 (c1 INT);
+LOCK TABLES t4 WRITE;
+ALTER TABLE t4 ADD COLUMN c2 VARCHAR(20);
+ALTER TABLE t4 MODIFY COLUMN c2 VARCHAR(40);
+ALTER TABLE t4 DROP COLUMN c2;
+SHOW COLUMNS FROM t4;
+UNLOCK TABLES;
+DROP TABLE t4;
+
+# TODO(villagesql-general): Extend this suite with CREATE TABLE (custom column),
+# ALTER RENAME, and custom index cases under LOCK TABLES. Those paths also funnel
+# through lock_and_apply() and should reject the same way.
+
+--source include/villagesql/uninstall_complex_extension.inc

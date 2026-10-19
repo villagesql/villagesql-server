@@ -88,8 +88,19 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     // Use entry's key() method
     std::string key_str = entry.key().str();
 
-    // Add to committed map
-    m_committed[key_str] = std::make_shared<EntryType>(std::move(entry));
+    // Duplicate canonical keys are a datadir fault, not a code bug, so
+    // fail without asserting. Keep scanning so one failed startup reports
+    // every conflict.
+    auto inserted = m_committed.emplace(
+        key_str, std::make_shared<EntryType>(std::move(entry)));
+    if (!inserted.second) {
+      LogVSQL(ERROR_LEVEL,
+              "Duplicate canonical key '%s' while loading %s.%s; "
+              "remove or rename one of the conflicting rows",
+              key_str.c_str(), schema_name, table_name);
+      error = true;
+      continue;
+    }
     loaded_count++;
   }
 
@@ -129,6 +140,19 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
     return true;
   }
 
+  // find_open_table() only proves the table is open, not that this THD holds a
+  // thr_lock on it. Writing through an unlocked handler trips an assertion in
+  // handler::ha_index_init() on a debug build, and corrupts InnoDB state on a
+  // release build, so reject it here instead. This happens when a caller opens
+  // its own system table and then flushes every map, while a different
+  // subsystem has already staged entries for a table it left for
+  // Metadata_modifier::store() to lock.
+  if (should_assert_if_true(sys_table->file->get_lock_type() == F_UNLCK)) {
+    LogVSQL(ERROR_LEVEL, "%s.%s is open but not locked for writing",
+            schema_name, table_name);
+    return true;
+  }
+
   // Enable writes to all fields.
   sys_table->use_all_columns();
 
@@ -152,7 +176,7 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
       case OperationType::UPDATE:
         // Use TableTraits to update the row
         if (should_assert_if_true(TableTraits<EntryType>::update_in_table(
-                *sys_table, *op->entry, op->key.str()))) {
+                *sys_table, *op->entry, op->key))) {
           LogVSQL(ERROR_LEVEL, "Error updating %s.%s from key %s to %s",
                   schema_name, table_name, op->entry->key().str().c_str(),
                   op->key.str().c_str());

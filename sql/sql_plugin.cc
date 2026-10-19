@@ -1,4 +1,5 @@
 /* Copyright (c) 2005, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2033,6 +2034,11 @@ error:
   return true;
 }
 
+void cleanup_global_system_variables() {
+  cleanup_variables(nullptr, &global_system_variables);
+  cleanup_variables(nullptr, &max_system_variables);
+}
+
 /*
   Deinitialize and unload all the loaded plugins.
   Note: During valgrind testing, the shared objects (.dll/.so)
@@ -2141,12 +2147,6 @@ void plugin_shutdown() {
       if (plugins[i]->state & PLUGIN_IS_UNINITIALIZED) plugin_del(plugins[i]);
     }
 
-    /*
-      Now we can deallocate all memory.
-    */
-
-    cleanup_variables(nullptr, &global_system_variables);
-    cleanup_variables(nullptr, &max_system_variables);
     mysql_mutex_unlock(&LOCK_plugin);
     mysql_rwlock_unlock(&LOCK_system_variables_hash);
     mysql_mutex_unlock(&LOCK_plugin_delete);
@@ -2775,8 +2775,10 @@ bool plugin_foreach_with_mask(THD *thd, plugin_foreach_func *func, int type,
   returns null for non thd-local variables.
   Requires that a write lock is obtained on LOCK_system_variables_hash
 */
-static st_bookmark *register_var(const char *plugin, const char *name,
-                                 int flags) {
+// TODO(villagesql-rebase): un-static'd (was `static`) so the component sysvar
+// service can allocate THD-local bookmarks; MySQL 9.0+ exports this from
+// sql_plugin_var.cc. Drop this backport on rebase onto a 9.x base.
+st_bookmark *register_var(const char *plugin, const char *name, int flags) {
   const size_t length = strlen(plugin) + strlen(name) + 3;
   size_t size = 0, offset, new_size;
   st_bookmark *result;
@@ -2977,31 +2979,34 @@ void alloc_and_copy_thd_dynamic_variables(THD *thd, bool global_lock) {
   construct_options to their respective types.
 */
 
-static bool *mysql_sys_var_bool(THD *thd, int offset) {
+// TODO(villagesql-rebase): these resolvers were `static`; un-static'd so the
+// component sysvar service can wire THD-local variable resolution. MySQL 9.0+
+// exports them from sql_plugin_var.cc. Drop this backport on rebase to 9.x.
+bool *mysql_sys_var_bool(THD *thd, int offset) {
   return (bool *)intern_sys_var_ptr(thd, offset, true);
 }
 
-static int *mysql_sys_var_int(THD *thd, int offset) {
+int *mysql_sys_var_int(THD *thd, int offset) {
   return (int *)intern_sys_var_ptr(thd, offset, true);
 }
 
-static unsigned int *mysql_sys_var_uint(THD *thd, int offset) {
+unsigned int *mysql_sys_var_uint(THD *thd, int offset) {
   return (unsigned int *)intern_sys_var_ptr(thd, offset, true);
 }
 
-static unsigned long *mysql_sys_var_ulong(THD *thd, int offset) {
+unsigned long *mysql_sys_var_ulong(THD *thd, int offset) {
   return (unsigned long *)intern_sys_var_ptr(thd, offset, true);
 }
 
-static unsigned long long *mysql_sys_var_ulonglong(THD *thd, int offset) {
+unsigned long long *mysql_sys_var_ulonglong(THD *thd, int offset) {
   return (unsigned long long *)intern_sys_var_ptr(thd, offset, true);
 }
 
-static char **mysql_sys_var_str(THD *thd, int offset) {
+char **mysql_sys_var_str(THD *thd, int offset) {
   return (char **)intern_sys_var_ptr(thd, offset, true);
 }
 
-static double *mysql_sys_var_double(THD *thd, int offset) {
+double *mysql_sys_var_double(THD *thd, int offset) {
   return (double *)intern_sys_var_ptr(thd, offset, true);
 }
 

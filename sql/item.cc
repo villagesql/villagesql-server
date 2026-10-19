@@ -3621,8 +3621,10 @@ void Item_string::print(const THD *, String *str,
     String decoded;
     if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
                                           &decoded)) {
-      // TODO(villagesql-beta): Should we print a placeholder in case of error?
       str->append(decoded);
+    } else {
+      //  TODO(villagesql-general): Make this error observable.
+      str->append("<error decoding value>");
     }
     str->append('\'');
     return;
@@ -7046,12 +7048,20 @@ type_conversion_status Item::save_in_field_inner(Field *field,
 
     // For custom types, encode the string value before storing
     if (!has_type_context() && field->has_type_context()) {
-      bool is_valid = false;
+      villagesql::EncodeStatus status = villagesql::EncodeStatus::kBadValue;
       String *encoded =
-          villagesql::EncodeStringForField(field, *result, is_valid);
+          villagesql::EncodeStringForField(field, *result, status);
       if (encoded == nullptr) {
         str_value.set_quick(nullptr, 0, cs);
-        return is_valid ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+        switch (status) {
+          case villagesql::EncodeStatus::kNull:
+            return set_field_to_null_with_conversions(field, no_conversions);
+          case villagesql::EncodeStatus::kOom:
+            return TYPE_ERR_OOM;
+          case villagesql::EncodeStatus::kErrorRaised:
+          case villagesql::EncodeStatus::kBadValue:
+            return TYPE_ERR_BAD_VALUE;
+        }
       }
       result = encoded;
       cs = &my_charset_bin;
@@ -7088,7 +7098,8 @@ type_conversion_status Item::save_in_field_inner(Field *field,
   return field->store(nr, unsigned_flag);
 }
 
-type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
+type_conversion_status Item_string::save_in_field_inner(Field *field,
+                                                        bool no_conversions) {
   assert(fixed);
   if (!has_type_context() && field->has_type_context()) {
     // Treat this Item as if it were a custom type.
@@ -7096,18 +7107,26 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
     this->set_type_context(tc);
 
     // Encode str_value into a new representation, based on the type.
-    bool is_oom = false;
+    villagesql::EncodeStatus status = villagesql::EncodeStatus::kBadValue;
     String *encoded =
-        villagesql::EncodeStringForField(field, str_value, is_oom);
+        villagesql::EncodeStringForField(field, str_value, status);
     if (encoded == nullptr) {
-      return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+      switch (status) {
+        case villagesql::EncodeStatus::kNull:
+          return set_field_to_null_with_conversions(field, no_conversions);
+        case villagesql::EncodeStatus::kOom:
+          return TYPE_ERR_OOM;
+        case villagesql::EncodeStatus::kErrorRaised:
+        case villagesql::EncodeStatus::kBadValue:
+          return TYPE_ERR_BAD_VALUE;
+      }
     }
 
-    // Now re-cache the new version.
-    // TODO(villagesql-beta): check on the collation settings.
+    // Now re-cache the new version. The repertoire must match the encoded
+    // bytes, not the original literal.
     fixed = false;
     init(encoded->ptr(), encoded->length(), &my_charset_bin,
-         collation.derivation, collation.repertoire);
+         collation.derivation, my_charset_repertoire(&my_charset_bin));
   }
   String *result = val_str(&str_value);
   return save_str_value_in_field(field, result);
@@ -8968,6 +8987,55 @@ bool Item_view_ref::fix_fields(THD *thd, Item **reference) {
     first_inner_table = cached_table->any_outer_leaf_table();
   }
   return false;
+}
+
+/**
+  Return the set of tables this view column logically depends on.
+
+  For a view/derived-table column that has been merged, the
+  underlying expression may itself be another view reference or
+  an arbitrary expression. In most cases, the dependency set is
+  simply the `used_tables()` of the referenced expression
+
+  There are two important refinements:
+
+  - If the view column (or its underlying field) is an outer
+    reference, we report OUTER_REF_TABLE_BIT so the optimizer can
+    treat it as referring to an outer query block.
+
+  - If the referenced expression is constant for the duration of
+    execution but the view/derived table is on the inner side of an
+    outer join (indicated by `first_inner_table`), the value may
+    still depend on whether the inner table has been null-complemented
+    (via `has_null_row()`). In this case we ensure the inner table’s
+    map is included, so the expression is not treated as an
+    unconditional constant during optimization.
+*/
+table_map Item_view_ref::used_tables() const {
+  // If this view column itself is an outer reference, report it as such.
+  if (depended_from != nullptr) return OUTER_REF_TABLE_BIT;
+  Item *inner_item = ref_item();
+  table_map inner_map = inner_item->used_tables();
+  // Note that we do not use const_for_execution() function so
+  // as to avoid multiple and recursive calls to used_tables, as this could
+  // create a problem when views are created using other views.
+  if (!(inner_map & ~INNER_TABLE_BIT) && first_inner_table != nullptr) {
+    if (inner_item->type() == Item::FIELD_ITEM) {
+      const Item_field *field = down_cast<const Item_field *>(inner_item);
+      // Const table elimination has converted field to a const value.
+      // Nevertheless, we cannot handle it as a true const value in other parts
+      // of the code, and thus have to report it as if it were original,
+      // ie. an outer reference or a regular table field.
+      return field->depended_from != nullptr ? OUTER_REF_TABLE_BIT
+                                             : field->table_ref->map();
+    }
+    // Constant value on inner side of outer join wrapped in one or more
+    // Item_view_ref levels) depends on the inner table.
+    return first_inner_table->map();
+  }
+  // In all other cases, used tables are exactly those of the underlying
+  // expression referenced by this view column.
+  return inner_map;
 }
 
 /**

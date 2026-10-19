@@ -97,36 +97,21 @@ bool TableTraits<SpParamEntry>::write_to_table(TABLE &table,
 
 bool TableTraits<SpParamEntry>::update_in_table(TABLE &table,
                                                 const SpParamEntry &entry,
-                                                const std::string &old_key) {
-  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
-
-  // Key format: "db.sp_name.param"
-  size_t first_dot = lookup_key.find('.');
-  size_t second_dot = lookup_key.find('.', first_dot + 1);
-  if (should_assert_if_true(first_dot == std::string::npos ||
-                            second_dot == std::string::npos)) {
-    LogVSQL(ERROR_LEVEL, "Invalid key format for update: %s",
-            lookup_key.c_str());
-    return true;
-  }
-
-  std::string old_db = lookup_key.substr(0, first_dot);
-  std::string old_sp =
-      lookup_key.substr(first_dot + 1, second_dot - first_dot - 1);
-  std::string old_param = lookup_key.substr(second_dot + 1);
+                                                const SpParamKey &old_key) {
+  const SpParamKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
 
   Field **field = table.field;
 
-  field[0]->store(old_db.c_str(), old_db.length(), &my_charset_utf8mb4_bin);
-  field[1]->store(old_sp.c_str(), old_sp.length(), &my_charset_utf8mb4_bin);
-  field[2]->store(old_param.c_str(), old_param.length(),
+  field[0]->store(lookup_key.db().c_str(), lookup_key.db().length(),
+                  &my_charset_utf8mb4_bin);
+  field[1]->store(lookup_key.sp_name().c_str(), lookup_key.sp_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(lookup_key.param().c_str(), lookup_key.param().length(),
                   &my_charset_utf8mb4_bin);
 
   uchar key_buf[MAX_KEY_LENGTH];
   key_copy(key_buf, table.record[0], table.key_info,
            table.key_info->key_length);
-
-  store_record(&table, record[1]);
 
   int error = table.file->ha_index_init(0, false);
   if (error) {
@@ -137,8 +122,7 @@ bool TableTraits<SpParamEntry>::update_in_table(TABLE &table,
   auto index_end_guard =
       create_scope_guard([&table]() { table.file->ha_index_end(); });
 
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  error = read_row_for_update(table, key_buf);
   if (error) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for update: error %d", error);
     return true;

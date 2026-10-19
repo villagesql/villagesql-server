@@ -331,4 +331,18 @@ TEST_F(TypeBuilderTest, VariableLengthLastStillNegotiatesV4) {
 //       .build()                        // ERROR at build():
 //       !std::is_void_v<ParamsType> fails
 
+TEST(TypeParameterSerialization, ValidatesUtf8AndNul) {
+  using vsql::func_builder::detail::serialize_type_params;
+  std::string out;
+  char error[VEF_MAX_ERROR_LEN] = {};
+  EXPECT_FALSE(serialize_type_params({{"résumé", "É😀"}}, "test", out, error));
+  for (const std::string &bad :
+       {std::string("x\0y", 3), std::string("\xe9"), std::string("\xc0\xaf"),
+        std::string("\xed\xa0\x80"), std::string("\xf4\x90\x80\x80"),
+        std::string("\xe2\x82")}) {
+    EXPECT_TRUE(serialize_type_params({{"key", bad}}, "test", out, error));
+    EXPECT_TRUE(serialize_type_params({{bad, "value"}}, "test", out, error));
+  }
+}
+
 }  // namespace villagesql_unittest

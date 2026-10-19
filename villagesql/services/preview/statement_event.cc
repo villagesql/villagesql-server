@@ -27,6 +27,7 @@
 #include "my_systime.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/command_mapping.h"
+#include "sql/server_component/mysql_connection_attributes_iterator_imp.h"
 #include "sql/sql_class.h"
 #include "sql/sql_digest.h"
 #include "sql/sql_lex.h"
@@ -264,6 +265,36 @@ void on_statement_postexecute(THD *thd) {
       (thd->server_status & SERVER_QUERY_NO_INDEX_USED) ? 1 : 0;
   args.no_good_index_used =
       (thd->server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) ? 1 : 0;
+
+  // Selected client connection attributes (session_connect_attrs). Read via the
+  // connection-attributes iterator service implementation -- the same decoder
+  // the mysql_connection_attributes_iterator component service exposes --
+  // rather than re-parsing thd->m_connection_attributes here. init() fails when
+  // the client sent no attributes, in which case the three strings stay empty.
+  // The strings live on this stack frame until the dispatch loop below returns,
+  // so the args pointers into them remain valid for the whole invocation.
+  std::string client_pid_str, client_name_str, program_name_str;
+  my_h_connection_attributes_iterator attr_it;
+  if (!mysql_connection_attributes_iterator_imp::init(thd, &attr_it)) {
+    const char *name = nullptr, *value = nullptr, *charset = nullptr;
+    size_t name_len = 0, value_len = 0;
+    while (!mysql_connection_attributes_iterator_imp::get(
+        thd, &attr_it, &name, &name_len, &value, &value_len, &charset)) {
+      const std::string_view key(name, name_len);
+      if (key == "_pid")
+        client_pid_str.assign(value, value_len);
+      else if (key == "_client_name")
+        client_name_str.assign(value, value_len);
+      else if (key == "program_name")
+        program_name_str.assign(value, value_len);
+    }
+    mysql_connection_attributes_iterator_imp::deinit(attr_it);
+  }
+  args.client_pid = client_pid_str.empty() ? nullptr : client_pid_str.c_str();
+  args.client_name =
+      client_name_str.empty() ? nullptr : client_name_str.c_str();
+  args.program_name =
+      program_name_str.empty() ? nullptr : program_name_str.c_str();
 
   for (const auto &h : *hooks) {
     if (h.cc->phase != VEF_STATEMENT_EVENT_POSTEXECUTE) continue;

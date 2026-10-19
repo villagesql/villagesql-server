@@ -1,0 +1,30 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Shut server down
+# Initialize a fresh datadir
+# Start the server on the fresh datadir, which must succeed
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Rewrite the stored version to name a different code base. The value is
+# a valid version so this exercises the code base check rather than
+# version parsing, and is picked so it always differs from the code base
+# of the running build.
+UPDATE villagesql.properties
+SET value = IF(@@GLOBAL.villagesql_server_version LIKE 'percona-9.7\_%',
+'mysql-8.4_0.0.1',
+'percona-9.7_0.0.1')
+WHERE name = 'version';
+SELECT SUBSTRING_INDEX(value, '_', 1)
+<> SUBSTRING_INDEX(@@GLOBAL.villagesql_server_version, '_', 1)
+AS code_base_differs
+FROM villagesql.properties
+WHERE name = 'version';
+code_base_differs
+1
+# Shut server down
+# Starting on that datadir must fail rather than skip the upgrade.
+Pattern "Cannot upgrade the VillageSQL schema across code bases" found
+# --upgrade=MINIMAL skips the server upgrades but still runs the
+# VillageSQL ones, so it must be rejected too.
+Pattern "Cannot upgrade the VillageSQL schema across code bases" found
+# Cleanup
+# Restart with the original datadir
+# Test completed successfully

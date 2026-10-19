@@ -185,17 +185,19 @@ get_clang_format_version() {
 # Whitelist of allowed TODO tags for VillageSQL code
 ALLOWED_TODO_TAGS=(
   "villagesql"
-  "villagesql-beta"
-  "villagesql-preview"
-  "villagesql-crash"
-  "villagesql-ga"
-  "villagesql-performance"
-  "villagesql-rebase"
-  "villagesql-windows"
-  "villagesql-blob"
-  "villagesql-indexing"
   "villagesql-back-to-mysql"
+  "villagesql-beta"
+  "villagesql-blob"
+  "villagesql-charset"
+  "villagesql-crash"
+  "villagesql-general"
+  "villagesql-indexing"
+  "villagesql-performance"
+  "villagesql-preview"
+  "villagesql-production"
+  "villagesql-rebase"
   "villagesql-rust"
+  "villagesql-windows"
 )
 
 INVALID_TODO_TAGS_FOUND=0
@@ -430,10 +432,11 @@ fi
 die_clang_format() {
   echo "Error: $1" >&2
   echo "Please install clang-format $REQUIRED_CLANG_FORMAT_VERSION:" >&2
-  echo "  Linux: pip install clang-format==$REQUIRED_CLANG_FORMAT_VERSION" >&2
-  echo "  macOS: brew install clang-format" >&2
-  echo "         (then verify 'clang-format --version' matches; brew tracks" >&2
-  echo "         LLVM's latest stable so a future bump may drift away)" >&2
+  echo "  pipx install \"clang-format==$REQUIRED_CLANG_FORMAT_VERSION.*\"" >&2
+  echo "  pipx ensurepath   # adds ~/.local/bin to PATH; open a new shell after" >&2
+  echo "Get pipx with 'brew install pipx' (macOS) or 'sudo apt-get install pipx'" >&2
+  echo "(Ubuntu/Debian). Do not install clang-format from Homebrew or apt:" >&2
+  echo "they ship their own version, which does not match." >&2
   exit 1
 }
 

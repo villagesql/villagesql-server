@@ -1042,8 +1042,29 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
 
   doc_id_t write_doc_id{};
 
+  /* VillageSQL: fetch_for_bulk_ddl resolves an extended column's stored ref to
+  its value by reading the source table's column store, so it needs the source
+  clustered index. For a clustered build that is the old table's first index;
+  for a custom (USING EXTENDED) secondary build over existing rows, the source
+  is the table being scanned -- also the old table's clustered index -- so the
+  stored col_refs in each scanned row resolve to their values. */
   const dict_index_t *old_index =
-      m_index->is_clustered() ? m_ctx.m_old_table->first_index() : nullptr;
+      (m_index->is_clustered() || m_index->custom_index != nullptr)
+          ? m_ctx.m_old_table->first_index()
+          : nullptr;
+
+  /* TODO(villagesql-indexing): custom index (USING EXTENDED) on a populated
+  table not supported yet -- old_index is null for a secondary build. Reject
+  cleanly instead of asserting in fetch_for_bulk_ddl on the first row. The
+  reason is set on the trx (not logged) so the client sees it via the
+  DB_VILLAGESQL_ERROR mapping. */
+  if (m_index->custom_index != nullptr && old_index == nullptr) {
+    trx_set_detailed_error(
+        m_ctx.m_trx,
+        "CREATE INDEX ... USING EXTENDED on a non-empty table is not supported"
+        " yet; create the index before loading data.");
+    return DB_VILLAGESQL_ERROR;
+  }
 
   for (;;) {
     // clang-format off
@@ -1219,6 +1240,7 @@ dberr_t Builder::key_buffer_sort(size_t thread_id) noexcept {
 }
 
 dberr_t Builder::handle_error(dberr_t err) noexcept {
+  ut_ad(err != DB_SUCCESS);
   set_error(err);
 
   if (m_btr_load != nullptr) {
@@ -1350,6 +1372,54 @@ dberr_t Builder::batch_add_row(Row &row, size_t thread_id) noexcept {
   rtree_inserter->add_to_batch(row.m_ptr, row.m_ext);
 
   return DB_SUCCESS;
+}
+
+/* VillageSQL: a custom (USING EXTENDED) index is built by inserting each
+scanned row through the extension's insert, one row at a time -- not by the
+sort-merge path, and, unlike a spatial index, not batched. copy_row builds the
+index entry, resolving any externally stored column to its value
+(fetch_for_bulk_ddl), into the per-thread key buffer; that entry is handed to
+the extension's insert and dropped -- nothing goes to merge. The scan may run on
+multiple threads (each with its own key buffer), so the inserts reach the
+extension index concurrently, as concurrent DML inserts do at run time. Whether
+the resolution step runs is decided per field by is_extended() inside copy_row,
+so a field held in the row itself is passed through without a fetch.
+TODO(villagesql-indexing): the extension ABI offers only a single-row insert, so
+rows are inserted one at a time; a batch/bulk-insert hook (like the RTree batch
+inserter) would let an extension amortize its per-call storage overhead.
+TODO(villagesql-indexing): the ABI has no way for a custom index to declare that
+its keys are sortable, so the sort-merge path is never used here; use it for
+indexes that declare sortable keys once the ABI can express that. */
+dberr_t Builder::custom_add_row(Row &row, size_t thread_id) noexcept {
+  ut_a(is_custom_index());
+
+  auto key_buffer = m_thread_ctxs[thread_id]->m_key_buffer;
+  size_t mv_rows_added{};
+
+  Copy_ctx ctx{row, m_ctx.m_eval_table, thread_id};
+  auto err = copy_row(ctx, mv_rows_added);
+
+  if (err == DB_SUCCESS && ctx.m_n_rows_added > 0) {
+    const uint16_t n_fields =
+        static_cast<uint16_t>(dict_index_get_n_fields(m_index));
+    dfield_t *fields = key_buffer->back();
+    dtuple_t *entry = dtuple_create(key_buffer->heap(), n_fields);
+    for (uint16_t i = 0; i < n_fields; ++i) {
+      entry->fields[i] = fields[i];
+    }
+    dtuple_set_n_fields_cmp(entry, n_fields);
+    err = villagesql::innodb::Custom_index::insert(
+        m_index, m_ctx.m_trx->id, entry, /*dup_chk_only=*/false);
+    key_buffer->clear();
+  }
+
+  /* copy_row may allocate a virtual column into m_v_heap; reclaim it per row.
+  (Spatial's batch_add_row reads row.m_ptr directly and so has nothing to
+  clear.) The entry copied above points into that heap, so clear only after the
+  insert above has consumed it. */
+  clear_virtual_heap();
+
+  return err;
 }
 
 dberr_t Builder::enqueue_parsing(const dtuple_t &row) noexcept {
@@ -1505,17 +1575,7 @@ dberr_t Builder::bulk_add_row(Cursor &cursor, Row &row, size_t thread_id,
         if (!cursor.eof()) {
           /* Copy the row data and release any latches held by the parallel
           scan thread. Required for the log_free_check() during mtr.commit(). */
-          err = cursor.copy_row(thread_id, row);
-
-          if (DBUG_EVALUATE_IF("builder_bulk_add_row_trigger_error_2", true,
-                               false)) {
-            err = DB_INVALID_NULL;
-          }
-
-          if (err != DB_SUCCESS) {
-            set_error(err);
-            return get_error();
-          }
+          cursor.copy_row(thread_id, row);
 
           err = latch_release();
 
@@ -1624,6 +1684,10 @@ dberr_t Builder::add_row(Cursor &cursor, Row &row, size_t thread_id,
   } else if (is_spatial_index()) {
     if (!cursor.eof()) {
       err = batch_add_row(row, thread_id);
+    }
+  } else if (is_custom_index()) {
+    if (!cursor.eof()) {
+      err = custom_add_row(row, thread_id);
     }
   } else {
     err = bulk_add_row(cursor, row, thread_id, std::move(latch_release));

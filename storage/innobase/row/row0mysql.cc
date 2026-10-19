@@ -2915,7 +2915,11 @@ dberr_t row_create_index_for_mysql(
     ut_ad(table->is_intrinsic());
   }
 
-  for (i = 0; i < index->n_def; i++) {
+  // VillageSQL: custom indexes are responsible for their own key representation
+  // and size constraints; InnoDB does not impose the column key-length limit.
+  const bool custom_index = villagesql::innodb::Custom_index::is_custom(index);
+
+  for (i = 0; i < index->n_def && !custom_index; i++) {
     /* Check that prefix_len and actual length
     < DICT_MAX_INDEX_COL_LEN */
 

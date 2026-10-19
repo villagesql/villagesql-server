@@ -1,5 +1,6 @@
 call mtr.add_suppression("routing unknown accounts");
 INSTALL EXTENSION vsql_auth_test;
+SET GLOBAL vsql_auth_test.auto_create = ON;
 CREATE ROLE vsql_role_granted;
 GRANT SELECT ON *.* TO vsql_role_granted;
 SELECT CURRENT_USER() AS who, @@external_user AS ext;

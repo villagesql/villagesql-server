@@ -1,0 +1,64 @@
+# on_init runs after the server has registered the extension's system
+# variables, so the hook sees configured values rather than whatever static
+# initialization left behind. on_deinit runs before those variables are
+# unregistered, so it can still read them through the capability.
+#
+# The restart case is the one with an ordering gap: extensions load from
+# init_server_components(), before persisted values are applied, so the startup
+# path defers the hook until after that pass (run_extension_init_hooks()).
+#
+# The two hooks are a pair, so a load that fails before on_init runs must not
+# run on_deinit on the way back out.
+
+call mtr.add_suppression("vsql_allow_preview_extensions");
+
+--let $marker = $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+--error 0,1
+--remove_file $marker
+
+--echo # A load that fails after vef_register runs neither hook: preview
+--echo # capabilities are off, so the load fails between vef_register and the
+--echo # point where on_init would run
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_config_vars_test;
+
+--echo # on_init never ran, so on_deinit must not run either: no marker file
+--error 1
+--file_exists $marker
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--echo # INSTALL: the hook sees the declared defaults
+INSTALL EXTENSION vsql_config_vars_test;
+SELECT vsql_config_vars_test.init_saw_max_items();
+SELECT vsql_config_vars_test.init_saw_label();
+
+--echo # Persist both variables, then restart with the extension installed
+SET PERSIST vsql_config_vars_test.max_items = 77;
+SET PERSIST vsql_config_vars_test.label = 'configured';
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # The shutdown half of that restart ran on_deinit, and the variable was
+--echo # still readable through the capability
+--cat_file $marker
+--remove_file $marker
+
+--echo # Startup: the hook sees the persisted values, not the defaults
+SELECT @@global.vsql_config_vars_test.max_items;
+SELECT @@global.vsql_config_vars_test.label;
+SELECT vsql_config_vars_test.init_saw_max_items();
+SELECT vsql_config_vars_test.init_saw_label();
+
+RESET PERSIST vsql_config_vars_test.max_items;
+RESET PERSIST vsql_config_vars_test.label;
+
+--echo # UNINSTALL runs on_deinit the same way
+UNINSTALL EXTENSION vsql_config_vars_test;
+--cat_file $marker
+--remove_file $marker
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

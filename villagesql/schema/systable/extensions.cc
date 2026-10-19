@@ -47,8 +47,8 @@ constexpr const char kPendingActionColumn[] = "pending_action";
 // Format the current UTC time as ISO-8601 with microseconds:
 // "YYYY-MM-DDTHH:MM:SS.uuuuuuZ".
 //
-// TODO(villagesql-ga): move to a shared time-formatting utility once a
-// second caller wants it.
+// TODO(villagesql): move to a shared time-formatting utility once a second
+// caller wants it.
 std::string CurrentTimestampUtc() {
   using clock = std::chrono::system_clock;
   const auto now = clock::now();
@@ -354,24 +354,22 @@ bool TableTraits<ExtensionEntry>::write_to_table(TABLE &table,
 
 bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
                                                   const ExtensionEntry &entry,
-                                                  const std::string &old_key) {
-  // Determine which key to use for lookup
-  std::string lookup_key = old_key.empty() ? entry.key().str() : old_key;
+                                                  const ExtensionKey &old_key) {
+  const ExtensionKey &lookup_key =
+      old_key.str().empty() ? entry.key() : old_key;
 
   // Build index scan on primary key (extension_name)
   uchar key_buf[MAX_KEY_LENGTH];
 
   // Set up the key for index scan
   Field **field = table.field;
-  field[0]->store(lookup_key.c_str(), lookup_key.length(),
+  field[0]->store(lookup_key.extension_name().c_str(),
+                  lookup_key.extension_name().length(),
                   &my_charset_utf8mb4_bin);
 
   // Copy the key for index read
   key_copy(key_buf, table.record[0], table.key_info,
            table.key_info->key_length);
-
-  // Save old record for update
-  store_record(&table, record[1]);
 
   // Find the row using index read
   int error = table.file->ha_index_init(0, false);
@@ -383,8 +381,7 @@ bool TableTraits<ExtensionEntry>::update_in_table(TABLE &table,
   auto index_end_guard =
       create_scope_guard([&table]() { table.file->ha_index_end(); });
 
-  error = table.file->ha_index_read_map(table.record[0], key_buf, HA_WHOLE_KEY,
-                                        HA_READ_KEY_EXACT);
+  error = read_row_for_update(table, key_buf);
   if (should_assert_if_true(error)) {
     LogVSQL(ERROR_LEVEL, "Failed to find row for update: error %d", error);
     return true;

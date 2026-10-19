@@ -1,0 +1,36 @@
+# Indexing an externally-stored column whose declared width exceeds the server's
+# key-length limit. The index keys on the column's small reference, not its
+# value, so creation should succeed. Regression test for
+# https://github.com/villagesql/villagesql-server/issues/1034.
+#
+# The debug flag lets the custom-index DDL path run in this build.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_ext_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+--echo # --- Case 1: inline index on a wide externally-stored column ---
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a ext_index_wide_blob,
+  INDEX idx_inline (a) USING EXTENDED(ext_index)
+);
+SHOW CREATE TABLE t1;
+
+--echo # --- Case 2: standalone CREATE INDEX ... USING EXTENDED on the wide column ---
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  a ext_index_wide_blob
+);
+CREATE INDEX idx_ext ON t2 (a) USING EXTENDED(ext_index);
+SHOW CREATE TABLE t2;
+
+--echo # --- Cleanup ---
+DROP TABLE t1;
+DROP TABLE t2;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_ext_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

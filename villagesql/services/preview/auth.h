@@ -155,6 +155,17 @@ bool maybe_apply_vef_auth_state(MPVIO_EXT *mpvio, Security_context *sctx,
 // should fail the login closed); false if it succeeded or nothing was staged.
 bool run_vef_provision(MPVIO_EXT *mpvio);
 
+// Reconcile the token-staged roles with the resolved account's grants,
+// according to the method's live roles_mode (see vef_auth_roles_mode_t): GRANT
+// grants the missing ones, SYNC also revokes every granted role the token did
+// not claim, ACTIVATE does nothing here. Runs GRANT/REVOKE DDL on a fresh
+// internal THD that takes ACL locks itself, so it MUST be called where no ACL
+// cache lock is held -- before the role-activation block, not from
+// maybe_apply_vef_auth_state (which runs under the ACL read lock). No-op when
+// the method is in ACTIVATE mode.
+void maybe_apply_vef_role_grants(MPVIO_EXT *mpvio, const char *acl_user_authid,
+                                 const char *acl_user_host);
+
 }  // namespace villagesql::services
 
 #endif  // VILLAGESQL_SERVICES_PREVIEW_AUTH_H

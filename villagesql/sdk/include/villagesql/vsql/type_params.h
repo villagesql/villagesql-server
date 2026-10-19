@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -94,6 +95,11 @@ class MaybeParams {
 // .to_string(), etc.) with a parameterized type. Requires the parse function
 // to be registered via .params<P, &parse_fn, &to_strings_fn>() in the type
 // builder. See villagesql/vsql/type_builder.h for full usage.
+//
+// Because the cache is keyed on the C++ Params type P, if the same P is used
+// by more than one custom type, each of those types MUST register the same
+// parse function.
+// TODO(villagesql-beta): remove this restriction.
 //
 // Thread-safe: concurrent readers do not block each other. Entries are only
 // evicted when the extension is uninstalled because type parameters are
@@ -181,7 +187,12 @@ class TypeParamsCache {
 
   static std::string key_from_map(
       const std::map<std::string, std::string> &params) {
+    // One ',' between each pair of entries.
+    size_t size = params.empty() ? 0 : params.size() - 1;
+    // Each entry contributes "key=value".
+    for (const auto &[k, v] : params) size += k.size() + 1 + v.size();
     std::string key;
+    key.reserve(size);
     for (const auto &[k, v] : params) {
       if (!key.empty()) key += ',';
       key += k;
@@ -196,6 +207,8 @@ class TypeParamsCache {
     // The server normally delivers params in sorted order (matching the
     // std::map ordering used by key_from_map), so this is the common case.
     std::string key;
+    // Reserve the full key so the appends below never reallocate.
+    key.reserve(raw_key_size(raw));
     for (unsigned i = 0; i < raw.count; ++i) {
       if (i > 0) {
         if (std::strcmp(raw.keys[i - 1], raw.keys[i]) >= 0) {
@@ -210,6 +223,17 @@ class TypeParamsCache {
     return key;
   }
 
+  // Length of the "k1=v1,k2=v2,..." key built from raw, for reserve().
+  static size_t raw_key_size(const vef_type_params_t &raw) {
+    // One ',' between each pair of entries.
+    size_t size = raw.count == 0 ? 0 : raw.count - 1;
+    for (unsigned i = 0; i < raw.count; ++i) {
+      // Each entry contributes "key=value".
+      size += std::strlen(raw.keys[i]) + 1 + std::strlen(raw.values[i]);
+    }
+    return size;
+  }
+
   static std::string key_from_raw_unsorted(const vef_type_params_t &raw) {
     std::vector<unsigned> idx(raw.count);
     std::iota(idx.begin(), idx.end(), 0);
@@ -217,6 +241,8 @@ class TypeParamsCache {
       return std::strcmp(raw.keys[a], raw.keys[b]) < 0;
     });
     std::string key;
+    // Same length as the sorted key; only the entry order differs.
+    key.reserve(raw_key_size(raw));
     for (unsigned j : idx) {
       if (!key.empty()) key += ',';
       key += raw.keys[j];
@@ -257,6 +283,38 @@ type_params_cache_for() {
 template <typename T>
 __attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
   return type_params_cache_for<T>().is_bound();
+}
+
+// Serializes a params map into a caller-supplied buffer, following the
+// vef_inferred_type_params_t contract: the canonical "k=v,k=v" form is written
+// if it fits; actual_len is always set to the length that *would* have been
+// written; and overflow is set when it did not fit, in which case the buffer
+// contents are undefined and the caller should retry with a larger one.
+inline void write_params_to(vef_inferred_type_params_t *out,
+                            const std::map<std::string, std::string> &m) {
+  char *const buf_begin = out->buf;
+  const size_t cap = out->max_buf_len;
+  char *p = buf_begin;
+  size_t needed = 0;
+  bool ok = true;
+  bool first = true;
+  for (const auto &[k, v] : m) {
+    const size_t pair_size = (first ? 0u : 1u) + k.size() + 1u + v.size();
+    if (ok && static_cast<size_t>(p - buf_begin) + pair_size <= cap) {
+      if (!first) *p++ = ',';
+      std::memcpy(p, k.data(), k.size());
+      p += k.size();
+      *p++ = '=';
+      std::memcpy(p, v.data(), v.size());
+      p += v.size();
+    } else {
+      ok = false;
+    }
+    needed += pair_size;
+    first = false;
+  }
+  out->actual_len = needed;
+  out->overflow = !ok;
 }
 
 }  // namespace vsql

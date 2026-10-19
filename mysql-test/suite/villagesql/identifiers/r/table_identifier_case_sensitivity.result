@@ -7,4 +7,11 @@ Tables_in_test_case
 T1
 t1
 DROP TABLE t1, T1;
+CREATE TABLE t1 (value COMPLEX);
+CREATE TABLE T1 (value COMPLEX);
+SHOW TABLES;
+Tables_in_test_case
+T1
+t1
+DROP TABLE t1, T1;
 DROP DATABASE test_case;

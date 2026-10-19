@@ -172,7 +172,18 @@ udf_func *make_udf_func_from_vdf(const FuncDescriptor *desc,
 
   // Set VDF-specific fields
   udf->returns = desc->return_type();
-  udf->type = (desc->protocol() >= VEF_PROTOCOL_3 && func_desc->clear)
+  // A VDF is an aggregate only when it declares both callbacks, as the ABI
+  // defines it: udf_handler::add() dispatches straight to accumulate with no
+  // NULL check, so promoting on `clear` alone would call through a NULL if a
+  // half-declared pair ever reached here. parse_extension_registration()
+  // rejects that pair at install time; this keeps the runtime from depending
+  // on a check made in another module.
+  //
+  // clear and accumulate arrived in PROTOCOL_3. The negotiated protocol is the
+  // only gate needed: check_vef_registration() has already rejected a
+  // descriptor declaring less than its registration.
+  udf->type = (desc->protocol() >= VEF_PROTOCOL_3 && func_desc->clear &&
+               func_desc->accumulate)
                   ? UDFTYPE_AGGREGATE
                   : UDFTYPE_FUNCTION;
   udf->usage_count = 1;

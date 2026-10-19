@@ -96,6 +96,11 @@ struct System_status_var;
 namespace dd {
 class Properties;
 }  // namespace dd
+namespace villagesql {
+// VillageSQL: defined (fully typed) in villagesql/sql/custom_index_handle.h;
+// forward-declared here so handler.h stays free of the preview VEF ABI.
+struct CustomIndexHandle;
+}  // namespace villagesql
 struct AccessPath;
 struct JoinHypergraph;
 struct KEY_CACHE;
@@ -5492,6 +5497,66 @@ class handler {
   int handle_records_error(int error, ha_rows *num_rows);
 
  public:
+  /**
+    VillageSQL: fetch the loaded custom-index handle for key number @p keynr.
+
+    Custom indexes have no B-tree; the storage engine loads the extension's
+    index instance (its vef_index_ctx_t + storage context) at table-open time
+    and owns its lifetime. The SQL-layer custom-index scan uses this to reach
+    that live instance instead of re-loading it, so it scans the engine's
+    actual storage. The handle type (villagesql::CustomIndexHandle) is defined
+    in villagesql/sql/custom_index_handle.h.
+
+    @param keynr  key number, indexing table->key_info[] (same numbering the
+                  engine uses).
+    @param[out] out  filled with the loaded handle on success. On failure it is
+                     not read from; the caller must treat a true return as
+                     "no custom scan" and not use @p out.
+
+    @retval false  @p keynr is a custom index and @p out was filled.
+    @retval true   not a custom index, or the engine does not support custom
+                   indexes — the caller must fall back (no custom scan).
+  */
+  virtual bool get_custom_index_handle(uint keynr [[maybe_unused]],
+                                       villagesql::CustomIndexHandle *out
+                                       [[maybe_unused]]) {
+    return true;
+  }
+
+  /** VillageSQL: one field of a custom index's returned primary key: the field
+  value bytes in InnoDB clustered-storage format, and their length. */
+  struct Custom_index_pkey_part {
+    const unsigned char *data;
+    uint32_t length;
+  };
+
+  /** VillageSQL: fetch a base-table row from a custom index's returned primary
+    key. For a custom KNN index whose scan returns the owning row's primary key
+    directly (each part in InnoDB clustered-storage byte format), the engine
+    builds the clustered search key from the parts and reads the full row into
+    @p buf via an exact clustered lookup.
+
+    @param keynr    key number of the custom index.
+    @param pkey_parts array of @p num_pkey_parts primary-key field parts, in
+                  clustered-index key order.
+    @param num_pkey_parts number of primary-key parts.
+    @param[out] buf record buffer to receive the fetched row.
+    @param[out] row_not_found  set true when the key resolves but the row is not
+                  visible to the current transaction (MVCC); caller skips the
+    hit.
+    @param error_msg / error_msg_len  error description buffer.
+    @retval false  the row was fetched (or, with row_not_found set, skip it).
+    @retval true   not a custom index, unsupported, or the fetch failed.
+  */
+  virtual bool custom_index_pkey_to_row(
+      uint keynr [[maybe_unused]],
+      const Custom_index_pkey_part *pkey_parts [[maybe_unused]],
+      uint32_t num_pkey_parts [[maybe_unused]], uchar *buf [[maybe_unused]],
+      bool *row_not_found [[maybe_unused]], char *error_msg [[maybe_unused]],
+      uint error_msg_len [[maybe_unused]]) {
+    return true;
+  }
+
   /**
     Wrapper function to call records() in storage engine.
 

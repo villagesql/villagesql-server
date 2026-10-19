@@ -7,10 +7,11 @@
 # <build_dir>:   The VillageSQL build directory (output of build_ci.sh). mysqld
 #                must be present at runtime_output_directory/mysqld within this
 #                directory.
-# <extension_clones_dir>: Directory of cloned extension repos (one subdir per extension),
-#                produced by build_bundled_extensions.sh with EXTENSION_CLONES_DIR
-#                set. Extensions that contain a mysql-test/ directory have their
-#                suites exercised.
+# <extension_clones_dir>: Directory of cloned extension repos (one subdir per
+#                         extension), produced by checkout_bundled_extensions.sh.
+#
+# Before you run this script, make sure to run build_bundled_extensions.sh, and
+# have it copy the built .veb files to <build_dir>/veb_output_directory.
 #
 # Extension test convention: each extension repo must have a mysql-test/ directory
 # at its root, structured as a single MTR suite (t/ and r/ subdirectories). This
@@ -18,13 +19,19 @@
 # source tree while tests run, then removed on exit.
 #
 # Env vars:
-#   MTR_EXTRA_FLAGS - additional mysql-test-run.pl flags appended verbatim
-#                     (e.g. --sanitize for a sanitized build).
+#   MTR_EXTRA_FLAGS  - additional mysql-test-run.pl flags appended verbatim
+#                      (e.g. --sanitize for a sanitized build, or
+#                      --valgrind for a WITH_VALGRIND=1 build).
+#   MTR_MAX_PARALLEL - cap on MTR workers. Read by mysql-test-run.pl itself;
+#                      set it when each worker is expensive (valgrind).
+#   MTR_RETRY        - --retry value. Defaults to 0 (no retries); raise it when
+#                      the run is prone to infrastructure flakes (sanitizers).
 
 set -e
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$TOOLS_DIR/../.." && pwd)"
+
 source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
 BUILD_DIR="${1:?Usage: $0 <build_dir> <extension_clones_dir>}"
@@ -70,14 +77,16 @@ if [[ -z "$SUITES" ]]; then
 fi
 
 log_step "Running extension MTR suites: $SUITES"
-NCORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo "4")
 
+# 'auto' rather than a literal core count: mysql-test-run.pl resolves auto to
+# the CPU count and only then applies the MTR_MAX_PARALLEL cap. A literal
+# bypasses that cap, which matters when every worker runs mysqld under valgrind.
 MTR_FLAGS=(
     "--suite=$SUITES"
     "--nounit-tests"
-    "--parallel=$NCORES"
+    "--parallel=auto"
     "--force"
-    "--retry=0"
+    "--retry=${MTR_RETRY:-0}"
 )
 
 if [[ -n "${MTR_EXTRA_FLAGS:-}" ]]; then

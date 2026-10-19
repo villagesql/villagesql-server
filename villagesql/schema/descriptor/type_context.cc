@@ -20,6 +20,8 @@
 #include <cassert>
 #include <cerrno>
 #include <cstdlib>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -27,6 +29,8 @@
 #include "sql/strfunc.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/identifier_names.h"
+#include "villagesql/schema/systable/helpers.h"
 #include "villagesql/types/special_vdf_call.h"
 
 namespace villagesql {
@@ -126,7 +130,7 @@ bool TypeContext::init_intrinsic_default(std::string &error_out) {
     return true;
   }
 
-  // TODO(villagesql-beta): consolidate this encode call with TypeEncoder to
+  // TODO(villagesql-general): consolidate this encode call with TypeEncoder to
   // avoid duplicating the vdf/fn dispatch logic.
   const EncodeOp &op = encode_op_.value();
   if (op.vdf() != nullptr) {
@@ -209,14 +213,19 @@ void TypeContext::resolve_cached_values() {
           // provide resolve_params (enforced at registration), so it is always
           // present here.
           assert(descriptor_->resolve_params_fn().has_value());
+          // Validate and normalize int_to_params output before resolving
+          // defaults. Missing parameters are allowed; malformed entries are
+          // not.
+          TypeParameters initial = TypeParameters::from_raw(result);
+          if (initial.has_error()) continue;
           ResolvedTypeParams tmp = {};
           char rerr[VEF_MAX_ERROR_LEN] = {0};
           std::string canonical = result;
-          if (descriptor_->resolve_params_fn()->invoke(result, &tmp, rerr,
-                                                       &canonical))
+          if (descriptor_->resolve_params_fn()->invoke(initial.str(), &tmp,
+                                                       rerr, &canonical))
             continue;
           TypeParameters candidate = TypeParameters::from_raw(canonical);
-          if (candidate == key_.parameters()) {
+          if (!candidate.has_error() && candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);
             qualified_name_ += ")";
@@ -244,7 +253,7 @@ void TypeContext::resolve_cached_values() {
       // This can happen if parameters stored on disk no longer validate
       // (e.g., extension upgraded). The type will be unusable until the
       // column is altered, but we won't crash.
-      // TODO(villagesql-beta): how should we actually handle this error?
+      // TODO(villagesql-production): how should we actually handle this error?
       LogVSQL(WARNING_LEVEL,
               "resolve_params failed for type '%s' (params: %s): %s. "
               "Falling back to descriptor defaults.",
@@ -263,6 +272,19 @@ void TypeContext::resolve_cached_values() {
   }
 }
 
+const char *TypeParameters::text_error(std::string_view text) {
+  if (text.find('\0') != std::string_view::npos)
+    return "embedded NUL in type parameters";
+  if (text.empty()) return nullptr;
+  const CHARSET_INFO *cs = type_parameter_collation();
+  int error = 0;
+  const size_t length = cs->cset->well_formed_len(
+      cs, text.data(), text.data() + text.size(), text.size(), &error);
+  if (error || length != text.size())
+    return "type parameters must be valid UTF-8";
+  return nullptr;
+}
+
 void TypeParameters::build_entries() {
   keys_.clear();
   values_.clear();
@@ -270,8 +292,8 @@ void TypeParameters::build_entries() {
   c_values_.clear();
   if (str_.empty()) return;
 
-  // Parse "key=value" pairs separated by commas. Keys are already sorted
-  // alphabetically in canonical form.
+  // from_raw() has already checked the text and sorted the keys.
+  // Parse "key=value" pairs separated by commas.
   size_t start = 0;
   while (start < str_.size()) {
     size_t comma = str_.find(',', start);
@@ -295,27 +317,46 @@ void TypeParameters::build_entries() {
   for (const auto &v : values_) {
     c_values_.push_back(v.c_str());
   }
+  for (size_t i = 0; i < keys_.size(); ++i) {
+    if (keys_[i].empty()) {
+      error_ = "empty parameter name";
+      return;
+    }
+    if (values_[i].empty()) {
+      error_ = "parameter '" + keys_[i] + "' has no value";
+      return;
+    }
+    // Equal names are adjacent after sorting with the parameter collation.
+    if (i > 0 && type_parameter_names_equal(keys_[i], keys_[i - 1])) {
+      error_ = "duplicate parameter '" + keys_[i] + "'";
+      return;
+    }
+  }
 }
 
 TypeParameters TypeParameters::from_raw(const std::string_view raw) {
+  if (const char *error = text_error(raw)) return invalid(error);
   if (raw.empty()) return TypeParameters();
 
   // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
   // re-serialize. Use the same charset for both lowercasing and sort order.
-  // TODO(villagesql-beta): refactor parsing to use std::string_view.
-  const CHARSET_INFO *cs = &my_charset_utf8mb4_0900_ai_ci;
-  std::vector<std::pair<std::string, std::string>> pairs;
+  const CHARSET_INFO *cs = type_parameter_collation();
+  StringPairs pairs;
   size_t start = 0;
-  while (start < raw.size()) {
+  // <= visits an empty token after a trailing comma, so it becomes a nameless
+  // parameter. This does not cause an out-of-bounds read: when start == size(),
+  // find() returns npos and substr() only errors out for pos > size().
+  while (start <= raw.size()) {
     size_t comma = raw.find(',', start);
     if (comma == std::string_view::npos) comma = raw.size();
     size_t eq = raw.find('=', start);
-    if (eq == std::string_view::npos || eq >= comma) {
-      start = comma + 1;
-      continue;
-    }
-    std::string_view key = raw.substr(start, eq - start);
-    std::string_view value = raw.substr(eq + 1, comma - eq - 1);
+    // A token with no '=' names a parameter but supplies no value. Keep it
+    // with an empty value.
+    const bool has_value = eq != std::string_view::npos && eq < comma;
+    std::string_view key = has_value ? raw.substr(start, eq - start)
+                                     : raw.substr(start, comma - start);
+    std::string_view value =
+        has_value ? raw.substr(eq + 1, comma - eq - 1) : std::string_view();
 
     // Trim whitespace
     auto trim = [](std::string_view &s) {
@@ -327,9 +368,10 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
     trim(value);
     std::string key_str{key};
     std::string value_str{value};
-    // Lowercase
-    key_str = casedn(cs, std::move(key_str));
-    value_str = casedn(cs, std::move(value_str));
+    // Lowercase. casedn() dereferences &s.front(), so it must not be called on
+    // an empty string (e.g. a valueless token's empty value).
+    if (!key_str.empty()) key_str = casedn(cs, std::move(key_str));
+    if (!value_str.empty()) value_str = casedn(cs, std::move(value_str));
 
     pairs.emplace_back(std::move(key_str), std::move(value_str));
     start = comma + 1;
@@ -356,75 +398,44 @@ TypeParameters TypeParameters::from_raw(const std::string_view raw) {
 }
 
 std::string TypeParameters::to_json() const {
-  if (str_.empty()) return std::string("{}");
-
-  // Convert "k1=v1,k2=v2" → {"k1":"v1","k2":"v2"}
-  std::string json = "{";
-  size_t start = 0;
-  bool first = true;
-  while (start < str_.size()) {
-    size_t comma = str_.find(',', start);
-    if (comma == std::string::npos) comma = str_.size();
-    size_t eq = str_.find('=', start);
-    if (eq != std::string::npos && eq < comma) {
-      if (!first) json += ',';
-      json += '"';
-      json += str_.substr(start, eq - start);
-      json += "\":\"";
-      json += str_.substr(eq + 1, comma - eq - 1);
-      json += '"';
-      first = false;
-    }
-    start = comma + 1;
+  // keys_/values_ are already the parsed form of str_, so serialize those
+  // rather than re-splitting the canonical string.
+  StringPairs pairs;
+  pairs.reserve(keys_.size());
+  for (size_t i = 0; i < keys_.size(); i++) {
+    pairs.emplace_back(keys_[i], values_[i]);
   }
-  json += '}';
-  return json;
+  return json_object_from_pairs(pairs);
 }
 
 TypeParameters TypeParameters::from_json(const std::string &json) {
-  if (json.empty() || json == "{}") return TypeParameters();
+  StringPairs pairs;
+  if (json_object_to_pairs(json, &pairs))
+    return invalid("invalid type parameter JSON object");
 
-  // Parse {"k1":"v1","k2":"v2"} → "k1=v1,k2=v2"
-  // Simple parser: skip '{', find "key":"value" pairs, skip '}'
-  std::string canonical;
-  size_t pos = json.find('{');
-  if (pos == std::string::npos) return TypeParameters();
-  pos++;
-
-  bool first = true;
-  while (pos < json.size()) {
-    // Skip whitespace and commas
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ',')) pos++;
-    if (pos >= json.size() || json[pos] == '}') break;
-
-    // Expect "key"
-    if (json[pos] != '"') break;
-    pos++;
-    size_t key_end = json.find('"', pos);
-    if (key_end == std::string::npos) break;
-    std::string key = json.substr(pos, key_end - pos);
-    pos = key_end + 1;
-
-    // Skip ':'
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':')) pos++;
-
-    // Expect "value"
-    if (pos >= json.size() || json[pos] != '"') break;
-    pos++;
-    size_t val_end = json.find('"', pos);
-    if (val_end == std::string::npos) break;
-    std::string value = json.substr(pos, val_end - pos);
-    pos = val_end + 1;
-
-    if (!first) canonical += ',';
-    canonical += key;
-    canonical += '=';
-    canonical += value;
-    first = false;
+  // Validate the parameters and count the bytes needed for "key=value,...".
+  size_t raw_size = 0;
+  for (const auto &[key, value] : pairs) {
+    if (const char *error = text_error(key)) return invalid(error);
+    if (const char *error = text_error(value)) return invalid(error);
+    // TODO(villagesql-general): Support commas in parameter values in both
+    // the server and SDK parsers/serializers.
+    if (key.find_first_of(",=") != std::string::npos ||
+        value.find(',') != std::string::npos)
+      return invalid("invalid delimiter in stored type parameters");
+    raw_size += key.size() + value.size() + 2;  // key=value,
   }
 
-  // Canonicalize so key order and casing match what from_raw() produces.
-  return from_raw(canonical);
+  // Rebuild the raw form so from_raw() applies canonical order and casing.
+  std::string raw;
+  raw.reserve(raw_size);
+  for (const auto &[key, value] : pairs) {
+    if (!raw.empty()) raw += ',';
+    raw += key;
+    raw += '=';
+    raw += value;
+  }
+  return from_raw(raw);
 }
 
 }  // namespace villagesql

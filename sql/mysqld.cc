@@ -2843,6 +2843,14 @@ static void clean_up(bool print_message) {
   Singleton_event_tracking_service_to_plugin_mapping::remove_instance();
   component_infrastructure_deinit(print_message);
   /*
+    The component unregister_variable() api for session string type variables
+    depends on global_system_variables. So we yank cleanup of
+    global_system_variables and max_system_variables from plugin_shutdown()
+    code and calling after component_infrastructure_deinit()
+  */
+  cleanup_global_system_variables();
+
+  /*
     component unregister_variable() api depends on system_variable_hash.
     component_infrastructure_deinit() interns calls the deinit function
     of components which are loaded, and the deinit functions can have
@@ -6471,16 +6479,20 @@ void unregister_server_metric_sources() {
 }
 
 PSI_logger_key key_error_logger = 0;
+PSI_logger_key key_slow_query_logger = 0;
+PSI_logger_key key_general_logger = 0;
 
-static PSI_logger_info_v1 err_loggers[] = {
-    {"error_log", "MySQL error logger", 0, &key_error_logger}};
+static PSI_logger_info_v1 sql_loggers[] = {
+    {"error_log", "MySQL error logger", 0, &key_error_logger},
+    {"slow_log", "MySQL slow query logger", 0, &key_slow_query_logger},
+    {"general_log", "MySQL general logger", 0, &key_general_logger}};
 
 void register_server_telemetry_loggers() {
-  mysql_log_client_register(err_loggers, std::size(err_loggers), "error");
+  mysql_log_client_register(sql_loggers, std::size(sql_loggers), "sql");
 }
 
 void unregister_server_telemetry_loggers() {
-  mysql_log_client_unregister(err_loggers, std::size(err_loggers));
+  mysql_log_client_unregister(sql_loggers, std::size(sql_loggers));
 }
 
 int init_common_variables() {
@@ -8386,11 +8398,22 @@ static int init_server_components() {
 #endif
 
   bool recreate_non_dd_based_system_view = dd::upgrade::I_S_upgrade_required();
+  bool villagesql_upgraded_in_minimal = false;
   if (!is_help_or_validate_option() && !opt_initialize &&
       !dd::upgrade::no_server_upgrade_required()) {
-    if (opt_upgrade_mode == UPGRADE_MINIMAL)
+    if (opt_upgrade_mode == UPGRADE_MINIMAL) {
       LogErr(WARNING_LEVEL, ER_SERVER_UPGRADE_SKIP);
-    else {
+      // VillageSQL system tables are dictionary state, so their upgrades
+      // run even in MINIMAL mode.
+      if (villagesql::SchemaManager::is_villagesql_upgrade_needed()) {
+        if (villagesql::SchemaManager::run_villagesql_upgrades_standalone()) {
+          LogErr(ERROR_LEVEL, ER_SERVER_UPGRADE_FAILED);
+          unireg_abort(MYSQLD_ABORT_EXIT);
+        }
+        recreate_non_dd_based_system_view = true;
+        villagesql_upgraded_in_minimal = true;
+      }
+    } else {
       init_optimizer_cost_module(true);
       if (bootstrap::run_bootstrap_thread(nullptr, nullptr,
                                           &dd::upgrade::upgrade_system_schemas,
@@ -8429,10 +8452,12 @@ static int init_server_components() {
     Re-create non DD based system views after a) if we upgraded system
     schemas b) I_S system view version is changed and server system views
     were recreated. c) If the database was upgraded. We do not update this
-    in upgrade-minimal mode.
+    in upgrade-minimal mode, except when VillageSQL schema upgrades ran.
+    The VillageSQL I_S view overrides are non DD based and must match the
+    upgraded schema.
    */
   if (!is_help_or_validate_option() && !opt_initialize &&
-      opt_upgrade_mode != UPGRADE_MINIMAL &&
+      (opt_upgrade_mode != UPGRADE_MINIMAL || villagesql_upgraded_in_minimal) &&
       recreate_non_dd_based_system_view) {
     if (dd::init(
             dd::enum_dd_init_type::DD_INITIALIZE_NON_DD_BASED_SYSTEM_VIEWS)) {
@@ -8925,15 +8950,21 @@ class Plugin_and_data_dir_option_parser final {
     /* Backup mysql_real_data_home */
     if (mysql_real_data_home[0])
       memcpy(save_homedir_, mysql_real_data_home, strlen(mysql_real_data_home));
-    if (datadir_ != nullptr)
-      memcpy(mysql_real_data_home, datadir_, strlen(datadir_));
+    if (datadir_ != nullptr) {
+      memset(mysql_real_data_home, 0, sizeof(mysql_real_data_home));
+      strncpy(mysql_real_data_home, datadir_, sizeof(mysql_real_data_home) - 1);
+      mysql_real_data_home[sizeof(mysql_real_data_home) - 1] = '\0';
+    }
 
     /* Backup opt_plugin_dir */
     if (opt_plugin_dir[0])
       memcpy(save_plugindir_, opt_plugin_dir,
              std::min(static_cast<size_t>(FN_REFLEN), strlen(opt_plugin_dir)));
-    if (plugindir_ != nullptr)
-      memcpy(opt_plugin_dir, plugindir_, strlen(plugindir_));
+    if (plugindir_ != nullptr) {
+      memset(opt_plugin_dir, 0, sizeof(opt_plugin_dir));
+      strncpy(opt_plugin_dir, plugindir_, sizeof(opt_plugin_dir) - 1);
+      opt_plugin_dir[sizeof(opt_plugin_dir) - 1] = '\0';
+    }
 
     // Backup opt_veb_dir
     if (opt_veb_dir[0])
@@ -9911,6 +9942,11 @@ int mysqld_main(int argc, char **argv)
     flush_error_log_messages();
     return 1;
   }
+
+  // Extensions loaded in init_server_components() deferred their on_init hooks
+  // to here so they observe persisted system-variable values, which is what the
+  // call above applies.
+  villagesql::run_extension_init_hooks();
 
   /*
     Invoke the bootstrap thread, if required.
@@ -12326,7 +12362,8 @@ static bool process_opt_pfs_meter(char *argument) {
 pfs_error_meter:
   if (error) {
     // trunk: LogErr(WARNING_LEVEL, ER_INVALID_METER, orig_argument);
-    std::string msg_84("Invalid meter name or value for performance_schema_meter '");
+    std::string msg_84(
+        "Invalid meter name or value for performance_schema_meter '");
     msg_84.append(orig_argument);
     msg_84.append("'.");
     LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG, msg_84.c_str());
@@ -12433,7 +12470,8 @@ static bool process_opt_pfs_logger(char *argument) {
 pfs_error_logger:
   if (error) {
     // trunk: LogErr(WARNING_LEVEL, ER_INVALID_LOGGER, orig_argument);
-    std::string msg_84("Invalid logger name or value for performance_schema_logger '");
+    std::string msg_84(
+        "Invalid logger name or value for performance_schema_logger '");
     msg_84.append(orig_argument);
     msg_84.append("'.");
     LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG, msg_84.c_str());
