@@ -54,6 +54,7 @@ on:
         options:
           - linux-x86_64
           - linux-aarch64
+          - linux-s390x
           - macos-arm64
         default: linux-x86_64
       slack_notify:
