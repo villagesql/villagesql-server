@@ -52,7 +52,11 @@ int RowLookup::read() {
   key_copy(key_buf, m_table.record[0], &key, key.key_length);
 
   int error = m_table.file->ha_index_init(m_key_index, false);
-  if (error) return error;
+  if (error) {
+    LogVSQL(ERROR_LEVEL, "Failed to initialize index on %s: error %d",
+            m_table.s->table_name.str, error);
+    return error;
+  }
   m_index_open = true;
 
   return m_table.file->ha_index_read_map(m_table.record[0], key_buf,
