@@ -4,7 +4,8 @@
 # value the bad value was silently dropped; when the column had never been
 # populated the leftover bytes did not decode and every later read failed.
 #
-# The bad row now takes NULL, as it does on the other store paths.
+# The bad row now takes the type's intrinsic default, as it does on the other
+# store paths.
 #
 # This is the same corruption as #1312 through a different store path: a
 # field-to-field copy (TryEncodeStringFieldToCustom) rather than a prepared

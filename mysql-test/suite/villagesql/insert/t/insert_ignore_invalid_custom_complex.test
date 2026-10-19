@@ -2,9 +2,9 @@
 # statement parameter was written as bytes that could not be decoded, so every
 # later read of the column failed, including a read of the whole table.
 #
-# A bad value that does not abort the statement now stores NULL on every path,
-# or the type's intrinsic default where the column is NOT NULL. The cases are
-# labelled as in the issue.
+# A bad value that does not abort the statement now stores the type's
+# intrinsic default on every path, whatever the column's nullability. The
+# cases are labelled as in the issue.
 #
 # Case B is a separate defect kept here because it shares the shape: a binary
 # literal under IGNORE raises a hard error instead of a warning, and the
@@ -46,8 +46,8 @@ SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 2;
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSERT IGNORE INTO t VALUES (3, X'00000000000008400000000000001040');
 
-# C: INSERT IGNORE, prepared statement, text parameter. Stores NULL, as the
-# literal in A does.
+# C: INSERT IGNORE, prepared statement, text parameter. Stores the intrinsic
+# default, as the literal in A does.
 PREPARE s FROM 'INSERT IGNORE INTO t VALUES (?, ?)';
 SET @id = 4, @v = 'not a complex';
 EXECUTE s USING @id, @v;
