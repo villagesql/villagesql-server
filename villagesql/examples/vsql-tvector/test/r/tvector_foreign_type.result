@@ -1,0 +1,21 @@
+INSTALL EXTENSION vsql_tvector;
+INSTALL EXTENSION vsql_bitfield_test;
+CREATE TABLE bits (id INT PRIMARY KEY, b vsql_bitfield_test.BITFIELD);
+INSERT INTO bits VALUES (1, '1010');
+CREATE TABLE v3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO v3 VALUES (1, '[1,2,3]');
+SELECT vsql_tvector.tvector_concat_all(a.v, b.b) AS c FROM v3 a, bits b;
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 2 is a BITFIELD, not a TVECTOR
+# First argument, to show the position is reported rather than assumed.
+SELECT vsql_tvector.tvector_concat_all(b.b, a.v) AS c FROM v3 a, bits b;
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 is a BITFIELD, not a TVECTOR
+# tvector_sum_all checks in its own loop, so the wording differs. Which
+# message appears says which guard fired.
+SELECT vsql_tvector.tvector_sum_all(a.v, b.b) AS c FROM v3 a, bits b;
+ERROR HY000: Cannot initialize function 'tvector_sum_all': argument 2 is a BITFIELD; only TVECTOR and plain numbers can be added
+SELECT vsql_tvector.tvector_concat(a.v, b.b) AS c FROM v3 a, bits b;
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 2 type mismatch (expected vsql_tvector.TVECTOR, got vsql_bitfield_test.BITFIELD)
+DROP TABLE bits;
+DROP TABLE v3;
+UNINSTALL EXTENSION vsql_bitfield_test;
+UNINSTALL EXTENSION vsql_tvector;
