@@ -1274,24 +1274,6 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   return false;
 }
 
-// Leave a field decodable after an encode produced no value, so that a row
-// kept under IGNORE or in non-strict mode can still be read back. A nullable
-// field takes SQL NULL, a NOT NULL one the type's intrinsic default, mirroring
-// the 0 or '' a built-in type stores for a value it cannot parse.
-//
-// This only writes the field. Whether the row survives at all is the caller's
-// to report, through the status it returns.
-//
-// Deliberately not set_field_to_null_with_conversions(): that reports a NULL
-// going into a NOT NULL column, and a bad value has already pushed 1366.
-static void StoreFallbackForFailedEncode(Field *field) {
-  if (field->is_nullable()) {
-    field->set_null();
-    return;
-  }
-  StoreCustomFieldIntrinsicDefault(field);
-}
-
 type_conversion_status HandleFailedEncode(Field *field, EncodeStatus status,
                                           bool no_conversions) {
   switch (status) {
@@ -1302,12 +1284,15 @@ type_conversion_status HandleFailedEncode(Field *field, EncodeStatus status,
     case EncodeStatus::kErrorRaised:
       return TYPE_ERR_BAD_VALUE;
     case EncodeStatus::kBadValue:
-      // A warning is already pushed; leave the field readable.
-      StoreFallbackForFailedEncode(field);
-      return TYPE_ERR_BAD_VALUE;
+      break;
   }
-  assert(false);
-  return TYPE_ERR_BAD_VALUE;
+  // A warning for the bad value is already pushed. Store the type's intrinsic
+  // default so the row reads back if it survives, as a built-in stores 0 or ''
+  // for a value it cannot parse; nullability does not enter into it. A failure
+  // here has reported itself, so pass its status on.
+  const type_conversion_status store_stat =
+      StoreCustomFieldIntrinsicDefault(field);
+  return store_stat != TYPE_OK ? store_stat : TYPE_ERR_BAD_VALUE;
 }
 
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,

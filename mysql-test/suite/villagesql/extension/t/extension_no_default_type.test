@@ -1,5 +1,7 @@
-# Test that direct from_string calls and CREATE TABLE with a NOT NULL column
-# both fail when a type has no valid intrinsic default.
+# Test that direct from_string calls and CREATE TABLE both fail when a type
+# has no valid intrinsic default. The column's nullability does not matter:
+# a bad value stores the intrinsic default whether or not the column is
+# nullable, so a type without one is unusable either way.
 
 INSTALL EXTENSION vsql_test_only;
 
@@ -17,5 +19,15 @@ CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4) NOT NULL);
 # a default is unusable, so any reference fails at initialization.
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_VAR_PARAM_TYPE(4) NOT NULL);
+
+# The same columns without NOT NULL are rejected for the same reason.
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4));
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_VAR_PARAM_TYPE(4));
 
 UNINSTALL EXTENSION vsql_test_only;
