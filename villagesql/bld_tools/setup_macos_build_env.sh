@@ -10,4 +10,4 @@
 
 set -e
 
-brew install bison cmake jq openssl@3
+brew install bison ccache cmake jq openssl@3
