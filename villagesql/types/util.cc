@@ -698,7 +698,8 @@ String *EncodeStringForField(Field *field, const String &from,
   // Always push a warning (consistent with MySQL built-in types)
   // Caller decides whether to also promote to error
   // TODO(villagesql-general): an extension's own warning() message is dropped
-  // here; only the standard 1366 reaches the user.
+  // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
+  // the user.
   const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
   const Diagnostics_area *da = thd->get_stmt_da();
   push_warning_printf(

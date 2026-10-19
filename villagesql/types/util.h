@@ -412,6 +412,12 @@ extern type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field);
 // field and returns a type_conversion_status. Writes the field so a row kept
 // under IGNORE or in non-strict mode can still be read back, and returns the
 // status for the caller to propagate.
+//
+// kNull and kBadValue are treated differently. kNull is a value the encode
+// chose, so the field takes SQL NULL and a NOT NULL column is reported as it
+// would be for an explicit NULL. kBadValue is input the encode could not
+// parse, so the field takes the type's intrinsic default whatever the
+// column's nullability, as a built-in stores 0 or '' for the same.
 extern type_conversion_status HandleFailedEncode(Field *field,
                                                  EncodeStatus status,
                                                  bool no_conversions);
