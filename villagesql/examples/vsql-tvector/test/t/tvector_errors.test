@@ -96,6 +96,43 @@ DROP TABLE t_dim3, t_dim4;
 
 ########################################################################
 #
+# Test: decoding a TVECTOR with no dimension fails cleanly
+#
+########################################################################
+
+# from_string over a per-row expression yields a TVECTOR with no params.
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+
+CREATE TABLE t_str (s VARCHAR(32));
+INSERT INTO t_str (s) VALUES ('[1,2,3]');
+
+# Minimal case: returning the value decodes it with no dimension.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string(s) FROM t_str;
+
+DROP TABLE t_str;
+
+########################################################################
+#
+# Test: a TVECTOR column does not round trip through from_string
+#
+########################################################################
+
+# The column's dimension is not propagated through to_string, so the
+# from_string result has no params and cannot be decoded.
+# TODO(villagesql-general): Propagate type params through a to_string /
+# from_string round trip so this returns '[1,2,3]'.
+CREATE TABLE t_dim3 (v TVECTOR(3));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::to_string(TVECTOR::from_string(TVECTOR::to_string(v)))
+  FROM t_dim3;
+
+DROP TABLE t_dim3;
+
+########################################################################
+#
 # Clean up
 #
 ########################################################################

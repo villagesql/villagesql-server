@@ -24,4 +24,16 @@ SELECT vsql_tvector.tvector_dot_product(
 (SELECT v FROM t_dim4 LIMIT 1));
 ERROR HY000: Cannot initialize function 'tvector_dot_product': conflicting type parameters for vsql_tvector.TVECTOR in arguments 1 and 2
 DROP TABLE t_dim3, t_dim4;
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+CREATE TABLE t_str (s VARCHAR(32));
+INSERT INTO t_str (s) VALUES ('[1,2,3]');
+SELECT TVECTOR::from_string(s) FROM t_str;
+ERROR HY000: Invalid value in column 'TVECTOR::from_string(s)' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+DROP TABLE t_str;
+CREATE TABLE t_dim3 (v TVECTOR(3));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+SELECT TVECTOR::to_string(TVECTOR::from_string(TVECTOR::to_string(v)))
+FROM t_dim3;
+ERROR HY000: Cannot initialize function 'TVECTOR::to_string': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+DROP TABLE t_dim3;
 UNINSTALL EXTENSION vsql_tvector;
