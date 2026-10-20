@@ -415,6 +415,20 @@ extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
 // sets a user-visible error and returns TYPE_ERR_BAD_VALUE.
 extern type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field);
 
+// Handle an encode that produced no value, for a caller that stores into a
+// field and returns a type_conversion_status. Writes the field so a row kept
+// under IGNORE or in non-strict mode can still be read back, and returns the
+// status for the caller to propagate.
+//
+// kNull and kBadValue are treated differently. kNull is a value the encode
+// chose, so the field takes SQL NULL and a NOT NULL column is reported as it
+// would be for an explicit NULL. kBadValue is input the encode could not
+// parse, so the field takes the type's intrinsic default whatever the
+// column's nullability, as a built-in stores 0 or '' for the same.
+extern type_conversion_status HandleFailedEncode(Field *field,
+                                                 EncodeStatus status,
+                                                 bool no_conversions);
+
 // Encode and store a string value into a custom type field during LOAD DATA /
 // LOAD XML, applying strict/non-strict/IGNORE semantics. Returns true on error.
 extern bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
