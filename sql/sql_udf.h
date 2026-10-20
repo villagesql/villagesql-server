@@ -166,19 +166,20 @@ class udf_handler {
            u_d->vdf_func_desc->deterministic;
   }
 
-  // Check if this VDF returns a text string (VEF_TYPE_STRING) as opposed to
-  // binary data (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available before
-  // m_vdf is instantiated.
+  // Check if this VDF returns a string it produces itself: text
+  // (VEF_TYPE_STRING) or raw bytes (VEF_TYPE_BINARY), as opposed to a custom
+  // type's stored form (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available
+  // before m_vdf is instantiated.
   bool is_vdf_returns_string() const;
 
-  // Set `item`'s data type for a STRING-returning VDF result, and set the
-  // runtime result charset to match, so the String returned by val_str()
-  // carries the same charset the item declares. Uses the max output length
-  // the extension declared (max_result_length), falling back to
-  // `default_length` (the argument-derived width the caller computed) when
-  // none is declared -- mirroring a classic UDF that does not set
-  // initid->max_length. Callable before m_vdf is instantiated (uses
-  // vdf_func_desc).
+  // Set `item`'s data type for a STRING- or BINARY-returning VDF result, and
+  // set the runtime result charset to match (utf8mb4 for STRING, binary for
+  // BINARY), so the String returned by val_str() carries the same charset the
+  // item declares. Uses the max output length the extension declared
+  // (max_result_length), falling back to `default_length` (the
+  // argument-derived width the caller computed) when none is declared --
+  // mirroring a classic UDF that does not set initid->max_length. Callable
+  // before m_vdf is instantiated (uses vdf_func_desc).
   void set_vdf_string_result_type(Item *item, uint32 default_length);
 
   const char *name() const { return u_d ? u_d->name.str : "?"; }

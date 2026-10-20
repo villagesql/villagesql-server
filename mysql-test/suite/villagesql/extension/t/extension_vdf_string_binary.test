@@ -1,0 +1,91 @@
+# A BINARY parameter receives the argument's bytes unconverted, and a BINARY
+# result is labelled binary, where a STRING result is utf8mb4.
+#
+# The *_hex functions return, in hex, the bytes the VDF received.
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = vdf_sb
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_string_binary.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION vdf_sb;
+
+--echo #
+--echo # Test 1: an argument in utf8mb4 reaches both as the same bytes
+--echo #
+
+SELECT vdf_sb.str_hex('é') AS str, vdf_sb.bin_hex('é') AS bin;
+
+--echo #
+--echo # Test 2: an argument in another charset
+--echo #
+--echo # BINARY gets the bytes it was written in.
+
+SELECT vdf_sb.bin_hex(_latin1 0xE9) AS bin;
+SELECT vdf_sb.bin_hex(_ucs2 0x00E9) AS bin;
+
+CREATE TABLE t1 (txt VARCHAR(8) CHARACTER SET latin1);
+INSERT INTO t1 VALUES ('é');
+SELECT vdf_sb.bin_hex(txt) AS bin FROM t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Test 3: an argument in the binary charset
+--echo #
+--echo # BINARY takes any bytes.
+
+SELECT vdf_sb.bin_hex(0xC3A9) AS bin;
+SELECT vdf_sb.bin_hex(0xFF) AS bin;
+
+--echo #
+--echo # Test 4: NULL
+--echo #
+
+SELECT vdf_sb.str_hex(NULL) AS str, vdf_sb.bin_hex(NULL) AS bin;
+
+--echo #
+--echo # Test 5: the charset of each result
+--echo #
+
+SELECT CHARSET(vdf_sb.str_echo('a')) AS str, COLLATION(vdf_sb.str_echo('a')) AS str_coll;
+SELECT CHARSET(vdf_sb.bin_echo('a')) AS bin, COLLATION(vdf_sb.bin_echo('a')) AS bin_coll;
+SELECT HEX(vdf_sb.bin_echo(0x00FF10)) AS bin;
+
+--echo #
+--echo # Test 6: a BINARY result that is not text can be materialized
+--echo #
+--echo # A result labelled utf8mb4 would be refused here as an incorrect
+--echo # string value.
+
+CREATE TABLE t2 AS SELECT vdf_sb.bin_echo(0xBA7816BF8F01) AS h;
+SHOW CREATE TABLE t2;
+SELECT HEX(h) FROM t2;
+DROP TABLE t2;
+
+--echo #
+--echo # Test 7: the registration lists BINARY
+--echo #
+
+SELECT jt.name, jt.return_type, jt.params
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
+JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
+  name        VARCHAR(64) PATH '$.name',
+  return_type VARCHAR(64) PATH '$.return_type',
+  params      JSON        PATH '$.params'
+)) AS jt
+WHERE EXTENSION_NAME = 'vdf_sb'
+ORDER BY jt.name;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+UNINSTALL EXTENSION vdf_sb;

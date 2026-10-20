@@ -108,6 +108,20 @@ class StringArg {
   const vef_invalue_t *v_;
 };
 
+// BinaryArg: raw bytes, exactly as the caller supplied them; never converted.
+// Requires VEF_PROTOCOL_4.
+class BinaryArg {
+ public:
+  explicit BinaryArg(const vef_invalue_t *v) : v_(v) {}
+  bool is_null() const { return v_->is_null; }
+  Span<const unsigned char> value() const {
+    return {v_->binary_value, v_->binary_len};
+  }
+
+ private:
+  const vef_invalue_t *v_;
+};
+
 // CustomArg: input type for non-parameterized custom type arguments.  For
 // parameterized types (e.g., TVECTOR(N)), use CustomArgWith<P> instead.
 class CustomArg {
@@ -209,8 +223,8 @@ class RealResult {
   vef_vdf_result_t *r_;
 };
 
-// Write into buffer(), then call set_length() with the number of chars written.
-// buffer().size() is the maximum usable capacity.
+// Write utf8mb4 text into buffer(), then call set_length() with the number of
+// bytes written. buffer().size() is the maximum usable capacity.
 class StringResult {
  public:
   explicit StringResult(vef_vdf_result_t *r) : r_(r) {}
@@ -228,6 +242,46 @@ class StringResult {
     // (snprintf-style overflow contract). Only copy_len bytes are valid until
     // that retry.
     set_length(sv.size());
+  }
+  void set_null() { r_->type = VEF_RESULT_NULL; }
+  void warning(std::string_view msg) {
+    r_->type = VEF_RESULT_WARNING;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
+  void error(std::string_view msg) {
+    r_->type = VEF_RESULT_ERROR;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
+
+ private:
+  vef_vdf_result_t *r_;
+};
+
+// BinaryResult: raw bytes, returned with the binary charset. Write into
+// buffer(), then call set_length() with the number of bytes written.
+// buffer().size() is the maximum usable capacity. Requires VEF_PROTOCOL_4.
+class BinaryResult {
+ public:
+  explicit BinaryResult(vef_vdf_result_t *r) : r_(r) {}
+
+  Span<unsigned char> buffer() { return {r_->binary_buf, r_->max_binary_len}; }
+  void set_length(size_t len) {
+    r_->actual_len = len;
+    r_->type = VEF_RESULT_VALUE;
+  }
+  void set(Span<const unsigned char> bytes) {
+    size_t copy_len =
+        bytes.size() < r_->max_binary_len ? bytes.size() : r_->max_binary_len;
+    memcpy(r_->binary_buf, bytes.data(), copy_len);
+    // Report the full size even when it does not fit, as StringResult::set
+    // does: the server grows the buffer and re-invokes the VDF.
+    set_length(bytes.size());
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
   void warning(std::string_view msg) {

@@ -50,9 +50,9 @@ static bool is_inferrable_string_const(Item *arg) {
   return false;
 }
 
-// Default result-buffer size for STRING/CUSTOM returns when the extension does
-// not declare its own buffer_size. Most JSON/text results fit in 1 KiB, so
-// this avoids a reallocation in the common case.
+// Default result-buffer size for STRING/BINARY/CUSTOM returns when the
+// extension does not declare its own buffer_size. Most JSON/text results fit in
+// 1 KiB, so this avoids a reallocation in the common case.
 static constexpr size_t kDefaultResultBufferSize = 1024;
 
 // Result-buffer growth quantum. Reallocations round up to a multiple of this
@@ -123,10 +123,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   if (!m_error_msg) return true;
   m_error_msg[0] = '\0';
 
-  // Allocate result buffer only for types that need it (STRING/CUSTOM)
+  // Allocate result buffer only for types that need it (STRING/BINARY/CUSTOM)
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
-  if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_CUSTOM) {
+  if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_BINARY ||
+      return_type == VEF_TYPE_CUSTOM) {
     size_t needed = m_udf->vdf_func_desc->buffer_size > 0
                         ? m_udf->vdf_func_desc->buffer_size
                         : kDefaultResultBufferSize;
@@ -417,6 +418,28 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
         }
         break;
       }
+      case VEF_TYPE_BINARY: {
+        // BINARY needs VEF_PROTOCOL_4, so it never uses the v1 layout, which
+        // has no field for it.
+        if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
+          // A BINARY argument is the bytes as they are, never converted.
+          String *arg_str = arg_item->val_str(&buffers[i]);
+          if (arg_item->null_value || arg_str == nullptr) {
+            invalues[i].is_null = true;
+            invalues[i].binary_value = nullptr;
+            invalues[i].binary_len = 0;
+          } else {
+            invalues[i].is_null = false;
+            invalues[i].binary_value =
+                reinterpret_cast<const unsigned char *>(arg_str->ptr());
+            invalues[i].binary_len = arg_str->length();
+          }
+        } else {
+          assert(false);
+          invalues[i].is_null = true;
+        }
+        break;
+      }
       case VEF_TYPE_CUSTOM:
       default: {
         String *arg_str = arg_item->val_str(&buffers[i]);
@@ -570,6 +593,10 @@ String *vdf_handler::val_str(String *str, String *save_str,
       } else {
         result.type_params = {0, nullptr, nullptr};
       }
+    } else if (return_type == VEF_TYPE_BINARY) {
+      result.binary_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
+      result.max_binary_len = m_result_buffer_size;
+      result.alt_binary_buf = nullptr;
     } else {
       result.str_buf = m_result_buffer;
       result.max_str_len = m_result_buffer_size;
@@ -613,6 +640,10 @@ String *vdf_handler::val_str(String *str, String *save_str,
       if (is_binary) {
         res = result.alt_bin_buf ? reinterpret_cast<char *>(*result.alt_bin_buf)
                                  : reinterpret_cast<char *>(result.bin_buf);
+      } else if (return_type == VEF_TYPE_BINARY) {
+        res = result.alt_binary_buf
+                  ? reinterpret_cast<char *>(*result.alt_binary_buf)
+                  : reinterpret_cast<char *>(result.binary_buf);
       } else {
         res = result.alt_str_buf ? *result.alt_str_buf : result.str_buf;
       }

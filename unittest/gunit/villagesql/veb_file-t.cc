@@ -330,6 +330,36 @@ TEST_F(CheckVefRegistrationTest, CustomParamWithoutTypeNameIsError) {
   EXPECT_NE(error.find("CUSTOM"), std::string::npos) << error;
 }
 
+// VEF_TYPE_BINARY exists from VEF_PROTOCOL_4; a descriptor declaring an older
+// protocol cannot use it.
+TEST_F(CheckVefRegistrationTest, BinaryParamBeforeProtocol4IsError) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_INT, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_3;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+
+  std::string error;
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("param 1"), std::string::npos) << error;
+  EXPECT_NE(error.find("type id 4"), std::string::npos) << error;
+}
+
+TEST_F(CheckVefRegistrationTest, BinaryAtProtocol4IsWellFormed) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_BINARY, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_4;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+
+  std::string error;
+  EXPECT_FALSE(check_vef_registration(&reg, error)) << error;
+}
+
 TEST_F(CheckVefRegistrationTest, UnknownReturnTypeIdIsError) {
   vef_signature_t sig = {0, nullptr, {static_cast<vef_type_id>(99), nullptr}};
   vef_func_desc_t desc = g_func_desc;

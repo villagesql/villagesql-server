@@ -185,13 +185,17 @@ typedef enum : unsigned int {
                    //   required_capability_count in vef_registration_t)
   VEF_PROTOCOL_4,  // Under development, not stable. Adds:
                    // + max_result_length on vef_func_desc_t: an extension may
-                   //   declare the maximum length of a STRING result so the
-                   //   result column is sized to hold the full value instead of
-                   //   the argument width (fixes materialization truncation).
+                   //   declare the maximum length of a STRING or BINARY result
+                   //   so the result column is sized to hold the full value
+                   //   instead of the argument width (fixes materialization
+                   //   truncation).
                    // + on_init / on_deinit on vef_registration_t: the server
                    //   calls the extension's load and unload hooks with its
                    //   capabilities populated, rather than the extension
                    //   running them itself inside vef_register/vef_unregister.
+                   // + VEF_TYPE_BINARY: a parameter or result of raw bytes.
+                   //   A BINARY argument arrives unconverted, and a BINARY
+                   //   result is labelled binary rather than utf8mb4.
 } vef_protocol_t;
 
 // =============================================================================
@@ -287,7 +291,10 @@ typedef enum : int {
   VEF_TYPE_STRING = 0,
   VEF_TYPE_REAL = 1,
   VEF_TYPE_INT = 2,
-  VEF_TYPE_CUSTOM = 3
+  VEF_TYPE_CUSTOM = 3,
+  // protocol >= VEF_PROTOCOL_4
+  // Raw bytes, never converted.
+  VEF_TYPE_BINARY = 4
 
   // TODO(villagesql-production): Do we want to support DECIMAL?
 } vef_type_id;
@@ -378,6 +385,13 @@ typedef struct {
       vef_type_params_t type_params;
     };
 
+    // protocol >= VEF_PROTOCOL_4
+    // For TYPE_BINARY: raw bytes, exactly as the caller supplied them
+    struct {
+      size_t binary_len;
+      const unsigned char *binary_value;
+    };
+
     // For TYPE_REAL
     double real_value;
 
@@ -406,8 +420,9 @@ typedef enum : int {
 
 // Result from a VDF call
 //
-// For STRING return type: use str_buf/max_str_len/alt_str_buf
+// For STRING return type: use str_buf/max_str_len/alt_str_buf; write utf8mb4
 // For CUSTOM return type: use bin_buf/max_bin_len/alt_bin_buf
+// For BINARY return type: use binary_buf/max_binary_len/alt_binary_buf
 // For REAL return type: use real_value
 // For INT return type: use int_value
 typedef struct {
@@ -415,8 +430,8 @@ typedef struct {
   vef_return_value_type_t type;
 
   // The actual length of the result (set iff type is IS_VALUE for
-  // STRING/CUSTOM) If type is IS_BUF_TOO_SMALL, this indicates the required
-  // buffer size. For REAL and INT types, this field is unused.
+  // STRING/CUSTOM/BINARY) If type is IS_BUF_TOO_SMALL, this indicates the
+  // required buffer size. For REAL and INT types, this field is unused.
   size_t actual_len;
 
   // Caller-provided buffer for error message (size VEF_MAX_ERROR_LEN).
@@ -462,6 +477,20 @@ typedef struct {
       // protocol >= VEF_PROTOCOL_3
       // Read-only: the extension must not overwrite these parameters.
       vef_type_params_t type_params;
+    };
+
+    // protocol >= VEF_PROTOCOL_4
+    // For BINARY type: caller-provided buffer for raw bytes
+    struct {
+      // Buffer where the result bytes should be written
+      unsigned char *binary_buf;
+
+      // Size of binary_buf in bytes
+      size_t max_binary_len;
+
+      // Callee can return a different pointer than binary_buf. Same semantics
+      // as alt_str_buf above.
+      unsigned char **alt_binary_buf;
     };
 
     // For REAL return type
@@ -814,14 +843,15 @@ typedef struct {
   vef_vdf_accumulate_func_t accumulate;
 
   // protocol >= VEF_PROTOCOL_4
-  // Declared maximum length of this function's STRING result, in characters
-  // (the result is utf8mb4; for ASCII/JSON output one character is one byte).
+  // Declared maximum length of this function's STRING or BINARY result: in
+  // characters for STRING (the result is utf8mb4; for ASCII/JSON output one
+  // character is one byte), in bytes for BINARY.
   // The server uses it to size the result column so a materialized result
   // (temp tables for GROUP BY/DISTINCT, CREATE TABLE ... SELECT, UNION) is not
   // truncated at the argument width. 0 = fall back to the argument width (like
   // a classic UDF that leaves initid->max_length unset, in which case a large
-  // result truncates when materialized). Not allowed for non-STRING return
-  // types. Capped at VEF_MAX_RESULT_LENGTH (see PRACTICAL LIMITS).
+  // result truncates when materialized). Not allowed for other return types.
+  // Capped at VEF_MAX_RESULT_LENGTH (see PRACTICAL LIMITS).
   //
   // Distinct from buffer_size, which is only the initial row-time output buffer
   // (it grows on demand); this bounds the column the result is stored into.

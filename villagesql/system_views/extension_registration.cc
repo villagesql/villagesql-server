@@ -55,6 +55,8 @@ static const char *type_id_to_str(vef_type_id id) {
       return "INT";
     case VEF_TYPE_CUSTOM:
       return "CUSTOM";
+    case VEF_TYPE_BINARY:
+      return "BINARY";
   }
   return "UNKNOWN";
 }

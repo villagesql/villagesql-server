@@ -1,0 +1,93 @@
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension vdf_sb using SDK...
+Created vdf_sb.veb
+INSTALL EXTENSION vdf_sb;
+#
+# Test 1: an argument in utf8mb4 reaches both as the same bytes
+#
+SELECT vdf_sb.str_hex('é') AS str, vdf_sb.bin_hex('é') AS bin;
+str	bin
+C3A9	C3A9
+#
+# Test 2: an argument in another charset
+#
+# BINARY gets the bytes it was written in.
+SELECT vdf_sb.bin_hex(_latin1 0xE9) AS bin;
+bin
+E9
+SELECT vdf_sb.bin_hex(_ucs2 0x00E9) AS bin;
+bin
+00E9
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+CREATE TABLE t1 (txt VARCHAR(8) CHARACTER SET latin1);
+INSERT INTO t1 VALUES ('é');
+SELECT vdf_sb.bin_hex(txt) AS bin FROM t1;
+bin
+E9
+DROP TABLE t1;
+#
+# Test 3: an argument in the binary charset
+#
+# BINARY takes any bytes.
+SELECT vdf_sb.bin_hex(0xC3A9) AS bin;
+bin
+C3A9
+SELECT vdf_sb.bin_hex(0xFF) AS bin;
+bin
+FF
+#
+# Test 4: NULL
+#
+SELECT vdf_sb.str_hex(NULL) AS str, vdf_sb.bin_hex(NULL) AS bin;
+str	bin
+NULL	NULL
+#
+# Test 5: the charset of each result
+#
+SELECT CHARSET(vdf_sb.str_echo('a')) AS str, COLLATION(vdf_sb.str_echo('a')) AS str_coll;
+str	str_coll
+utf8mb4	utf8mb4_bin
+SELECT CHARSET(vdf_sb.bin_echo('a')) AS bin, COLLATION(vdf_sb.bin_echo('a')) AS bin_coll;
+bin	bin_coll
+binary	binary
+SELECT HEX(vdf_sb.bin_echo(0x00FF10)) AS bin;
+bin
+00FF10
+#
+# Test 6: a BINARY result that is not text can be materialized
+#
+# A result labelled utf8mb4 would be refused here as an incorrect
+# string value.
+CREATE TABLE t2 AS SELECT vdf_sb.bin_echo(0xBA7816BF8F01) AS h;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `h` varbinary(64) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT HEX(h) FROM t2;
+HEX(h)
+BA7816BF8F01
+DROP TABLE t2;
+#
+# Test 7: the registration lists BINARY
+#
+SELECT jt.name, jt.return_type, jt.params
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
+JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
+name        VARCHAR(64) PATH '$.name',
+return_type VARCHAR(64) PATH '$.return_type',
+params      JSON        PATH '$.params'
+)) AS jt
+WHERE EXTENSION_NAME = 'vdf_sb'
+ORDER BY jt.name;
+name	return_type	params
+bin_echo	BINARY	["BINARY"]
+bin_hex	STRING	["BINARY"]
+str_echo	STRING	["STRING"]
+str_hex	STRING	["STRING"]
+#
+# Cleanup
+#
+UNINSTALL EXTENSION vdf_sb;

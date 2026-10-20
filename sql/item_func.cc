@@ -4515,7 +4515,8 @@ bool udf_handler::is_vdf_returns_string() const {
   return u_d != nullptr &&
          u_d->calling_convention == UdfCallingConvention::VDF &&
          u_d->vdf_func_desc != nullptr &&
-         u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING;
+         (u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING ||
+          u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_BINARY);
 }
 
 void udf_handler::set_vdf_string_result_type(Item *item,
@@ -4533,8 +4534,7 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   // is not clipped to N/4. Both paths are capped at MAX_BLOB_WIDTH, like a
   // classic UDF (see the init path in udf_handler::fix_fields).
   // set_data_type_string then buckets to VARCHAR / MEDIUM / LONG blob by
-  // length.
-  // TODO(villagesql): Allow VDFs to choose an encoding.
+  // length. A BINARY result is sized the same way, in bytes.
   size_t len = 0;
   if (u_d != nullptr && u_d->vdf_func_desc != nullptr &&
       u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_4) {
@@ -4550,10 +4550,15 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   if (len > MAX_BLOB_WIDTH) {
     len = MAX_BLOB_WIDTH;
   }
-  item->set_data_type_string(static_cast<uint32>(len), &my_charset_utf8mb4_bin);
+  // STRING is utf8mb4 text; BINARY is raw bytes.
+  const CHARSET_INFO *cs =
+      u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_BINARY
+          ? &my_charset_bin
+          : &my_charset_utf8mb4_bin;
+  item->set_data_type_string(static_cast<uint32>(len), cs);
   // Keep the runtime result charset in sync with the item's declared
   // collation.
-  m_return_value_extension.charset_info = &my_charset_utf8mb4_bin;
+  m_return_value_extension.charset_info = cs;
 }
 
 void udf_handler::cleanup() {
