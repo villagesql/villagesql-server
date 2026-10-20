@@ -42,6 +42,7 @@ class KeyringCapability
     NOT_FOUND = VEF_KEYRING_NOT_FOUND,
     UNAVAILABLE = VEF_KEYRING_UNAVAILABLE,
     ERROR = VEF_KEYRING_ERROR,
+    BUF_TOO_SMALL = VEF_KEYRING_BUF_TOO_SMALL,
   };
 
   // Outcome of a read(). On Status::OK, value contains the secret.
