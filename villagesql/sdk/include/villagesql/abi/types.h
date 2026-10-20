@@ -560,7 +560,10 @@ typedef void (*vef_vdf_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
 // function returns.
 //
 // The user_data pointer allows the extension to maintain state across calls.
-// Memory allocated in prerun should be freed in postrun.
+// Memory allocated in prerun should be freed in postrun. If prerun succeeds,
+// postrun is called exactly once, even if the statement fails before the
+// first row. If prerun reports an error, postrun is not called, so prerun
+// must free anything it allocated before reporting the error.
 
 typedef struct {
   // Number of arguments that will be passed to each vdf call

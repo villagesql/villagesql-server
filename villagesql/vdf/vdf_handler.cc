@@ -20,6 +20,7 @@
 #include "lex_string.h"
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"
+#include "scope_guard.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"
 #include "sql/item.h"
@@ -228,6 +229,14 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     }
   }
 
+  // Steps after prerun can still fail. The caller then drops this handler
+  // without calling cleanup(), so run postrun here to free prerun's state. A
+  // failed prerun does not get a postrun; it must clean up after itself.
+  bool prerun_completed = false;
+  auto postrun_guard = create_scope_guard([&] {
+    if (prerun_completed) RunPostrun();
+  });
+
   // Call prerun if present
   if (m_udf->vdf_func_desc->prerun) {
     vef_prerun_args_t prerun_args{};
@@ -272,8 +281,14 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
 
     // Store user_data for subsequent calls
     m_vdf_args.user_data = prerun_result.user_data;
+    prerun_completed = true;
 
-    // Handle buffer size request
+    // Handle buffer size request. The vdf_fail_after_prerun debug point forces
+    // a failure here so tests can check that postrun still runs.
+    DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    });
     if (MaybeResizeBuffer(prerun_result.result_buffer_size)) return true;
   }
 
@@ -307,6 +322,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   }
 
   m_active = true;
+  postrun_guard.release();
   return false;
 }
 
@@ -345,14 +361,17 @@ void vdf_handler::accumulate(bool *null_value) {
 }
 
 void vdf_handler::cleanup() {
-  // Call postrun if VDF was active and postrun exists
-  if (m_active && m_udf->vdf_func_desc->postrun) {
-    vef_postrun_args_t postrun_args{};
-    postrun_args.user_data = m_vdf_args.user_data;
-    vef_postrun_result_t postrun_result{};
-    m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
-  }
+  if (m_active) RunPostrun();
   m_active = false;
+}
+
+void vdf_handler::RunPostrun() {
+  if (m_udf->vdf_func_desc->postrun == nullptr) return;
+  vef_postrun_args_t postrun_args{};
+  postrun_args.user_data = m_vdf_args.user_data;
+  vef_postrun_result_t postrun_result{};
+  m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
+  m_vdf_args.user_data = nullptr;
 }
 
 template <typename InvalueType>

@@ -32,6 +32,10 @@
 // postrun is responsible for freeing it. PostrunArgs::delete_state<T>() is
 // the typed convenience for the common case of `new T{}` + `delete`.
 //
+// If prerun succeeds, postrun runs exactly once, even if the statement fails
+// before the first row. If prerun calls PrerunResult::error(), postrun does
+// not run, so free anything allocated before calling error().
+//
 // Prerun and postrun can be a cumbersome API. The func builder already handles
 // the simple cases (e.g. type checking for functions with fixed args and
 // allocating fixed buffer sizes), and we want to cover more. If you find you

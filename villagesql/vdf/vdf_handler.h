@@ -96,6 +96,9 @@ class vdf_handler {
   // trigger a fresh allocation each time. No-op if already large enough.
   // Returns true on allocation failure.
   bool MaybeResizeBuffer(size_t needed);
+
+  // Call the VDF's postrun function, if any, and clear user_data.
+  void RunPostrun();
 };
 
 }  // namespace vdf
