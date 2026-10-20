@@ -98,6 +98,8 @@ class RealArg {
   const vef_invalue_t *v_;
 };
 
+// StringArg: text input, always utf8mb4. The server converts an argument in
+// any other charset before the call.
 class StringArg {
  public:
   explicit StringArg(const vef_invalue_t *v) : v_(v) {}

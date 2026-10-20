@@ -1,5 +1,7 @@
-# A BINARY parameter receives the argument's bytes unconverted, and a BINARY
-# result is labelled binary, where a STRING result is utf8mb4.
+# A VDF's STRING parameter receives utf8mb4 text, converted from whatever
+# charset the argument is in, and a STRING result is utf8mb4. A BINARY
+# parameter receives the argument's bytes unconverted, and a BINARY result is
+# labelled binary.
 #
 # The *_hex functions return, in hex, the bytes the VDF received.
 
@@ -27,22 +29,25 @@ SELECT vdf_sb.str_hex('é') AS str, vdf_sb.bin_hex('é') AS bin;
 --echo #
 --echo # Test 2: an argument in another charset
 --echo #
---echo # BINARY gets the bytes it was written in.
+--echo # STRING converts it to utf8mb4; BINARY gets the bytes it was written in.
 
-SELECT vdf_sb.bin_hex(_latin1 0xE9) AS bin;
-SELECT vdf_sb.bin_hex(_ucs2 0x00E9) AS bin;
+SELECT vdf_sb.str_hex(_latin1 0xE9) AS str, vdf_sb.bin_hex(_latin1 0xE9) AS bin;
+SELECT vdf_sb.str_hex(_ucs2 0x00E9) AS str, vdf_sb.bin_hex(_ucs2 0x00E9) AS bin;
 
 CREATE TABLE t1 (txt VARCHAR(8) CHARACTER SET latin1);
 INSERT INTO t1 VALUES ('é');
-SELECT vdf_sb.bin_hex(txt) AS bin FROM t1;
+SELECT vdf_sb.str_hex(txt) AS str, vdf_sb.bin_hex(txt) AS bin FROM t1;
 DROP TABLE t1;
 
 --echo #
 --echo # Test 3: an argument in the binary charset
 --echo #
---echo # BINARY takes any bytes.
+--echo # A STRING parameter accepts it only when it is valid utf8mb4. BINARY
+--echo # takes any bytes.
 
-SELECT vdf_sb.bin_hex(0xC3A9) AS bin;
+SELECT vdf_sb.str_hex(0xC3A9) AS str, vdf_sb.bin_hex(0xC3A9) AS bin;
+--error ER_CANNOT_CONVERT_STRING
+SELECT vdf_sb.str_hex(0xFF);
 SELECT vdf_sb.bin_hex(0xFF) AS bin;
 
 --echo #
@@ -57,6 +62,7 @@ SELECT vdf_sb.str_hex(NULL) AS str, vdf_sb.bin_hex(NULL) AS bin;
 
 SELECT CHARSET(vdf_sb.str_echo('a')) AS str, COLLATION(vdf_sb.str_echo('a')) AS str_coll;
 SELECT CHARSET(vdf_sb.bin_echo('a')) AS bin, COLLATION(vdf_sb.bin_echo('a')) AS bin_coll;
+SELECT vdf_sb.str_echo(_latin1 0xE9) AS str;
 SELECT HEX(vdf_sb.bin_echo(0x00FF10)) AS bin;
 
 --echo #

@@ -41,7 +41,12 @@ trims surrounding ASCII spaces and lowercases names and values. Names are sorted
 and checked for duplicates using the fixed `utf8mb4_0900_ai_ci` collation (case-
 and accent-insensitive). Extensions cannot configure this collation.
 
-## BINARY values
+## STRING and BINARY values
+
+A `VEF_TYPE_STRING` value is text in utf8mb4. The server converts a STRING
+argument from whatever charset it is in; an argument in the binary charset must
+already be valid UTF-8, or the statement fails. A STRING result must be utf8mb4,
+and the server labels it `utf8mb4_bin`.
 
 A `VEF_TYPE_BINARY` value (protocol >= `VEF_PROTOCOL_4`) is raw bytes. A BINARY
 argument arrives exactly as the caller supplied it, whatever its charset, and a

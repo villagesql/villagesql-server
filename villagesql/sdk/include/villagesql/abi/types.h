@@ -194,8 +194,10 @@ typedef enum : unsigned int {
                    //   capabilities populated, rather than the extension
                    //   running them itself inside vef_register/vef_unregister.
                    // + VEF_TYPE_BINARY: a parameter or result of raw bytes.
-                   //   A BINARY argument arrives unconverted, and a BINARY
-                   //   result is labelled binary rather than utf8mb4.
+                   //   A STRING argument now always arrives as utf8mb4 text,
+                   //   converted from the caller's charset; a BINARY argument
+                   //   arrives unconverted, and a BINARY result is labelled
+                   //   binary rather than utf8mb4.
 } vef_protocol_t;
 
 // =============================================================================
@@ -288,6 +290,7 @@ typedef struct {
 
 // Type identifiers for VEF values (parameters and return types)
 typedef enum : int {
+  // Text, always utf8mb4.
   VEF_TYPE_STRING = 0,
   VEF_TYPE_REAL = 1,
   VEF_TYPE_INT = 2,
@@ -367,7 +370,7 @@ typedef struct {
   bool is_null;
 
   union {
-    // For TYPE_STRING: human-readable text
+    // For TYPE_STRING: human-readable text, in utf8mb4
     struct {
       size_t str_len;
       const char *str_value;

@@ -12,28 +12,32 @@ C3A9	C3A9
 #
 # Test 2: an argument in another charset
 #
-# BINARY gets the bytes it was written in.
-SELECT vdf_sb.bin_hex(_latin1 0xE9) AS bin;
-bin
-E9
-SELECT vdf_sb.bin_hex(_ucs2 0x00E9) AS bin;
-bin
-00E9
+# STRING converts it to utf8mb4; BINARY gets the bytes it was written in.
+SELECT vdf_sb.str_hex(_latin1 0xE9) AS str, vdf_sb.bin_hex(_latin1 0xE9) AS bin;
+str	bin
+C3A9	E9
+SELECT vdf_sb.str_hex(_ucs2 0x00E9) AS str, vdf_sb.bin_hex(_ucs2 0x00E9) AS bin;
+str	bin
+C3A9	00E9
 Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE t1 (txt VARCHAR(8) CHARACTER SET latin1);
 INSERT INTO t1 VALUES ('é');
-SELECT vdf_sb.bin_hex(txt) AS bin FROM t1;
-bin
-E9
+SELECT vdf_sb.str_hex(txt) AS str, vdf_sb.bin_hex(txt) AS bin FROM t1;
+str	bin
+C3A9	E9
 DROP TABLE t1;
 #
 # Test 3: an argument in the binary charset
 #
-# BINARY takes any bytes.
-SELECT vdf_sb.bin_hex(0xC3A9) AS bin;
-bin
-C3A9
+# A STRING parameter accepts it only when it is valid utf8mb4. BINARY
+# takes any bytes.
+SELECT vdf_sb.str_hex(0xC3A9) AS str, vdf_sb.bin_hex(0xC3A9) AS bin;
+str	bin
+C3A9	C3A9
+SELECT vdf_sb.str_hex(0xFF);
+ERROR HY000: Cannot convert string '\xFF' from binary to utf8mb4
 SELECT vdf_sb.bin_hex(0xFF) AS bin;
 bin
 FF
@@ -52,6 +56,9 @@ utf8mb4	utf8mb4_bin
 SELECT CHARSET(vdf_sb.bin_echo('a')) AS bin, COLLATION(vdf_sb.bin_echo('a')) AS bin_coll;
 bin	bin_coll
 binary	binary
+SELECT vdf_sb.str_echo(_latin1 0xE9) AS str;
+str
+é
 SELECT HEX(vdf_sb.bin_echo(0x00FF10)) AS bin;
 bin
 00FF10
