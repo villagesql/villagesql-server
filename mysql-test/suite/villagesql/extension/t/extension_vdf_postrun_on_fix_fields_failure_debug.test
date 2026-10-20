@@ -1,0 +1,36 @@
+# vdf_handler::fix_fields can fail after the VDF's prerun has handed over its
+# state, e.g. when the result buffer prerun requested cannot be allocated.
+# postrun must still run. The vdf_fail_after_prerun injection point makes
+# fix_fields fail right after prerun returns.
+#
+# vsql_test_only.prerun_counted() and prerun_live_states() are described in
+# extension_vdf_postrun_on_fix_fields_failure.
+
+--source include/have_debug.inc
+
+INSTALL EXTENSION vsql_test_only;
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1);
+
+PREPARE s FROM 'SELECT vsql_test_only.prerun_counted() FROM t1';
+
+SET SESSION debug = '+d,vdf_fail_after_prerun';
+
+--error ER_OUTOFMEMORY
+SELECT vsql_test_only.prerun_counted();
+SELECT vsql_test_only.prerun_live_states() AS live_after_select;
+
+--error ER_OUTOFMEMORY
+PREPARE bad FROM 'SELECT vsql_test_only.prerun_counted()';
+SELECT vsql_test_only.prerun_live_states() AS live_after_prepare;
+
+--error ER_OUTOFMEMORY
+EXECUTE s;
+SELECT vsql_test_only.prerun_live_states() AS live_after_reprepare;
+
+SET SESSION debug = '-d,vdf_fail_after_prerun';
+
+DEALLOCATE PREPARE s;
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_test_only;

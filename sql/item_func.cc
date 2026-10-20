@@ -4761,6 +4761,7 @@ bool udf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     if (!mem) return true;
     m_vdf = ::new (mem) villagesql::vdf::vdf_handler(u_d);
     if (m_vdf->fix_fields(thd, func, arg_count, args, buffers)) {
+      m_vdf->cleanup();
       m_vdf = nullptr;
       return true;
     }

@@ -1,0 +1,64 @@
+INSTALL EXTENSION vsql_test_only;
+CREATE TABLE t1 (a INT, b INT);
+INSERT INTO t1 VALUES (1, 2);
+# Normal path: the state is alive while the statement runs and freed after
+SELECT vsql_test_only.prerun_counted() AS live_during;
+live_during
+1
+SELECT vsql_test_only.prerun_live_states() AS live_after;
+live_after
+0
+# Resolution fails on a later select-list item after prerun has run
+SELECT vsql_test_only.prerun_counted(), no_such_column FROM t1;
+ERROR 42S22: Unknown column 'no_such_column' in 'field list'
+SELECT vsql_test_only.prerun_live_states() AS live_after;
+live_after
+0
+PREPARE bad FROM 'SELECT vsql_test_only.prerun_counted(), no_such_column FROM t1';
+ERROR 42S22: Unknown column 'no_such_column' in 'field list'
+SELECT vsql_test_only.prerun_live_states() AS live_after;
+live_after
+0
+# Prepared statement: postrun runs after each execution
+PREPARE s FROM 'SELECT vsql_test_only.prerun_counted() AS live_during, b FROM t1';
+SELECT vsql_test_only.prerun_live_states() AS live_after_prepare;
+live_after_prepare
+0
+EXECUTE s;
+live_during	b
+1	2
+SELECT vsql_test_only.prerun_live_states() AS live_after_execute;
+live_after_execute
+0
+# Reprepare succeeds: the prerun of the new tree is paired with a postrun
+ALTER TABLE t1 ADD COLUMN c INT;
+EXECUTE s;
+live_during	b
+1	2
+SELECT vsql_test_only.prerun_live_states() AS live_after_reprepare;
+live_after_reprepare
+0
+# Reprepare fails after prerun ran for the new tree
+ALTER TABLE t1 DROP COLUMN b;
+EXECUTE s;
+ERROR 42S22: Unknown column 'b' in 'field list'
+SELECT vsql_test_only.prerun_live_states() AS live_after_failed_reprepare;
+live_after_failed_reprepare
+0
+DEALLOCATE PREPARE s;
+# CREATE TABLE ... SELECT reprepares a second time on later executions,
+# discarding the first reprepared tree without executing it
+PREPARE c FROM 'CREATE TABLE t2 AS SELECT vsql_test_only.prerun_counted() AS live_during FROM t1';
+EXECUTE c;
+DROP TABLE t2;
+EXECUTE c;
+SELECT live_during FROM t2;
+live_during
+1
+DROP TABLE t2;
+SELECT vsql_test_only.prerun_live_states() AS live_after_discarded_reprepare;
+live_after_discarded_reprepare
+0
+DEALLOCATE PREPARE c;
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_test_only;

@@ -3096,6 +3096,11 @@ bool Prepared_statement::reprepare(THD *thd) {
     fails.
   */
   Prepared_statement copy(thd);
+  // VillageSQL: whichever tree ends up in copy is freed without executing.
+  // A reprepared tree skipped udf_handler::cleanup(), so clean it here or a
+  // VDF's postrun and a UDF's deinit never run.
+  auto cleanup_copy =
+      create_scope_guard([&]() { cleanup_items(copy.m_arena.item_list()); });
 
   swap_prepared_statement(&copy);
   auto copy_guard =

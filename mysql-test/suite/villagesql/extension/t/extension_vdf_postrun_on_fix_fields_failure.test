@@ -1,0 +1,60 @@
+# A VDF's prerun may allocate state that only its postrun frees. Resolution
+# can still fail after prerun has handed that state over, and a prepared
+# statement can discard a resolved tree without executing it. postrun must run
+# on those paths too or the state leaks for the life of the server.
+#
+# vsql_test_only.prerun_counted()'s prerun allocates a state object and
+# increments a live counter. Its postrun frees the state and decrements the
+# counter. prerun_live_states() reads the counter, which must be 0 after every
+# statement.
+# extension_vdf_postrun_on_fix_fields_failure_debug covers a failure inside
+# the VDF's own fix_fields.
+
+INSTALL EXTENSION vsql_test_only;
+
+CREATE TABLE t1 (a INT, b INT);
+INSERT INTO t1 VALUES (1, 2);
+
+--echo # Normal path: the state is alive while the statement runs and freed after
+SELECT vsql_test_only.prerun_counted() AS live_during;
+SELECT vsql_test_only.prerun_live_states() AS live_after;
+
+--echo # Resolution fails on a later select-list item after prerun has run
+--error ER_BAD_FIELD_ERROR
+SELECT vsql_test_only.prerun_counted(), no_such_column FROM t1;
+SELECT vsql_test_only.prerun_live_states() AS live_after;
+--error ER_BAD_FIELD_ERROR
+PREPARE bad FROM 'SELECT vsql_test_only.prerun_counted(), no_such_column FROM t1';
+SELECT vsql_test_only.prerun_live_states() AS live_after;
+
+--echo # Prepared statement: postrun runs after each execution
+PREPARE s FROM 'SELECT vsql_test_only.prerun_counted() AS live_during, b FROM t1';
+SELECT vsql_test_only.prerun_live_states() AS live_after_prepare;
+EXECUTE s;
+SELECT vsql_test_only.prerun_live_states() AS live_after_execute;
+
+--echo # Reprepare succeeds: the prerun of the new tree is paired with a postrun
+ALTER TABLE t1 ADD COLUMN c INT;
+EXECUTE s;
+SELECT vsql_test_only.prerun_live_states() AS live_after_reprepare;
+
+--echo # Reprepare fails after prerun ran for the new tree
+ALTER TABLE t1 DROP COLUMN b;
+--error ER_BAD_FIELD_ERROR
+EXECUTE s;
+SELECT vsql_test_only.prerun_live_states() AS live_after_failed_reprepare;
+DEALLOCATE PREPARE s;
+
+--echo # CREATE TABLE ... SELECT reprepares a second time on later executions,
+--echo # discarding the first reprepared tree without executing it
+PREPARE c FROM 'CREATE TABLE t2 AS SELECT vsql_test_only.prerun_counted() AS live_during FROM t1';
+EXECUTE c;
+DROP TABLE t2;
+EXECUTE c;
+SELECT live_during FROM t2;
+DROP TABLE t2;
+SELECT vsql_test_only.prerun_live_states() AS live_after_discarded_reprepare;
+DEALLOCATE PREPARE c;
+
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_test_only;
