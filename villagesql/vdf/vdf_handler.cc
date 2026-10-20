@@ -15,7 +15,6 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
-#include <optional>
 #include <type_traits>
 
 #include "lex_string.h"
@@ -230,27 +229,13 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     }
   }
 
-  // If fix_fields bails out after prerun allocated user_data, the caller
-  // (Item_udf_func::fix_fields) drops this handler without calling cleanup(),
-  // so postrun would never run and prerun's allocation would leak. Run postrun
-  // on any such early return. On success, we release() this and cleanup() owns
-  // postrun as usual. Mirrors the cleanup_guard in udf_handler::fix_fields.
+  // Steps after prerun can still fail. The caller then drops this handler
+  // without calling cleanup(), so run postrun here to free prerun's state. A
+  // failed prerun does not get a postrun; it must clean up after itself.
   bool prerun_completed = false;
-  auto run_postrun = [&]() {
-    if (prerun_completed) {
-      vef_postrun_args_t postrun_args{};
-      postrun_args.user_data = m_vdf_args.user_data;
-      vef_postrun_result_t postrun_result{};
-      m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
-    }
-  };
-  // Only arm the guard when the extension actually has a postrun. A prerun-only
-  // VDF has nothing to tear down, so we skip constructing the guard entirely
-  // instead of building one that no-ops.
-  std::optional<decltype(create_scope_guard(run_postrun))> postrun_guard;
-  if (m_udf->vdf_func_desc->postrun != nullptr) {
-    postrun_guard.emplace(create_scope_guard(run_postrun));
-  }
+  auto postrun_guard = create_scope_guard([&] {
+    if (prerun_completed) RunPostrun();
+  });
 
   // Call prerun if present
   if (m_udf->vdf_func_desc->prerun) {
@@ -298,9 +283,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     m_vdf_args.user_data = prerun_result.user_data;
     prerun_completed = true;
 
-    // Handle buffer size request
-    // debug point here to explicitly and deterministically test what it looks
-    // like if there is a post-prerun buffer allocation failure.
+    // Handle buffer size request. The vdf_fail_after_prerun debug point forces
+    // a failure here so tests can check that postrun still runs.
     DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
@@ -338,8 +322,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   }
 
   m_active = true;
-  // success: cleanup() owns postrun from here (no-op if no guard was armed).
-  if (postrun_guard) postrun_guard->release();
+  postrun_guard.release();
   return false;
 }
 
@@ -378,14 +361,17 @@ void vdf_handler::accumulate(bool *null_value) {
 }
 
 void vdf_handler::cleanup() {
-  // Call postrun if VDF was active and postrun exists
-  if (m_active && m_udf->vdf_func_desc->postrun) {
-    vef_postrun_args_t postrun_args{};
-    postrun_args.user_data = m_vdf_args.user_data;
-    vef_postrun_result_t postrun_result{};
-    m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
-  }
+  if (m_active) RunPostrun();
   m_active = false;
+}
+
+void vdf_handler::RunPostrun() {
+  if (m_udf->vdf_func_desc->postrun == nullptr) return;
+  vef_postrun_args_t postrun_args{};
+  postrun_args.user_data = m_vdf_args.user_data;
+  vef_postrun_result_t postrun_result{};
+  m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
+  m_vdf_args.user_data = nullptr;
 }
 
 template <typename InvalueType>

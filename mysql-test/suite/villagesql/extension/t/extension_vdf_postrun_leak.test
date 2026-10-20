@@ -1,7 +1,8 @@
 # Regression: when VDF fix_fields fails after prerun allocated user_data,
 # postrun must still run to free it. The vdf_fail_after_prerun DBUG point
 # forces the post-prerun failure; the extension's global balance counter
-# (live_state_count) must return to zero.
+# (live_state_count) must return to zero. Also checks that a prerun that
+# reports an error does not get a postrun.
 
 --source include/have_debug.inc
 
@@ -29,6 +30,13 @@ SELECT vdf_postrun_leak.prerun_count() AS pre,
 
 --echo # Happy path: prerun+postrun pair normally, no leak
 SELECT vdf_postrun_leak.leak_probe() AS probe;
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+       vdf_postrun_leak.postrun_count() AS post,
+       vdf_postrun_leak.live_state_count() AS live;
+
+--echo # Failed prerun: postrun must not run (pre +1, post unchanged)
+--error ER_CANT_INITIALIZE_UDF
+SELECT vdf_postrun_leak.error_probe() AS probe;
 SELECT vdf_postrun_leak.prerun_count() AS pre,
        vdf_postrun_leak.postrun_count() AS post,
        vdf_postrun_leak.live_state_count() AS live;

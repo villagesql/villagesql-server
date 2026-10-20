@@ -26,4 +26,12 @@ vdf_postrun_leak.postrun_count() AS post,
 vdf_postrun_leak.live_state_count() AS live;
 pre	post	live
 2	2	0
+# Failed prerun: postrun must not run (pre +1, post unchanged)
+SELECT vdf_postrun_leak.error_probe() AS probe;
+ERROR HY000: Can't initialize function 'error_probe'; forced prerun error
+SELECT vdf_postrun_leak.prerun_count() AS pre,
+vdf_postrun_leak.postrun_count() AS post,
+vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+3	2	0
 UNINSTALL EXTENSION vdf_postrun_leak;

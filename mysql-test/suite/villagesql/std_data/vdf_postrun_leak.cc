@@ -19,7 +19,8 @@
 // counter) AND requests a result buffer. When fix_fields fails after prerun
 // (forced via the vdf_fail_after_prerun DBUG point), postrun must still run to
 // free that state. live_state_count() reports the balance so the test can
-// assert it returns to zero.
+// assert it returns to zero. error_probe's prerun reports an error, so its
+// postrun must not run.
 
 #include <villagesql/vsql.h>
 
@@ -57,6 +58,15 @@ void leak_probe_postrun(PostrunArgs args) {
   args.delete_state<LeakState>();
 }
 
+void error_probe_prerun(PrerunArgs, PrerunResult out) {
+  g_prerun_count.fetch_add(1);
+  out.error("forced prerun error");
+}
+
+void error_probe(IntResult out) { out.set(0); }
+
+void error_probe_postrun(PostrunArgs) { g_postrun_count.fetch_add(1); }
+
 void live_state_count(IntResult out) { out.set(g_live_state_count.load()); }
 void prerun_count(IntResult out) { out.set(g_prerun_count.load()); }
 void postrun_count(IntResult out) { out.set(g_postrun_count.load()); }
@@ -68,6 +78,12 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .prerun<&leak_probe_prerun>()
                   .postrun<&leak_probe_postrun>()
+                  .build())
+        .func(make_func<&error_probe>("error_probe")
+                  .returns(INT)
+                  .no_params()
+                  .prerun<&error_probe_prerun>()
+                  .postrun<&error_probe_postrun>()
                   .build())
         .func(make_func<&live_state_count>("live_state_count")
                   .returns(INT)

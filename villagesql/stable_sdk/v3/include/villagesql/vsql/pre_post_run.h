@@ -33,6 +33,10 @@
 // postrun is responsible for freeing it. PostrunArgs::delete_state<T>() is
 // the typed convenience for the common case of `new T{}` + `delete`.
 //
+// If prerun succeeds, postrun runs exactly once, even if the statement fails
+// before the first row. If prerun calls PrerunResult::error(), postrun does
+// not run, so free anything allocated before calling error().
+//
 // vef_postrun_result_t is currently empty in the ABI, so there is no
 // PostrunResult wrapper. If/when the result struct gains fields, a typed
 // wrapper class will be added and the postrun signature will become
