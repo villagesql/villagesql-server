@@ -1,0 +1,17 @@
+# A scalar VDF result inserted into a COMPLEX column must be stored with -0
+# normalized to 0, the same as a string literal.
+# Observed (job w1-0006): complex_conjugate('(-3,0)') is stored as (-3,-0);
+# only complex_sum canonicalizes its result.
+--source include/villagesql/not_implemented.inc
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+    (1, '(-3,-0)'),
+    (2, vsql_complex.complex_conjugate('(-3,0)')),
+    (3, vsql_complex.complex_multiply('(-1,0)', '(0,0)'));
+SELECT * FROM t1 ORDER BY id;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,39 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a COMPLEX,
+b COMPLEX,
+re DOUBLE,
+mag DOUBLE
+);
+INSERT INTO t1 (id, a, b) VALUES
+(1, vsql_complex.complex_add('(1,2)', '(3,4)'), vsql_complex.complex_conjugate('(1,2)')),
+(2, vsql_complex.complex_multiply('(0,1)', '(0,1)'), vsql_complex.complex_subtract('(0,0)', '(-0,5)'));
+INSERT INTO t1 (id, a, b) VALUES
+ROW(3, vsql_complex.complex_divide('(4,2)', '(2,0)'), NULL);
+INSERT INTO t1 SET id = 4, a = vsql_complex.complex_add('(1,1)', '(-1,-1)'),
+re = vsql_complex.complex_real('(2.5,7)'), mag = vsql_complex.complex_abs('(3,4)');
+INSERT INTO t1 (id, a, b, re, mag) VALUES
+(5, '(6,-8)', vsql_complex.complex_conjugate(a),
+vsql_complex.complex_real(b), vsql_complex.complex_abs(a));
+INSERT INTO t1 SET id = 6, a = '(1,2)', b = vsql_complex.complex_multiply(a, a);
+INSERT INTO t1 (id, a, re) VALUES
+(7, vsql_complex.complex_add(NULL, '(1,1)'), vsql_complex.complex_imag(NULL));
+SET @c = '(10,-10)';
+INSERT INTO t1 (id, a) VALUES (8, vsql_complex.complex_conjugate(@c));
+ERROR HY000: Cannot initialize function 'complex_conjugate': argument 1 must be a custom type or string constant
+INSERT INTO t1 (id, a) VALUES (8, vsql_complex.complex_conjugate(vsql_complex.COMPLEX::from_string(@c)));
+SET @d = (SELECT a FROM t1 WHERE id = 1);
+INSERT INTO t1 (id, a) VALUES (9, vsql_complex.complex_conjugate(@d));
+SET @c = NULL, @d = NULL;
+SELECT * FROM t1 ORDER BY id;
+id	a	b	re	mag
+1	(4,6)	(1,-2)	NULL	NULL
+2	(-1,0)	(0,-5)	NULL	NULL
+3	(2,1)	NULL	NULL	NULL
+4	(0,0)	NULL	2.5	5
+5	(6,-8)	(6,8)	6	10
+6	(1,2)	(-3,4)	NULL	NULL
+7	NULL	NULL	NULL	NULL
+8	(10,10)	NULL	NULL	NULL
+9	(4,-6)	NULL	NULL	NULL
+DROP TABLE t1;
