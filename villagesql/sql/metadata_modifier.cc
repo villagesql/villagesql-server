@@ -61,19 +61,6 @@ static constexpr const char *error_uninitialized_victionary =
 static constexpr const char *error_uninitialized_session =
     "Uninitialized Session: NULL THD";
 
-bool Metadata_modifier::ensure_engine_is_innodb(const handlerton *hton,
-                                                const char *operation) {
-  assert(hton);
-  if (hton && hton->db_type != DB_TYPE_INNODB) {
-    villagesql_error(
-        "Custom types are only supported with InnoDB storage engine. "
-        "Cannot %s with %s storage engine.",
-        MYF(0), operation, ha_resolve_storage_engine_name(hton));
-    return true;
-  }
-  return false;
-}
-
 bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
                                     Table_name db_table,
                                     const List<Create_field> &create_fields) {
@@ -1202,7 +1189,7 @@ bool Metadata_modifier::process_create(THD *thd,
 
   // Check storage engine if custom columns or indexes were added.
   if (custom_modifier.has_entries() &&
-      ensure_engine_is_innodb(create_info->db_type, "create table")) {
+      EnsureEngineIsInnodb(create_info->db_type, "create table")) {
     return true;
   }
 
@@ -1270,7 +1257,7 @@ bool Metadata_modifier::process_alter(THD *thd,
   }
   // The target engine must be InnoDB when custom columns are involved.
   if ((current_has_custom || adding_custom) &&
-      ensure_engine_is_innodb(target_engine, "alter table")) {
+      EnsureEngineIsInnodb(target_engine, "alter table")) {
     return true;
   }
 

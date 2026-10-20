@@ -39,8 +39,10 @@
 #include "sql/item_func.h"
 #include "sql/item_sum.h"
 #include "sql/key.h"
+#include "sql/key_spec.h"
 #include "sql/parse_tree_column_attrs.h"
 #include "sql/sp_pcontext.h"
+#include "sql/sql_alter.h"
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
 #include "sql/sql_show.h"  // append_identifier
@@ -1641,12 +1643,47 @@ static bool insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
   return false;
 }
 
-bool PrepareTmpTableCustomColumns(
-    THD *thd, const char *db, const char *table_name,
-    List<Create_field> &create_fields,
-    [[maybe_unused]] const HA_CREATE_INFO *create_info) {
+bool EnsureEngineIsInnodb(const handlerton *hton, const char *operation) {
+  assert(hton);
+  if (hton && hton->db_type != DB_TYPE_INNODB) {
+    villagesql_error(
+        "Custom types are only supported with InnoDB storage engine. "
+        "Cannot %s with %s storage engine.",
+        MYF(0), operation, ha_resolve_storage_engine_name(hton));
+    return true;
+  }
+  return false;
+}
+
+// Check that the tmp table is InnoDB if any column or index is custom-typed.
+static bool EnsureInnodbEngineForTmpTable(const HA_CREATE_INFO *create_info,
+                                          const Alter_info *alter_info,
+                                          const char *operation) {
   assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
-  List_iterator_fast<Create_field> it(create_fields);
+
+  bool has_custom = false;
+  for (const Create_field &cdef : alter_info->create_list) {
+    if (cdef.custom_type_context != nullptr) {
+      has_custom = true;
+      break;
+    }
+  }
+  for (const Key_spec *key : alter_info->key_list) {
+    if (has_custom) break;
+    has_custom = key->key_create_info.is_custom_index();
+  }
+
+  return has_custom && EnsureEngineIsInnodb(create_info->db_type, operation);
+}
+
+bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
+                                  const char *table_name,
+                                  Alter_info *alter_info,
+                                  const HA_CREATE_INFO *create_info) {
+  assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
+  if (EnsureInnodbEngineForTmpTable(create_info, alter_info, "create table"))
+    return true;
+  List_iterator_fast<Create_field> it(alter_info->create_list);
   Create_field *cdef;
   while ((cdef = it++) != nullptr) {
     if (cdef->custom_type_context == nullptr) continue;
@@ -1684,13 +1721,20 @@ void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
   RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
 
-void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
+bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
+                              const HA_CREATE_INFO *create_info) {
   thd->villagesql_alter_custom_fields.clear();
-  for (const Create_field &cdef : create_list) {
+
+  if ((create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
+      EnsureInnodbEngineForTmpTable(create_info, alter_info, "alter table"))
+    return true;
+
+  for (const Create_field &cdef : alter_info->create_list) {
     if (cdef.custom_type_context != nullptr)
       thd->villagesql_alter_custom_fields.emplace(cdef.field_name,
                                                   cdef.custom_type_context);
   }
+  return false;
 }
 
 void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table) {
