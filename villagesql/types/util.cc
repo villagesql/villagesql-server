@@ -2046,8 +2046,10 @@ static bool CallBindTypesHook(
       arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available
-    if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
+    // Provide constant string values where available. A prepared-statement
+    // parameter has no value until EXECUTE.
+    if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
+        arg_types[i].id == VEF_TYPE_STRING) {
       String *v = args[i]->val_str(&const_store[i]);
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
