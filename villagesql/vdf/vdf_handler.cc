@@ -39,10 +39,12 @@ namespace vdf {
 // Returns true when `arg` is an input the from_string-inference path can
 // safely pre-execute at fix_fields time: a constant-for-execution Item whose
 // val_str() has no side effects. Today this covers string literals and
-// read-only user variables (e.g. @v after `SET @v = '[...]'`).
-static bool is_inferrable_string_const(Item *arg) {
+// read-only user variables (e.g. @v after `SET @v = '[...]'`), and for a BINARY
+// parameter also hexadecimal and bit literals.
+static bool is_inferrable_string_const(Item *arg, bool binary) {
   if (!arg->const_for_execution()) return false;
   if (arg->type() == Item::STRING_ITEM) return true;
+  if (binary && arg->type() == Item::HEX_BIN_ITEM) return true;
   if (arg->type() == Item::FUNC_ITEM &&
       down_cast<Item_func *>(arg)->functype() == Item_func::GUSERVAR_FUNC) {
     return true;
@@ -50,11 +52,12 @@ static bool is_inferrable_string_const(Item *arg) {
   return false;
 }
 
-// How a STRING argument is read: as utf8mb4 from VEF_PROTOCOL_4. An extension
-// negotiated at an older protocol was built before that, and gets the value's
-// bytes as they are.
-static vef_type_id StringReadType(vef_protocol_t protocol) {
-  return protocol >= VEF_PROTOCOL_4 ? VEF_TYPE_STRING : VEF_TYPE_BINARY;
+// The type an argument for a parameter of type `id` is read as. A STRING
+// argument is utf8mb4 from VEF_PROTOCOL_4; an extension negotiated at an older
+// protocol was built before that, and gets the value's bytes as they are.
+static vef_type_id ArgReadType(vef_type_id id, vef_protocol_t protocol) {
+  if (id == VEF_TYPE_STRING && protocol < VEF_PROTOCOL_4) return VEF_TYPE_BINARY;
+  return id;
 }
 
 // Default result-buffer size for STRING/BINARY/CUSTOM returns when the
@@ -196,27 +199,28 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   // this time with known params, and encodes normally.
   //
   // "String const" here covers string literals and user variables — anything
-  // is_inferrable_string_const() accepts. Only a STRING parameter is
-  // pre-executed: the constant is read as utf8mb4 text, which would change or
-  // reject the bytes meant for a parameter of any other type.
+  // is_inferrable_string_const() accepts. Only a STRING or BINARY parameter
+  // is pre-executed, with the constant read as the VDF reads it at row time. A
+  // varargs call marshals a string constant as STRING.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
+  const vef_type_id param_id =
+      signature != nullptr && signature->param_count == 1
+          ? signature->params[0].id
+          : VEF_TYPE_STRING;
   if (signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
       m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
-      (signature->param_count == VEF_PARAM_VARARGS ||
-       signature->params[0].id == VEF_TYPE_STRING) &&
-      is_inferrable_string_const(arguments[0])) {
+      (param_id == VEF_TYPE_STRING || param_id == VEF_TYPE_BINARY) &&
+      is_inferrable_string_const(arguments[0], param_id == VEF_TYPE_BINARY)) {
     TypeInferenceSnapshot snap;
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
-      // The parameter is STRING, so the constant is read as the VDF will read
-      // it at row time.
       String tmp;
-      String *val =
-          ReadVdfValue(StringReadType(m_udf->vdf_protocol), arguments[0], &tmp);
+      String *val = ReadVdfValue(ArgReadType(param_id, m_udf->vdf_protocol),
+                                 arguments[0], &tmp);
       if (val == nullptr && thd->is_error()) return true;
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
@@ -439,7 +443,7 @@ static bool marshal_args_typed(const vef_signature_t *sig,
         // From VEF_PROTOCOL_4 a STRING argument is utf8mb4 text: converted
         // from any other charset, and a binary one must already be valid
         // utf8mb4.
-        String *arg_str = villagesql::ReadVdfValue(StringReadType(protocol),
+        String *arg_str = villagesql::ReadVdfValue(ArgReadType(VEF_TYPE_STRING, protocol),
                                                    arg_item, &buffers[i]);
         if (arg_str == nullptr && !arg_item->null_value) return true;
         if (arg_item->null_value || arg_str == nullptr) {

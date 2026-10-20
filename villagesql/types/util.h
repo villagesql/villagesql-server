@@ -224,7 +224,10 @@ enum class EncodeStatus {
 };
 
 // Encodes a string for storage in a custom type field, with error reporting.
-// The TypeContext and field name are taken from the field itself. Returns the
+// A string in the binary charset is the type's binary form, and an error for a
+// type without an encode from it; any other is its text form, converted to
+// utf8mb4. The TypeContext and field name are taken from the field itself.
+// Returns the
 // encoded String*, or nullptr with status saying why. On kBadValue a warning
 // has been pushed, so the caller only has to decide whether to promote it to
 // an error.
@@ -278,9 +281,16 @@ inline std::optional<size_t> TryComputeHash(const T &obj, const uchar *data,
 // Inject custom type context into a string Item and encode it for comparison
 // This is used to "poison" string literals with custom type information when
 // they are compared against custom type columns (e.g., WHERE col = '(1,2)')
-// Only affects STRING_ITEM types without existing type context
+// Only affects STRING_ITEM and HEX_BIN_ITEM types without existing type
+// context
 // Returns false on success, true on error (my_error already called if needed)
 extern bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc);
+
+// Append the literal a custom type value encoded by InjectAndEncodeCustomType
+// prints as: its text form, quoted, so the printed query parses back to the
+// same value.
+extern void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
+                                String *out);
 
 // Template version that works with both Item and Field types
 // Both Item and Field have has_type_context() and get_type_context() methods
@@ -407,6 +417,12 @@ extern FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to);
 // context, and the source produces a string result.
 extern type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                            Field *to_field);
+
+// Encode and store a string value into a custom type field: its binary form
+// when it is in the binary charset, otherwise its text form. Returns
+// appropriate type_conversion_status for the result.
+extern type_conversion_status EncodeAndStoreStringToCustomField(
+    const String &value, Field *field);
 
 // Encode and store a string value into a custom type field during EXECUTE,
 // reading the parameter's bytes in the charset they arrived in. Returns

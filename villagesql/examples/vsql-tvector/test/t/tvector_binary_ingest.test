@@ -1,0 +1,98 @@
+# A value in the binary charset is TVECTOR's binary form: packed little-endian
+# elements, encoded with TVECTOR::from_binary. That includes a hex literal.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+
+########################################################################
+#
+# 1. A binary string literal stores the same value as the text form.
+#
+########################################################################
+
+# [1,2,3] as float32: 0x3F800000, 0x40000000, 0x40400000
+INSERT INTO t VALUES (1, _binary 0x0000803F0000004000004040);
+INSERT INTO t VALUES (2, '[1,2,3]');
+SELECT id, v FROM t ORDER BY id;
+SELECT a.v = b.v AS same FROM t a, t b WHERE a.id = 1 AND b.id = 2;
+
+########################################################################
+#
+# 2. A prepared-statement parameter.
+#
+########################################################################
+
+PREPARE s FROM 'INSERT INTO t VALUES (?, ?)';
+SET @id = 3;
+SET @v = 0x0000803F0000004000004040;
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t WHERE id = 3;
+
+########################################################################
+#
+# 3. UPDATE, comparison, and INSERT ... SELECT from a VARBINARY column.
+#
+########################################################################
+
+# [4,5,6] as float32: 0x40800000, 0x40A00000, 0x40C00000
+UPDATE t SET v = _binary 0x000080400000A0400000C040 WHERE id = 3;
+SELECT id, v FROM t WHERE id = 3;
+SELECT id FROM t WHERE v = _binary 0x000080400000A0400000C040;
+
+CREATE TABLE b (id INT PRIMARY KEY, raw VARBINARY(12));
+INSERT INTO b VALUES (4, 0x0000803F0000004000004040);
+INSERT INTO t SELECT id, raw FROM b;
+SELECT id, v FROM t WHERE id = 4;
+DROP TABLE b;
+
+########################################################################
+#
+# 4. Bytes that are not a TVECTOR(3) are rejected, with no fallback to
+#    the text form.
+#
+########################################################################
+
+# Two elements where the column has three.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (5, _binary 0x0000803F00000040);
+
+# Not a whole number of elements.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (5, _binary 0x0000803F0000004000004040FF);
+
+# The text '[1,2,3]' written as a hex literal.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (5, _binary 0x5B312C322C335D);
+
+# IGNORE treats a rejected binary value as it does a rejected text one.
+INSERT IGNORE INTO t VALUES (5, _binary 0x0000803F00000040);
+INSERT IGNORE INTO t VALUES (7, '[1,2]');
+SELECT id, v FROM t WHERE id IN (5, 7) ORDER BY id;
+
+# A hex literal without an introducer is a binary string too.
+INSERT INTO t VALUES (6, 0x0000803F0000004000004040);
+INSERT IGNORE INTO t VALUES (8, 0x0000803F00000040);
+SELECT id, v FROM t WHERE id IN (6, 8) ORDER BY id;
+
+########################################################################
+#
+# 5. A double column takes float64 elements.
+#
+########################################################################
+
+CREATE TABLE d (v TVECTOR('dimension=2,type=double'));
+# [1,2] as float64: 0x3FF0000000000000, 0x4000000000000000
+INSERT INTO d VALUES (_binary 0x000000000000F03F0000000000000040);
+SELECT v FROM d;
+DROP TABLE d;
+
+########################################################################
+#
+# Cleanup
+#
+########################################################################
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

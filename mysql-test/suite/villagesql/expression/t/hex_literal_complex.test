@@ -1,0 +1,83 @@
+# A hex literal used as a custom type value outside a column store: compared
+# with a custom column, in IN, BETWEEN and CASE, and as a custom-typed VDF
+# argument. It is a binary string, so it is the type's binary form, encoded
+# with its from_binary, as it is when stored into a column.
+#
+# COMPLEX's binary form is two little-endian doubles:
+#   (1,5) is 0x000000000000F03F0000000000001440
+#   (3,4) is 0x00000000000008400000000000001040
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v COMPLEX);
+INSERT INTO t VALUES (1, '(1,5)'), (2, '(3,4)');
+
+--echo #
+--echo # Test 1: comparisons
+--echo #
+
+SELECT id FROM t WHERE v = 0x000000000000F03F0000000000001440;
+SELECT id FROM t WHERE v = X'00000000000008400000000000001040';
+SELECT id FROM t WHERE v <> 0x000000000000F03F0000000000001440;
+SELECT id FROM t WHERE v = _binary 0x000000000000F03F0000000000001440;
+SELECT id FROM t
+WHERE v IN (0x000000000000F03F0000000000001440,
+            0x00000000000008400000000000001040)
+ORDER BY id;
+SELECT id FROM t
+WHERE v BETWEEN 0x000000000000F03F0000000000001440
+            AND 0x00000000000008400000000000001040
+ORDER BY id;
+SELECT id,
+       CASE v WHEN 0x000000000000F03F0000000000001440 THEN 'one-five'
+              ELSE 'other' END AS c
+FROM t ORDER BY id;
+
+--echo #
+--echo # Test 2: a custom-typed VDF argument
+--echo #
+
+SELECT id, vsql_complex.complex_add(v, 0x000000000000F03F0000000000001440) AS s
+FROM t ORDER BY id;
+
+--echo #
+--echo # Test 3: a prepared statement, executed twice
+--echo #
+
+PREPARE s FROM 'SELECT id FROM t WHERE v = 0x00000000000008400000000000001040';
+EXECUTE s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # Test 4: a view prints the literal as its text form
+--echo #
+
+CREATE VIEW vw AS SELECT id FROM t WHERE v = 0x000000000000F03F0000000000001440;
+SHOW CREATE VIEW vw;
+SELECT id FROM vw;
+DROP VIEW vw;
+
+--echo #
+--echo # Test 5: bytes that are not a COMPLEX
+--echo #
+
+--error ER_WRONG_VALUE
+SELECT id FROM t WHERE v = 0x28312C3529;
+--error ER_WRONG_VALUE
+SELECT vsql_complex.complex_add(v, 0x28312C3529) FROM t;
+
+--echo #
+--echo # Test 6: a type without from_binary refuses a hex literal
+--echo #
+
+CREATE TABLE t2 (id INT PRIMARY KEY, v COMPLEX2);
+INSERT INTO t2 VALUES (1, '(1,5)');
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id FROM t2 WHERE v = 0x000000000000F03F0000000000001440;
+SELECT id FROM t2 WHERE v = '(1,5)';
+DROP TABLE t2;
+
+DROP TABLE t;
+
+--source include/villagesql/uninstall_complex_extension.inc

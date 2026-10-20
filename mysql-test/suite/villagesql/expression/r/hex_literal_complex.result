@@ -1,0 +1,87 @@
+CREATE TABLE t (id INT PRIMARY KEY, v COMPLEX);
+INSERT INTO t VALUES (1, '(1,5)'), (2, '(3,4)');
+#
+# Test 1: comparisons
+#
+SELECT id FROM t WHERE v = 0x000000000000F03F0000000000001440;
+id
+1
+SELECT id FROM t WHERE v = X'00000000000008400000000000001040';
+id
+2
+SELECT id FROM t WHERE v <> 0x000000000000F03F0000000000001440;
+id
+2
+SELECT id FROM t WHERE v = _binary 0x000000000000F03F0000000000001440;
+id
+1
+SELECT id FROM t
+WHERE v IN (0x000000000000F03F0000000000001440,
+0x00000000000008400000000000001040)
+ORDER BY id;
+id
+1
+2
+SELECT id FROM t
+WHERE v BETWEEN 0x000000000000F03F0000000000001440
+AND 0x00000000000008400000000000001040
+ORDER BY id;
+id
+1
+2
+SELECT id,
+CASE v WHEN 0x000000000000F03F0000000000001440 THEN 'one-five'
+              ELSE 'other' END AS c
+FROM t ORDER BY id;
+id	c
+1	one-five
+2	other
+#
+# Test 2: a custom-typed VDF argument
+#
+SELECT id, vsql_complex.complex_add(v, 0x000000000000F03F0000000000001440) AS s
+FROM t ORDER BY id;
+id	s
+1	(2,10)
+2	(4,9)
+#
+# Test 3: a prepared statement, executed twice
+#
+PREPARE s FROM 'SELECT id FROM t WHERE v = 0x00000000000008400000000000001040';
+EXECUTE s;
+id
+2
+EXECUTE s;
+id
+2
+DEALLOCATE PREPARE s;
+#
+# Test 4: a view prints the literal as its text form
+#
+CREATE VIEW vw AS SELECT id FROM t WHERE v = 0x000000000000F03F0000000000001440;
+SHOW CREATE VIEW vw;
+View	Create View	character_set_client	collation_connection
+vw	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw` AS select `t`.`id` AS `id` from `t` where (`t`.`v` = '(1,5)')	utf8mb4	utf8mb4_0900_ai_ci
+SELECT id FROM vw;
+id
+1
+DROP VIEW vw;
+#
+# Test 5: bytes that are not a COMPLEX
+#
+SELECT id FROM t WHERE v = 0x28312C3529;
+ERROR HY000: Incorrect COMPLEX value: '(1,5)'
+SELECT vsql_complex.complex_add(v, 0x28312C3529) FROM t;
+ERROR HY000: Incorrect COMPLEX value: '(1,5)'
+#
+# Test 6: a type without from_binary refuses a hex literal
+#
+CREATE TABLE t2 (id INT PRIMARY KEY, v COMPLEX2);
+INSERT INTO t2 VALUES (1, '(1,5)');
+SELECT id FROM t2 WHERE v = 0x000000000000F03F0000000000001440;
+ERROR HY000: Type 'vsql_complex.COMPLEX2' cannot read a binary value; give a text value a character set
+SELECT id FROM t2 WHERE v = '(1,5)';
+id
+1
+DROP TABLE t2;
+DROP TABLE t;

@@ -84,13 +84,22 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
   inferred_workspace.buf = stack_params_buf;
   inferred_workspace.max_buf_len = sizeof(stack_params_buf);
 
-  // Build the single STRING input arg holding the constant literal.
+  // Build the single input arg holding the constant literal, as text or as
+  // bytes depending on the encode VDF's parameter.
   // TODO(villagesql): change this to use the encoding wrapper.
   vef_invalue_t arg{};
-  arg.type = VEF_TYPE_STRING;
   arg.is_null = false;
-  arg.str_value = input_string.data();
-  arg.str_len = input_string.size();
+  if (encode_vdf->signature != nullptr &&
+      encode_vdf->signature->params[0].id == VEF_TYPE_BINARY) {
+    arg.type = VEF_TYPE_BINARY;
+    arg.binary_value =
+        reinterpret_cast<const unsigned char *>(input_string.data());
+    arg.binary_len = input_string.size();
+  } else {
+    arg.type = VEF_TYPE_STRING;
+    arg.str_value = input_string.data();
+    arg.str_len = input_string.size();
+  }
   vef_invalue_t *arg_ptr = &arg;
 
   vef_vdf_args_t vdf_args{};

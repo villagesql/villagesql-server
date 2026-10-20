@@ -1,0 +1,51 @@
+# TVECTOR::from_binary: (BINARY) -> TVECTOR
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+
+########################################################################
+#
+# 1. Packed little-endian float32 bytes store the same value as the text.
+#
+########################################################################
+
+# [1,2,3] as float32: 0x3F800000, 0x40000000, 0x40400000
+INSERT INTO t VALUES (1, TVECTOR::from_binary(0x0000803F0000004000004040));
+INSERT INTO t VALUES (2, '[1,2,3]');
+SELECT id, v FROM t ORDER BY id;
+SELECT a.v = b.v AS same FROM t a, t b WHERE a.id = 1 AND b.id = 2;
+
+########################################################################
+#
+# 2. The dimension comes from the byte length.
+#
+########################################################################
+
+SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(0x0000803F)) AS n;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_binary(0x0000803F00) AS v;
+
+########################################################################
+#
+# 3. A prepared-statement parameter.
+#
+########################################################################
+
+# #1426: the error is reported as a failure to decode the value.
+call mtr.add_suppression("VillageSQL.*Invalid value in column '\\?\\?\\?' of type 'vsql_tvector.TVECTOR'");
+PREPARE s FROM 'INSERT INTO t VALUES (3, TVECTOR::from_binary(?))';
+SET @v = 0x0000803F0000004000004040;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+########################################################################
+#
+# Cleanup
+#
+########################################################################
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

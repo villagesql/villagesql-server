@@ -47,6 +47,15 @@ TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
   } else {
     fn_ = op.fn();
   }
+
+  const std::optional<EncodeOp> &binary_op = tc->from_binary_op();
+  if (binary_op.has_value()) {
+    binary_call_.emplace(binary_op->vdf());
+    const auto &params = binary_op->parameters();
+    binary_call_->init(TypeParameterSlice(params.count(), params.key_data(),
+                                          params.value_data()),
+                       NoInitData{});
+  }
 }
 
 bool TypeEncoder::Init() {
@@ -58,31 +67,46 @@ bool TypeEncoder::Init() {
   return false;
 }
 
+template <typename Call>
+String *TypeEncoder::vdf_result(Call &call, std::optional<size_t> r,
+                                EncodeOutcome &outcome) {
+  if (!r) {
+    outcome.result_type = call.result_type();
+    outcome.message = call.error_msg();
+    return nullptr;
+  }
+
+  if (call.alt_bin_buf() != nullptr) {
+    // TODO(villagesql-beta): support the extension returning alternate
+    // buffers
+    return nullptr;
+  }
+
+  // TODO(villagesql-beta): report an error or warning when the VDF overruns
+  // the buffer rather than silently returning invalid
+  if (*r > buffer_size_) {
+    return nullptr;
+  }
+
+  result_.set(buffer_, *r, &my_charset_bin);
+  return &result_;
+}
+
+String *TypeEncoder::encode_binary(const String &from, EncodeOutcome &outcome) {
+  assert(binary_call_.has_value());
+  outcome = EncodeOutcome{};
+  auto r =
+      binary_call_->invoke(from, pointer_cast<uchar *>(buffer_), buffer_size_);
+  return vdf_result(*binary_call_, r, outcome);
+}
+
 String *TypeEncoder::encode(const String &from, EncodeOutcome &outcome) {
   outcome = EncodeOutcome{};
 
   if (vdf_call_.has_value()) {
     auto r =
         vdf_call_->invoke(from, pointer_cast<uchar *>(buffer_), buffer_size_);
-    if (!r) {
-      outcome.result_type = vdf_call_->result_type();
-      outcome.message = vdf_call_->error_msg();
-      return nullptr;
-    }
-
-    if (vdf_call_->alt_bin_buf() != nullptr) {
-      // TODO(villagesql-beta): support the extension returning alternate
-      // buffers
-      return nullptr;
-    }
-
-    // TODO(villagesql-beta): report an error or warning when the VDF overruns
-    // the buffer rather than silently returning invalid
-    if (*r > buffer_size_) {
-      return nullptr;
-    }
-
-    result_.set(buffer_, *r, &my_charset_bin);
+    return vdf_result(*vdf_call_, r, outcome);
   } else {
     // TODO(villagesql-beta): Remove suport for these raw functions
     assert(fn_ != nullptr);

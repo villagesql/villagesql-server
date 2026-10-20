@@ -24,8 +24,12 @@ Warning	1366	Incorrect COMPLEX value: 'not a complex' for column 'c' at row 1
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 2;
 id	c	is_null
 2	(0,0)	0
-INSERT IGNORE INTO t VALUES (3, X'00000000000008400000000000001040');
-ERROR HY000: Incorrect COMPLEX value: '' for column 'c' at row 1
+INSERT IGNORE INTO t VALUES (3, X'000000000000084000000000000010');
+Warnings:
+Warning	1366	Incorrect COMPLEX value: '\x00\x00\x00\x00\x00\x00\x08@\x00\x00\x00\x00\x00\x00\x10' for column 'c' at row 1
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 3;
+id	c	is_null
+3	(0,0)	0
 PREPARE s FROM 'INSERT IGNORE INTO t VALUES (?, ?)';
 SET @id = 4, @v = 'not a complex';
 EXECUTE s USING @id, @v;
@@ -34,10 +38,10 @@ Warning	1366	Incorrect COMPLEX value: 'not a complex' for column 'c' at row 1
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 4;
 id	c	is_null
 4	(0,0)	0
-SET @id = 5, @v = X'00000000000008400000000000001040';
+SET @id = 5, @v = X'000000000000084000000000000010';
 EXECUTE s USING @id, @v;
 Warnings:
-Warning	1366	Incorrect COMPLEX value: '\x00\x00\x00\x00\x00\x00\x08@\x00\x00\x00\x00\x00\x00\x10@' for column 'c' at row 1
+Warning	1366	Incorrect COMPLEX value: '\x00\x00\x00\x00\x00\x00\x08@\x00\x00\x00\x00\x00\x00\x10' for column 'c' at row 1
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 5;
 id	c	is_null
 5	(0,0)	0
@@ -68,6 +72,7 @@ SELECT id, c FROM t ORDER BY id;
 id	c
 1	(3,4)
 2	(0,0)
+3	(0,0)
 4	(0,0)
 5	(0,0)
 6	(0,0)
