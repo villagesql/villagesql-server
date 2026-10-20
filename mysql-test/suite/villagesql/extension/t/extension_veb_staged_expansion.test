@@ -103,10 +103,21 @@ close($fh);
 print "Expansion directory present before the failed re-expansion\n";
 EOF
 
+# Villagesql_veb_cache_repaired counts completed repairs, so an attempt that
+# fails must leave it alone.
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) INTO @repaired_before
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
+
 SET SESSION debug='+d,villagesql_veb_fail_extraction';
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION vsql_complex;
 SET SESSION debug='-d,villagesql_veb_fail_extraction';
+
+--echo # The failed repair was not counted
+SELECT CAST(VARIABLE_VALUE AS UNSIGNED) - @repaired_before AS repaired_delta
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Villagesql_veb_cache_repaired';
 
 # Check and report if the directory is gone.
 --perl

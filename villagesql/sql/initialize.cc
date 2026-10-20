@@ -36,6 +36,7 @@
 #include "string_with_len.h"
 #include "villagesql/include/build_info.h"
 #include "villagesql/include/error.h"
+#include "villagesql/include/metrics.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
@@ -293,6 +294,11 @@ bool init_extension_infrastructure() {
 
   villagesql::services::register_builtin_capabilities();
 
+  // Register status variables before the bootstrap thread below loads
+  // installed extensions, so load events are tracked. Failure here is
+  // non-fatal but unlikely (bad_alloc or bootstrap failure).
+  (void)villagesql::metrics::register_status_variables();
+
   // We need a temporary THD during boot
   // The initialization code may update table settings, in order to avoid
   // locking and avoid asserts in the locking code, run on a bootstrap dd system
@@ -440,6 +446,7 @@ void destroy_extension_state() {
 
   vclient.destroy();
   SchemaManager::deinit();
+  villagesql::metrics::unregister_status_variables();
   LogVSQL(INFORMATION_LEVEL,
           "VillageSQL extension infrastructure deinitialized");
 }
