@@ -1,0 +1,79 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX, KEY k_val (val),
+KEY k_grp_val (grp, val));
+INSERT INTO t1 VALUES
+(1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+(5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree
+SELECT id, val, RANK() OVER (ORDER BY val) AS rnk FROM t1 FORCE INDEX (k_val)
+ORDER BY id;
+EXPLAIN
+-> Sort: t1.id
+    -> Table scan on <temporary>  (cost=COST rows=ROWS)
+        -> Temporary table  (cost=COST rows=ROWS)
+            -> Window aggregate: rank() OVER (ORDER BY t1.val )   (cost=COST rows=ROWS)
+                -> Sort: t1.val  (cost=COST rows=ROWS)
+                    -> Covering index scan on t1 using k_val  (cost=COST rows=ROWS)
+
+SELECT id, val, RANK() OVER (ORDER BY val) AS rnk FROM t1 FORCE INDEX (k_val)
+ORDER BY id;
+id	val	rnk
+1	(2,1)	6
+2	(-3,0)	2
+3	(2,1)	6
+4	(2,-5)	5
+5	(-1,-1)	3
+6	NULL	1
+7	(10,0)	8
+8	(-1,-1)	3
+EXPLAIN FORMAT=tree
+SELECT id, grp, val,
+ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val, id) AS rn,
+LAG(val) OVER (PARTITION BY grp ORDER BY val, id) AS lag_v
+FROM t1 FORCE INDEX (k_grp_val) ORDER BY id;
+EXPLAIN
+-> Sort: t1.id
+    -> Table scan on <temporary>  (cost=COST rows=ROWS)
+        -> Temporary table  (cost=COST rows=ROWS)
+            -> Window aggregate with buffering: lag(t1.val) OVER (PARTITION BY t1.grp ORDER BY t1.val,t1.id )   (cost=COST rows=ROWS)
+                -> Table scan on <temporary>  (cost=COST rows=ROWS)
+                    -> Temporary table  (cost=COST rows=ROWS)
+                        -> Window aggregate: row_number() OVER (PARTITION BY t1.grp ORDER BY t1.val,t1.id )   (cost=COST rows=ROWS)
+                            -> Sort: t1.grp, t1.val, t1.id  (cost=COST rows=ROWS)
+                                -> Covering index scan on t1 using k_grp_val  (cost=COST rows=ROWS)
+
+SELECT id, grp, val,
+ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val, id) AS rn,
+LAG(val) OVER (PARTITION BY grp ORDER BY val, id) AS lag_v
+FROM t1 FORCE INDEX (k_grp_val) ORDER BY id;
+id	grp	val	rn	lag_v
+1	1	(2,1)	3	(2,-5)
+2	1	(-3,0)	1	NULL
+3	1	(2,1)	4	(2,1)
+4	1	(2,-5)	2	(-3,0)
+5	2	(-1,-1)	2	NULL
+6	2	NULL	1	NULL
+7	2	(10,0)	4	(-1,-1)
+8	2	(-1,-1)	3	(-1,-1)
+EXPLAIN FORMAT=tree
+SELECT id, val, ROW_NUMBER() OVER (ORDER BY val, id) AS rn
+FROM t1 FORCE INDEX (k_val) WHERE val > '(0,0)' ORDER BY id;
+EXPLAIN
+-> Sort: t1.id
+    -> Table scan on <temporary>  (cost=COST rows=ROWS)
+        -> Temporary table  (cost=COST rows=ROWS)
+            -> Window aggregate: row_number() OVER (ORDER BY t1.val,t1.id )   (cost=COST rows=ROWS)
+                -> Sort: t1.val, t1.id  (cost=COST rows=ROWS)
+                    -> Filter: (t1.val > '(0,0)')  (cost=COST rows=ROWS)
+                        -> Covering index range scan on t1 using k_val over (0x100000000000000000000000000000000000 < val)  (cost=COST rows=ROWS)
+
+SELECT id, val, ROW_NUMBER() OVER (ORDER BY val, id) AS rn
+FROM t1 FORCE INDEX (k_val) WHERE val > '(0,0)' ORDER BY id;
+id	val	rn
+1	(2,1)	2
+3	(2,1)	3
+4	(2,-5)	1
+7	(10,0)	4
+DROP TABLE t1;
