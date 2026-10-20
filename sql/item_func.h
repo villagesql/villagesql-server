@@ -2216,8 +2216,12 @@ class Item_udf_func : public Item_func {
   bool check_function_as_value_generator(uchar *checker_args) override {
     // Only allow VDFs explicitly declared deterministic by the extension
     // author. Classic UDFs are always disallowed (non-deterministic or
-    // independently droppable).
-    if (udf.is_vdf_deterministic()) return false;
+    // independently droppable). A VDF with prerun or postrun is disallowed
+    // too: a value generator is resolved once per TABLE open but cleaned up
+    // after every statement, so postrun would free the state that later
+    // statements still hand to the VDF.
+    if (udf.is_vdf_deterministic() && !udf.vdf_has_statement_hooks())
+      return false;
     Check_function_as_value_generator_parameters *func_arg =
         pointer_cast<Check_function_as_value_generator_parameters *>(
             checker_args);

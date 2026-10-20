@@ -102,6 +102,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -1447,6 +1448,43 @@ void bad_bind_params_no_type_bind(vsql::BindArgs args, vsql::BindResult out) {
 
 using namespace vsql;
 
+// state_probe(n) returns n and is deterministic, so CHECK constraints,
+// generated columns, DEFAULT expressions and functional indexes accept it.
+// Its prerun registers the new state in live_state_probes and its postrun
+// removes it. The body compares its state pointer against the registry, never
+// reading through it, and counts a call whose state is not registered.
+// state_probe_dead_calls() reads that count, which must stay 0. A dead call
+// means the server ran the VDF with the user_data of a state postrun already
+// freed. state_probe_live() reads how many states are still registered.
+struct StateProbe {};
+
+static std::set<const void *> live_state_probes;
+static int64_t state_probe_dead_calls = 0;
+
+void state_probe_prerun(vsql::PrerunArgs, vsql::PrerunResult result) {
+  auto *state = new StateProbe{};
+  live_state_probes.insert(state);
+  result.set_user_data(state);
+}
+
+void state_probe_postrun(vsql::PostrunArgs args) {
+  live_state_probes.erase(args.user_data());
+  args.delete_state<StateProbe>();
+}
+
+void state_probe_impl(void *state, vsql::IntArg n, vsql::IntResult out) {
+  if (live_state_probes.count(state) == 0) ++state_probe_dead_calls;
+  out.set(n.value());
+}
+
+void state_probe_dead_calls_impl(vsql::IntResult out) {
+  out.set(state_probe_dead_calls);
+}
+
+void state_probe_live_impl(vsql::IntResult out) {
+  out.set(static_cast<int64_t>(live_state_probes.size()));
+}
+
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
         // FAULT_BLOB type: behaviour controlled by
@@ -1487,6 +1525,21 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(INT)
                   .varargs()
                   .prerun<&int_sum_all_prerun>()
+                  .build())
+        .func(make_func<&state_probe_impl>("state_probe")
+                  .returns(INT)
+                  .param(INT)
+                  .deterministic()
+                  .prerun<&state_probe_prerun>()
+                  .postrun<&state_probe_postrun>()
+                  .build())
+        .func(make_func<&state_probe_dead_calls_impl>("state_probe_dead_calls")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&state_probe_live_impl>("state_probe_live")
+                  .returns(INT)
+                  .no_params()
                   .build())
         .func(make_aggregate_func<NormSqState, &pvec_norm_sq_result>(
                   "pvec_norm_sq")

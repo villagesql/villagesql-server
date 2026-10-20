@@ -166,6 +166,13 @@ class udf_handler {
            u_d->vdf_func_desc->deterministic;
   }
 
+  // Returns true if this VDF has a prerun or postrun hook. The pair runs once
+  // per statement, which only a statement's own Item tree can provide.
+  bool vdf_has_statement_hooks() const {
+    return is_vdf() && (u_d->vdf_func_desc->prerun != nullptr ||
+                        u_d->vdf_func_desc->postrun != nullptr);
+  }
+
   // Check if this VDF returns a text string (VEF_TYPE_STRING) as opposed to
   // binary data (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available before
   // m_vdf is instantiated.
