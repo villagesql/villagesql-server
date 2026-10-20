@@ -700,7 +700,8 @@ String *EncodeStringForField(Field *field, const String &from,
   // Always push a warning (consistent with MySQL built-in types)
   // Caller decides whether to also promote to error
   // TODO(villagesql-general): an extension's own warning() message is dropped
-  // here; only the standard 1366 reaches the user.
+  // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
+  // the user.
   const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
   const Diagnostics_area *da = thd->get_stmt_da();
   push_warning_printf(
@@ -1278,6 +1279,27 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   return false;
 }
 
+type_conversion_status HandleFailedEncode(Field *field, EncodeStatus status,
+                                          bool no_conversions) {
+  switch (status) {
+    case EncodeStatus::kNull:
+      return set_field_to_null_with_conversions(field, no_conversions);
+    case EncodeStatus::kOom:
+      return TYPE_ERR_OOM;
+    case EncodeStatus::kErrorRaised:
+      return TYPE_ERR_BAD_VALUE;
+    case EncodeStatus::kBadValue:
+      break;
+  }
+  // A warning for the bad value is already pushed. Store the type's intrinsic
+  // default so the row reads back if it survives, as a built-in stores 0 or ''
+  // for a value it cannot parse; nullability does not enter into it. A failure
+  // here has reported itself, so pass its status on.
+  const type_conversion_status store_stat =
+      StoreCustomFieldIntrinsicDefault(field);
+  return store_stat != TYPE_OK ? store_stat : TYPE_ERR_BAD_VALUE;
+}
+
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                     Field *to_field) {
   assert(!from_field->has_type_context());
@@ -1292,15 +1314,7 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
   EncodeStatus status = EncodeStatus::kBadValue;
   String *encoded = EncodeStringForField(to_field, *str, status);
   if (encoded == nullptr) {
-    switch (status) {
-      case EncodeStatus::kNull:
-        return set_field_to_null_with_conversions(to_field, false);
-      case EncodeStatus::kOom:
-        return TYPE_ERR_OOM;
-      case EncodeStatus::kErrorRaised:
-      case EncodeStatus::kBadValue:
-        return TYPE_ERR_BAD_VALUE;
-    }
+    return HandleFailedEncode(to_field, status, false);
   }
 
   to_field->set_notnull();
@@ -1312,15 +1326,7 @@ type_conversion_status EncodeAndStoreStringToCustomField(
   EncodeStatus status = EncodeStatus::kBadValue;
   String *encoded = EncodeStringForField(field, str_value, status);
   if (encoded == nullptr) {
-    switch (status) {
-      case EncodeStatus::kNull:
-        return set_field_to_null_with_conversions(field, false);
-      case EncodeStatus::kOom:
-        return TYPE_ERR_OOM;
-      case EncodeStatus::kErrorRaised:
-      case EncodeStatus::kBadValue:
-        return TYPE_ERR_BAD_VALUE;
-    }
+    return HandleFailedEncode(field, status, false);
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }

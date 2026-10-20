@@ -1,0 +1,110 @@
+INSTALL EXTENSION vsql_test_only;
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+CREATE TABLE t1 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+INSERT INTO t1 VALUES (1, 'OK one');
+UPDATE IGNORE t1 SET val = 'ENCODE_WARN' WHERE id = 1;
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+id	val	is_null
+1	OK default	0
+INSERT IGNORE INTO t1 VALUES (1, 'ENCODE_WARN')
+ON DUPLICATE KEY UPDATE val = 'ENCODE_WARN';
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+id	val	is_null
+1	OK default	0
+UPDATE t1 SET val = 'OK one' WHERE id = 1;
+UPDATE IGNORE t1 SET val = 'ENCODE_ERROR' WHERE id = 1;
+ERROR HY000: fault_blob: encode error sentinel
+SELECT id, val FROM t1 WHERE id = 1;
+id	val
+1	OK one
+SET @v = 'ENCODE_WARN';
+INSERT IGNORE INTO t1 VALUES (2, @v);
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 2;
+id	val	is_null
+2	OK default	0
+PREPARE ps FROM 'INSERT IGNORE INTO t1 VALUES (?, ?)';
+SET @id = 3, @v = 'ENCODE_WARN';
+EXECUTE ps USING @id, @v;
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+DEALLOCATE PREPARE ps;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 3;
+id	val	is_null
+3	OK default	0
+PREPARE pu FROM 'UPDATE IGNORE t1 SET val = ? WHERE id = ?';
+SET @v = 'ENCODE_WARN', @id = 3;
+EXECUTE pu USING @v, @id;
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+DEALLOCATE PREPARE pu;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 3;
+id	val	is_null
+3	OK default	0
+CREATE TABLE src (id INT, s VARCHAR(32));
+INSERT INTO src VALUES (4, 'ENCODE_WARN'), (5, 'OK five');
+INSERT IGNORE INTO t1 SELECT id, s FROM src;
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (4, 5) ORDER BY id;
+id	val	is_null
+4	OK default	0
+5	OK five	0
+DROP TABLE src;
+INSERT INTO t1 VALUES (6, 'OK six');
+UPDATE t1 SET val = 'ENCODE_WARN' WHERE id = 6;
+ERROR HY000: Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val FROM t1 WHERE id = 6;
+id	val
+6	OK six
+CREATE TABLE t2 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+INSERT IGNORE INTO t2 VALUES (1, 'ENCODE_WARN');
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val FROM t2 WHERE id = 1;
+id	val
+1	OK default
+INSERT INTO t2 VALUES (2, 'OK two');
+UPDATE IGNORE t2 SET val = 'ENCODE_WARN' WHERE id = 2;
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 1
+SELECT id, val FROM t2 WHERE id = 2;
+id	val
+2	OK default
+SELECT COUNT(*) AS readable_rows FROM t1;
+readable_rows
+6
+DROP TABLE t1;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;
