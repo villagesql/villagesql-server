@@ -7053,15 +7053,7 @@ type_conversion_status Item::save_in_field_inner(Field *field,
           villagesql::EncodeStringForField(field, *result, status);
       if (encoded == nullptr) {
         str_value.set_quick(nullptr, 0, cs);
-        switch (status) {
-          case villagesql::EncodeStatus::kNull:
-            return set_field_to_null_with_conversions(field, no_conversions);
-          case villagesql::EncodeStatus::kOom:
-            return TYPE_ERR_OOM;
-          case villagesql::EncodeStatus::kErrorRaised:
-          case villagesql::EncodeStatus::kBadValue:
-            return TYPE_ERR_BAD_VALUE;
-        }
+        return villagesql::HandleFailedEncode(field, status, no_conversions);
       }
       result = encoded;
       cs = &my_charset_bin;
@@ -7111,15 +7103,7 @@ type_conversion_status Item_string::save_in_field_inner(Field *field,
     String *encoded =
         villagesql::EncodeStringForField(field, str_value, status);
     if (encoded == nullptr) {
-      switch (status) {
-        case villagesql::EncodeStatus::kNull:
-          return set_field_to_null_with_conversions(field, no_conversions);
-        case villagesql::EncodeStatus::kOom:
-          return TYPE_ERR_OOM;
-        case villagesql::EncodeStatus::kErrorRaised:
-        case villagesql::EncodeStatus::kBadValue:
-          return TYPE_ERR_BAD_VALUE;
-      }
+      return villagesql::HandleFailedEncode(field, status, no_conversions);
     }
 
     // Now re-cache the new version. The repertoire must match the encoded

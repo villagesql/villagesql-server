@@ -1,0 +1,66 @@
+# Regression test for #1346: copying an invalid string column into a
+# custom-type column with strict mode off used to store nothing for the bad
+# row, leaving the field with whatever it held before. When that was a previous
+# value the bad value was silently dropped; when the column had never been
+# populated the leftover bytes did not decode and every later read failed.
+#
+# The bad row now takes the type's intrinsic default, as it does on the other
+# store paths.
+#
+# This is the same corruption as #1312 through a different store path: a
+# field-to-field copy (TryEncodeStringFieldToCustom) rather than a prepared
+# statement parameter. It is reached by the obvious migration pattern for
+# changing a vector's dimension: stage values in a VARCHAR column, then
+# UPDATE the custom-type column from it.
+
+--source include/villagesql/install_tvector_extension.inc
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR");
+
+CREATE TABLE m (id INT PRIMARY KEY, s VARCHAR(100), v TVECTOR(2));
+
+# v starts with a known value, so a failed UPDATE can be shown to leave it
+# alone rather than merely finding it still unset.
+INSERT INTO m VALUES (1, '[1,2]', '[9,9]'), (2, '[1,2,3]', '[9,9]');
+
+# Row 2 does not parse as TVECTOR(2). In strict mode the UPDATE fails and
+# writes nothing: both rows keep the seeded value.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+UPDATE m SET v = s;
+SELECT id, v, v IS NULL AS is_null FROM m ORDER BY id;
+
+# With strict mode off the statement completes with a warning. Row 1 takes the
+# copied value; row 2 takes the type's intrinsic default rather than keeping
+# its previous value, so the failed copy is visible instead of silently doing
+# nothing.
+SET @@session.sql_mode = '';
+UPDATE m SET v = s;
+SET @@session.sql_mode = DEFAULT;
+SELECT id, v, v IS NULL AS is_null FROM m ORDER BY id;
+
+# The same copy into a NOT NULL column that already holds a good value. The
+# bad row takes the intrinsic default like a nullable one, so nullability
+# does not change what a bad value stores.
+CREATE TABLE m_nn (id INT PRIMARY KEY, s VARCHAR(100), v TVECTOR(2) NOT NULL);
+INSERT INTO m_nn (id, s, v) VALUES (1, '[1,2]', '[9,9]'), (2, '[1,2,3]', '[9,9]');
+SET @@session.sql_mode = '';
+UPDATE m_nn SET v = s;
+SHOW WARNINGS;
+SET @@session.sql_mode = DEFAULT;
+SELECT id, v FROM m_nn ORDER BY id;
+DROP TABLE m_nn;
+
+# The same copy into a column with no previous value. This left undecodable
+# bytes behind before the fix, breaking every later read of the column.
+CREATE TABLE m2 (id INT PRIMARY KEY, s VARCHAR(100), v TVECTOR(2));
+INSERT INTO m2 (id, s) VALUES (1, '[1,2]'), (2, '[1,2,3]');
+SET @@session.sql_mode = '';
+UPDATE m2 SET v = s;
+SET @@session.sql_mode = DEFAULT;
+SELECT id, v, v IS NULL AS is_null FROM m2 ORDER BY id;
+SELECT id, v FROM m2 ORDER BY id;
+DROP TABLE m2;
+
+DROP TABLE m;
+
+--source include/villagesql/uninstall_tvector_extension.inc

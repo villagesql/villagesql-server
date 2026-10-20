@@ -53,6 +53,9 @@ INSERT IGNORE INTO bits (id, b) VALUES (6, '2');
 
 --echo # The defaulted values are valid, zero-length bit fields (not garbage and
 --echo # not NULL): bitfield_length is 0 and they round-trip to the empty string.
+--echo # The two blank b_optional cells differ: row 5 holds the default because
+--echo # its value was bad, row 6 is NULL because the column was omitted and is
+--echo # nullable. Only opt_is_null tells them apart.
 SELECT id, b, b_optional,
        vsql_bitfield_test.bitfield_length(b) AS nbits,
        b IS NULL AS b_is_null,

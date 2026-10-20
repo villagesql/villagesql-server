@@ -1,0 +1,98 @@
+# Regression test for #1312: an invalid value stored through a prepared-
+# statement parameter was written as bytes that could not be decoded, so every
+# later read of the column failed, including a read of the whole table.
+#
+# A bad value that does not abort the statement now stores the type's
+# intrinsic default on every path, whatever the column's nullability. The
+# cases are labelled as in the issue.
+#
+# Case B is a separate defect kept here because it shares the shape: a binary
+# literal under IGNORE raises a hard error instead of a warning, and the
+# message shows '' rather than the offending value.
+
+--source include/villagesql/install_complex_extension.inc
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*COMPLEX");
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(3,4)');
+
+# Baseline: a plain INSERT in strict mode rejects a bad value and writes no
+# row. This is the behavior a fix for the cases below must not weaken, so it
+# is pinned here for both a literal and a parameter.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (100, 'not a complex');
+PREPARE strict_s FROM 'INSERT INTO t VALUES (?, ?)';
+SET @id = 101, @v = 'not a complex';
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE strict_s USING @id, @v;
+DEALLOCATE PREPARE strict_s;
+SELECT COUNT(*) AS rows_from_strict_inserts FROM t WHERE id >= 100;
+
+# The same on a NOT NULL column: still rejected, no row written.
+CREATE TABLE t_nn (id INT PRIMARY KEY, c COMPLEX NOT NULL);
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t_nn VALUES (1, 'not a complex');
+SELECT COUNT(*) AS rows_in_t_nn FROM t_nn;
+DROP TABLE t_nn;
+
+# A: INSERT IGNORE, invalid text literal.
+INSERT IGNORE INTO t VALUES (2, 'not a complex');
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 2;
+
+# B: INSERT IGNORE, invalid binary literal. IGNORE does not downgrade this to
+# a warning the way it does for A, and the message shows '' rather than the
+# offending value.
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT IGNORE INTO t VALUES (3, X'00000000000008400000000000001040');
+
+# C: INSERT IGNORE, prepared statement, text parameter. Stores the intrinsic
+# default, as the literal in A does.
+PREPARE s FROM 'INSERT IGNORE INTO t VALUES (?, ?)';
+SET @id = 4, @v = 'not a complex';
+EXECUTE s USING @id, @v;
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 4;
+
+# D: INSERT IGNORE, prepared statement, binary parameter.
+SET @id = 5, @v = X'00000000000008400000000000001040';
+EXECUTE s USING @id, @v;
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 5;
+DEALLOCATE PREPARE s;
+
+# E: plain INSERT with strict mode off, invalid text literal.
+SET @@session.sql_mode = '';
+INSERT INTO t VALUES (6, 'not a complex');
+SET @@session.sql_mode = DEFAULT;
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 6;
+
+# F: the same through a prepared statement parameter. D covers a binary
+# parameter in strict mode; this is a text one with strict mode off.
+PREPARE s2 FROM 'INSERT INTO t VALUES (?, ?)';
+SET @@session.sql_mode = '';
+SET @id = 7, @v = 'not a complex';
+EXECUTE s2 USING @id, @v;
+SHOW WARNINGS;
+SET @@session.sql_mode = DEFAULT;
+DEALLOCATE PREPARE s2;
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 7;
+
+# No row holds an undecodable value, so a read of the whole table works.
+SELECT id, c FROM t ORDER BY id;
+
+# A bad value stores the type's intrinsic default, as a built-in type stores
+# 0 or ''. A NOT NULL column is no different.
+CREATE TABLE t_nn (id INT PRIMARY KEY, c COMPLEX NOT NULL);
+INSERT IGNORE INTO t_nn VALUES (1, 'not a complex');
+SELECT id, c FROM t_nn ORDER BY id;
+
+# Non-strict mode without IGNORE takes the same path.
+SET @@session.sql_mode = '';
+INSERT INTO t_nn VALUES (2, 'not a complex');
+SHOW WARNINGS;
+SET @@session.sql_mode = DEFAULT;
+SELECT id, c FROM t_nn ORDER BY id;
+DROP TABLE t_nn;
+
+DROP TABLE t;
+
+--source include/villagesql/uninstall_complex_extension.inc
