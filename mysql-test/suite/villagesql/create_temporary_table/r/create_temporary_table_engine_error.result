@@ -1,0 +1,79 @@
+#
+# CREATE TEMPORARY TABLE with an explicit non-InnoDB engine.
+#
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, c COMPLEX) ENGINE=MEMORY;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot create table with MEMORY storage engine.
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, c COMPLEX) ENGINE=MyISAM;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot create table with MyISAM storage engine.
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+#
+# CREATE TEMPORARY TABLE ... SELECT.
+#
+CREATE TABLE p (id INT PRIMARY KEY, c COMPLEX) ENGINE=InnoDB;
+INSERT INTO p VALUES (1, '(3,4)');
+CREATE TEMPORARY TABLE t1 ENGINE=MEMORY AS SELECT * FROM p;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot create table with MEMORY storage engine.
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+#
+# default_tmp_storage_engine is honored the same way. CREATE TEMPORARY
+# TABLE ... LIKE inherits the source table's engine instead, it is
+# allowed (source table has to be INNODB engine if it contains custom
+# types).
+#
+SET SESSION default_tmp_storage_engine = MEMORY;
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, c COMPLEX);
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot create table with MEMORY storage engine.
+CREATE TEMPORARY TABLE t1 LIKE p;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TEMPORARY TABLE `t1` (
+  `id` int NOT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TEMPORARY TABLE t1;
+SET SESSION default_tmp_storage_engine = DEFAULT;
+#
+# InnoDB temporary tables still work.
+#
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, c COMPLEX) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '(3,4)');
+SELECT id, c, complex_abs(c) FROM t1;
+id	c	complex_abs(c)
+1	(3,4)	5
+#
+# ALTER TABLE cannot move a temporary table off InnoDB.
+#
+ALTER TABLE t1 ENGINE=MEMORY;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot alter table with MEMORY storage engine.
+ALTER TABLE t1 ENGINE=MyISAM;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot alter table with MyISAM storage engine.
+SELECT id, c, complex_abs(c) FROM t1;
+id	c	complex_abs(c)
+1	(3,4)	5
+#
+# ALTER TABLE cannot add a custom column to a non-InnoDB temporary table.
+#
+CREATE TEMPORARY TABLE t2 (id INT PRIMARY KEY) ENGINE=MEMORY;
+ALTER TABLE t2 ADD COLUMN c COMPLEX;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot alter table with MEMORY storage engine.
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TEMPORARY TABLE `t2` (
+  `id` int NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# An ALTER that keeps the temporary table on InnoDB is unaffected.
+#
+ALTER TABLE t1 ADD COLUMN d COMPLEX;
+ALTER TABLE t1 ENGINE=InnoDB;
+SELECT id, c, d FROM t1;
+id	c	d
+1	(3,4)	NULL
+DROP TEMPORARY TABLE t1, t2;
+DROP TABLE p;

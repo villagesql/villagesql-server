@@ -242,11 +242,6 @@ class Metadata_modifier {
   // Returns false on success, true on error.
   bool add_functions(SQL_I_List<Croutine_hash_entry> &croutines_list);
 
-  // Verify that the storage engine is InnoDB; otherwise, report an error.
-  // Returns false on success and true on error.
-  static bool ensure_engine_is_innodb(const handlerton *hton,
-                                      const char *operation);
-
   std::vector<ColumnEntry> to_add_;
   std::vector<ColumnEntry> to_remove_;
   size_t existing_custom_count_ = 0;

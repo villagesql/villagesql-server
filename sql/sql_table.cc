@@ -9213,11 +9213,12 @@ static bool create_table_impl(
   // inject type contexts during open_table_from_share.
   if (internal_tmp_table) {
     // ALTER TABLE rebuild table (#sql-xxx).
-    villagesql::PrepareAlterCustomFields(thd, alter_info->create_list);
+    if (villagesql::PrepareAlterCustomFields(thd, alter_info, create_info))
+      return true;
   } else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
     // User facing temporary table.
-    if (villagesql::PrepareTmpTableCustomColumns(
-            thd, db, table_name, alter_info->create_list, create_info))
+    if (villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
+                                                 alter_info, create_info))
       return true;
   }
 
