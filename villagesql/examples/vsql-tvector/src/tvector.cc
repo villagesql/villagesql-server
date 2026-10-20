@@ -63,8 +63,12 @@ struct TVectorParams {
   size_t bytes_per_elem;  // 4 for float, 8 for double
 
   static TVectorParams parse(const std::map<std::string, std::string> &params) {
+    // Params that were never resolved may lack a dimension; 0 makes encode
+    // and decode fail cleanly.
     auto dim_it = params.find("dimension");
-    int64_t dim = strtoll(dim_it->second.c_str(), nullptr, 10);
+    int64_t dim = dim_it == params.end()
+                      ? 0
+                      : strtoll(dim_it->second.c_str(), nullptr, 10);
     size_t bytes = kDefaultBytesPerElem;
     auto type_it = params.find("type");
     if (type_it != params.end() && type_it->second == "double") bytes = 8;
@@ -300,7 +304,14 @@ void tvector_to_string(vsql::CustomArgWith<TVectorParams> in,
   const TVectorParams &p = in.params();
   auto data = in.value();
   const size_t bpe = p.bytes_per_elem;
-  if (data.size() != static_cast<size_t>(p.dimension) * bpe) return;
+  if (p.dimension == 0) {
+    out.error("TVECTOR has no dimension");
+    return;
+  }
+  if (data.size() != static_cast<size_t>(p.dimension) * bpe) {
+    out.error("TVECTOR data size does not match its dimension");
+    return;
+  }
 
   auto buf = out.buffer();
   char *w = buf.data();

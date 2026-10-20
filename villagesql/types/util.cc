@@ -783,6 +783,8 @@ static void ReportDecodeError(DecodeResult result, const char *column_name,
   LogVSQL(WARNING_LEVEL, "%s '%s' of type '%s' at row %llu (value: %s): %s",
           label, column_name, type_name, static_cast<unsigned long long>(row),
           value_prefix.ptr(), decoder_error_msg);
+  // TODO(villagesql-general): say the decode failed instead of "Invalid value
+  // ... check server log for details".
   villagesql_error(
       "%s '%s' of type '%s' at row %llu: check server log for details", MYF(0),
       label, column_name, type_name, static_cast<unsigned long long>(row));
