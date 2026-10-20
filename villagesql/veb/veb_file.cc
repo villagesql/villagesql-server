@@ -46,6 +46,7 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "villagesql/include/error.h"
+#include "villagesql/include/metrics.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
@@ -913,6 +914,11 @@ bool expand_veb_to_directory(const std::string &name,
     villagesql_error("VEB for '%s' contains no usable 'lib/%s.so'", MYF(0),
                      name.c_str(), name.c_str());
     return true;
+  }
+
+  // If a stale expansion was found, it has been repaired. Count it now.
+  if (stale_expansion) {
+    metrics::g_veb_cache_repaired.fetch_add(1, std::memory_order_relaxed);
   }
 
   LogVSQL(INFORMATION_LEVEL, "Successfully expanded '%s' to %s", name.c_str(),
