@@ -1,0 +1,58 @@
+# SET GLOBAL on a session variable must not disturb sessions that already
+# hold a value.
+#
+# A session's copy of a THD-local variable is taken when it first reads the
+# variable, and from then on it is that session's own value: a later
+# SET GLOBAL changes the global and is picked up only by sessions that
+# connect afterwards. A session that already has a copy keeps it, including
+# the session that issued the SET GLOBAL.
+#
+# This matches stock MySQL. Verified against a plugin THD-local MEMALLOC
+# string (example_last_create_thdvar), which returns its own value here.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_session_var_test;
+
+--echo # Seed the global before anyone connects
+SET GLOBAL vsql_session_var_test.session_str_var = 'g3';
+SELECT @@global.vsql_session_var_test.session_str_var AS seeded;
+
+--echo # c1 connects and takes its first read, which allocates its copy
+--connect(c1, localhost, root,,)
+SELECT @@session.vsql_session_var_test.session_str_var AS c1_first_read;
+
+--echo # c2 changes the global
+--connect(c2, localhost, root,,)
+SET GLOBAL vsql_session_var_test.session_str_var = 'g4';
+SELECT @@global.vsql_session_var_test.session_str_var AS global_now;
+
+--echo # c1 never ran SET SESSION, so it still holds g3
+--connection c1
+SELECT @@session.vsql_session_var_test.session_str_var AS c1_after;
+
+--echo # ...and so does the session that issued the SET GLOBAL
+--connection c2
+SELECT @@session.vsql_session_var_test.session_str_var AS c2_after;
+
+--echo # A session connecting after the change starts from the new global
+--connect(c3, localhost, root,,)
+SELECT @@session.vsql_session_var_test.session_str_var AS c3_fresh;
+
+--echo # SET SESSION remains local to the session that issues it
+--connection c1
+SET SESSION vsql_session_var_test.session_str_var = 'mine';
+SELECT @@session.vsql_session_var_test.session_str_var AS c1_own;
+--connection c3
+SELECT @@session.vsql_session_var_test.session_str_var AS c3_unchanged;
+SELECT @@global.vsql_session_var_test.session_str_var AS global_unchanged;
+
+--connection default
+--disconnect c1
+--disconnect c2
+--disconnect c3
+
+UNINSTALL EXTENSION vsql_session_var_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -141,22 +141,7 @@ bool plugin_var_memalloc_session_update(THD *thd, SYS_VAR *var, char **dest,
         list_add(vars->dynamic_variables_allocs, element);
   }
 
-  // TODO(villagesql-rebase): proposed upstream fix for mysql/mysql-server#721
-  // (SET SESSION on a component THD-local string var crashed). A THD-local
-  // MEMALLOC string initially inherits the global value, which is not
-  // necessarily allocated here (a component may provide a string literal as
-  // its default), so it must not be treated as a LIST allocation. Find an
-  // existing allocation in the THD's ownership list before removing it. Not
-  // yet merged upstream (trunk still has the old cast); drop once it lands.
-  if (*dest) {
-    for (LIST *element = vars->dynamic_variables_allocs; element;
-         element = element->next) {
-      if (static_cast<void *>(element + 1) == *dest) {
-        old_element = element;
-        break;
-      }
-    }
-  }
+  if (*dest) old_element = (LIST *)(*dest - sizeof(LIST));
 
   if (var)
     var->update(thd, var, (void **)dest, (const void *)&value);
@@ -953,7 +938,18 @@ void plugin_opt_set_limits(struct my_option *options, const SYS_VAR *opt) {
   Requires that a write lock is obtained on LOCK_system_variables_hash
 */
 st_bookmark *register_var(const char *plugin, const char *name, int flags) {
-  const size_t length = strlen(plugin) + strlen(name) + 3;
+  // TODO(villagesql-rebase): `plugin` may be nullptr, meaning `name` is
+  // already the fully-qualified system variable name and must be used as the
+  // bookmark key verbatim. A component registers its variable as
+  // "component.var" (component_sys_var_service.cc), but joining here with "_"
+  // would key the bookmark as "component_var"; the MEMALLOC strdup loop in
+  // alloc_and_copy_thd_dynamic_variables() resolves a bookmark back to its
+  // sys_var by that key, so a component variable was never found and its
+  // sessions never got their own copy of the string -- they kept aliasing the
+  // global buffer, which the next SET GLOBAL frees (villagesql#1324).
+  // find_bookmark() already accepts a null plugin this way. Drop if upstream
+  // adopts the same shape.
+  const size_t length = (plugin ? strlen(plugin) + 1 : 0) + strlen(name) + 2;
   size_t size = 0, offset, new_size;
   st_bookmark *result;
   char *varname, *p;
@@ -987,9 +983,14 @@ st_bookmark *register_var(const char *plugin, const char *name, int flags) {
   };
 
   varname = ((char *)my_alloca(length));
-  strxmov(varname + 1, plugin, "_", name, NullS);
-  for (p = varname + 1; *p; p++)
-    if (*p == '-') *p = '_';
+  if (plugin) {
+    strxmov(varname + 1, plugin, "_", name, NullS);
+    for (p = varname + 1; *p; p++)
+      if (*p == '-') *p = '_';
+  } else {
+    // Pre-composed name: keep it verbatim, including any '.' separator.
+    memcpy(varname + 1, name, strlen(name) + 1);
+  }
 
   if (!(result = find_bookmark(nullptr, varname + 1, flags))) {
     result =
