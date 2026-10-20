@@ -45,7 +45,7 @@ extern "C" {
 #define VEF_PREVIEW_SYS_VAR_NAME "vsql::sys_var"
 
 // Capability ABI version compiled into this SDK snapshot.
-#define VEF_PREVIEW_SYS_VAR_ABI_VERSION 1
+#define VEF_PREVIEW_SYS_VAR_ABI_VERSION 2
 
 // System variable value type.
 typedef enum {
@@ -181,6 +181,23 @@ typedef bool (*vef_sys_var_set_func_t)(const char *component_name,
                                        const char *name, const char *scope,
                                        const char *val);
 
+// Sets an INT system variable to a signed integer value.
+//
+// An INT variable accepts only an integer: the server's string update path
+// takes a STRING_RESULT, which Sys_var_integer rejects outright. Passing the
+// value as a long long keeps the caller's type all the way to the server, so
+// nothing has to render it as text and parse it back.
+//
+// component_name: extension name (e.g. "vsql_my_ext")
+// name:           variable name without the extension prefix
+// scope:          as for vef_sys_var_set_func_t
+// val:            new value
+//
+// Returns false on success, true on error.
+typedef bool (*vef_sys_var_set_int_func_t)(const char *component_name,
+                                           const char *name, const char *scope,
+                                           long long val);
+
 typedef struct {
   // Capability ABI version. Always the first field in every capability vtable.
   uint32_t version;
@@ -188,8 +205,22 @@ typedef struct {
   // Read/write access to system variables from extension code.
   // Set by the server during capability registration; call through these
   // pointers from extension VDFs or callbacks.
+  //
+  // get returns the value as a string whatever the variable's type. For a
+  // STRING variable it is the only safe way to read one: the server owns the
+  // buffer and frees it on update, so reading the storage pointer directly
+  // races with a concurrent SET. Other types can be read straight from the
+  // storage global.
+  //
+  // Writing always goes through set/set_int, never the storage global: the
+  // server applies range clamping, PERSIST, on_change callbacks and locking,
+  // and owns the buffer behind a STRING variable. set_int serves VEF_VAR_INT;
+  // set serves every other type.
   vef_sys_var_get_func_t get;
   vef_sys_var_set_func_t set;
+
+  // Added in ABI version 2.
+  vef_sys_var_set_int_func_t set_int;
 } vef_preview_sys_var_t;
 
 #ifdef __cplusplus
