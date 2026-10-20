@@ -431,7 +431,7 @@ static bool sock_descriptor_to_string(int fd, std::string &out) {
   // try IPv4
   if (sa.ss_family == AF_INET) {
     if (inet_ntop(AF_INET, &(((struct sockaddr_in *)&sa)->sin_addr), saddr,
-                  INET_ADDRSTRLEN)) {
+                  INET6_ADDRSTRLEN)) {
       out = saddr;
       return false;
     }
