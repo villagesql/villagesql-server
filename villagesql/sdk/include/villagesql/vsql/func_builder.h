@@ -124,6 +124,17 @@ template <typename P>
 using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
                                           std::string_view from, CustomResult);
 
+// Encode from the binary form: raw bytes -> custom binary. Reports its outcome
+// the same way as TypeEncodeFunc.
+using TypeEncodeBinaryFunc = void (*)(Span<const unsigned char> from,
+                                      CustomResult out);
+// Parameterized variant: as TypeEncodeWithParamsFunc, the params are known
+// when encoding into a column and must be inferred from the bytes otherwise.
+template <typename P>
+using TypeEncodeBinaryWithParamsFunc = void (*)(MaybeParams<P> &,
+                                                Span<const unsigned char> from,
+                                                CustomResult);
+
 // Decode: custom -> string. The function reports its outcome by calling
 // out.set_length(n), out.set(sv), out.set_null(), out.warning(msg), or
 // out.error(msg). If none is called then the result falls back to a default
@@ -817,6 +828,34 @@ constexpr detail::StaticFuncDesc<1> make_type_encode(const char *name,
   }
   meta.return_type = detail::to_vef_type(type_name);
   meta.param_types[0] = detail::to_vef_type(STRING);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
+  meta.deterministic = true;
+  return detail::StaticFuncDesc<1>(name, meta);
+}
+
+// make_type_encode_binary<&fn>("name", TYPE) — (BINARY) -> CUSTOM(type).
+//
+// Accepts two signatures:
+//   TypeEncodeBinaryFunc              (non-parameterized)
+//   TypeEncodeBinaryWithParamsFunc<P> (parameterized)
+template <auto Func>
+constexpr detail::StaticFuncDesc<1> make_type_encode_binary(
+    const char *name, const char *type_name) {
+  using F = decltype(Func);
+  detail::FuncWithMetadata meta{};
+  if constexpr (std::is_same_v<F, TypeEncodeBinaryFunc>) {
+    meta.f = &detail::TypeEncodeVdfWrapper<Func>::invoke;
+  } else {
+    using P = typename detail::TypeEncodeWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeEncodeBinaryWithParamsFunc<P>>,
+                  "make_type_encode_binary: function must match either "
+                  "TypeEncodeBinaryFunc or TypeEncodeBinaryWithParamsFunc<P>.");
+    meta.f = &detail::TypeEncodeWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
+  }
+  meta.return_type = detail::to_vef_type(type_name);
+  meta.param_types[0] = detail::to_vef_type(BINARY);
   meta.num_params = 1;
   meta.buffer_size = 0;
   meta.deterministic = true;

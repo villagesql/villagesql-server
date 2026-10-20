@@ -45,7 +45,8 @@ bool LookupTypeForInference(std::string_view extension_name,
 
 // Pre-executes a parameterized type's from_string VDF on a constant string
 // literal at fix_fields time, and returns the inferred TypeParameters along
-// with the encoded bytes the VDF produced.
+// with the encoded bytes the VDF produced. A from_binary VDF is given the
+// constant as bytes instead.
 //
 // The extension's from_string is called with MaybeParams<P> in the unknown
 // state. The SDK wrapper writes the inferred canonical "k=v,k=v" params

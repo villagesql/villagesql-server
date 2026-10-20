@@ -1,0 +1,122 @@
+CREATE TABLE t_int (id INT PRIMARY KEY, v INT);
+INSERT INTO t_int VALUES (1, 0x0F);
+INSERT INTO t_int VALUES (2, 0x3135);
+INSERT INTO t_int VALUES (3, '15');
+INSERT INTO t_int VALUES (4, _binary 0x3135);
+SELECT id, v FROM t_int ORDER BY id;
+id	v
+1	15
+2	12597
+3	15
+4	15
+DROP TABLE t_int;
+CREATE TABLE t_complex (id INT PRIMARY KEY, v COMPLEX);
+INSERT INTO t_complex VALUES (1, 0x000000000000F03F0000000000001440);
+INSERT INTO t_complex VALUES (2, 0x28312E3030302C352E30303030303029);
+INSERT INTO t_complex VALUES (3, '(1.000,5.000000)');
+INSERT INTO t_complex VALUES (4, _binary 0x28312E3030302C352E30303030303029);
+INSERT IGNORE INTO t_complex VALUES (5, X'00000000000008400000000000001040');
+INSERT IGNORE INTO t_complex VALUES (6, 0x28312C3529);
+Warnings:
+Warning	1366	Incorrect COMPLEX value: '(1,5)' for column 'v' at row 1
+SELECT id, v FROM t_complex ORDER BY id;
+id	v
+1	(1,5)
+2	(1.471494541653334e-52,2.692533428240447e-110)
+3	(1,5)
+4	(1.471494541653334e-52,2.692533428240447e-110)
+5	(3,4)
+6	(0,0)
+DROP TABLE t_complex;
+CREATE TABLE t_complex (id INT PRIMARY KEY, v COMPLEX);
+INSERT INTO t_complex VALUES (1, '(0,0)');
+UPDATE t_complex SET v = 0x000000000000F03F0000000000001440 WHERE id = 1;
+INSERT INTO t_complex VALUES (1, '(0,0)')
+ON DUPLICATE KEY UPDATE v = 0x00000000000008400000000000001040;
+INSERT IGNORE INTO t_complex VALUES (2, b'101');
+Warnings:
+Warning	1366	Incorrect COMPLEX value: '\x05' for column 'v' at row 1
+SELECT id, v FROM t_complex ORDER BY id;
+id	v
+1	(3,4)
+2	(0,0)
+DROP TABLE t_complex;
+CREATE TABLE t_complex (id INT PRIMARY KEY,
+v COMPLEX DEFAULT 0x000000000000F03F0000000000001440);
+SHOW CREATE TABLE t_complex;
+Table	Create Table
+t_complex	CREATE TABLE `t_complex` (
+  `id` int NOT NULL,
+  `v` vsql_complex.COMPLEX DEFAULT '(1,5)',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t_complex (id) VALUES (1);
+SELECT id, v FROM t_complex ORDER BY id;
+id	v
+1	(1,5)
+DROP TABLE t_complex;
+CREATE TABLE t_int (id INT PRIMARY KEY, v INT);
+PREPARE s FROM 'INSERT INTO t_int VALUES (?, ?)';
+SET @id = 1, @v = 0x0F;
+EXECUTE s USING @id, @v;
+ERROR HY000: Incorrect integer value: '\x0F' for column 'v' at row 1
+SET @id = 2, @v = 0x3135;
+EXECUTE s USING @id, @v;
+SET @id = 3, @v = '15';
+EXECUTE s USING @id, @v;
+SET @id = 4, @v = _binary 0x3135;
+EXECUTE s USING @id, @v;
+SELECT id, v FROM t_int ORDER BY id;
+id	v
+2	15
+3	15
+4	15
+DEALLOCATE PREPARE s;
+DROP TABLE t_int;
+CREATE TABLE t_complex (id INT PRIMARY KEY, v COMPLEX);
+PREPARE s FROM 'INSERT INTO t_complex VALUES (?, ?)';
+PREPARE s_ignore FROM 'INSERT IGNORE INTO t_complex VALUES (?, ?)';
+SET @id = 1, @v = 0x000000000000F03F0000000000001440;
+EXECUTE s USING @id, @v;
+SET @id = 2, @v = 0x28312E3030302C352E30303030303029;
+EXECUTE s USING @id, @v;
+SET @id = 3, @v = '(1.000,5.000000)';
+EXECUTE s USING @id, @v;
+SET @id = 4, @v = _binary 0x28312E3030302C352E30303030303029;
+EXECUTE s USING @id, @v;
+SET @id = 5, @v = X'00000000000008400000000000001040';
+EXECUTE s_ignore USING @id, @v;
+SET @id = 6, @v = 0x28312C3529;
+EXECUTE s_ignore USING @id, @v;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: '(1,5)' for column 'v' at row 1
+SELECT id, v FROM t_complex ORDER BY id;
+id	v
+1	(1,5)
+2	(1.471494541653334e-52,2.692533428240447e-110)
+3	(1,5)
+4	(1.471494541653334e-52,2.692533428240447e-110)
+5	(3,4)
+6	(0,0)
+DEALLOCATE PREPARE s;
+DEALLOCATE PREPARE s_ignore;
+DROP TABLE t_complex;
+CREATE TABLE t_complex2 (id INT PRIMARY KEY, v COMPLEX2);
+INSERT INTO t_complex2 VALUES (1, 0x000000000000F03F0000000000001440);
+ERROR HY000: Type 'vsql_complex.COMPLEX2' cannot read a binary value; give a text value a character set
+INSERT INTO t_complex2 VALUES (2, _binary '(1,5)');
+ERROR HY000: Type 'vsql_complex.COMPLEX2' cannot read a binary value; give a text value a character set
+INSERT IGNORE INTO t_complex2 VALUES (3, 0x28312C3529);
+ERROR HY000: Type 'vsql_complex.COMPLEX2' cannot read a binary value; give a text value a character set
+PREPARE s FROM 'INSERT INTO t_complex2 VALUES (?, ?)';
+SET @id = 4, @v = 0x28312C3529;
+EXECUTE s USING @id, @v;
+ERROR HY000: Type 'vsql_complex.COMPLEX2' cannot read a binary value; give a text value a character set
+DEALLOCATE PREPARE s;
+INSERT INTO t_complex2 VALUES (5, '(1,5)');
+INSERT INTO t_complex2 VALUES (6, _utf8mb4 0x28312C3529);
+SELECT id, v FROM t_complex2 ORDER BY id;
+id	v
+5	(1,5)
+6	(1,5)
+DROP TABLE t_complex2;

@@ -1,0 +1,113 @@
+# A value in the binary charset stored into a custom column is the type's
+# binary form, encoded with its from_binary: a hex literal, a _binary string,
+# or a binary string bound to a prepared-statement parameter. A value in any
+# other charset is the type's text form. A type without from_binary refuses a
+# binary value rather than reading it as text.
+#
+# INT is the reference: a hex literal is its number, so 0x3135 is 12597, and
+# a string is parsed as text. Through a parameter, a hex value bound from a
+# user variable is a binary string, so INT parses it as text.
+#
+# COMPLEX's binary form is two little-endian doubles: (1,5) is
+# 0x000000000000F03F0000000000001440. The text '(1.000,5.000000)' is 16 bytes,
+# the size of the binary form, so as a binary value its bytes are read as two
+# doubles.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_int (id INT PRIMARY KEY, v INT);
+INSERT INTO t_int VALUES (1, 0x0F);
+INSERT INTO t_int VALUES (2, 0x3135);
+INSERT INTO t_int VALUES (3, '15');
+INSERT INTO t_int VALUES (4, _binary 0x3135);
+SELECT id, v FROM t_int ORDER BY id;
+DROP TABLE t_int;
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, v COMPLEX);
+INSERT INTO t_complex VALUES (1, 0x000000000000F03F0000000000001440);
+INSERT INTO t_complex VALUES (2, 0x28312E3030302C352E30303030303029);
+INSERT INTO t_complex VALUES (3, '(1.000,5.000000)');
+INSERT INTO t_complex VALUES (4, _binary 0x28312E3030302C352E30303030303029);
+# (3,4) in the binary form.
+INSERT IGNORE INTO t_complex VALUES (5, X'00000000000008400000000000001040');
+# Not 16 bytes: IGNORE downgrades the error to a warning that quotes the
+# value, and the row takes the intrinsic default.
+INSERT IGNORE INTO t_complex VALUES (6, 0x28312C3529);
+SELECT id, v FROM t_complex ORDER BY id;
+DROP TABLE t_complex;
+
+# The other ways a hex literal is stored: UPDATE, ON DUPLICATE KEY UPDATE, a
+# bit literal, and a column DEFAULT.
+CREATE TABLE t_complex (id INT PRIMARY KEY, v COMPLEX);
+INSERT INTO t_complex VALUES (1, '(0,0)');
+UPDATE t_complex SET v = 0x000000000000F03F0000000000001440 WHERE id = 1;
+INSERT INTO t_complex VALUES (1, '(0,0)')
+  ON DUPLICATE KEY UPDATE v = 0x00000000000008400000000000001040;
+# One byte where the binary form is 16.
+INSERT IGNORE INTO t_complex VALUES (2, b'101');
+SELECT id, v FROM t_complex ORDER BY id;
+DROP TABLE t_complex;
+
+CREATE TABLE t_complex (id INT PRIMARY KEY,
+                        v COMPLEX DEFAULT 0x000000000000F03F0000000000001440);
+SHOW CREATE TABLE t_complex;
+INSERT INTO t_complex (id) VALUES (1);
+SELECT id, v FROM t_complex ORDER BY id;
+DROP TABLE t_complex;
+
+# The same values bound to a prepared-statement parameter.
+CREATE TABLE t_int (id INT PRIMARY KEY, v INT);
+PREPARE s FROM 'INSERT INTO t_int VALUES (?, ?)';
+SET @id = 1, @v = 0x0F;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE s USING @id, @v;
+SET @id = 2, @v = 0x3135;
+EXECUTE s USING @id, @v;
+SET @id = 3, @v = '15';
+EXECUTE s USING @id, @v;
+SET @id = 4, @v = _binary 0x3135;
+EXECUTE s USING @id, @v;
+SELECT id, v FROM t_int ORDER BY id;
+DEALLOCATE PREPARE s;
+DROP TABLE t_int;
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, v COMPLEX);
+PREPARE s FROM 'INSERT INTO t_complex VALUES (?, ?)';
+PREPARE s_ignore FROM 'INSERT IGNORE INTO t_complex VALUES (?, ?)';
+SET @id = 1, @v = 0x000000000000F03F0000000000001440;
+EXECUTE s USING @id, @v;
+SET @id = 2, @v = 0x28312E3030302C352E30303030303029;
+EXECUTE s USING @id, @v;
+SET @id = 3, @v = '(1.000,5.000000)';
+EXECUTE s USING @id, @v;
+SET @id = 4, @v = _binary 0x28312E3030302C352E30303030303029;
+EXECUTE s USING @id, @v;
+SET @id = 5, @v = X'00000000000008400000000000001040';
+EXECUTE s_ignore USING @id, @v;
+SET @id = 6, @v = 0x28312C3529;
+EXECUTE s_ignore USING @id, @v;
+SELECT id, v FROM t_complex ORDER BY id;
+DEALLOCATE PREPARE s;
+DEALLOCATE PREPARE s_ignore;
+DROP TABLE t_complex;
+
+# COMPLEX2 has no from_binary: a binary value is an error, even under IGNORE,
+# and only a value with a character set is read as text.
+CREATE TABLE t_complex2 (id INT PRIMARY KEY, v COMPLEX2);
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex2 VALUES (1, 0x000000000000F03F0000000000001440);
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex2 VALUES (2, _binary '(1,5)');
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT IGNORE INTO t_complex2 VALUES (3, 0x28312C3529);
+PREPARE s FROM 'INSERT INTO t_complex2 VALUES (?, ?)';
+SET @id = 4, @v = 0x28312C3529;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+INSERT INTO t_complex2 VALUES (5, '(1,5)');
+INSERT INTO t_complex2 VALUES (6, _utf8mb4 0x28312C3529);
+SELECT id, v FROM t_complex2 ORDER BY id;
+DROP TABLE t_complex2;
+
+--source include/villagesql/uninstall_complex_extension.inc

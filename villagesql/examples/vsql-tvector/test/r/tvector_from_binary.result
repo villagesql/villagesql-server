@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, TVECTOR::from_binary(0x0000803F0000004000004040));
+INSERT INTO t VALUES (2, '[1,2,3]');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[1,2,3]
+SELECT a.v = b.v AS same FROM t a, t b WHERE a.id = 1 AND b.id = 2;
+same
+1
+SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(0x0000803F)) AS n;
+n
+1
+SELECT TVECTOR::from_binary(0x0000803F00) AS v;
+ERROR HY000: error encountered during TVECTOR::from_binary inference: tvector_from_binary: length is not a multiple of 4 bytes
+call mtr.add_suppression("VillageSQL.*Invalid value in column '\\?\\?\\?' of type 'vsql_tvector.TVECTOR'");
+PREPARE s FROM 'INSERT INTO t VALUES (3, TVECTOR::from_binary(?))';
+SET @v = 0x0000803F0000004000004040;
+EXECUTE s USING @v;
+ERROR HY000: Invalid value in column '???' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+DEALLOCATE PREPARE s;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

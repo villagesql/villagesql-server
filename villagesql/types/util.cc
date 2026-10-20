@@ -687,7 +687,23 @@ static const String *ConvertToUtf8mb4(const String &from, String *converted,
   return converted;
 }
 
-// Encode from for item's custom type, converting it to utf8mb4 first. Returns
+// Whether from is a value's binary form: bytes in the binary charset. A value
+// in any other charset is its text form.
+static bool IsBinaryForm(const String &from) {
+  return from.charset() == &my_charset_bin;
+}
+
+// Raise the error for a value's binary form given to a type that has no encode
+// from it. The bytes are not read as text instead, so that a type adding a
+// binary form never changes what existing input means.
+static void ReportNoBinaryForm(const TypeContext &tc) {
+  villagesql_error(
+      "Type '%s' cannot read a binary value; give a text value a character set",
+      MYF(0), tc.qualified_name().c_str());
+}
+
+// Encode from for item's custom type, converting it to utf8mb4 first, or as
+// the binary form when IsBinaryForm(). Returns
 // the encoded String*, or nullptr with status saying why. *given is set to the
 // value the type was given, held in from or *converted, so an error message
 // can quote the value as the user wrote it.
@@ -699,14 +715,24 @@ static String *EncodeForItem(Item *item, const String &from, String *converted,
     status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  const String *value = ConvertToUtf8mb4(from, converted, status);
-  if (value == nullptr) {
-    if (status == EncodeStatus::kBadValue) *given = converted;
-    return nullptr;
-  }
-  *given = value;
   EncodeOutcome outcome;
-  String *encoded = encoder->encode(*value, outcome);
+  String *encoded;
+  if (IsBinaryForm(from)) {
+    if (!encoder->has_binary_encode()) {
+      ReportNoBinaryForm(*item->get_type_context());
+      status = EncodeStatus::kErrorRaised;
+      return nullptr;
+    }
+    encoded = encoder->encode_binary(from, outcome);
+  } else {
+    const String *value = ConvertToUtf8mb4(from, converted, status);
+    if (value == nullptr) {
+      if (status == EncodeStatus::kBadValue) *given = converted;
+      return nullptr;
+    }
+    *given = value;
+    encoded = encoder->encode(*value, outcome);
+  }
   if (encoded == nullptr) status = EncodeStatus::kBadValue;
   return encoded;
 }
@@ -736,17 +762,27 @@ String *EncodeStringForField(Field *field, const String &from,
     return nullptr;
   }
 
-  String converted;
-  const String *value = ConvertToUtf8mb4(from, &converted, status);
-  if (value == nullptr) {
-    if (status == EncodeStatus::kBadValue) {
-      ReportBadCustomFieldValue(field, converted);
-    }
-    return nullptr;
-  }
-
   EncodeOutcome outcome;
-  String *encoded = encoder->encode(*value, outcome);
+  String converted;
+  const String *value = &from;
+  String *encoded;
+  if (IsBinaryForm(from)) {
+    if (!encoder->has_binary_encode()) {
+      ReportNoBinaryForm(*field->get_type_context());
+      status = EncodeStatus::kErrorRaised;
+      return nullptr;
+    }
+    encoded = encoder->encode_binary(from, outcome);
+  } else {
+    value = ConvertToUtf8mb4(from, &converted, status);
+    if (value == nullptr) {
+      if (status == EncodeStatus::kBadValue) {
+        ReportBadCustomFieldValue(field, converted);
+      }
+      return nullptr;
+    }
+    encoded = encoder->encode(*value, outcome);
+  }
   if (encoded != nullptr) return encoded;
 
   // set_null() states a value rather than reporting a bad one.
@@ -966,14 +1002,14 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
   // Set the type context
   item->set_type_context(const_cast<TypeContext *>(&tc));
 
-  // The rest of the function is for strings only, since we may need to
-  // re-encode it to the custom type's representation.
-  if (item->type() != Item::STRING_ITEM) return false;
+  // The rest of the function is for string and hex literals only, since we
+  // may need to re-encode them to the custom type's representation.
+  if (item->type() != Item::STRING_ITEM && item->type() != Item::HEX_BIN_ITEM)
+    return false;
 
-  // Encode the string value
-  Item_string *str_item = down_cast<Item_string *>(item);
+  // Encode the literal's value
   String tmp_buf;
-  String *str_val = str_item->val_str(&tmp_buf);
+  String *str_val = item->val_str(&tmp_buf);
   if (str_val == nullptr) {
     return false;  // NULL value, nothing to encode
   }
@@ -991,9 +1027,26 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
     return true;
   }
 
-  // Replace the string value with the encoded value
-  str_item->set_str_value(encoded);
+  // Replace the literal's value with the encoded value
+  if (item->type() == Item::STRING_ITEM) {
+    down_cast<Item_string *>(item)->set_str_value(encoded);
+  } else {
+    down_cast<Item_hex_string *>(item)->set_str_value(encoded);
+  }
   return false;
+}
+
+void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
+                         String *out) {
+  out->append('\'');
+  String decoded;
+  if (!DecodeStringUncached(tc, encoded, &decoded)) {
+    out->append(decoded);
+  } else {
+    //  TODO(villagesql-general): Make this error observable.
+    out->append("<error decoding value>");
+  }
+  out->append('\'');
 }
 
 int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
@@ -1142,6 +1195,9 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
   // function validate the actual format
   switch (item->type()) {
     case Item::STRING_ITEM:
+    // A hex or bit literal is a binary string;
+    // Item_hex_string::save_in_field_inner encodes it.
+    case Item::HEX_BIN_ITEM:
     case Item::NULL_ITEM:
     case Item::DEFAULT_VALUE_ITEM:
       return true;
@@ -1397,16 +1453,21 @@ static const String ParamValueInItsCharset(const Item_param *param,
   return String(str_value.ptr(), str_value.length(), cs);
 }
 
-type_conversion_status ParamEncodeAndStoreCustomField(const Item_param *param,
-                                                      const String &str_value,
-                                                      Field *field) {
-  const String value = ParamValueInItsCharset(param, str_value);
+type_conversion_status EncodeAndStoreStringToCustomField(const String &value,
+                                                         Field *field) {
   EncodeStatus status = EncodeStatus::kBadValue;
   String *encoded = EncodeStringForField(field, value, status);
   if (encoded == nullptr) {
     return HandleFailedEncode(field, status, false);
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
+}
+
+type_conversion_status ParamEncodeAndStoreCustomField(const Item_param *param,
+                                                      const String &str_value,
+                                                      Field *field) {
+  return EncodeAndStoreStringToCustomField(
+      ParamValueInItsCharset(param, str_value), field);
 }
 
 String *EncodeStringForCustomParam(Item_param *param, const String &str_value,
@@ -1505,8 +1566,9 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
 bool CanImplicitlyCastToCustom(const Item *item) {
   if (item->has_type_context()) return false;
 
-  // Allow string and null literals
-  if (item->type() == Item::STRING_ITEM || item->type() == Item::NULL_ITEM) {
+  // Allow string, hex and null literals
+  if (item->type() == Item::STRING_ITEM || item->type() == Item::HEX_BIN_ITEM ||
+      item->type() == Item::NULL_ITEM) {
     return true;
   }
 
@@ -2070,15 +2132,16 @@ static bool ConvertVDFArguments(
       continue;
     }
 
-    // Case 3: Arg is a constant string, or a prepared-statement parameter —
-    // implicit conversion.
+    // Case 3: Arg is a constant string or hex literal, or a prepared-statement
+    // parameter — implicit conversion.
     //
     // A parameter has no value here, so only its type context is set:
-    // InjectAndEncodeCustomType encodes a constant string in place and leaves
+    // InjectAndEncodeCustomType encodes a constant literal in place and leaves
     // any other Item alone, and Item_param::val_str encodes whatever value
     // each EXECUTE supplies.
     if (args[i]->type() == Item::PARAM_ITEM ||
-        (args[i]->type() == Item::STRING_ITEM &&
+        ((args[i]->type() == Item::STRING_ITEM ||
+          args[i]->type() == Item::HEX_BIN_ITEM) &&
          args[i]->const_for_execution())) {
       // Take the params from whichever source is in play -- the hook's answer
       // for this argument, or the answer shared across arguments of its type

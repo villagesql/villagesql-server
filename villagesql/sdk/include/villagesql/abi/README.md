@@ -53,3 +53,14 @@ A `VEF_TYPE_BINARY` value (protocol >= `VEF_PROTOCOL_4`) is raw bytes. A BINARY
 argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
+
+A custom type may also declare `from_binary_vdf_name` (protocol >=
+`VEF_PROTOCOL_4`), an encode with signature `(BINARY) -> CUSTOM(this type)`
+that builds a value from its binary form, next to the required encode from
+text. It is registered as the SQL function `TYPE::from_binary`. The server
+uses it for any value in the binary charset that becomes a value of the type:
+a hex literal, a `_binary` string, a parameter bound as a BLOB, or a
+`VARBINARY` column. A value in any other charset is text, converted to utf8mb4
+for the encode from text. For a type without `from_binary`, a value in the
+binary charset is an error rather than being read as text, so adding
+`from_binary` later never changes what existing input means.

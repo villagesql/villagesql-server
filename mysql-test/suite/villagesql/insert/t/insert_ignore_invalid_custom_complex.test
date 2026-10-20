@@ -5,10 +5,6 @@
 # A bad value that does not abort the statement now stores the type's
 # intrinsic default on every path, whatever the column's nullability. The
 # cases are labelled as in the issue.
-#
-# Case B is a separate defect kept here because it shares the shape: a binary
-# literal under IGNORE raises a hard error instead of a warning, and the
-# message shows '' rather than the offending value.
 
 --source include/villagesql/install_complex_extension.inc
 
@@ -40,11 +36,11 @@ DROP TABLE t_nn;
 INSERT IGNORE INTO t VALUES (2, 'not a complex');
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 2;
 
-# B: INSERT IGNORE, invalid binary literal. IGNORE does not downgrade this to
-# a warning the way it does for A, and the message shows '' rather than the
-# offending value.
---error ER_VILLAGESQL_GENERIC_ERROR
-INSERT IGNORE INTO t VALUES (3, X'00000000000008400000000000001040');
+# B: INSERT IGNORE, invalid binary literal: 15 bytes, where COMPLEX's binary
+# form is 16. Stores the intrinsic default, as the text literal in A does
+# (#1352).
+INSERT IGNORE INTO t VALUES (3, X'000000000000084000000000000010');
+SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 3;
 
 # C: INSERT IGNORE, prepared statement, text parameter. Stores the intrinsic
 # default, as the literal in A does.
@@ -53,8 +49,8 @@ SET @id = 4, @v = 'not a complex';
 EXECUTE s USING @id, @v;
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 4;
 
-# D: INSERT IGNORE, prepared statement, binary parameter.
-SET @id = 5, @v = X'00000000000008400000000000001040';
+# D: INSERT IGNORE, prepared statement, invalid binary parameter: 15 bytes.
+SET @id = 5, @v = X'000000000000084000000000000010';
 EXECUTE s USING @id, @v;
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 5;
 DEALLOCATE PREPARE s;

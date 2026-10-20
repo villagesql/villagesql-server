@@ -1,0 +1,65 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, _binary 0x0000803F0000004000004040);
+INSERT INTO t VALUES (2, '[1,2,3]');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[1,2,3]
+SELECT a.v = b.v AS same FROM t a, t b WHERE a.id = 1 AND b.id = 2;
+same
+1
+PREPARE s FROM 'INSERT INTO t VALUES (?, ?)';
+SET @id = 3;
+SET @v = 0x0000803F0000004000004040;
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t WHERE id = 3;
+id	v
+3	[1,2,3]
+UPDATE t SET v = _binary 0x000080400000A0400000C040 WHERE id = 3;
+SELECT id, v FROM t WHERE id = 3;
+id	v
+3	[4,5,6]
+SELECT id FROM t WHERE v = _binary 0x000080400000A0400000C040;
+id
+3
+CREATE TABLE b (id INT PRIMARY KEY, raw VARBINARY(12));
+INSERT INTO b VALUES (4, 0x0000803F0000004000004040);
+INSERT INTO t SELECT id, raw FROM b;
+SELECT id, v FROM t WHERE id = 4;
+id	v
+4	[1,2,3]
+DROP TABLE b;
+INSERT INTO t VALUES (5, _binary 0x0000803F00000040);
+ERROR HY000: Incorrect TVECTOR value: '\x00\x00\x80?\x00\x00\x00@' for column 'v' at row 1
+INSERT INTO t VALUES (5, _binary 0x0000803F0000004000004040FF);
+ERROR HY000: Incorrect TVECTOR value: '\x00\x00\x80?\x00\x00\x00@\x00\x00@@\xFF' for column 'v' at row 1
+INSERT INTO t VALUES (5, _binary 0x5B312C322C335D);
+ERROR HY000: Incorrect TVECTOR value: '[1,2,3]' for column 'v' at row 1
+INSERT IGNORE INTO t VALUES (5, _binary 0x0000803F00000040);
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '\x00\x00\x80?\x00\x00\x00@' for column 'v' at row 1
+INSERT IGNORE INTO t VALUES (7, '[1,2]');
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2]' for column 'v' at row 1
+SELECT id, v FROM t WHERE id IN (5, 7) ORDER BY id;
+id	v
+5	[0,0,0]
+7	[0,0,0]
+INSERT INTO t VALUES (6, 0x0000803F0000004000004040);
+INSERT IGNORE INTO t VALUES (8, 0x0000803F00000040);
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '\x00\x00\x80?\x00\x00\x00@' for column 'v' at row 1
+SELECT id, v FROM t WHERE id IN (6, 8) ORDER BY id;
+id	v
+6	[1,2,3]
+8	[0,0,0]
+CREATE TABLE d (v TVECTOR('dimension=2,type=double'));
+INSERT INTO d VALUES (_binary 0x000000000000F03F0000000000000040);
+SELECT v FROM d;
+v
+[1,2]
+DROP TABLE d;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

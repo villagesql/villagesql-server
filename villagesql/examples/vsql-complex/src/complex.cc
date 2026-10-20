@@ -160,6 +160,24 @@ void complex_from_string(std::string_view from, vsql::CustomResult out) {
   out.set_length(kComplexSize);
 }
 
+// COMPLEX encode from the binary form: 16 bytes, the real and imaginary parts
+// as little-endian doubles -> 16 bytes (with canonicalization of -0.0)
+// BINARY -> COMPLEX
+void complex_from_binary(vsql::Span<const unsigned char> from,
+                         vsql::CustomResult out) {
+  if (from.size() != static_cast<size_t>(kComplexSize)) {
+    out.warning("complex_from_binary: length is not " +
+                std::to_string(kComplexSize) + " bytes");
+    return;
+  }
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kComplexSize)) return;
+  Complex cx = load_complex(from.data());
+  cx.canonicalize();
+  store_complex(buf.data(), cx);
+  out.set_length(kComplexSize);
+}
+
 // COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
 // preserves -0.0 in binary form)
 // STRING -> COMPLEX2
@@ -440,6 +458,7 @@ constexpr auto COMPLEX =
         .persisted_length(kComplexSize)
         .max_decode_buffer_length(64)
         .from_string<&complex_from_string>()  // auto: "COMPLEX::from_string"
+        .from_binary<&complex_from_binary>()  // auto: "COMPLEX::from_binary"
         .to_string<&complex_to_string>()      // auto: "COMPLEX::to_string"
         .compare<&complex_compare>()          // auto: "COMPLEX::compare"
         .intrinsic_default_str("(0,0)")

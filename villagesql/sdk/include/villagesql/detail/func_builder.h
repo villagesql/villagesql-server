@@ -345,6 +345,11 @@ struct TypeOpParamsType<void (*)(MaybeParams<P> &, std::string_view,
   using type = P;
 };
 template <typename P>
+struct TypeOpParamsType<void (*)(MaybeParams<P> &, Span<const unsigned char>,
+                                 CustomResult)> {
+  using type = P;
+};
+template <typename P>
 struct TypeOpParamsType<void (*)(CustomArgWith<P>, StringResult)> {
   using type = P;
 };
@@ -691,8 +696,42 @@ inline void set_default_encode_failure(vef_vdf_result_t *result,
            static_cast<int>(display_len), arg.str_value, ellipsis);
 }
 
-// TypeEncodeVdfWrapper: wraps TypeEncodeFunc into a VDF.
-// VDF signature: (STRING) -> CUSTOM(type).
+// The binary form's counterpart: the bytes are not quotable text, so the
+// default warning gives their length instead.
+inline void set_default_binary_encode_failure(vef_vdf_result_t *result,
+                                              const vef_invalue_t &arg) {
+  result->type = VEF_RESULT_WARNING;
+  snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to encode %zu bytes",
+           arg.binary_len);
+}
+
+// The input an encode function is given: the text form (std::string_view, a
+// STRING argument) or the binary form (Span<const unsigned char>, a BINARY
+// argument).
+template <typename In>
+In encode_input(const vef_invalue_t &arg) {
+  if constexpr (std::is_same_v<In, Span<const unsigned char>>) {
+    return {arg.binary_value, arg.binary_len};
+  } else {
+    static_assert(std::is_same_v<In, std::string_view>,
+                  "encode input must be std::string_view or "
+                  "Span<const unsigned char>");
+    return {arg.str_value, arg.str_len};
+  }
+}
+
+template <typename In>
+void set_default_encode_failure_for(vef_vdf_result_t *result,
+                                    const vef_invalue_t &arg) {
+  if constexpr (std::is_same_v<In, Span<const unsigned char>>) {
+    set_default_binary_encode_failure(result, arg);
+  } else {
+    set_default_encode_failure(result, arg);
+  }
+}
+
+// TypeEncodeVdfWrapper: wraps TypeEncodeFunc or TypeEncodeBinaryFunc into a
+// VDF. VDF signature: (STRING) -> CUSTOM(type), or (BINARY) -> CUSTOM(type).
 //
 // Pre-sets the result to VEF_RESULT_WARNING with a default
 // "failed to encode '<input>'" message; the extension can override by calling
@@ -700,6 +739,9 @@ inline void set_default_encode_failure(vef_vdf_result_t *result,
 // return without such a call surfaces the default warning.
 template <auto Func>
 struct TypeEncodeVdfWrapper {
+  using In =
+      std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -707,10 +749,8 @@ struct TypeEncodeVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    set_default_encode_failure(result, arg);
-    VDF_EXCEPTIONS_TRY {
-      Func({arg.str_value, arg.str_len}, CustomResult(result));
-    }
+    set_default_encode_failure_for<In>(result, arg);
+    VDF_EXCEPTIONS_TRY { Func(encode_input<In>(arg), CustomResult(result)); }
     VDF_EXCEPTIONS_CATCH(result);
   }
 };
@@ -793,7 +833,8 @@ struct TypeHashVdfWrapper {
 
 template <auto Func>
 struct TypeEncodeWithCacheVdfWrapper {
-  // Func signature: void(MaybeParams<P>&, string_view, CustomResult).
+  // Func signature: void(MaybeParams<P>&, In, CustomResult), where In is
+  // std::string_view or Span<const unsigned char>.
   // Recover P from the first argument's MaybeParams<P>.
   using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
@@ -804,6 +845,8 @@ struct TypeEncodeWithCacheVdfWrapper {
     using type = P_;
   };
   using P = typename ExtractP<FirstArgStripped>::type;
+  using In =
+      std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -833,8 +876,8 @@ struct TypeEncodeWithCacheVdfWrapper {
         maybe_params =
             MaybeParams<P>(type_params_cache_for<P>().get(result->type_params));
       }
-      set_default_encode_failure(result, arg);
-      Func(maybe_params, {arg.str_value, arg.str_len}, CustomResult(result));
+      set_default_encode_failure_for<In>(result, arg);
+      Func(maybe_params, encode_input<In>(arg), CustomResult(result));
     }
     VDF_EXCEPTIONS_CATCH(result);
 
