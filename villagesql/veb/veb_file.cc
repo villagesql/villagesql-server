@@ -916,7 +916,7 @@ bool expand_veb_to_directory(const std::string &name,
     return true;
   }
 
-  // If a stale expansion was found, it was been repaired. Count it now.
+  // If a stale expansion was found, it has been repaired. Count it now.
   if (stale_expansion) {
     metrics::g_veb_cache_repaired.fetch_add(1, std::memory_order_relaxed);
   }

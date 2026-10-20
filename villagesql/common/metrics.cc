@@ -37,6 +37,7 @@ struct StatusVarDef {
 };
 
 // The table. A new counter is one entry here and one extern in metrics.h.
+// Names are limited to [A-Za-z0-9_]; see the convention in metrics.h.
 const StatusVarDef kStatusVars[] = {
     {"Villagesql_veb_cache_repaired", &g_veb_cache_repaired},
 };

@@ -29,7 +29,8 @@
 // The naming convention is Villagesql_{subsystem}_{event}. The shared prefix
 // is what lets a scraper pick up a new counter without being taught its name,
 // so a collector matching 'Villagesql\_%' needs no change when an area starts
-// reporting. The subsystem segment keeps the namespace navigable.
+// reporting. The subsystem segment keeps the namespace navigable. Keep names
+// to [A-Za-z0-9_] since a scraper may rewrite anything outside that set.
 //
 // These count events, not state. Where a system table already holds the answer
 // read it from there instead, so one number has one source rather than two

@@ -295,7 +295,8 @@ bool init_extension_infrastructure() {
   villagesql::services::register_builtin_capabilities();
 
   // Register status variables before the bootstrap thread below loads
-  // installed extensions, so load events are tracked.
+  // installed extensions, so load events are tracked. Failure here is
+  // non-fatal but unlikely (bad_alloc or bootstrap failure).
   (void)villagesql::metrics::register_status_variables();
 
   // We need a temporary THD during boot
