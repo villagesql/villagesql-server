@@ -329,6 +329,22 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
         return std::nullopt;
       }
 
+      // If index provides a parse() function, it must also provide an
+      // options_size, i.e. the size of the options struct that parse() fills.
+      // And the other way around.
+      //
+      // The C++ SDK sets both in one place, in options<>(), so this cannot
+      // fire for an extension built with it. It is here for one that fills
+      // vef_type_index_intf_t by hand.
+      if ((intf->parse != nullptr) != (intf->options_size > 0)) {
+        error_out = std::string("index type '") + reg_entry.name +
+                    "': parse and options_size must be set together or left "
+                    "unset together";
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
       result.index_types.emplace_back(
           IndexTypeDescriptorKey(reg_entry.name, extension_name,
                                  extension_version),

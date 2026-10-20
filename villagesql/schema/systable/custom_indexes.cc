@@ -16,10 +16,9 @@
 
 #include "villagesql/schema/systable/custom_indexes.h"
 
-#include <memory>
+#include <cstring>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "scope_guard.h"
 #include "sql/field.h"
@@ -208,22 +207,6 @@ bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
   }
 
   return false;
-}
-
-std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
-  StringPairs pairs;
-  pairs.reserve(params.size());
-
-  for (const IndexWithParam &p : params) {
-    // Numbers become JSON strings: json_object_to_pairs() rejects a non-string
-    // member.
-    pairs.emplace_back(std::string(p.key.str, p.key.length),
-                       p.is_string
-                           ? std::string(p.value.str.str, p.value.str.length)
-                           : std::to_string(p.value.num));
-  }
-
-  return json_object_from_pairs(pairs);
 }
 
 }  // namespace villagesql

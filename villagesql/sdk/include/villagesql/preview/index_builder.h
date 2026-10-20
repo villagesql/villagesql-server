@@ -31,13 +31,22 @@
 //
 // 1. Define your per-index storage context and optional options struct:
 //
+//   // Must be a POD: the server allocates it from the index heap, so no
+//   // constructor or destructor ever runs for it.
 //   struct HNSWOptions {
-//     int M = 16;
-//     int ef_construction = 200;
-//     static bool parse(const Index::Parameter *params, uint32_t count,
+//     int M;
+//     int ef_construction;
+//     // Fills the struct from a completed parameter set.
+//     static bool parse(const std::map<std::string, std::string> &,
 //                       HNSWOptions *out, char *error_msg,
 //                       uint32_t error_msg_len);
 //   };
+//
+//   // Fills in the WITH (...) parameters the user left out and validates
+//   // them. What it leaves in the map is what the server persists with the
+//   // index. Returns true on error.
+//   static bool hnsw_parse_options(std::map<std::string, std::string> &,
+//                                  char *error_msg, uint32_t error_msg_len);
 //
 //   struct HNSWContext {
 //     // Per-index-instance runtime state
@@ -70,7 +79,7 @@
 //               .capabilities(Index::Support::KNN)
 //               .storage_props(Index::Storage::HAS_COLUMN_REF |
 //                              Index::Storage::REF_LOOKUP)
-//               .options<HNSWOptions, &HNSWOptions::parse>()
+//               .options<HNSWOptions, &hnsw_parse_options>()
 //               .build();
 //
 // EXTENSION FUNCTION SIGNATURES
@@ -213,7 +222,7 @@
 //               .capabilities(Index::Support::POINT_LOOKUP |
 //                             Index::Support::RANGE_SCAN | ...)
 //               .storage_props(Index::Storage::HAS_ROW_REF | ...)
-//               .options<MyOptions, &MyOptions::parse>()
+//               .options<MyOptions, &my_parse_options>()
 //               .build();
 //
 //   // Step 3 - profile: for_type takes the name string, not the TypeDesc.
@@ -242,7 +251,9 @@
 #include <array>
 #include <cassert>
 #include <cstdio>
+#include <map>
 #include <new>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -328,7 +339,6 @@ class Index {
   using Ref = vef_index_ref_t;
   using StorageRef = vef_storage_ref_t;
   using Cursor = vef_index_cursor_ref_t;
-  using Parameter = vef_index_param_t;
 
   // The SDK allocates Index::StorageCtx<T> and T from the InnoDB arena before
   // calling create/load, and destroys the arena (which calls ~T) after drop
@@ -531,6 +541,25 @@ using ScanRestoreFn = bool (*)(Index::Cursor, MtrCtx::Ref, bool *, char *,
 
 using ScanEndFn = void (*)(Index::Cursor *);
 
+// Completes the WITH (...) parameters and validates them. What it leaves in
+// the map is what the server persists with the index.
+using IndexParseFn = bool (*)(std::map<std::string, std::string> &, char *,
+                              uint32_t);
+
+// Fills in the options struct for an index type that takes WITH (...)
+// parameters.
+template <typename Options>
+using IndexOptionStructParseFn = bool (*)(
+    const std::map<std::string, std::string> &, Options *, char *, uint32_t);
+
+// True when Options names a member `parse`.
+template <typename Options, typename = void>
+inline constexpr bool has_member_parse = false;
+
+template <typename Options>
+inline constexpr bool
+    has_member_parse<Options, std::void_t<decltype(&Options::parse)>> = true;
+
 template <auto F, typename Context>
 struct CreateWrapper {
   static bool invoke(const vef_index_ctx_t *index_ctx,
@@ -728,16 +757,68 @@ struct ScanEndWrapper {
   static void invoke(vef_index_cursor_ref_t *cursor) { F(cursor); }
 };
 
-// Adapts a typed parse function to the C ABI's void* options_out.
-// ParseFn must have signature:
-//   bool fn(const vef_index_param_t*, uint32_t, Options*, char*, uint32_t)
+// Adapts an index type's parameter functions to the C ABI. Completes the
+// incoming parameters, serializes them back for the server, then projects them
+// into the options struct the server allocated.
 template <typename Options, auto ParseFn>
-struct ParseWrapper {
-  static bool invoke(const vef_index_param_t *params, uint32_t count,
-                     void *options_out, char *error_msg,
-                     uint32_t error_msg_len) {
-    return ParseFn(params, count, static_cast<Options *>(options_out),
-                   error_msg, error_msg_len);
+struct IndexParseWrapper {
+  static_assert(std::is_same_v<decltype(ParseFn), IndexParseFn>,
+                "options<Options, &Parse>(): Parse must have signature bool "
+                "fn(std::map<std::string, std::string> &, char *, uint32_t)");
+  static_assert(std::is_same_v<decltype(&Options::parse),
+                               IndexOptionStructParseFn<Options>>,
+                "options<Options, &Parse>(): Options::parse must have "
+                "signature bool fn(const std::map<std::string, std::string> &, "
+                "Options *, char *, uint32_t)");
+
+  static bool invoke(const vef_type_params_t *params,
+                     vef_inferred_type_params_t *params_out, void *options_out,
+                     char *error_msg, uint32_t error_msg_len) {
+    // This wrapper allocates, and it is called across an extern "C" boundary,
+    // so nothing may escape.
+    try {
+      return invoke_impl(params, params_out, options_out, error_msg,
+                         error_msg_len);
+    } catch (const std::exception &e) {
+      snprintf(error_msg, error_msg_len, "parse: %s", e.what());
+      return true;
+    } catch (...) {
+      snprintf(error_msg, error_msg_len, "parse: unknown exception");
+      return true;
+    }
+  }
+
+ private:
+  static bool invoke_impl(const vef_type_params_t *params,
+                          vef_inferred_type_params_t *params_out,
+                          void *options_out, char *error_msg,
+                          uint32_t error_msg_len) {
+    std::map<std::string, std::string> m = vsql::map_from_raw(*params);
+    if (ParseFn(m, error_msg, error_msg_len)) return true;
+
+    // Serializing validates: a key or value carrying ',' or '=', or text that
+    // is not valid UTF-8, cannot survive the canonical encoding and must be
+    // rejected rather than read back as something the index type did not
+    // write.
+    std::string serialized;
+    if (vsql::func_builder::detail::serialize_type_params(
+            m, "parse", serialized, error_msg))
+      return true;
+
+    params_out->actual_len = serialized.size();
+    params_out->overflow = serialized.size() > params_out->max_buf_len;
+    if (params_out->overflow) {
+      snprintf(error_msg, error_msg_len,
+               "parse: parameters exceed the buffer capacity: "
+               "%zu bytes needed, %zu available",
+               params_out->actual_len, params_out->max_buf_len);
+      return true;
+    }
+    memcpy(params_out->buf, serialized.data(), serialized.size());
+
+    // Only now that the set is complete: project it into the server's buffer.
+    return Options::parse(m, static_cast<Options *>(options_out), error_msg,
+                          error_msg_len);
   }
 };
 
@@ -1034,6 +1115,7 @@ template <typename Context, uint32_t Bits>
 class GlobalBuilder {
   static constexpr uint32_t kCapabilities = 1u << 0;
   static constexpr uint32_t kStorageProps = 1u << 1;
+  static constexpr uint32_t kOptions = 1u << 2;
 
  public:
   constexpr GlobalBuilder(const char *name, vef_type_index_intf_t intf)
@@ -1051,16 +1133,36 @@ class GlobalBuilder {
     return {name_, intf_};
   }
 
-  // Bind a parameterized options struct and its parse function.
-  // ParseFn must have signature:
-  //   bool fn(const vef_index_param_t*, uint32_t, OptionsStruct*,
-  //           char*, uint32_t)
-  // The server allocates sizeof(OptionsStruct) bytes, calls parse() to fill
-  // them, then passes the result as index_ctx->options to create().
+  // Bind the options struct and the two functions that produce it.
+  //   ParseFn:             bool fn(std::map<std::string, std::string> &,
+  //                                char *, uint32_t)
+  //   OptionStructParseFn: bool fn(const std::map<std::string, std::string> &,
+  //                                OptionsStruct *, char *, uint32_t)
+  //
+  // ParseFn completes the WITH (...) parameters and validates them. The
+  // server calls it once at CREATE INDEX, where it validates the
+  // user-supplied parameters and allows user to fill in defaults.
+  //
+  // OptionStructParseFn parses the completed parameter set into the options
+  // struct. It's called on index load.
+  //
+  // OptionsStruct must be a POD. The server allocates it from the index heap,
+  // which runs no constructor and no destructor, so it cannot hold a
+  // std::string or any other member that owns memory.
   template <typename OptionsStruct, auto ParseFn>
-  constexpr GlobalBuilder<Context, Bits> options() && {
+  constexpr GlobalBuilder<Context, Bits | kOptions> options() && {
+    static_assert((Bits & kOptions) == 0,
+                  "global: options() called more than once");
+    static_assert(
+        detail::has_member_parse<OptionsStruct>,
+        "options<Options, &Parse>(): Options has no member 'parse'. "
+        "Please provide 'static bool parse(const std::map<std::string, "
+        "std::string> &, Options *, char *, uint32_t)'");
+    static_assert(std::is_trivial_v<OptionsStruct> &&
+                      std::is_standard_layout_v<OptionsStruct>,
+                  "options<>(): Options must be a POD struct.");
     intf_.options_size = static_cast<uint32_t>(sizeof(OptionsStruct));
-    intf_.parse = detail::ParseWrapper<OptionsStruct, ParseFn>::invoke;
+    intf_.parse = detail::IndexParseWrapper<OptionsStruct, ParseFn>::invoke;
     return {name_, intf_};
   }
 
@@ -1521,7 +1623,12 @@ struct CapabilityTraits<::vsql::preview_index_builder::IndexTypeCapability<N>> {
       "vsql::preview_index_builder::IndexTypeCapability";
   using CapabilityConfigType = vef_preview_index_type_ext_desc_t;
   static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  // ver-2: vef_type_index_parse_func_t changed signature, so a ver-1 extension
+  // would hand over a pointer the server calls with the wrong argument list.
+  // The struct layout is unchanged from ver-1, which is exactly why this hash
+  // has to carry the difference: only the pointed-to function type moved, and
+  // nothing about the layout would reveal it.
+  static constexpr const char *kCapabilityConfigHash = "ver-2";
 
   static void *vtable_destination(
       ::vsql::preview_index_builder::IndexTypeCapability<N> *p) noexcept {

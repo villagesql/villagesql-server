@@ -313,38 +313,34 @@ static bool vef_index_col_data_to_ref_impl(vef_index_ref_t index_ref,
   return false;
 }
 
-// Calls intf.parse to validate the WITH (...) parameters. Allocates the
-// options struct on index->heap, writes the parsed result into it, and sets
-// *options_out to point to it. No-op (leaves *options_out unchanged) when
-// intf.parse is nullptr.
+// Calls the index type's parse function to build its options struct.
+// Allocates the struct on index->heap, has the index type fill it, and sets
+// *options_out to point at it. No-op (leaves *options_out unchanged) for an
+// index type that takes no WITH (...) parameters.
 static dberr_t parse_index_options(dict_index_t *index,
                                    const vef_type_index_intf_t &intf,
                                    const void **options_out) {
-  if (intf.parse == nullptr) return DB_SUCCESS;
+  const auto *descriptor = index->custom_index->index_meta()->descriptor();
+  if (!descriptor->has_parameters()) return DB_SUCCESS;
   ut_ad(intf.options_size > 0);
 
   const auto &params = index->custom_index->index_meta()->parameters();
-  const uint32_t param_count = params.count();
-  vef_index_param_t *param_arr = nullptr;
-  if (param_count > 0) {
-    param_arr = static_cast<vef_index_param_t *>(
-        mem_heap_alloc(index->heap, param_count * sizeof(vef_index_param_t)));
-    const char *const *keys = params.key_data();
-    const char *const *vals = params.value_data();
-    for (uint32_t i = 0; i < param_count; i++) {
-      param_arr[i].key = keys[i];
-      param_arr[i].value = vals[i];
-    }
-  }
 
   void *parsed = mem_heap_zalloc(index->heap, intf.options_size);
-  char error_msg[Custom_index::ERROR_MSG_SIZE] = {};
-  if (intf.parse(param_arr, param_count, parsed, error_msg,
-                 sizeof(error_msg))) {
-    error_msg[sizeof(error_msg) - 1] = '\0';
+  TypeParameters completed;
+  char error_msg[VEF_MAX_ERROR_LEN] = {};
+  if (descriptor->parse(params, &completed, parsed, error_msg)) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "Error parsing custom index options for index " << index->name
         << ": " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  if (!(completed == params)) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index " << index->name << ": stored parameters '"
+        << params.str() << "' are not what the index type completes them to ('"
+        << completed.str() << "')";
     return DB_VILLAGESQL_ERROR;
   }
 

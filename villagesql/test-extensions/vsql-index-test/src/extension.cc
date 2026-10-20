@@ -53,6 +53,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <string>
 #include <string_view>
 
 using namespace vsql::preview_index_builder;
@@ -61,12 +63,48 @@ using vsql::preview_storage::MtrCtx;
 using vsql::preview_storage::Segment;
 using vsql::preview_storage::Space;
 
+// Defaults for DUMMY_HNSW's WITH (...) options.
+constexpr uint32_t kDefaultM = 16;
+constexpr uint32_t kDefaultEfConstruction = 200;
+
+// Largest value each DUMMY_HNSW option may declare.
+constexpr unsigned long kMaxM = 65536;
+constexpr unsigned long kMaxEfConstruction = kMaxM;
+
 // Options parsed from WITH (...) at CREATE INDEX time.
 // Passed as index_ctx->options during create(); available via index_ctx in
-// every call.
+// every call. Must stay a POD: the server allocates it from the index heap,
+// which runs no constructor and no destructor.
 struct DummyHNSWOptions {
-  uint32_t M = 16;
-  uint32_t ef_construction = 200;
+  uint32_t M;
+  uint32_t ef_construction;
+
+  // Convert a completed parameter set into the struct. Validation is not this
+  // function's job: dummy_parse_options has already run and the server
+  // refused the index if it reported a problem, so both keys are present and
+  // both values are in range. The only failure left is that guarantee being
+  // broken, which would mean a bug in dummy_parse_options rather than
+  // anything the user wrote.
+  static bool parse(const std::map<std::string, std::string> &params,
+                    DummyHNSWOptions *out, char *error_msg,
+                    uint32_t error_msg_len) {
+    if (params.count("m") == 0) {
+      snprintf(error_msg, error_msg_len,
+               "M is missing from the completed parameters");
+      return true;
+    }
+    if (params.count("ef_construction") == 0) {
+      snprintf(error_msg, error_msg_len,
+               "ef_construction is missing from the completed parameters");
+      return true;
+    }
+
+    out->M =
+        static_cast<uint32_t>(strtoul(params.at("m").c_str(), nullptr, 10));
+    out->ef_construction = static_cast<uint32_t>(
+        strtoul(params.at("ef_construction").c_str(), nullptr, 10));
+    return false;
+  }
 };
 
 // Per-index dummy state. No real data is stored.
@@ -226,35 +264,58 @@ constexpr auto DUMMY_VECTOR =
         .intrinsic_default_str("[0,0,0,0]")
         .build();
 
-// Parse WITH (...) options for DUMMY_HNSW. Accepts "M" and "ef_construction".
-static bool dummy_parse_options(const vef_index_param_t *params, uint32_t count,
-                                DummyHNSWOptions *out, char *error_msg,
-                                uint32_t error_msg_len) {
-  *out = DummyHNSWOptions{};
-  for (uint32_t i = 0; i < count; ++i) {
-    const char *key = params[i].key;
-    const char *val = params[i].value;
-    char *end;
-    if (strcmp(key, "m") == 0) {
-      unsigned long v = strtoul(val, &end, 10);
-      if (*end != '\0' || v == 0 || v > 65536) {
-        snprintf(error_msg, error_msg_len,
-                 "M must be a positive integer <= 65536, got '%s'", val);
-        return true;
-      }
-      out->M = static_cast<uint32_t>(v);
-    } else if (strcmp(key, "ef_construction") == 0) {
-      unsigned long v = strtoul(val, &end, 10);
-      if (*end != '\0' || v == 0) {
-        snprintf(error_msg, error_msg_len,
-                 "ef_construction must be a positive integer, got '%s'", val);
-        return true;
-      }
-      out->ef_construction = static_cast<uint32_t>(v);
-    } else if (strcmp(key, "label") != 0 && strcmp(key, "mode") != 0) {
-      snprintf(error_msg, error_msg_len, "unknown option '%s'", key);
+// Check one unsigned WITH (...) value against its upper bound.
+// Returns true and fills error_msg when the value is not acceptable.
+static bool dummy_check_option(const char *name, const std::string &val,
+                               unsigned long max, char *error_msg,
+                               uint32_t error_msg_len) {
+  char *end = nullptr;
+  unsigned long v = strtoul(val.c_str(), &end, 10);
+  if (*end != '\0' || v == 0 || v > max) {
+    snprintf(error_msg, error_msg_len,
+             "%s must be a positive integer <= %lu, got '%s'", name, max,
+             val.c_str());
+    return true;
+  }
+  return false;
+}
+
+// Complete and validate DUMMY_HNSW's WITH (...) parameters.
+//
+// On CREATE INDEX, the server calls this to validate the user-supplied
+// parameters and fill in any missing ones with defaults.
+// On every index open, the server calls this to validate that the persisted
+// parameters are still valid.
+static bool dummy_parse_options(std::map<std::string, std::string> &params,
+                                char *error_msg, uint32_t error_msg_len) {
+  const char *m_opt = "m";
+  const char *ef_construction_opt = "ef_construction";
+
+  // Reject anything this index type does not recognize.
+  for (const auto &kv : params) {
+    const std::string &key = kv.first;
+    if (key != m_opt && key != ef_construction_opt && key != "label" &&
+        key != "mode") {
+      snprintf(error_msg, error_msg_len, "unknown option '%s'", key.c_str());
       return true;
     }
+  }
+
+  // Validate what the user supplied, and fill in only what is missing. All
+  // validation lives here: what this function leaves in the map is what the
+  // server persists, so this is the place a bad value has to be caught.
+  if (params.count(m_opt) != 0) {
+    if (dummy_check_option("M", params[m_opt], kMaxM, error_msg, error_msg_len))
+      return true;
+  } else {
+    params[m_opt] = std::to_string(kDefaultM);
+  }
+  if (params.count(ef_construction_opt) != 0) {
+    if (dummy_check_option("ef_construction", params[ef_construction_opt],
+                           kMaxEfConstruction, error_msg, error_msg_len))
+      return true;
+  } else {
+    params[ef_construction_opt] = std::to_string(kDefaultEfConstruction);
   }
   return false;
 }

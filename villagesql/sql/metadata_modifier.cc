@@ -18,6 +18,7 @@
 
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "sql/create_field.h"
 #include "sql/field.h"
@@ -125,6 +126,44 @@ bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
         type_context->type_name(), type_context->parameters().to_json());
   }
 
+  return false;
+}
+
+// Serialize a WITH (...) clause into the raw "k=v,k=v" form.
+static std::string index_with_params_to_raw(
+    const Mem_root_array<IndexWithParam> &params) {
+  std::string raw;
+  for (const IndexWithParam &p : params) {
+    if (!raw.empty()) raw += ',';
+    raw.append(p.key.str, p.key.length);
+    raw += '=';
+    if (p.is_string) {
+      raw.append(p.value.str.str, p.value.str.length);
+    } else {
+      raw += std::to_string(p.value.num);
+    }
+  }
+  return raw;
+}
+
+// An index type completing its parameters may add them or change their values,
+// but dropping one would silently discard what the user asked for.
+// Returns true with *error set if any key in before is missing from after.
+static bool index_params_removed(const TypeParameters &before,
+                                 const TypeParameters &after,
+                                 std::string *error) {
+  for (unsigned int i = 0; i < before.count(); i++) {
+    const char *key = before.key_data()[i];
+    bool found = false;
+    for (unsigned int j = 0; j < after.count() && !found; j++) {
+      found = strcmp(key, after.key_data()[j]) == 0;
+    }
+    if (!found) {
+      *error = std::string("parse dropped parameter '") + key +
+               "'; parameters may be added or changed but not removed";
+      return true;
+    }
+  }
   return false;
 }
 
@@ -265,10 +304,6 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
     const std::string type_name(kci.custom_index_type.str,
                                 kci.custom_index_type.length);
     const std::string index_name(key->name.str, key->name.length);
-    const std::string params_json =
-        (kci.custom_index_params && !kci.custom_index_params->empty())
-            ? params_to_json(*kci.custom_index_params)
-            : "{}";
     std::string ext_version;
 
     {
@@ -282,10 +317,27 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
       ext_name = desc->extension_name();
       ext_version = desc->extension_version();
 
+      // Canonicalize the WITH clause before storing it, so the persisted form
+      // matches the one every reader reconstructs through
+      // TypeParameters::from_json(). Defaults are filled in later, in
+      // resolve_index_params(), once the extension MDL is held.
+      TypeParameters params;
+      if (kci.custom_index_params != nullptr &&
+          !kci.custom_index_params->empty()) {
+        params = TypeParameters::from_raw(
+            index_with_params_to_raw(*kci.custom_index_params));
+        if (params.has_error()) {
+          villagesql_error("Index '%s' on custom index type '%s': %s", MYF(0),
+                           index_name.c_str(), type_name.c_str(),
+                           params.validation_error().c_str());
+          return true;
+        }
+      }
+
       const uint64_t index_id = vclient.allocate_index_id();
       to_add_indexes_.emplace_back(IndexKey(db, table_name, index_name),
                                    index_id, ext_name, ext_version, type_name,
-                                   params_json);
+                                   params.to_json());
 
       uint32_t key_pos = 0;
       for (const Key_part_spec *kp : key->columns) {
@@ -983,6 +1035,73 @@ bool Metadata_modifier::validate_entries() {
   return false;
 }
 
+bool Metadata_modifier::resolve_index_params() {
+  if (to_add_indexes_.empty()) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+
+  for (IndexEntry &entry : to_add_indexes_) {
+    const IndexTypeDescriptorKey key(
+        entry.index_type_name, entry.extension_name, entry.extension_version);
+    const IndexTypeDescriptor *desc =
+        vclient.index_type_descriptors().get_committed(key);
+    if (desc == nullptr) {
+      // validate_entries() just confirmed the descriptor is there.
+      assert(false);
+      villagesql_error("Custom index type '%s' from extension '%s' not found",
+                       MYF(0), entry.index_type_name.c_str(),
+                       entry.extension_name.c_str());
+      return true;
+    }
+    const TypeParameters before =
+        TypeParameters::from_json(entry.index_type_parameters);
+
+    if (!desc->has_parameters()) {
+      // Nothing will ever read these, so accepting them would store a WITH
+      // clause that silently does nothing and still renders in SHOW CREATE.
+      if (!before.empty()) {
+        villagesql_error(
+            "Index '%s': custom index type '%s' takes no WITH (...) "
+            "parameters",
+            MYF(0), entry.index_name().c_str(), entry.index_type_name.c_str());
+        return true;
+      }
+      continue;
+    }
+
+    // We will not use options here. We just need to validate the parameters
+    // and fill in defaults.
+    std::vector<unsigned char> options(desc->intf().options_size);
+    TypeParameters after;
+    char error_msg[VEF_MAX_ERROR_LEN] = {0};
+    if (desc->parse(before, &after, options.data(), error_msg)) {
+      villagesql_error("Index '%s' on custom index type '%s': %s", MYF(0),
+                       entry.index_name().c_str(),
+                       entry.index_type_name.c_str(), error_msg);
+      return true;
+    }
+    if (after == before) continue;
+
+    if (after.has_error()) {
+      villagesql_error("Index '%s' on custom index type '%s': %s", MYF(0),
+                       entry.index_name().c_str(),
+                       entry.index_type_name.c_str(),
+                       after.validation_error().c_str());
+      return true;
+    }
+    std::string error;
+    if (index_params_removed(before, after, &error)) {
+      villagesql_error("Index '%s' on custom index type '%s': %s", MYF(0),
+                       entry.index_name().c_str(),
+                       entry.index_type_name.c_str(), error.c_str());
+      return true;
+    }
+    entry.index_type_parameters = after.to_json();
+  }
+  return false;
+}
+
 bool Metadata_modifier::mark_victionary_modifications(THD *thd,
                                                       bool &marked_column,
                                                       bool &marked_index) {
@@ -1161,6 +1280,14 @@ bool Metadata_modifier::lock_and_apply(THD *thd) {
 
   // 2. Validate that all referenced types exist with matching extension info.
   if (validate_entries()) {
+    return true;
+  }
+
+  // 2b. Let each custom index type fill in the WITH (...) parameters the user
+  // left out. This must run after step 1, because it calls into extension
+  // code and only the extension MDL keeps UNINSTALL EXTENSION out, and before
+  // step 3, which moves the entries out of to_add_indexes_.
+  if (resolve_index_params()) {
     return true;
   }
 

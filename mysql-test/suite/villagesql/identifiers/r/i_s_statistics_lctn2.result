@@ -11,7 +11,7 @@ INDEX MixedIdx (a) USING EXTENDED(dummy_index_hnsw)
 );
 # --- Stored rows: db and table names lowercased, index name as entered ---
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 mixedtab	MixedIdx	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # --- I_S.STATISTICS resolves the custom type across the case difference ---
@@ -30,8 +30,8 @@ MixedTab	1	MixedIdx	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
 # --- Index added by a statement spelled in a different case ---
 ALTER TABLE mixedtab ADD INDEX MixedIdx2 (b) USING EXTENDED(dummy_index_hnsw);
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
-mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{}
-mixeddb	mixedtab	MixedIdx2	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+mixeddb	mixedtab	MixedIdx	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+mixeddb	mixedtab	MixedIdx2	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
 mixedtab	MixedIdx	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 mixedtab	MixedIdx2	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
