@@ -308,7 +308,10 @@ void tvector_to_string(vsql::CustomArgWith<TVectorParams> in,
     out.error("TVECTOR has no dimension");
     return;
   }
-  if (data.size() != static_cast<size_t>(p.dimension) * bpe) return;
+  if (data.size() != static_cast<size_t>(p.dimension) * bpe) {
+    out.error("TVECTOR data size does not match its dimension");
+    return;
+  }
 
   auto buf = out.buffer();
   char *w = buf.data();
