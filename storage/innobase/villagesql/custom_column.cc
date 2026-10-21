@@ -469,6 +469,7 @@ static dberr_t insert_impl(const dict_index_t *index, uint32_t index_field_num,
 
   log_free_check();
   mtr_start(&mtr);
+  dict_disable_redo_if_temporary(index->table, &mtr);
 
   ut_a(pcur->restore_position(BTR_MODIFY_LEAF, &mtr, UT_LOCATION_HERE));
   ut_a(pcur->m_rel_pos == BTR_PCUR_ON);
@@ -529,6 +530,11 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
   // Position the cursor to B-tree record inserted.
   pcur.open(index, 0, index_entry, PAGE_CUR_LE, BTR_SEARCH_LEAF, &mtr,
             UT_LOCATION_HERE);
+
+  // Compute the offsets of the inserted record here: the direct insert into an
+  // intrinsic table does not compute them for the caller.
+  offsets = rec_get_offsets(pcur.get_rec(), index, offsets, ULINT_UNDEFINED,
+                            UT_LOCATION_HERE, heap);
 
   pcur.store_position(&mtr);
   mtr_commit(&mtr);
@@ -642,6 +648,7 @@ static dberr_t mark_impl(const dict_index_t *index, uint32_t index_field_num,
   log_free_check();
   mtr_t mtr;
   mtr_start(&mtr);
+  dict_disable_redo_if_temporary(index->table, &mtr);
 
   dict_field_t *ind_field = index->get_field(index_field_num);
   dict_col_t *col = ind_field->col;
@@ -792,6 +799,7 @@ dberr_t Custom_column::purge_updated(const dict_table_t *table, trx_id_t trx_id,
     log_free_check();
     mtr_t mtr;
     mtr_start(&mtr);
+    dict_disable_redo_if_temporary(table, &mtr);
 
     error = purge_in_column_store(ind_field->col, &mtr, trx_id, ref_val);
 
@@ -865,6 +873,7 @@ static dberr_t purge_impl(const dict_table_t *table, const upd_t *upd,
     log_free_check();
     mtr_t mtr;
     mtr_start(&mtr);
+    dict_disable_redo_if_temporary(table, &mtr);
 
     ut_a(pcur->restore_position(BTR_MODIFY_LEAF, &mtr, UT_LOCATION_HERE));
     ut_a(pcur->m_rel_pos == BTR_PCUR_ON);
