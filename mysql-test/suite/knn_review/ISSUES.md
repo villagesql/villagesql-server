@@ -28,9 +28,9 @@ mark the issue fixed here.
 | KNN-14 | An MVCC_VISIBILITY index shows a row committed after the reader's snapshot (phantom) | obsolete | (tests removed) |
 | KNN-15 | A READ COMMITTED locking KNN read drops rows whose entry is current | fixed in /40 | locking/current_entry_pk, locking/current_entry_btree, locking/read_committed |
 | KNN-16 | VEF_INDEX_CAP_APPROXIMATE has the same bit as VEF_INDEX_CAP_KNN | fixed in /40 | unit test index_capability_bits-t |
-| KNN-17 | UPDATE of a column-store column in an intrinsic temporary table crashes (write_trx_id of trx 0) | open | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
-| KNN-18 | INSERT of a vsql-vector SVECTOR into an intrinsic temporary table crashes (write_trx_id of trx 0) | open | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
-| KNN-19 | A column store created in the temporary tablespace gets a root page with stale bytes (vsql-vector asserts) | open | villagesql/extension/vsql-storage-test/storage_intrinsic_table, storage_temp_table (not skipped) |
+| KNN-17 | UPDATE of a column-store column in an intrinsic temporary table crashes (write_trx_id of trx 0) | fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
+| KNN-18 | INSERT of a vsql-vector SVECTOR into an intrinsic temporary table crashes (write_trx_id of trx 0) | fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
+| KNN-19 | A column store created in the temporary tablespace gets a root page with stale bytes (vsql-vector asserts) | fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table, storage_temp_table (not skipped) |
 
 ## Not implemented yet
 
@@ -391,6 +391,9 @@ still not implemented on /40.
   build write_trx_id returns without writing, so the record is marked but
   its delete trx id stays empty.
 - Ours (the temp-tables commit, PR #1431), not Deb's.
+- Fixed: Custom_column::update frees the old value of an intrinsic table in
+  the column store (free_impl, the column store's purge) instead of delete
+  marking it.
 - Expected: nothing reads an intrinsic table's old value (no undo, no other
   readers), so the in-place update should remove it (purge) instead of
   delete-marking it with a transaction that does not exist.
@@ -414,10 +417,12 @@ still not implemented on /40.
   with write_trx_id" they write it like vsql-vector, and
   vsql-storage-test.storage_intrinsic_table crashes the same way in this
   tree.
-- Not decided: either the server passes a transaction id that is never empty
-  for an intrinsic table, or the SDK documents that trx_ref is EMPTY_TRX_ID
-  for a table without transactions and a column store then clears the field
-  (clear_trx_id) instead of writing it. The second changes vsql-vector.
+- Ours: column-store columns in intrinsic tables come from the temp-tables
+  commit, which passed InnoDB's trx id of an intrinsic table (0) on.
+- Fixed: Custom_column::insert and update pass Custom_column::INTRINSIC_TRX_ID
+  (2^48 - 1, the largest 6-byte id, never a real one) for an intrinsic table,
+  so its column store gets a non-empty id. Insert and the free of an old
+  value on update (KNN-17) use the same id, so the free still matches.
 
 ## KNN-19: A column store created in the temporary tablespace gets a root page with stale bytes (vsql-vector asserts)
 
@@ -443,3 +448,6 @@ still not implemented on /40.
   storage_intrinsic_table runs the window query after the other temporary
   tables were dropped; storage_temp_table drops a temporary table and creates
   it again.
+- Fixed: vef_storage_segment_create and vef_storage_page_allocate_and_load
+  (storage_abi.cc) zero a new page of a temporary tablespace, keeping the
+  segment header of a root page.

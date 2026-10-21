@@ -2761,7 +2761,8 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
       dtuple_convert_back_big_rec(entry, big_rec);
 
     } else if (err == DB_SUCCESS) {
-      if (!commit_mtr && !index->last_ins_cur->disable_caching) {
+      if (!commit_mtr && !index->last_ins_cur->disable_caching &&
+          !index->table->has_extended_storage) {
         index->last_ins_cur->rec = insert_rec;
 
         index->last_ins_cur->block = cursor.page_cur.block;
@@ -2771,6 +2772,14 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
     }
 
     break;
+  }
+
+  // VillageSQL: store the extended columns of the inserted row. The cached
+  // insert position was released above, as this repositions on the record.
+  if (err == DB_SUCCESS) {
+    trx_t *trx = thr ? thr_get_trx(thr) : nullptr;
+    err = villagesql::innodb::Custom_column::insert(
+        index->table, trx ? trx->id : 0, entry, offsets, &offsets_heap);
   }
 
   if (err != DB_SUCCESS) {

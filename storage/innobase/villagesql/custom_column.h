@@ -76,6 +76,9 @@ class Custom_column {
   using Info = std::pair<Custom_column *, bool>;
 
   static constexpr Ref EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
+  // Transaction id the column store sees for an intrinsic table, which has no
+  // transaction. The largest 6-byte id, so it is never a real one.
+  static constexpr trx_id_t INTRINSIC_TRX_ID = (trx_id_t{1} << 48) - 1;
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
 
   explicit Custom_column(std::shared_ptr<const TypeContext> type_context)
@@ -173,7 +176,8 @@ class Custom_column {
   // @param table The table being inserted into.
   // @param trx_id The transaction ID of the insert.
   // @param index_entry The clustered index entry of the new row.
-  // @param offsets Offsets for the index entry.
+  // @param offsets Buffer for the offsets of the inserted record, which are
+  // computed here.
   // @param heap Memory heap.
   // @return DB_SUCCESS or an error code.
   static dberr_t insert(dict_table_t *table, trx_id_t trx_id,

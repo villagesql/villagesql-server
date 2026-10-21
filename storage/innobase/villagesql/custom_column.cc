@@ -491,6 +491,7 @@ static dberr_t insert_impl(const dict_index_t *index, uint32_t index_field_num,
 
   log_free_check();
   mtr_start(&mtr);
+  dict_disable_redo_if_temporary(index->table, &mtr);
 
   ut_a(pcur->restore_position(BTR_MODIFY_LEAF, &mtr, UT_LOCATION_HERE));
   ut_a(pcur->m_rel_pos == BTR_PCUR_ON);
@@ -542,6 +543,9 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
   if (!table->has_extended_storage) {
     return DB_SUCCESS;
   }
+  if (table->is_intrinsic()) {
+    trx_id = INTRINSIC_TRX_ID;
+  }
 
   dict_index_t *index = table->first_index();
   btr_pcur_t pcur;
@@ -551,6 +555,11 @@ dberr_t Custom_column::insert(dict_table_t *table, trx_id_t trx_id,
   // Position the cursor to B-tree record inserted.
   pcur.open(index, 0, index_entry, PAGE_CUR_LE, BTR_SEARCH_LEAF, &mtr,
             UT_LOCATION_HERE);
+
+  // Compute the offsets of the inserted record here: the direct insert into an
+  // intrinsic table does not compute them for the caller.
+  offsets = rec_get_offsets(pcur.get_rec(), index, offsets, ULINT_UNDEFINED,
+                            UT_LOCATION_HERE, heap);
 
   pcur.store_position(&mtr);
   mtr_commit(&mtr);
@@ -664,6 +673,7 @@ static dberr_t mark_impl(const dict_index_t *index, uint32_t index_field_num,
   log_free_check();
   mtr_t mtr;
   mtr_start(&mtr);
+  dict_disable_redo_if_temporary(index->table, &mtr);
 
   dict_field_t *ind_field = index->get_field(index_field_num);
   dict_col_t *col = ind_field->col;
@@ -731,11 +741,45 @@ dberr_t Custom_column::mark_delete(const dict_table_t *table, trx_id_t trx_id,
   return error;
 }
 
+static dberr_t purge_in_column_store(const dict_col_t *col, mtr_t *mtr,
+                                     trx_id_t trx_id, Custom_column::Ref ref,
+                                     bool is_purge, bool &logged);
+
+// Frees the data of an extended column in the column store right away, for
+// an update of an intrinsic table. Such a table has no undo log and no other
+// readers, so the old value is never read again and is not delete marked.
+static dberr_t free_impl(const dict_index_t *index, uint32_t index_field_num,
+                         const dfield_t *data_field, trx_id_t trx_id) {
+  if (!data_field->is_extended() || dfield_is_null(data_field)) {
+    return DB_SUCCESS;
+  }
+  const Custom_column::Ref ref_val = data_field->get_extended_ref();
+  if (ref_val == Custom_column::EMPTY_REF) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Update: Invalid custom column reference.";
+    return DB_VILLAGESQL_ERROR;
+  }
+  log_free_check();
+  mtr_t mtr;
+  mtr_start(&mtr);
+  dict_disable_redo_if_temporary(index->table, &mtr);
+
+  bool logged = true;
+  const dberr_t error =
+      purge_in_column_store(index->get_field(index_field_num)->col, &mtr,
+                            trx_id, ref_val, false, logged);
+  mtr_commit(&mtr);
+  return error;
+}
+
 dberr_t Custom_column::update(const dict_table_t *table, trx_id_t trx_id,
                               btr_pcur_t *pcur, upd_t *update, ulint *offsets,
                               mem_heap_t **heap) {
   if (!table->has_extended_storage || !update->update_extended) {
     return DB_SUCCESS;
+  }
+  if (table->is_intrinsic()) {
+    trx_id = INTRINSIC_TRX_ID;
   }
   const dict_index_t *index = table->first_index();
   ut_a(index->is_clustered());
@@ -746,10 +790,12 @@ dberr_t Custom_column::update(const dict_table_t *table, trx_id_t trx_id,
     upd_field_t *upd_field = upd_get_nth_field(update, i);
     uint32_t field_num = upd_field->field_no;
 
-    // Step-1: Delete old columns.
+    // Step-1: Delete old columns. Those of an intrinsic table are freed.
     const dfield_t *old_field = &(upd_field->old_val);
 
-    error = mark_impl(index, field_num, old_field, trx_id, true);
+    error = table->is_intrinsic()
+                ? free_impl(index, field_num, old_field, trx_id)
+                : mark_impl(index, field_num, old_field, trx_id, true);
 
     if (error != DB_SUCCESS) {
       log_extended_error("Update[Delete]", nullptr, index, field_num);
@@ -887,6 +933,7 @@ dberr_t Custom_column::purge_updated(const dict_table_t *table, trx_id_t trx_id,
     log_free_check();
     mtr_t mtr;
     mtr_start(&mtr);
+    dict_disable_redo_if_temporary(table, &mtr);
 
     bool logged = true;
     error = purge_in_column_store(ind_field->col, &mtr, trx_id, ref_val,
@@ -972,6 +1019,7 @@ static dberr_t purge_impl(const dict_table_t *table, const upd_t *upd,
     log_free_check();
     mtr_t mtr;
     mtr_start(&mtr);
+    dict_disable_redo_if_temporary(table, &mtr);
 
     ut_a(pcur->restore_position(BTR_MODIFY_LEAF, &mtr, UT_LOCATION_HERE));
     ut_a(pcur->m_rel_pos == BTR_PCUR_ON);

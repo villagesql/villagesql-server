@@ -41,6 +41,7 @@
 #include <villagesql/preview/storage_builder.h>
 #include <villagesql/vsql.h>
 
+#include <algorithm>
 #include <cassert>
 #include <charconv>
 #include <cstddef>
@@ -160,6 +161,17 @@ int stored_int_compare(vsql::CustomArg a, vsql::CustomArg b) {
 // Storage interface functions
 // ============================================================================
 
+// Returns true if the bytes of page from offset begin to the trailer are all
+// zero. A column store may rely on a new page being zero filled, as vsql-vector
+// does, so this store checks each new page it gets.
+static bool zero_filled_from(const storage::Page &page,
+                             storage::Page::Offset begin) {
+  const unsigned char *data = page.get_data();
+  const uint32_t end = page.data_size() - storage::Page::TRAILER_SIZE;
+  return std::all_of(data + begin, data + end,
+                     [](unsigned char b) { return b == 0; });
+}
+
 bool stored_int_create(Ctx *ctx, storage::Space::Ref space,
                        storage::Segment::TrxRef trx, uint32_t /*col_len*/,
                        char *err, uint32_t err_len) {
@@ -169,6 +181,27 @@ bool stored_int_create(Ctx *ctx, storage::Space::Ref space,
     snprintf(err, err_len, "stored_int create: %s",
              storage::last_error().data());
     return true;
+  }
+  {
+    storage::MtrCtx mtr_ctx;
+    auto mtr = mtr_ctx.start();
+    storage::Page root;
+    if (root.load(space, root_page, storage::Page::Latch::SHARED, mtr) !=
+        storage::Error::SUCCESS) {
+      snprintf(err, err_len, "stored_int create: root page load failed: %s",
+               storage::last_error().data());
+      mtr_ctx.commit();
+      return true;
+    }
+    // The root page holds the segment count and the one segment header.
+    const bool zero = zero_filled_from(
+        root, storage::Page::HEADER_SIZE + storage::Segment::NUM_SEGMENTS_SIZE +
+                  storage::Segment::HEADER_SIZE);
+    mtr_ctx.commit();
+    if (!zero) {
+      snprintf(err, err_len, "stored_int create: new root page is not zeroed");
+      return true;
+    }
   }
   ctx->user()->space = space;
   ctx->user()->root_page = root_page;
@@ -226,6 +259,10 @@ bool stored_int_insert(Ctx *ctx, storage::MtrCtx::Ref mctx,
   if (data_page.load_new(seg, mctx) != storage::Error::SUCCESS) {
     snprintf(err, err_len, "stored_int insert: page allocation failed: %s",
              storage::last_error().data());
+    return true;
+  }
+  if (!zero_filled_from(data_page, storage::Page::HEADER_SIZE)) {
+    snprintf(err, err_len, "stored_int insert: new page is not zeroed");
     return true;
   }
 
