@@ -24,11 +24,11 @@
 
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_status_var_service.h"
-#include "mysql/service_plugin_registry.h"
 #include "mysql/status_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/status_var.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/services/plugin_registry.h"
 
 namespace villagesql::services {
 
@@ -66,8 +66,8 @@ bool on_populate_status_var(const PopulateContext &ctx,
       ctx.capability_config);
   if (list == nullptr || list->var_count == 0) return false;
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
+  PluginRegistry registry;
+  if (!registry.is_valid()) {
     error_message = "on_populate_status_var: failed to acquire plugin registry";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
     return true;
@@ -79,7 +79,6 @@ bool on_populate_status_var(const PopulateContext &ctx,
     error_message =
         "on_populate_status_var: status_variable_registration unavailable";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
-    mysql_plugin_registry_release(registry);
     return true;
   }
 
@@ -122,7 +121,6 @@ bool on_populate_status_var(const PopulateContext &ctx,
       // Roll back any variables registered so far.
       for (auto &already : entry.vars)
         reg_svc->unregister_variable(already->show_var);
-      mysql_plugin_registry_release(registry);
       return true;
     }
 
@@ -131,8 +129,6 @@ bool on_populate_status_var(const PopulateContext &ctx,
             entry.extension_name.c_str());
     entry.vars.push_back(std::move(rsv));
   }
-
-  mysql_plugin_registry_release(registry);
 
   std::lock_guard<std::mutex> lock(g_mutex);
   g_extensions.emplace(ctx.capability_config, std::move(entry));
@@ -151,15 +147,14 @@ void on_depopulate_status_var(const DepopulateContext &ctx) {
     g_extensions.erase(it);
   }
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry != nullptr) {
+  PluginRegistry registry;
+  if (registry.is_valid()) {
     my_service<SERVICE_TYPE(status_variable_registration)> reg_svc(
         "status_variable_registration", registry);
     if (reg_svc.is_valid()) {
       for (auto &rsv : to_unregister)
         reg_svc->unregister_variable(rsv->show_var);
     }
-    mysql_plugin_registry_release(registry);
   }
 }
 
