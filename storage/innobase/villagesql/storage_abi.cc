@@ -17,6 +17,7 @@
 // C ABI implementation for InnoDB storage interface
 
 #include <cstdio>
+#include <cstring>
 #include <iterator>
 #include <new>
 
@@ -51,6 +52,34 @@ static ulint abi_to_innodb_latch(vef_storage_latch_t latch) {
 }
 
 // Mini-Transaction Interface Implementation
+
+// A temporary tablespace is not redo logged. An mtr started by the extension
+// does not know its space until it loads a page, which must precede any write,
+// so the mode is switched there.
+static void disable_redo_if_temporary(vef_storage_space_ref_t space_ref,
+                                      mtr_t *mtr) {
+  if (fsp_is_system_temporary(space_ref) &&
+      mtr->get_log_mode() == MTR_LOG_ALL) {
+    mtr->set_log_mode(MTR_LOG_NO_REDO);
+  }
+}
+
+// Starts a mini-transaction on the space.
+static void start_mtr(vef_storage_space_ref_t space_ref, mtr_t *mtr) {
+  mtr->start();
+  disable_redo_if_temporary(space_ref, mtr);
+}
+
+// Zeroes the bytes of a new page from offset begin to offset end. Other
+// tablespaces give a new page zero filled, but InnoDB does not zero one in a
+// temporary tablespace (fsp_init_file_page_low), so a page freed by an earlier
+// temporary table keeps its bytes. The page is modified in the caller's
+// mini-transaction, which is not redo logged for a temporary tablespace.
+static void zero_if_temporary(buf_block_t *block, ulint begin, ulint end) {
+  if (fsp_is_system_temporary(block->page.id.space())) {
+    memset(buf_block_get_frame(block) + begin, 0, end - begin);
+  }
+}
 
 extern "C" vef_storage_mtr_ref_t vef_storage_mtr_start(
     void *buffer, uint32_t buffer_size, uint32_t *required_size,
@@ -130,7 +159,7 @@ extern "C" int vef_storage_segment_create(
   log_free_check();
 
   mtr_t mtr;
-  mtr.start();
+  start_mtr(space_ref, &mtr);
 
   // First segment: allocate root page
   uint16_t seg_offset =
@@ -150,6 +179,11 @@ extern "C" int vef_storage_segment_create(
   vef_storage_page_num_t root_page_num = block->get_page_no();
   *root_page_num_p = root_page_num;
 
+  // Keep the segment header fseg_create wrote at seg_offset.
+  zero_if_temporary(block, FIL_PAGE_DATA, seg_offset);
+  zero_if_temporary(block, seg_offset + FSEG_HEADER_SIZE,
+                    UNIV_PAGE_SIZE - FIL_PAGE_DATA_END);
+
   unsigned char *page_data = buf_block_get_frame(block);
   // Write number of segments
   num_allocated = 1;
@@ -160,7 +194,7 @@ extern "C" int vef_storage_segment_create(
   // Create remaining segments
   while (num_allocated < num_segments) {
     log_free_check();
-    mtr.start();
+    start_mtr(space_ref, &mtr);
 
     seg_offset = VEF_STORAGE_PAGE_HEADER_SIZE +
                  VEF_STORAGE_SEGMENT_NUM_SEGMENTS_SIZE +
@@ -219,7 +253,7 @@ static int vef_drop_one_segment(vef_storage_space_ref_t space_ref,
     // Commit and restart mtr between steps, reloading the root page each time.
     mtr->commit();
     log_free_check();
-    mtr->start();
+    start_mtr(space_ref, mtr);
 
     page_size_t page_size(UNIV_PAGE_SIZE, UNIV_PAGE_SIZE, false);
     page_id_t page_id(space_ref, root_page_num);
@@ -251,7 +285,7 @@ extern "C" int vef_storage_segment_drop(vef_storage_space_ref_t space_ref,
   log_free_check();
 
   mtr_t mtr;
-  mtr.start();
+  start_mtr(space_ref, &mtr);
 
   page_size_t page_size(UNIV_PAGE_SIZE, UNIV_PAGE_SIZE, false);
   page_id_t page_id(space_ref, root_page_num);
@@ -334,6 +368,8 @@ extern "C" int vef_storage_page_load(
   page_size_t page_size(UNIV_PAGE_SIZE, UNIV_PAGE_SIZE, false);
   page_id_t page_id(space_ref, page_num);
 
+  disable_redo_if_temporary(space_ref, mtr);
+
   ulint innodb_latch = abi_to_innodb_latch(latch_mode);
   ulint savepoint = mtr->get_savepoint();
 
@@ -378,7 +414,7 @@ extern "C" int vef_storage_page_allocate_and_load(
   // the caller's content mtr, so allocation is crash-recoverable even when the
   // contents are written no-redo. Mirrors Page_load::init in btr0load.cc.
   mtr_t alloc_mtr;
-  alloc_mtr.start();
+  start_mtr(page_get_space_id(page_align(segment_header)), &alloc_mtr);
   buf_block_t *buf_block = fseg_alloc_free_page_general(
       segment_header, 0, FSP_NO_DIR, false, &alloc_mtr, mtr);
   alloc_mtr.commit();
@@ -391,6 +427,9 @@ extern "C" int vef_storage_page_allocate_and_load(
     }
     return VEF_STORAGE_ERROR_OUT_OF_SPACE;
   }
+
+  zero_if_temporary(buf_block, FIL_PAGE_DATA,
+                    UNIV_PAGE_SIZE - FIL_PAGE_DATA_END);
 
   // Set page type
   unsigned char *page_data = buf_block_get_frame(buf_block);

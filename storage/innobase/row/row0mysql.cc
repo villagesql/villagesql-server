@@ -1370,6 +1370,14 @@ static void row_mysql_to_innobase(dtuple_t *row, row_prebuilt_t *prebuilt,
     const dtype_t *dtype = dfield_get_type(dfield);
     ulint col_len = templ->mysql_col_len;
 
+    // VillageSQL: an extended column is a true VARCHAR in the MySQL row,
+    // though its InnoDB type is the integer reference.
+    if (dtype->extended_storage) {
+      villagesql::innodb::Custom_column::store_innodb_true_varchar(dfield, true,
+                                                                   ptr);
+      continue;
+    }
+
     ut_ad(dtype->mtype == DATA_INT || dtype->mtype == DATA_CHAR ||
           dtype->mtype == DATA_MYSQL || dtype->mtype == DATA_VARCHAR ||
           dtype->mtype == DATA_VARMYSQL || dtype->mtype == DATA_BINARY ||
@@ -1981,10 +1989,16 @@ static dberr_t row_update_inplace_for_intrinsic(const upd_node_t *node) {
   evicted from the buffer pool it is flushed and we don't lose
   the changes */
   mtr.set_modified();
-  pcur.close();
-  mtr_commit(&mtr);
 
-  return (DB_SUCCESS);
+  // VillageSQL: store the new values of updated extended columns in the column
+  // store and write their references into the record.
+  pcur.store_position(&mtr);
+  mtr_commit(&mtr);
+  const dberr_t err = villagesql::innodb::Custom_column::update(
+      table, 0, &pcur, node->update, offsets, &heap);
+  pcur.close();
+
+  return err;
 }
 
 typedef std::vector<btr_pcur_t, ut::allocator<btr_pcur_t>> cursors_t;
