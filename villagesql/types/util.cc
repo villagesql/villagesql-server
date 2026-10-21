@@ -1387,13 +1387,18 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
   }
   switch (status) {
     case EncodeStatus::kNull:
-      // Mirror a literal \N in the input: mark the field NULL and leave the
-      // NOT NULL decision to the row-level check once the row is complete,
-      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
-      // would satisfy that check and let a NOT NULL column through.
-      if (!field->is_nullable() && thd->lex->is_ignore()) {
-        // IGNORE keeps the row, so give it the type's intrinsic default
-        // rather than zero bytes, as the \N path does.
+      // Mirror a literal \N in the input: mark the field NULL and let the
+      // row-level check report ER_WARN_NULL_TO_NOTNULL once the row is
+      // complete. Storing a value here instead would satisfy that check and
+      // let a NOT NULL column through.
+      //
+      // Two cases cannot wait for it. Under IGNORE the row is kept whatever
+      // the check says. And a field that is not tmp-nullable cannot hold a
+      // NULL to be found later, which is how LOAD XML arrives here: it runs
+      // no row-level check and so marks nothing tmp-nullable.
+      if (!field->is_nullable() &&
+          (thd->lex->is_ignore() || !field->is_tmp_nullable())) {
+        // Warn and default the column, as the row-level check would have.
         if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
         field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
                            1);
@@ -1405,19 +1410,12 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
     case EncodeStatus::kErrorRaised:
       return true;
     case EncodeStatus::kBadValue:
-      break;  // handled below: whether this fails the row depends on the mode
+      break;
   }
-  if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-    // EncodeStringForField already pushed a warning; promote to error
-    my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
-             field->get_type_context()->type_name().c_str(),
-             ErrConvString(&input_str).ptr(), field->field_name,
-             thd->get_stmt_da()->current_row_for_condition());
-    return true;
-  }
-  // EncodeStringForField already pushed a warning. Store the intrinsic default,
-  // mirroring MySQL built-in behavior of storing 0, '', etc. for bad values in
-  // IGNORE or non-strict mode.
+  // A warning is already pushed, which strict mode has turned into an error;
+  // the statement fails with it and the caller sees that on the THD.
+  // Otherwise the row survives, so store the intrinsic default, mirroring the
+  // 0 or '' a built-in stores for a bad value.
   return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
 }
 
