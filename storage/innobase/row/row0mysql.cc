@@ -1962,10 +1962,16 @@ static dberr_t row_update_inplace_for_intrinsic(const upd_node_t *node) {
   evicted from the buffer pool it is flushed and we don't lose
   the changes */
   mtr.set_modified();
-  pcur.close();
-  mtr_commit(&mtr);
 
-  return (DB_SUCCESS);
+  // VillageSQL: store the new values of updated extended columns in the column
+  // store and write their references into the record.
+  pcur.store_position(&mtr);
+  mtr_commit(&mtr);
+  const dberr_t err = villagesql::innodb::Custom_column::update(
+      table, 0, &pcur, node->update, offsets, &heap);
+  pcur.close();
+
+  return err;
 }
 
 typedef std::vector<btr_pcur_t, ut::allocator<btr_pcur_t>> cursors_t;

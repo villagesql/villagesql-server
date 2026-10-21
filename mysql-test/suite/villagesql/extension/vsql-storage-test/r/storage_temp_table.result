@@ -1,0 +1,112 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+#
+# DML on a temporary table with one column-store column
+#
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '42');
+INSERT INTO t1 VALUES (2, '-7');
+INSERT INTO t1 VALUES (3, '0');
+INSERT INTO t1 VALUES (4, NULL);
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	42
+2	-7
+3	0
+4	NULL
+UPDATE t1 SET n = '999' WHERE id = 1;
+UPDATE t1 SET n = '5' WHERE n IS NULL;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	999
+2	-7
+3	0
+4	5
+DELETE FROM t1 WHERE id = 2;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	999
+3	0
+4	5
+SELECT id, n FROM t1 WHERE n = '999';
+id	n
+1	999
+#
+# Rollback of INSERT, UPDATE and DELETE on a temporary table
+#
+START TRANSACTION;
+INSERT INTO t1 VALUES (6, '666');
+UPDATE t1 SET n = '888' WHERE id = 3;
+DELETE FROM t1 WHERE id = 1;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+3	888
+4	5
+6	666
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	999
+3	0
+4	5
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TEMPORARY TABLE t1;
+#
+# Two column-store columns, each with its own segment
+#
+CREATE TEMPORARY TABLE t2 (id INT PRIMARY KEY, a STORED_INT, b STORED_INT_2)
+ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, '10', '20'), (2, '-3', '0'), (3, NULL, '7');
+UPDATE t2 SET b = '999' WHERE id = 2;
+SELECT id, a, b FROM t2 ORDER BY id;
+id	a	b
+1	10	20
+2	-3	999
+3	NULL	7
+DROP TEMPORARY TABLE t2;
+#
+# Temporary table filled from a base table
+#
+CREATE TABLE base (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO base VALUES (1, '100'), (2, '200'), (3, '300');
+CREATE TEMPORARY TABLE t3 ENGINE=InnoDB AS SELECT id, n FROM base;
+SELECT id, n FROM t3 ORDER BY id;
+id	n
+1	100
+2	200
+3	300
+DROP TEMPORARY TABLE t3;
+CREATE TEMPORARY TABLE t4 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t4 SELECT id, n FROM base WHERE id > 1;
+SELECT id, n FROM t4 ORDER BY id;
+id	n
+2	200
+3	300
+# A temporary table shadowing a base table of the same name
+CREATE TEMPORARY TABLE base (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO base VALUES (9, '9');
+SELECT id, n FROM base ORDER BY id;
+id	n
+9	9
+DROP TEMPORARY TABLE base;
+SELECT id, n FROM base ORDER BY id;
+id	n
+1	100
+2	200
+3	300
+DROP TEMPORARY TABLE t4;
+#
+# A temporary table dropped implicitly at disconnect
+#
+CREATE TEMPORARY TABLE t5 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t5 VALUES (1, '1'), (2, '2');
+SELECT id, n FROM t5 ORDER BY id;
+id	n
+1	1
+2	2
+DROP TABLE base;
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

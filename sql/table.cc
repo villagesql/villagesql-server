@@ -6966,6 +6966,11 @@ bool Table_ref::update_derived_keys(THD *thd, Field *field, Item **values,
       field->is_flag_set(BLOB_FLAG) || field->field_length == 0)
     return false;
 
+  // VillageSQL: no lookup key on a column-store type; the key would compare the
+  // stored column reference.
+  // TODO(villagesql-indexing): Support it; the key must compare the value.
+  if (field->has_external_storage()) return false;
+
   const Sql_cmd *const cmd = thd->lex->m_sql_cmd;
 
   // Secondary storage engines do not support use of indexes on derived tables
