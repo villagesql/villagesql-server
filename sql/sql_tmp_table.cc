@@ -91,6 +91,7 @@
 #include "sql/thr_malloc.h"
 #include "sql/window.h"
 #include "template_utils.h"
+#include "villagesql/types/util.h"
 
 using std::max;
 using std::min;
@@ -1278,6 +1279,10 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
       Field *field = (*cur_group->item)->get_tmp_table_field();
       assert(field->table == table);
       cur_group->field_in_tmp_table = field;
+      // VillageSQL: a group key cannot be on a column-store type.
+      // TODO(villagesql-indexing): Support it; the key must compare the value,
+      // not the column reference.
+      if (villagesql::CheckTmpTableKeyField(field)) return nullptr;
 
       /*
         Use hash key as the unique constraint if the group-by key is
@@ -1344,6 +1349,13 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
     share->is_distinct =
         distinct || param->m_operation == Temp_table_param::TTP_INTERSECT ||
         param->m_operation == Temp_table_param::TTP_EXCEPT;
+
+    // VillageSQL: a distinct key cannot be on a column-store type.
+    // TODO(villagesql-indexing): Support it; the key must compare the value,
+    // not the column reference.
+    for (unsigned i = param->hidden_field_count; i < share->fields; i++) {
+      if (villagesql::CheckTmpTableKeyField(table->field[i])) return nullptr;
+    }
 
     if (!unique_constraint_via_hash_field) {
       param->keyinfo->table = table;
