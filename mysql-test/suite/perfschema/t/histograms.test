@@ -52,6 +52,11 @@ select "A 1st statement" as marker_one;
 
 --connection mon
 
+# The server sends a statement's result before it aggregates the
+# statement into performance_schema, so wait for the aggregation
+# before checking it.
+--let $wait_condition = select sum(COUNT_BUCKET) = 1 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 # 450
 select count(*)
   from performance_schema.events_statements_histogram_by_digest;
@@ -102,6 +107,8 @@ select "A 1st statement, again" as marker_one;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 2 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 # 2 executions
 select sum(COUNT_BUCKET)
   from performance_schema.events_statements_histogram_by_digest
@@ -116,6 +123,8 @@ select "A 1st statement, again and again" as marker_one;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 3 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 # 3 executions
 select sum(COUNT_BUCKET)
   from performance_schema.events_statements_histogram_by_digest
@@ -130,6 +139,8 @@ select "A 2nd statement" as marker_two;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 4 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 select DIGEST
   from performance_schema.events_statements_summary_by_digest
   where DIGEST_TEXT like "%marker_two%"
@@ -152,6 +163,8 @@ select "A 2nd statement, again" as marker_two;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 5 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 select sum(COUNT_BUCKET), max(COUNT_BUCKET_AND_LOWER)
   from performance_schema.events_statements_histogram_by_digest
   where DIGEST = @digest_one;
@@ -238,6 +251,8 @@ select "A 2nd statement, again" as marker_two;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 6 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 select sum(COUNT_BUCKET)
   from performance_schema.events_statements_histogram_by_digest
   where DIGEST = @digest_one;
@@ -276,6 +291,8 @@ select "A 1st statement, again" as marker_one;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 1 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 select sum(COUNT_BUCKET)
   from performance_schema.events_statements_histogram_by_digest
   where DIGEST = @digest_one;
@@ -304,6 +321,8 @@ select "A 1st statement, another time" as marker_one;
 
 --connection mon
 
+--let $wait_condition = select sum(COUNT_BUCKET) = 2 from performance_schema.events_statements_histogram_global
+--source include/wait_condition.inc
 select count(*)
   from performance_schema.events_statements_histogram_by_digest;
 
