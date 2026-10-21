@@ -14,12 +14,12 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 #include "villagesql/services/preview/keyring.h"
+#include "villagesql/services/plugin_registry.h"
 
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/keyring_metadata_query.h"
 #include "mysql/components/services/keyring_reader_with_status.h"
 #include "mysql/components/services/keyring_writer.h"
-#include "mysql/service_plugin_registry.h"
 
 namespace villagesql::services {
 
@@ -28,13 +28,12 @@ namespace {
 vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
                                   unsigned char *buf, size_t buf_len,
                                   size_t *out_len) {
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return VEF_KEYRING_ERROR;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return VEF_KEYRING_ERROR;
 
   my_service<SERVICE_TYPE(keyring_component_status)> status(
       "keyring_component_status", registry);
   if (!status.is_valid() || !status->is_initialized()) {
-    mysql_plugin_registry_release(registry);
     return VEF_KEYRING_UNAVAILABLE;
   }
 
@@ -57,19 +56,17 @@ vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
     reader->deinit(obj);
   }
 
-  mysql_plugin_registry_release(registry);
   return result;
 }
 
 vef_keyring_result_t write_keyring(const char *data_id, const char *auth_id,
                                    const unsigned char *data, size_t data_len) {
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return VEF_KEYRING_ERROR;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return VEF_KEYRING_ERROR;
 
   my_service<SERVICE_TYPE(keyring_component_status)> status(
       "keyring_component_status", registry);
   if (!status.is_valid() || !status->is_initialized()) {
-    mysql_plugin_registry_release(registry);
     return VEF_KEYRING_UNAVAILABLE;
   }
 
@@ -79,7 +76,6 @@ vef_keyring_result_t write_keyring(const char *data_id, const char *auth_id,
       writer->store(data_id, auth_id, data, data_len, "SECRET")
           ? VEF_KEYRING_ERROR
           : VEF_KEYRING_OK;
-  mysql_plugin_registry_release(registry);
   return result;
 }
 

@@ -27,8 +27,8 @@
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
-#include "mysql/service_plugin_registry.h"
 #include "villagesql/include/error.h"
+#include "villagesql/services/plugin_registry.h"
 
 namespace villagesql::services {
 
@@ -68,8 +68,8 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
 
 bool get_variable(const char *component_name, const char *name, void **val,
                   size_t *val_len) {
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return true;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return true;
 
   my_service<SERVICE_TYPE(component_sys_variable_register)> svc(
       "component_sys_variable_register", registry);
@@ -94,7 +94,6 @@ bool get_variable(const char *component_name, const char *name, void **val,
       }
     }
   }
-  mysql_plugin_registry_release(registry);
   return result;
 }
 
@@ -102,8 +101,8 @@ bool set_variable(const char *component_name, const char *name,
                   const char *scope, const char *val) {
   if (val == nullptr) return true;
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return true;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return true;
 
   my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
       "mysql_string_factory", registry);
@@ -129,15 +128,14 @@ bool set_variable(const char *component_name, const char *name,
     if (h_value) str_factory->destroy(h_value);
   }
 
-  mysql_plugin_registry_release(registry);
   return result;
 }
 
 bool register_one_sys_var(std::string_view extension_name,
                           const SysVarDesc &desc) {
   const std::string ext_name(extension_name);
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
+  PluginRegistry registry;
+  if (!registry.is_valid()) {
     LogVSQL(ERROR_LEVEL, "register_one_sys_var: failed to acquire registry");
     return true;
   }
@@ -148,7 +146,6 @@ bool register_one_sys_var(std::string_view extension_name,
     LogVSQL(
         ERROR_LEVEL,
         "register_one_sys_var: component_sys_variable_register unavailable");
-    mysql_plugin_registry_release(registry);
     return true;
   }
 
@@ -165,7 +162,6 @@ bool register_one_sys_var(std::string_view extension_name,
                                  update_fn, &bool_arg, desc.value_ptr)) {
     LogVSQL(ERROR_LEVEL, "Failed to register system variable '%s' for '%s'",
             desc.name, ext_name.c_str());
-    mysql_plugin_registry_release(registry);
     return true;
   }
 
@@ -175,7 +171,6 @@ bool register_one_sys_var(std::string_view extension_name,
         {ext_name, std::string(desc.name), desc.value_ptr, desc.on_change});
   }
 
-  mysql_plugin_registry_release(registry);
   return false;
 }
 
@@ -193,15 +188,14 @@ void unregister_one_sys_var(std::string_view extension_name,
               vec.end());
   }
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return;
 
   my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
       "component_sys_variable_unregister", registry);
   if (unreg_svc.is_valid()) {
     unreg_svc->unregister_variable(ext_name.c_str(), var_name);
   }
-  mysql_plugin_registry_release(registry);
 }
 
 }  // namespace villagesql::services

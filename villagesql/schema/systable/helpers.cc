@@ -30,6 +30,7 @@
 #include "sql-common/json_dom.h"
 #include "sql/field.h"
 #include "sql/handler.h"
+#include "sql/key.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/statement/ed_connection.h"
@@ -40,12 +41,33 @@
 
 namespace villagesql {
 
-int read_row_for_update(TABLE &table, const uchar *key_buf) {
-  int error = table.file->ha_index_read_map(table.record[0], key_buf,
-                                            HA_WHOLE_KEY, HA_READ_KEY_EXACT);
+RowLookup::~RowLookup() {
+  if (m_index_open) m_table.file->ha_index_end();
+}
+
+int RowLookup::read() {
+  assert(!m_index_open);
+  const KEY &key = m_table.key_info[m_key_index];
+  uchar key_buf[MAX_KEY_LENGTH];
+  key_copy(key_buf, m_table.record[0], &key, key.key_length);
+
+  int error = m_table.file->ha_index_init(m_key_index, false);
+  if (error) {
+    LogVSQL(ERROR_LEVEL, "Failed to initialize index on %s: error %d",
+            m_table.s->table_name.str, error);
+    return error;
+  }
+  m_index_open = true;
+
+  return m_table.file->ha_index_read_map(m_table.record[0], key_buf,
+                                         HA_WHOLE_KEY, HA_READ_KEY_EXACT);
+}
+
+int RowLookup::read_for_update() {
+  int error = read();
   if (error) return error;
 
-  store_record(&table, record[1]);
+  store_record(&m_table, record[1]);
   return 0;
 }
 
