@@ -67,7 +67,18 @@ static void write_type(rapidjson::Writer<rapidjson::StringBuffer> &w,
     w.String(type_id_to_str(t.id));
 }
 
-static std::string registration_to_json(const vef_registration_t *r) {
+static bool is_sql_callable(const villagesql::veb::ExtensionRegistration &reg,
+                            const vef_func_desc_t *func_desc) {
+  // hidden_from_sql was added in PROTOCOL_4. check_vef_registration() rejects
+  // a func descriptor older than its registration, so the negotiated protocol
+  // is the only gate needed.
+  return reg.negotiated_protocol < VEF_PROTOCOL_4 ||
+         !func_desc->hidden_from_sql;
+}
+
+static std::string registration_to_json(
+    const villagesql::veb::ExtensionRegistration &reg_info) {
+  const vef_registration_t *r = reg_info.registration;
   rapidjson::StringBuffer buf;
   rapidjson::Writer<rapidjson::StringBuffer> w(buf);
 
@@ -94,6 +105,9 @@ static std::string registration_to_json(const vef_registration_t *r) {
   w.StartArray();
   for (unsigned int i = 0; i < r->func_count; i++) {
     const vef_func_desc_t *f = r->funcs[i];
+    if (!is_sql_callable(reg_info, f)) {
+      continue;
+    }
     w.StartObject();
     w.Key("name");
     w.String(f->name ? f->name : "");
@@ -206,7 +220,6 @@ int fill_extension_registration(THD *thd, Table_ref *tables, Item *) {
   for (const villagesql::ExtensionDescriptor *desc :
        vclient.extension_descriptors().get_all_committed()) {
     const villagesql::veb::ExtensionRegistration &reg = desc->registration();
-    const vef_registration_t *r = reg.registration;
 
     restore_record(table, s->default_values);
 
@@ -216,7 +229,7 @@ int fill_extension_registration(THD *thd, Table_ref *tables, Item *) {
     table->field[FIELD_NEGOTIATED_PROTOCOL]->store(
         static_cast<longlong>(reg.negotiated_protocol), true);
 
-    const std::string json = registration_to_json(r);
+    const std::string json = registration_to_json(reg);
     table->field[FIELD_REGISTRATION_JSON]->store(json.c_str(), json.length(),
                                                  cs);
 

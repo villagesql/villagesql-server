@@ -69,6 +69,14 @@ static Item_result vef_type_to_item_result(const vef_type_t &type) {
   }
 }
 
+static bool is_sql_callable(const ExtensionRegistration &ext_reg,
+                            const vef_func_desc_t *func_desc) {
+  // hidden_from_sql was added in PROTOCOL_4; see the clear/accumulate gate
+  // below for why the negotiated protocol is enough.
+  return ext_reg.negotiated_protocol < VEF_PROTOCOL_4 ||
+         !func_desc->hidden_from_sql;
+}
+
 std::optional<ValidatedRegistration> parse_extension_registration(
     const ExtensionRegistration &ext_reg, const std::string &extension_name,
     const std::string &extension_version, std::string &error_out) {
@@ -178,6 +186,10 @@ std::optional<ValidatedRegistration> parse_extension_registration(
                   error_out.c_str());
           return std::nullopt;
         }
+      }
+
+      if (!is_sql_callable(ext_reg, func_desc)) {
+        continue;
       }
 
       Item_result return_type =

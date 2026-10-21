@@ -57,10 +57,12 @@
 // VDF names are auto-generated from the type name at compile time:
 //   .from_string<&fn>()      ->  VDF name "MYTYPE::from_string"  (SQL-callable)
 //   .to_string<&fn>()        ->  VDF name "MYTYPE::to_string"    (SQL-callable)
-//   .compare<&fn>()          ->  VDF name "MYTYPE::compare"      (SQL-callable)
-//   .hash<&fn>()             ->  VDF name "MYTYPE::hash"         (SQL-callable)
+//   .compare<&fn>()          ->  VDF name "MYTYPE::compare"
+//   .hash<&fn>()             ->  VDF name "MYTYPE::hash"
 //   .int_to_params<&fn>()    ->  VDF name "MYTYPE::int_to_params"
 //   .resolve_params<&fn>()   ->  VDF name "MYTYPE::resolve_params"
+//
+// Non-string operations are hidden from SQL by default.
 //
 // Two types sharing the same function pointer still get independent VDF name
 // buffers because the kMyTypeName pointer value differs per type.
@@ -230,7 +232,7 @@ class TypeBuilder {
   // Function signature: bool fn(int64_t, std::map<std::string,std::string>&,
   //                             char* error_msg)
   template <auto Func>
-  constexpr auto int_to_params() const {
+  constexpr auto int_to_params(bool sql_callable = false) const {
     using namespace detail;
     static_assert(
         std::is_same_v<decltype(Func), func_builder::IntToTypeParamsFunc>,
@@ -242,7 +244,9 @@ class TypeBuilder {
     TypeBuilderState s = state_;
     s.desc.vef_desc.int_to_params_vdf_name = vdf_name;
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    auto new_embedded = std::tuple_cat(
+        embedded_funcs_,
+        std::make_tuple(detail::make_embedded_func(inner, sql_callable)));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType, true,
                        HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
@@ -266,7 +270,7 @@ class TypeBuilder {
   // output of resolve_params, so by the time parse sees the params they are
   // already known to be valid.
   template <auto Func>
-  constexpr auto resolve_params() const {
+  constexpr auto resolve_params(bool sql_callable = false) const {
     using namespace detail;
     static_assert(!HasResolveParams,
                   "resolve_params<Func>() called more than once; a type may "
@@ -286,7 +290,9 @@ class TypeBuilder {
     TypeBuilderState s = state_;
     s.desc.vef_desc.resolve_params_vdf_name = vdf_name;
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    auto new_embedded = std::tuple_cat(
+        embedded_funcs_,
+        std::make_tuple(detail::make_embedded_func(inner, sql_callable)));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, true, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
@@ -303,7 +309,7 @@ class TypeBuilder {
   // -------------------------------------------------------------------------
 
   template <auto Func>
-  constexpr auto from_string() const {
+  constexpr auto from_string(bool sql_callable = true) const {
     using namespace detail;
     using OpP =
         typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
@@ -319,7 +325,9 @@ class TypeBuilder {
     TypeBuilderState s = state_;
     s.desc.vef_desc.encode_vdf_name = vdf_name;
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    auto new_embedded = std::tuple_cat(
+        embedded_funcs_,
+        std::make_tuple(detail::make_embedded_func(inner, sql_callable)));
     return TypeBuilder<true, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
@@ -328,7 +336,7 @@ class TypeBuilder {
   }
 
   template <auto Func>
-  constexpr auto to_string() const {
+  constexpr auto to_string(bool sql_callable = true) const {
     using namespace detail;
     using OpP =
         typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
@@ -344,7 +352,9 @@ class TypeBuilder {
     TypeBuilderState s = state_;
     s.desc.vef_desc.decode_vdf_name = vdf_name;
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    auto new_embedded = std::tuple_cat(
+        embedded_funcs_,
+        std::make_tuple(detail::make_embedded_func(inner, sql_callable)));
     return TypeBuilder<HasFromString, true, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
@@ -353,7 +363,7 @@ class TypeBuilder {
   }
 
   template <auto Func>
-  constexpr auto compare() const {
+  constexpr auto compare(bool sql_callable = false) const {
     using namespace detail;
     using OpP =
         typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
@@ -369,7 +379,9 @@ class TypeBuilder {
     TypeBuilderState s = state_;
     s.desc.vef_desc.compare_vdf_name = vdf_name;
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    auto new_embedded = std::tuple_cat(
+        embedded_funcs_,
+        std::make_tuple(detail::make_embedded_func(inner, sql_callable)));
     return TypeBuilder<HasFromString, HasToString, true, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
@@ -378,7 +390,7 @@ class TypeBuilder {
   }
 
   template <auto Func>
-  constexpr auto hash() const {
+  constexpr auto hash(bool sql_callable = false) const {
     using namespace detail;
     using OpP =
         typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
@@ -393,7 +405,9 @@ class TypeBuilder {
     TypeBuilderState s = state_;
     s.desc.vef_desc.hash_vdf_name = vdf_name;
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
-    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    auto new_embedded = std::tuple_cat(
+        embedded_funcs_,
+        std::make_tuple(detail::make_embedded_func(inner, sql_callable)));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
