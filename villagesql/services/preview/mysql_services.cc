@@ -20,9 +20,9 @@
 #include <vector>
 
 #include "mysql/components/services/registry.h"
-#include "mysql/service_plugin_registry.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/mysql_services.h"
+#include "villagesql/services/plugin_registry.h"
 
 namespace villagesql::services {
 
@@ -52,8 +52,8 @@ std::unordered_map<const vef_preview_mysql_services_t *, ServiceState> g_states;
 // manifest declaration.
 bool populate(const vef_preview_mysql_services_t *cfg, ServiceState &state,
               std::string &error_message) {
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
+  PluginRegistry registry;
+  if (!registry.is_valid()) {
     error_message = "could not acquire MySQL plugin registry";
     return true;
   }
@@ -62,32 +62,28 @@ bool populate(const vef_preview_mysql_services_t *cfg, ServiceState &state,
     const vef_mysql_service_required_t &req = cfg->required[i];
     if (req.service_name == nullptr || req.destination == nullptr) {
       error_message = "mysql_services: required entry has null field";
-      mysql_plugin_registry_release(registry);
       return true;
     }
     my_h_service handle = nullptr;
     if (registry->acquire(req.service_name, &handle) || handle == nullptr) {
       error_message = std::string("failed to acquire MySQL service '") +
                       req.service_name + "'";
-      mysql_plugin_registry_release(registry);
       return true;
     }
     *req.destination = reinterpret_cast<const void *>(handle);
     state.acquired_handles.push_back(handle);
   }
 
-  mysql_plugin_registry_release(registry);
   return false;
 }
 
 // Release every acquired service handle. Runs at extension unload.
 void depopulate(ServiceState &state) {
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return;
   for (auto h : state.acquired_handles) {
     registry->release(h);
   }
-  mysql_plugin_registry_release(registry);
 }
 
 }  // namespace
