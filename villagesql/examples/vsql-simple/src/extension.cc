@@ -187,7 +187,9 @@ void ba_concat_all(VarArgs args, StringResult out) {
       return;
     }
     auto bytes = a.as_custom();
-    memcpy(dst.data() + off, bytes.data(), bytes.size());
+    if ((off + bytes.size()) < dst.size()) {
+      memcpy(dst.data() + off, bytes.data(), bytes.size());
+    }
     off += bytes.size();
   }
   out.set_length(off);
