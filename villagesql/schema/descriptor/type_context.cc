@@ -220,11 +220,10 @@ void TypeContext::resolve_cached_values() {
           if (initial.has_error()) continue;
           ResolvedTypeParams tmp = {};
           char rerr[VEF_MAX_ERROR_LEN] = {0};
-          std::string canonical = result;
           if (descriptor_->resolve_params_fn()->invoke(initial.str(), &tmp,
-                                                       rerr, &canonical))
+                                                       rerr, &result))
             continue;
-          TypeParameters candidate = TypeParameters::from_raw(canonical);
+          TypeParameters candidate = TypeParameters::from_raw(result);
           if (!candidate.has_error() && candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);

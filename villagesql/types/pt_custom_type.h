@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 #include "lex_string.h"
 #include "mysql/components/services/log_builtins.h"
@@ -390,7 +391,7 @@ class PT_custom_type : public PT_type {
                             params_str_len, thd->variables.collation_connection,
                             true))
       return nullptr;
-    std::string input(converted.str, converted.length);
+    std::string_view input(converted.str, converted.length);
     if (input.empty()) {
       thd->syntax_error_at(pos, "Empty parameter string for type '%s'",
                            descriptor->qualified_base_name().c_str());
