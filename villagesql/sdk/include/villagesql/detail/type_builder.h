@@ -49,6 +49,7 @@ enum class TypeOp {
   kHash = 3,
   kIntToParams = 4,
   kResolveParams = 5,
+  kRealValue = 6,
 };
 
 // TypeOpVdfName: constexpr-initialized string "TypeName::suffix" for a given
@@ -77,6 +78,8 @@ struct TypeOpVdfName {
         return "int_to_params";
       case TypeOp::kResolveParams:
         return "resolve_params";
+      case TypeOp::kRealValue:
+        return "real_value";
     }
   }
   static constexpr std::string_view kTypeName = std::string_view{TypeName};

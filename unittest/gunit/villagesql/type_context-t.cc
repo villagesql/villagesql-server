@@ -860,7 +860,7 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_ok_fd));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeParameters params =
       villagesql::TypeParameters::from_raw("dimension=1536");
   villagesql::TypeContextKey key(
@@ -882,7 +882,7 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_fail_fd));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_fail_fd));
   villagesql::TypeParameters params =
       villagesql::TypeParameters::from_raw("dimension=1536");
   villagesql::TypeContextKey key(
@@ -906,7 +906,7 @@ TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_fail_fd2));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_fail_fd2));
   // No parameters — should use descriptor values directly, not call
   // resolve_params (which would fail)
   villagesql::TypeContextKey key("VVECTOR", "test_ext", "1.0.0");
@@ -965,7 +965,7 @@ TEST_F(TypeContextTest, DifferentParametersAreNotCompatible) {
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_ok_fd));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeContextKey key_3(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
       villagesql::TypeParameters::from_raw("dimension=3"));
@@ -990,7 +990,7 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithKnown) {
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_ok_fd));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeContextKey key_unknown(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
       villagesql::TypeParameters::from_raw(""));
@@ -1015,7 +1015,7 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_ok_fd));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeContextKey key_unknown(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
       villagesql::TypeParameters::from_raw(""));
@@ -1114,7 +1114,7 @@ TEST_F(TypeContextTest, UnknownParameterizedTypeSkipsIntrinsicDefault) {
       villagesql::EncodeFunction(two_byte_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsFunction(&rp_ok_fd));
+      std::nullopt, villagesql::ResolveParamsFunction(&rp_ok_fd));
   // No parameters: this is an "unknown" parameterized type.
   villagesql::TypeContextKey key("VARVECTOR", "test_ext", "1.0.0");
   villagesql::TypeContext ctx = make_context(key, &desc);
@@ -1163,7 +1163,7 @@ static villagesql::TypeDescriptor make_parameterized_desc(
       /*max_unpersisted_len=*/256, /*max_persisted_len=*/128,
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
-      villagesql::CompareFunction(dummy_compare), std::nullopt,
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       std::move(int_to_params), villagesql::ResolveParamsFunction(resolve_fd));
 }
 
@@ -1177,7 +1177,7 @@ static villagesql::TypeDescriptor make_variable_desc(
       villagesql::LengthKind::Variable, villagesql::EncodeFunction(encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
-      std::move(resolve));
+      std::nullopt, std::move(resolve));
 }
 
 // Builds the TypeContextKey for one of the descriptors above.
