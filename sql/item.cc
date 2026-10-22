@@ -4319,7 +4319,8 @@ type_conversion_status Item_param::save_in_field_inner(Field *field,
       return TYPE_OK;
     case MYSQL_TYPE_VARCHAR: {
       if (field->has_type_context()) {
-        return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+        return villagesql::ParamEncodeAndStoreCustomField(this, str_value,
+                                                          field);
       }
       return field->store(str_value.ptr(), str_value.length(),
                           str_value.charset());
