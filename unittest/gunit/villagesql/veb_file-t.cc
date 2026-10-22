@@ -330,6 +330,18 @@ TEST_F(CheckVefRegistrationTest, CustomParamWithoutTypeNameIsError) {
   EXPECT_NE(error.find("CUSTOM"), std::string::npos) << error;
 }
 
+TEST_F(CheckVefRegistrationTest, UnknownReturnTypeIdIsError) {
+  vef_signature_t sig = {0, nullptr, {static_cast<vef_type_id>(99), nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+
+  std::string error;
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("type id 99"), std::string::npos) << error;
+}
+
 TEST_F(CheckVefRegistrationTest, CustomReturnTypeWithoutTypeNameIsError) {
   vef_signature_t sig = {0, nullptr, {VEF_TYPE_CUSTOM, nullptr}};
   vef_func_desc_t desc = g_func_desc;

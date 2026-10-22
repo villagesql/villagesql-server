@@ -1831,6 +1831,19 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
+// Whether a function descriptor may use type id `id`. An id the server does
+// not know is never valid.
+static bool is_known_type_id(vef_type_id id) {
+  switch (id) {
+    case VEF_TYPE_STRING:
+    case VEF_TYPE_REAL:
+    case VEF_TYPE_INT:
+    case VEF_TYPE_CUSTOM:
+      return true;
+  }
+  return false;
+}
+
 // Contents of one function descriptor. Reads only protocol-1 fields, so it is
 // safe for a descriptor declaring any protocol version. `index` names the slot
 // for descriptors that have no usable name of their own.
@@ -1862,6 +1875,13 @@ static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
       return true;
     }
     for (unsigned int i = 0; i < sig->param_count; i++) {
+      if (!is_known_type_id(sig->params[i].id)) {
+        error_message = std::string("VDF '") + f->name + "' param " +
+                        std::to_string(i + 1) + " has type id " +
+                        std::to_string(sig->params[i].id) +
+                        ", which its protocol does not define";
+        return true;
+      }
       if (sig->params[i].id == VEF_TYPE_CUSTOM &&
           sig->params[i].custom_type == nullptr) {
         error_message = std::string("VDF '") + f->name + "' param " +
@@ -1870,6 +1890,12 @@ static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
         return true;
       }
     }
+  }
+  if (!is_known_type_id(sig->return_type.id)) {
+    error_message = std::string("VDF '") + f->name + "' returns type id " +
+                    std::to_string(sig->return_type.id) +
+                    ", which its protocol does not define";
+    return true;
   }
   if (sig->return_type.id == VEF_TYPE_CUSTOM &&
       sig->return_type.custom_type == nullptr) {
