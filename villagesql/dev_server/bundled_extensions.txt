@@ -29,17 +29,11 @@ https://github.com/villagesql/vsql-fuzzystrmatch main
 https://github.com/villagesql/vsql-trgm main
 https://github.com/villagesql/vsql-cube main
 https://github.com/villagesql/vsql-http main
-https://github.com/villagesql/vsql-mcp main build=cargo abi=stable bundle=false
 https://github.com/villagesql/vsql-network-address main
 https://github.com/villagesql/vsql-oauth2 main abi=dev
 https://github.com/villagesql/vsql-rest main abi=dev
 https://github.com/villagesql/vsql-uuid main
 https://github.com/villagesql/vsql-vector main bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_keyring abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_ping abi=stable bundle=false
 https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rational abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_status_var abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_sys_var abi=stable bundle=false
-https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_thread_worker abi=stable bundle=false
+https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rot13 abi=stable bundle=false
 https://github.com/villagesql/vsql-rust-sdk main build=cargo path=tests/sdk_coverage abi=stable bundle=false
