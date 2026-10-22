@@ -49,9 +49,10 @@ extern "C" {
 
 typedef enum {
   VEF_KEYRING_OK = 0,
-  VEF_KEYRING_NOT_FOUND = 1,    // key does not exist
-  VEF_KEYRING_UNAVAILABLE = 2,  // no keyring component is installed
-  VEF_KEYRING_ERROR = 3,        // other error
+  VEF_KEYRING_NOT_FOUND = 1,      // key does not exist
+  VEF_KEYRING_UNAVAILABLE = 2,    // no keyring component is installed
+  VEF_KEYRING_ERROR = 3,          // other error
+  VEF_KEYRING_BUF_TOO_SMALL = 4,  // read buffer too small
 } vef_keyring_result_t;
 
 // Read a secret from the MySQL keyring component.
