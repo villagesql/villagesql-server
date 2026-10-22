@@ -110,8 +110,6 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       platform: ${{ matrix.platform }}
-      os: ${{ matrix.os }}
-      runner: ${{ toJSON(matrix.runner) }}
       release_build: false
       bundled_extensions: false
       run_unit_tests: false

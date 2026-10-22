@@ -6,6 +6,9 @@ name: Release Server Branch
 #
 # This workflow handles the multi-target case only; single-target builds live
 # in build-server-branch.
+#
+# The set of targets is a data table, villagesql/bld_matrix/json_platforms.sh,
+# so the choices and their parameters can be read and run outside CI.
 
 on:
   workflow_call:
@@ -48,33 +51,38 @@ permissions:
 jobs:
   report-parameters:
     name: Report Parameters
-    runs-on: [self-hosted, linux, x86_64]
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix: ${{ steps.platforms.outputs.build-matrix }}
+
     steps:
+    - name: Checkout
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        fetch-depth: 1
+        sparse-checkout: villagesql/bld_matrix/
+        ref: ${{ inputs.ref }}
+
     - name: Report Parameters
       run: |
         echo "Git Rev: ${{ inputs.ref }}"
+        echo "Git SHA1: $(git rev-parse HEAD)"
+        echo "Git Commit: $(git log -n1 --oneline)"
         echo "Release Tag: ${{ inputs.release_tag }}"
         echo "Release Build: ${{ inputs.release_build }}"
 
+    - name: Read platform table
+      id: platforms
+      run: echo "build-matrix=$(villagesql/bld_matrix/json_build_matrix.sh)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: report-parameters
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: [self-hosted, linux, x86_64]
-            platform: linux-x86_64
-            os: linux
-          - runner: ubuntu-24.04-arm
-            platform: linux-aarch64
-            os: linux
-          - runner: [self-hosted, macOS, ARM64]
-            platform: macos-arm64
-            os: macos
+      matrix: ${{ fromJson(needs.report-parameters.outputs.build-matrix) }}
     uses: ./.github/workflows/build-server-branch.yml
     with:
       ref: ${{ inputs.ref }}
-      runner: ${{ toJSON(matrix.runner) }}
-      os: ${{ matrix.os }}
       platform: ${{ matrix.platform }}
       release_build: ${{ inputs.release_build }}
 

@@ -25,21 +25,13 @@ on:
         required: true
         type: string
       platform:
-        description: 'Platform label used to name the devserver artifact (e.g. linux-x86_64).'
+        description: 'Platform to build on, per json_platforms.sh (e.g. linux-x86_64).'
         required: true
         type: string
       release_build:
         description: 'Strip the -dev suffix from the version.'
         required: true
         type: boolean
-      os:
-        description: 'Build OS family: linux or macos.'
-        required: true
-        type: string
-      runner:
-        description: 'JSON-encoded runs-on value (array or quoted string), e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
-        required: true
-        type: string
       bundled_extensions:
         description: 'Build (and test) the bundled extensions. Callers that build extensions separately (e.g. extension-compat-suite) pass false.'
         required: false
@@ -67,12 +59,13 @@ on:
         required: true
         type: string
       platform:
-        description: 'Platform label used to name the server artifact.'
+        description: 'Platform to build on'
         required: false
         type: choice
         options:
           - linux-x86_64
           - linux-aarch64
+          - linux-s390x
           - macos-arm64
         default: linux-x86_64
       release_build:
@@ -80,19 +73,6 @@ on:
         required: false
         type: boolean
         default: false
-      os:
-        description: 'Build OS family.'
-        required: true
-        type: choice
-        options:
-          - linux
-          - macos
-        default: linux
-      runner:
-        description: 'JSON-encoded runs-on value, e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
-        required: true
-        type: string
-        default: '["self-hosted","linux","x86_64"]'
       bundled_extensions:
         description: 'Build (and test) the bundled extensions.'
         required: false
@@ -118,10 +98,52 @@ permissions:
   contents: read
 
 jobs:
+  # Turn the platform name into its runs-on value and OS family.
+  resolve-platform:
+    name: Resolve Platform
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.platform.outputs.runner }}
+      os: ${{ steps.platform.outputs.os }}
+
+    steps:
+    - name: Checkout platform registry
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        ref: ${{ inputs.ref }}
+        fetch-depth: 1
+        sparse-checkout: villagesql/bld_matrix/
+
+    - name: Resolve platform
+      id: platform
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        set -euo pipefail
+
+        # The registry is shared with the other multi-platform workflows, and
+        # is runnable locally:
+        #   villagesql/bld_matrix/json_platforms.sh | jq .
+        PLATFORMS="$(villagesql/bld_matrix/json_platforms.sh)"
+
+        ENTRY="$(jq -c --arg p "$PLATFORM" \
+          '.[] | select(.platform == $p)' <<<"$PLATFORMS")"
+        if [ -z "$ENTRY" ]; then
+          KNOWN="$(jq -r '[.[].platform] | join(", ")' <<<"$PLATFORMS")"
+          echo "::error::Unknown platform '$PLATFORM'. Known platforms: $KNOWN"
+          exit 1
+        fi
+        jq . <<<"$ENTRY"
+
+        # `runner` stays JSON: it is a label array for self-hosted runners and
+        # a plain string for GitHub-hosted ones, and the consumer fromJSON's it.
+        echo "runner=$(jq -c '.runner' <<<"$ENTRY")" >> "$GITHUB_OUTPUT"
+        echo "os=$(jq -r '.os' <<<"$ENTRY")" >> "$GITHUB_OUTPUT"
 
   build-package:
     name: Build (${{ inputs.platform }})
-    runs-on: ${{ fromJSON(inputs.runner) }}
+    needs: resolve-platform
+    runs-on: ${{ fromJSON(needs.resolve-platform.outputs.runner) }}
 
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
@@ -145,8 +167,8 @@ jobs:
           echo "Git Rev: ${{ inputs.ref }}"
           echo "Platform: ${{ inputs.platform }}"
           echo "Release Bld: ${{ inputs.release_build }}"
-          echo "OS: ${{ inputs.os }}"
-          echo "Runner: ${{ inputs.runner }}"
+          echo "OS: ${{ needs.resolve-platform.outputs.os }}"
+          echo "Runner: ${{ needs.resolve-platform.outputs.runner }}"
           echo "Run Unit Tests: $RUN_UNIT_TESTS (${{ inputs.run_unit_tests }})"
           echo "Run Integration Tests: $RUN_INTEGRATION_TESTS (${{ inputs.run_integration_tests }})"
           echo "Bundle Extension: $BUILD_BUNDLED_EXTENSIONS (${{ inputs.bundled_extensions }})"
@@ -182,11 +204,11 @@ jobs:
       # Bundled-extension build deps. Slated for separate revision; preserved
       # as inline steps so BUILD_BUNDLED_EXTENSIONS builds keep working.
       - name: Install bundled-extension dependencies (Linux)
-        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && inputs.os == 'linux'
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && needs.resolve-platform.outputs.os == 'linux'
         run: sudo source/scripts/setup_linux_ext_deps.sh
 
       - name: Install bundled-extension dependencies (macOS)
-        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && inputs.os == 'macos'
+        if: env.BUILD_BUNDLED_EXTENSIONS == '1' && needs.resolve-platform.outputs.os == 'macos'
         run: source/scripts/setup_macos_ext_deps.sh
 
       - name: Clear previous build outputs
