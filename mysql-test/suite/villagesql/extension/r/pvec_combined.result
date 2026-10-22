@@ -8,10 +8,18 @@ total
 SELECT vsql_test_only.int_sum_all(1, 2, 3, 4, 5) AS total;
 total
 15
+SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
+total
+3
+SELECT vsql_test_only.int_sum_all(NULL) AS total;
+total
+0
 SELECT vsql_test_only.int_sum_all();
 ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all requires at least one argument
 SELECT vsql_test_only.int_sum_all(1.5);
-ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 0 must be INT
+ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 0 must be either INT or NULL
+SELECT vsql_test_only.int_sum_all(1, 'abc');
+ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 1 must be either INT or NULL
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
 v PVEC(3)
