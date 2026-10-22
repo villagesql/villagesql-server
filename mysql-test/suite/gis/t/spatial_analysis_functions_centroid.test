@@ -126,6 +126,7 @@ SELECT ST_ASTEXT(ST_CENTROID(g)) FROM gis_geometrycollection WHERE fid=110;
 
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_vertical)));
 
+--replace_numeric_round 12
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_horizontal)));
 
 --error ER_GIS_INVALID_DATA
