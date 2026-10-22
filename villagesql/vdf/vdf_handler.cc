@@ -50,9 +50,9 @@ static bool is_inferrable_string_const(Item *arg) {
   return false;
 }
 
-// Default result-buffer size for STRING/CUSTOM returns when the extension does
-// not declare its own buffer_size. Most JSON/text results fit in 1 KiB, so
-// this avoids a reallocation in the common case.
+// Default result-buffer size for STRING/BINARY/CUSTOM returns when the
+// extension does not declare its own buffer_size. Most JSON/text results fit in
+// 1 KiB, so this avoids a reallocation in the common case.
 static constexpr size_t kDefaultResultBufferSize = 1024;
 
 // Result-buffer growth quantum. Reallocations round up to a multiple of this
@@ -123,10 +123,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   if (!m_error_msg) return true;
   m_error_msg[0] = '\0';
 
-  // Allocate result buffer only for types that need it (STRING/CUSTOM)
+  // Allocate result buffer only for types that need it (STRING/BINARY/CUSTOM)
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
-  if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_CUSTOM) {
+  if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_BINARY ||
+      return_type == VEF_TYPE_CUSTOM) {
     size_t needed = m_udf->vdf_func_desc->buffer_size > 0
                         ? m_udf->vdf_func_desc->buffer_size
                         : kDefaultResultBufferSize;
@@ -200,8 +201,12 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
+      // The encode VDF's parameter is STRING, so it reads the constant in
+      // utf8mb4, as it will at row time.
       String tmp;
-      String *val = arguments[0]->val_str(&tmp);
+      String *val =
+          eval_string_arg(&my_charset_utf8mb4_bin, arguments[0], &tmp);
+      if (val == nullptr && thd->is_error()) return true;
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
         // We will discard the encoded bytes when we infer the parameters so as
@@ -331,7 +336,10 @@ void vdf_handler::clear() {
 }
 
 void vdf_handler::accumulate(bool *null_value) {
-  marshal_args();
+  if (marshal_args()) {
+    *null_value = true;
+    return;
+  }
   vef_vdf_result_t result{};
   result.type = VEF_RESULT_VALUE;
   m_error_msg[0] = '\0';
@@ -374,8 +382,10 @@ void vdf_handler::RunPostrun() {
   m_vdf_args.user_data = nullptr;
 }
 
+// Returns true if an argument could not be converted for the VDF; the error is
+// already reported.
 template <typename InvalueType>
-static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
+static bool marshal_args_typed(const vef_signature_t *sig, uint value_count,
                                Item **args, String *buffers,
                                InvalueType *invalues) {
   for (unsigned int i = 0; i < value_count; i++) {
@@ -405,7 +415,11 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
         break;
       }
       case VEF_TYPE_STRING: {
-        String *arg_str = arg_item->val_str(&buffers[i]);
+        // A STRING argument is utf8mb4 text: converted from any other
+        // charset, and a binary one must already be valid utf8mb4.
+        String *arg_str =
+            eval_string_arg(&my_charset_utf8mb4_bin, arg_item, &buffers[i]);
+        if (arg_str == nullptr && !arg_item->null_value) return true;
         if (arg_item->null_value || arg_str == nullptr) {
           invalues[i].is_null = true;
           invalues[i].str_value = nullptr;
@@ -414,6 +428,28 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
           invalues[i].is_null = false;
           invalues[i].str_value = arg_str->ptr();
           invalues[i].str_len = arg_str->length();
+        }
+        break;
+      }
+      case VEF_TYPE_BINARY: {
+        // BINARY needs VEF_PROTOCOL_4, so it never uses the v1 layout, which
+        // has no field for it.
+        if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
+          // A BINARY argument is the bytes as they are, never converted.
+          String *arg_str = arg_item->val_str(&buffers[i]);
+          if (arg_item->null_value || arg_str == nullptr) {
+            invalues[i].is_null = true;
+            invalues[i].binary_value = nullptr;
+            invalues[i].binary_len = 0;
+          } else {
+            invalues[i].is_null = false;
+            invalues[i].binary_value =
+                reinterpret_cast<const unsigned char *>(arg_str->ptr());
+            invalues[i].binary_len = arg_str->length();
+          }
+        } else {
+          assert(false);
+          invalues[i].is_null = true;
         }
         break;
       }
@@ -446,22 +482,25 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
       }
     }
   }
+  return false;
 }
 
-void vdf_handler::marshal_args() {
+bool vdf_handler::marshal_args() {
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
-    marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
-                       m_invalues);
-  } else {
-    marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
-                       m_invalues_v1);
+    return marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
+                              m_invalues);
   }
+  return marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
+                            m_invalues_v1);
 }
 
 template <typename T>
 bool vdf_handler::invoke_numeric(T *out_value, bool *null_value) {
-  marshal_args();
+  if (marshal_args()) {
+    *null_value = true;
+    return false;
+  }
 
   // Set up result structure (numeric types use the union, not the buffer)
   vef_vdf_result_t result{};
@@ -537,7 +576,7 @@ String *vdf_handler::result_string(const char *res, size_t res_length,
 String *vdf_handler::val_str(String *str, String *save_str,
                              const char *func_name,
                              const CHARSET_INFO *charset) {
-  marshal_args();
+  if (marshal_args()) return nullptr;
 
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
@@ -570,6 +609,10 @@ String *vdf_handler::val_str(String *str, String *save_str,
       } else {
         result.type_params = {0, nullptr, nullptr};
       }
+    } else if (return_type == VEF_TYPE_BINARY) {
+      result.binary_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
+      result.max_binary_len = m_result_buffer_size;
+      result.alt_binary_buf = nullptr;
     } else {
       result.str_buf = m_result_buffer;
       result.max_str_len = m_result_buffer_size;
@@ -613,6 +656,10 @@ String *vdf_handler::val_str(String *str, String *save_str,
       if (is_binary) {
         res = result.alt_bin_buf ? reinterpret_cast<char *>(*result.alt_bin_buf)
                                  : reinterpret_cast<char *>(result.bin_buf);
+      } else if (return_type == VEF_TYPE_BINARY) {
+        res = result.alt_binary_buf
+                  ? reinterpret_cast<char *>(*result.alt_binary_buf)
+                  : reinterpret_cast<char *>(result.binary_buf);
       } else {
         res = result.alt_str_buf ? *result.alt_str_buf : result.str_buf;
       }

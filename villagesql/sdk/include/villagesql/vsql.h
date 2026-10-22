@@ -98,6 +98,7 @@
 namespace vsql {
 
 // Re-export from func_builder sub-namespace into the flat vsql:: namespace
+using func_builder::BINARY;
 using func_builder::INT;
 using func_builder::make_aggregate_func;
 using func_builder::make_func;

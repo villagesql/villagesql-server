@@ -2141,9 +2141,14 @@ static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
 // true on error (error already raised).
+//
+// declared_params is the signature's parameter types, or nullptr for a varargs
+// call, which has none. It decides only how a constant string argument is
+// read; each argument's type is what the caller passed.
 static bool CallBindTypesHook(
     const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
     const char *func_name, uint arg_count, Item **args,
+    const vef_type_t *declared_params,
     std::vector<TypeParameters> *out_arg_params,
     TypeParameters *out_return_params,
     std::vector<std::string> *out_arg_type_names = nullptr) {
@@ -2179,11 +2184,17 @@ static bool CallBindTypesHook(
       arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available. A prepared-statement
-    // parameter has no value until EXECUTE.
+    // Provide constant string values where available, as the VDF will read
+    // them: the bytes unconverted for a BINARY parameter, utf8mb4 otherwise.
+    // A prepared-statement parameter has no value until EXECUTE.
     if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
         arg_types[i].id == VEF_TYPE_STRING) {
-      String *v = args[i]->val_str(&const_store[i]);
+      const bool binary = declared_params != nullptr &&
+                          declared_params[i].id == VEF_TYPE_BINARY;
+      String *v = binary ? args[i]->val_str(&const_store[i])
+                         : eval_string_arg(&my_charset_utf8mb4_bin, args[i],
+                                           &const_store[i]);
+      if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
         const_lengths[i] = v->length();
@@ -2391,7 +2402,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // have.
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params,
+                          nullptr, &hook_arg_params, out_return_params,
                           &hook_arg_type_names)) {
       return true;
     }
@@ -2445,7 +2456,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // The type-name argument is left at its default: a fixed-arity signature
     // already declares every argument's type, so the hook has nothing to name.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params)) {
+                          signature->params, &hook_arg_params,
+                          out_return_params)) {
       return true;
     }
   }

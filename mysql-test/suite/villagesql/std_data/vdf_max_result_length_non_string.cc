@@ -16,11 +16,11 @@
 
 // Negative-compile fixture: max_result_length() on a non-STRING return type.
 //
-// max_result_length() only sizes a STRING result column, so the typed function
-// builder rejects it for any other return type. This extension declares
-// .returns(INT) and then .max_result_length(1000); it MUST fail to compile.
-// The paired test asserts the SDK build is rejected and names the trap
-// max_result_length_is_only_valid_for_a_STRING_return_type.
+// max_result_length() only sizes a STRING or BINARY result column, so the
+// typed function builder rejects it for any other return type. This extension
+// declares .returns(INT) and then .max_result_length(1000); it MUST fail to
+// compile. The paired test asserts the SDK build is rejected and names the trap
+// max_result_length_is_only_valid_for_a_STRING_or_BINARY_return_type.
 
 #include <villagesql/vsql.h>
 
