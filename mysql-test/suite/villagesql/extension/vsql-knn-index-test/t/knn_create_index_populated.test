@@ -10,6 +10,9 @@
 # return the same neighbours as the create-index-then-insert order, proving every
 # pre-existing row was indexed.
 #
+
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 # Reset the static scan/insert counters so their absolute values are

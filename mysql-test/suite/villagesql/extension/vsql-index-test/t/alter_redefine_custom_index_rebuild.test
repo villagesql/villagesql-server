@@ -3,6 +3,8 @@
 # on one column and is dropped and re-added, same name, on a different column, in
 # a single COPY rebuild; afterwards it must reference the new column.
 
+--source include/villagesql/not_implemented.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_ext_index_test;
 

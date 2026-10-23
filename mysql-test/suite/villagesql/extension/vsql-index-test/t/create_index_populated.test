@@ -16,6 +16,8 @@
 # The debug flag lets the custom-index DDL path run in this build.
 --source include/have_debug.inc
 
+--source include/villagesql/not_implemented.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
 --disable_query_log

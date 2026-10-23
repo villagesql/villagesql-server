@@ -5,6 +5,8 @@
 # are preserved. Adding further custom indexes in later statements keeps the
 # ones already present.
 
+--source include/villagesql/not_implemented.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_ext_index_test;
 

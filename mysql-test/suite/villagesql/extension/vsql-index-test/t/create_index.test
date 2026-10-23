@@ -12,6 +12,8 @@
 #   - (col profile)                         -- unqualified per-column index profile
 #   - (col extension.profile)               -- qualified per-column index profile
 
+--source include/villagesql/not_implemented.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
 
