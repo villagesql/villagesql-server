@@ -23,7 +23,7 @@
 // builder. Independent of the hypergraph header
 // (custom_index_knn_optimizer_hypergraph.h).
 
-#include "my_base.h"  // ha_rows
+#include "my_base.h"         // ha_rows
 #include "sql/sql_bitmap.h"  // Key_map
 
 class Item;
