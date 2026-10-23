@@ -15317,19 +15317,30 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       // only known case where the difference matters is in case of indexes on
       // geometry columns and typed arrays, which can't have explicit ordering.
       // Therefore, in such cases we pass ORDER_NOT_RELEVANT.
+      // VillageSQL: a custom index key part also gets ORDER_NOT_RELEVANT unless
+      // it is DESC, so a key part defined without a direction is not rebuilt
+      // with an explicit ASC. Without ordering, index profile decides the
+      // order.
       const enum_order order =
           key_part->key_part_flag & HA_REVERSE_SORT
               ? ORDER_DESC
               : ((key_part->field->type() == MYSQL_TYPE_GEOMETRY ||
-                  key_part->field->is_array())
+                  key_part->field->is_array() ||
+                  key_part->custom_index_profile != nullptr)
                      ? ORDER_NOT_RELEVANT
                      : ORDER_ASC);
       if (key_part->field->is_field_for_functional_index()) {
         key_parts.push_back(new (thd->mem_root) Key_part_spec(
             cfield->field_name, key_part->field->gcol_info->expr_item, order));
       } else {
+        // VillageSQL: keep a custom index key part's profile
+        LEX_CSTRING profile, profile_extension;
+        if (villagesql::MaybeCarryCustomKeyPartProfileForRebuild(
+                thd, key_part, &profile, &profile_extension))
+          return true;
         key_parts.push_back(new (thd->mem_root) Key_part_spec(
-            to_lex_cstring(cfield->field_name), key_part_length, order));
+            to_lex_cstring(cfield->field_name), key_part_length, order, profile,
+            profile_extension));
       }
     }
     if (key_parts.elements) {
