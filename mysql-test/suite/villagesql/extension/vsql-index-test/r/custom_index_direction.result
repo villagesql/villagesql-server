@@ -1,0 +1,73 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector, b dummy_type_vector);
+# --- ASC profile ---
+CREATE INDEX i ON t (a dummy_profile_hnsw_l2 DESC) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_l2' does not support DESC order on column 'a'
+CREATE INDEX i_asc ON t (a dummy_profile_hnsw_l2 ASC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_asc_none ON t (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+Warnings:
+Warning	1831	Duplicate index 'i_asc_none' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+# --- DESC profile ---
+CREATE INDEX i ON t (a dummy_profile_hnsw_desc ASC) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_desc' does not support ASC order on column 'a'
+CREATE INDEX i_desc ON t (a dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_desc_none ON t (a dummy_profile_hnsw_desc) USING EXTENDED(dummy_index_hnsw);
+Warnings:
+Warning	1831	Duplicate index 'i_desc_none' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+# --- NONE profile ---
+CREATE INDEX i ON t (a dummy_profile_hnsw_none ASC) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_none' does not support ASC order on column 'a'
+CREATE INDEX i ON t (a dummy_profile_hnsw_none DESC) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_none' does not support DESC order on column 'a'
+CREATE INDEX i_unordered ON t (a dummy_profile_hnsw_none) USING EXTENDED(dummy_index_hnsw);
+Warnings:
+Warning	1831	Duplicate index 'i_unordered' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+# --- Default profile (ASC), no profile named ---
+CREATE INDEX i ON t (a DESC) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_l2' does not support DESC order on column 'a'
+CREATE INDEX i_default_asc ON t (a ASC) USING EXTENDED(dummy_index_hnsw);
+Warnings:
+Warning	1831	Duplicate index 'i_default_asc' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+# --- Multi-column: a ASC is valid, b DESC on a NONE profile is not ---
+CREATE INDEX i ON t (a ASC, b dummy_profile_hnsw_none DESC)
+USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_none' does not support DESC order on column 'b'
+# --- ALTER TABLE ADD INDEX ---
+ALTER TABLE t ADD INDEX i (b dummy_profile_hnsw_desc ASC) USING EXTENDED(dummy_index_hnsw);
+ERROR HY000: Index profile 'dummy_profile_hnsw_desc' does not support ASC order on column 'b'
+ALTER TABLE t ADD INDEX i_alter (b dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw);
+# Only the accepted indexes were recorded.
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	i_alter	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	i_asc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	i_asc_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	i_default_asc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	i_desc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	i_desc_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t	i_unordered	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	i_alter	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t	i_asc	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	i_asc_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	i_default_asc	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	i_desc	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t	i_desc_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t	i_unordered	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_none
+DROP TABLE t;
+# --- CREATE TABLE with an inline index ---
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
+INDEX i (a dummy_profile_hnsw_none ASC) USING EXTENDED(dummy_index_hnsw));
+ERROR HY000: Index profile 'dummy_profile_hnsw_none' does not support ASC order on column 'a'
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
+INDEX i (a dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	i	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	i	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+DROP TABLE t;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
