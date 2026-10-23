@@ -1,0 +1,69 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE src (id INT PRIMARY KEY,
+a dummy_type_vector, b dummy_type_vector, c dummy_type_vector,
+d dummy_type_vector,
+INDEX i_default (a) USING EXTENDED(dummy_index_hnsw),
+INDEX i_desc (b dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw),
+INDEX i_desc_none (c dummy_profile_hnsw_desc) USING EXTENDED(dummy_index_hnsw),
+INDEX i_none (d dummy_profile_hnsw_none) USING EXTENDED(dummy_index_hnsw));
+CREATE TABLE dst LIKE src;
+# dst has the same profile on every key part as src.
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	dst	i_default	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	dst	i_desc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	dst	i_desc_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	dst	i_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_default	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_desc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_desc_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+dst	i_default	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+dst	i_desc	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+dst	i_desc_none	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+dst	i_none	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_none
+src	i_default	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+src	i_desc	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+src	i_desc_none	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+src	i_none	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_none
+SHOW CREATE TABLE dst;
+Table	Create Table
+dst	CREATE TABLE `dst` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_default` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_desc` (`b` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_desc_none` (`c` `vsql_index_test`.`dummy_profile_hnsw_desc`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_none` (`d` `vsql_index_test`.`dummy_profile_hnsw_none`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# A rebuild of the copy keeps the profiles too.
+ALTER TABLE dst FORCE;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	dst	i_default	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	dst	i_desc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	dst	i_desc_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	dst	i_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_default	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_desc	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_desc_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	src	i_none	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+dst	i_default	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+dst	i_desc	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+dst	i_desc_none	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+dst	i_none	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_none
+src	i_default	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+src	i_desc	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+src	i_desc_none	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+src	i_none	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_none
+DROP TABLE dst, src;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
