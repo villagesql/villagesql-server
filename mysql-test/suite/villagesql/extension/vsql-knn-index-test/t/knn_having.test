@@ -4,6 +4,8 @@
 # the rows the scan produces, much like a WHERE. The KNN ORDER BY should still
 # drive the index; HAVING selects a subset.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (

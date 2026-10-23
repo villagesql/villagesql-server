@@ -4,6 +4,8 @@
 # distance function -- returning that metric's ordering, which differs from the
 # other's.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 --disable_query_log

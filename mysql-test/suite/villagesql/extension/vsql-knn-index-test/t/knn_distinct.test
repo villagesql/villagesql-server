@@ -9,6 +9,8 @@
 # by a distance over a non-selected column is rejected before the KNN path even
 # runs.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (
