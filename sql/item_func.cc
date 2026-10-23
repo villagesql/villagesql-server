@@ -9736,6 +9736,37 @@ longlong Item_func_internal_keys_disabled::val_int() {
   return keys_disabled;
 }
 
+longlong Item_func_internal_get_custom_index_property::val_int() {
+  DBUG_TRACE;
+
+  String options;
+  String *options_ptr = args[0]->val_str(&options);
+  if (options_ptr == nullptr) return 0;
+
+  String key_buf;
+  String *key_ptr = args[1]->val_str(&key_buf);
+  if (key_ptr == nullptr) return 0;
+
+  std::unique_ptr<dd::Properties> p(
+      dd::Properties::parse_properties(options_ptr->c_ptr_safe()));
+
+  // Warn if the property string is corrupt, like the sibling INTERNAL_*
+  // functions do.
+  if (!p.get()) {
+    LogErr(WARNING_LEVEL, ER_WARN_PROPERTY_STRING_PARSE_FAILED,
+           options_ptr->c_ptr_safe());
+    assert(false);
+    return 0;
+  }
+
+  const char *key = key_ptr->c_ptr_safe();
+  if (!p->exists(key)) return 0;
+
+  ulonglong value = 0;
+  p->get(key, &value);
+  return static_cast<longlong>(value);
+}
+
 /**
   @brief
     INFORMATION_SCHEMA picks metadata from DD using system views.
