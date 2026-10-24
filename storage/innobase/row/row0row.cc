@@ -971,6 +971,7 @@ enum row_search_result row_search_index_entry(
                            be closed by the caller */
     mtr_t *mtr)            /*!< in: mtr */
 {
+  using villagesql::innodb::Custom_index;
   ulint n_fields;
   ulint low_match;
   rec_t *rec;
@@ -1011,6 +1012,9 @@ enum row_search_result row_search_index_entry(
   rec = pcur->get_rec();
 
   n_fields = dtuple_get_n_fields(entry);
+  if (Custom_index::is_custom(index)) {
+    n_fields = dict_index_get_n_unique(index);
+  }
 
   if (page_rec_is_infimum(rec)) {
     return (ROW_NOT_FOUND);

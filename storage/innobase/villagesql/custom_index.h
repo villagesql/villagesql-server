@@ -63,6 +63,7 @@ class Custom_index {
   using StorageCtx = vef_storage_ctx_t;
   using StorageRef = vef_storage_ref_t;
   using KeyRef = vef_storage_col_ref_t;
+  static constexpr KeyRef EMPTY_KEY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
   using CursorRef = vef_index_cursor_ref_t;
 
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
@@ -150,6 +151,10 @@ class Custom_index {
   // Returns true if a scan on index must always read the clustered index.
   static bool needs_clustered_access(const dict_index_t *index);
 
+  // Returns true if the index stores an entry reference in its mapping
+  // B-tree, which the extension needs to locate the entry.
+  static bool needs_mapping_key(const dict_index_t *index);
+
   static uint32_t n_extra_fields(const dict_index_t *index);
 
   static void add_extra_fields(dict_index_t *new_index,
@@ -175,6 +180,21 @@ class Custom_index {
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
                         const dtuple_t *entry, bool dup_chk_only,
                         bool *is_key_null);
+
+  // Marks (or unmarks) the entry in extension-managed storage as deleted by
+  // the transaction.
+  // @param[in] key_ref entry reference from the mapping B-tree record, or
+  //            EMPTY_KEY_REF if not yet known. When the index needs the
+  //            reference (needs_mapping_key()), the call is a no-op without it.
+  // @param[out] is_key_null true if all the key columns of the entry are NULL
+  static dberr_t mark_delete(dict_index_t *index, trx_id_t trx_id,
+                             const dtuple_t *entry, KeyRef key_ref,
+                             bool delete_mark, bool *is_key_null);
+
+  // Returns the entry reference stored in a mapping B-tree record, or
+  // EMPTY_KEY_REF if the index does not store one.
+  static KeyRef get_key_ref(const dict_index_t *index, const rec_t *rec,
+                            mem_heap_t **heap);
 
   // Entry point for row_search_mvcc()/row_search_no_mvcc() when the index
   // being scanned is a custom index.

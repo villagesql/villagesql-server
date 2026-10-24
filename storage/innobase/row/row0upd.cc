@@ -80,6 +80,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "dict0dd.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 #endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_HOTBACKUP
@@ -2165,6 +2166,8 @@ code or DB_LOCK_WAIT */
   ulint mode;
   ulint flags = 0;
   enum row_search_result search_result;
+  using villagesql::innodb::Custom_index;
+  Custom_index::KeyRef custom_key_ref = Custom_index::EMPTY_KEY_REF;
 
   ut_ad(trx->id != 0);
 
@@ -2201,6 +2204,18 @@ code or DB_LOCK_WAIT */
   if (entry == nullptr) {
     entry = row_build_index_entry(node->row, node->ext, index, heap);
     ut_a(entry);
+  }
+
+  if (Custom_index::is_custom(index)) {
+    bool is_key_null = false;
+    err = Custom_index::mark_delete(index, trx->id, entry, custom_key_ref, true,
+                                    &is_key_null);
+    if (err != DB_SUCCESS) {
+      goto func_exit;
+    }
+    if (!index->has_mapping_btree() || is_key_null) {
+      goto key_insert;
+    }
   }
 
   if (!index->table->is_intrinsic()) {
@@ -2352,6 +2367,10 @@ code or DB_LOCK_WAIT */
 
       ut_ad(err == DB_SUCCESS);
 
+      if (Custom_index::needs_mapping_key(index)) {
+        custom_key_ref = Custom_index::get_key_ref(index, rec, &heap);
+      }
+
       if (referenced) {
         ulint *offsets;
 
@@ -2369,6 +2388,14 @@ code or DB_LOCK_WAIT */
   pcur.close();
   mtr_commit(&mtr);
 
+  if (err == DB_SUCCESS && search_result == ROW_FOUND &&
+      Custom_index::needs_mapping_key(index)) {
+    bool is_key_null;
+    err = Custom_index::mark_delete(index, trx->id, entry, custom_key_ref, true,
+                                    &is_key_null);
+  }
+
+key_insert:
   if (node->is_delete || err != DB_SUCCESS) {
     goto func_exit;
   }

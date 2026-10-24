@@ -472,6 +472,10 @@ const vef_type_index_intf_t &Custom_index::interface() const {
   return index_meta()->descriptor()->intf();
 }
 
+bool Custom_index::needs_mapping_key(const dict_index_t *index) {
+  return n_extra_fields(index) > 0;
+}
+
 uint32_t Custom_index::n_extra_fields(const dict_index_t *index) {
   if (!is_custom(index)) return 0;
 
@@ -809,27 +813,16 @@ static vef_storage_col_data_t to_col_data(const dfield_t *field) {
           static_cast<uint32_t>(dfield_get_len(field, false))};
 }
 
-dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
-                             const dtuple_t *entry, bool dup_chk_only,
-                             bool *is_key_null) {
-  *is_key_null = false;
-
-  // Custom indexes are not supported on intrinsic tables, and dup_chk_only is
-  // only used for intrinsic tables because they cannot be rolled back.
-  ut_ad(!dup_chk_only);
-
+// Extracts the key and primary key columns of an index entry for the
+// extension. Sets *is_key_null to true if all the key columns are NULL.
+static void get_entry_columns(
+    const dict_index_t *index, const dtuple_t *entry,
+    std::array<vef_storage_col_data_t, MAX_REF_PARTS> &key_columns,
+    std::array<vef_storage_col_data_t, MAX_REF_PARTS> &pkey_columns,
+    bool *is_key_null) {
   Custom_index *custom_index = index->custom_index;
   const auto &intf = custom_index->interface();
-  auto *storage_ctx = custom_index->storage_ctx();
-
-  if (!storage_ctx) {
-    ut_ad(false);
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Custom index storage context is not initialized.";
-    return DB_VILLAGESQL_ERROR;
-  }
-
-  vef_index_ctx_t *index_ctx = custom_index->index_ctx();
+  const vef_index_ctx_t *index_ctx = custom_index->index_ctx();
   uint32_t num_key_columns = index_ctx->num_key_columns;
   uint32_t num_pk_columns = index_ctx->num_primary_key_columns;
   // Both are bounded by MAX_REF_PARTS: num_key_columns is the user-defined
@@ -845,13 +838,11 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
   // between num_key_columns (all PK columns overlap) and num_key_columns +
   // num_pk_columns (no overlap).
   ut_a(entry->n_fields >= num_key_columns);
-  ut_a(entry->n_fields <= num_key_columns + num_pk_columns + MAX_EXTRA_FIELDS);
+  ut_a(entry->n_fields <=
+       num_key_columns + num_pk_columns + Custom_index::MAX_EXTRA_FIELDS);
 
   const dict_index_t *clust_index = index->table->first_index();
   ut_a(clust_index != nullptr);
-
-  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
-  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
 
   if (intf.storage_props & VEF_INDEX_STORAGE_HAS_ROW_REF) {
     // A PK column may already be one of the key columns above; find its actual
@@ -873,6 +864,33 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
       *is_key_null = false;
     }
   }
+}
+
+dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
+                             const dtuple_t *entry, bool dup_chk_only,
+                             bool *is_key_null) {
+  *is_key_null = false;
+
+  // Custom indexes are not supported on intrinsic tables, and dup_chk_only is
+  // only used for intrinsic tables because they cannot be rolled back.
+  ut_ad(!dup_chk_only);
+
+  Custom_index *custom_index = index->custom_index;
+  const auto &intf = custom_index->interface();
+  auto *storage_ctx = custom_index->storage_ctx();
+
+  if (!storage_ctx) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index storage context is not initialized.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  vef_index_ctx_t *index_ctx = custom_index->index_ctx();
+
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
+  get_entry_columns(index, entry, key_columns, pkey_columns, is_key_null);
 
   // NULL keys are not inserted into the custom index, or into the mapping
   // B-tree when the index needs one. For example, an HNSW index neither indexes
@@ -906,6 +924,64 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
     ut_a(dfield_get_len(key_ref_field) == sizeof(KeyRef));
     mach_write_to_8(static_cast<byte *>(dfield_get_data(key_ref_field)),
                     key_ref);
+  }
+  return DB_SUCCESS;
+}
+
+Custom_index::KeyRef Custom_index::get_key_ref(const dict_index_t *index,
+                                               const rec_t *rec,
+                                               mem_heap_t **heap) {
+  if (n_extra_fields(index) == 0) return EMPTY_KEY_REF;
+
+  // The key reference is the last field of the mapping B-tree record.
+  const ulint *offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
+                                         UT_LOCATION_HERE, heap);
+  ulint len;
+  const byte *data = rec_get_nth_field(
+      index, rec, offsets, dict_index_get_n_fields(index) - 1, &len);
+  ut_a(len == sizeof(KeyRef));
+  return mach_read_from_8(data);
+}
+
+dberr_t Custom_index::mark_delete(dict_index_t *index, trx_id_t trx_id,
+                                  const dtuple_t *entry, KeyRef key_ref,
+                                  bool delete_mark, bool *is_key_null) {
+  *is_key_null = false;
+
+  Custom_index *custom_index = index->custom_index;
+  const auto &intf = custom_index->interface();
+  auto *storage_ctx = custom_index->storage_ctx();
+
+  if (!storage_ctx) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index storage context is not initialized.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
+  get_entry_columns(index, entry, key_columns, pkey_columns, is_key_null);
+
+  // NULL keys are not inserted into the mapping B-tree or the index. If the
+  // entry reference is needed, it is only known after the mapping B-tree
+  // lookup.
+  if (index->has_mapping_btree() &&
+      (*is_key_null ||
+       (needs_mapping_key(index) && key_ref == EMPTY_KEY_REF))) {
+    return DB_SUCCESS;
+  }
+
+  char error_msg[ERROR_MSG_SIZE] = {};
+  bool failed = intf.mark_delete(
+      custom_index->index_ctx(), storage_ctx,
+      static_cast<vef_storage_trx_ref_t>(trx_id), &key_ref, key_columns.data(),
+      pkey_columns.data(), delete_mark, error_msg, sizeof(error_msg));
+  if (failed) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error marking custom index entry as deleted: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
 }
