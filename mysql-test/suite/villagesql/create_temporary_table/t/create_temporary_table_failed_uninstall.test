@@ -1,0 +1,15 @@
+# A CREATE TEMPORARY TABLE with a custom-type column that fails in the storage
+# engine must not keep the type referenced: the extension can be uninstalled
+# afterwards.
+
+INSTALL EXTENSION vsql_complex;
+
+--echo # Fails in InnoDB: temporary tables do not support compression
+--error ER_ILLEGAL_HA
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, c COMPLEX)
+  COMPRESSION = 'ZLIB' ENGINE = InnoDB;
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+
+UNINSTALL EXTENSION vsql_complex;

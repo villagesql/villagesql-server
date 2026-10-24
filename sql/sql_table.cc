@@ -9210,13 +9210,20 @@ static bool create_table_impl(
   if (prepare_error) return true;
 
   // VillageSQL: Pre-populate session metadata so MaybeInjectCustomType can
-  // inject type contexts during open_table_from_share.
+  // inject type contexts during open_table_from_share. The metadata of a user
+  // temporary table is removed again if its creation fails.
+  bool remove_tmp_metadata = false;
+  auto tmp_metadata_guard = create_scope_guard([&]() {
+    if (remove_tmp_metadata)
+      villagesql::RemoveTmpTableMetadata(thd, db, table_name);
+  });
   if (internal_tmp_table) {
     // ALTER TABLE rebuild table (#sql-xxx).
     if (villagesql::PrepareAlterCustomFields(thd, alter_info, create_info))
       return true;
   } else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
     // User facing temporary table.
+    remove_tmp_metadata = true;
     if (villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
                                                  alter_info, create_info))
       return true;
@@ -9307,6 +9314,7 @@ static bool create_table_impl(
     thd->server_status |= SERVER_STATUS_IN_TRANS;
   }
   if (table_created) *table_created = true;
+  tmp_metadata_guard.release();
   return false;
 }
 
