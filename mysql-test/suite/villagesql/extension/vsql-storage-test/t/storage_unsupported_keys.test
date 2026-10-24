@@ -1,0 +1,69 @@
+# Keys on a column-store column are refused with an error until they are
+# supported: the key would compare the stored column reference, not the value.
+# Covers the keys of internal temporary tables (GROUP BY, DISTINCT, set
+# operations) in memory and on disk (big_tables=ON), and ordinary indexes on
+# base and temporary tables.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_storage_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, n STORED_INT);
+INSERT INTO t1 VALUES
+  (1, 1, '10'), (2, 1, '20'), (3, 2, '10'), (4, 2, NULL), (5, 3, '30');
+
+CREATE TABLE t2 (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO t2 VALUES (1, '10'), (2, '40');
+
+--let $i = 2
+while ($i)
+{
+  if ($i == 2)
+  {
+    --echo #
+    --echo # In memory
+    --echo #
+    SET SESSION big_tables = OFF;
+  }
+  if ($i == 1)
+  {
+    --echo #
+    --echo # On disk (InnoDB intrinsic)
+    --echo #
+    SET SESSION big_tables = ON;
+  }
+
+  --error ER_VILLAGESQL_GENERIC_ERROR
+  SELECT DISTINCT n FROM t1;
+  --error ER_VILLAGESQL_GENERIC_ERROR
+  SELECT n, COUNT(*) FROM t1 GROUP BY n;
+  --error ER_VILLAGESQL_GENERIC_ERROR
+  SELECT n FROM t1 UNION SELECT n FROM t2;
+  --error ER_VILLAGESQL_GENERIC_ERROR
+  SELECT n FROM t1 INTERSECT SELECT n FROM t2;
+  --error ER_VILLAGESQL_GENERIC_ERROR
+  SELECT n FROM t1 EXCEPT SELECT n FROM t2;
+
+  --dec $i
+}
+
+SET SESSION big_tables = DEFAULT;
+
+--echo #
+--echo # Ordinary indexes on a column-store column
+--echo #
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, KEY (n));
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, UNIQUE KEY (n));
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx_n ON t1 (n);
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TEMPORARY TABLE t3 (id INT PRIMARY KEY, n STORED_INT, KEY (n));
+
+DROP TABLE t1, t2;
+
+UNINSTALL EXTENSION vsql_storage_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

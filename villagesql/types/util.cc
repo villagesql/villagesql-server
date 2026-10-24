@@ -1663,6 +1663,15 @@ bool EnsureEngineIsInnodb(const handlerton *hton, const char *operation) {
   return false;
 }
 
+bool CheckTmpTableKeyField(const Field *field) {
+  if (!field->has_external_storage()) return false;
+  villagesql_error(
+      "Type '%s' uses column storage, so its values cannot be grouped or "
+      "deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).",
+      MYF(0), field->get_type_context()->qualified_name().c_str());
+  return true;
+}
+
 // Check that the tmp table is InnoDB if any column or index is custom-typed.
 static bool EnsureInnodbEngineForTmpTable(const HA_CREATE_INFO *create_info,
                                           const Alter_info *alter_info,

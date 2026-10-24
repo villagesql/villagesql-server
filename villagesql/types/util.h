@@ -133,6 +133,12 @@ extern bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
 // Returns false on success and true on error.
 extern bool EnsureEngineIsInnodb(const handlerton *hton, const char *operation);
 
+// Verify that a key part of an internal temporary table (GROUP BY, DISTINCT,
+// set operations) does not use column storage. The key would compare the
+// stored column reference, not the value. Reports an error and returns true if
+// it does; returns false otherwise.
+extern bool CheckTmpTableKeyField(const Field *field);
+
 // Pre-populate session-local temporary metadata from the create list so that
 // MaybeInjectCustomType can inject type contexts during open_table_from_share
 // (which calls unpack_value_generator before AnnotateCustomColumnsInTmpTable
