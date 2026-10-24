@@ -67,10 +67,17 @@ static void emit_type_method_error(std::string_view ext_name,
     return;
   }
 
-  static const char *valid_methods[] = {"from_string", "to_string", "compare",
-                                        "hash"};
+  std::string pref = villagesql::canonical_extension_name(type_name) + "::";
+  std::vector<std::string> valid_methods;
+  for (const auto *f : victionary.funcs().get_all_committed()) {
+    if (villagesql::canonical_extension_name(f->function_name())
+            .compare(0, pref.size(), pref) == 0) {
+      valid_methods.push_back(f->function_name().substr(pref.size()));
+    }
+  }
+
   bool is_valid_method = false;
-  for (const char *m : valid_methods) {
+  for (const auto &m : valid_methods) {
     if (method_name == m) {
       is_valid_method = true;
       break;
@@ -78,10 +85,19 @@ static void emit_type_method_error(std::string_view ext_name,
   }
 
   if (!is_valid_method) {
-    villagesql_error(
-        "Unknown method '%s' for type '%s'. Valid methods: from_string, "
-        "to_string, compare, hash",
-        MYF(0), method_name.c_str(), type_name.c_str());
+    std::ostringstream methods;
+    for (size_t i = 0; i < valid_methods.size(); i++) {
+      if (i != valid_methods.size() - 1) {
+        methods << valid_methods[i] << ", ";
+        continue;
+      }
+
+      methods << valid_methods[i];
+    }
+
+    villagesql_error("Unknown method '%s' for type '%s'. Valid methods: %s",
+                     MYF(0), method_name.c_str(), type_name.c_str(),
+                     methods.str().c_str());
     return;
   }
 
