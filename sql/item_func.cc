@@ -4509,7 +4509,7 @@ udf_handler::udf_handler(udf_func *udf_arg)
       m_args_extension(),
       m_return_value_extension(&my_charset_bin, result_type()) {}
 
-bool udf_handler::is_vdf_returns_string() const {
+bool udf_handler::is_vdf_returns_string_or_binary() const {
   // Use vdf_func_desc directly instead of m_vdf because this is called from
   // resolve_type() before m_vdf is instantiated.
   return u_d != nullptr &&
@@ -4519,9 +4519,9 @@ bool udf_handler::is_vdf_returns_string() const {
           u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_BINARY);
 }
 
-void udf_handler::set_vdf_string_result_type(Item *item,
-                                             uint32 default_length) {
-  assert(is_vdf_returns_string());
+void udf_handler::set_vdf_string_or_binary_result_type(Item *item,
+                                                       uint32 default_length) {
+  assert(is_vdf_returns_string_or_binary());
   // Size the result field for a STRING-returning VDF, mirroring a classic
   // loadable UDF. Prefer the max output length the extension declared
   // (max_result_length); otherwise fall back to default_length,
@@ -5283,8 +5283,8 @@ bool Item_func_udf_str::resolve_type(THD *) {
   for (uint i = 0; i < arg_count; i++)
     result_length = max(result_length, args[i]->max_length);
   // If the UDF has an init function, this may be overridden later.
-  if (udf.is_vdf_returns_string()) {
-    udf.set_vdf_string_result_type(this, result_length);
+  if (udf.is_vdf_returns_string_or_binary()) {
+    udf.set_vdf_string_or_binary_result_type(this, result_length);
   } else {
     set_data_type_string(result_length, &my_charset_bin);
   }

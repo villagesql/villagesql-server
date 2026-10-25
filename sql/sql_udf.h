@@ -170,7 +170,7 @@ class udf_handler {
   // (VEF_TYPE_STRING) or raw bytes (VEF_TYPE_BINARY), as opposed to a custom
   // type's stored form (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available
   // before m_vdf is instantiated.
-  bool is_vdf_returns_string() const;
+  bool is_vdf_returns_string_or_binary() const;
 
   // Set `item`'s data type for a STRING- or BINARY-returning VDF result, and
   // set the runtime result charset to match (utf8mb4 for STRING, binary for
@@ -180,7 +180,7 @@ class udf_handler {
   // argument-derived width the caller computed) when none is declared --
   // mirroring a classic UDF that does not set initid->max_length. Callable
   // before m_vdf is instantiated (uses vdf_func_desc).
-  void set_vdf_string_result_type(Item *item, uint32 default_length);
+  void set_vdf_string_or_binary_result_type(Item *item, uint32 default_length);
 
   const char *name() const { return u_d ? u_d->name.str : "?"; }
   const char *qualified_name() const {

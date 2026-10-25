@@ -4045,12 +4045,12 @@ bool Item_sum_udf_str::resolve_type(THD *) {
   max_length = 0;
   for (uint i = 0; i < arg_count; i++)
     max_length = max(max_length, args[i]->max_length);
-  if (udf.is_vdf_returns_string()) {
+  if (udf.is_vdf_returns_string_or_binary()) {
     // VDFs returning STRING produce text, and BINARY raw bytes; size the result
     // field from the declared max output length, falling back to the argument
     // width.
     // Mirrors the scalar path in Item_func_udf_str::resolve_type().
-    udf.set_vdf_string_result_type(this, max_length);
+    udf.set_vdf_string_or_binary_result_type(this, max_length);
   } else {
     set_data_type(MYSQL_TYPE_VARCHAR);
   }
