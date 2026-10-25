@@ -205,7 +205,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
       // utf8mb4, as it will at row time.
       String tmp;
       String *val =
-          eval_string_arg(&my_charset_utf8mb4_bin, arguments[0], &tmp);
+          eval_string_arg(VdfValueCharset(VEF_TYPE_STRING), arguments[0], &tmp);
       if (val == nullptr && thd->is_error()) return true;
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
@@ -418,7 +418,8 @@ static bool marshal_args_typed(const vef_signature_t *sig, uint value_count,
         // A STRING argument is utf8mb4 text: converted from any other
         // charset, and a binary one must already be valid utf8mb4.
         String *arg_str =
-            eval_string_arg(&my_charset_utf8mb4_bin, arg_item, &buffers[i]);
+            eval_string_arg(villagesql::VdfValueCharset(VEF_TYPE_STRING),
+                            arg_item, &buffers[i]);
         if (arg_str == nullptr && !arg_item->null_value) return true;
         if (arg_item->null_value || arg_str == nullptr) {
           invalues[i].is_null = true;

@@ -4550,11 +4550,8 @@ void udf_handler::set_vdf_string_or_binary_result_type(Item *item,
   if (len > MAX_BLOB_WIDTH) {
     len = MAX_BLOB_WIDTH;
   }
-  // STRING is utf8mb4 text; BINARY is raw bytes.
-  const CHARSET_INFO *cs =
-      u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_BINARY
-          ? &my_charset_bin
-          : &my_charset_utf8mb4_bin;
+  const CHARSET_INFO *cs = villagesql::VdfValueCharset(
+      u_d->vdf_func_desc->signature->return_type.id);
   item->set_data_type_string(static_cast<uint32>(len), cs);
   // Keep the runtime result charset in sync with the item's declared
   // collation.

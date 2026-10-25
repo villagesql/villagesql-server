@@ -2213,8 +2213,8 @@ static bool CallBindTypesHook(
       const bool binary = declared_params != nullptr &&
                           declared_params[i].id == VEF_TYPE_BINARY;
       String *v = binary ? args[i]->val_str(&const_store[i])
-                         : eval_string_arg(&my_charset_utf8mb4_bin, args[i],
-                                           &const_store[i]);
+                         : eval_string_arg(VdfValueCharset(VEF_TYPE_STRING),
+                                           args[i], &const_store[i]);
       if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
@@ -2345,6 +2345,10 @@ vef_type_id InferArgTypeId(const Item *item) {
     default:
       return VEF_TYPE_STRING;
   }
+}
+
+const CHARSET_INFO *VdfValueCharset(vef_type_id id) {
+  return id == VEF_TYPE_STRING ? &my_charset_utf8mb4_bin : &my_charset_bin;
 }
 
 // Turns a varargs hook's answers into the expected-type array the two passes
