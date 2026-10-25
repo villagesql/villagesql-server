@@ -1831,7 +1831,7 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
-// Whether a function descriptor of `protocol` may use type id `id`. An id the
+// Whether a function called at `protocol` may use type id `id`. An id the
 // server does not know is never valid; BINARY needs VEF_PROTOCOL_4.
 static bool is_known_type_id(vef_type_id id, vef_protocol_t protocol) {
   switch (id) {
@@ -1848,8 +1848,11 @@ static bool is_known_type_id(vef_type_id id, vef_protocol_t protocol) {
 
 // Contents of one function descriptor. Reads only protocol-1 fields, so it is
 // safe for a descriptor declaring any protocol version. `index` names the slot
-// for descriptors that have no usable name of their own.
+// for descriptors that have no usable name of their own. `protocol` is the
+// registration's: a call is marshalled at the protocol negotiated from it, not
+// at the descriptor's own, which may be higher.
 static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
+                            vef_protocol_t protocol,
                             std::string &error_message) {
   if (f->name == nullptr) {
     error_message =
@@ -1877,7 +1880,7 @@ static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
       return true;
     }
     for (unsigned int i = 0; i < sig->param_count; i++) {
-      if (!is_known_type_id(sig->params[i].id, f->protocol)) {
+      if (!is_known_type_id(sig->params[i].id, protocol)) {
         error_message = std::string("VDF '") + f->name + "' param " +
                         std::to_string(i + 1) + " has type id " +
                         std::to_string(sig->params[i].id) +
@@ -1893,7 +1896,7 @@ static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
       }
     }
   }
-  if (!is_known_type_id(sig->return_type.id, f->protocol)) {
+  if (!is_known_type_id(sig->return_type.id, protocol)) {
     error_message = std::string("VDF '") + f->name + "' returns type id " +
                     std::to_string(sig->return_type.id) +
                     ", which its protocol does not define";
@@ -1986,7 +1989,9 @@ bool check_vef_registration(const vef_registration_t *registration,
           std::to_string(static_cast<unsigned>(registration->protocol));
       return true;
     }
-    if (check_func_desc(registration->funcs[i], i, error_message)) return true;
+    if (check_func_desc(registration->funcs[i], i, registration->protocol,
+                        error_message))
+      return true;
   }
   // Check registration type members.
   if (registration->type_count > 0 && registration->types == nullptr) {
