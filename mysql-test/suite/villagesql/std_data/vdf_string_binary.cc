@@ -17,11 +17,14 @@
 // STRING and BINARY parameters and results. The *_hex functions report the
 // bytes the VDF received, so a test can see whether the server converted an
 // argument; the *_echo functions return their argument, so a test can see the
-// charset the server gives the result.
+// charset the server gives the result. The *_const functions do the same for
+// the constant their bind_and_check_types hook is given: the hook rejects the
+// call with the constant's bytes in hex.
 
 #include <villagesql/vsql.h>
 
 #include <cstddef>
+#include <string>
 #include <string_view>
 
 using namespace vsql;
@@ -62,6 +65,25 @@ void bin_echo_impl(BinaryArg in, BinaryResult out) {
   out.set(in.value());
 }
 
+void int_echo_impl(IntArg in, IntResult out) {
+  if (in.is_null()) return out.set_null();
+  out.set(in.value());
+}
+
+// A hook with nothing to decide, so the call goes ahead.
+void pass_bind(BindArgs, BindResult) {}
+
+void const_hex_bind(BindArgs args, BindResult out) {
+  if (!args.at(0).has_const_value()) return;
+  static const char digits[] = "0123456789ABCDEF";
+  std::string msg = "constant ";
+  for (unsigned char c : args.at(0).const_value()) {
+    msg += digits[c >> 4];
+    msg += digits[c & 0xF];
+  }
+  out.error(msg);
+}
+
 VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .func(make_func<&str_hex_impl>("str_hex")
                                         .returns(STRING)
@@ -79,4 +101,24 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .returns(BINARY)
                                         .param(BINARY)
                                         .max_result_length(64)
+                                        .build())
+                              .func(make_func<&int_echo_impl>("int_echo")
+                                        .returns(INT)
+                                        .param(INT)
+                                        .bind_and_check_types<&pass_bind>()
+                                        .build())
+                              .func(make_func<&str_hex_impl>("str_const")
+                                        .returns(STRING)
+                                        .param(STRING)
+                                        .bind_and_check_types<&const_hex_bind>()
+                                        .build())
+                              .func(make_func<&bin_hex_impl>("bin_const")
+                                        .returns(STRING)
+                                        .param(BINARY)
+                                        .bind_and_check_types<&const_hex_bind>()
+                                        .build())
+                              .func(make_func<&int_echo_impl>("int_const")
+                                        .returns(INT)
+                                        .param(INT)
+                                        .bind_and_check_types<&const_hex_bind>()
                                         .build()))

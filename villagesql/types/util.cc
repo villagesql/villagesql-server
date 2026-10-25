@@ -2164,8 +2164,9 @@ static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 // true on error (error already raised).
 //
 // declared_params is the signature's parameter types, or nullptr for a varargs
-// call, which has none. It decides only how a constant string argument is
-// read; each argument's type is what the caller passed.
+// call, which has none and reads each argument as its own type. It decides
+// only how a constant string argument is read; each argument's type is what
+// the caller passed.
 static bool CallBindTypesHook(
     const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
     const char *func_name, uint arg_count, Item **args,
@@ -2205,16 +2206,16 @@ static bool CallBindTypesHook(
       arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available, as the VDF will read
-    // them: the bytes unconverted for a BINARY parameter, utf8mb4 otherwise.
-    // A prepared-statement parameter has no value until EXECUTE.
+    // Provide constant string values where available, in the charset of the
+    // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
+    // unconverted for any other. A prepared-statement parameter has no value
+    // until EXECUTE.
     if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
         arg_types[i].id == VEF_TYPE_STRING) {
-      const bool binary = declared_params != nullptr &&
-                          declared_params[i].id == VEF_TYPE_BINARY;
-      String *v = binary ? args[i]->val_str(&const_store[i])
-                         : eval_string_arg(VdfValueCharset(VEF_TYPE_STRING),
-                                           args[i], &const_store[i]);
+      const vef_type_id param_id =
+          declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
+      String *v =
+          eval_string_arg(VdfValueCharset(param_id), args[i], &const_store[i]);
       if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());

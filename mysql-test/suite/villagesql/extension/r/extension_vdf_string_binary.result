@@ -78,7 +78,23 @@ HEX(h)
 BA7816BF8F01
 DROP TABLE t2;
 #
-# Test 7: the registration lists BINARY
+# Test 7: the constant a bind_and_check_types hook is given
+#
+# The hook reads a constant as the VDF does: utf8mb4 for a STRING
+# parameter, the bytes unconverted for any other. The *_const hooks
+# reject the call with the bytes they were given.
+SELECT vdf_sb.str_const(_latin1 0xE9);
+ERROR HY000: Cannot initialize function 'str_const': constant C3A9
+SELECT vdf_sb.bin_const(_latin1 0xE9);
+ERROR HY000: Cannot initialize function 'bin_const': constant E9
+SELECT vdf_sb.int_const(0xFF);
+ERROR HY000: Cannot initialize function 'int_const': constant FF
+# A constant that is not valid utf8mb4 still reaches an INT parameter.
+SELECT vdf_sb.int_echo(0xFF) AS i;
+i
+255
+#
+# Test 8: the registration lists BINARY
 #
 SELECT jt.name, jt.return_type, jt.params
 FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
@@ -90,8 +106,12 @@ params      JSON        PATH '$.params'
 WHERE EXTENSION_NAME = 'vdf_sb'
 ORDER BY jt.name;
 name	return_type	params
+bin_const	STRING	["BINARY"]
 bin_echo	BINARY	["BINARY"]
 bin_hex	STRING	["BINARY"]
+int_const	INT	["INT"]
+int_echo	INT	["INT"]
+str_const	STRING	["STRING"]
 str_echo	STRING	["STRING"]
 str_hex	STRING	["STRING"]
 #

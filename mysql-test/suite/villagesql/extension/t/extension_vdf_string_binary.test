@@ -77,7 +77,24 @@ SELECT HEX(h) FROM t2;
 DROP TABLE t2;
 
 --echo #
---echo # Test 7: the registration lists BINARY
+--echo # Test 7: the constant a bind_and_check_types hook is given
+--echo #
+--echo # The hook reads a constant as the VDF does: utf8mb4 for a STRING
+--echo # parameter, the bytes unconverted for any other. The *_const hooks
+--echo # reject the call with the bytes they were given.
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vdf_sb.str_const(_latin1 0xE9);
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vdf_sb.bin_const(_latin1 0xE9);
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vdf_sb.int_const(0xFF);
+
+--echo # A constant that is not valid utf8mb4 still reaches an INT parameter.
+SELECT vdf_sb.int_echo(0xFF) AS i;
+
+--echo #
+--echo # Test 8: the registration lists BINARY
 --echo #
 
 SELECT jt.name, jt.return_type, jt.params
