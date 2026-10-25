@@ -189,20 +189,24 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   // this time with known params, and encodes normally.
   //
   // "String const" here covers string literals and user variables — anything
-  // is_inferrable_string_const() accepts.
+  // is_inferrable_string_const() accepts. Only a STRING parameter is
+  // pre-executed: the constant is read as utf8mb4 text, which would change or
+  // reject the bytes meant for a parameter of any other type.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
   if (signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
       m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
+      (signature->param_count == VEF_PARAM_VARARGS ||
+       signature->params[0].id == VEF_TYPE_STRING) &&
       is_inferrable_string_const(arguments[0])) {
     TypeInferenceSnapshot snap;
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
-      // The encode VDF's parameter is STRING, so it reads the constant in
-      // utf8mb4, as it will at row time.
+      // The parameter is STRING, so the VDF reads the constant in utf8mb4, as
+      // it will at row time.
       String tmp;
       String *val =
           eval_string_arg(VdfValueCharset(VEF_TYPE_STRING), arguments[0], &tmp);
