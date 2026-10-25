@@ -19,11 +19,13 @@
 // argument; the *_echo functions return their argument, so a test can see the
 // charset the server gives the result. The *_const functions do the same for
 // the constant their bind_and_check_types hook is given: the hook rejects the
-// call with the constant's bytes in hex.
+// call with the constant's bytes in hex. TEXT8 stores the bytes its
+// from_string was given, so text8_hex shows what a constant was encoded from.
 
 #include <villagesql/vsql.h>
 
 #include <cstddef>
+#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -84,7 +86,45 @@ void const_hex_bind(BindArgs args, BindResult out) {
   out.error(msg);
 }
 
+// TEXT8: up to 8 bytes of text, zero padded.
+static const size_t kText8Len = 8;
+
+void text8_from_string(std::string_view from, CustomResult out) {
+  auto buf = out.buffer();
+  if (from.size() > kText8Len || buf.size() < kText8Len) return;
+  memset(buf.data(), 0, kText8Len);
+  memcpy(buf.data(), from.data(), from.size());
+  out.set_length(kText8Len);
+}
+
+void text8_to_string(CustomArg in, StringResult out) {
+  auto data = in.value();
+  size_t n = 0;
+  while (n < data.size() && data[n] != 0) n++;
+  out.set(std::string_view(reinterpret_cast<const char *>(data.data()), n));
+}
+
+int text8_compare(CustomArg a, CustomArg b) {
+  return memcmp(a.value().data(), b.value().data(), kText8Len);
+}
+
+void text8_hex_impl(CustomArg in, StringResult out) {
+  if (in.is_null()) return out.set_null();
+  write_hex(in.value().data(), in.value().size(), out);
+}
+
+static constexpr const char kText8TypeName[] = "TEXT8";
+
+constexpr auto TEXT8 = make_type<kText8TypeName>()
+                           .persisted_length(kText8Len)
+                           .max_decode_buffer_length(kText8Len)
+                           .from_string<&text8_from_string>()
+                           .to_string<&text8_to_string>()
+                           .compare<&text8_compare>()
+                           .build();
+
 VEF_GENERATE_ENTRY_POINTS(make_extension()
+                              .type(TEXT8)
                               .func(make_func<&str_hex_impl>("str_hex")
                                         .returns(STRING)
                                         .param(STRING)
@@ -121,4 +161,13 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .returns(INT)
                                         .param(INT)
                                         .bind_and_check_types<&const_hex_bind>()
+                                        .build())
+                              .func(make_func<&text8_hex_impl>("text8_hex")
+                                        .returns(STRING)
+                                        .param(TEXT8)
+                                        .build())
+                              .func(make_func<&text8_hex_impl>("text8_hooked")
+                                        .returns(STRING)
+                                        .param(TEXT8)
+                                        .bind_and_check_types<&pass_bind>()
                                         .build()))

@@ -2214,8 +2214,7 @@ static bool CallBindTypesHook(
         arg_types[i].id == VEF_TYPE_STRING) {
       const vef_type_id param_id =
           declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
-      String *v =
-          eval_string_arg(VdfValueCharset(param_id), args[i], &const_store[i]);
+      String *v = ReadVdfValue(param_id, args[i], &const_store[i]);
       if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
@@ -2350,6 +2349,33 @@ vef_type_id InferArgTypeId(const Item *item) {
 
 const CHARSET_INFO *VdfValueCharset(vef_type_id id) {
   return id == VEF_TYPE_STRING ? &my_charset_utf8mb4_bin : &my_charset_bin;
+}
+
+String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
+  // eval_string_arg() labels a value it does not convert with the charset
+  // asked for, and that value can be a constant's own: reading a text literal
+  // as binary would leave the literal labelled binary for everything after.
+  if (id != VEF_TYPE_STRING) return arg->val_str(buffer);
+  const CHARSET_INFO *to_cs = VdfValueCharset(id);
+  // In any other charset, eval_string_arg() either returns the value as it is
+  // or converts it into buffer; only a binary value is left unconverted and
+  // relabelled.
+  if (arg->collation.collation != &my_charset_bin) {
+    return eval_string_arg(to_cs, arg, buffer);
+  }
+  // The same steps for a binary value, with the relabelled value in buffer.
+  String *res = arg->val_str(buffer);
+  if (res == nullptr) return nullptr;
+  if (!res->is_valid_string(to_cs)) {
+    report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
+    return nullptr;
+  }
+  if (res != buffer) {
+    buffer->set(res->ptr(), res->length(), to_cs);
+    return buffer;
+  }
+  res->set_charset(to_cs);
+  return res;
 }
 
 // Turns a varargs hook's answers into the expected-type array the two passes

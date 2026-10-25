@@ -93,6 +93,13 @@ ERROR HY000: Cannot initialize function 'int_const': constant FF
 SELECT vdf_sb.int_echo(0xFF) AS i;
 i
 255
+# Reading a constant for the hook leaves the constant as it was: a latin1
+# literal for a custom type is still converted to utf8mb4 for its
+# from_string, with a hook or without.
+SELECT vdf_sb.text8_hex(_latin1 0xE9) AS unhooked,
+vdf_sb.text8_hooked(_latin1 0xE9) AS hooked;
+unhooked	hooked
+C3A9000000000000	C3A9000000000000
 #
 # Test 8: the registration lists BINARY
 #
@@ -114,6 +121,11 @@ int_echo	INT	["INT"]
 str_const	STRING	["STRING"]
 str_echo	STRING	["STRING"]
 str_hex	STRING	["STRING"]
+text8_hex	STRING	["TEXT8"]
+text8_hooked	STRING	["TEXT8"]
+TEXT8::compare	INT	["TEXT8", "TEXT8"]
+TEXT8::from_string	TEXT8	["STRING"]
+TEXT8::to_string	STRING	["TEXT8"]
 #
 # Cleanup
 #

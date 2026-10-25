@@ -478,6 +478,12 @@ extern vef_type_id InferArgTypeId(const Item *item);
 // reads and returns, and binary, the bytes unconverted, for any other type.
 extern const CHARSET_INFO *VdfValueCharset(vef_type_id id);
 
+// Read arg as a VDF parameter of type `id` reads it: converted to utf8mb4 for
+// STRING, the bytes as they are for any other type. Unlike eval_string_arg(),
+// this never relabels arg's own value. Returns nullptr for NULL or on error,
+// as eval_string_arg() does.
+extern String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer);
+
 // Validate VDF arguments against function signature and convert string
 // constants to custom types where appropriate. Applies type disambiguation
 // rules to the arguments (args of the same custom type share params) to resolve

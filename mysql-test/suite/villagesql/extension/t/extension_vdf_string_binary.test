@@ -93,6 +93,12 @@ SELECT vdf_sb.int_const(0xFF);
 --echo # A constant that is not valid utf8mb4 still reaches an INT parameter.
 SELECT vdf_sb.int_echo(0xFF) AS i;
 
+--echo # Reading a constant for the hook leaves the constant as it was: a latin1
+--echo # literal for a custom type is still converted to utf8mb4 for its
+--echo # from_string, with a hook or without.
+SELECT vdf_sb.text8_hex(_latin1 0xE9) AS unhooked,
+       vdf_sb.text8_hooked(_latin1 0xE9) AS hooked;
+
 --echo #
 --echo # Test 8: the registration lists BINARY
 --echo #
