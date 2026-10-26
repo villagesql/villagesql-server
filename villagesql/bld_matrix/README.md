@@ -13,6 +13,7 @@ span lines. Pipe through `jq .` to read it.
 | `json_platforms.sh`  | The platforms built and tested on, as an array of objects.     |
 | `json_version.sh`    | The VSQL_VERSION file, parsed into a single object.            |
 | `json_docker.sh`     | The Docker images published, as an array of objects.           |
+| `json_deb.sh`        | The Debian package targets published, as an array of objects.  |
 | `json_build_matrix.sh` | The build-server matrix, one row per platform.                |
 | `json_test_extensions.sh` | The extension tests, one row per (platform, extension, abi). |
 | `json_override_extensions.sh` | Extension test rows from stdin, with a server ref's overrides applied. |
@@ -22,8 +23,8 @@ variables, and is the source of truth for them.
 
 ## Scope
 
-`json_extensions.sh`, `json_platforms.sh`, `json_version.sh`, and
-`json_docker.sh` are the data tables. They parse and shape but never select,
+`json_extensions.sh`, `json_platforms.sh`, `json_version.sh`,
+`json_docker.sh`, and `json_deb.sh` are the data tables. They parse and shape but never select,
 and each prints its whole set.
 
 The rest select and combine. They call the tables they need and take filters
