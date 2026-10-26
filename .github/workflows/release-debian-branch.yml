@@ -1,0 +1,225 @@
+name: Release Debian Branch
+
+# Builds the VillageSQL Debian packages for every distro and architecture in
+# villagesql/bld_matrix/json_deb.sh, smoke tests each set by installing it into
+# a clean container, and attaches them to an existing GitHub Release.
+#
+# Each target is built inside its own distro image by
+# villagesql/bld_tools/build_deb_docker.sh, which can be run the same way
+# outside CI. The release gets one tarball per target, holding that target's
+# .deb files, plus one tarball holding the source package (.dsc + .tar.xz).
+# The DEBs are bundled because each target produces the same file names.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git tag, branch, or SHA to build from.'
+        required: true
+        type: string
+      release_tag:
+        description: 'GitHub Release to attach artifacts to. Blank to skip upload.'
+        required: false
+        type: string
+        default: ''
+      release_build:
+        description: 'Strip the -dev suffix from the version.'
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git tag, branch, or SHA to build from (e.g. 0.0.4 or main).'
+        required: true
+        type: string
+        default: 'main'
+      release_tag:
+        description: 'GitHub Release to attach artifacts to. Leave blank to skip upload (useful for test builds — artifacts are still available for download from the Actions run page).'
+        required: false
+        type: string
+        default: ''
+      release_build:
+        description: 'Release build: strip the -dev suffix from the version. Leave unchecked to include -dev (safe default).'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # Resolve the release/-dev decision once, at workflow scope, so every job
+  # sees the same value. build_deb.sh reads it through vsql_parse_version.
+  VSQL_PRE_RELEASE_VERSION: ${{ !inputs.release_build && 'dev' || '' }}
+
+jobs:
+  # Reports what is being built and reads the target table. The report
+  # describes the commit named by 'ref' — the thing being built — which is not
+  # the branch the workflow file itself came from.
+  report-parameters:
+    name: Report Parameters
+    runs-on: ubuntu-latest
+    outputs:
+      target-matrix: ${{ steps.targets.outputs.target-matrix }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: villagesql/bld_matrix/
+          ref: ${{ inputs.ref }}
+
+      - name: Report Parameters
+        run: |
+          echo "Git Rev: ${{ inputs.ref }}"
+          echo "Git SHA1: $(git rev-parse HEAD)"
+          echo "Git Commit: $(git log -n1 --oneline)"
+          echo "Release Tag: ${{ inputs.release_tag }}"
+          echo "Release Build: ${{ inputs.release_build }}"
+          echo "Pre-release Version: '$VSQL_PRE_RELEASE_VERSION'"
+
+      # Matrix logic lives in villagesql/bld_matrix, so it can be run locally
+      # exactly as it runs here:
+      #   villagesql/bld_matrix/json_deb.sh | jq .
+      - name: Read target table
+        id: targets
+        run: |
+          TARGETS=$(villagesql/bld_matrix/json_deb.sh)
+
+          COUNT=$(jq 'length' <<<"$TARGETS")
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::json_deb.sh listed no targets. Nothing to build."
+            exit 1
+          fi
+
+          echo "target-matrix=$(jq -c '{include: .}' <<<"$TARGETS")" >> "$GITHUB_OUTPUT"
+
+  # The source package is the same for every target, so it is built once. It
+  # needs no compile, only the build dependencies dpkg-buildpackage checks for.
+  source-package:
+    name: Source Package
+    needs: report-parameters
+    runs-on: ubuntu-latest
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/output
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          path: source
+          ref: ${{ inputs.ref }}
+
+      - name: Build source package
+        run: |
+          export SOURCE_DATE_EPOCH="$(git -C source log -1 --format=%ct)"
+          source/villagesql/bld_tools/build_deb_docker.sh --source-only
+
+      - name: Bundle source package
+        id: bundle
+        run: |
+          # villagesql_0.0.8~dev.dsc -> 0.0.8-dev
+          DSC=$(basename "$(ls "$OUTPUT_DIR"/villagesql_*.dsc)")
+          VERSION=$(sed -e 's/^villagesql_//' -e 's/\.dsc$//' -e 's/~/-/' <<<"$DSC")
+          BUNDLE="villagesql-${VERSION}-deb-source.tar"
+          tar -C "$OUTPUT_DIR" -cf "$BUNDLE" \
+            $(cd "$OUTPUT_DIR" && ls *.dsc *.tar.xz)
+          tar -tvf "$BUNDLE"
+          echo "bundle=$BUNDLE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload source package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deb-source
+          path: ${{ steps.bundle.outputs.bundle }}
+
+  # One build per row of the table, each native to its architecture and run in
+  # its distro's image.
+  build:
+    name: Build (${{ matrix.distro }}-${{ matrix.arch }})
+    needs: report-parameters
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.report-parameters.outputs.target-matrix) }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE: ${{ matrix.image }}
+      OUTPUT_DIR: ${{ github.workspace }}/output
+
+    steps:
+      # A RelWithDebInfo server build plus its staged install trees does not
+      # fit in the free space a GitHub-hosted runner starts with. These are
+      # preinstalled toolchains the build never uses.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost
+          docker system prune -af
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          path: source
+          ref: ${{ inputs.ref }}
+
+      - name: Build binary packages
+        run: |
+          rm -rf "${OUTPUT_DIR:?}"
+          export SOURCE_DATE_EPOCH="$(git -C source log -1 --format=%ct)"
+          source/villagesql/bld_tools/build_deb_docker.sh --binary-only
+
+      - name: Smoke test packages
+        run: source/villagesql/bld_tools/smoke_test_debs.sh "$OUTPUT_DIR"
+
+      - name: Bundle packages
+        id: bundle
+        run: |
+          # villagesql-server_0.0.8~dev_amd64.deb -> 0.0.8-dev
+          SERVER=$(basename "$(ls "$OUTPUT_DIR"/villagesql-server_*.deb)")
+          VERSION=$(cut -d_ -f2 <<<"$SERVER" | sed 's/~/-/')
+          BUNDLE="villagesql-${VERSION}-${{ matrix.distro }}-${{ matrix.arch }}-debs.tar"
+          tar -C "$OUTPUT_DIR" -cf "$BUNDLE" $(cd "$OUTPUT_DIR" && ls *.deb)
+          tar -tvf "$BUNDLE"
+          echo "bundle=$BUNDLE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deb-${{ matrix.distro }}-${{ matrix.arch }}
+          path: ${{ steps.bundle.outputs.bundle }}
+
+  # Runs only when a release tag is given.
+  attach-release-artifacts:
+    name: Attach Release Artifacts
+    needs: [source-package, build]
+    if: inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: deb-*
+          merge-multiple: true
+          path: packages/
+
+      - name: Attach artifacts to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          ls -l packages/
+          if gh release view "$TAG" &>/dev/null; then
+            gh release upload "$TAG" packages/*.tar --clobber
+          else
+            echo "No GitHub Release found for '$TAG' — skipping upload. Download artifacts from the Actions run page."
+          fi

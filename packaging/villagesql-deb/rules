@@ -53,7 +53,12 @@ override_dh_auto_configure:
 		-DCOMPILATION_COMMENT="VillageSQL Server - GPL" \
 		-DWITH_NDB=OFF \
 		-DWITHOUT_NDBCLUSTER_STORAGE_ENGINE=1 \
-		-DWITH_ROUTER=OFF
+		-DWITH_ROUTER=OFF \
+		-DVILLAGESQL_WERROR=OFF
+# VILLAGESQL_WERROR is off because each distro builds with its own compiler,
+# and a warning new to that compiler (GCC 12 on Debian 12 arm64 flags Boost
+# Geometry with -Wmaybe-uninitialized) should not fail the package build.
+#
 # NDB Cluster and MySQL Router both default to ON in this tree. Upstream ships
 # them as separate products and so does VillageSQL, so they are off here.
 # Leaving them on costs a large amount of build time and then leaves unpackaged
@@ -88,3 +93,12 @@ override_dh_auto_install:
 	# Static archives are not shipped; the client library is shared-only.
 	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libmysqlclient.a
 	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libmysqlservices.a
+	# cmake/systemd.cmake installs units where systemd.pc says, and Debian 12's
+	# says /lib/systemd/system. Move them to /usr/lib, where the .install files
+	# expect them; with merged /usr both name the same directory.
+	if [ -d debian/tmp/lib/systemd/system ]; then \
+		mkdir -p debian/tmp/usr/lib/systemd/system; \
+		mv debian/tmp/lib/systemd/system/* debian/tmp/usr/lib/systemd/system/; \
+		rm -rf debian/tmp/lib/systemd; \
+		rmdir --ignore-fail-on-non-empty debian/tmp/lib; \
+	fi

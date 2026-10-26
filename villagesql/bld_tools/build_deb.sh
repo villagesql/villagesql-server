@@ -49,6 +49,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -f "$SOURCE_DIR/CMakeLists.txt" ]] || die "Not a source tree: $SOURCE_DIR"
+command -v dpkg-buildpackage >/dev/null || \
+    die "dpkg-buildpackage not found; this needs a Debian-family host. Use build_deb_docker.sh elsewhere."
 
 log_step "VillageSQL DEB Build"
 
@@ -213,4 +215,4 @@ find "$WORK_DIR" -maxdepth 1 \
 
 log_step "Done"
 log_info "Packages in $OUTPUT_DIR:"
-ls -1 "$OUTPUT_DIR"/*.deb | while read -r f; do log_info "  $(basename "$f")"; done
+for f in "$OUTPUT_DIR"/*; do log_info "  $(basename "$f")"; done
