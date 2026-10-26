@@ -128,9 +128,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REF: ${{ needs.collect-info.outputs.ref }}
+          TAG: ${{ needs.collect-info.outputs.tag }}
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
           set -euo pipefail
+          REF="${TAG:-$REF}"
           gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
@@ -153,9 +155,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REF: ${{ needs.collect-info.outputs.ref }}
+          TAG: ${{ needs.collect-info.outputs.tag }}
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
           set -euo pipefail
+          REF="${TAG:-$REF}"
           gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
@@ -180,9 +184,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REF: ${{ needs.collect-info.outputs.ref }}
+          TAG: ${{ needs.collect-info.outputs.tag }}
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
           set -euo pipefail
+          REF="${TAG:-$REF}"
           gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
@@ -206,9 +212,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REF: ${{ needs.collect-info.outputs.ref }}
+          TAG: ${{ needs.collect-info.outputs.tag }}
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
           set -euo pipefail
+          REF="${TAG:-$REF}"
           gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
