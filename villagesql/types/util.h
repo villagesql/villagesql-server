@@ -42,6 +42,7 @@ class Item_func;
 enum class enum_sp_type;
 class KEY;
 class KEY_CREATE_INFO;
+class KEY_PART_INFO;
 struct MEM_ROOT;
 struct ORDER;
 class sp_pcontext;
@@ -176,6 +177,15 @@ extern void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table);
 // my_error raised), false on success.
 extern bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
                                             KEY_CREATE_INFO *key_create_info);
+
+// Carry a custom index key part's profile name and extension from the old key
+// part onto out_profile and out_profile_extension (copied onto thd->mem_root),
+// so the rebuilt key part keeps its profile instead of falling back to the
+// default one. Leaves both empty when key_part has no profile. Returns true on
+// error, false on success.
+extern bool MaybeCarryCustomKeyPartProfileForRebuild(
+    THD *thd, const KEY_PART_INFO *key_part, LEX_CSTRING *out_profile,
+    LEX_CSTRING *out_profile_extension);
 
 // Clear thd->villagesql_alter_custom_fields and the alter target name stash.
 extern void ClearAlterCustomContext(THD *thd);
