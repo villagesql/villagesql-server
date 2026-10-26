@@ -1,9 +1,12 @@
-name: Extension SDK Compatibility (Reusable)
+name: Extension SDK Compatibility Suite
+run-name: Extension SDK Compatibility (${{ inputs.ref }})
 
-# Reusable workflow that builds bundled extensions against the SDK built from a
-# given ref and runs their MTR suites. Called by:
+# Builds bundled extensions against the SDK built from a given ref and runs
+# their MTR suites. Called by:
 #   - extension-compat.yml (nightly dispatch + manual workflow_dispatch)
 #   - slash-commands.yml    (/testextensions on a PR)
+# and started directly by:
+#   - nightly-dispatch.yml  (nightly, against the latest release)
 #
 # The SDK is compiled fresh from `ref` in build-server, and each extension is
 # built against that SDK artifact — so passing a PR's head SHA as `ref` tests
@@ -40,10 +43,46 @@ on:
         required: false
         type: string
         default: 'true'
+      title:
+        description: 'Name used in the Slack notification'
+        required: false
+        type: string
+        default: 'Extension SDK Compatibility'
     outputs:
       build-server-result:
         description: 'Aggregate result of the build-server matrix (success/failure/cancelled/skipped)'
         value: ${{ jobs.build-server.result }}
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit/branch/tag to build the server and SDK from'
+        required: true
+        type: string
+      platform_filter:
+        description: 'Limit to one platform (linux-x86_64, linux-aarch64, macos-arm64)'
+        required: false
+        type: string
+        default: ''
+      extension_filter:
+        description: 'Limit to one extension (e.g. vsql-ai)'
+        required: false
+        type: string
+        default: ''
+      abi_filter:
+        description: 'Limit to one ABI (stable, dev); empty means per-extension declared'
+        required: false
+        type: string
+        default: ''
+      slack_notify:
+        description: "Send Slack notification with results ('true'/'false')"
+        required: false
+        type: string
+        default: 'false'
+      title:
+        description: 'Name used in the Slack notification'
+        required: false
+        type: string
+        default: 'Extension SDK Compatibility'
 
 permissions:
   contents: read
@@ -286,7 +325,7 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "${{ steps.status.outputs.emoji }} Extension SDK Compatibility ${{ steps.status.outputs.label }}",
+              "text": "${{ steps.status.outputs.emoji }} ${{ inputs.title }} ${{ steps.status.outputs.label }}",
               "attachments": [
                 {
                   "color": "${{ steps.status.outputs.color }}",
