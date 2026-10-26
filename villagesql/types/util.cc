@@ -1783,6 +1783,27 @@ bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
   return false;
 }
 
+bool MaybeCarryCustomKeyPartProfileForRebuild(
+    THD *thd, const KEY_PART_INFO *key_part, LEX_CSTRING *out_profile,
+    LEX_CSTRING *out_profile_extension) {
+  *out_profile = {nullptr, 0};
+  *out_profile_extension = {nullptr, 0};
+  const IndexProfileDescriptor *profile = key_part->custom_index_profile;
+  if (profile == nullptr) return false;
+
+  const std::string &name = profile->profile_name();
+  const std::string &ext = profile->extension_name();
+  char *name_copy = strmake_root(thd->mem_root, name.c_str(), name.length());
+  char *ext_copy = strmake_root(thd->mem_root, ext.c_str(), ext.length());
+  if (name_copy == nullptr || ext_copy == nullptr) {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), name.length() + ext.length());
+    return true;
+  }
+  *out_profile = {name_copy, name.length()};
+  *out_profile_extension = {ext_copy, ext.length()};
+  return false;
+}
+
 void ClearAlterCustomContext(THD *thd) {
   thd->villagesql_alter_custom_fields.clear();
   thd->villagesql_alter_target_db.clear();
