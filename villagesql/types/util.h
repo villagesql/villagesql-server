@@ -39,6 +39,7 @@ struct handlerton;
 struct HA_CREATE_INFO;
 class Item;
 class Item_func;
+class Item_param;
 enum class enum_sp_type;
 class KEY;
 class KEY_CREATE_INFO;
@@ -356,6 +357,17 @@ bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item);
 bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
                                               const char *operation_name);
 
+// Cast-only counterpart of MaybeValidateAndCastCustomTypeComparison, for use
+// during resolve_type before collation aggregation. Collation aggregation can
+// relabel a string literal as binary when it is compared with a custom-typed
+// value, losing the charset its bytes are in; casting first lets the encode
+// convert the literal from its own charset. If exactly one item has a custom
+// type, the other is cast to it when eligible (see CanImplicitlyCastToCustom).
+// Reports no "cannot cast" or "incompatible types" errors; those are left to
+// MaybeValidateAndCastCustomTypeComparison. Returns true on error (e.g. a value
+// the type cannot encode), false otherwise.
+bool MaybeImplicitCastForCustomTypeComparison(Item &left, Item &right);
+
 // Get custom type context if Items have compatible custom types
 // Returns TypeContext* if one or both Items have compatible custom types
 // Returns nullptr if no custom types or if custom types are incompatible
@@ -407,16 +419,18 @@ extern FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to);
 extern type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                            Field *to_field);
 
-// Encode and store a string value into a custom type field.
-// Returns appropriate type_conversion_status for the result.
-extern type_conversion_status EncodeAndStoreStringToCustomField(
-    const String &str_value, Field *field);
+// Encode and store a string value into a custom type field during EXECUTE,
+// reading the parameter's bytes in the charset they arrived in. Returns
+// appropriate type_conversion_status for the result.
+extern type_conversion_status ParamEncodeAndStoreCustomField(
+    const Item_param *param, const String &str_value, Field *field);
 
-// Encode a string value for a custom type item (e.g. Item_param), reporting
-// errors appropriately. The TypeContext and item name are taken from the item
+// Encode a string value for a custom type parameter, reporting errors
+// appropriately. The TypeContext and item name are taken from the parameter
 // itself. Returns encoded String* on success, nullptr on error (with error
 // reported). Sets null_value to true on error.
-extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
+extern String *EncodeStringForCustomParam(Item_param *param,
+                                          const String &str_value,
                                           bool &null_value);
 
 // Store intrinsic default value for a NOT NULL custom field receiving NULL via

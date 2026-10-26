@@ -754,6 +754,27 @@ bool Item_bool_func2::resolve_type(THD *thd) {
   if (Item_bool_func::resolve_type(thd)) {
     return true;
   }
+
+  // VillageSQL: For a comparison operator, cast an eligible operand to the
+  // other operand's custom type before collation aggregation, which could
+  // otherwise relabel a string literal as binary and lose its charset.
+  // Validation errors are left to Item_func_comparison::fix_fields.
+  switch (functype()) {
+    case EQ_FUNC:
+    case EQUAL_FUNC:
+    case NE_FUNC:
+    case LT_FUNC:
+    case LE_FUNC:
+    case GE_FUNC:
+    case GT_FUNC:
+      if (villagesql::MaybeImplicitCastForCustomTypeComparison(*args[0],
+                                                               *args[1]))
+        return true;
+      break;
+    default:
+      break;
+  }
+
   /*
     See agg_item_charsets() in item.cc for comments
     on character set and collation aggregation.
@@ -5750,6 +5771,16 @@ void Item_func_in::fix_after_pullout(Query_block *parent_query_block,
 
 bool Item_func_in::resolve_type(THD *thd) {
   if (Item_func_opt_neg::resolve_type(thd)) return true;
+
+  // VillageSQL: Cast eligible list values to the predicand's custom type
+  // before collation aggregation, which could otherwise relabel a string
+  // literal as binary and lose its charset. Item_func_in::fix_fields keeps
+  // its own cast as a backstop.
+  if (const villagesql::TypeContext *custom_tc = args[0]->get_type_context()) {
+    for (uint i = 1; i < arg_count; ++i) {
+      if (villagesql::TryImplicitCastToCustom(args[i], *custom_tc)) return true;
+    }
+  }
 
   // Return value is either true or false:
   max_length = 1;
