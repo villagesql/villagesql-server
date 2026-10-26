@@ -1,0 +1,67 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, vec TVECTOR(3));
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+INSERT INTO t2 VALUES (1, '[1,2,3]');
+#
+# Test 1: a wide-charset literal compared with a custom column
+#
+# Given as bytes, because an introducer on a quoted literal labels the
+# string without encoding it. The bytes are '(1.0,2.0)' in ucs2.
+SELECT id FROM t1 WHERE val = _ucs2 0x00280031002E0030002C0032002E00300029;
+id
+1
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT id FROM t1
+WHERE val IN (_ucs2 0x00280033002E0030002C0034002E00300029);
+id
+2
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+#
+# Test 2: the same literal as a custom-typed VDF argument
+#
+SELECT vsql_complex.complex_real(
+_ucs2 0x00280031002E0030002C0032002E00300029) AS re;
+re
+1
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+#
+# Test 3: a charset that reassigns characters the grammar uses
+#
+# In swe7, 0x5B is 'A-umlaut' and 0x5D is 'A-ring', so what is written
+# is not a vector. The comparison must refuse it, as the INSERT does,
+# not match the row stored as [1,2,3]. The error renders back into
+# swe7, where those characters are again shown as brackets.
+SET NAMES swe7;
+SELECT id FROM t2 WHERE vec = '[1,2,3]';
+ERROR HY000: Incorrect TVECTOR value: '[1,2,3]'
+SET NAMES utf8mb4;
+#
+# Test 4: a wide-charset prepared-statement parameter
+#
+SET @v = _ucs2 0x00280031002E0030002C0032002E00300029;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+PREPARE p FROM 'SELECT id FROM t1 WHERE val = ?';
+EXECUTE p USING @v;
+id
+1
+DEALLOCATE PREPARE p;
+PREPARE p FROM 'SELECT vsql_complex.complex_real(?) AS re';
+EXECUTE p USING @v;
+re
+1
+DEALLOCATE PREPARE p;
+# And one already in utf8mb4
+SET @v = '(3.0,4.0)';
+PREPARE p FROM 'SELECT id FROM t1 WHERE val = ?';
+EXECUTE p USING @v;
+id
+2
+DEALLOCATE PREPARE p;
+#
+# Cleanup
+#
+DROP TABLE t1, t2;
