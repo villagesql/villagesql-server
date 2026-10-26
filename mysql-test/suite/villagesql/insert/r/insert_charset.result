@@ -1,0 +1,105 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, vec TVECTOR(3));
+#
+# Test 1: latin1 and utf8mb4, which store the same value
+#
+SET NAMES latin1;
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+SET NAMES utf8mb4;
+INSERT INTO t1 VALUES (2, '(3.0,4.0)');
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+#
+# Test 2: a wide charset is refused for the connection
+#
+# So a value can only arrive in one by being written as such.
+SET NAMES ucs2;
+ERROR 42000: Variable 'character_set_client' can't be set to the value of 'ucs2'
+#
+# Test 3: a well-formed value written in a wide charset
+#
+# Given as bytes, because an introducer on a quoted literal labels the
+# string without encoding it.
+INSERT INTO t1 VALUES (3, _ucs2 0x00280035002E0030002C0036002E00300029);
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+#
+# Test 4: the same, from a column of that charset
+#
+CREATE TABLE t3 (id INT PRIMARY KEY, txt VARCHAR(32) CHARACTER SET ucs2);
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO t3 VALUES (1, '(7.0,8.0)');
+INSERT INTO t1 SELECT id + 10, txt FROM t3;
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+11	(7,8)
+#
+# Test 5: a charset that reassigns characters the grammar uses
+#
+# swe7 is single-byte, so it is allowed for the connection, but it is
+# not ASCII-based: 0x5B is 'A-umlaut' and 0x5D is 'A-ring'. What was
+# written is not a vector, and converting makes that visible.
+#
+# The error renders back into swe7, where those characters are again
+# shown as brackets.
+SET NAMES swe7;
+INSERT INTO t2 VALUES (1, '[1,2,3]');
+ERROR HY000: Incorrect TVECTOR value: '[1,2,3]' for column 'vec' at row 1
+SET NAMES utf8mb4;
+SELECT id, vec FROM t2 ORDER BY id;
+id	vec
+#
+# Test 6: the same value through a prepared-statement parameter
+#
+# A parameter's bytes can still be labelled binary when they reach the
+# type, so the charset they arrived in is looked up separately: a
+# different route than a literal takes. It should store the same value
+# either way.
+PREPARE p FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 20;
+SET @v = _ucs2 0x00280039002E0030002C0039002E00300029;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+EXECUTE p USING @id, @v;
+# And one already in utf8mb4
+SET @id = 21;
+SET @v = '(10.0,11.0)';
+EXECUTE p USING @id, @v;
+DEALLOCATE PREPARE p;
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+11	(7,8)
+20	(9,9)
+21	(10,11)
+#
+# Test 7: the same through LOAD DATA, which reads in the file's charset
+#
+# A data file cannot be in a wide charset, so this uses swe7 as in
+# Test 5: the file's brackets are 'A-umlaut' and 'A-ring' there, and the
+# load is refused. The same bytes loaded as latin1 are a vector.
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/insert_charset.dat' INTO TABLE t2 CHARACTER SET swe7;
+ERROR HY000: Incorrect TVECTOR value: 'Ä1,2,3Å' for column 'vec' at row 1
+SELECT id, vec FROM t2 ORDER BY id;
+id	vec
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/insert_charset.dat' INTO TABLE t2 CHARACTER SET latin1;
+SELECT id, vec FROM t2 ORDER BY id;
+id	vec
+1	[1,2,3]
+#
+# Cleanup
+#
+DROP TABLE t1, t2, t3;
