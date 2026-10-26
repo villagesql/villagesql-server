@@ -472,7 +472,7 @@ else
 fi
 
 if test -z "$MYSQL_HOME"
-then 
+then
   MYSQL_HOME=$MY_BASEDIR_VERSION
 fi
 export MYSQL_HOME
@@ -578,7 +578,7 @@ then
 
     # mysqld does not add ".err" to "--log-error=foo."; it considers a
     # trailing "." as an extension
-    
+
     if expr "$err_log" : '.*\.[^/]*$' > /dev/null
     then
         :
@@ -973,13 +973,18 @@ do
     # but should work for the rest of the servers.
     # The only thing is ps x => redhat 5 gives warnings when using ps -x.
     # kill -9 is used or the process won't react on the kill.
-    numofproces=`ps xaww | grep -v "grep" | grep "$ledir/$MYSQLD\>" | grep -c "pid-file=$pid_file"`
+    # LD_PRELOAD is cleared for these ps pipelines. Under mtr with a GCC ASan
+    # build it preloads libasan, so ps runs LeakSanitizer at exit; its leak
+    # check can deadlock ps, whose signal handler mallocs while LSan holds the
+    # allocator lock, and mysqld_safe then waits forever. The backticks run in
+    # a subshell, so mysqld still gets LD_PRELOAD.
+    numofproces=`unset LD_PRELOAD; ps xaww | grep -v "grep" | grep "$ledir/$MYSQLD\>" | grep -c "pid-file=$pid_file"`
 
     log_notice "Number of processes running now: $numofproces"
     I=1
     while test "$I" -le "$numofproces"
-    do 
-      PROC=`ps xaww | grep "$ledir/$MYSQLD\>" | grep -v "grep" | grep "pid-file=$pid_file" | sed -n '$p'` 
+    do
+      PROC=`unset LD_PRELOAD; ps xaww | grep "$ledir/$MYSQLD\>" | grep -v "grep" | grep "pid-file=$pid_file" | sed -n '$p'`
 
       for T in $PROC
       do
