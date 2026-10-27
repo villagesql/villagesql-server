@@ -1,0 +1,69 @@
+# Test for memory corruption / exhaustion previously documented #1332
+
+--echo # Install vsql_simple extension
+INSTALL EXTENSION vsql_simple;
+
+--echo # Install vsql_complex extension
+INSTALL EXTENSION vsql_complex;
+
+--echo # Verify extensions installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # create table with complex column
+CREATE TABLE t (id INT, c COMPLEX);
+INSERT INTO t VALUES (1, '(5,6)');
+
+--echo # 400 COMPLEX arguments (16 bytes each):
+#SELECT ba_concat_all(c, c, c, ... /* 400 times */) FROM t;
+SELECT ba_concat_all(
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c,
+c, c, c, c, c, c, c, c, c, c
+) FROM t;
+
+--echo # Drop table with complex
+DROP table t;
+
+--echo # Uninstall the extensions
+UNINSTALL EXTENSION vsql_simple;
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Verify extensions removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
