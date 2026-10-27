@@ -39,8 +39,8 @@ INSERT INTO gis_geometrycollection VALUES
 (114,ST_GEOMFROMTEXT(@star_lines_near_vertical)),
 (115,ST_GEOMFROMTEXT(@star_collection_elems)),
 (116,ST_GEOMFROMTEXT(@star_collection_multilinestr));
-# Checking the integrity of the above create/insert statements 
-# 17 rows. 
+# Checking the integrity of the above create/insert statements
+# 17 rows.
 SELECT count(ST_ASTEXT(g) != 'NULL') FROM gis_geometrycollection;
 count(ST_ASTEXT(g) != 'NULL')
 17
