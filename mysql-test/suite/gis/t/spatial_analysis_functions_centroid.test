@@ -67,9 +67,9 @@ INSERT INTO gis_geometrycollection VALUES
  (116,ST_GEOMFROMTEXT(@star_collection_multilinestr));
 --enable_warnings
 
---echo # Checking the integrity of the above create/insert statements 
+--echo # Checking the integrity of the above create/insert statements
 
---echo # 17 rows. 
+--echo # 17 rows.
 SELECT count(ST_ASTEXT(g) != 'NULL') FROM gis_geometrycollection;
 
 --echo #####################################################################################
