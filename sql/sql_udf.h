@@ -152,6 +152,11 @@ class udf_handler {
 
   bool is_initialized() const { return m_initialized; }
 
+  // VillageSQL: Resolves a VDF's return type params from a prepared-statement
+  // parameter when fix_fields deferred them to EXECUTE; a no-op otherwise. See
+  // vdf_handler::ResolveReturnTypeParamsFromPsParam. Returns true on error.
+  bool resolve_vdf_return_type_params_from_ps_param(THD *thd);
+
   // Returns true if this is a VDF. Uses vdf_func_desc (available before
   // fix_fields) rather than m_vdf (only set after fix_fields).
   bool is_vdf() const {

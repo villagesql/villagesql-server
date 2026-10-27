@@ -1,0 +1,93 @@
+# TVECTOR::from_string(?) in a prepared statement. The parameter holds no
+# value at PREPARE, so the return type's params are inferred from the bound
+# value at each EXECUTE.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+
+--echo # INSERT
+PREPARE s FROM 'INSERT INTO t VALUES (?, TVECTOR::from_string(?))';
+SET @id = 1, @v = '[1,2,3]';
+EXECUTE s USING @id, @v;
+
+--echo # A value of another dimension is a clear cast error
+SET @id = 2, @v = '[1,2,3,4]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+--echo # The failed execution does not impact the next: the next one infers again
+SET @id = 3, @v = '[4,5,6]';
+EXECUTE s USING @id, @v;
+
+--echo # A NULL value leaves the type unresolved, as for a NULL constant
+SET @id = 4, @v = NULL;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t VALUES (4, TVECTOR::from_string(NULL));
+
+--echo # A malformed value fails the execution, as a malformed constant does
+SET @id = 5, @v = 'not a vector';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t VALUES (5, TVECTOR::from_string('not a vector'));
+DEALLOCATE PREPARE s;
+
+--echo # Multi-row VALUES: each call infers from its own parameter
+PREPARE s FROM 'INSERT INTO t VALUES (6, TVECTOR::from_string(?)),
+                                     (7, TVECTOR::from_string(?))';
+SET @v = '[1,1,1]';
+EXECUTE s USING @v, @v;
+DELETE FROM t WHERE id IN (6, 7);
+SET @v = '[7,8,9]', @w = '[10,11,12]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
+--echo # UPDATE
+PREPARE s FROM 'UPDATE t SET v = TVECTOR::from_string(?) WHERE id = ?';
+SET @v = '[0,0,1]', @id = 1;
+EXECUTE s USING @v, @id;
+DEALLOCATE PREPARE s;
+
+--echo # INSERT ... ON DUPLICATE KEY UPDATE
+PREPARE s FROM 'INSERT INTO t VALUES (3, TVECTOR::from_string(?))
+                ON DUPLICATE KEY UPDATE v = TVECTOR::from_string(?)';
+SET @v = '[0,0,0]', @w = '[3,3,3]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
+SELECT id, TVECTOR::to_string(v) FROM t ORDER BY id;
+
+--echo # SELECT: the result type follows the value, execution by execution
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo # ORDER BY over a table
+PREPARE s FROM 'SELECT id, TVECTOR::from_string(?) AS w FROM t ORDER BY id';
+SET @v = '[1,0,0]';
+EXECUTE s USING @v;
+
+--echo # After a reprepare forced by a metadata change
+ALTER TABLE t ADD COLUMN c INT;
+SET @v = '[0,1]';
+EXECUTE s USING @v;
+ALTER TABLE t DROP COLUMN c;
+DEALLOCATE PREPARE s;
+
+--echo # As VDF argument
+PREPARE s FROM 'SELECT id FROM t
+                WHERE vsql_tvector.tvector_dot_product(v,
+                        TVECTOR::from_string(?)) > 0 ORDER BY id';
+SET @v = '[1,0,0]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+SET @id = NULL, @v = NULL, @w = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;
