@@ -12199,6 +12199,11 @@ void innodb_base_col_setup_for_stored(const dict_table_t *table,
       /* Create temp tablespace if configured. */
       err = dict_build_tablespace_for_table(table, m_create_info, m_trx);
 
+      // VillageSQL: create the column store of a temporary table.
+      if (err == DB_SUCCESS) {
+        err = villagesql::innodb::Custom_column::create(table, m_trx->id);
+      }
+
       if (err == DB_SUCCESS) {
         /* Temp-table are maintained in memory and so
         can_be_evicted is false. */

@@ -1,0 +1,102 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, n STORED_INT);
+INSERT INTO t1 VALUES
+(1, 1, '10'), (2, 1, '20'), (3, 2, '10'), (4, 2, NULL), (5, 3, '30');
+CREATE TABLE t2 (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO t2 VALUES (1, '10'), (2, '40');
+#
+# In memory
+#
+SET SESSION big_tables = OFF;
+# Materialized derived table and CTE
+SELECT /*+ NO_MERGE(d) */ d.id, d.n FROM (SELECT id, n FROM t1) AS d
+ORDER BY d.id;
+id	n
+1	10
+2	20
+3	10
+4	NULL
+5	30
+WITH c AS (SELECT id, n FROM t1)
+SELECT c1.id, c1.n, c2.n FROM c AS c1 JOIN c AS c2 ON c1.id = c2.id
+ORDER BY c1.id;
+id	n	n
+1	10	10
+2	20	20
+3	10	10
+4	NULL	NULL
+5	30	30
+# A derived table joined on its column-store column: no lookup key
+SELECT /*+ NO_MERGE(d) */ t2.id, d.id
+FROM t2 JOIN (SELECT id, n FROM t1) AS d ON d.n = t2.n
+ORDER BY t2.id, d.id;
+id	id
+1	1
+1	3
+# Aggregates of a column-store column, grouped by another column
+SELECT grp, MIN(n), MAX(n), COUNT(*) FROM t1 GROUP BY grp ORDER BY grp;
+grp	MIN(n)	MAX(n)	COUNT(*)
+1	10	20	2
+2	10	10	2
+3	30	30	1
+# UNION ALL needs no key
+SELECT n FROM t1 UNION ALL SELECT n FROM t2 ORDER BY n;
+n
+NULL
+10
+10
+10
+20
+30
+40
+#
+# On disk (InnoDB intrinsic)
+#
+SET SESSION big_tables = ON;
+# Materialized derived table and CTE
+SELECT /*+ NO_MERGE(d) */ d.id, d.n FROM (SELECT id, n FROM t1) AS d
+ORDER BY d.id;
+id	n
+1	10
+2	20
+3	10
+4	NULL
+5	30
+WITH c AS (SELECT id, n FROM t1)
+SELECT c1.id, c1.n, c2.n FROM c AS c1 JOIN c AS c2 ON c1.id = c2.id
+ORDER BY c1.id;
+id	n	n
+1	10	10
+2	20	20
+3	10	10
+4	NULL	NULL
+5	30	30
+# A derived table joined on its column-store column: no lookup key
+SELECT /*+ NO_MERGE(d) */ t2.id, d.id
+FROM t2 JOIN (SELECT id, n FROM t1) AS d ON d.n = t2.n
+ORDER BY t2.id, d.id;
+id	id
+1	1
+1	3
+# Aggregates of a column-store column, grouped by another column
+SELECT grp, MIN(n), MAX(n), COUNT(*) FROM t1 GROUP BY grp ORDER BY grp;
+grp	MIN(n)	MAX(n)	COUNT(*)
+1	10	20	2
+2	10	10	2
+3	30	30	1
+# UNION ALL needs no key
+SELECT n FROM t1 UNION ALL SELECT n FROM t2 ORDER BY n;
+n
+NULL
+10
+10
+10
+20
+30
+40
+SET SESSION big_tables = DEFAULT;
+DROP TABLE t1, t2;
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -156,7 +156,8 @@ class Custom_column {
   // @param table The table being inserted into.
   // @param trx_id The transaction ID of the insert.
   // @param index_entry The clustered index entry of the new row.
-  // @param offsets Offsets for the index entry.
+  // @param offsets Buffer for the offsets of the inserted record, which are
+  // computed here.
   // @param heap Memory heap.
   // @return DB_SUCCESS or an error code.
   static dberr_t insert(dict_table_t *table, trx_id_t trx_id,
