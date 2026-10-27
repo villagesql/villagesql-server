@@ -26,6 +26,7 @@ class Item_result_field;
 class String;
 class THD;
 struct CHARSET_INFO;
+struct MEM_ROOT;
 struct udf_func;
 
 namespace villagesql {
@@ -51,6 +52,16 @@ class vdf_handler {
                   Item **arguments, String *buffers);
   // cleanup: Call postrun and reset state
   void cleanup();
+
+  // Returns true if the return type's parameters must be inferred from
+  // a prepared-statement parameters
+  bool needs_return_type_params_from_ps_param() const;
+
+  // Resolves the return type's params from a prepared-statement parameter,
+  // the way fix_fields does for a string constant. Called once per EXECUTE,
+  // after the PS parameters are bound and before the statement uses the return
+  // type. Returns true on error.
+  bool ResolveReturnTypeParamsFromPsParam(THD *thd);
 
   // Aggregate methods - called by udf_handler for aggregate VDFs
   void clear();
@@ -79,6 +90,18 @@ class vdf_handler {
   bool m_active{false};
   const villagesql::TypeContext *m_return_type_context{nullptr};
 
+  // Set by fix_fields when the return type's params must be inferred from a
+  // prepared-statement parameter, which holds no value until EXECUTE.
+  bool m_infer_return_type_params_from_ps_param{false};
+  int64_t m_max_persisted_length{0};
+  // The function's item, recorded by fix_fields so the item's type can be
+  // updated at EXECUTE.
+  Item_result_field *m_func{nullptr};
+  // The unresolved return type as fix_fields left it, saved while
+  // ResolveReturnTypeParamsFromPsParam has replaced it with a resolved one for
+  // the current execution; cleanup() puts it back. Null otherwise.
+  const villagesql::TypeContext *m_saved_return_type_context{nullptr};
+
   // Marshal arguments into m_invalues array based on declared parameter types
   void marshal_args();
 
@@ -94,12 +117,17 @@ class vdf_handler {
   // Grow m_result_buffer to hold at least `needed` bytes, rounding up to a
   // fixed quantum so a result that grows by a few bytes row-over-row does not
   // trigger a fresh allocation each time. No-op if already large enough.
-  // Returns true on allocation failure.
-  bool MaybeResizeBuffer(size_t needed);
+  // Allocates on `mem_root`, or on THR_MALLOC when it is null. Returns true on
+  // allocation failure.
+  bool MaybeResizeBuffer(size_t needed, MEM_ROOT *mem_root = nullptr);
 
   // Call the VDF's postrun function, if any, and clear user_data.
   void RunPostrun();
 };
+
+// Calls ResolveReturnTypeParamsFromPsParam on every VDF in `item_list`, a
+// prepared statement's item list. Returns true on error.
+bool MaybeResolveReturnTypeParamsFromPsParams(THD *thd, Item *item_list);
 
 }  // namespace vdf
 }  // namespace villagesql
