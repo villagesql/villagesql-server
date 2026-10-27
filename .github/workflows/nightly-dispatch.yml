@@ -46,8 +46,23 @@ jobs:
       ref: ${{ steps.resolve.outputs.ref || steps.resolve-manual.outputs.ref }}
       tag: ${{ steps.resolve.outputs.tag || steps.resolve-manual.outputs.tag }}
       workflow-branch: ${{ steps.resolve.outputs.workflow_branch || steps.resolve-manual.outputs.workflow_branch }}
+      release-tag: ${{ steps.resolve-release.outputs.tag }}
 
     steps:
+      - name: Resolve latest release
+        id: resolve-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # With no tag argument, `gh release view` returns the release marked
+          # Latest, which excludes drafts and prereleases.
+          TAG=$(gh release view --json tagName --jq .tagName)
+          echo "Latest release:  $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Resolve ref (manual run)
         if: github.event_name == 'workflow_dispatch'
         id: resolve-manual
@@ -251,6 +266,37 @@ jobs:
             -f ref="$REF" \
             -f slack_notify=true
           echo "Started extension-compat on $REF" >> "$GITHUB_STEP_SUMMARY"
+
+  # Tests extensions against the latest release, not the nightly commit, so it
+  # does not depend on the nightly having passed.
+  #
+  # This starts the suite directly rather than extension-compat.yml.
+  # extension-actions takes its nightly devserver-*/sdk-* artifacts from the
+  # latest successful extension-compat.yml run, so a release run there would
+  # hand extension repos a release build in place of nightly.
+  start-extension-compat-release:
+    if: always() && needs.collect-info.outputs.release-tag != ''
+    name: Start extension SDK compatibility (latest release)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start extension-compat-suite (latest release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.release-tag }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run extension-compat-suite.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f slack_notify=true \
+            -f title="Extension SDK Compatibility ($REF)"
+          echo "Started extension-compat-suite on $REF" >> "$GITHUB_STEP_SUMMARY"
 
   start-valgrind:
     if: always()
