@@ -136,6 +136,14 @@ bool is_deterministic_vdf(const Item *item) {
   return down_cast<const Item_udf_func *>(func)->is_vdf_deterministic();
 }
 
+void disable_custom_keys_for_query(TABLE *table, bool all) {
+  for (uint key_nr = 0; key_nr < table->s->keys; ++key_nr) {
+    if (table->key_info[key_nr].custom_index_context == nullptr) continue;
+    if (all || !(table->file->index_flags(key_nr, 0, true) & HA_READ_RANGE))
+      table->keys_in_use_for_query.clear_bit(key_nr);
+  }
+}
+
 bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
                    const Key_map *map, ha_rows select_limit, bool no_changes,
                    int *order_idx) {

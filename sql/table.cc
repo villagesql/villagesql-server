@@ -785,7 +785,14 @@ void setup_key_part_field(TABLE_SHARE *share, handler *handler_file,
     share->keys_for_keyread.set_bit(key_n);
   }
 
-  if (full_length_key_part &&
+  // A custom index that falls back to a table scan on NULL does not store NULL
+  // entries, so an ordered index scan over a nullable column would miss rows.
+  const bool custom_index_skips_null =
+      keyinfo->custom_index_context != nullptr && field->is_nullable() &&
+      (handler_file->index_flags(key_n, key_part_n, true) &
+       HA_TABLE_SCAN_ON_NULL);
+
+  if (full_length_key_part && !custom_index_skips_null &&
       (handler_file->index_flags(key_n, key_part_n, true) & HA_READ_ORDER))
     field->part_of_sortkey.set_bit(key_n);
 

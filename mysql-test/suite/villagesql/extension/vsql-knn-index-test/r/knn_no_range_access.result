@@ -1,0 +1,51 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]');
+# Equality, range and NULL predicates must not use idx_v.
+EXPLAIN SELECT * FROM t WHERE v = '[0,1,0,0]';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	FILTERED	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`v` AS `v` from `test`.`t` where (`test`.`t`.`v` = '[0,1,0,0]')
+EXPLAIN SELECT * FROM t WHERE v > '[0,1,0,0]';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	FILTERED	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`v` AS `v` from `test`.`t` where (`test`.`t`.`v` > '[0,1,0,0]')
+EXPLAIN SELECT * FROM t WHERE v IS NULL;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	FILTERED	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`v` AS `v` from `test`.`t` where (`test`.`t`.`v` is null)
+EXPLAIN SELECT * FROM t WHERE v IS NOT NULL;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	FILTERED	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`v` AS `v` from `test`.`t` where (`test`.`t`.`v` is not null)
+SELECT id FROM t WHERE v = '[0,1,0,0]';
+id
+2
+# Plain ORDER BY on the column must not use idx_v.
+EXPLAIN SELECT * FROM t ORDER BY v;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	FILTERED	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`v` AS `v` from `test`.`t` order by `test`.`t`.`v`
+# KNN ordering still uses idx_v.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 2  (cost=COST rows=ROWS)
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
