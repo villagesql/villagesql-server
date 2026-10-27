@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "scope_guard.h"
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/mysqld.h"
@@ -241,12 +242,14 @@ static bool do_init_extension_infrastructure(THD *thd) {
   const dd::cache::Dictionary_client::Auto_releaser scope_releaser(
       thd->dd_client());
 
-  if (SchemaManager::init(thd)) {
+  // Roll back on any failure below; released before the commit.
+  auto rollback_guard = create_scope_guard([thd] {
     trans_rollback_stmt(thd);
     // Full rollback in case we have THD::transaction_rollback_request.
     trans_rollback(thd);
-    return true;
-  }
+  });
+
+  if (SchemaManager::init(thd)) return true;
 
   // Repair the sys view metadata that installing the VillageSQL
   // INFORMATION_SCHEMA overrides rewrote. Best effort by design: it logs its
@@ -259,11 +262,10 @@ static bool do_init_extension_infrastructure(THD *thd) {
   // This validates manifests and cleans up orphaned expansion directories
   if (villagesql::veb::load_installed_extensions(thd)) {
     LogVSQL(ERROR_LEVEL, "Extension loading failed");
-    trans_rollback_stmt(thd);
-    trans_rollback(thd);
     return true;
   }
 
+  rollback_guard.release();
   return trans_commit_stmt(thd) || trans_commit(thd);
 }
 

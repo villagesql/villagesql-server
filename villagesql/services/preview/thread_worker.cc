@@ -29,6 +29,7 @@
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_thread.h"
+#include "scope_guard.h"
 #include "sql/mysqld.h"
 #include "sql/mysqld_thd_manager.h"
 #include "sql/protocol_classic.h"
@@ -398,12 +399,13 @@ static void on_enabled_change(const char *var_name, bool new_val) {
   // the real worker state; lifecycle_mu keeps the start/stop itself serialized.
   mysql_mutex_assert_owner(&LOCK_global_system_variables);
   mysql_mutex_unlock(&LOCK_global_system_variables);
+  auto relock = create_scope_guard(
+      [] { mysql_mutex_lock(&LOCK_global_system_variables); });
   if (new_val) {
     worker_start(state);
   } else {
     worker_stop(state);
   }
-  mysql_mutex_lock(&LOCK_global_system_variables);
 }
 
 bool on_populate_thread_worker(const PopulateContext &ctx,
