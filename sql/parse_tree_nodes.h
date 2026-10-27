@@ -1372,6 +1372,32 @@ class PT_select_var_list : public PT_into_destination {
 };
 
 /**
+  Target of RETURNING ... INTO: either a single JSON variable
+  (INTO JSON <var>; rows captured as a JSON array) or a list of scalar
+  variables (INTO v1, v2, ...; exactly one row, columns assigned positionally,
+  like SELECT ... INTO).
+
+  Unlike PT_select_var_list this does not install a Query_dumpvar into
+  lex->result: RETURNING drives its own Query_result_returning.
+*/
+class PT_returning_into : public Parse_tree_node {
+  typedef Parse_tree_node super;
+
+ public:
+  /// INTO JSON <var> target, or nullptr
+  PT_select_var *const json_var;
+  /// INTO v1, v2, ... targets, or nullptr
+  PT_select_var_list *const scalar_vars;
+
+  PT_returning_into(const POS &pos, PT_select_var *json_var_arg)
+      : super(pos), json_var(json_var_arg), scalar_vars(nullptr) {}
+  PT_returning_into(const POS &pos, PT_select_var_list *scalar_vars_arg)
+      : super(pos), json_var(nullptr), scalar_vars(scalar_vars_arg) {}
+
+  bool do_contextualize(Parse_context *pc) override;
+};
+
+/**
   Parse tree node for a single of a window extent's borders,
   cf. \<window frame extent\> in SQL 2003.
 */
@@ -1946,7 +1972,7 @@ class PT_delete final : public Parse_tree_root {
   PT_order *opt_order_clause;
   Item *opt_delete_limit_clause;
   PT_item_list *opt_returning_clause;
-  PT_select_var *opt_returning_into;
+  PT_returning_into *opt_returning_into;
   SQL_I_List<Table_ref> delete_tables;
 
  public:
@@ -1958,7 +1984,7 @@ class PT_delete final : public Parse_tree_root {
             List<String> *opt_use_partition_arg, Item *opt_where_clause_arg,
             PT_order *opt_order_clause_arg, Item *opt_delete_limit_clause_arg,
             PT_item_list *opt_returning_clause_arg,
-            PT_select_var *opt_returning_into_arg = nullptr)
+            PT_returning_into *opt_returning_into_arg = nullptr)
       : super(pos),
         m_with_clause(with_clause_arg),
         opt_hints(opt_hints_arg),
@@ -2026,7 +2052,7 @@ class PT_update : public Parse_tree_root {
   PT_order *opt_order_clause;
   Item *opt_limit_clause;
   PT_item_list *opt_returning_clause;
-  PT_select_var *opt_returning_into;
+  PT_returning_into *opt_returning_into;
 
  public:
   PT_update(const POS &pos, PT_with_clause *with_clause_arg,
@@ -2036,7 +2062,7 @@ class PT_update : public Parse_tree_root {
             PT_item_list *column_list_arg, PT_item_list *value_list_arg,
             Item *opt_where_clause_arg, PT_order *opt_order_clause_arg,
             Item *opt_limit_clause_arg, PT_item_list *opt_returning_clause_arg,
-            PT_select_var *opt_returning_into_arg = nullptr)
+            PT_returning_into *opt_returning_into_arg = nullptr)
       : super(pos),
         m_with_clause(with_clause_arg),
         opt_hints(opt_hints_arg),

@@ -1932,7 +1932,8 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <into_destination> into_destination into_clause
 
-%type <select_var_ident> select_var_ident opt_returning_into
+%type <select_var_ident> select_var_ident
+%type <returning_into> opt_returning_into
 
 %type <select_var_list> select_var_list
 
@@ -13654,13 +13655,26 @@ opt_returning_clause:
         | returning_clause
         ;
 
-// RETURNING ... INTO JSON <var>: capture the returned rows into a single
-// variable as a JSON array of row objects, rather than sending a result set.
-// The variable is a @user_var or a stored-procedure local (typically of type
-// JSON). Only meaningful together with a preceding returning_clause.
+// RETURNING ... INTO: assign the returned rows to variables rather than
+// sending a result set. Only meaningful together with a preceding
+// returning_clause.
+//   INTO JSON <var>   captures all rows into one variable as a JSON array of
+//                     row objects. The variable is a @user_var or a
+//                     stored-procedure local (typically of type JSON).
+//   INTO v1, v2, ...  scalar targets, assigned positionally like
+//                     SELECT ... INTO. Requires exactly one returned row (zero
+//                     rows raises the NOT FOUND warning, more than one raises
+//                     ER_TOO_MANY_ROWS).
 opt_returning_into:
           %empty { $$= nullptr; }
-        | INTO JSON_SYM select_var_ident { $$= $3; }
+        | INTO JSON_SYM select_var_ident
+          {
+            $$= NEW_PTN PT_returning_into(@$, $3);
+          }
+        | INTO select_var_list
+          {
+            $$= NEW_PTN PT_returning_into(@$, $2);
+          }
         ;
 
 opt_wild:

@@ -30,9 +30,11 @@
 #include "my_inttypes.h"
 #include "sql-common/json_dom.h"
 #include "sql/query_result.h"
+#include "sql/sql_list.h"
 #include "sql/sql_data_change.h"
 
 class Item;
+class PT_returning_into;
 class PT_select_var;
 class Query_block;
 class THD;
@@ -53,16 +55,25 @@ class Query_result_returning final : public Query_result_send {
   void set_fields(mem_root_deque<Item *> *fields) { m_fields = fields; }
   const mem_root_deque<Item *> &fields() const { return *m_fields; }
 
-  // Redirect this RETURNING into a single variable as a JSON array of row
-  // objects, rather than sending a result set to the client.
-  void set_into(PT_select_var *into) { m_into = into; }
+  // Redirect this RETURNING into variables rather than sending a result set to
+  // the client: either one variable receiving a JSON array of row objects
+  // (INTO JSON), or a list of scalar variables receiving the single returned
+  // row positionally (INTO v1, v2).
+  void set_into(PT_returning_into *into);
   bool into_json() const { return m_into != nullptr; }
+  bool into_scalar() const { return m_into_vars != nullptr; }
+  bool has_into() const { return into_json() || into_scalar(); }
+  // Number of target variables for INTO v1, v2 (0 for the other modes).
+  uint into_scalar_count() const {
+    return m_into_vars != nullptr ? m_into_vars->elements : 0;
+  }
+  void cleanup() override;
 
   bool send_metadata(THD *thd);
 
   // Emit the row currently in the table's record buffer.
   bool send_row(THD *thd) {
-    return into_json() ? append_row(thd) : send_data(thd, *m_fields);
+    return has_into() ? append_row(thd) : send_data(thd, *m_fields);
   }
 
   // Emit the row only if write_record() actually changed the table, as
@@ -76,7 +87,7 @@ class Query_result_returning final : public Query_result_send {
   // INTO-JSON case there is no metadata and nothing to send; the target is set
   // to an empty array by send_count_eof(row_count == 0).
   bool send_empty(THD *thd) {
-    if (into_json()) return send_count_eof(thd, 0);
+    if (has_into()) return send_count_eof(thd, 0);
     return send_metadata(thd) || send_eof(thd);
   }
 
@@ -86,17 +97,23 @@ class Query_result_returning final : public Query_result_send {
   bool send_count_eof(THD *thd, longlong row_count);
 
  private:
-  // Append the row currently in the record buffer to m_into_array as a JSON
-  // object keyed by each RETURNING item's column alias.
+  // INTO: capture the row currently in the record buffer. INTO JSON appends it
+  // to m_into_array as a JSON object keyed by each RETURNING item's column
+  // alias; INTO v1, v2 assigns its columns to the variables (one row only).
   bool append_row(THD *thd);
+  bool assign_scalars(THD *thd);
 
   // Assign m_into_array to the INTO target variable (SP-local or @user_var).
   bool assign_into(THD *thd);
 
   mem_root_deque<Item *> *m_fields{nullptr};
 
-  // RETURNING ... INTO target, or nullptr for the send-to-client case.
+  // RETURNING ... INTO JSON target, or nullptr.
   PT_select_var *m_into{nullptr};
+  // RETURNING ... INTO v1, v2 targets, or nullptr.
+  List<PT_select_var> *m_into_vars{nullptr};
+  // Rows seen by the scalar INTO (more than one is an error).
+  ulonglong m_into_rows{0};
   // Rows accumulated for the INTO-JSON case, allocated on first use. Remains
   // null (and is materialized as an empty array on assignment) when no row
   // matched.
@@ -110,7 +127,7 @@ class Query_result_returning final : public Query_result_send {
 bool prepare_returning_fields(THD *thd, Query_block *query_block,
                               mem_root_deque<Item *> *returning_fields,
                               Query_result_returning **returning_result,
-                              PT_select_var *into = nullptr);
+                              PT_returning_into *into = nullptr);
 
 // Terminate a data-change statement: when returning is non-null, close the
 // RETURNING result set reporting row_count; otherwise send a plain OK packet
