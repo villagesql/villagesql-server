@@ -39,8 +39,8 @@ INSERT INTO gis_geometrycollection VALUES
 (114,ST_GEOMFROMTEXT(@star_lines_near_vertical)),
 (115,ST_GEOMFROMTEXT(@star_collection_elems)),
 (116,ST_GEOMFROMTEXT(@star_collection_multilinestr));
-# Checking the integrity of the above create/insert statements 
-# 17 rows. 
+# Checking the integrity of the above create/insert statements
+# 17 rows.
 SELECT count(ST_ASTEXT(g) != 'NULL') FROM gis_geometrycollection;
 count(ST_ASTEXT(g) != 'NULL')
 17
@@ -115,7 +115,7 @@ ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_vertical)))
 POINT(7.5 18.75)
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_horizontal)));
 ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_horizontal)))
-POINT(9.333108739249747 15.167565043001009)
+POINT(9.33310873925 15.167565043001)
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT('MULTILINESTRING((0 0,-0.00 0),(0.0 0))')));
 ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT('MULTILINESTRING((0 0,0 5,5 5,5 0,0 0))')));

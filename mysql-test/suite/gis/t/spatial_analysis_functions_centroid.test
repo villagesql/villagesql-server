@@ -67,9 +67,9 @@ INSERT INTO gis_geometrycollection VALUES
  (116,ST_GEOMFROMTEXT(@star_collection_multilinestr));
 --enable_warnings
 
---echo # Checking the integrity of the above create/insert statements 
+--echo # Checking the integrity of the above create/insert statements
 
---echo # 17 rows. 
+--echo # 17 rows.
 SELECT count(ST_ASTEXT(g) != 'NULL') FROM gis_geometrycollection;
 
 --echo #####################################################################################
@@ -126,6 +126,7 @@ SELECT ST_ASTEXT(ST_CENTROID(g)) FROM gis_geometrycollection WHERE fid=110;
 
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_vertical)));
 
+--replace_numeric_round 12
 SELECT ST_ASTEXT(ST_CENTROID(ST_GEOMFROMTEXT(@star_lines_near_horizontal)));
 
 --error ER_GIS_INVALID_DATA
