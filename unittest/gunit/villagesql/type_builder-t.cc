@@ -204,6 +204,81 @@ TEST_F(TypeBuilderTest, ParameterizedWithHash) {
   EXPECT_NE(obj.params_init_fn, nullptr);
 }
 
+// Embedded type-operation VDFs default to SQL-callable only for
+// from_string/to_string; the other operations serve internal type wiring.
+// Embedded funcs are appended in call order.
+TEST_F(TypeBuilderTest, EmbeddedFuncSqlCallableDefaults) {
+  constexpr auto obj = vsql::make_type<kPlainName>()
+                           .persisted_length(8)
+                           .max_decode_buffer_length(64)
+                           .from_string<&plain_encode>()
+                           .to_string<&plain_decode>()
+                           .compare<&plain_compare>()
+                           .hash<&plain_hash>()
+                           .build();
+
+  EXPECT_TRUE(std::get<0>(obj.embedded_funcs).sql_callable());   // from_string
+  EXPECT_TRUE(std::get<1>(obj.embedded_funcs).sql_callable());   // to_string
+  EXPECT_FALSE(std::get<2>(obj.embedded_funcs).sql_callable());  // compare
+  EXPECT_FALSE(std::get<3>(obj.embedded_funcs).sql_callable());  // hash
+}
+
+// The optional bool argument on each type-operation method overrides the
+// default in either direction.
+TEST_F(TypeBuilderTest, EmbeddedFuncSqlCallableOverride) {
+  constexpr auto obj = vsql::make_type<kPlainName>()
+                           .persisted_length(8)
+                           .max_decode_buffer_length(64)
+                           .from_string<&plain_encode>()
+                           .to_string<&plain_decode>(/*sql_callable=*/false)
+                           .compare<&plain_compare>(/*sql_callable=*/true)
+                           .build();
+
+  EXPECT_TRUE(std::get<0>(obj.embedded_funcs).sql_callable());   // from_string
+  EXPECT_FALSE(std::get<1>(obj.embedded_funcs).sql_callable());  // to_string
+  EXPECT_TRUE(std::get<2>(obj.embedded_funcs).sql_callable());   // compare
+}
+
+struct CountState {
+  int64_t count;
+};
+
+void count_clear(CountState &state) { state.count = 0; }
+
+void count_accumulate(CountState &state, vsql::IntArg) { state.count++; }
+
+void count_result(const CountState &state, vsql::IntResult out) {
+  out.set(state.count);
+}
+
+void identity(vsql::IntArg in, vsql::IntResult out) { out.set(in.value()); }
+
+// Builder steps that return a new builder must carry sql_callable over.
+TEST_F(TypeBuilderTest, ScalarSqlCallableSurvivesLaterSteps) {
+  constexpr auto fn =
+      vsql::func_builder::make_func<&identity>("hidden_identity")
+          .sql_callable(false)
+          .returns(vsql::func_builder::INT)
+          .param(vsql::func_builder::INT)
+          .build();
+
+  EXPECT_FALSE(fn.sql_callable());
+}
+
+TEST_F(TypeBuilderTest, AggregateSqlCallableSurvivesClearAndAccumulate) {
+  constexpr auto fn =
+      vsql::func_builder::make_aggregate_func<CountState, &count_result>(
+          "hidden_count")
+          .sql_callable(false)
+          .returns(vsql::func_builder::INT)
+          .param(vsql::func_builder::INT)
+          .clear<&count_clear>()
+          .accumulate<&count_accumulate>()
+          .build();
+
+  EXPECT_FALSE(fn.sql_callable());
+}
+
 // Operations can be registered in any order after params().
 TEST_F(TypeBuilderTest, ParameterizedOperationsAnyOrder) {
   auto obj =

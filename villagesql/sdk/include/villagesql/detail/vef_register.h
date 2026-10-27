@@ -59,6 +59,15 @@ template <typename T>
 struct has_bind<T, std::void_t<decltype(std::declval<const T &>().bind())>>
     : std::true_type {};
 
+// Same idiom for sql_callable(): the legacy builder has no way to hide a VDF,
+// so its VDFs stay SQL-callable.
+template <typename T, typename = void>
+struct has_sql_callable : std::false_type {};
+template <typename T>
+struct has_sql_callable<
+    T, std::void_t<decltype(std::declval<const T &>().sql_callable())>>
+    : std::true_type {};
+
 template <typename FuncData, size_t Index>
 __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     const FuncData &func_data) {
@@ -97,6 +106,11 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     desc.bind_and_check_types = func_data.bind();
   } else {
     desc.bind_and_check_types = nullptr;
+  }
+  if constexpr (has_sql_callable<FuncData>::value) {
+    desc.hidden_from_sql = !func_data.sql_callable();
+  } else {
+    desc.hidden_from_sql = false;
   }
 
   return &desc;

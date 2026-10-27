@@ -1,0 +1,35 @@
+INSTALL EXTENSION vsql_tarray_test;
+# Visible helpers stay callable from SQL.
+CREATE TABLE t1 (val vsql_tarray_test.TARRAY(3));
+INSERT INTO t1 VALUES ('[1,2,3]');
+SELECT vsql_tarray_test.TARRAY::to_string(val) AS roundtrip FROM t1;
+roundtrip
+[1,2,3]
+# compare is hidden by default; this extension explicitly opts it in.
+SELECT vsql_tarray_test.TARRAY::compare(val, val) AS cmp FROM t1;
+cmp
+0
+# Hidden parameterized helpers are not SQL-callable.
+SELECT vsql_tarray_test.TARRAY::int_to_params(3) AS params_str;
+ERROR HY000: Type 'TARRAY' method 'int_to_params' is not SQL-callable
+SELECT vsql_tarray_test.TARRAY::resolve_params('max_size=3,type=float') AS resolved;
+ERROR HY000: Type 'TARRAY' method 'resolve_params' is not SQL-callable
+# Standalone VDFs registered with .sql_callable(false) are hidden too.
+SELECT vsql_tarray_test.tarray_dim_hidden(val) FROM t1;
+ERROR 42000: FUNCTION vsql_tarray_test.tarray_dim_hidden does not exist
+# Hidden VDFs are omitted from information_schema.
+SELECT jt.name
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
+JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
+name VARCHAR(64) PATH '$.name'
+)) AS jt
+WHERE EXTENSION_NAME = 'vsql_tarray_test'
+ORDER BY jt.name;
+name
+tarray_concat
+tarray_dim
+TARRAY::compare
+TARRAY::from_string
+TARRAY::to_string
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_tarray_test;
