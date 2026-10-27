@@ -2279,7 +2279,7 @@ static bool CallBindTypesHook(
   }
   if (out_return.actual_len > 0 && out_return_params != nullptr) {
     *out_return_params = TypeParameters::from_raw(
-        std::string(return_buf, out_return.actual_len));
+        std::string_view(return_buf, out_return.actual_len));
     const std::string validation_error = out_return_params->validation_error();
     if (!validation_error.empty()) {
       villagesql_error("Invalid inferred return parameters: %s", MYF(0),
@@ -2298,7 +2298,7 @@ static bool CallBindTypesHook(
     }
     if (out_args[i].actual_len > 0) {
       (*out_arg_params)[i] = TypeParameters::from_raw(
-          std::string(out_args[i].buf, out_args[i].actual_len));
+          std::string_view(out_args[i].buf, out_args[i].actual_len));
       const std::string validation_error =
           (*out_arg_params)[i].validation_error();
       if (!validation_error.empty()) {
