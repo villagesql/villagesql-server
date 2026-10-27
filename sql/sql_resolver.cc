@@ -114,6 +114,7 @@
 #include "sql/window.h"
 #include "template_utils.h"
 #include "thr_lock.h"  // TL_READ
+#include "villagesql/sql/optimizer.h"
 
 using std::find;
 using std::function;
@@ -1302,6 +1303,10 @@ bool Query_block::setup_tables(THD *thd, Table_ref *tables,
         !tr->opt_hints_table->update_index_hint_maps(thd, tr->table)) {
       if (tr->process_index_hints(thd, table)) return true;
     }
+    // TODO(villagesql-indexing): Support custom indexes in the hypergraph
+    // optimizer.
+    villagesql::optimizer::disable_custom_keys_for_query(
+        table, thd->lex->using_hypergraph_optimizer());
 
     if (table->part_info)  // Count number of partitioned tables
       partitioned_table_count++;
