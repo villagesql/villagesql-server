@@ -53,7 +53,10 @@ std::shared_ptr<HookList> g_hooks{std::make_shared<HookList>()};
 
 // Fast-path: number of registered hooks. on_statement_postexecute loads this
 // with acquire and returns immediately when zero, avoiding the mutex and
-// shared_ptr bump on every query when no extensions are installed.
+// shared_ptr bump on every query when no extensions are installed. Set from
+// the list size under g_mu, so a depopulate that removes nothing (e.g. the
+// rollback of an install that failed before this capability populated)
+// leaves it unchanged.
 std::atomic<size_t> g_hook_count{0};
 
 // Drain counter: incremented (seq_cst) before snapshot(), decremented
@@ -108,9 +111,9 @@ bool on_populate_statement_event(const PopulateContext &ctx,
     std::lock_guard<std::mutex> lock(g_mu);
     auto new_list = std::make_shared<HookList>(*g_hooks);
     new_list->push_back({std::string(ctx.extension_name), cc});
+    g_hook_count.store(new_list->size(), std::memory_order_release);
     g_hooks = std::move(new_list);
   }
-  g_hook_count.fetch_add(1, std::memory_order_release);
 
   LogVSQL(INFORMATION_LEVEL,
           "Registered statement event phase=%d from extension '%.*s'",
@@ -132,9 +135,9 @@ void on_depopulate_statement_event(const DepopulateContext &ctx) {
         std::remove_if(new_list->begin(), new_list->end(),
                        [&](const RegisteredHook &h) { return h.cc == cc; }),
         new_list->end());
+    g_hook_count.store(new_list->size(), std::memory_order_release);
     g_hooks = std::move(new_list);
   }
-  g_hook_count.fetch_sub(1, std::memory_order_release);
   while (g_inflight.load(std::memory_order_acquire) > 0)
     std::this_thread::yield();
 }
@@ -212,8 +215,13 @@ void on_statement_postexecute(THD *thd) {
                     ? thd->db().str
                     : nullptr;
 
-  // Warning count from the diagnostics area.
-  args.warning_count = da != nullptr ? da->last_statement_cond_count() : 0;
+  // Warnings raised by the statement, not counting its error (per the ABI).
+  // last_statement_cond_count() is only valid once a statement succeeds, so
+  // use the current count, which includes an error if it occurred.
+  if (da != nullptr) {
+    args.warning_count = da->current_statement_cond_count();
+    if (da->is_error() && args.warning_count > 0) args.warning_count--;
+  }
 
   // Digest text and hash — into stack buffers valid for this call. The hash is
   // the value performance_schema exposes as DIGEST.
