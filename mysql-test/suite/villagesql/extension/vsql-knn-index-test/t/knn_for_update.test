@@ -1,0 +1,123 @@
+# A KNN scan used by a locking read (SELECT ... FOR UPDATE).
+#
+# A locking read has no read view, so the scan must hand back the transaction
+# that inserted each entry; the server compares it with the clustered record to
+# skip stale entries before locking the row. This test checks that
+# the KNN scan returns the right rows for a locking read, that exactly those
+# rows are locked, and that a stale entry left by an update is not returned.
+#
+# A KNN scan is not used for a locking read under REPEATABLE READ, so the test
+# runs under READ COMMITTED and records the REPEATABLE READ fallback.
+
+--source include/have_binlog_format_row.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+--echo # Distances from [0,0,0,0] are 1, 3, 5 and 10: all distinct.
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[3,0,0,0]'),
+  (3, '[0,5,0,0]'),
+  (4, '[10,0,0,0]');
+
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+--connect (con1, localhost, root,,)
+--connection con1
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET SESSION innodb_lock_wait_timeout = 1;
+--connection default
+
+--echo # --- The locking read uses the KNN scan and returns the nearest rows ---
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2
+FOR UPDATE;
+
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2
+FOR UPDATE;
+
+--echo # --- Exactly the returned rows are locked ---
+--connection con1
+--error ER_LOCK_NOWAIT
+SELECT id FROM t WHERE id = 1 FOR UPDATE NOWAIT;
+--error ER_LOCK_NOWAIT
+SELECT id FROM t WHERE id = 2 FOR UPDATE NOWAIT;
+SELECT id FROM t WHERE id = 3 FOR UPDATE NOWAIT;
+SELECT id FROM t WHERE id = 4 FOR UPDATE NOWAIT;
+COMMIT;
+
+--connection default
+COMMIT;
+
+--echo # --- A row locked by another transaction blocks the locking read ---
+--connection con1
+START TRANSACTION;
+SELECT id FROM t WHERE id = 1 FOR UPDATE;
+--connection default
+START TRANSACTION;
+--error ER_LOCK_WAIT_TIMEOUT
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2
+FOR UPDATE;
+ROLLBACK;
+--echo # SKIP LOCKED skips the locked row and returns the next nearest ones.
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2
+FOR UPDATE SKIP LOCKED;
+ROLLBACK;
+--connection con1
+COMMIT;
+--connection default
+
+--echo # --- A stale entry left by an update is not returned or locked ---
+--echo # Moving id=1 far away leaves its old entry (vector [1,0,0,0]) in the
+--echo # index. A locking read must not return id=1 at the old distance (it would
+--echo # rank first) or twice; at its new distance it ranks last.
+UPDATE t SET v = '[20,0,0,0]' WHERE id = 1;
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4
+FOR UPDATE;
+COMMIT;
+
+--echo # --- A row deleted by a committed transaction is not returned ---
+DELETE FROM t WHERE id = 2;
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4
+FOR UPDATE;
+COMMIT;
+
+--echo # --- REPEATABLE READ: the KNN scan is not used for a locking read ---
+--echo # Check that the scan did not run.
+# TODO(villagesql-indexing): EXPLAIN shows the KNN scan here; it should show a
+# sort. Enable once EXPLAIN reflects the locking read.
+#--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+#EXPLAIN FORMAT=tree
+#SELECT id FROM t
+#ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2
+#FOR UPDATE;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2
+FOR UPDATE;
+COMMIT;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() = @begins AS knn_scan_not_used;
+
+--disconnect con1
+--connection default
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
