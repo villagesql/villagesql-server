@@ -1,0 +1,26 @@
+call mtr.add_suppression("Failed to load VEF extension 'reserved_phase'");
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_slow_failed_install.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+SELECT 'before_failed_install' AS marker;
+marker
+before_failed_install
+Creating extension reserved_phase using SDK...
+Created reserved_phase.veb
+INSTALL EXTENSION reserved_phase;
+ERROR HY000: Failed to load VEF extension 'reserved_phase': statement_event: phase 4 is reserved but not yet implemented
+SELECT 'after_failed_install' AS marker;
+marker
+after_failed_install
+SELECT 'failed_select' AS marker FROM no_such_table;
+ERROR 42S02: Table 'test.no_such_table' doesn't exist
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# Confirm that the live hook kept firing after the failed install
+before: 1
+after: 1
+failed select: 1
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
