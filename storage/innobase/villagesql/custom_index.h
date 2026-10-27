@@ -38,6 +38,7 @@ struct mem_block_info_t;
 typedef mem_block_info_t mem_heap_t;
 struct TABLE_SHARE;
 struct row_prebuilt_t;
+struct purge_node_t;
 struct mtr_t;
 namespace dd {
 class Index;
@@ -148,6 +149,9 @@ class Custom_index {
   // Returns true if index is a KNN custom index.
   static bool is_knn(const dict_index_t *index);
 
+  // Returns true if it is custom index entry and safe to purge.
+  static bool purge_check(const dict_index_t *index, const dtuple_t *entry);
+
   // Returns true if a scan on index must always read the clustered index.
   static bool needs_clustered_access(const dict_index_t *index);
 
@@ -190,6 +194,15 @@ class Custom_index {
   static dberr_t mark_delete(dict_index_t *index, trx_id_t trx_id,
                              const dtuple_t *entry, KeyRef key_ref,
                              bool delete_mark, bool *is_key_null);
+
+  // Removes the entry of a delete-marked row version from the extension
+  // storage, if the purge view allows it. Called by the purge system with the
+  // entry built from the undo record of node->trx_id. The entry reference is
+  // looked up in the mapping B-tree when needed, but the mapping B-tree record
+  // is left for the caller to purge. Does nothing if the entry is already gone.
+  // @param[out] is_key_null true if all the key columns of the entry are NULL
+  static dberr_t purge(dict_index_t *index, purge_node_t *node,
+                       const dtuple_t *entry, bool *is_key_null);
 
   // Returns the entry reference stored in a mapping B-tree record, or
   // EMPTY_KEY_REF if the index does not store one.

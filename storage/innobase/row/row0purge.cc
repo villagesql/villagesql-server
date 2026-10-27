@@ -66,6 +66,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -290,6 +291,8 @@ bool row_purge_poss_sec(purge_node_t *node,    /*!< in/out: row purge node */
                         dict_index_t *index,   /*!< in: secondary index */
                         const dtuple_t *entry) /*!< in: secondary index entry */
 {
+  if (villagesql::innodb::Custom_index::purge_check(index, entry)) return true;
+
   bool can_delete;
   mtr_t mtr;
 
@@ -605,6 +608,18 @@ static inline void row_purge_remove_sec_if_poss(
     index. This is possible when the undo log record was
     written before this index was created. */
     return;
+  }
+
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::is_custom(index)) {
+    bool is_key_null = false;
+    dberr_t err = Custom_index::purge(index, node, entry, &is_key_null);
+    // Failures are logged by Custom_index::purge(). Continue to purge the
+    // mapping B-tree record, if the index has one for this entry.
+    if (err != DB_SUCCESS || !index->has_mapping_btree() || is_key_null) {
+      ut_ad(err == DB_SUCCESS);
+      return;
+    }
   }
 
   if (row_purge_remove_sec_if_poss_leaf(node, index, entry)) {

@@ -44,6 +44,7 @@
 #include "storage/innobase/include/read0types.h"
 #include "storage/innobase/include/rem0rec.h"
 #include "storage/innobase/include/row0mysql.h"
+#include "storage/innobase/include/row0purge.h"
 #include "storage/innobase/include/row0row.h"
 #include "storage/innobase/include/row0sel.h"
 #include "storage/innobase/include/row0vers.h"
@@ -460,6 +461,15 @@ bool Custom_index::is_knn(const dict_index_t *index) {
   if (!is_custom(index)) return false;
   const Custom_index *custom_index = index->custom_index;
   return (flags(custom_index->index_meta().get()) & HA_SUPPORT_KNN) != 0;
+}
+
+bool Custom_index::purge_check(const dict_index_t *index, const dtuple_t *) {
+  if (!is_custom(index)) return false;
+  // Only the mapping B-tree is purged through the InnoDB B-tree purge path.
+  ut_ad(index->has_mapping_btree());
+  // The mapping B-tree always has a single entry for a cluster index record. We
+  // skip expensive cluster index lookup.
+  return true;
 }
 
 bool Custom_index::needs_clustered_access(const dict_index_t *index) {
@@ -981,6 +991,70 @@ dberr_t Custom_index::mark_delete(dict_index_t *index, trx_id_t trx_id,
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "Error marking custom index entry as deleted: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+  return DB_SUCCESS;
+}
+
+// Looks up the entry reference of an index entry in the mapping B-tree.
+// @param[out] found false if the mapping B-tree has no record for the entry
+static void lookup_key_ref(dict_index_t *index, const dtuple_t *entry,
+                           Custom_index::KeyRef *key_ref, bool *found) {
+  Mtr_guard mtr_guard;
+  mtr_t *mtr = mtr_guard.get();
+
+  btr_pcur_t pcur;
+  *found = row_search_index_entry(index, entry, BTR_SEARCH_LEAF, &pcur, mtr) ==
+           ROW_FOUND;
+  if (*found) {
+    mem_heap_t *heap = nullptr;
+    *key_ref = Custom_index::get_key_ref(index, pcur.get_rec(), &heap);
+    if (heap != nullptr) mem_heap_free(heap);
+  }
+  pcur.close();
+}
+
+dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
+                            const dtuple_t *entry, bool *is_key_null) {
+  *is_key_null = false;
+
+  Custom_index *custom_index = index->custom_index;
+  const auto &intf = custom_index->interface();
+  auto *storage_ctx = custom_index->storage_ctx();
+
+  if (!storage_ctx) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index storage context is not initialized.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
+  get_entry_columns(index, entry, key_columns, pkey_columns, is_key_null);
+
+  // NULL keys are not inserted into the mapping B-tree or the index.
+  if (index->has_mapping_btree() && *is_key_null) return DB_SUCCESS;
+
+  KeyRef key_ref = EMPTY_KEY_REF;
+  if (needs_mapping_key(index)) {
+    // No mapping record means the entry was already purged. No page latch of
+    // the mapping B-tree is held after the lookup, as scans latch the extension
+    // storage before the mapping B-tree.
+    bool found = false;
+    lookup_key_ref(index, entry, &key_ref, &found);
+    if (!found) return DB_SUCCESS;
+  }
+
+  char error_msg[ERROR_MSG_SIZE] = {};
+  bool failed = intf.purge(custom_index->index_ctx(), storage_ctx,
+                           static_cast<vef_storage_trx_ref_t>(node->trx_id),
+                           &key_ref, key_columns.data(), pkey_columns.data(),
+                           error_msg, sizeof(error_msg));
+  if (failed) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error purging custom index entry: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
