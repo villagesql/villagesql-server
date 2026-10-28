@@ -11,6 +11,8 @@ INSTALL EXTENSION vsql_test_only;
 SELECT vsql_test_only.int_sum_all(1, 2, 3) AS total;
 SELECT vsql_test_only.int_sum_all(10) AS total;
 SELECT vsql_test_only.int_sum_all(1, 2, 3, 4, 5) AS total;
+SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
+SELECT vsql_test_only.int_sum_all(NULL) AS total;
 
 # Varargs prerun rejects zero arguments
 --error ER_CANT_INITIALIZE_UDF
@@ -19,6 +21,11 @@ SELECT vsql_test_only.int_sum_all();
 # Varargs prerun rejects non-INT arguments
 --error ER_CANT_INITIALIZE_UDF
 SELECT vsql_test_only.int_sum_all(1.5);
+
+# Varargs prerun rejects string arguments
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_test_only.int_sum_all(1, 'abc');
+
 
 # Parameterized type: PVEC(N) column stores N int16 elements
 CREATE TABLE t1 (

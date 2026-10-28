@@ -684,9 +684,9 @@ void int_sum_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult result) {
     return;
   }
   for (size_t i = 0; i < args.size(); i++) {
-    if (!args.type_at(i).is_int()) {
+    if (!args.type_at(i).is_int() && !args.type_at(i).is_null()) {
       result.error("int_sum_all: argument " + std::to_string(i) +
-                   " must be INT");
+                   " must be either INT or NULL");
       return;
     }
   }
@@ -695,7 +695,8 @@ void int_sum_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult result) {
 void int_sum_all_impl(vsql::VarArgs args, vsql::IntResult out) {
   long long total = 0;
   for (auto a : args) {
-    if (!a.is_null() && a.is_int()) total += a.as_int();
+    if (a.is_null()) continue;
+    if (a.is_int()) total += a.as_int();
   }
   out.set(total);
 }

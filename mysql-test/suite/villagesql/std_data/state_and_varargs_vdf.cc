@@ -62,9 +62,8 @@ void varargs_indexed_prerun(PrerunArgs args, PrerunResult out) {
   }
   for (size_t i = 0; i < args.size(); i++) {
     auto t = args.type_at(i);
-    // Allow CUSTOM (real values) and STRING (so NULL literals — which arrive
-    // typed as STRING — also pass prerun). The body re-checks per-row.
-    if (!t.is_custom() && !t.is_str()) {
+    // Allow CUSTOM (real values) and NULL The body re-checks per-row.
+    if (!t.is_custom() && !t.is_null() && !t.is_str()) {
       out.error("varargs_indexed: argument " + std::to_string(i) +
                 " must be a CUSTOM-typed value");
       return;
