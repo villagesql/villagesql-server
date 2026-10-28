@@ -201,6 +201,13 @@ class Custom_column {
                         btr_pcur_t *pcur, upd_t *upd, ulint *offsets,
                         mem_heap_t **heap);
 
+  // Returns true if the table has extended storage columns and the update
+  // vector changes a primary key column. The clustered record is then delete
+  // marked and re-inserted, giving each extended column a new REF.
+  // @param table The table.
+  // @param upd The update vector for the clustered index.
+  static bool primary_key_changed(const dict_table_t *table, const upd_t *upd);
+
   // Marks or unmarks extended column data as deleted.
   // Used during delete operations (mark) and rollbacks (unmark).
   // @param table The table.

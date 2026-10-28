@@ -1378,6 +1378,9 @@ void row_upd_replace(dtuple_t *row, row_ext_t **ext, const dict_index_t *index,
 
   dtuple_set_info_bits(row, update->info_bits);
 
+  using villagesql::innodb::Custom_column;
+  const bool key_changed = Custom_column::primary_key_changed(table, update);
+
   for (col_no = 0; col_no < n_cols; col_no++) {
     const dict_col_t *col = table->get_col(col_no);
     const ulint clust_pos = dict_col_get_clust_pos(col, index);
@@ -1389,6 +1392,7 @@ void row_upd_replace(dtuple_t *row, row_ext_t **ext, const dict_index_t *index,
 
     dfield = dtuple_get_nth_field(row, col_no);
 
+    bool in_update = false;
     for (i = 0; i < upd_get_n_fields(update); i++) {
       const upd_field_t *upd_field = upd_get_nth_field(update, i);
 
@@ -1397,7 +1401,15 @@ void row_upd_replace(dtuple_t *row, row_ext_t **ext, const dict_index_t *index,
       }
 
       dfield_copy_data(dfield, &upd_field->new_val);
+      in_update = true;
       break;
+    }
+
+    // The column REF of an unchanged extended column is rewritten in place
+    // when the new clustered record is inserted. Give this row its own copy so
+    // the old row still carries the old REF for secondary index maintenance.
+    if (key_changed && !in_update && dfield->is_extended()) {
+      dfield_dup(dfield, heap);
     }
 
     if (dfield_is_ext(dfield) && col->ord_part) {
