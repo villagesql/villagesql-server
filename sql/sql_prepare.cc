@@ -182,6 +182,7 @@ When one supplies long data for a placeholder:
 #include "sql_string.h"
 #include "string_with_len.h"
 #include "villagesql/types/util.h"
+#include "villagesql/vdf/vdf_handler.h"
 #include "violite.h"
 
 namespace resourcegroups {
@@ -3460,6 +3461,12 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
 
   // Prepare for a new execution
   m_lex->clear_execution();
+
+  // VillageSQL: Resolve custom return types that depend on a parameter's value
+  if (m_param_count > 0 &&
+      villagesql::vdf::MaybeResolveReturnTypeParamsFromPsParams(
+          thd, m_arena.item_list()))
+    return true;
 
   if (open_cursor) {
     Query_result_send *new_result = nullptr;

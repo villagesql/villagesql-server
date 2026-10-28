@@ -4606,6 +4606,12 @@ void udf_handler::free_handler() {
   m_initialized = false;
 }
 
+bool udf_handler::resolve_vdf_return_type_params_from_ps_param(THD *thd) {
+  if (m_vdf == nullptr || !m_vdf->needs_return_type_params_from_ps_param())
+    return false;
+  return m_vdf->ResolveReturnTypeParamsFromPsParam(thd);
+}
+
 bool Item_udf_func::fix_fields(THD *thd, Item **) {
   assert(!fixed);
   assert(!thd->is_error());
