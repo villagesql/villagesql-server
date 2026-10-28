@@ -38,6 +38,19 @@
 
 --source abi_v3_test_logic.inc
 
+# A protocol 3 extension built against the stable SDK keeps receiving a
+# STRING argument in the binary charset as its bytes, even when they are not
+# valid utf8mb4, as it did when it was built.
+INSTALL EXTENSION abi_v3_test;
+SELECT NEGOTIATED_PROTOCOL FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION
+WHERE EXTENSION_NAME = 'abi_v3_test';
+SELECT abi_v3_test.test_result_kind(UNHEX('DEADBEEF')) AS result;
+CREATE TABLE t_bin (b VARBINARY(8));
+INSERT INTO t_bin VALUES (0xFF), (0xC3A9);
+SELECT HEX(b), abi_v3_test.test_result_kind(b) AS result FROM t_bin ORDER BY b;
+DROP TABLE t_bin;
+UNINSTALL EXTENSION abi_v3_test;
+
 --echo # Cleanup
 --exec rm -rf $test_dir
 --exec rm -f $veb_dir/abi_v3_test.veb

@@ -194,7 +194,7 @@ typedef enum : unsigned int {
                    //   capabilities populated, rather than the extension
                    //   running them itself inside vef_register/vef_unregister.
                    // + VEF_TYPE_BINARY: a parameter or result of raw bytes.
-                   //   A STRING argument now always arrives as utf8mb4 text,
+                   //   A STRING argument then arrives as utf8mb4 text,
                    //   converted from the caller's charset; a BINARY argument
                    //   arrives unconverted, and a BINARY result is labelled
                    //   binary rather than utf8mb4.

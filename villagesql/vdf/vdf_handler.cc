@@ -50,6 +50,13 @@ static bool is_inferrable_string_const(Item *arg) {
   return false;
 }
 
+// How a STRING argument is read: as utf8mb4 from VEF_PROTOCOL_4. An extension
+// negotiated at an older protocol was built before that, and gets the value's
+// bytes as they are.
+static vef_type_id StringReadType(vef_protocol_t protocol) {
+  return protocol >= VEF_PROTOCOL_4 ? VEF_TYPE_STRING : VEF_TYPE_BINARY;
+}
+
 // Default result-buffer size for STRING/BINARY/CUSTOM returns when the
 // extension does not declare its own buffer_size. Most JSON/text results fit in
 // 1 KiB, so this avoids a reallocation in the common case.
@@ -205,10 +212,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
-      // The parameter is STRING, so the VDF reads the constant in utf8mb4, as
-      // it will at row time.
+      // The parameter is STRING, so the constant is read as the VDF will read
+      // it at row time.
       String tmp;
-      String *val = ReadVdfValue(VEF_TYPE_STRING, arguments[0], &tmp);
+      String *val = ReadVdfValue(StringReadType(m_udf->vdf_protocol),
+                                 arguments[0], &tmp);
       if (val == nullptr && thd->is_error()) return true;
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
@@ -388,7 +396,8 @@ void vdf_handler::RunPostrun() {
 // Returns true if an argument could not be converted for the VDF; the error is
 // already reported.
 template <typename InvalueType>
-static bool marshal_args_typed(const vef_signature_t *sig, uint value_count,
+static bool marshal_args_typed(const vef_signature_t *sig,
+                               vef_protocol_t protocol, uint value_count,
                                Item **args, String *buffers,
                                InvalueType *invalues) {
   for (unsigned int i = 0; i < value_count; i++) {
@@ -418,10 +427,11 @@ static bool marshal_args_typed(const vef_signature_t *sig, uint value_count,
         break;
       }
       case VEF_TYPE_STRING: {
-        // A STRING argument is utf8mb4 text: converted from any other
-        // charset, and a binary one must already be valid utf8mb4.
-        String *arg_str =
-            villagesql::ReadVdfValue(VEF_TYPE_STRING, arg_item, &buffers[i]);
+        // From VEF_PROTOCOL_4 a STRING argument is utf8mb4 text: converted
+        // from any other charset, and a binary one must already be valid
+        // utf8mb4.
+        String *arg_str = villagesql::ReadVdfValue(StringReadType(protocol),
+                                                   arg_item, &buffers[i]);
         if (arg_str == nullptr && !arg_item->null_value) return true;
         if (arg_item->null_value || arg_str == nullptr) {
           invalues[i].is_null = true;
@@ -492,11 +502,11 @@ static bool marshal_args_typed(const vef_signature_t *sig, uint value_count,
 bool vdf_handler::marshal_args() {
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
-    return marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
-                              m_invalues);
+    return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
+                              m_args, m_buffers, m_invalues);
   }
-  return marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
-                            m_invalues_v1);
+  return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
+                            m_args, m_buffers, m_invalues_v1);
 }
 
 template <typename T>
