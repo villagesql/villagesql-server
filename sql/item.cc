@@ -6645,6 +6645,8 @@ Field *Item::make_string_field(TABLE *table) const {
   } else if (has_type_context()) {
     // VillageSQL: don't change the type to a blob if the field is a
     // custom type.
+    // TODO(villagesql-blob): allow a blob here once custom types can use
+    // blobs as their underlying storage.
     assert(get_type_context()->descriptor()->implementation_type() ==
            MYSQL_TYPE_VARCHAR);
     field = new (*THR_MALLOC) Field_varstring(

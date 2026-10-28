@@ -8771,6 +8771,11 @@ static bool prepare_blob_field(THD *thd, Create_field *sql_field,
     /* Convert long VARCHAR columns to TEXT or BLOB */
     char warn_buff[MYSQL_ERRMSG_SIZE];
 
+    // VillageSQL: install time caps a custom type's size below the blob
+    // threshold, so a custom type column never reaches this conversion.
+    // TODO(villagesql-blob): revisit once custom types can be stored as blobs.
+    assert(sql_field->custom_type_context == nullptr);
+
     if (sql_field->constant_default || thd->is_strict_mode()) {
       my_error(ER_TOO_BIG_FIELDLENGTH, MYF(0), sql_field->field_name,
                static_cast<ulong>(MAX_FIELD_VARCHARLENGTH /
