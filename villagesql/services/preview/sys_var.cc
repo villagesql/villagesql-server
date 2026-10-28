@@ -255,8 +255,8 @@ static bool sys_var_set_int(const char *component_name, const char *name,
       registered_var_type(component_name, name);
   if (!var_type.has_value() || *var_type != VEF_VAR_INT) return true;
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return true;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return true;
 
   bool result = true;
 
@@ -285,7 +285,6 @@ static bool sys_var_set_int(const char *component_name, const char *name,
     }
   }
 
-  mysql_plugin_registry_release(registry);
   return result;
 }
 

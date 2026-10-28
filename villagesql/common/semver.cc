@@ -141,7 +141,7 @@ bool parse_core_component(std::string_view version_str,
   }
 
   unsigned long value = 0;
-  auto [ptr, ec] = std::from_chars(
+  auto [_, ec] = std::from_chars(
       version_str.data(), version_str.data() + version_str.size(), value);
   if (ec != std::errc()) {
     if (error)
