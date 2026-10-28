@@ -177,7 +177,7 @@ class udf_handler {
   // BINARY), so the String returned by val_str() carries the same charset the
   // item declares. Uses the max output length the extension declared
   // (max_result_length), falling back to `default_length` (the
-  // argument-derived width the caller computed) when none is declared --
+  // argument-derived width the caller computed) when none is declared,
   // mirroring a classic UDF that does not set initid->max_length. Callable
   // before m_vdf is instantiated (uses vdf_func_desc).
   void set_vdf_string_or_binary_result_type(Item *item, uint32 default_length);

@@ -2357,9 +2357,9 @@ String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
   // as binary would leave the literal labelled binary for everything after.
   if (id != VEF_TYPE_STRING) return arg->val_str(buffer);
   const CHARSET_INFO *to_cs = VdfValueCharset(id);
-  // In any other charset, eval_string_arg() either returns the value as it is
-  // or converts it into buffer; only a binary value is left unconverted and
-  // relabelled.
+  // In any other charset, eval_string_arg() either converts the value into
+  // buffer or returns it with at most its collation changed to utf8mb4_bin;
+  // only a binary value would be relabelled to another charset.
   if (arg->collation.collation != &my_charset_bin) {
     return eval_string_arg(to_cs, arg, buffer);
   }

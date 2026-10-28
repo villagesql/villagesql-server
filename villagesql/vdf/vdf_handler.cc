@@ -215,8 +215,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
       // The parameter is STRING, so the constant is read as the VDF will read
       // it at row time.
       String tmp;
-      String *val = ReadVdfValue(StringReadType(m_udf->vdf_protocol),
-                                 arguments[0], &tmp);
+      String *val =
+          ReadVdfValue(StringReadType(m_udf->vdf_protocol), arguments[0], &tmp);
       if (val == nullptr && thd->is_error()) return true;
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
@@ -451,6 +451,7 @@ static bool marshal_args_typed(const vef_signature_t *sig,
           // A BINARY argument is the bytes as they are, never converted.
           String *arg_str =
               villagesql::ReadVdfValue(VEF_TYPE_BINARY, arg_item, &buffers[i]);
+          if (arg_str == nullptr && !arg_item->null_value) return true;
           if (arg_item->null_value || arg_str == nullptr) {
             invalues[i].is_null = true;
             invalues[i].binary_value = nullptr;
