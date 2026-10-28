@@ -65,6 +65,15 @@ class Sql_cmd_install_extension : public Sql_cmd {
         m_update_version(update_version),
         m_at_restart(at_restart) {}
 
+  explicit Sql_cmd_install_extension(const LEX_CSTRING &name,
+                                     const LEX_STRING &source,
+                                     bool update_version = false,
+                                     bool at_restart = false)
+      : m_name(name),
+        m_source(source),
+        m_update_version(update_version),
+        m_at_restart(at_restart) {}
+
   enum_sql_command sql_command_code() const override {
     return SQLCOM_INSTALL_EXTENSION;
   }
@@ -80,6 +89,7 @@ class Sql_cmd_install_extension : public Sql_cmd {
 
   LEX_CSTRING m_name;
   LEX_CSTRING m_version;
+  LEX_STRING m_source;
   bool m_update_version;
   bool m_at_restart;
 };
