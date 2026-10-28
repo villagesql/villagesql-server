@@ -2363,19 +2363,19 @@ String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
   if (arg->collation.collation != &my_charset_bin) {
     return eval_string_arg(to_cs, arg, buffer);
   }
-  // The same steps for a binary value, with the relabelled value in buffer.
-  String *res = arg->val_str(buffer);
+  // The same steps for a binary value, with the relabelled value copied into
+  // buffer. It is read into local, not buffer, because a value such as
+  // SUBSTRING()'s can be a view into the buffer it is given, which the copy
+  // would overwrite.
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> local(nullptr, 0, &my_charset_bin);
+  String *res = arg->val_str(&local);
   if (res == nullptr) return nullptr;
   if (!res->is_valid_string(to_cs)) {
     report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
     return nullptr;
   }
-  if (res != buffer) {
-    buffer->set(res->ptr(), res->length(), to_cs);
-    return buffer;
-  }
-  res->set_charset(to_cs);
-  return res;
+  if (buffer->copy(res->ptr(), res->length(), to_cs)) return nullptr;
+  return buffer;
 }
 
 // Turns a varargs hook's answers into the expected-type array the two passes

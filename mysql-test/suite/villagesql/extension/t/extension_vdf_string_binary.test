@@ -50,6 +50,15 @@ SELECT vdf_sb.str_hex(0xC3A9) AS str, vdf_sb.bin_hex(0xC3A9) AS bin;
 SELECT vdf_sb.str_hex(0xFF);
 SELECT vdf_sb.bin_hex(0xFF) AS bin;
 
+--echo # A binary value that is a view into the buffer it was read into: LPAD()
+--echo # writes into that buffer, and SUBSTRING() returns part of it.
+CREATE TABLE t3 (txt VARCHAR(8));
+INSERT INTO t3 VALUES ('abc'), ('é');
+SELECT vdf_sb.str_hex(SUBSTRING(CAST(LPAD(txt, 6, '-') AS BINARY), 2)) AS str,
+       HEX(SUBSTRING(CAST(LPAD(txt, 6, '-') AS BINARY), 2)) AS expected
+FROM t3;
+DROP TABLE t3;
+
 --echo #
 --echo # Test 4: NULL
 --echo #

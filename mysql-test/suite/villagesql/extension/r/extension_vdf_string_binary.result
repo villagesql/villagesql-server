@@ -41,6 +41,17 @@ ERROR HY000: Cannot convert string '\xFF' from binary to utf8mb4
 SELECT vdf_sb.bin_hex(0xFF) AS bin;
 bin
 FF
+# A binary value that is a view into the buffer it was read into: LPAD()
+# writes into that buffer, and SUBSTRING() returns part of it.
+CREATE TABLE t3 (txt VARCHAR(8));
+INSERT INTO t3 VALUES ('abc'), ('é');
+SELECT vdf_sb.str_hex(SUBSTRING(CAST(LPAD(txt, 6, '-') AS BINARY), 2)) AS str,
+HEX(SUBSTRING(CAST(LPAD(txt, 6, '-') AS BINARY), 2)) AS expected
+FROM t3;
+str	expected
+2D2D616263	2D2D616263
+2D2D2D2DC3A9	2D2D2D2DC3A9
+DROP TABLE t3;
 #
 # Test 4: NULL
 #
