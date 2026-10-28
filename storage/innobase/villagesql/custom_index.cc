@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "custom_column.h"
+#include "custom_index_helper_fn_name.h"
 #include "sql/dd/types/index.h"
 #include "sql/dd/types/table.h"
 #include "sql/handler.h"
@@ -423,6 +424,7 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->key_is_desc_fn = vef_index_key_is_desc_impl;
   ctx->options = nullptr;
   ctx->is_unique = dict_index_is_unique(index) ? 1 : 0;
+  ctx->helper_fn_name_fn = vef_index_helper_fn_name_impl;
 
   const auto &intf = index->custom_index->interface();
   if ((intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) != 0 ||
