@@ -343,6 +343,10 @@ template <typename P>
 struct TypeOpParamsType<size_t (*)(CustomArgWith<P>)> {
   using type = P;
 };
+template <typename P>
+struct TypeOpParamsType<void (*)(CustomArgWith<P>, RealResult)> {
+  using type = P;
+};
 
 // TODO(villagesql-general): clear function should have a vef_vdf_result_t out
 // param. Wraps void(State&) -> vef_vdf_clear_func_t
@@ -776,6 +780,21 @@ struct TypeHashVdfWrapper {
   }
 };
 
+// TypeRealValueVdfWrapper: wraps TypeRealValueFunc into a VDF.
+// VDF signature: (CUSTOM(type)) -> REAL.
+template <auto Func>
+struct TypeRealValueVdfWrapper {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    Func(CustomArg(&arg), RealResult(result));
+  }
+};
+
 // Cache-aware wrapper for parameterized types.
 
 template <auto Func>
@@ -917,6 +936,23 @@ struct TypeHashWithCacheVdfWrapper {
       result->type = VEF_RESULT_VALUE;
     }
     VDF_EXCEPTIONS_CATCH(result);
+  }
+};
+
+template <auto Func>
+struct TypeRealValueWithCacheVdfWrapper {
+  using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
+      std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
+  using P = typename ExtractDchParamsType<FirstArgStripped>::type;
+
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    Func(CustomArgWith<P>(&arg), RealResult(result));
   }
 };
 

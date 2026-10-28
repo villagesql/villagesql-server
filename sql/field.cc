@@ -6266,6 +6266,11 @@ uint32 Field_longstr::max_data_length() const {
 
 double Field_string::val_real() const {
   ASSERT_COLUMN_MARKED_FOR_READ;
+  if (has_type_context()) {
+    auto result = villagesql::TryComputeRealValue(
+        *get_type_context(), pointer_cast<const uchar *>(ptr), field_length);
+    if (result.has_value()) return *result;
+  }
   int error;
   const char *end;
   const CHARSET_INFO *cs = charset();
@@ -6647,12 +6652,16 @@ type_conversion_status Field_varstring::store(longlong nr, bool unsigned_val) {
 
 double Field_varstring::val_real() const {
   ASSERT_COLUMN_MARKED_FOR_READ;
+  const uint length = data_length();
+  if (has_type_context()) {
+    auto result = villagesql::TryComputeRealValue(*get_type_context(),
+                                                  ptr + length_bytes, length);
+    if (result.has_value()) return *result;
+  }
   int error;
   const char *end;
   double result;
   const CHARSET_INFO *cs = charset();
-
-  const uint length = data_length();
   result = my_strntod(cs, (char *)ptr + length_bytes, length, &end, &error);
 
   if ((error || (length != (uint)(end - (char *)ptr + length_bytes) &&
@@ -7198,6 +7207,12 @@ double Field_blob::val_real() const {
 
   const char *blob = pointer_cast<const char *>(get_blob_data());
   if (blob == nullptr) return 0.0;
+  if (has_type_context()) {
+    auto result = villagesql::TryComputeRealValue(
+        *get_type_context(), pointer_cast<const uchar *>(blob),
+        get_length(ptr));
+    if (result.has_value()) return *result;
+  }
 
   int not_used;
   const char *end_not_used;
@@ -10518,6 +10533,9 @@ Item_result Create_field_wrapper::result_type() const {
 }
 
 Item_result Create_field_wrapper::numeric_context_result_type() const {
+  if (has_type_context() && villagesql::HasRealValue(*get_type_context())) {
+    return REAL_RESULT;
+  }
   return ::numeric_context_result_type(type(), result_type(),
                                        m_field->decimals);
 }

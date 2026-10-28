@@ -110,6 +110,18 @@ class HashFunction {
   const vef_func_desc_t *vdf_{nullptr};
 };
 
+class RealValueFunction {
+ public:
+  explicit RealValueFunction(const vef_func_desc_t *vdf) : vdf_(vdf) {
+    assert(vdf != nullptr);
+  }
+
+  const vef_func_desc_t *vdf() const { return vdf_; }
+
+ private:
+  const vef_func_desc_t *vdf_{nullptr};
+};
+
 class IntToParamsFunction {
  public:
   explicit IntToParamsFunction(const vef_func_desc_t *vdf) : vdf_(vdf) {
