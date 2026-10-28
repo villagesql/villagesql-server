@@ -44,13 +44,18 @@ vef_keyring_result_t read_keyring(const char *data_id, const char *auth_id,
   my_h_keyring_reader_object obj = nullptr;
   if (!reader->init(data_id, auth_id, &obj) && obj != nullptr) {
     size_t key_len = 0, type_len = 0;
-    if (!reader->fetch_length(obj, &key_len, &type_len) && key_len <= buf_len) {
-      char type_buf[64];
-      size_t fetched_len = 0, fetched_type_len = 0;
-      if (!reader->fetch(obj, buf, buf_len, &fetched_len, type_buf,
-                         sizeof(type_buf), &fetched_type_len)) {
-        *out_len = fetched_len;
-        result = VEF_KEYRING_OK;
+    if (!reader->fetch_length(obj, &key_len, &type_len)) {
+      if (key_len > buf_len) {
+        *out_len = key_len;
+        result = VEF_KEYRING_BUF_TOO_SMALL;
+      } else {
+        char type_buf[64];
+        size_t fetched_len = 0, fetched_type_len = 0;
+        if (!reader->fetch(obj, buf, buf_len, &fetched_len, type_buf,
+                           sizeof(type_buf), &fetched_type_len)) {
+          *out_len = fetched_len;
+          result = VEF_KEYRING_OK;
+        }
       }
     }
     reader->deinit(obj);
