@@ -1,0 +1,176 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3), s VARCHAR(100));
+INSERT INTO t VALUES (1, '[1,2,3]', '[1,2,3]'), (2, '[4,5,6]', '[0,0,0]');
+CREATE TABLE t4 (id INT PRIMARY KEY, w TVECTOR(4));
+INSERT INTO t4 VALUES (1, '[1,2,3,4]');
+#
+# Comparisons with from_string(?)
+#
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(?)';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+id
+1
+# A value of another dimension fails at EXECUTE
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR(2) in =
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT id FROM t WHERE v IN (TVECTOR::from_string(?),
+                                              TVECTOR::from_string(?))';
+SET @v = '[1,2,3]', @w = '[4,5,6]';
+EXECUTE s USING @v, @w;
+id
+1
+2
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT id FROM t
+                WHERE v BETWEEN TVECTOR::from_string(?) AND v';
+SET @v = '[0,0,0]';
+EXECUTE s USING @v;
+id
+1
+2
+DEALLOCATE PREPARE s;
+#
+# UNION and derived tables
+#
+PREPARE s FROM 'SELECT TVECTOR::to_string(u) AS u FROM
+                  (SELECT v AS u FROM t WHERE id = 1
+                   UNION ALL SELECT TVECTOR::from_string(?)) d';
+SET @v = '[7,8,9]';
+EXECUTE s USING @v;
+u
+[1,2,3]
+[7,8,9]
+SET @v = '[7,8]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot use UNION with different custom types 'vsql_tvector.TVECTOR(3)' and 'vsql_tvector.TVECTOR(2)'
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT TVECTOR::to_string(d.x) AS d
+                FROM (SELECT TVECTOR::from_string(?) AS x) d';
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+d
+[1,2,3,4]
+DEALLOCATE PREPARE s;
+#
+# CASE
+#
+# THEN and ELSE results: a column and from_string(?)
+SELECT id, TVECTOR::to_string(CASE WHEN id = 1 THEN v
+ELSE TVECTOR::from_string('[0,0,0]') END) AS c
+FROM t ORDER BY id;
+id	c
+1	[1,2,3]
+2	[0,0,0]
+PREPARE s FROM 'SELECT id, TVECTOR::to_string(CASE WHEN id = 1 THEN v
+                                ELSE TVECTOR::from_string(?) END) AS c
+                FROM t ORDER BY id';
+SET @v = '[0,0,0]';
+EXECUTE s USING @v;
+id	c
+1	[1,2,3]
+2	[0,0,0]
+# A value of another dimension fails at EXECUTE
+SET @v = '[0,0]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare values of incompatible types 'vsql_tvector.TVECTOR(3)' and 'vsql_tvector.TVECTOR(2)'
+DEALLOCATE PREPARE s;
+# Compared with a WHEN value
+SELECT id, CASE v WHEN TVECTOR::from_string('[1,2,3]') THEN 'match'
+                  ELSE 'other' END AS c
+FROM t ORDER BY id;
+id	c
+1	match
+2	other
+PREPARE s FROM 'SELECT id, CASE v WHEN TVECTOR::from_string(?) THEN ''match''
+                                  ELSE ''other'' END AS c
+                FROM t ORDER BY id';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+id	c
+1	match
+2	other
+DEALLOCATE PREPARE s;
+#
+# Functions with a bind_and_check_types hook
+#
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TVECTOR::from_string(?)) AS d';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+d
+3
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+d
+5
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT vsql_tvector.tvector_max_element(
+                  TVECTOR::from_string(?)) AS m';
+SET @v = '[1,7,3]';
+EXECUTE s USING @v;
+m
+7
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT TVECTOR::to_string(vsql_tvector.tvector_concat(
+                  TVECTOR::from_string(?), TVECTOR::from_string(?))) AS c';
+SET @v = '[1,2]', @w = '[3,4,5]';
+EXECUTE s USING @v, @w;
+c
+[1,2,3,4,5]
+DEALLOCATE PREPARE s;
+# The hook's result compared with a column
+PREPARE s FROM 'SELECT id FROM t WHERE v = vsql_tvector.tvector_concat(
+                  TVECTOR::from_string(''[1]''), TVECTOR::from_string(?))';
+SET @v = '[2,3]';
+EXECUTE s USING @v;
+id
+1
+# A result of another dimension fails at EXECUTE
+SET @v = '[2,3,4]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR(4) in =
+DEALLOCATE PREPARE s;
+# A bare parameter: the hook reads the value when the statement is
+# prepared again
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?) AS d';
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+d
+4
+SET @v = 'not a vector';
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 is not a vector literal
+DEALLOCATE PREPARE s;
+#
+# Checks whose params are known stay at PREPARE
+#
+# Params copied from a column
+PREPARE s FROM 'SELECT t.id FROM t, t4
+                WHERE t4.w = vsql_tvector.tvector_add(t.v, t.v)';
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(4) and vsql_tvector.TVECTOR(3) in =
+# A parameter whose params come from a column
+PREPARE s FROM 'SELECT t.id FROM t, t4
+                WHERE t4.w = vsql_tvector.tvector_add(?, t.v)';
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(4) and vsql_tvector.TVECTOR(3) in =
+# Different base types
+PREPARE s FROM 'SELECT id FROM t
+                WHERE v = vsql_tvector.tvector_dim(TVECTOR::from_string(?))';
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in =
+# Arguments that disagree, both known
+PREPARE s FROM 'SELECT vsql_tvector.tvector_add(t.v, t4.w) FROM t, t4';
+ERROR HY000: Cannot initialize function 'tvector_add': conflicting type parameters for vsql_tvector.TVECTOR in arguments 1 and 2
+#
+# Params unknown for good: the error moves from PREPARE to EXECUTE
+#
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(s)';
+EXECUTE s;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR in =
+DEALLOCATE PREPARE s;
+# Without a prepared statement it fails at once, as before
+SELECT id FROM t WHERE v = TVECTOR::from_string(s);
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR in =
+SET @v = NULL, @w = NULL;
+DROP TABLE t, t4;
+UNINSTALL EXTENSION vsql_tvector;

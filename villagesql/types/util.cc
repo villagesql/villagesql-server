@@ -1026,6 +1026,19 @@ bool ParamsResolvedOnReprepare(const THD *thd) {
          !thd->stmt_arena->is_repreparing && thd->lex->has_udf();
 }
 
+// Types are compatible for the checks done while a statement is resolved. This
+// is is_compatible_with(), except that at a first PREPARE whose params are
+// worked out when the statement is prepared again (ParamsResolvedOnReprepare),
+// a type whose params are unknown also matches its own base type with any
+// params.
+static bool CompatibleWhileResolving(const TypeContext &a,
+                                     const TypeContext &b) {
+  if (a.is_compatible_with(b)) return true;
+  return (a.is_unknown() || b.is_unknown()) &&
+         a.key().descriptor_key() == b.key().descriptor_key() &&
+         ParamsResolvedOnReprepare(current_thd);
+}
+
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
   const TypeContext *accumulator_tc = accumulator->get_type_context();
   const TypeContext *item_tc = item->get_type_context();
@@ -1050,7 +1063,7 @@ bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
                      MYF(0));
     return true;
   } else if (accumulator_tc != nullptr && item_tc != nullptr &&
-             !accumulator_tc->is_compatible_with(*item_tc)) {
+             !CompatibleWhileResolving(*accumulator_tc, *item_tc)) {
     // Both have custom types but they're incompatible
     villagesql_error(
         "Cannot use UNION with different custom types '%s' and '%s'", MYF(0),
@@ -1075,7 +1088,7 @@ bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
 
   // Case 1: Both sides have custom types
   if (lhs_tc != nullptr && rhs_tc != nullptr) {
-    if (!lhs_tc->is_compatible_with(*rhs_tc)) {
+    if (!CompatibleWhileResolving(*lhs_tc, *rhs_tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        lhs_tc->qualified_name().c_str(),
                        rhs_tc->qualified_name().c_str(), operation_name);
@@ -1546,7 +1559,7 @@ static bool AllArgsCompatible(Item_func *func) {
   for (uint i = 1; any_tc && i < func->arg_count; i++) {
     auto *tc = func->get_arg(i)->get_type_context();
     if (!tc) continue;  // not yet custom-typed, skip
-    if (!any_tc->is_compatible_with(*tc)) {
+    if (!CompatibleWhileResolving(*any_tc, *tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        any_tc->qualified_name().c_str(),
                        tc->qualified_name().c_str(), func->func_name());
@@ -1603,9 +1616,10 @@ static bool CaseArgsCompatible(Item_func *func) {
       villagesql_error(ER_INCOMPARABLE_TYPES, MYF(0), func->func_name());
       return false;
     }
-    if (!tc0->is_compatible_with(*tc1)) {
-      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0), tc0->type_name().c_str(),
-                       tc1->type_name().c_str());
+    if (!CompatibleWhileResolving(*tc0, *tc1)) {
+      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0),
+                       tc0->qualified_name().c_str(),
+                       tc1->qualified_name().c_str());
       return false;
     }
   }
@@ -2065,8 +2079,10 @@ static bool ConvertVDFArguments(
           return true;
         }
         args[i]->set_type_context(resolved_tc);
-      } else {
-        // Neither the hook nor the built-in rules could supply params.
+      } else if (!ParamsResolvedOnReprepare(thd)) {
+        // Neither the hook nor the built-in rules could supply params. At a
+        // first PREPARE they may depend on a parameter value, so they are left
+        // for the statement to be prepared again.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2116,8 +2132,11 @@ static bool ConvertVDFArguments(
       }
 
       // If the resolved type is still unknown (parameterized type, no known
-      // params from other args), error.
+      // params from other args), error, unless the params may depend on a
+      // parameter value at a first PREPARE. The argument is then left as it is
+      // until the statement is prepared again.
       if (type_ctx->is_unknown()) {
+        if (ParamsResolvedOnReprepare(thd)) continue;
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2436,10 +2455,12 @@ static bool BuildVarargsExpectedTypes(
 }
 
 // Returns true if a bind_and_check_types hook would be run without what it
-// decides from: an argument that is a parameter with no value, which the hook
-// cannot read.
+// decides from: an argument of a custom type whose params are unknown, or a
+// parameter with no value, which the hook cannot read.
 static bool HookLacksArgumentInfo(uint arg_count, Item **args) {
   for (uint i = 0; i < arg_count; i++) {
+    const TypeContext *tc = args[i]->get_type_context();
+    if (tc != nullptr && tc->is_unknown()) return true;
     if (args[i]->type() == Item::PARAM_ITEM &&
         down_cast<Item_param *>(args[i])->param_state() ==
             Item_param::NO_VALUE) {

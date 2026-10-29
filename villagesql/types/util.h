@@ -508,8 +508,8 @@ extern bool ValidateAndConvertVDFArguments(
 // has no parameter values, so custom type params that depend on one, e.g.
 // those of TVECTOR::from_string(?), are unknown. Its tree is never executed:
 // each EXECUTE resolves the statement again with the values bound. So while
-// this returns true, checks that need a parameter value can wait for the
-// statement to be prepared again.
+// this returns true, unknown params are accepted, and the checks that need
+// them run when the statement is prepared again.
 extern bool ParamsResolvedOnReprepare(const THD *thd);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
