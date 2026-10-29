@@ -2881,7 +2881,7 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
     ut_ad(!index->table->is_intrinsic() || (flags & BTR_NO_UNDO_LOG_FLAG));
 
     mtr.set_log_mode(MTR_LOG_NO_REDO);
-  } else if (!dict_index_is_spatial(index)) {
+  } else if (!dict_index_no_change_buffering(index)) {
     /* Enable insert buffering if it's neither temp-table
     nor spatial index. */
     search_mode |= BTR_INSERT;
@@ -2985,7 +2985,9 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
 
   n_unique = dict_index_get_n_unique(index);
 
-  if (dict_index_is_unique(index) &&
+  // VillageSQL: Skip duplicate check for mapping B-tree for performance and
+  // to avoid unnecessary gap locks.
+  if (dict_index_is_unique(index) && !index->has_mapping_btree() &&
       (cursor.low_match >= n_unique || cursor.up_match >= n_unique)) {
     mtr_commit(&mtr);
 
@@ -3251,8 +3253,11 @@ and return. don't execute actual insert. */
 
   using villagesql::innodb::Custom_index;
   if (Custom_index::is_custom(index)) {
-    return Custom_index::insert(index, thr_get_trx(thr)->id, entry,
-                                dup_chk_only);
+    err =
+        Custom_index::insert(index, thr_get_trx(thr)->id, entry, dup_chk_only);
+    if (err != DB_SUCCESS || !index->has_mapping_btree()) {
+      return err;
+    }
   }
 
   offsets_heap = mem_heap_create(1024, UT_LOCATION_HERE);
@@ -3416,6 +3421,7 @@ columns in row.
 @return DB_SUCCESS if the set is successful */
 dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
                                      const dtuple_t *row) {
+  using villagesql::innodb::Custom_index;
   ulint n_fields;
   ulint i;
   ulint num_v = dtuple_get_n_v_fields(entry);
@@ -3438,6 +3444,10 @@ dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
       ind_field = index->get_field(i);
       col = ind_field->col;
       ut_ad(!col->is_instant_dropped());
+    }
+
+    if (Custom_index::is_extra_field(index, i)) {
+      continue;
     }
 
     if (col->is_virtual()) {

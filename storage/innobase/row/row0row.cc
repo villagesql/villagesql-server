@@ -57,10 +57,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0mem.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 dtuple_t *row_build_index_entry_low(const dtuple_t *row, const row_ext_t *ext,
                                     const dict_index_t *index, mem_heap_t *heap,
                                     ulint flag) {
+  using villagesql::innodb::Custom_index;
   dtuple_t *entry;
   ulint entry_len;
   ulint i;
@@ -114,6 +116,10 @@ dtuple_t *row_build_index_entry_low(const dtuple_t *row, const row_ext_t *ext,
       dfield = dtuple_get_nth_field(entry, i);
     }
     static_assert(DATA_MISSING == 0, "DATA_MISSING != 0");
+
+    if (Custom_index::set_extra_field(index, i, dfield, heap)) {
+      continue;
+    }
 
     if (col->is_virtual()) {
       const dict_v_col_t *v_col = reinterpret_cast<const dict_v_col_t *>(col);
@@ -985,7 +991,7 @@ enum row_search_result row_search_index_entry(
       ut_o(break);
 
     case BTR_CUR_DELETE_REF:
-      ut_a(mode & BTR_DELETE && !dict_index_is_spatial(index));
+      ut_a(mode & BTR_DELETE && !dict_index_no_change_buffering(index));
       return (ROW_NOT_DELETED_REF);
 
     case BTR_CUR_DEL_MARK_IBUF:
