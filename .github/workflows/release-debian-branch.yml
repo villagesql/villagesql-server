@@ -11,6 +11,13 @@ name: Release Debian Branch
 # The DEBs are bundled because each target produces the same file names.
 
 on:
+  # TEMP: for testing this branch; drop before merging. A push has no inputs,
+  # so they all read as empty: ref is blank, which checks out the pushed
+  # commit; release_tag is blank, so nothing is uploaded (the packages stay on
+  # the run page); release_build is false, so the version keeps -dev.
+  push:
+    branches:
+      - leeca/release-debian
   workflow_call:
     inputs:
       ref:
