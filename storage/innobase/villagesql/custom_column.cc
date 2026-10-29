@@ -14,6 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 #include "custom_column.h"
+#include "custom_index.h"
 
 #include <unordered_set>
 
@@ -89,7 +90,9 @@ Custom_column::Info Custom_column::get_from_field(const dict_field_t *field) {
 
 Custom_column::Info Custom_column::get_from_position(const dict_index_t *index,
                                                      size_t position) {
-  if (dict_index_is_ibuf(index)) return {nullptr, true};
+  if (dict_index_is_ibuf(index) || index->has_mapping_btree()) {
+    return {nullptr, true};
+  }
   return get_from_field(index->get_field(position));
 }
 
@@ -270,6 +273,8 @@ void Custom_column::load_all(dict_table_t *table) {
     Custom_column::load(table, col, field, dd_col);
     ++col_index;
   }
+
+  Custom_index::load_all(table, dd_table, &ts);
 
   // Clean up the TABLE_SHARE and TABLE.
   release_uncached_table(&ts, &td);

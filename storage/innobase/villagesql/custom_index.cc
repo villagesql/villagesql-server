@@ -21,10 +21,14 @@
 #include <cstdio>
 #include <memory>
 #include <new>
+#include <string>
 #include <vector>
 
 #include "custom_column.h"
+#include "sql/dd/types/index.h"
+#include "sql/dd/types/table.h"
 #include "sql/handler.h"
+#include "sql/table.h"
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
@@ -33,6 +37,7 @@
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "storage/innobase/include/univ.i"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
@@ -361,8 +366,22 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->options = nullptr;
+  ctx->is_unique = dict_index_is_unique(index) ? 1 : 0;
 
   const auto &intf = index->custom_index->interface();
+  if ((intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) != 0 ||
+      (intf.storage_props & VEF_INDEX_STORAGE_REF_LOOKUP) != 0) {
+    // Map the index key to the primary key and index record reference.
+    index->set_mapping_btree();
+  }
+
+  if ((intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) != 0) {
+    // Column references uniquely identify the index entry. Mark the mapping
+    // B-tree as unique.
+    ut_ad(index->has_mapping_btree());
+    index->type |= DICT_UNIQUE;
+    index->n_uniq = index->n_user_defined_cols;
+  }
 
   // Column reference conversion is only meaningful for an index type that
   // stores column references in its entries.
@@ -389,6 +408,59 @@ bool Custom_index::is_knn(const dict_index_t *index) {
 
 const vef_type_index_intf_t &Custom_index::interface() const {
   return index_meta()->descriptor()->intf();
+}
+
+uint32_t Custom_index::n_extra_fields(const dict_index_t *index) {
+  if (!is_custom(index)) return 0;
+
+  const vef_type_index_intf_t &intf = index->custom_index->interface();
+  return (intf.storage_props & VEF_INDEX_STORAGE_REF_LOOKUP) ? 1 : 0;
+}
+
+bool Custom_index::is_extra_field(const dict_index_t *index, ulint pos) {
+  const ulint n_fields = dict_index_get_n_fields(index);
+  if (pos >= n_fields) return false;
+
+  const ulint n_extra = n_extra_fields(index);
+  if (n_extra == 0 || pos + n_extra < n_fields) return false;
+
+  // Extra fields are appended after all other fields of the index.
+  ut_ad(index->has_mapping_btree());
+  return true;
+}
+
+bool Custom_index::set_extra_field(const dict_index_t *index, ulint pos,
+                                   dfield_t *dfield, mem_heap_t *heap) {
+  if (!is_extra_field(index, pos)) return false;
+
+  dfield->reset();
+  index->get_field(pos)->col->copy_type(dfield_get_type(dfield));
+
+  byte *data = static_cast<byte *>(mem_heap_zalloc(heap, sizeof(KeyRef)));
+  dfield_set_data(dfield, data, sizeof(KeyRef));
+
+  return true;
+}
+
+void Custom_index::add_extra_fields(dict_index_t *new_index,
+                                    const dict_index_t *index) {
+  const uint32_t n_extra = n_extra_fields(index);
+  ut_a(n_extra <= MAX_EXTRA_FIELDS);
+  for (uint32_t i = 0; i < n_extra; i++) {
+    const std::string name = "INDEX_KEY_REF_" + std::to_string(i + 1);
+    new_index->add_field(mem_heap_strdup(new_index->heap, name.c_str()), 0,
+                         true);
+    dict_field_t *field = new_index->get_field(new_index->n_def - 1);
+    field->fixed_len = sizeof(vef_storage_col_ref_t);
+
+    dict_col_t *col = static_cast<dict_col_t *>(
+        mem_heap_alloc(new_index->heap, sizeof(dict_col_t)));
+    dict_mem_fill_column_struct(col, 0, DATA_INT, DATA_NOT_NULL | DATA_UNSIGNED,
+                                sizeof(vef_storage_col_ref_t), true,
+                                UINT32_UNDEFINED, UINT8_UNDEFINED,
+                                UINT8_UNDEFINED);
+    field->col = col;
+  }
 }
 
 ulong Custom_index::flags(const IndexContext *meta) {
@@ -501,6 +573,12 @@ dberr_t Custom_index::load(dict_index_t *new_index,
   // means the index was already created and needs to be loaded.
   if (!custom_index->copy_storage_ref(old_custom_index)) return DB_SUCCESS;
 
+  return load_storage(new_index);
+}
+
+dberr_t Custom_index::load_storage(dict_index_t *new_index) {
+  Custom_index *custom_index = new_index->custom_index;
+
   auto arena_alloc = [](vef_storage_arena_t *actx, uint32_t sz) -> void * {
     return mem_heap_zalloc(reinterpret_cast<mem_heap_t *>(actx), sz);
   };
@@ -523,10 +601,75 @@ dberr_t Custom_index::load(dict_index_t *new_index,
         << "Error loading custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
+  ut_ad(new_index->page == FIL_NULL || new_index->has_mapping_btree());
 
   storage->ref = custom_index->storage_ref();
   custom_index->set_storage_ctx(storage);
   return DB_SUCCESS;
+}
+
+// Recomputes fixed_len of custom column fields, as dict_index_add_col() does.
+static void fix_index_fields(dict_index_t *index) {
+  const dict_table_t *table = index->table;
+  for (uint i = 0; i < index->n_def; i++) {
+    dict_field_t *field = index->get_field(i);
+    if (field->col->custom_column == nullptr) continue;
+
+    field->fixed_len = static_cast<unsigned int>(
+        field->col->get_fixed_size(dict_table_is_comp(table)));
+
+    if (field->prefix_len && field->fixed_len > field->prefix_len) {
+      field->fixed_len = (unsigned int)field->prefix_len;
+    }
+
+    if (field->fixed_len > DICT_MAX_FIXED_COL_LEN) {
+      field->fixed_len = 0;
+    }
+  }
+}
+
+void Custom_index::load_all(dict_table_t *table, const dd::Table *dd_table,
+                            const TABLE_SHARE *ts) {
+  fix_index_fields(table->first_index());
+
+  // Same key_info[] to DD index mapping as dd_fill_dict_index().
+  const uint dd_offset = (ts->primary_key == MAX_KEY) ? 1 : 0;
+  for (uint k = 0; k < ts->keys; k++) {
+    const KEY *key = &ts->key_info[k];
+    if (key->custom_index_context == nullptr) continue;
+
+    const dd::Index *dd_index = dd_table->indexes()[k + dd_offset];
+    dict_index_t *index = const_cast<dict_index_t *>(
+        dd_find_index(table, const_cast<dd::Index *>(dd_index)));
+    if (index == nullptr || is_custom(index)) continue;
+
+    auto old_size = mem_heap_get_size(index->heap);
+
+    fix_index_fields(index);
+    dberr_t err = attach(index, key->custom_index_context, dd_index);
+    for (uint i = 0; err == DB_SUCCESS && i < key->user_defined_key_parts;
+         i++) {
+      err = add_profile(index, key->key_part[i].custom_index_profile, i);
+    }
+    if (err == DB_SUCCESS) err = init_index_ctx(index);
+    // Load only if the index storage was already created.
+    if (err == DB_SUCCESS && index->custom_index->storage_ref_initialized_) {
+      err = load_storage(index);
+    }
+
+    // Heap grew after the index was added to the dictionary cache.
+    auto new_size = mem_heap_get_size(index->heap);
+    dict_sys_mutex_enter();
+    dict_sys->size += new_size - old_size;
+    dict_sys_mutex_exit();
+
+    if (err != DB_SUCCESS) {
+      LogVSQL(WARNING_LEVEL,
+              "Cannot load custom index '%s' for table '%s' during recovery",
+              index->name(), table->name.m_name);
+      ut_ad(false);
+    }
+  }
 }
 
 dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
@@ -535,8 +678,8 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
   index->page = FIL_NULL;
   index->trx_id = trx_id;
 
-  dberr_t init_err = init_index_ctx(index);
-  if (init_err != DB_SUCCESS) return init_err;
+  // Custom index must already have been initialized by ::load
+  ut_ad(index->custom_index->index_ctx());
 
   auto arena_alloc = [](vef_storage_arena_t *actx, uint32_t sz) -> void * {
     return mem_heap_zalloc(reinterpret_cast<mem_heap_t *>(actx), sz);
@@ -568,7 +711,6 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
         << "Error creating custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
-
   index->custom_index->set_storage_ctx(storage);
   return DB_SUCCESS;
 }
@@ -638,7 +780,7 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
   // between num_key_columns (all PK columns overlap) and num_key_columns +
   // num_pk_columns (no overlap).
   ut_a(entry->n_fields >= num_key_columns);
-  ut_a(entry->n_fields <= num_key_columns + num_pk_columns);
+  ut_a(entry->n_fields <= num_key_columns + num_pk_columns + MAX_EXTRA_FIELDS);
 
   const dict_index_t *clust_index = index->table->first_index();
   ut_a(clust_index != nullptr);
@@ -678,9 +820,16 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
     return DB_VILLAGESQL_ERROR;
   }
 
-  if (intf.storage_props & VEF_INDEX_STORAGE_REF_LOOKUP) {
-    // TODO(villagesql-indexing): Persist key_ref once mark_delete()/purge()
-    // are implemented for Custom_index and need it to relocate this entry.
+  const uint32_t n_extra = n_extra_fields(index);
+  if (n_extra > 0) {
+    ut_a(entry->n_fields > n_extra);
+    uint32_t key_ref_pos = entry->n_fields - n_extra;
+    dfield_t *key_ref_field = dtuple_get_nth_field(entry, key_ref_pos);
+
+    ut_a(!dfield_is_null(key_ref_field));
+    ut_a(dfield_get_len(key_ref_field) == sizeof(KeyRef));
+    mach_write_to_8(static_cast<byte *>(dfield_get_data(key_ref_field)),
+                    key_ref);
   }
   return DB_SUCCESS;
 }

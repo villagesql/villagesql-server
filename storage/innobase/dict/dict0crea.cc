@@ -418,7 +418,10 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
   }
 
   if (villagesql::innodb::Custom_index::is_custom(index)) {
-    return villagesql::innodb::Custom_index::create(index, trx->id);
+    dberr_t err = villagesql::innodb::Custom_index::create(index, trx->id);
+    if (err != DB_SUCCESS || !index->has_mapping_btree()) {
+      return err;
+    }
   }
 
   mtr_start(&mtr);

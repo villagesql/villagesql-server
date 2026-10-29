@@ -397,6 +397,8 @@ class Index {
 
   explicit Index(const vef_index_ctx_t *ctx) : ctx_(ctx) {}
 
+  bool is_unique() const { return ctx_->is_unique != 0; }
+
   uint32_t get_num_key_cols() const { return ctx_->num_key_columns; }
 
   uint32_t get_max_col_len(uint32_t key_pos) const {

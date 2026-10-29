@@ -1147,6 +1147,9 @@ struct dict_index_t {
   /** true if the index is clustered index and table has row versions */
   unsigned row_versions : 1;
 
+  /** true if the custom index has a mapping B-tree */
+  unsigned mapping_btree : 1;
+
   /** spatial reference id */
   uint32_t srid;
 
@@ -1157,10 +1160,7 @@ struct dict_index_t {
    */
   std::unique_ptr<dd::Spatial_reference_system> rtr_srs;
 
-  // Owned per-index runtime state (client-managed IndexContext reference, ABI
-  // index context, extension storage handle) for a custom index. Allocated on
-  // this index's heap by Custom_index::create() and destroyed by
-  // dict_mem_index_free().
+  // Custom index context.
   villagesql::innodb::Custom_index *custom_index{nullptr};
 
 #ifdef UNIV_DEBUG
@@ -1363,6 +1363,13 @@ struct dict_index_t {
   /** Check whether index belongs to a table having row versions
   @return true if table has row versions, otherwise false */
   bool has_row_versions() const { return (row_versions); }
+
+  /** Check whether index has a mapping B-tree
+  @return true if index has a mapping B-tree, otherwise false */
+  bool has_mapping_btree() const { return (mapping_btree); }
+
+  /** Mark index as having a mapping B-tree */
+  void set_mapping_btree() { mapping_btree = true; }
 
   /** check if either instant or versioned.
   @return true if table has row versions or instant cols, otherwise false */

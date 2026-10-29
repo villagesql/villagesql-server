@@ -165,6 +165,9 @@ typedef struct {
   // Number of primary key columns
   uint32_t num_primary_key_columns;
 
+  // 1 if custom index is unique, 0 otherwise.
+  uint8_t is_unique;
+
   // Index profile function call interface. Always non-NULL.
   vef_index_profile_fn profile_fn;
 

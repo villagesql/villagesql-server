@@ -122,7 +122,7 @@ static inline bool ibuf_should_try(
 {
   return (innodb_change_buffering != IBUF_USE_NONE && ibuf->max_size != 0 &&
           index->space != dict_sys_t::s_dict_space_id &&
-          !index->is_clustered() && !dict_index_is_spatial(index) &&
+          !index->is_clustered() && !dict_index_no_change_buffering(index) &&
           !dict_index_has_desc(index) &&
           index->table->quiesce == QUIESCE_NONE &&
           (ignore_sec_unique || !dict_index_is_unique(index)) &&

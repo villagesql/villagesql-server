@@ -17768,6 +17768,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
   ut_a(ib_table->stat_initialized);
 
   const dict_index_t *pk = UT_LIST_GET_FIRST(ib_table->indexes);
+  using villagesql::innodb::Custom_index;
 
   for (uint i = 0; i < table->s->keys; i++) {
     ulong j;
@@ -17792,7 +17793,9 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     Thus, we can't calculate pct_cached below because we need
     dict_index_t::stat_n_leaf_pages for that. See
     dict_stats_should_ignore_index(). */
-    if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL)) {
+    if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL) ||
+        Custom_index::is_custom(index)) {
+      // TODO(villagesql-indexing): Add statistics for custom indexes.
       pct_cached = IN_MEMORY_ESTIMATE_UNKNOWN;
     } else {
       pct_cached = index_pct_cached(index);
@@ -17805,7 +17808,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     }
 
     if (flag & HA_STATUS_CONST) {
-      if (!key->supports_records_per_key()) {
+      if (!key->supports_records_per_key() || Custom_index::is_custom(index)) {
         continue;
       }
 
