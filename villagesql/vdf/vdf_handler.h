@@ -22,6 +22,7 @@
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
 class Item;
+class Item_param;
 class Item_result_field;
 class String;
 class THD;
@@ -102,6 +103,15 @@ class vdf_handler {
   // Call the VDF's postrun function, if any, and clear user_data.
   void RunPostrun();
 };
+
+// Every EXECUTE of a prepared statement that calls a VDF prepares the
+// statement again. Each new parameter in `to` gets only the type of the bound
+// value from the matching one in `from` before the statement is resolved, and
+// the value itself only after. If the statement, whose parsed items start at
+// `item_list`, calls a VDF, this copies string values as well, so that
+// resolving can read them, e.g. to infer the params of TVECTOR::from_string(?).
+void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
+                                  Item_param *const *from, uint count);
 
 }  // namespace vdf
 }  // namespace villagesql

@@ -25,6 +25,7 @@
 #include "sql/derror.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
+#include "sql/item_sum.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_udf.h"
@@ -38,11 +39,18 @@ namespace vdf {
 
 // Returns true when `arg` is an input the from_string-inference path can
 // safely pre-execute at fix_fields time: a constant-for-execution Item whose
-// val_str() has no side effects. Today this covers string literals and
-// read-only user variables (e.g. @v after `SET @v = '[...]'`).
+// val_str() has no side effects. Today this covers string literals, read-only
+// user variables (e.g. @v after `SET @v = '[...]'`) and prepared-statement
+// parameters holding a string. A parameter has no value at PREPARE, but every
+// EXECUTE of a statement calling a VDF prepares it again with the values bound
+// (see MaybeCopyPsParamStringValues).
 static bool is_inferrable_string_const(Item *arg) {
   if (!arg->const_for_execution()) return false;
   if (arg->type() == Item::STRING_ITEM) return true;
+  if (arg->type() == Item::PARAM_ITEM) {
+    return down_cast<Item_param *>(arg)->param_state() ==
+           Item_param::STRING_VALUE;
+  }
   if (arg->type() == Item::FUNC_ITEM &&
       down_cast<Item_func *>(arg)->functype() == Item_func::GUSERVAR_FUNC) {
     return true;
@@ -195,10 +203,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   // return TypeContext. The VDF re-runs at row time on the original argument,
   // this time with known params, and encodes normally.
   //
-  // "String const" here covers string literals and user variables — anything
-  // is_inferrable_string_const() accepts. Only a STRING parameter is
-  // pre-executed: the constant is read as utf8mb4 text, which would change or
-  // reject the bytes meant for a parameter of any other type.
+  // "String const" here covers string literals, user variables and string
+  // prepared-statement parameters, i.e. anything is_inferrable_string_const()
+  // accepts. Only a STRING parameter is pre-executed: the constant is read as
+  // utf8mb4 text, which would change or reject the bytes meant for a parameter
+  // of any other type.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
   if (signature != nullptr && return_params.empty() &&
@@ -704,6 +713,36 @@ String *vdf_handler::val_str(String *str, String *save_str,
       return nullptr;
   }
   return nullptr;
+}
+
+// Returns true if any of the parsed items starting at `item_list` is a VDF
+// call, scalar or aggregate.
+static bool CallsVdf(Item *item_list) {
+  for (Item *item = item_list; item != nullptr; item = item->next_free) {
+    if (item->type() == Item::FUNC_ITEM &&
+        down_cast<Item_func *>(item)->functype() == Item_func::UDF_FUNC &&
+        down_cast<Item_udf_func *>(item)->is_vdf()) {
+      return true;
+    }
+    if (item->type() == Item::SUM_FUNC_ITEM &&
+        down_cast<Item_sum *>(item)->sum_func() == Item_sum::UDF_SUM_FUNC &&
+        down_cast<Item_udf_sum *>(item)->is_vdf()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
+                                  Item_param *const *from, uint count) {
+  if (!CallsVdf(item_list)) return;
+  for (uint i = 0; i < count; i++) {
+    if (from[i]->param_state() != Item_param::STRING_VALUE) continue;
+    // str_value_ptr is what val_str() returns. Here it owns its copy; when the
+    // reprepare later moves the bound values over, the copy goes to the old
+    // parameter and is freed with it.
+    to[i]->str_value_ptr.copy(from[i]->str_value_ptr);
+  }
 }
 
 }  // namespace vdf
