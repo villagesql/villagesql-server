@@ -72,11 +72,16 @@ EXECUTE stmt5 USING @vec;
 DEALLOCATE PREPARE stmt5;
 
 --echo #
---echo # Test 6: nothing supplies the dimension, so the statement is rejected
+--echo # Test 6: nothing supplies the dimension, so the statement is rejected.
+--echo # PREPARE has no values and leaves that to EXECUTE, which prepares the
+--echo # statement again with them.
 --echo #
 
---error ER_VILLAGESQL_GENERIC_ERROR
 PREPARE stmt6 FROM 'SELECT tvector_dot_product(?, ?)';
+SET @vec = '[1,2,3]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE stmt6 USING @vec, @vec;
+DEALLOCATE PREPARE stmt6;
 
 --echo #
 --echo # Test 7: a string constant does not supply it either, with or
@@ -85,8 +90,10 @@ PREPARE stmt6 FROM 'SELECT tvector_dot_product(?, ?)';
 
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT tvector_dot_product('[1,2,3]', '[4,5,6]') AS dp;
---error ER_VILLAGESQL_GENERIC_ERROR
 PREPARE stmt7 FROM 'SELECT tvector_dot_product(''[1,2,3]'', ?) AS dp';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE stmt7 USING @vec;
+DEALLOCATE PREPARE stmt7;
 
 --echo #
 --echo # Cleanup
