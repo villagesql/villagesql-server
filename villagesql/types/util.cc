@@ -1264,16 +1264,22 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
   // a pointer to the data (skipping the length prefix). But to->field_ptr()
   // returns the start of the field including the length prefix area, so we must
   // manually encode the length prefix.
-  // TODO(villagesql-blob): needs update for blob implementation.
   assert(from->get_type_context()->is_compatible_with(*to->get_type_context()));
   assert(from->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
+  const size_t data_len = from->data_length();
+  const uchar *from_data = from->data_ptr();
+
+  if (to->type() == MYSQL_TYPE_BLOB) {
+    down_cast<Field_blob *>(to)->store(reinterpret_cast<const char *>(from_data),
+                                      data_len, from->charset());
+    return;
+  }
+
   assert(to->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
-  const size_t data_len = from->data_length();
   const uint32 to_length_bytes =
       down_cast<const Field_varstring *>(to)->get_length_bytes();
-  const uchar *from_data = from->data_ptr();
   uchar *to_ptr = to->field_ptr();
 
   // Write length prefix (1 or 2 bytes) to destination
