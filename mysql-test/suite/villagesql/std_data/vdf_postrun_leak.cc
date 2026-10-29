@@ -20,7 +20,9 @@
 // (forced via the vdf_fail_after_prerun DBUG point), postrun must still run to
 // free that state. live_state_count() reports the balance so the test can
 // assert it returns to zero. error_probe's prerun reports an error, so its
-// postrun must not run.
+// postrun must not run. hooked_probe adds a bind_and_check_types hook, whose
+// calls bind_count() reports, so a prepared statement can show when the hook,
+// prerun and postrun run.
 
 #include <villagesql/vsql.h>
 
@@ -32,6 +34,7 @@ using namespace vsql;
 static std::atomic<long long> g_live_state_count{0};
 static std::atomic<long long> g_prerun_count{0};
 static std::atomic<long long> g_postrun_count{0};
+static std::atomic<long long> g_bind_count{0};
 
 struct LeakState {
   long long n = 0;
@@ -67,9 +70,22 @@ void error_probe(IntResult out) { out.set(0); }
 
 void error_probe_postrun(PostrunArgs) { g_postrun_count.fetch_add(1); }
 
+void hooked_probe_bind(BindArgs, BindResult) { g_bind_count.fetch_add(1); }
+
+void hooked_probe(LeakState &state, StringArg s, StringResult out) {
+  state.n++;
+  auto out_buf = out.buffer();
+  const std::string_view v = s.is_null() ? std::string_view{} : s.value();
+  int len =
+      snprintf(reinterpret_cast<char *>(out_buf.data()), out_buf.size(),
+               "%lld:%.*s", state.n, static_cast<int>(v.size()), v.data());
+  out.set_length(static_cast<size_t>(len));
+}
+
 void live_state_count(IntResult out) { out.set(g_live_state_count.load()); }
 void prerun_count(IntResult out) { out.set(g_prerun_count.load()); }
 void postrun_count(IntResult out) { out.set(g_postrun_count.load()); }
+void bind_count(IntResult out) { out.set(g_bind_count.load()); }
 
 VEF_GENERATE_ENTRY_POINTS(
     make_extension()
@@ -85,6 +101,13 @@ VEF_GENERATE_ENTRY_POINTS(
                   .prerun<&error_probe_prerun>()
                   .postrun<&error_probe_postrun>()
                   .build())
+        .func(make_func<&hooked_probe>("hooked_probe")
+                  .returns(STRING)
+                  .param(STRING)
+                  .bind_and_check_types<&hooked_probe_bind>()
+                  .prerun<&leak_probe_prerun>()
+                  .postrun<&leak_probe_postrun>()
+                  .build())
         .func(make_func<&live_state_count>("live_state_count")
                   .returns(INT)
                   .no_params()
@@ -94,6 +117,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .build())
         .func(make_func<&postrun_count>("postrun_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&bind_count>("bind_count")
                   .returns(INT)
                   .no_params()
                   .build()))

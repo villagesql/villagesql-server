@@ -492,13 +492,23 @@ extern String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer);
 // return type (inferred from args via the rule that the return parameters are
 // the same as those matching arguements of the same abstract type).
 // When a bind_and_check_types hook is provided, that hook replaces the
-// otherwise automatically applied type disambiguation rules. Returns false on
-// success, true on error.
+// otherwise automatically applied type disambiguation rules. Sets
+// *out_bind_hook_postponed when the bind hook could not be run yet (see
+// IsFirstPrepareBeforeReprepare); the call is then left unchecked and the
+// return params unknown. Returns false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
     uint arg_count, Item **args, const vef_signature_t *signature,
     TypeParameters *out_return_params,
-    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx);
+    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
+    bool *out_bind_hook_postponed);
+
+// Returns true at the first PREPARE of a statement that is prepared again at
+// every EXECUTE, which is any statement calling a UDF or VDF. Such a PREPARE
+// has no parameter values, so custom type params that depend on one, e.g.
+// those of TVECTOR::from_string(?), are unknown. Each EXECUTE resolves the
+// statement again with the values bound.
+extern bool IsFirstPrepareBeforeReprepare(const THD *thd);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.
