@@ -1047,8 +1047,8 @@ dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
   }
 
   char error_msg[ERROR_MSG_SIZE] = {};
-  bool failed = intf.purge(custom_index->index_ctx(), storage_ctx,
-                           static_cast<vef_storage_trx_ref_t>(node->trx_id),
+  auto trx_ref = static_cast<vef_storage_trx_ref_t>(node->modifier_trx_id);
+  bool failed = intf.purge(custom_index->index_ctx(), storage_ctx, trx_ref,
                            &key_ref, key_columns.data(), pkey_columns.data(),
                            error_msg, sizeof(error_msg));
   if (failed) {
