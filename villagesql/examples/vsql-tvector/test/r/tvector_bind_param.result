@@ -54,6 +54,23 @@ EXECUTE s USING @a, @b, @c;
 c
 [4,5,6,1,2,3,9]
 DEALLOCATE PREPARE s;
+# Nested: the inner call's result is an argument of the outer call
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(?,
+                  vsql_tvector.tvector_concat_all(?, v, ?), ?) AS c FROM t';
+SET @a = '[4]', @b = '[5,6]', @c = '[9]', @d = '[0,0]';
+EXECUTE s USING @a, @b, @c, @d;
+c
+[4,5,6,1,2,3,9,0,0]
+DEALLOCATE PREPARE s;
+# Nested, with no parameter among the outer call's own arguments: the
+# inner call's result has unknown params until EXECUTE
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(
+                  vsql_tvector.tvector_concat_all(?, ?), v) AS c FROM t';
+SET @a = '[4]', @b = '[5,6]';
+EXECUTE s USING @a, @b;
+c
+[4,5,6,1,2,3]
+DEALLOCATE PREPARE s;
 DROP TABLE t;
 SET @v = NULL, @a = NULL, @b = NULL, @c = NULL, @d = NULL;
 UNINSTALL EXTENSION vsql_tvector;
