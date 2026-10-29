@@ -32,7 +32,8 @@ files in `villagesql/sdk/include/villagesql/*.h` NOT including the subdirectory
 
 - **Fluent builder pattern**: `make_extension()`, `.function()`, `.type()`
 - **Typed argument and result wrappers**: `IntArg`, `RealArg`, `StringArg`,
-  `CustomArg`, `IntResult`, `RealResult`, `StringResult`, `CustomResult`
+  `BinaryArg`, `CustomArg`, `IntResult`, `RealResult`, `StringResult`,
+  `BinaryResult`, `CustomResult`
 - **Automatic protocol awareness**: `VEF_GENERATE_ENTRY_POINTS` sets the max
   protocol the extension will negotiate
 - **Lifecycle hooks**: `.prerun()`, `.postrun()` for per-query setup/teardown
