@@ -116,6 +116,17 @@ id	d
 6	8
 7	11
 DEALLOCATE PREPARE s;
+# Two parameters, each call infers from its own value
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dot_product(
+                  TVECTOR::from_string(?), TVECTOR::from_string(?)) AS d';
+SET @v = '[1,2]', @w = '[3,4]';
+EXECUTE s USING @v, @w;
+d
+11
+SET @w = '[3,4,5]';
+EXECUTE s USING @v, @w;
+ERROR HY000: Cannot initialize function 'tvector_dot_product': conflicting type parameters for vsql_tvector.TVECTOR in arguments 1 and 2
+DEALLOCATE PREPARE s;
 # A non-string value is not inferred from, as for from_string(5)
 PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
 SET @i = 5;

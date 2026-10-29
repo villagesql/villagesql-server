@@ -1,0 +1,163 @@
+# Checks that need TVECTOR params which come from a prepared-statement
+# parameter ('?') value. The first PREPARE has no values, so those
+# PS params are unknown there and the checks that need them are deferred.
+# Every EXECUTE of a statement calling a VDF prepares it again with the
+# values bound, and the deferred checks run then.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3), s VARCHAR(100));
+INSERT INTO t VALUES (1, '[1,2,3]', '[1,2,3]'), (2, '[4,5,6]', '[0,0,0]');
+CREATE TABLE t4 (id INT PRIMARY KEY, w TVECTOR(4));
+INSERT INTO t4 VALUES (1, '[1,2,3,4]');
+
+--echo #
+--echo # Comparisons with from_string(?)
+--echo #
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(?)';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+--echo # A value of another dimension fails at EXECUTE
+SET @v = '[1,2]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT id FROM t WHERE v IN (TVECTOR::from_string(?),
+                                              TVECTOR::from_string(?))';
+SET @v = '[1,2,3]', @w = '[4,5,6]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT id FROM t
+                WHERE v BETWEEN TVECTOR::from_string(?) AND v';
+SET @v = '[0,0,0]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # UNION and derived tables
+--echo #
+PREPARE s FROM 'SELECT TVECTOR::to_string(u) AS u FROM
+                  (SELECT v AS u FROM t WHERE id = 1
+                   UNION ALL SELECT TVECTOR::from_string(?)) d';
+SET @v = '[7,8,9]';
+EXECUTE s USING @v;
+SET @v = '[7,8]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT TVECTOR::to_string(d.x) AS d
+                FROM (SELECT TVECTOR::from_string(?) AS x) d';
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # CASE
+--echo #
+--echo # THEN and ELSE results: a column and from_string(?)
+SELECT id, TVECTOR::to_string(CASE WHEN id = 1 THEN v
+                              ELSE TVECTOR::from_string('[0,0,0]') END) AS c
+FROM t ORDER BY id;
+PREPARE s FROM 'SELECT id, TVECTOR::to_string(CASE WHEN id = 1 THEN v
+                                ELSE TVECTOR::from_string(?) END) AS c
+                FROM t ORDER BY id';
+SET @v = '[0,0,0]';
+EXECUTE s USING @v;
+--echo # A value of another dimension fails at EXECUTE
+SET @v = '[0,0]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo # Compared with a WHEN value
+SELECT id, CASE v WHEN TVECTOR::from_string('[1,2,3]') THEN 'match'
+                  ELSE 'other' END AS c
+FROM t ORDER BY id;
+PREPARE s FROM 'SELECT id, CASE v WHEN TVECTOR::from_string(?) THEN ''match''
+                                  ELSE ''other'' END AS c
+                FROM t ORDER BY id';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # Functions with a bind_and_check_types hook
+--echo #
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TVECTOR::from_string(?)) AS d';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT vsql_tvector.tvector_max_element(
+                  TVECTOR::from_string(?)) AS m';
+SET @v = '[1,7,3]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT TVECTOR::to_string(vsql_tvector.tvector_concat(
+                  TVECTOR::from_string(?), TVECTOR::from_string(?))) AS c';
+SET @v = '[1,2]', @w = '[3,4,5]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
+--echo # The hook's result compared with a column
+PREPARE s FROM 'SELECT id FROM t WHERE v = vsql_tvector.tvector_concat(
+                  TVECTOR::from_string(''[1]''), TVECTOR::from_string(?))';
+SET @v = '[2,3]';
+EXECUTE s USING @v;
+--echo # A result of another dimension fails at EXECUTE
+SET @v = '[2,3,4]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo # A bare parameter: the hook reads the value when the statement is
+--echo # prepared again
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?) AS d';
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+SET @v = 'not a vector';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # Checks whose params are known stay at PREPARE
+--echo #
+--echo # Params copied from a column
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT t.id FROM t, t4
+                WHERE t4.w = vsql_tvector.tvector_add(t.v, t.v)';
+--echo # A parameter whose params come from a column
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT t.id FROM t, t4
+                WHERE t4.w = vsql_tvector.tvector_add(?, t.v)';
+--echo # Different base types
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT id FROM t
+                WHERE v = vsql_tvector.tvector_dim(TVECTOR::from_string(?))';
+--echo # Arguments that disagree, both known
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT vsql_tvector.tvector_add(t.v, t4.w) FROM t, t4';
+
+--echo #
+--echo # Params unknown for good: the error moves from PREPARE to EXECUTE. A
+--echo # classic UDF fails the same way: with a column argument, e.g. UDF(s), its
+--echo # init runs only at EXECUTE, so an error from init is also reported there.
+--echo #
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(s)';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s;
+DEALLOCATE PREPARE s;
+--echo # Without a prepared statement it fails at once, as before
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id FROM t WHERE v = TVECTOR::from_string(s);
+
+SET @v = NULL, @w = NULL;
+DROP TABLE t, t4;
+UNINSTALL EXTENSION vsql_tvector;

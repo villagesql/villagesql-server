@@ -505,9 +505,11 @@ extern bool ValidateAndConvertVDFArguments(
 
 // Returns true at the first PREPARE of a statement that is prepared again at
 // every EXECUTE, which is any statement calling a UDF or VDF. Such a PREPARE
-// has no parameter values, so custom type params that depend on one, e.g.
-// those of TVECTOR::from_string(?), are unknown. Each EXECUTE resolves the
-// statement again with the values bound.
+// has no values for its `?` markers, so custom type params that depend on one,
+// e.g. those of TVECTOR::from_string(?), are unknown. Each EXECUTE resolves the
+// statement again with the values bound. So while this returns true, unknown
+// params are accepted, and the checks that need them run when the statement is
+// prepared again.
 extern bool IsFirstPrepareBeforeReprepare(const THD *thd);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.

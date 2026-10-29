@@ -104,6 +104,16 @@ SET @v = '[0,1,0]';
 EXECUTE s USING @v;
 DEALLOCATE PREPARE s;
 
+--echo # Two parameters, each call infers from its own value
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dot_product(
+                  TVECTOR::from_string(?), TVECTOR::from_string(?)) AS d';
+SET @v = '[1,2]', @w = '[3,4]';
+EXECUTE s USING @v, @w;
+SET @w = '[3,4,5]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
 --echo # A non-string value is not inferred from, as for from_string(5)
 PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
 SET @i = 5;
