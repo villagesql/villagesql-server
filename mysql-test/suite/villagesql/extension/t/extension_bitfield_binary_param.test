@@ -1,0 +1,19 @@
+# A deterministic VDF returning a parameterized type is pre-executed on a
+# constant argument to infer the return type's parameters, reading the
+# constant as utf8mb4 text. Only a STRING parameter is pre-executed: a
+# constant for a BINARY parameter is not text, and reading it as utf8mb4 would
+# reject bytes such as 0xFF.
+
+INSTALL EXTENSION vsql_bitfield_test;
+
+--echo # The VDF runs on a constant that is not valid utf8mb4.
+SELECT vsql_bitfield_test.bitfield_from_bytes(_binary x'FF') IS NOT NULL AS computed;
+
+--echo # Nothing infers the result's parameters, so it cannot be stored in a
+--echo # column of the type.
+CREATE TABLE bits (id INT PRIMARY KEY, b vsql_bitfield_test.BITFIELD);
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO bits VALUES (1, vsql_bitfield_test.bitfield_from_bytes(_binary x'FF'));
+
+DROP TABLE bits;
+UNINSTALL EXTENSION vsql_bitfield_test;

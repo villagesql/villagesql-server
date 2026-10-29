@@ -51,6 +51,7 @@ constexpr vef_type_t to_vef_type(const char *name) {
   if (sv == "STRING") return vef_type_t{VEF_TYPE_STRING, nullptr};
   if (sv == "INT") return vef_type_t{VEF_TYPE_INT, nullptr};
   if (sv == "REAL") return vef_type_t{VEF_TYPE_REAL, nullptr};
+  if (sv == "BINARY") return vef_type_t{VEF_TYPE_BINARY, nullptr};
   return vef_type_t{VEF_TYPE_CUSTOM, name};
 }
 
@@ -120,6 +121,8 @@ struct is_result_wrapper<RealResult> : std::true_type {};
 template <>
 struct is_result_wrapper<StringResult> : std::true_type {};
 template <>
+struct is_result_wrapper<BinaryResult> : std::true_type {};
+template <>
 struct is_result_wrapper<CustomResult> : std::true_type {};
 template <typename P>
 struct is_result_wrapper<CustomResultWith<P>> : std::true_type {};
@@ -133,6 +136,8 @@ template <>
 struct is_arg_wrapper<RealArg> : std::true_type {};
 template <>
 struct is_arg_wrapper<StringArg> : std::true_type {};
+template <>
+struct is_arg_wrapper<BinaryArg> : std::true_type {};
 template <>
 struct is_arg_wrapper<CustomArg> : std::true_type {};
 template <typename P>
@@ -153,6 +158,10 @@ struct wrapper_vef_type<StringArg> {
   static constexpr vef_type_id id = VEF_TYPE_STRING;
 };
 template <>
+struct wrapper_vef_type<BinaryArg> {
+  static constexpr vef_type_id id = VEF_TYPE_BINARY;
+};
+template <>
 struct wrapper_vef_type<CustomArg> {
   static constexpr vef_type_id id = VEF_TYPE_CUSTOM;
 };
@@ -171,6 +180,10 @@ struct wrapper_vef_type<RealResult> {
 template <>
 struct wrapper_vef_type<StringResult> {
   static constexpr vef_type_id id = VEF_TYPE_STRING;
+};
+template <>
+struct wrapper_vef_type<BinaryResult> {
+  static constexpr vef_type_id id = VEF_TYPE_BINARY;
 };
 template <>
 struct wrapper_vef_type<CustomResult> {
@@ -515,8 +528,8 @@ struct VarArgsWrapper {
                 "vsql .varargs(): first parameter must be vsql::VarArgs");
   static_assert(is_result_wrapper<ResultParam>::value,
                 "vsql .varargs(): second parameter must be a result wrapper "
-                "(IntResult, RealResult, StringResult, CustomResult, or "
-                "CustomResultWith<P>)");
+                "(IntResult, RealResult, StringResult, BinaryResult, "
+                "CustomResult, or CustomResultWith<P>)");
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -1224,10 +1237,20 @@ struct StaticFuncDesc {
   }
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
-  // bind_and_check_types exists from VEF_PROTOCOL_4.
+  // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_4.
   constexpr vef_protocol_t required_protocol() const {
-    if (max_result_length_ > 0 || bind_ != nullptr) return VEF_PROTOCOL_4;
+    if (max_result_length_ > 0 || bind_ != nullptr || uses_binary()) {
+      return VEF_PROTOCOL_4;
+    }
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
+  }
+  constexpr bool uses_binary() const {
+    if (return_type_.id == VEF_TYPE_BINARY) return true;
+    if (is_varargs_) return false;
+    for (size_t i = 0; i < NumParams; i++) {
+      if (params_[i].id == VEF_TYPE_BINARY) return true;
+    }
+    return false;
   }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr size_t max_result_length() const { return max_result_length_; }
