@@ -1,0 +1,40 @@
+Creating extension vdf_postrun_leak using SDK...
+Created vdf_postrun_leak.veb
+INSTALL EXTENSION vdf_postrun_leak;
+CREATE TABLE t (id INT PRIMARY KEY);
+INSERT INTO t VALUES (1), (2), (3);
+# Baseline
+SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+0	0	0
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe() AS n FROM t ORDER BY id';
+# After PREPARE
+SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+1	1	0
+EXECUTE s;
+id	n
+1	1
+2	2
+3	3
+# After the first EXECUTE
+SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+2	2	0
+# The per-statement state starts again at each EXECUTE
+EXECUTE s;
+id	n
+1	1
+2	2
+3	3
+# After the second EXECUTE
+SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+3	3	0
+DEALLOCATE PREPARE s;
+# After DEALLOCATE: every prerun has had its postrun
+SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+pre	post	live
+3	3	0
+DROP TABLE t;
+UNINSTALL EXTENSION vdf_postrun_leak;
