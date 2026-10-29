@@ -1,4 +1,12 @@
 INSTALL EXTENSION vsql_tvector;
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?)';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+vsql_tvector.tvector_dim(?)
+3
+SET @v = 'not a vector';
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 is not a vector literal
+DEALLOCATE PREPARE s;
+SET @v = NULL;
 UNINSTALL EXTENSION vsql_tvector;

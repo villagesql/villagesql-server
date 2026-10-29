@@ -1,9 +1,17 @@
 # A prepared-statement parameter passed to a function with a
-# bind_and_check_types hook.
+# bind_and_check_types hook. The parameter has no value at PREPARE, so the hook
+# is not run there; it runs at EXECUTE, which prepares the statement again with
+# the value, and reads the value as a constant.
 
 INSTALL EXTENSION vsql_tvector;
 
---error ER_VILLAGESQL_GENERIC_ERROR
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?)';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = 'not a vector';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+SET @v = NULL;
 
 UNINSTALL EXTENSION vsql_tvector;
