@@ -262,6 +262,29 @@ void bitfield_popcount(vsql::CustomArg in, vsql::IntResult out) {
   out.set(count);
 }
 
+// BINARY -> BITFIELD: every bit of the bytes, MSB-first, so N bytes give a
+// value of 8*N bits.
+void bitfield_from_bytes(vsql::BinaryArg in, vsql::CustomResult out) {
+  if (in.is_null()) {
+    out.set_null();
+    return;
+  }
+  auto bytes = in.value();
+  const size_t nbits = bytes.size() * 8;
+  if (static_cast<int64_t>(nbits) > kBitfieldMaxBits) {
+    out.warning("BITFIELD: value exceeds max_number_of_bits");
+    return;
+  }
+  auto buf = out.buffer();
+  if (kBitfieldHeaderLen + bytes.size() > buf.size()) {
+    out.warning("BITFIELD: value exceeds max length");
+    return;
+  }
+  store_bit_count(buf.data(), nbits);
+  memcpy(buf.data() + kBitfieldHeaderLen, bytes.data(), bytes.size());
+  out.set_length(kBitfieldHeaderLen + bytes.size());
+}
+
 static constexpr const char kBitfieldTypeName[] = "BITFIELD";
 
 constexpr auto BITFIELD = vsql::make_type<kBitfieldTypeName>()
@@ -289,5 +312,10 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_func<&bitfield_popcount>("bitfield_popcount")
                   .returns(INT)
                   .param(BITFIELD)
+                  .deterministic()
+                  .build())
+        .func(make_func<&bitfield_from_bytes>("bitfield_from_bytes")
+                  .returns(BITFIELD)
+                  .param(BINARY)
                   .deterministic()
                   .build()))

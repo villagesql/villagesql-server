@@ -2162,9 +2162,15 @@ static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
 // true on error (error already raised).
+//
+// declared_params is the signature's parameter types, or nullptr for a varargs
+// call, which has none and reads each argument as its own type. It decides
+// only how a constant string argument is read; each argument's type is what
+// the caller passed.
 static bool CallBindTypesHook(
     const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
     const char *func_name, uint arg_count, Item **args,
+    const vef_type_t *declared_params,
     std::vector<TypeParameters> *out_arg_params,
     TypeParameters *out_return_params,
     std::vector<std::string> *out_arg_type_names = nullptr) {
@@ -2200,11 +2206,16 @@ static bool CallBindTypesHook(
       arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available. A prepared-statement
-    // parameter has no value until EXECUTE.
+    // Provide constant string values where available, in the charset of the
+    // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
+    // unconverted for any other. A prepared-statement parameter has no value
+    // until EXECUTE.
     if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
         arg_types[i].id == VEF_TYPE_STRING) {
-      String *v = args[i]->val_str(&const_store[i]);
+      const vef_type_id param_id =
+          declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
+      String *v = ReadVdfValue(param_id, args[i], &const_store[i]);
+      if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
         const_lengths[i] = v->length();
@@ -2336,6 +2347,37 @@ vef_type_id InferArgTypeId(const Item *item) {
   }
 }
 
+const CHARSET_INFO *VdfValueCharset(vef_type_id id) {
+  return id == VEF_TYPE_STRING ? &my_charset_utf8mb4_bin : &my_charset_bin;
+}
+
+String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
+  // eval_string_arg() labels a value it does not convert with the charset
+  // asked for, and that value can be a constant's own: reading a text literal
+  // as binary would leave the literal labelled binary for everything after.
+  if (id != VEF_TYPE_STRING) return arg->val_str(buffer);
+  const CHARSET_INFO *to_cs = VdfValueCharset(id);
+  // In any other charset, eval_string_arg() either converts the value into
+  // buffer or returns it with at most its collation changed to utf8mb4_bin;
+  // only a binary value would be relabelled to another charset.
+  if (arg->collation.collation != &my_charset_bin) {
+    return eval_string_arg(to_cs, arg, buffer);
+  }
+  // The same steps for a binary value, with the relabelled value copied into
+  // buffer. It is read into local, not buffer, because a value such as
+  // SUBSTRING()'s can be a view into the buffer it is given, which the copy
+  // would overwrite.
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> local(nullptr, 0, &my_charset_bin);
+  String *res = arg->val_str(&local);
+  if (res == nullptr) return nullptr;
+  if (!res->is_valid_string(to_cs)) {
+    report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
+    return nullptr;
+  }
+  if (buffer->copy(res->ptr(), res->length(), to_cs)) return nullptr;
+  return buffer;
+}
+
 // Turns a varargs hook's answers into the expected-type array the two passes
 // consume. A type the hook named is looked up rather than trusted; an
 // argument the hook stayed silent about keeps the type it already carries.
@@ -2412,7 +2454,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // have.
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params,
+                          nullptr, &hook_arg_params, out_return_params,
                           &hook_arg_type_names)) {
       return true;
     }
@@ -2466,7 +2508,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // The type-name argument is left at its default: a fixed-arity signature
     // already declares every argument's type, so the hook has nothing to name.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params)) {
+                          signature->params, &hook_arg_params,
+                          out_return_params)) {
       return true;
     }
   }
