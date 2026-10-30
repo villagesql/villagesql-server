@@ -1,0 +1,21 @@
+# A READ COMMITTED locking KNN read must return the rows whose index entry is
+# current, whatever else happened to the row.
+#
+# The extension reports the inserting transaction as each entry's trx_ref.
+# Index type kvec_l2 stores the primary key and returns it at scan_fetch.
+#   1. Fresh rows: every row is returned.
+#   2. After an UPDATE of a non-indexed column, the row is still returned:
+#      the index entry is unchanged and still current.
+#   3. A row locked by another session's uncommitted change is waited for (here
+#      reported by NOWAIT), not silently skipped.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+--let $kvec_key = v
+--let $kvec_index = kvec_l2
+--source suite/villagesql/extension/vsql-knn-index-test/t/knn_locking_read_current_entry.inc
+
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

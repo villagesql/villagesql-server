@@ -1,0 +1,49 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, c INT, v KVECTOR);
+CREATE INDEX idx_v ON t (v kvec_profile_l2_btree) USING EXTENDED(vsql_knn_index_test.kvec_l2_btree);
+INSERT INTO t VALUES (1, 0, '[1,0,0,0]'), (2, 0, '[0,1,0,0]'), (3, 0, '[0,0,2,0]');
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+# 1. Fresh rows: expect 1 2 3
+SELECT vsql_knn_index_test.kvec_reset_counters();
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+1
+2
+3
+COMMIT;
+# The locking read used the KNN scan: expect 1
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+knn_scan_ran
+1
+# 2. After an UPDATE of the non-indexed column c: expect 1 2 3
+UPDATE t SET c = 1 WHERE id = 1;
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+1
+2
+3
+COMMIT;
+# The same read without locking: expect 1 2 3
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+2
+3
+# 3. Row 2 is locked by another session's uncommitted UPDATE: expect
+#    ER_LOCK_NOWAIT, not a result without row 2
+START TRANSACTION;
+UPDATE t SET c = 2 WHERE id = 2;
+START TRANSACTION;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE NOWAIT;
+ERROR HY000: Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.
+COMMIT;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

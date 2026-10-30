@@ -381,10 +381,12 @@ using PrimaryKey = std::vector<std::vector<unsigned char>>;
 // the primary key at insert (pkey_columns, HAS_ROW_REF), the index stores it
 // here and returns it at scan_fetch via pkey_columns, and the server resolves
 // the row from it. A real index would page-back this store; a brute-force test
-// index keeps it arena-resident.
+// index keeps it arena-resident. The kvec_l2_btree index type stores no primary
+// key (pkey stays empty); see kvec_btree_insert.
 struct KVecEntry {
   IndexScanKey::KeyPartRef ref;  // vector's column reference
   PrimaryKey pkey;               // owning row's primary key (all parts)
+  Segment::TrxRef trx = 0;       // transaction that inserted the entry
 };
 struct KVecIndexCtx {
   std::vector<KVecEntry> entries;
@@ -407,6 +409,7 @@ struct KVecCursor {
   struct Result {
     IndexScanKey::KeyPartRef ref;  // vector column reference
     PrimaryKey pkey;  // owning row's primary key (copied, all parts)
+    Segment::TrxRef trx;  // transaction that inserted the entry
   };
   std::vector<Result> results;
   size_t pos = 0;
@@ -434,7 +437,7 @@ static bool kvec_load(IdxCtx * /*ctx*/, const Index & /*index*/,
 }
 
 static bool kvec_insert(IdxCtx *ctx, const Index &index,
-                        Segment::TrxRef /*trx_ref*/,
+                        Segment::TrxRef trx_ref,
                         IndexScanKey::KeyPartData *key_columns,
                         IndexScanKey::KeyPartData *pkey_columns,
                         IndexScanKey::KeyPartRef * /*key_ref*/, char *err,
@@ -462,6 +465,7 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   }
   KVecEntry entry;
   entry.ref = ref;
+  entry.trx = trx_ref;
   // Primary-key parts are NOT NULL, but a part may be zero-length (an empty
   // VARCHAR/VARBINARY) -- a valid key value.
   entry.pkey.reserve(num_pk_parts);
@@ -472,6 +476,38 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   // Exclusive lock: a concurrent DDL build inserts each scanned row from
   // multiple worker threads (like vsql-vector's unique_lock on its operation
   // mutex).
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  ctx->user()->entries.push_back(std::move(entry));
+  ++g_insert_count;
+  return false;
+}
+
+// Insert for the kvec_l2_btree index type (HAS_COLUMN_REF | REF_LOOKUP, no
+// HAS_ROW_REF). The index does not own the row identity: the server passes no
+// primary key and resolves each hit's row through its own col_ref -> primary
+// key mapping B-tree. The entry's pkey stays empty, so kvec_fetch returns none.
+// The col_ref doubles as the entry's key_ref, which REF_LOOKUP requires to be
+// unique per live entry.
+static bool kvec_btree_insert(IdxCtx *ctx, const Index &index,
+                              Segment::TrxRef trx_ref,
+                              IndexScanKey::KeyPartData *key_columns,
+                              IndexScanKey::KeyPartData * /*pkey_columns*/,
+                              IndexScanKey::KeyPartRef *key_ref, char *err,
+                              uint32_t err_len) {
+  if (key_columns == nullptr || key_columns[0].data == nullptr) {
+    snprintf(err, err_len, "kvec_l2_btree: missing key column");
+    return true;
+  }
+  IndexScanKey::KeyPartRef ref;
+  if (index.get_key_ref(kKeyPos, key_columns[0], &ref)) {
+    snprintf(err, err_len, "kvec_l2_btree: get_key_ref failed: %s",
+             index.get_error());
+    return true;
+  }
+  if (key_ref != nullptr) *key_ref = ref;
+  KVecEntry entry;
+  entry.ref = ref;
+  entry.trx = trx_ref;
   std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
   ctx->user()->entries.push_back(std::move(entry));
   ++g_insert_count;
@@ -530,6 +566,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   struct Hit {
     IndexScanKey::KeyPartRef ref;
     const PrimaryKey *pkey;  // points into ctx entries
+    Segment::TrxRef trx;
     double distance;
   };
   std::vector<Hit> hits;
@@ -566,7 +603,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     // helper silently corrupts the ordering.
     double d = 0.0;
     index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
-    hits.push_back(Hit{entry.ref, &entry.pkey, d});
+    hits.push_back(Hit{entry.ref, &entry.pkey, entry.trx, d});
   }
 
   std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
@@ -590,7 +627,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // so the pointers into entries are valid). The cursor outlives the lock, so
   // it must own the bytes.
   for (const Hit &hit : hits) {
-    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey});
+    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey, hit.trx});
   }
 
   *cursor = c;
@@ -610,7 +647,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
                        IndexScanKey::KeyPartRef *key_column_refs,
                        IndexScanKey::KeyPartData * /*key_columns*/,
                        IndexScanKey::KeyPartData *pkey_columns,
-                       Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
+                       Segment::TrxRef *trx_ref, bool * /*delete_mark*/,
                        char *err, uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
   if (c->pos >= c->results.size()) {
@@ -622,6 +659,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   if (key_ref != nullptr) *key_ref = res.ref;
   // Single key column (kKeyPos): its col_ref is the stored vector reference.
   if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
+  if (trx_ref != nullptr) *trx_ref = res.trx;
 
   // The index owns the row identity: return the primary key stored at insert
   // (all parts), so the server resolves the row directly from pkey_columns.
@@ -672,6 +710,14 @@ static constexpr const char kKVecL2Func[] = "kvec_l2_distance";
 static constexpr const char kKVecIndexCos[] = "kvec_cos";
 static constexpr const char kKVecProfileCos[] = "kvec_profile_cos";
 static constexpr const char kKVecCosFunc[] = "kvec_cos_distance";
+
+// A third index type with the same L2 metric whose entries hold only the
+// vector's col_ref, like vsql-vector's HNSW. The server resolves each hit's row
+// through its col_ref -> primary key mapping B-tree instead of a primary key
+// stored in the index. Its profile is not default_for_type, so a test names it
+// explicitly: (v kvec_profile_l2_btree) USING EXTENDED(...kvec_l2_btree).
+static constexpr const char kKVecIndexL2Btree[] = "kvec_l2_btree";
+static constexpr const char kKVecProfileL2Btree[] = "kvec_profile_l2_btree";
 
 // ============================================================================
 // Type + column-store registration
@@ -763,6 +809,38 @@ static constexpr auto KVEC_STORE_COS_INDEX =
         .build();
 // clang-format on
 
+// The mapping B-tree variant: no HAS_ROW_REF, so the server never passes or
+// expects a primary key from the extension. Shares the scan callbacks with
+// kvec_l2; kvec_fetch returns no primary key because the entries hold none.
+// clang-format off
+static constexpr auto KVEC_STORE_BTREE_INDEX =
+    make_index_type<kKVecIndexL2Btree, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_btree_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::REF_LOOKUP)
+
+        .build();
+// clang-format on
+
 // ============================================================================
 // Distance function + profile
 // ============================================================================
@@ -831,6 +909,17 @@ static const auto KVEC_L2_PROFILE =
         .default_for_type(true)
         .build();
 
+// Same L2 function and helper as kvec_profile_l2, bound to the mapping B-tree
+// index type.
+static const auto KVEC_L2_BTREE_PROFILE =
+    make_index_profile(kKVecProfileL2Btree)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexL2Btree)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
 // Cosine metric, bound to the kvec_cos index (NOT kvec_l2). Not
 // default_for_type -- a type may have only one default profile, and L2 owns it.
 static void kvec_cos_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
@@ -882,10 +971,12 @@ static auto COLUMN_STORE =
     ColumnStoreCapability().column_store(kKVectorStorage);
 static auto INDEX_TYPE = IndexTypeCapability()
                              .index_type(KVEC_STORE_INDEX)
-                             .index_type(KVEC_STORE_COS_INDEX);
+                             .index_type(KVEC_STORE_COS_INDEX)
+                             .index_type(KVEC_STORE_BTREE_INDEX);
 static auto INDEX_PROFILE = IndexProfileCapability()
                                 .index_profile(KVEC_L2_PROFILE)
-                                .index_profile(KVEC_COS_PROFILE);
+                                .index_profile(KVEC_COS_PROFILE)
+                                .index_profile(KVEC_L2_BTREE_PROFILE);
 
 using namespace vsql;
 
