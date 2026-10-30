@@ -3,8 +3,6 @@
 # The parameter form must route to the distance scan like a literal does, and
 # must be read per execution.
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (

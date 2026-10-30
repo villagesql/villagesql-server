@@ -45,9 +45,11 @@ FROM t
 GROUP BY d
 ORDER BY d LIMIT 3;
 EXPLAIN
--> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Group aggregate: count(0)  (cost=COST rows=ROWS)
-        -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+-> Limit: 3 row(s)
+    -> Sort: d, limit input to 3 row(s) per chunk
+        -> Table scan on <temporary>
+            -> Aggregate using temporary table
+                -> Table scan on t  (cost=COST rows=ROWS)
 
 SELECT vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d, COUNT(*) AS n
 FROM t
