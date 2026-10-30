@@ -1,0 +1,72 @@
+# A direction written explicitly on a custom index key part (ASC or DESC) must
+# be one the key part's index profile declares. Writing no direction is always
+# accepted.
+#
+# Profiles from vsql_index_test, all binding dummy_index_hnsw to
+# dummy_type_vector:
+#   dummy_profile_hnsw_l2   - ASC, the default profile for the pair
+#   dummy_profile_hnsw_desc - DESC
+#   dummy_profile_hnsw_none - NONE (unordered)
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector, b dummy_type_vector);
+
+--echo # --- ASC profile ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX i ON t (a dummy_profile_hnsw_l2 DESC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_asc ON t (a dummy_profile_hnsw_l2 ASC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_asc_none ON t (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- DESC profile ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX i ON t (a dummy_profile_hnsw_desc ASC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_desc ON t (a dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_desc_none ON t (a dummy_profile_hnsw_desc) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- NONE profile ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX i ON t (a dummy_profile_hnsw_none ASC) USING EXTENDED(dummy_index_hnsw);
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX i ON t (a dummy_profile_hnsw_none DESC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_unordered ON t (a dummy_profile_hnsw_none) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Default profile (ASC), no profile named ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX i ON t (a DESC) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX i_default_asc ON t (a ASC) USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- Multi-column: a ASC is valid, b DESC on a NONE profile is not ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX i ON t (a ASC, b dummy_profile_hnsw_none DESC)
+  USING EXTENDED(dummy_index_hnsw);
+
+--echo # --- ALTER TABLE ADD INDEX ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t ADD INDEX i (b dummy_profile_hnsw_desc ASC) USING EXTENDED(dummy_index_hnsw);
+ALTER TABLE t ADD INDEX i_alter (b dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw);
+
+--echo # Only the accepted indexes were recorded.
+--source include/villagesql/query_custom_indexes.inc
+DROP TABLE t;
+
+--echo # --- CREATE TABLE with an inline index ---
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX i (a dummy_profile_hnsw_none ASC) USING EXTENDED(dummy_index_hnsw));
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX i (a dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+--source include/villagesql/query_custom_indexes.inc
+DROP TABLE t;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
