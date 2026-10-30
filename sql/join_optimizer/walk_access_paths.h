@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -84,6 +85,7 @@ void WalkAccessPaths(AccessPathPtr path, JoinPtr join,
     case AccessPath::SAMPLE_SCAN:
     case AccessPath::INDEX_SCAN:
     case AccessPath::INDEX_DISTANCE_SCAN:
+    case AccessPath::INDEX_KNN_SCAN:
     case AccessPath::REF:
     case AccessPath::REF_OR_NULL:
     case AccessPath::EQ_REF:
@@ -275,6 +277,8 @@ void WalkTablesUnderAccessPath(AccessPath *root_path, Func &&func,
             return func(path->index_scan().table);
           case AccessPath::INDEX_DISTANCE_SCAN:
             return func(path->index_distance_scan().table);
+          case AccessPath::INDEX_KNN_SCAN:
+            return func(path->index_knn_scan().table);
           case AccessPath::REF:
             return func(path->ref().table);
           case AccessPath::REF_OR_NULL:

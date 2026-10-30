@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,6 +80,7 @@
 #include "sql/table.h"
 #include "sql/visible_fields.h"
 #include "template_utils.h"
+#include "villagesql/sql/knn_iterator.h"
 
 using pack_rows::TableCollection;
 using std::all_of;
@@ -223,6 +225,8 @@ TABLE *GetBasicTable(const AccessPath *path) {
       return path->index_scan().table;
     case AccessPath::INDEX_DISTANCE_SCAN:
       return path->index_distance_scan().table;
+    case AccessPath::INDEX_KNN_SCAN:
+      return path->index_knn_scan().table;
     case AccessPath::REF:
       return path->ref().table;
     case AccessPath::REF_OR_NULL:
@@ -341,6 +345,7 @@ bool ShouldEnableBatchMode(AccessPath *path) {
     case AccessPath::TABLE_SCAN:
     case AccessPath::INDEX_SCAN:
     case AccessPath::INDEX_DISTANCE_SCAN:
+    case AccessPath::INDEX_KNN_SCAN:
     case AccessPath::REF:
     case AccessPath::REF_OR_NULL:
     case AccessPath::PUSHED_JOIN_REF:
@@ -553,6 +558,13 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         iterator = NewIterator<IndexDistanceScanIterator>(
             thd, mem_root, param.table, param.idx, param.range,
             path->num_output_rows(), examined_rows);
+        break;
+      }
+      case AccessPath::INDEX_KNN_SCAN: {
+        const auto &param = path->index_knn_scan();
+        iterator = NewIterator<villagesql::IndexKnnScanIterator>(
+            thd, mem_root, param.table, param.idx, param.query_point,
+            param.limit, path->num_output_rows(), examined_rows);
         break;
       }
       case AccessPath::REF: {

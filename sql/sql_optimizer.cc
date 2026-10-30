@@ -1397,6 +1397,7 @@ uint QEP_TAB::effective_index() const {
       return uint(ref().key);
 
     case JT_INDEX_SCAN:
+    case JT_KNN_SCAN:
     case JT_FT:
       return index();
 
@@ -2364,6 +2365,8 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
     // The optimizer has decided to use an index scan.
     ref_key = tab->index();
     ref_key_parts = actual_key_parts(&table->key_info[tab->index()]);
+  } else if (tab->type() == JT_KNN_SCAN) {
+    return false;
   }
 
   // Check if a KNN-capable index (HA_SUPPORT_KNN) can be used to retrieve
@@ -3740,6 +3743,9 @@ static bool setup_join_buffering(JOIN_TAB *tab, JOIN *join,
 
       tab->join_cache_flags = join_cache_flags;
       return false;
+    case JT_KNN_SCAN:
+      goto no_join_cache;
+
     default:;
   }
 
