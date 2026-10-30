@@ -15,6 +15,7 @@
  */
 #include "custom_index.h"
 
+#include <scope_guard.h>
 #include <sql_const.h>
 
 #include <array>
@@ -29,16 +30,23 @@
 #include "sql/dd/types/table.h"
 #include "sql/handler.h"
 #include "sql/table.h"
+#include "storage/innobase/handler/ha_innodb.h"
+#include "storage/innobase/include/btr0pcur.h"
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
+#include "storage/innobase/include/lock0lock.h"
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "storage/innobase/include/que0que.h"
 #include "storage/innobase/include/read0types.h"
+#include "storage/innobase/include/rem0rec.h"
 #include "storage/innobase/include/row0mysql.h"
+#include "storage/innobase/include/row0row.h"
+#include "storage/innobase/include/row0sel.h"
+#include "storage/innobase/include/row0vers.h"
 #include "storage/innobase/include/univ.i"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/index_context.h"
@@ -60,6 +68,11 @@ class Mtr_guard {
   Mtr_guard &operator=(const Mtr_guard &) = delete;
 
   mtr_t *get() { return &m_mtr; }
+
+  // Releases the latches held by the mini-transaction, if still active.
+  void commit() {
+    if (m_mtr.is_active()) mtr_commit(&m_mtr);
+  }
 
  private:
   mtr_t m_mtr;
@@ -153,7 +166,7 @@ static void call_profile_binding(const dict_index_t *index, uint32_t key_pos,
   if (!ok) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: custom index function '" << binding.name
+        << "Custom index function '" << binding.name
         << "' failed: " << error_msg;
   }
   *static_cast<double *>(result) = vdf_result.real_value;
@@ -343,6 +356,11 @@ static bool vef_index_trx_is_visible_impl(vef_index_ref_t index_ref,
                                           vef_storage_trx_ref_t trx_ref) {
   const auto *index = static_cast<const dict_index_t *>(index_ref);
   const auto *view = static_cast<const ReadView *>(read_view);
+  if (view == nullptr) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Extension asked for visibility with an uninitialized read view.";
+    return true;
+  }
   return view->changes_visible(static_cast<trx_id_t>(trx_ref),
                                index->table->name);
 }
@@ -435,6 +453,12 @@ bool Custom_index::is_knn(const dict_index_t *index) {
   if (!is_custom(index)) return false;
   const Custom_index *custom_index = index->custom_index;
   return (flags(custom_index->index_meta().get()) & HA_SUPPORT_KNN) != 0;
+}
+
+bool Custom_index::needs_clustered_access(const dict_index_t *index) {
+  if (!is_custom(index)) return false;
+  const vef_index_cap_t caps = index->custom_index->interface().capabilities;
+  return (caps & VEF_INDEX_CAP_MVCC_VISIBILITY) == 0;
 }
 
 const vef_type_index_intf_t &Custom_index::interface() const {
@@ -779,7 +803,10 @@ static vef_storage_col_data_t to_col_data(const dfield_t *field) {
 }
 
 dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
-                             const dtuple_t *entry, bool dup_chk_only) {
+                             const dtuple_t *entry, bool dup_chk_only,
+                             bool *is_key_null) {
+  *is_key_null = false;
+
   // Custom indexes are not supported on intrinsic tables, and dup_chk_only is
   // only used for intrinsic tables because they cannot be rolled back.
   ut_ad(!dup_chk_only);
@@ -832,8 +859,19 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
     ut_ad(intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF);
   }
 
+  *is_key_null = true;
   for (uint32_t i = 0; i < num_key_columns; i++) {
     key_columns[i] = to_col_data(dtuple_get_nth_field(entry, i));
+    if (key_columns[i].data != nullptr) {
+      *is_key_null = false;
+    }
+  }
+
+  // NULL keys are not inserted into the custom index, or into the mapping
+  // B-tree when the index needs one. For example, an HNSW index neither indexes
+  // nor returns NULL values.
+  if (*is_key_null && index->has_mapping_btree()) {
+    return DB_SUCCESS;
   }
 
   KeyRef key_ref{};
@@ -896,8 +934,8 @@ dberr_t Custom_index::fill_profile(const row_prebuilt_t *prebuilt,
 }
 
 dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
-                                  page_cur_mode_t mode, bool reverse,
-                                  bool *eof) {
+                                  page_cur_mode_t mode, bool reverse, bool *eof,
+                                  char *error_msg, uint32_t error_msg_len) {
   const auto &intf = interface();
   const dtuple_t *search_tuple = prebuilt->search_tuple;
 
@@ -920,7 +958,8 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
   scan_desc.keys = n_fields > 0 ? &scan_key : nullptr;
   scan_desc.readview = nullptr;
   if (prebuilt->select_lock_type == LOCK_NONE) {
-    static_cast<vef_readview_ref_t>(trx_get_read_view(prebuilt->trx));
+    scan_desc.readview =
+        static_cast<vef_readview_ref_t>(trx_get_read_view(prebuilt->trx));
   }
   if (n_fields > 0) {
     dberr_t err = fill_profile(prebuilt, &scan_desc, mode);
@@ -928,15 +967,9 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
   }
 
   CursorRef cursor = nullptr;
-  char error_msg[ERROR_MSG_SIZE] = {};
-  bool failed = intf.scan_begin(
-      index_ctx(), storage_ctx(), static_cast<vef_storage_mtr_ref_t>(mtr),
-      &scan_desc, &cursor, eof, error_msg, sizeof(error_msg));
-
-  error_msg[sizeof(error_msg) - 1] = '\0';
-  if (failed) {
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error opening custom index scan: " << error_msg;
+  if (intf.scan_begin(index_ctx(), storage_ctx(),
+                      static_cast<vef_storage_mtr_ref_t>(mtr), &scan_desc,
+                      &cursor, eof, error_msg, error_msg_len)) {
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -945,20 +978,14 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
 }
 
 dberr_t Custom_index::restore_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
-                                     bool *eof) {
+                                     bool *eof, char *error_msg,
+                                     uint32_t error_msg_len) {
   const auto &intf = interface();
   CursorRef cursor = prebuilt->pcur->custom_cursor;
   ut_a(cursor != nullptr);
 
-  char error_msg[ERROR_MSG_SIZE] = {};
-  bool failed =
-      intf.scan_restore(cursor, static_cast<vef_storage_mtr_ref_t>(mtr), eof,
-                        error_msg, sizeof(error_msg));
-
-  error_msg[sizeof(error_msg) - 1] = '\0';
-  if (failed) {
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error restoring custom index scan: " << error_msg;
+  if (intf.scan_restore(cursor, static_cast<vef_storage_mtr_ref_t>(mtr), eof,
+                        error_msg, error_msg_len)) {
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
@@ -971,10 +998,284 @@ void Custom_index::close_cursor(row_prebuilt_t *prebuilt) {
   prebuilt->pcur->custom_cursor = nullptr;
 }
 
-dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
-                                 row_prebuilt_t *prebuilt, ulint match_mode,
-                                 ulint direction, bool range_lock,
-                                 bool scan_forward, bool is_mvcc) {
+// Locks the clustered index record of a locking read if the index entry is
+// still current, that is, the record was last modified by the transaction that
+// created the entry. The record is locked with a no-gap lock because it is
+// found by its full primary key.
+// @param[out] matched false if the entry is stale and no lock was taken
+// @return DB_SUCCESS, DB_LOCK_WAIT (the caller must save the position and
+// wait),
+//         DB_DEADLOCK or another lock error
+static dberr_t check_and_lock(row_prebuilt_t *prebuilt, const rec_t *rec,
+                              dict_index_t *clust_index, const ulint *offsets,
+                              vef_storage_trx_ref_t entry_trx, que_thr_t *thr,
+                              bool *matched) {
+  *matched = row_get_rec_trx_id(rec, clust_index, offsets) ==
+             static_cast<trx_id_t>(entry_trx);
+  if (!*matched) return DB_SUCCESS;
+
+  dberr_t err = lock_clust_rec_read_check_and_lock(
+      lock_duration_t::REGULAR, prebuilt->clust_pcur->get_block(), rec,
+      clust_index, offsets, prebuilt->select_mode,
+      static_cast<lock_mode>(prebuilt->select_lock_type), LOCK_REC_NOT_GAP,
+      thr);
+
+  if (err == DB_SUCCESS_LOCKED_REC) {
+    if (prebuilt->trx->releases_non_matching_rows()) {
+      // Note that the clustered index record was locked.
+      ut_ad(!prebuilt->new_rec_lock[row_prebuilt_t::LOCK_CLUST_PCUR]);
+      prebuilt->new_rec_lock[row_prebuilt_t::LOCK_CLUST_PCUR] = true;
+    }
+    err = DB_SUCCESS;
+  }
+  return err;
+}
+
+// Returns an empty heap kept in the prebuilt, creating it on first use. The
+// heap is freed together with the prebuilt.
+static mem_heap_t *get_empty_heap(mem_heap_t **heap, ulint size) {
+  if (*heap == nullptr) {
+    *heap = mem_heap_create(size, UT_LOCATION_HERE);
+  } else {
+    mem_heap_empty(*heap);
+  }
+  return *heap;
+}
+
+// Reads the clustered index row identified by the primary key columns and
+// converts it to MySQL format into buf. For a locking read, the record is
+// locked instead of building an old version, provided entry_trx matches.
+// @param[out] found false if the row does not exist in the read view of the
+//             transaction, is delete-marked, is not the version the index
+//             entry was created for, or cannot be converted yet
+static dberr_t fetch_cluster_row(
+    byte *buf, row_prebuilt_t *prebuilt,
+    const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &pkey_columns,
+    vef_storage_trx_ref_t entry_trx, que_thr_t *thr, bool *found) {
+  dict_index_t *index = prebuilt->index;
+  dict_index_t *clust_index = index->table->first_index();
+  trx_t *trx = prebuilt->trx;
+  const uint32_t n_pk = dict_index_get_n_unique(clust_index);
+
+  dtuple_t *clust_ref = prebuilt->clust_ref;
+  ut_ad(dtuple_get_n_fields(clust_ref) == n_pk);
+  for (uint32_t i = 0; i < n_pk; i++) {
+    dfield_t *field = dtuple_get_nth_field(clust_ref, i);
+    if (pkey_columns[i].data == nullptr) {
+      dfield_set_null(field);
+    } else {
+      dfield_set_data(field, pkey_columns[i].data, pkey_columns[i].length);
+    }
+  }
+
+  mem_heap_t *heap = get_empty_heap(&prebuilt->custom_offset_heap, 256);
+  ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  rec_offs_init(offsets_);
+  ulint *offsets = offsets_;
+  dberr_t err = DB_SUCCESS;
+
+  *found = false;
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+
+  prebuilt->clust_pcur->open_no_init(clust_index, clust_ref, PAGE_CUR_LE,
+                                     BTR_SEARCH_LEAF, 0, &mtr,
+                                     UT_LOCATION_HERE);
+  prebuilt->clust_pcur->m_trx_if_known = trx;
+
+  const rec_t *rec = prebuilt->clust_pcur->get_rec();
+
+  // The row can be missing when it was inserted after the read view or its
+  // delete-marked record has been purged.
+  if (page_rec_is_user_rec(rec) &&
+      prebuilt->clust_pcur->get_low_match() >= n_pk) {
+    offsets = rec_get_offsets(rec, clust_index, offsets, ULINT_UNDEFINED,
+                              UT_LOCATION_HERE, &heap);
+
+    bool visible = true;
+    if (prebuilt->select_lock_type != LOCK_NONE) {
+      err = check_and_lock(prebuilt, rec, clust_index, offsets, entry_trx, thr,
+                           &visible);
+      if (err != DB_SUCCESS) visible = false;
+    } else if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
+               !lock_clust_rec_cons_read_sees(rec, clust_index, offsets,
+                                              trx_get_read_view(trx))) {
+      if (prebuilt->old_vers_heap != nullptr) {
+        mem_heap_empty(prebuilt->old_vers_heap);
+      } else {
+        prebuilt->old_vers_heap = mem_heap_create(200, UT_LOCATION_HERE);
+      }
+
+      rec_t *old_vers = nullptr;
+      err = row_vers_build_for_consistent_read(
+          rec, &mtr, clust_index, &offsets, trx->read_view, &heap,
+          prebuilt->old_vers_heap, &old_vers, nullptr,
+          prebuilt->get_lob_undo());
+      visible = err == DB_SUCCESS && old_vers != nullptr;
+      rec = old_vers;
+    }
+
+    if (visible &&
+        rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
+      // No need to keep the lock on a delete-marked record in lower isolation
+      // levels. The clustered record is still latched by mtr.
+      if (prebuilt->select_lock_type != LOCK_NONE) prebuilt->try_unlock(true);
+    } else if (visible) {
+      if (prebuilt->clust_index_was_generated) {
+        row_sel_store_row_id_to_prebuilt(prebuilt, rec, clust_index, offsets);
+      }
+      *found = row_sel_store_mysql_rec(
+          buf, prebuilt, rec, nullptr, true, clust_index, index, offsets, false,
+          prebuilt->get_lob_undo(), prebuilt->blob_heap);
+    }
+  }
+
+  mtr_commit(&mtr);
+  return err;
+}
+
+// Converts the index entry returned by the extension to MySQL format into buf,
+// for scans that need no clustered index lookup. The entry holds the user key
+// columns first, followed by the primary key columns that are not already key
+// columns, the same layout used by Custom_index::insert().
+static void store_index_entry_to_mysql(
+    byte *buf, row_prebuilt_t *prebuilt,
+    const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &key_columns,
+    const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &pkey_columns) {
+  const dict_index_t *index = prebuilt->index;
+  const dict_index_t *clust_index = index->table->first_index();
+  const vef_index_ctx_t *index_ctx = index->custom_index->index_ctx();
+  const uint32_t n_key = index_ctx->num_key_columns;
+  const uint32_t n_pk = index_ctx->num_primary_key_columns;
+
+  if (prebuilt->blob_heap != nullptr) mem_heap_empty(prebuilt->blob_heap);
+
+  for (ulint i = 0; i < prebuilt->n_template; i++) {
+    const mysql_row_templ_t *templ = &prebuilt->mysql_template[i];
+    if (templ->is_multi_val) continue;
+    ut_ad(!templ->is_virtual);
+
+    const ulint field_no = templ->rec_field_no;
+    ut_ad(index->get_field(field_no)->prefix_len == 0);
+
+    const vef_storage_col_data_t *col_data = nullptr;
+    if (field_no < n_key) {
+      col_data = &key_columns[field_no];
+    } else {
+      const dict_col_t *col = index->get_field(field_no)->col;
+      for (uint32_t k = 0; k < n_pk; k++) {
+        if (clust_index->get_field(k)->col == col) {
+          col_data = &pkey_columns[k];
+          break;
+        }
+      }
+    }
+    // A covering scan only requests columns present in the index entry.
+    ut_ad(col_data != nullptr);
+
+    if (col_data == nullptr || col_data->data == nullptr) {
+      ut_ad(templ->mysql_null_bit_mask);
+      buf[templ->mysql_null_byte_offset] |= (byte)templ->mysql_null_bit_mask;
+      memcpy(buf + templ->mysql_col_offset,
+             prebuilt->default_rec + templ->mysql_col_offset,
+             templ->mysql_col_len);
+      continue;
+    }
+
+    const byte *data = col_data->data;
+    // The converted BLOB value keeps a pointer to the data, which is owned by
+    // the extension cursor and can change on the next cursor move.
+    if (DATA_LARGE_MTYPE(templ->type) || DATA_GEOMETRY_MTYPE(templ->type)) {
+      if (prebuilt->blob_heap == nullptr) {
+        prebuilt->blob_heap = mem_heap_create(UNIV_PAGE_SIZE, UT_LOCATION_HERE);
+      }
+      data = static_cast<byte *>(
+          mem_heap_dup(prebuilt->blob_heap, data, col_data->length));
+    }
+
+    row_sel_field_store_in_mysql_format(buf + templ->mysql_col_offset, templ,
+                                        index, field_no, data, col_data->length,
+                                        ULINT_UNDEFINED);
+    if (templ->mysql_null_bit_mask) {
+      buf[templ->mysql_null_byte_offset] &= ~(byte)templ->mysql_null_bit_mask;
+    }
+  }
+}
+
+// Finds the primary key of an index entry that stores column references by
+// looking up the entry in the mapping B-tree of the index.
+// @param[in]  key_refs     column references of the entry returned by the
+//                          extension
+// @param[in]  btr_mtr      mini-transaction that latches the mapping B-tree
+//                          page. The caller must keep it active while it uses
+//                          pkey_columns, which point into that page.
+// @param[out] pkey_columns primary key columns of the row
+// @param[out] found        false if the mapping B-tree has no such entry
+static void fetch_pkey_from_mapping_btree(
+    row_prebuilt_t *prebuilt,
+    const std::array<vef_storage_col_ref_t, MAX_REF_PARTS> &key_refs,
+    mtr_t *btr_mtr,
+    std::array<vef_storage_col_data_t, MAX_REF_PARTS> *pkey_columns,
+    bool *found) {
+  dict_index_t *index = prebuilt->index;
+  const vef_index_ctx_t *index_ctx = index->custom_index->index_ctx();
+  const uint32_t n_key = index_ctx->num_key_columns;
+  const uint32_t n_pk = index_ctx->num_primary_key_columns;
+  ut_ad(index->has_mapping_btree());
+
+  *found = false;
+
+  // The mapping B-tree is unique on the column reference of the first key
+  // column.
+  mem_heap_t *heap = get_empty_heap(&prebuilt->custom_pk_heap, 256);
+  dtuple_t *tuple = dtuple_create(heap, 1);
+  dict_index_copy_types(tuple, index, 1);
+  dtuple_set_n_fields_cmp(tuple, 1);
+
+  byte ref_data[sizeof(vef_storage_col_ref_t)];
+  static_assert(sizeof(ref_data) == 8);
+  mach_write_to_8(ref_data, key_refs[0]);
+  dfield_set_data(dtuple_get_nth_field(tuple, 0), ref_data, sizeof(ref_data));
+
+  btr_pcur_t pcur;
+  pcur.open_no_init(index, tuple, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, btr_mtr,
+                    UT_LOCATION_HERE);
+
+  const rec_t *rec = pcur.get_rec();
+  if (page_rec_is_user_rec(rec) && pcur.get_low_match() >= 1) {
+    mem_heap_t *offsets_heap =
+        get_empty_heap(&prebuilt->custom_offset_heap, 256);
+    ulint offsets_[REC_OFFS_NORMAL_SIZE];
+    rec_offs_init(offsets_);
+    const ulint *offsets = rec_get_offsets(
+        rec, index, offsets_, ULINT_UNDEFINED, UT_LOCATION_HERE, &offsets_heap);
+
+    // The primary key columns follow the key columns in the mapping record.
+    for (uint32_t i = 0; i < n_pk; i++) {
+      ulint len;
+      const byte *data =
+          rec_get_nth_field(index, rec, offsets, n_key + i, &len);
+      if (len == UNIV_SQL_NULL) {
+        (*pkey_columns)[i] = {nullptr, 0};
+      } else {
+        (*pkey_columns)[i] = {static_cast<const unsigned char *>(data),
+                              static_cast<uint32_t>(len)};
+      }
+    }
+    *found = true;
+  }
+}
+
+static dberr_t check_row_search_conditions(const row_prebuilt_t *prebuilt,
+                                           ulint match_mode, bool range_lock,
+                                           bool is_mvcc) {
+  auto unsupported = [](const char *what) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index doesn't support " << what << ".";
+    return DB_VILLAGESQL_ERROR;
+  };
+
   ut_ad(is_mvcc);
   if (!is_mvcc) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
@@ -983,17 +1284,68 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
   }
 
   if (range_lock && prebuilt->select_lock_type != LOCK_NONE) {
-    ut_ad(false);
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Custom index doesn't support range lock.";
-    return DB_VILLAGESQL_ERROR;
+    return unsupported("Secondary index range lock");
   }
+
+  // TODO(villagesql-indexing): Support virtual column
+  if (dict_index_has_virtual(prebuilt->index)) {
+    return unsupported("Virtual column");
+  }
+
+  // TODO(villagesql-indexing): Support end range condition check
+  if (prebuilt->m_mysql_handler != nullptr &&
+      prebuilt->m_mysql_handler->end_range != nullptr) {
+    return unsupported("End range condition");
+  }
+
+  // TODO(villagesql-indexing): Check exact match for supporting match_mode
+  // ROW_SEL_EXACT and ROW_SEL_EXACT_PREFIX
+  if (match_mode != 0) {
+    return unsupported("Exact match or exact prefix match mode");
+  }
+
+  // TODO(villagesql-indexing): Check push down index condition.
+  if (prebuilt->idx_cond) {
+    return unsupported("Index condition pushdown");
+  }
+
+  // TODO(villagesql-indexing): Support ROW_MYSQL_DUMMY_TEMPLATE
+  if (prebuilt->template_type == ROW_MYSQL_DUMMY_TEMPLATE) {
+    return unsupported("Check table");
+  }
+  return DB_SUCCESS;
+}
+
+dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
+                                 row_prebuilt_t *prebuilt, ulint match_mode,
+                                 ulint direction, bool range_lock,
+                                 bool scan_forward, bool is_mvcc) {
+  que_thr_t *thr = que_fork_get_first_thr(prebuilt->sel_graph);
+  trx_t *trx = prebuilt->trx;
+  bool lock_failed = false;
+  auto thr_guard = create_scope_guard([&]() {
+    if (is_mvcc && !lock_failed) que_thr_stop_for_mysql_no_error(thr, trx);
+  });
+
+  dberr_t cond_err =
+      check_row_search_conditions(prebuilt, match_mode, range_lock, is_mvcc);
+  if (cond_err != DB_SUCCESS) return cond_err;
+
+  char error_msg[ERROR_MSG_SIZE] = {};
+
+  auto failed = [&](const char *op, bool print_mesg = false) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index fetch operation: " << op << " :failed"
+        << (print_mesg ? ": " : ".") << (print_mesg ? error_msg : "");
+    return DB_VILLAGESQL_ERROR;
+  };
+
   // We come here from row_search_mvcc after PHASE 1, PHASE 2, and part of
   // PHASE 3, before opening the cursor. Keep this functionally aligned with
   // PHASE 3, 4 nd 5 of row_search_mvcc. We cannot reuse the code directly
   // because it depends on the B-tree record format.
 
-  que_thr_t *thr = que_fork_get_first_thr(prebuilt->sel_graph);
   dict_index_t *index = prebuilt->index;
 
   ut_ad(Custom_index::is_custom(index));
@@ -1004,13 +1356,6 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
   ut_ad(!dict_index_is_spatial(index));
 
   dtuple_t *search_tuple = prebuilt->search_tuple;
-  trx_t *trx = prebuilt->trx;
-  bool clust_templ_for_sec = prebuilt->need_to_access_clustered;
-
-  (void)thr;
-  (void)clust_index;
-  (void)trx;
-  (void)clust_templ_for_sec;
 
   // PHASE 3: Open or restore index cursor position
   Mtr_guard mtr_guard;
@@ -1019,30 +1364,173 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
 
   if (direction != 0) {
     // Restore Cursor.
-    ut_ad(prebuilt->row_read_type != ROW_READ_TRY_SEMI_CONSISTENT);
-    ut_ad(prebuilt->row_read_type != ROW_READ_DID_SEMI_CONSISTENT);
-    dberr_t err = custom_index->restore_cursor(prebuilt, mtr, &eof);
-    if (err != DB_SUCCESS) return err;
+    dberr_t err = custom_index->restore_cursor(prebuilt, mtr, &eof, error_msg,
+                                               sizeof(error_msg));
+    if (err != DB_SUCCESS) return failed("Restore cursor", true);
   } else if (dtuple_get_n_fields(search_tuple) > 0) {
     // Open Cursor using search tuple and mode.
-    dberr_t err =
-        custom_index->open_cursor(prebuilt, mtr, mode, !scan_forward, &eof);
-    if (err != DB_SUCCESS) return err;
+    dberr_t err = custom_index->open_cursor(prebuilt, mtr, mode, !scan_forward,
+                                            &eof, error_msg, sizeof(error_msg));
+    if (err != DB_SUCCESS) return failed("Open cursor at search key", true);
   } else {
     // Open cursor to read all.
     ut_ad(mode == PAGE_CUR_G || mode == PAGE_CUR_L);
-    dberr_t err =
-        custom_index->open_cursor(prebuilt, mtr, mode, !scan_forward, &eof);
-    if (err != DB_SUCCESS) return err;
+    dberr_t err = custom_index->open_cursor(prebuilt, mtr, mode, !scan_forward,
+                                            &eof, error_msg, sizeof(error_msg));
+    if (err != DB_SUCCESS) return failed("Open cursor at end", true);
   }
   // PHASE 4: Look for matching records in a loop
+  const auto &intf = custom_index->interface();
+  const vef_index_ctx_t *index_ctx = custom_index->index_ctx();
+  const uint32_t n_pk = index_ctx->num_primary_key_columns;
+  ut_a(index_ctx->num_key_columns <= MAX_REF_PARTS);
+  ut_a(n_pk <= MAX_REF_PARTS);
+  ut_a(n_pk == dict_index_get_n_unique(clust_index));
 
-  // PHASE 5: Move the cursor to the next index record
+  CursorRef cursor = prebuilt->pcur->custom_cursor;
+  ut_a(cursor != nullptr);
 
-  if (eof) custom_index->close_cursor(prebuilt);
-  ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-      << "Row search on a custom index is not supported yet.";
-  return DB_VILLAGESQL_ERROR;
+  const vef_index_cursor_op_t advance_op =
+      scan_forward ? VEF_INDEX_CURSOR_OP_NEXT : VEF_INDEX_CURSOR_OP_PREV;
+
+  std::array<vef_storage_col_ref_t, MAX_REF_PARTS> key_column_refs{};
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns{};
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
+  dberr_t err = DB_SUCCESS;
+
+  // The restored cursor sits on the row returned by the previous call.
+  bool advance = direction != 0;
+
+  for (;;) {
+    // PHASE 5: Move the cursor to the next index record
+    if (advance && !eof) {
+      if (intf.scan_position(cursor, advance_op, &eof, error_msg,
+                             sizeof(error_msg))) {
+        err = failed("Position cursor", true);
+        break;
+      }
+    }
+    advance = true;
+
+    if (eof) {
+      err = match_mode != 0 ? DB_RECORD_NOT_FOUND : DB_END_OF_INDEX;
+      break;
+    }
+
+    prebuilt->lob_undo_reset();
+
+    // Latches the mapping B-tree page for this index record. Latch order is
+    // the custom index cursor, the mapping B-tree page, then the clustered
+    // index page.
+    Mtr_guard btr_mtr_guard;
+
+    if (trx_is_interrupted(trx)) {
+      err = DB_INTERRUPTED;
+      break;
+    }
+
+    vef_storage_col_ref_t key_ref{};
+    vef_storage_trx_ref_t entry_trx = 0;
+    if (intf.scan_fetch(cursor, &key_ref, key_column_refs.data(),
+                        key_columns.data(), pkey_columns.data(), &entry_trx,
+                        error_msg, sizeof(error_msg))) {
+      err = failed("Fetch index key", true);
+      break;
+    }
+    bool record_found = true;
+
+    // Get primary key if required.
+    if ((intf.storage_props & VEF_INDEX_STORAGE_HAS_ROW_REF) == 0) {
+      ut_ad((intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) != 0);
+      // Get primary Keys from col_ref using B-tree mapping index.
+      bool mapped = false;
+      fetch_pkey_from_mapping_btree(prebuilt, key_column_refs,
+                                    btr_mtr_guard.get(), &pkey_columns,
+                                    &mapped);
+      // The entry was purged from the mapping B-tree after the scan read it.
+      if (!mapped) continue;
+    }
+
+    // Column references are handed back as they are stored in the index
+    // entry, in the big-endian format of the reference field.
+    std::array<std::array<byte, sizeof(vef_storage_col_ref_t)>, MAX_REF_PARTS>
+        key_ref_data;
+    if (intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) {
+      for (uint32_t i = 0; i < index_ctx->num_key_columns; i++) {
+        if (key_column_refs[i] == VEF_STORAGE_EMPTY_COLUMN_REF) {
+          key_columns[i] = {nullptr, 0};
+          continue;
+        }
+        auto &ref_data = key_ref_data[i];
+        mach_write_to_8(ref_data.data(), key_column_refs[i]);
+        key_columns[i] = {ref_data.data(), sizeof(vef_storage_col_ref_t)};
+      }
+    }
+
+    if (prebuilt->need_to_access_clustered) {
+      // Get the clustered index record and store in MySQL format.
+      err = fetch_cluster_row(buf, prebuilt, pkey_columns, entry_trx, thr,
+                              &record_found);
+      if (err == DB_SKIP_LOCKED) {
+        err = DB_SUCCESS;
+        continue;
+      }
+      if (err != DB_SUCCESS) {
+        // Save the position and release the mini-transaction before waiting
+        // for the lock.
+        if (intf.scan_save(cursor, error_msg, sizeof(error_msg))) {
+          err = failed("Save cursor position", true);
+          break;
+        }
+        mtr_guard.commit();
+        btr_mtr_guard.commit();
+
+        trx->error_state = err;
+        if (thr->is_active) que_thr_stop_for_mysql(thr);
+        thr->lock_state = QUE_THR_LOCK_ROW;
+        const bool lock_wait_over =
+            row_mysql_handle_errors(&err, trx, thr, nullptr);
+        thr->lock_state = QUE_THR_LOCK_NOLOCK;
+        if (!lock_wait_over) {
+          // Thread state is already handled by row_mysql_handle_errors().
+          lock_failed = true;
+          break;
+        }
+
+        mtr_start(mtr);
+        if (custom_index->restore_cursor(prebuilt, mtr, &eof, error_msg,
+                                         sizeof(error_msg)) != DB_SUCCESS) {
+          err = failed("Restore cursor", true);
+          break;
+        }
+        // The cursor may not be on the same record, so the record locks taken
+        // so far cannot be tracked for early release.
+        prebuilt->new_rec_lock.reset();
+
+        // Retry the row the cursor was saved on.
+        err = DB_SUCCESS;
+        advance = false;
+        continue;
+      }
+    } else {
+      ut_ad(prebuilt->select_lock_type == LOCK_NONE);
+      store_index_entry_to_mysql(buf, prebuilt, key_columns, pkey_columns);
+    }
+
+    if (record_found) break;
+  }
+
+  if (eof || err != DB_SUCCESS) {
+    // Check if we need to support scrollable cursor that could go back
+    // after reaching EOF.
+    custom_index->close_cursor(prebuilt);
+    return err;
+  }
+
+  if (intf.scan_save(cursor, error_msg, sizeof(error_msg))) {
+    return failed("Save cursor position", true);
+  }
+  return DB_SUCCESS;
 }
 
 void Custom_index::free_all(dict_index_t *index) {
@@ -1056,7 +1544,7 @@ void Custom_index::free_all(dict_index_t *index) {
                       error_msg, sizeof(error_msg))) {
         error_msg[sizeof(error_msg) - 1] = '\0';
         ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-            << "InnoDB: Error unloading custom index storage: " << error_msg;
+            << "Error unloading custom index storage: " << error_msg;
       }
     }
     custom_index->~Custom_index();

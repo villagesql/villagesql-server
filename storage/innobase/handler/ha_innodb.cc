@@ -8719,6 +8719,9 @@ void ha_innobase::build_template(bool whole_row) {
   index = whole_row ? clust_index : m_prebuilt->index;
 
   m_prebuilt->need_to_access_clustered = (index == clust_index);
+  if (villagesql::innodb::Custom_index::needs_clustered_access(index)) {
+    m_prebuilt->need_to_access_clustered = true;
+  }
 
   /* Either m_prebuilt->index should be a secondary index, or it
   should be the clustered index. */
@@ -10410,7 +10413,8 @@ int ha_innobase::knn_index_init(uint keynr, const uchar *key, uint length,
       m_prebuilt->srch_key_val_len, m_prebuilt->index, key, length);
 
   m_prebuilt->m_knn_query = true;
-  m_prebuilt->set_knn_limit(limit, limit_is_exact);
+  m_prebuilt->set_knn_limit(
+      limit, limit_is_exact && m_prebuilt->select_lock_type == LOCK_NONE);
 
   return 0;
 }
