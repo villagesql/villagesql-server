@@ -426,8 +426,10 @@ static UNIV_COLD void my_error_innodb(
       my_error(ER_TABLESPACE_EXISTS, MYF(0), table);
       break;
     case DB_VILLAGESQL_ERROR:
-      villagesql_error("%s", MYF(0),
-                       check_trx_exists(current_thd)->detailed_error);
+      villagesql_error(
+          "InnoDB: Custom type operation failed. See server"
+          " error log for details.",
+          MYF(0));
       break;
 #ifdef UNIV_DEBUG
     case DB_SUCCESS:
@@ -1299,23 +1301,6 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
     ha_alter_info->unsupported_reason =
         innobase_get_err_msg(ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS);
     online = false;
-  }
-
-  /* VillageSQL: a custom (USING EXTENDED) index is built with the table locked,
-  not online. Building it online would allocate a modification log and leave the
-  index in ONLINE_INDEX_CREATION; nothing replays that log into a custom index,
-  so its status would never advance to ONLINE_INDEX_COMPLETE and the commit
-  would assert. Keyed on the index itself, not on the column's storage: a custom
-  index can be built over an ordinary in-row column.
-  TODO(villagesql-indexing): allow online builds once a custom index can consume
-  a replayed DML row-log, exposed as a declared per-index capability. */
-  for (uint i = 0; i < ha_alter_info->index_add_count; i++) {
-    const KEY *key =
-        &ha_alter_info->key_info_buffer[ha_alter_info->index_add_buffer[i]];
-    if (key->custom_index_context != nullptr) {
-      online = false;
-      break;
-    }
   }
 
   // Extended custom column storage holds DML operations during table rebuild.

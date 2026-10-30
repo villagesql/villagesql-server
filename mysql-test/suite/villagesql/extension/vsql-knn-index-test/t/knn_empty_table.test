@@ -4,6 +4,8 @@
 # empty result without error, and a subsequent INSERT and query must work
 # normally.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (

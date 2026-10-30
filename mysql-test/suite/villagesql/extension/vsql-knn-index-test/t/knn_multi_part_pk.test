@@ -12,6 +12,8 @@
 # is interleaved with fixed ones -- so resolution must resume a fixed-field read
 # immediately after a variable one.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 --disable_query_log

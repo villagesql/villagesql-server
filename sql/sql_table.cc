@@ -17685,16 +17685,6 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
   }
 
-  // TODO(villagesql-indexing): changing the primary key of a table with a
-  // custom index is not supported yet
-  if (villagesql::alter_changes_pk_of_custom_indexed_table(
-          table, alter_info, key_info, key_count)) {
-    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0),
-             "Changing the primary key of a table with a USING EXTENDED index "
-             "is not supported");
-    goto err_new_table_cleanup;
-  }
-
   // VillageSQL: stash the real target table name so the #sql-xxx rebuild table
   // can resolve its custom indexes against the victionary under that name (the
   // #sql-xxx name matches nothing there).

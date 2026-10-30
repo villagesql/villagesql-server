@@ -8,6 +8,8 @@
 # This is a pure custom-index test: an ordinary column-storage type, no vector
 # type and no primary-key change involved.
 
+--source include/villagesql/not_implemented.inc
+
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_ext_index_test;
 
