@@ -1026,6 +1026,23 @@ bool IsFirstPrepareBeforeReprepare(const THD *thd) {
          !thd->stmt_arena->is_repreparing && thd->lex->has_udf();
 }
 
+// Calling a VDF or UDF in a prepared statement always makes EXECUTE prepare
+// the statement again. At the first PREPARE we might not yet know all the type
+// params of the custom types in the statement. That's OK: they are resolved at
+// EXECUTE, when the statement is prepared again with the bound values. So at
+// the first PREPARE, when one side's params are unknown, it is enough that the
+// base types match. E.g. in `WHERE v = TVECTOR::from_string(?)`, with `v` a
+// TVECTOR(3) column, the right side is a TVECTOR with unknown params until
+// EXECUTE. It is accepted at PREPARE, and at EXECUTE a value of another
+// dimension, e.g. '[1,2]', is rejected.
+static bool CompatibleWhileResolving(const TypeContext &a,
+                                     const TypeContext &b) {
+  if (a.is_compatible_with(b)) return true;
+  return (a.is_unknown() || b.is_unknown()) &&
+         a.key().descriptor_key() == b.key().descriptor_key() &&
+         IsFirstPrepareBeforeReprepare(current_thd);
+}
+
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
   const TypeContext *accumulator_tc = accumulator->get_type_context();
   const TypeContext *item_tc = item->get_type_context();
@@ -1050,7 +1067,7 @@ bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
                      MYF(0));
     return true;
   } else if (accumulator_tc != nullptr && item_tc != nullptr &&
-             !accumulator_tc->is_compatible_with(*item_tc)) {
+             !CompatibleWhileResolving(*accumulator_tc, *item_tc)) {
     // Both have custom types but they're incompatible
     villagesql_error(
         "Cannot use UNION with different custom types '%s' and '%s'", MYF(0),
@@ -1075,7 +1092,7 @@ bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
 
   // Case 1: Both sides have custom types
   if (lhs_tc != nullptr && rhs_tc != nullptr) {
-    if (!lhs_tc->is_compatible_with(*rhs_tc)) {
+    if (!CompatibleWhileResolving(*lhs_tc, *rhs_tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        lhs_tc->qualified_name().c_str(),
                        rhs_tc->qualified_name().c_str(), operation_name);
@@ -1546,7 +1563,7 @@ static bool AllArgsCompatible(Item_func *func) {
   for (uint i = 1; any_tc && i < func->arg_count; i++) {
     auto *tc = func->get_arg(i)->get_type_context();
     if (!tc) continue;  // not yet custom-typed, skip
-    if (!any_tc->is_compatible_with(*tc)) {
+    if (!CompatibleWhileResolving(*any_tc, *tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        any_tc->qualified_name().c_str(),
                        tc->qualified_name().c_str(), func->func_name());
@@ -1603,9 +1620,10 @@ static bool CaseArgsCompatible(Item_func *func) {
       villagesql_error(ER_INCOMPARABLE_TYPES, MYF(0), func->func_name());
       return false;
     }
-    if (!tc0->is_compatible_with(*tc1)) {
-      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0), tc0->type_name().c_str(),
-                       tc1->type_name().c_str());
+    if (!CompatibleWhileResolving(*tc0, *tc1)) {
+      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0),
+                       tc0->qualified_name().c_str(),
+                       tc1->qualified_name().c_str());
       return false;
     }
   }
@@ -2065,8 +2083,10 @@ static bool ConvertVDFArguments(
           return true;
         }
         args[i]->set_type_context(resolved_tc);
-      } else {
-        // Neither the hook nor the built-in rules could supply params.
+      } else if (!IsFirstPrepareBeforeReprepare(thd)) {
+        // Neither the hook nor the built-in rules could supply params. At a
+        // first PREPARE they may depend on a parameter value, so don't error
+        // out just yet.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2116,8 +2136,11 @@ static bool ConvertVDFArguments(
       }
 
       // If the resolved type is still unknown (parameterized type, no known
-      // params from other args), error.
+      // params from other args), error, unless the params may depend on a
+      // parameter value at a first PREPARE. The argument is then left as it is
+      // until the statement is prepared again.
       if (type_ctx->is_unknown()) {
+        if (IsFirstPrepareBeforeReprepare(thd)) continue;
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2435,6 +2458,15 @@ static bool BuildVarargsExpectedTypes(
   return false;
 }
 
+// Returns true if any argument is of a custom type whose params are unknown.
+static bool UnknownCustomTypeParamsPresent(uint arg_count, Item **args) {
+  for (uint i = 0; i < arg_count; i++) {
+    const TypeContext *tc = args[i]->get_type_context();
+    if (tc != nullptr && tc->is_unknown()) return true;
+  }
+  return false;
+}
+
 // Returns true if any argument is a prepared-statement parameter with no value
 // yet.
 static bool UnboundPSParamsPresent(uint arg_count, Item **args) {
@@ -2460,12 +2492,14 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
   *out_bind_hook_postponed = false;
 
-  // At a first PREPARE an argument may be a parameter with no value yet. The
-  // bind_and_check_types hook (and pass 2) then waits until the statement is
-  // prepared again at EXECUTE with the values bound.
-  const bool postpone_bind_hook = has_bind_hook &&
-                                  IsFirstPrepareBeforeReprepare(thd) &&
-                                  UnboundPSParamsPresent(arg_count, args);
+  // At a first PREPARE an argument may be a parameter with no value yet, or of
+  // a custom type whose params depend on one. The bind_and_check_types hook
+  // (and pass 2) then waits until the statement is prepared again at EXECUTE
+  // with the values bound.
+  const bool postpone_bind_hook =
+      has_bind_hook && IsFirstPrepareBeforeReprepare(thd) &&
+      (UnboundPSParamsPresent(arg_count, args) ||
+       UnknownCustomTypeParamsPresent(arg_count, args));
 
   // Varargs without a hook: skip both arg-count and per-arg type validation.
   // The function's prerun hook is responsible for inspecting arg_count and
