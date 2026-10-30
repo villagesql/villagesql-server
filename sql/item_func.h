@@ -2739,6 +2739,25 @@ class Item_func_internal_keys_disabled : public Item_int_func {
   }
 };
 
+// Reads a uint64 key out of a custom index's se_private_data property string.
+// The first arg is the se_private_data string, the second the key name. Returns
+// 0 when the key is absent.
+class Item_func_internal_get_custom_index_property : public Item_int_func {
+ public:
+  Item_func_internal_get_custom_index_property(const POS &pos, Item *a, Item *b)
+      : Item_int_func(pos, a, b) {}
+  longlong val_int() override;
+  const char *func_name() const override {
+    return "internal_get_custom_index_property";
+  }
+  bool resolve_type(THD *) override {
+    unsigned_flag = true;
+    set_nullable(false);
+    null_on_null = false;
+    return false;
+  }
+};
+
 class Item_func_internal_index_column_cardinality : public Item_int_func {
  public:
   Item_func_internal_index_column_cardinality(const POS &pos,

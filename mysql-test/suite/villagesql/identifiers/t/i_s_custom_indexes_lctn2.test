@@ -1,0 +1,63 @@
+# At lower_case_table_names=2 statements are lowercased while the data dictionary
+# keeps the CREATE-time case, so I_S.CUSTOM_INDEXES join against
+# villagesql.custom_indexes must be case-insensitively.
+#
+# Companion to i_s_columns_lctn2.test and i_s_statistics_lctn2.test.
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+--source include/have_case_insensitive_file_system.inc
+--source include/have_lowercase2.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE DATABASE MixedDb;
+USE MixedDb;
+
+CREATE TABLE MixedTab (
+  id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b dummy_type_vector,
+  INDEX MixedIdx (a) USING EXTENDED(dummy_index_hnsw)
+);
+
+--echo # --- Stored rows: db and table names lower-cased, index name as entered ---
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- CUSTOM_INDEXES reports the CREATE-time case, not the stored case ---
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, INDEX_TYPE_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME;
+
+--echo # --- CUSTOM_INDEX_COLUMNS join ---
+SELECT i.TABLE_SCHEMA, i.TABLE_NAME, i.INDEX_NAME,
+       c.SEQ_IN_INDEX, c.COLUMN_NAME, c.PROFILE_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES i
+JOIN INFORMATION_SCHEMA.CUSTOM_INDEX_COLUMNS c USING (INDEX_ID)
+WHERE i.TABLE_SCHEMA = 'mixeddb'
+ORDER BY i.INDEX_NAME, c.SEQ_IN_INDEX;
+
+--echo # --- and agrees with I_S.COLUMNS on the same table ---
+SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'mixeddb' AND COLUMN_NAME = 'a';
+
+--echo # --- Index added by a statement spelled in a different case ---
+ALTER TABLE mixeddb.mixedtab
+  ADD INDEX MixedIdx2 (b) USING EXTENDED(dummy_index_hnsw);
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+FROM INFORMATION_SCHEMA.CUSTOM_INDEXES
+WHERE TABLE_SCHEMA = 'mixeddb'
+ORDER BY INDEX_NAME;
+
+--echo # --- Cleanup ---
+DROP DATABASE MixedDb;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
