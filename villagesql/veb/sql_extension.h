@@ -68,11 +68,13 @@ class Sql_cmd_install_extension : public Sql_cmd {
   explicit Sql_cmd_install_extension(const LEX_CSTRING &name,
                                      const LEX_STRING &source,
                                      bool update_version = false,
-                                     bool at_restart = false)
+                                     bool at_restart = false,
+                                     bool download_extension = true)
       : m_name(name),
         m_source(source),
         m_update_version(update_version),
-        m_at_restart(at_restart) {}
+        m_at_restart(at_restart),
+        m_download_extension(download_extension) {}
 
   enum_sql_command sql_command_code() const override {
     return SQLCOM_INSTALL_EXTENSION;
@@ -92,6 +94,7 @@ class Sql_cmd_install_extension : public Sql_cmd {
   LEX_STRING m_source;
   bool m_update_version;
   bool m_at_restart;
+  bool m_download_extension;
 };
 
 // This class implements the UNINSTALL EXTENSION statement.

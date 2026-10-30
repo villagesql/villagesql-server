@@ -78,6 +78,8 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
                      std::string &sha256_hash,
                      villagesql::services::LoadReason load_reason =
                          villagesql::services::LoadReason::kInstall);
+
+bool download_veb(std::string_view extension_source, std::string_view veb_dir);
 }  // namespace
 
 // Guards the extension DDL (INSTALL / UNINSTALL / ALTER EXTENSION). These
@@ -369,10 +371,20 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
 }
 
 bool Sql_cmd_install_extension::execute_install(THD *thd) {
+  std::string extension_name(m_name.str, m_name.length);
+
+  if (m_download_extension) {
+    std::string extension_source(m_source.str, m_source.length);
+
+    if (download_veb(extension_source, opt_veb_dir)) {
+      LogVSQL(ERROR_LEVEL, "Error installing extension: '%s' from '%s'",
+              extension_name.c_str(), extension_source.c_str());
+      return true;
+    }
+  }
+
   // We do not replicate the INSTALL EXTENSION statement
   const Disable_binlog_guard binlog_guard(thd);
-
-  std::string extension_name(m_name.str, m_name.length);
 
   // INSTALL EXTENSION is DDL-like (modifies system tables), so we follow the
   // INSTALL PLUGIN pattern: disable autocommit to prevent premature commits
@@ -695,6 +707,10 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
   return false;
 }
 
+bool download_veb(std::string_view src, std::string_view veb_dir) {
+  std::cout << src << veb_dir;
+  return false;
+}
 }  // namespace
 
 namespace villagesql {
