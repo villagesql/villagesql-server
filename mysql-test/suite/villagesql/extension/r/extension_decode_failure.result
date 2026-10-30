@@ -1,6 +1,7 @@
 INSTALL EXTENSION vsql_test_only;
 call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
 call mtr.add_suppression("VillageSQL.*Extension error decoding column.*FAULT_BLOB");
+call mtr.add_suppression("VillageSQL.*VDF threw an exception.*throw");
 # Verify extension is installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
@@ -22,11 +23,20 @@ id	val
 3	OK abc
 # Insert a value that will fail on decode
 INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
+# Insert a value that will throw on decode
+INSERT INTO t1 VALUES (5, 'DECODE_THROW');
 # SELECT the decode-failing row alone: returns an error
 SELECT id, val FROM t1 WHERE id = 4;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
 # Verify the failure was logged
 VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
+# SELECT the decode-throw row alone: returns an error
+SELECT id, val FROM t1 WHERE id = 5;
+ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
+# Verify the failure was logged
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_THROW\x00\x00\x00\x00): VDF threw an exception (fault blob decode throw)
+# UPDATE: overwrite the DECODE_THROW row with a good value
+UPDATE t1 SET val = 'OK fixed' WHERE id = 5;
 # SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
 SELECT id, val FROM t1 ORDER BY id;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4: check server log for details
@@ -41,6 +51,37 @@ id	val
 2	OK world
 3	OK abc
 4	OK fixed
+5	OK fixed
+# First show weird hash function works
+SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
+sum(id)	val
+3	OK abc
+9	OK fixed
+1	OK hello
+2	OK world
+# Second insert throw row and retest
+INSERT INTO t1 VALUES (6, 'HASH_THROW');
+SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
+sum(id)	val
+6	HASH_THROW
+3	OK abc
+9	OK fixed
+1	OK hello
+2	OK world
+# Verify the failure was logged (two ERRORs)
+VillageSQL: hash VDF 'FAULT_BLOB::hash' returned error: VDF threw an exception (fault blob hash throw)
+# Insert a value that will throw on compare
+INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
+SELECT id, val FROM t1 ORDER BY val;
+id	val
+6	HASH_THROW
+3	OK abc
+4	OK fixed
+5	OK fixed
+1	OK hello
+2	OK world
+7	COMPARE_THROW
+VillageSQL: compare VDF 'FAULT_BLOB::compare' returned error: VDF threw an exception (fault blob compare throw)
 # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
 # The updated row now causes an error on SELECT
@@ -62,6 +103,8 @@ ERROR HY000: Incorrect FAULT_BLOB value: 'ENCODE_FAIL' for column 'val' at row 1
 SELECT id, val FROM t2 ORDER BY id;
 id	val
 1	OK good
+INSERT INTO t2 VALUES (3, 'ENCODE_THROW');
+ERROR HY000: VDF threw an exception (fault blob encode throw)
 DROP TABLE t2;
 UNINSTALL EXTENSION vsql_test_only;
 # Verify extension was removed

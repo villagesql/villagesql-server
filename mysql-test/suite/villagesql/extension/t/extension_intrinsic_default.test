@@ -22,6 +22,23 @@ INSERT INTO t_vdf VALUES (2, '(42)');
 SELECT id, v FROM t_vdf ORDER BY id;
 DROP TABLE t_vdf;
 
+# Record log file position before first decode failure.
+--source include/villagesql/decode_failure_log_init.inc
+
+--echo # intrinsic_default VDF: same as previous but function returns error
+--error 3219
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_ERR_TYPE NOT NULL);
+
+--echo # Verify the failure was logged
+--source include/villagesql/decode_failure_log_print.inc
+
+--echo # intrinsic_default VDF: same as previous but function throws
+--error 3219
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_THROW_TYPE NOT NULL);
+
+--echo # Verify the failure was logged
+--source include/villagesql/decode_failure_log_print.inc
+
 --echo # Parameterized type
 CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
 INSERT IGNORE INTO t_param VALUES (1, NULL);
@@ -57,4 +74,5 @@ DROP TABLE t_again;
 --echo # An ordinary VDF in the same extension is still callable.
 SELECT vsql_test_only.test_result_kind('ok') AS k;
 
+--remove_file $MYSQLTEST_VARDIR/tmp/decode_fail_log_pos.txt
 UNINSTALL EXTENSION vsql_test_only;
