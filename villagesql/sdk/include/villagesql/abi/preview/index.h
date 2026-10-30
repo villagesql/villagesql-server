@@ -53,6 +53,13 @@ typedef uint32_t vef_index_cap_t;
 // Supports index scan for K nearest neighbours.
 // ORDER BY distance_function(index_column, reference_key) LIMIT K;
 #define VEF_INDEX_CAP_KNN ((vef_index_cap_t)1u << 4)
+// Index scan may return approximate results (e.g. approximate nearest
+// neighbour search); results may omit or misorder some matching rows.
+#define VEF_INDEX_CAP_APPROXIMATE ((vef_index_cap_t)1u << 4)
+// Index entries carry MVCC visibility information: scan_fetch reports the
+// transaction reference and the delete mark of each entry, so the server can
+// decide visibility from the index entry without a clustered index lookup.
+#define VEF_INDEX_CAP_MVCC_VISIBILITY ((vef_index_cap_t)1u << 5)
 
 // Physical storage properties (used by InnoDB).
 // Every index entry must carry a back-reference to the data it indexes so the
@@ -85,7 +92,7 @@ typedef uint32_t vef_index_storage_t;
 typedef void *vef_index_ref_t;
 
 // InnoDB ReadView reference for MVCC
-typedef void *vef_readview_ref_t;
+typedef const void *vef_readview_ref_t;
 
 // Naming convention for function pointer typedefs in this header:
 //   _fn      - callback provided by the server and called by the extension
@@ -146,7 +153,8 @@ typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref,
                                      void *result);
 
 // Check whether a transaction's changes are visible under a read view.
-typedef bool (*vef_index_trx_is_visible_fn)(vef_readview_ref_t read_view,
+typedef bool (*vef_index_trx_is_visible_fn)(vef_index_ref_t index_ref,
+                                            vef_readview_ref_t read_view,
                                             vef_storage_trx_ref_t trx_ref);
 
 // Index context passed by the server to every extension function. The pointer
@@ -428,19 +436,27 @@ typedef bool (*vef_type_index_scan_position_func_t)(
 //                  set. Follows the same stability guarantees as the key_ref
 //                  output of insert: stable across mini-transactions and
 //                  transactions until the entry is physically removed by purge.
+//   key_column_refs - Caller-allocated array of index_ctx->num_key_columns
+//                  vef_storage_col_ref_t values. The extension fills this
+//                  array, instead of key_columns, when
+//                  VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props.
 //   key_columns  - Caller-allocated array of index_ctx->num_key_columns
 //                  vef_storage_col_data_t structs; the extension sets each
-//                  data pointer and length to the key data at this position
+//                  data pointer and length to the key data at this position.
+//                  Filled only when VEF_INDEX_STORAGE_HAS_COLUMN_REF is not
+//                  set.
 //   pkey_columns - Caller-allocated array of
 //                  index_ctx->num_primary_key_columns vef_storage_col_data_t
 //                  structs; the extension sets each data pointer and length
 //                  to the primary key data for the current row
+//   trx_ref      - Output: transaction that last wrote this entry
 //   error_msg    - Output: error description on failure
 //   error_msg_len - length of error message buffer
 // Returns false on success, true on error (writes to error_msg).
 typedef bool (*vef_type_index_scan_fetch_func_t)(
     vef_index_cursor_ref_t cursor, vef_storage_col_ref_t *key_ref,
-    vef_storage_col_data_t *key_columns, vef_storage_col_data_t *pkey_columns,
+    vef_storage_col_ref_t *key_column_refs, vef_storage_col_data_t *key_columns,
+    vef_storage_col_data_t *pkey_columns, vef_storage_trx_ref_t *trx_ref,
     char *error_msg, uint32_t error_msg_len);
 
 // Save the current cursor position before the active mini-transaction commits.

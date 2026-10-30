@@ -37,6 +37,7 @@
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "storage/innobase/include/que0que.h"
+#include "storage/innobase/include/read0types.h"
 #include "storage/innobase/include/row0mysql.h"
 #include "storage/innobase/include/univ.i"
 #include "villagesql/include/error.h"
@@ -334,6 +335,18 @@ static bool vef_index_col_data_to_ref_impl(vef_index_ref_t index_ref,
   return false;
 }
 
+// Checks whether the changes of trx_ref (a transaction id) are visible under
+// the InnoDB ReadView. The index's table name is used for InnoDB's trx id
+// sanity diagnostics.
+static bool vef_index_trx_is_visible_impl(vef_index_ref_t index_ref,
+                                          vef_readview_ref_t read_view,
+                                          vef_storage_trx_ref_t trx_ref) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  const auto *view = static_cast<const ReadView *>(read_view);
+  return view->changes_visible(static_cast<trx_id_t>(trx_ref),
+                               index->table->name);
+}
+
 // Calls intf.parse to validate the WITH (...) parameters. Allocates the
 // options struct on index->heap, writes the parsed result into it, and sets
 // *options_out to point to it. No-op (leaves *options_out unchanged) when
@@ -382,6 +395,7 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->profile_fn = vef_index_profile_fn_impl;
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
+  ctx->trx_is_visible_fn = vef_index_trx_is_visible_impl;
   ctx->options = nullptr;
   ctx->is_unique = dict_index_is_unique(index) ? 1 : 0;
 
@@ -904,8 +918,10 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
   scan_desc.reverse = reverse;
   scan_desc.num_keys = n_fields > 0 ? 1 : 0;
   scan_desc.keys = n_fields > 0 ? &scan_key : nullptr;
-  scan_desc.readview = static_cast<vef_readview_ref_t>(
-      const_cast<ReadView *>(trx_get_read_view(prebuilt->trx)));
+  scan_desc.readview = nullptr;
+  if (prebuilt->select_lock_type == LOCK_NONE) {
+    static_cast<vef_readview_ref_t>(trx_get_read_view(prebuilt->trx));
+  }
   if (n_fields > 0) {
     dberr_t err = fill_profile(prebuilt, &scan_desc, mode);
     if (err != DB_SUCCESS) return err;

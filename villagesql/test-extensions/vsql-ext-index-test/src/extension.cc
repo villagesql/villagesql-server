@@ -362,9 +362,11 @@ static bool ext_index_position(Index::Cursor /*cursor*/, Index::CursorOp /*op*/,
 
 static bool ext_index_fetch(Index::Cursor /*cursor*/,
                             IndexScanKey::KeyPartRef * /*key_ref*/,
+                            IndexScanKey::KeyPartRef * /*key_column_refs*/,
                             IndexScanKey::KeyPartData * /*key_columns*/,
                             IndexScanKey::KeyPartData * /*pkey_columns*/,
-                            char * /*err*/, uint32_t /*err_len*/) {
+                            Segment::TrxRef * /*trx_ref*/, char * /*err*/,
+                            uint32_t /*err_len*/) {
   return false;
 }
 
