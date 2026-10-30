@@ -264,7 +264,7 @@ static const dict_col_t *ref_column(const dict_index_t *index, uint32_t key_pos,
 static bool vef_index_col_ref_to_data_impl(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
     vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
-    char *error_msg, uint32_t error_msg_len) {
+    bool *delete_mark, char *error_msg, uint32_t error_msg_len) {
   const auto *index = static_cast<const dict_index_t *>(index_ref);
   const dict_col_t *col = ref_column(index, key_pos, error_msg, error_msg_len);
   if (col == nullptr) return true;
@@ -295,9 +295,9 @@ static bool vef_index_col_ref_to_data_impl(
   auto *value = const_cast<byte *>(col_data->data);
   mach_write_to_8(value, col_ref);
 
-  dberr_t err =
-      Custom_column::fetch(index->table, col, value + ref_size,
-                           value_len - ref_size, value, ref_size, trx_ref);
+  dberr_t err = Custom_column::fetch(index->table, col, value + ref_size,
+                                     value_len - ref_size, value, ref_size,
+                                     trx_ref, delete_mark);
   if (err != DB_SUCCESS) {
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len,
@@ -309,6 +309,12 @@ static bool vef_index_col_ref_to_data_impl(
 
   col_data->length = value_len;
   return false;
+}
+
+static bool vef_index_key_is_desc_impl(vef_index_ref_t index_ref,
+                                       uint32_t key_pos) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  return !index->get_field(key_pos)->is_ascending;
 }
 
 // Extracts the column reference from a stored value of an extension-managed
@@ -414,6 +420,7 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->trx_is_visible_fn = vef_index_trx_is_visible_impl;
+  ctx->key_is_desc_fn = vef_index_key_is_desc_impl;
   ctx->options = nullptr;
   ctx->is_unique = dict_index_is_unique(index) ? 1 : 0;
 
@@ -1431,9 +1438,10 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
 
     vef_storage_col_ref_t key_ref{};
     vef_storage_trx_ref_t entry_trx = 0;
+    bool entry_delete_mark = false;
     if (intf.scan_fetch(cursor, &key_ref, key_column_refs.data(),
                         key_columns.data(), pkey_columns.data(), &entry_trx,
-                        error_msg, sizeof(error_msg))) {
+                        &entry_delete_mark, error_msg, sizeof(error_msg))) {
       err = failed("Fetch index key", true);
       break;
     }
