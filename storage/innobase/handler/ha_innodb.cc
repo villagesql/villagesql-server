@@ -3167,6 +3167,8 @@ void ha_innobase::reset_template(void) {
   m_prebuilt->read_just_key = 0;
   m_prebuilt->in_fts_query = false;
   m_prebuilt->m_end_range = false;
+  m_prebuilt->m_knn_query = false;
+  m_prebuilt->m_knn_limit_is_exact = true;
 
   /* Reset index condition pushdown state. */
   if (m_prebuilt->idx_cond) {
@@ -6647,6 +6649,11 @@ const char *ha_innobase::table_type() const { return (innobase_hton_name); }
 ulong ha_innobase::index_flags(uint key, uint, bool) const {
   if (table_share->key_info[key].algorithm == HA_KEY_ALG_FULLTEXT) {
     return (0);
+  }
+
+  auto *custom_context = table_share->key_info[key].custom_index_context;
+  if (custom_context != nullptr) {
+    return villagesql::innodb::Custom_index::flags(custom_context);
   }
 
   ulong flags = HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER | HA_READ_RANGE |
@@ -10364,16 +10371,43 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
 {
   DBUG_TRACE;
 
-  return change_active_index(keynr);
+  using villagesql::innodb::Custom_index;
+
+  int error = change_active_index(keynr);
+  if (error != 0) {
+    return error;
+  }
+
+  // A KNN-capable custom index should use  knn_index_init() instead.
+  ut_ad(!Custom_index::is_knn(m_prebuilt->index));
+
+  if (Custom_index::is_knn(m_prebuilt->index)) {
+    villagesql_error(
+        "InnoDB: Incorrect handler method index_init() called for KNN scan.",
+        MYF(0));
+    return ER_VILLAGESQL_GENERIC_ERROR;
+  }
+
+  return 0;
 }
 
-// TODO(villagesql-indexing): Dispatch to the custom index type's KNN scan
-// (VEF_INDEX_SCAN_TYPE_KNN) instead of falling back to a regular index scan.
-int ha_innobase::knn_index_init(uint keynr, const uchar *, uint, ha_rows,
-                                bool) {
+int ha_innobase::knn_index_init(uint keynr, const uchar *key, uint length,
+                                ha_rows limit, bool limit_is_exact) {
   DBUG_TRACE;
 
-  return change_active_index(keynr);
+  int error = change_active_index(keynr);
+  if (error != 0) {
+    return error;
+  }
+
+  row_sel_convert_mysql_key_to_innobase(
+      m_prebuilt->search_tuple, m_prebuilt->srch_key_val1,
+      m_prebuilt->srch_key_val_len, m_prebuilt->index, key, length);
+
+  m_prebuilt->m_knn_query = true;
+  m_prebuilt->set_knn_limit(limit, limit_is_exact);
+
+  return 0;
 }
 
 /** Currently does nothing.
@@ -10566,7 +10600,7 @@ int ha_innobase::index_read(
         m_prebuilt->srch_key_val_len, index, key_ptr, key_len);
 
     assert(m_prebuilt->search_tuple->n_fields > 0);
-  } else {
+  } else if (!m_prebuilt->is_knn_query()) {
     /* We position the cursor to the last or the first entry
     in the index */
 

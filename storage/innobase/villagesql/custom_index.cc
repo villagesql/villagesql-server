@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "custom_column.h"
+#include "sql/handler.h"
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
@@ -225,7 +226,8 @@ static const dict_col_t *ref_column(const dict_index_t *index, uint32_t key_pos,
 // holding page latches in a mini-transaction of its own.
 static bool vef_index_col_ref_to_data_impl(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
-    vef_storage_col_data_t *col_data, char *error_msg, uint32_t error_msg_len) {
+    vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
+    char *error_msg, uint32_t error_msg_len) {
   const auto *index = static_cast<const dict_index_t *>(index_ref);
   const dict_col_t *col = ref_column(index, key_pos, error_msg, error_msg_len);
   if (col == nullptr) return true;
@@ -256,8 +258,9 @@ static bool vef_index_col_ref_to_data_impl(
   auto *value = const_cast<byte *>(col_data->data);
   mach_write_to_8(value, col_ref);
 
-  dberr_t err = Custom_column::fetch(index->table, col, value + ref_size,
-                                     value_len - ref_size, value, ref_size);
+  dberr_t err =
+      Custom_column::fetch(index->table, col, value + ref_size,
+                           value_len - ref_size, value, ref_size, trx_ref);
   if (err != DB_SUCCESS) {
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len,
@@ -377,8 +380,36 @@ bool Custom_index::is_custom(const dict_index_t *index) {
   return index != nullptr && index->custom_index != nullptr;
 }
 
+bool Custom_index::is_knn(const dict_index_t *index) {
+  if (!is_custom(index)) return false;
+  const Custom_index *custom_index = index->custom_index;
+  return (flags(custom_index->index_meta().get()) & HA_SUPPORT_KNN) != 0;
+}
+
 const vef_type_index_intf_t &Custom_index::interface() const {
   return index_meta()->descriptor()->intf();
+}
+
+ulong Custom_index::flags(const IndexContext *meta) {
+  ut_a(meta != nullptr);
+  const vef_index_cap_t caps = meta->descriptor()->intf().capabilities;
+
+  // TODO(villagesql-indexing):
+  // 1. Custom index support:
+  //    A. Predicate push down: HA_DO_INDEX_COND_PUSHDOWN
+  //    B. For part key search: HA_ONLY_WHOLE_INDEX
+  //    C. For storing NULL: HA_TABLE_SCAN_ON_NULL
+  //    D. For row ID ordered scan: HA_KEY_SCAN_NOT_ROR
+  //    E. For covered scan: HA_KEYREAD_ONLY
+  ulong flags = HA_READ_NEXT | HA_ONLY_WHOLE_INDEX | HA_TABLE_SCAN_ON_NULL |
+                HA_KEY_SCAN_NOT_ROR;
+
+  if (caps & VEF_INDEX_CAP_RANGE_SCAN) flags |= HA_READ_RANGE;
+  if (caps & VEF_INDEX_CAP_REVERSE_SCAN) flags |= HA_READ_PREV;
+  if (caps & VEF_INDEX_CAP_ORDER_BY) flags |= HA_READ_ORDER;
+  if (caps & VEF_INDEX_CAP_KNN) flags |= HA_SUPPORT_KNN;
+
+  return flags;
 }
 
 dberr_t Custom_index::attach(dict_index_t *index, const IndexContext *meta,
@@ -651,6 +682,22 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
     // are implemented for Custom_index and need it to relocate this entry.
   }
   return DB_SUCCESS;
+}
+
+dberr_t Custom_index::row_search(byte *, page_cur_mode_t, row_prebuilt_t *,
+                                 ulint, ulint, bool is_mvcc) {
+  ut_ad(is_mvcc);
+  if (!is_mvcc) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index is not supported for intrinsic tables.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  // TODO(villagesql-indexing): Drive the custom index type's scan_begin /
+  // scan_fetch / scan_end interface instead of rejecting every scan.
+  ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+      << "Row search on a custom index is not supported yet.";
+  return DB_VILLAGESQL_ERROR;
 }
 
 void Custom_index::free_all(dict_index_t *index) {

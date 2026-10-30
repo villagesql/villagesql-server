@@ -270,11 +270,14 @@ namespace vsql::preview_index_builder {
 
 using Arena = vsql::preview_storage::Arena;
 
+using vsql::preview_storage::Segment;
+
 using vsql::preview_storage::detail::AllocateArenaStorage;
 using vsql::preview_storage::detail::ERROR_MSG_SIZE;
 using vsql::preview_storage::detail::tl_error_msg;
 
-// Represents a scan key used to define an index scan boundary.
+// Describes a key used to define an index scan.
+// This is a temporary view and must not be copied or saved by an extension.
 class IndexScanKey {
  public:
   using KeyPartData = vef_storage_col_data_t;
@@ -288,6 +291,8 @@ class IndexScanKey {
   static constexpr KeyPartRef EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
 
   explicit IndexScanKey(const vef_index_scan_key_t &key) : key_(key) {}
+  IndexScanKey(const IndexScanKey &) = delete;
+  IndexScanKey &operator=(const IndexScanKey &) = delete;
 
   Type type() const { return static_cast<Type>(key_.type); }
   uint32_t num_columns() const { return key_.num_key_columns; }
@@ -307,8 +312,11 @@ class IndexScanKey {
 };
 
 // Describes an index scan, including its type, scan direction, and scan keys.
+// This is a temporary view and must not be copied or saved by an extension.
 class IndexScanDesc {
  public:
+  using ReadViewRef = vef_readview_ref_t;
+
   enum class Type : vef_index_scan_type_t {
     Point = VEF_INDEX_SCAN_TYPE_POINT,
     Range = VEF_INDEX_SCAN_TYPE_RANGE,
@@ -316,6 +324,8 @@ class IndexScanDesc {
   };
 
   explicit IndexScanDesc(const vef_index_scan_desc_t &desc) : desc_(desc) {}
+  IndexScanDesc(const IndexScanDesc &) = delete;
+  IndexScanDesc &operator=(const IndexScanDesc &) = delete;
 
   Type scan_type() const { return static_cast<Type>(desc_.scan_type); }
   bool is_point() const { return scan_type() == Type::Point; }
@@ -323,8 +333,12 @@ class IndexScanDesc {
   bool is_knn() const { return scan_type() == Type::Knn; }
 
   bool reverse() const { return static_cast<bool>(desc_.reverse); }
+  bool is_limit_exact() const {
+    return static_cast<bool>(desc_.knn_limit_is_exact);
+  }
   uint32_t limit() const { return desc_.limit; }
   uint32_t num_keys() const { return desc_.num_keys; }
+  ReadViewRef read_view() const { return desc_.readview; }
 
   IndexScanKey operator[](uint32_t i) const {
     return IndexScanKey{desc_.keys[i]};
@@ -335,7 +349,8 @@ class IndexScanDesc {
 };
 
 // Provides access to the index definition and services required by an
-// extension.
+// extension. This is a copyable handle to an index context that remains
+// valid during the scan. An extension can save it in its cursor handle.
 class Index {
  public:
   using Ref = vef_index_ref_t;
@@ -380,25 +395,25 @@ class Index {
     Prev = VEF_INDEX_CURSOR_OP_PREV,
   };
 
-  explicit Index(const vef_index_ctx_t &ctx) : ctx_(ctx) {}
+  explicit Index(const vef_index_ctx_t *ctx) : ctx_(ctx) {}
 
-  uint32_t get_num_key_cols() const { return ctx_.num_key_columns; }
+  uint32_t get_num_key_cols() const { return ctx_->num_key_columns; }
 
   uint32_t get_max_col_len(uint32_t key_pos) const {
-    return ctx_.key_len_fn(ctx_.index_ref, key_pos, false);
+    return ctx_->key_len_fn(ctx_->index_ref, key_pos, false);
   }
 
   uint32_t get_primary_num_key_cols() const {
-    return ctx_.num_primary_key_columns;
+    return ctx_->num_primary_key_columns;
   }
 
   uint32_t get_primary_max_col_len(uint32_t key_pos) const {
-    return ctx_.key_len_fn(ctx_.index_ref, key_pos, true);
+    return ctx_->key_len_fn(ctx_->index_ref, key_pos, true);
   }
 
   template <typename T>
   const T *options() const {
-    return static_cast<const T *>(ctx_.options);
+    return static_cast<const T *>(ctx_->options);
   }
 
   // args are the raw column values (persisted format) the profile/helper
@@ -411,8 +426,8 @@ class Index {
     static_assert((std::is_same_v<ColData, vef_storage_col_data_t> && ...),
                   "profile() args must be vef_storage_col_data_t");
     const void *argv[] = {static_cast<const void *>(&args)...};
-    ctx_.profile_fn(ctx_.index_ref, key_pos, fn_id, argv, sizeof...(ColData),
-                    result);
+    ctx_->profile_fn(ctx_->index_ref, key_pos, fn_id, argv, sizeof...(ColData),
+                     result);
   }
 
   template <typename Result, typename... ColData>
@@ -421,32 +436,42 @@ class Index {
     static_assert((std::is_same_v<ColData, vef_storage_col_data_t> && ...),
                   "helper() args must be vef_storage_col_data_t");
     const void *argv[] = {static_cast<const void *>(&args)...};
-    ctx_.helper_fn(ctx_.index_ref, key_pos, fn_id, argv, sizeof...(ColData),
-                   result);
+    ctx_->helper_fn(ctx_->index_ref, key_pos, fn_id, argv, sizeof...(ColData),
+                    result);
   }
 
   // Reads the value key_ref points to for the key column at key_pos. key_data
   // must point at a buffer of key_data->length bytes, at least
   // get_max_col_len(key_pos); on success key_data->length is the value length.
+  // If trx_ref is not nullptr, it is set to the transaction reference of the
+  // value read, e.g. for a column-only scan that needs visibility information
+  // without a row lookup.
   // Must not be called while holding page latches.
   bool get_key_data(uint32_t key_pos, IndexScanKey::KeyPartRef key_ref,
-                    IndexScanKey::KeyPartData *key_data) const {
-    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_pos, key_ref, key_data,
-                                   tl_error_msg, ERROR_MSG_SIZE);
+                    IndexScanKey::KeyPartData *key_data,
+                    Segment::TrxRef *trx_ref = nullptr) const {
+    return ctx_->col_ref_to_data_fn(ctx_->index_ref, key_pos, key_ref, key_data,
+                                    trx_ref, tl_error_msg, ERROR_MSG_SIZE);
   }
 
   // Derives the column reference for a value of the key column at key_pos that
   // is already in the column store, e.g. a key column handed to insert().
   bool get_key_ref(uint32_t key_pos, IndexScanKey::KeyPartData key_data,
                    IndexScanKey::KeyPartRef *key_ref) const {
-    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_pos, key_data, key_ref,
-                                   tl_error_msg, ERROR_MSG_SIZE);
+    return ctx_->col_data_to_ref_fn(ctx_->index_ref, key_pos, key_data, key_ref,
+                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
   const char *get_error() const { return tl_error_msg; }
 
+  // Checks whether trx_ref's changes are visible under read_view.
+  bool is_trx_visible(IndexScanDesc::ReadViewRef read_view,
+                      Segment::TrxRef trx_ref) const {
+    return ctx_->trx_is_visible_fn(read_view, trx_ref);
+  }
+
  private:
-  const vef_index_ctx_t &ctx_;
+  const vef_index_ctx_t *ctx_;
 };
 
 constexpr Index::Support operator|(Index::Support a, Index::Support b) {
@@ -471,7 +496,6 @@ namespace detail {
 // and C++ having compatible calling conventions on all supported platforms.
 
 using vsql::preview_storage::MtrCtx;
-using vsql::preview_storage::Segment;
 using vsql::preview_storage::Space;
 
 // Expected extension function pointer types. Each builder setter
@@ -553,7 +577,7 @@ struct CreateWrapper {
       return true;
     }
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     bool err = F(ctx, index, space_ref, trx_ref, error_msg, error_msg_len);
     if (err) {
       arena->~Arena();
@@ -570,7 +594,7 @@ struct DropWrapper {
                      char *error_msg, uint32_t error_msg_len) {
     auto *ctx = reinterpret_cast<Index::StorageCtx<Context> *>(storage);
     Arena *arena = &ctx->arena();
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     bool err = F(ctx, index, trx_ref, error_msg, error_msg_len);
     arena->~Arena();
     return err;
@@ -599,7 +623,7 @@ struct LoadWrapper {
       return true;
     }
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     bool err = F(ctx, index, storage_ref, error_msg, error_msg_len);
     if (err) {
       arena->~Arena();
@@ -634,7 +658,7 @@ struct InsertWrapper {
                      vef_storage_col_data_t *pkey_columns,
                      vef_storage_col_ref_t *key_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_columns, pkey_columns, key_ref, error_msg,
              error_msg_len);
@@ -649,7 +673,7 @@ struct MarkDeleteWrapper {
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns, bool delete_mark,
                      char *error_msg, uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_ref, key_columns, pkey_columns, delete_mark,
              error_msg, error_msg_len);
@@ -664,7 +688,7 @@ struct PurgeWrapper {
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns, char *error_msg,
                      uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_ref, key_columns, pkey_columns, error_msg,
              error_msg_len);
@@ -678,7 +702,7 @@ struct ScanBeginWrapper {
                      const vef_index_scan_desc_t *scan_desc,
                      vef_index_cursor_ref_t *cursor, bool *eof, char *error_msg,
                      uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     const IndexScanDesc desc{*scan_desc};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              mctx, desc, cursor, eof, error_msg, error_msg_len);
