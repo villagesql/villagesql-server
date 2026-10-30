@@ -1,0 +1,135 @@
+INSTALL EXTENSION vsql_tvector;
+# SELECT: the result type follows the value, execution by execution
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+v
+[1,2,3]
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+v
+[1,2,3,4,5]
+DEALLOCATE PREPARE s;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+# INSERT
+PREPARE s FROM 'INSERT INTO t VALUES (?, TVECTOR::from_string(?))';
+SET @id = 1, @v = '[1,2,3]';
+EXECUTE s USING @id, @v;
+# A value of another dimension is a clear cast error
+SET @id = 2, @v = '[1,2,3,4]';
+EXECUTE s USING @id, @v;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(4) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+# The failed execution does not impact the next: the next one infers again
+SET @id = 3, @v = '[4,5,6]';
+EXECUTE s USING @id, @v;
+# A NULL value leaves the type unresolved, as for a NULL constant
+SET @id = 4, @v = NULL;
+EXECUTE s USING @id, @v;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+INSERT INTO t VALUES (4, TVECTOR::from_string(NULL));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+# A malformed value fails the execution, as a malformed constant does
+SET @id = 5, @v = 'not a vector';
+EXECUTE s USING @id, @v;
+ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: missing '['
+INSERT INTO t VALUES (5, TVECTOR::from_string('not a vector'));
+ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: missing '['
+DEALLOCATE PREPARE s;
+# Multi-row VALUES: each call infers from its own parameter
+PREPARE s FROM 'INSERT INTO t VALUES (6, TVECTOR::from_string(?)),
+                                     (7, TVECTOR::from_string(?))';
+SET @v = '[1,1,1]';
+EXECUTE s USING @v, @v;
+DELETE FROM t WHERE id IN (6, 7);
+SET @v = '[7,8,9]', @w = '[10,11,12]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+# UPDATE
+PREPARE s FROM 'UPDATE t SET v = TVECTOR::from_string(?) WHERE id = ?';
+SET @v = '[0,0,1]', @id = 1;
+EXECUTE s USING @v, @id;
+DEALLOCATE PREPARE s;
+# INSERT ... ON DUPLICATE KEY UPDATE
+PREPARE s FROM 'INSERT INTO t VALUES (3, TVECTOR::from_string(?))
+                ON DUPLICATE KEY UPDATE v = TVECTOR::from_string(?)';
+SET @v = '[0,0,0]', @w = '[3,3,3]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+SELECT id, TVECTOR::to_string(v) FROM t ORDER BY id;
+id	TVECTOR::to_string(v)
+1	[0,0,1]
+3	[3,3,3]
+6	[7,8,9]
+7	[10,11,12]
+# ORDER BY over a table
+PREPARE s FROM 'SELECT id, TVECTOR::from_string(?) AS w FROM t ORDER BY id';
+SET @v = '[1,0,0]';
+EXECUTE s USING @v;
+id	w
+1	[1,0,0]
+3	[1,0,0]
+6	[1,0,0]
+7	[1,0,0]
+# After a reprepare forced by a metadata change
+ALTER TABLE t ADD COLUMN c INT;
+SET @v = '[0,1]';
+EXECUTE s USING @v;
+id	w
+1	[0,1]
+3	[0,1]
+6	[0,1]
+7	[0,1]
+ALTER TABLE t DROP COLUMN c;
+DEALLOCATE PREPARE s;
+# As VDF argument
+PREPARE s FROM 'SELECT id FROM t
+                WHERE vsql_tvector.tvector_dot_product(v,
+                        TVECTOR::from_string(?)) > 0 ORDER BY id';
+SET @v = '[1,0,0]';
+EXECUTE s USING @v;
+id
+3
+6
+7
+DEALLOCATE PREPARE s;
+# Nested: the inner call resolves its own params before the outer call
+# compares them with the column's
+PREPARE s FROM 'SELECT id, vsql_tvector.tvector_dot_product(v,
+                             TVECTOR::from_string(?)) AS d FROM t ORDER BY id';
+SET @v = '[1,0,0]';
+EXECUTE s USING @v;
+id	d
+1	0
+3	3
+6	7
+7	10
+# A value of another dimension is the usual conflicting params error
+SET @v = '[1,0]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dot_product': conflicting type parameters for vsql_tvector.TVECTOR in arguments 1 and 2
+# and the next EXECUTE is not affected
+SET @v = '[0,1,0]';
+EXECUTE s USING @v;
+id	d
+1	0
+3	3
+6	8
+7	11
+DEALLOCATE PREPARE s;
+# A non-string value is not inferred from, as for from_string(5)
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
+SET @i = 5;
+EXECUTE s USING @i;
+v
+NULL
+Warnings:
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: missing '['
+SELECT TVECTOR::from_string(5) AS v;
+v
+NULL
+Warnings:
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: missing '['
+DEALLOCATE PREPARE s;
+SET @id = NULL, @v = NULL, @w = NULL, @i = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;
