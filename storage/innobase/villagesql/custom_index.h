@@ -147,6 +147,9 @@ class Custom_index {
   // Returns true if index is a KNN custom index.
   static bool is_knn(const dict_index_t *index);
 
+  // Returns true if a scan on index must always read the clustered index.
+  static bool needs_clustered_access(const dict_index_t *index);
+
   static uint32_t n_extra_fields(const dict_index_t *index);
 
   static void add_extra_fields(dict_index_t *new_index,
@@ -168,8 +171,10 @@ class Custom_index {
   static dberr_t drop(dict_index_t *index, trx_id_t trx_id);
 
   // Inserts a key into extension-managed storage for a custom index.
+  // @param[out] is_key_null true if all the key columns of the entry are NULL
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
-                        const dtuple_t *entry, bool dup_chk_only);
+                        const dtuple_t *entry, bool dup_chk_only,
+                        bool *is_key_null);
 
   // Entry point for row_search_mvcc()/row_search_no_mvcc() when the index
   // being scanned is a custom index.
@@ -201,11 +206,13 @@ class Custom_index {
   // record of the scan described by search_tuple. On success the cursor is
   // stored in prebuilt->pcur->custom_cursor, even when eof is true.
   dberr_t open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
-                      page_cur_mode_t mode, bool reverse, bool *eof);
+                      page_cur_mode_t mode, bool reverse, bool *eof,
+                      char *error_msg, uint32_t error_msg_len);
 
   // Re-attaches the saved extension cursor in prebuilt->pcur->custom_cursor to
   // the new mini-transaction mtr and repositions it.
-  dberr_t restore_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr, bool *eof);
+  dberr_t restore_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr, bool *eof,
+                         char *error_msg, uint32_t error_msg_len);
 
   // Ends the extension cursor in prebuilt->pcur->custom_cursor, if any, and
   // clears it.

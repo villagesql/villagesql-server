@@ -2459,7 +2459,7 @@ void row_sel_convert_mysql_key_to_innobase(dtuple_t *tuple, byte *buf,
 }
 
 /** Stores the row id to the prebuilt struct. */
-static void row_sel_store_row_id_to_prebuilt(
+void row_sel_store_row_id_to_prebuilt(
     row_prebuilt_t *prebuilt,  /*!< in/out: prebuilt */
     const rec_t *index_rec,    /*!< in: record */
     const dict_index_t *index, /*!< in: index of the record */
