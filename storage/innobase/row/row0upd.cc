@@ -2022,8 +2022,9 @@ static inline dberr_t row_upd_del_one_multi_sec_index_entry(dict_index_t *index,
   able to invoke thd_get_trx(). */
   pcur.get_btr_cur()->thr = thr;
 
-  mode = (index->table->is_temporary()) ? BTR_MODIFY_LEAF
-                                        : BTR_MODIFY_LEAF | BTR_DELETE_MARK;
+  mode = (index->table->is_temporary() || dict_index_no_change_buffering(index))
+             ? BTR_MODIFY_LEAF
+             : BTR_MODIFY_LEAF | BTR_DELETE_MARK;
 
   search_result = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
@@ -2259,7 +2260,7 @@ code or DB_LOCK_WAIT */
     Change buffering is disabled for temporary tables and
     spatial index. */
     mode = (referenced || index->table->is_temporary() ||
-            dict_index_is_spatial(index))
+            dict_index_no_change_buffering(index))
                ? BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED
                : BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED | BTR_DELETE_MARK;
   } else {
@@ -2273,7 +2274,7 @@ code or DB_LOCK_WAIT */
     Change buffering is disabled for temporary tables and
     spatial index. */
     mode = (referenced || index->table->is_temporary() ||
-            dict_index_is_spatial(index))
+            dict_index_no_change_buffering(index))
                ? BTR_MODIFY_LEAF
                : BTR_MODIFY_LEAF | BTR_DELETE_MARK;
   }

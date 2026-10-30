@@ -17,6 +17,7 @@
 #ifndef STORAGE_INNOBASE_VILLAGESQL_CUSTOM_INDEX_H_
 #define STORAGE_INNOBASE_VILLAGESQL_CUSTOM_INDEX_H_
 
+#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -28,12 +29,18 @@
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 
 // Forward declarations
+struct dict_col_t;
 struct dict_index_t;
 struct dict_table_t;
+struct dfield_t;
 struct dtuple_t;
+struct mem_block_info_t;
+typedef mem_block_info_t mem_heap_t;
+struct TABLE_SHARE;
 struct row_prebuilt_t;
 namespace dd {
 class Index;
+class Table;
 }
 
 namespace villagesql {
@@ -57,6 +64,7 @@ class Custom_index {
   using KeyRef = vef_storage_col_ref_t;
 
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
+  static constexpr uint32_t MAX_EXTRA_FIELDS = 1;
 
   explicit Custom_index(std::shared_ptr<const IndexContext> index_metadata)
       : index_metadata_(std::move(index_metadata)) {}
@@ -127,11 +135,28 @@ class Custom_index {
   // state from old_index onto new_index's heap.
   static dberr_t load(dict_index_t *new_index, const dict_index_t *old_index);
 
+  // Loads all custom indexes of a table.
+  static void load_all(dict_table_t *table, const dd::Table *dd_table,
+                       const TABLE_SHARE *ts);
+
   // Returns true if index has Custom_index runtime state.
   static bool is_custom(const dict_index_t *index);
 
   // Returns true if index is a KNN custom index.
   static bool is_knn(const dict_index_t *index);
+
+  static uint32_t n_extra_fields(const dict_index_t *index);
+
+  static void add_extra_fields(dict_index_t *new_index,
+                               const dict_index_t *index);
+
+  // Returns true if the field at position pos of index is an extra field.
+  static bool is_extra_field(const dict_index_t *index, ulint pos);
+
+  // Initializes dfield if the field at position pos of index is an extra
+  // field. Returns true if it is an extra field and was handled.
+  static bool set_extra_field(const dict_index_t *index, ulint pos,
+                              dfield_t *dfield, mem_heap_t *heap);
 
   // Creates the extension-managed storage for a custom index, invoking the
   // registered index-type create function.
@@ -140,7 +165,7 @@ class Custom_index {
   // Drops the extension-managed storage for a custom index.
   static dberr_t drop(dict_index_t *index, trx_id_t trx_id);
 
-  // Inserts a key into the extension-managed storage for a custom index.
+  // Inserts a key into extension-managed storage for a custom index.
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
                         const dtuple_t *entry, bool dup_chk_only);
 
@@ -160,6 +185,10 @@ class Custom_index {
   static void free_all(dict_index_t *index);
 
  private:
+  // Loads the extension-managed storage of an attached custom index that has
+  // a storage reference.
+  static dberr_t load_storage(dict_index_t *new_index);
+
   std::shared_ptr<const IndexContext> index_metadata_;
   std::vector<std::shared_ptr<const IndexProfileDescriptor>> key_profiles_;
 

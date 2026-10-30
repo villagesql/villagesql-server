@@ -476,9 +476,10 @@ if possible.
     }
 
     /* Change buffering is disabled for temporary tables. */
-    mode = (index->table->is_temporary())
-               ? BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED
-               : BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED | BTR_DELETE;
+    mode =
+        (index->table->is_temporary() || dict_index_no_change_buffering(index))
+            ? BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED
+            : BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED | BTR_DELETE;
   } else {
     /* For secondary indexes,
     index->online_status==ONLINE_INDEX_COMPLETE if
@@ -487,9 +488,10 @@ if possible.
 
     /* Change buffering is disabled for temporary tables
     and spatial index. */
-    mode = (index->table->is_temporary() || dict_index_is_spatial(index))
-               ? BTR_MODIFY_LEAF
-               : BTR_MODIFY_LEAF | BTR_DELETE;
+    mode =
+        (index->table->is_temporary() || dict_index_no_change_buffering(index))
+            ? BTR_MODIFY_LEAF
+            : BTR_MODIFY_LEAF | BTR_DELETE;
   }
 
   /* Set the purge node for the call to row_purge_poss_sec(). */

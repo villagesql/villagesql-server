@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -640,10 +641,15 @@ static void log_index_column_counts(const dict_index_t *index, uint16_t n,
   }
 
   /* log n_uniq */
-  const auto n_uniq = page_is_leaf(page_align(rec))
-                          ? dict_index_get_n_unique_in_tree(index)
-                          : dict_index_get_n_unique_in_tree_nonleaf(index);
+  auto n_uniq = page_is_leaf(page_align(rec))
+                    ? dict_index_get_n_unique_in_tree(index)
+                    : dict_index_get_n_unique_in_tree_nonleaf(index);
   ut_ad(n_uniq <= n);
+  ut_ad((n_uniq & N_UNIQ_MAPPING_INDEX_FLAG) == 0);
+
+  if (index->has_mapping_btree()) {
+    n_uniq |= N_UNIQ_MAPPING_INDEX_FLAG;
+  }
   mach_write_to_2(log_ptr, n_uniq);
   log_ptr += 2;
 }
@@ -972,12 +978,15 @@ static const byte *read_1_bytes(const byte *ptr, const byte *end_ptr,
 @param[out]  n             number of index fields
 @param[out]  n_uniq        n_uniq for index
 @param[out]  inst_cols     number of column before first instant add was done.
+@param[out]  is_mapping_index true if it is the mapping index for a custom index
 @return pointer to buffer. */
 static const byte *parse_index_column_counts(const byte *ptr,
                                              const byte *end_ptr, bool is_comp,
                                              bool is_versioned, bool is_instant,
                                              uint16_t &n, uint16_t &n_uniq,
-                                             uint16_t &inst_cols) {
+                                             uint16_t &inst_cols,
+                                             bool &is_mapping_index) {
+  is_mapping_index = false;
   if (!is_versioned && !is_comp) {
     n = n_uniq = 1;
     inst_cols = 0;
@@ -1006,6 +1015,8 @@ static const byte *parse_index_column_counts(const byte *ptr,
   if (ptr == nullptr) {
     return ptr;
   }
+  is_mapping_index = (n_uniq & N_UNIQ_MAPPING_INDEX_FLAG) != 0;
+  n_uniq &= ~N_UNIQ_MAPPING_INDEX_FLAG;
   ut_ad(n_uniq <= n);
 
   return ptr;
@@ -1262,8 +1273,10 @@ static const byte *mlog_parse_index_v1(const byte *ptr, const byte *end_ptr,
   uint16_t n = 0;
   uint16_t n_uniq = 0;
   uint16_t inst_cols = 0;
-  ptr = parse_index_column_counts(ptr, end_ptr, is_comp, is_versioned,
-                                  is_instant, n, n_uniq, inst_cols);
+  bool is_mapping_index = false;
+  ptr =
+      parse_index_column_counts(ptr, end_ptr, is_comp, is_versioned, is_instant,
+                                n, n_uniq, inst_cols, is_mapping_index);
   if (ptr == nullptr) {
     return ptr;
   }
@@ -1284,7 +1297,9 @@ static const byte *mlog_parse_index_v1(const byte *ptr, const byte *end_ptr,
                             RECOVERY_INDEX_TABLE_NAME, DICT_HDR_SPACE, 0, n);
   ind->table = table;
   ind->n_uniq = (unsigned int)n_uniq;
-  if (n_uniq != n) {
+  if (is_mapping_index) {
+    ind->set_mapping_btree();
+  } else if (n_uniq != n) {
     ut_a(n_uniq + DATA_ROLL_PTR <= n);
     ind->type = DICT_CLUSTERED;
   }
