@@ -23,7 +23,7 @@ KVECTOR::from_string('[1,0,0,0]'))
 LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> vsql_knn_index_test.kvector::from_string('[1,0,0,0]')), limit 3  (cost=COST rows=ROWS)
 
 #
 # Scan callbacks have not fired yet (EXPLAIN does not execute the scan).

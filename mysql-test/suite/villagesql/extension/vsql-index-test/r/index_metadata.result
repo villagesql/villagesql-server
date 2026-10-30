@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 # --- Initial state: empty ---
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
@@ -277,7 +276,6 @@ t_roundtrip	idx_ext	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 DROP TABLE t_roundtrip;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
 table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

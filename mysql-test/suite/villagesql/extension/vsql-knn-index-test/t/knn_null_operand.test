@@ -5,8 +5,6 @@
 # which rejects the operand. The point of the test is that this errors rather
 # than crashing the server.
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (

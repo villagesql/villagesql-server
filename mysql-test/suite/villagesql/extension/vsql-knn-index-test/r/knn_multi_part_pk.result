@@ -43,7 +43,7 @@ KVECTOR::from_string('[5,6,7,8]'))
 LIMIT 1;
 EXPLAIN
 -> Limit: 1 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_vec  (cost=COST rows=ROWS)
+    -> Index KNN scan on docs using idx_vec (vec <-> vsql_knn_index_test.kvector::from_string('[5,6,7,8]')), limit 1  (cost=COST rows=ROWS)
 
 SELECT tag FROM docs
 ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,

@@ -5,8 +5,6 @@
 # order" optimization -- the same trouble spot. This test exercises the
 # combinations and asserts correct results (or a clean rejection).
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (
