@@ -24,7 +24,7 @@ EXPLAIN
 -> Table scan on s  (cost=COST rows=ROWS)
     -> Materialize  (cost=COST rows=ROWS)
         -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-            -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+            -> Index KNN scan on t1 using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT id FROM (
 SELECT id FROM t1
@@ -49,7 +49,7 @@ EXPLAIN
     -> Table scan on s  (cost=COST rows=ROWS)
         -> Materialize  (cost=COST rows=ROWS)
             -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-                -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+                -> Index KNN scan on t1 using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
     -> Single-row covering index lookup on t1 using PRIMARY (id=s.id)  (cost=COST rows=ROWS)
 
 SELECT t1.id FROM t1

@@ -22,7 +22,7 @@ KVECTOR::from_string('[1,0,0,0]'))
 LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_vm  (cost=COST rows=ROWS)
+    -> Index KNN scan on tvm using idx_vm (v <-> vsql_knn_index_test.kvector::from_string('[1,0,0,0]')), limit 3  (cost=COST rows=ROWS)
 
 SELECT vsql_knn_index_test.kvec_scan_begin_count() AS l2_begins_before;
 l2_begins_before
@@ -54,10 +54,9 @@ ORDER BY vsql_knn_index_test.kvec_cos_distance(v,
 KVECTOR::from_string('[1,0,0,0]'))
 LIMIT 3;
 EXPLAIN
--> Limit: 3 row(s)
-    -> Sort: vsql_knn_index_test.kvec_cos_distance(tvm.v,vsql_knn_index_test.kvector::from_string('[1,0,0,0]')), limit input to 3 row(s) per chunk
-        -> Stream results  (cost=COST rows=ROWS)
-            -> Table scan on tvm  (cost=COST rows=ROWS)
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_cos_distance(tvm.v,vsql_knn_index_test.kvector::from_string('[1,0,0,0]')), limit input to 3 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on tvm  (cost=COST rows=ROWS)
 
 SELECT vsql_knn_index_test.kvec_scan_begin_count() AS cos_begins_before;
 cos_begins_before

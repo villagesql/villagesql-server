@@ -13,9 +13,6 @@
 #
 # All error cases expect ER_VILLAGESQL_GENERIC_ERROR (HY000).
 
-# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
-# custom index execution is fully implemented and the guard in
-# PT_custom_index_type::do_contextualize() is removed.
 --source include/have_debug.inc
 --disable_query_log
 call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* VillageSQL: Error parsing custom index options");
@@ -23,7 +20,6 @@ call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* VillageSQL: Error parsing cust
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 
 CREATE TABLE t (id INT PRIMARY KEY,
   a dummy_type_vector,
@@ -128,7 +124,6 @@ SET SESSION debug='-d,villagesql_skip_uninstall_index_check';
 --echo # --- DROP INDEX + DROP TABLE unblocks UNINSTALL; reinstall succeeds in same session ---
 DROP INDEX idx_block ON t;
 DROP TABLE t;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 INSTALL EXTENSION vsql_index_test;
 UNINSTALL EXTENSION vsql_index_test;

@@ -4,8 +4,6 @@
 # the distance scan under view merging and (for a materialized view) a temporary
 # table wrapping the scan -- the same plan-transformation class as DISTINCT.
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (

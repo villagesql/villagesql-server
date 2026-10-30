@@ -19,7 +19,7 @@ SELECT id FROM v_merge
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT id FROM v_merge
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
@@ -39,7 +39,7 @@ EXPLAIN
 -> Table scan on v_knn  (cost=COST rows=ROWS)
     -> Materialize  (cost=COST rows=ROWS)
         -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-            -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+            -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT id FROM v_knn;
 id
@@ -56,12 +56,11 @@ EXPLAIN FORMAT=tree
 SELECT id FROM v_tmp
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 EXPLAIN
--> Limit: 3 row(s)
-    -> Sort: vsql_knn_index_test.kvec_l2_distance(v_tmp.v,'[1,0,0,0]'), limit input to 3 row(s) per chunk
-        -> Stream results  (cost=COST rows=ROWS)
-            -> Table scan on v_tmp  (cost=COST rows=ROWS)
-                -> Materialize  (cost=COST rows=ROWS)
-                    -> Table scan on t  (cost=COST rows=ROWS)
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_l2_distance(v_tmp.v,'[1,0,0,0]'), limit input to 3 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on v_tmp  (cost=COST rows=ROWS)
+            -> Materialize  (cost=COST rows=ROWS)
+                -> Table scan on t  (cost=COST rows=ROWS)
 
 SELECT id FROM v_tmp
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;

@@ -5,8 +5,6 @@
 # (handler::custom_index_ref_to_row).
 #
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 # Reset the static scan/insert counters so their absolute values are

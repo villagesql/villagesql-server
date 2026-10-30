@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
 a dummy_type_vector,
@@ -41,7 +40,6 @@ idx_btree	BTREE
 PRIMARY	BTREE
 # --- Cleanup ---
 DROP TABLE t1;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;
