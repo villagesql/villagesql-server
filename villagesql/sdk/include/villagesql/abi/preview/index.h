@@ -114,6 +114,8 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 // If trx_ref is not NULL, the server sets *trx_ref to the transaction
 // reference of the value read, e.g. for a column-only scan that needs
 // visibility information without a row lookup.
+// If delete_mark is not NULL, the server sets *delete_mark to whether the
+// stored value is marked as deleted.
 // The server reads the value under a mini-transaction of its own, so the
 // extension must not call this while holding page latches in a mini-transaction
 // it started.
@@ -121,7 +123,12 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 typedef bool (*vef_index_col_ref_to_data_fn)(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
     vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
-    char *error_msg, uint32_t error_msg_len);
+    bool *delete_mark, char *error_msg, uint32_t error_msg_len);
+
+// Check whether the index key column at key_pos is sorted in descending order.
+// key_pos is the 0-based index key column.
+typedef bool (*vef_index_key_is_desc_fn)(vef_index_ref_t index_ref,
+                                         uint32_t key_pos);
 
 // Derive a stable column reference from column data.
 // key_pos is the 0-based index key column col_data holds a value of; its column
@@ -195,6 +202,9 @@ typedef struct {
 
   // Check if a transaction is visible under a read view. Always non-NULL.
   vef_index_trx_is_visible_fn trx_is_visible_fn;
+
+  // Check if an index key column is descending. Always non-NULL.
+  vef_index_key_is_desc_fn key_is_desc_fn;
 
   // Pointer to the options struct filled by parse() at CREATE INDEX time.
   // Valid only during the create() call; NULL for all other calls and when
@@ -450,6 +460,8 @@ typedef bool (*vef_type_index_scan_position_func_t)(
 //                  structs; the extension sets each data pointer and length
 //                  to the primary key data for the current row
 //   trx_ref      - Output: transaction that last wrote this entry
+//   delete_mark  - Output: true if the entry is marked as deleted. Meaningful
+//                  when VEF_INDEX_CAP_MVCC_VISIBILITY is set.
 //   error_msg    - Output: error description on failure
 //   error_msg_len - length of error message buffer
 // Returns false on success, true on error (writes to error_msg).
@@ -457,7 +469,7 @@ typedef bool (*vef_type_index_scan_fetch_func_t)(
     vef_index_cursor_ref_t cursor, vef_storage_col_ref_t *key_ref,
     vef_storage_col_ref_t *key_column_refs, vef_storage_col_data_t *key_columns,
     vef_storage_col_data_t *pkey_columns, vef_storage_trx_ref_t *trx_ref,
-    char *error_msg, uint32_t error_msg_len);
+    bool *delete_mark, char *error_msg, uint32_t error_msg_len);
 
 // Save the current cursor position before the active mini-transaction commits.
 // The server calls this when it is about to commit the mini-transaction the

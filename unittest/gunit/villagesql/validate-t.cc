@@ -973,7 +973,8 @@ static bool stub_idx_scan_fetch(vef_index_cursor_ref_t, vef_storage_col_ref_t *,
                                 vef_storage_col_ref_t *,
                                 vef_storage_col_data_t *,
                                 vef_storage_col_data_t *,
-                                vef_storage_trx_ref_t *, char *, uint32_t) {
+                                vef_storage_trx_ref_t *, bool *, char *,
+                                uint32_t) {
   return false;
 }
 static bool stub_idx_scan_save(vef_index_cursor_ref_t, char *, uint32_t) {

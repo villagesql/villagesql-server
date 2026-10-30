@@ -434,13 +434,21 @@ class Index {
   // get_max_col_len(key_pos); on success key_data->length is the value length.
   // If trx_ref is not nullptr, it is set to the transaction reference of the
   // value read, e.g. for a column-only scan that needs visibility information
-  // without a row lookup.
+  // without a row lookup. If delete_mark is not nullptr, it is set to whether
+  // the value is marked as deleted.
   // Must not be called while holding page latches.
   bool get_key_data(uint32_t key_pos, IndexScanKey::KeyPartRef key_ref,
                     IndexScanKey::KeyPartData *key_data,
-                    Segment::TrxRef *trx_ref = nullptr) const {
+                    Segment::TrxRef *trx_ref = nullptr,
+                    bool *delete_mark = nullptr) const {
     return ctx_->col_ref_to_data_fn(ctx_->index_ref, key_pos, key_ref, key_data,
-                                    trx_ref, tl_error_msg, ERROR_MSG_SIZE);
+                                    trx_ref, delete_mark, tl_error_msg,
+                                    ERROR_MSG_SIZE);
+  }
+
+  // Checks whether the key column at key_pos is sorted in descending order.
+  bool is_key_desc(uint32_t key_pos) const {
+    return ctx_->key_is_desc_fn(ctx_->index_ref, key_pos);
   }
 
   // Derives the column reference for a value of the key column at key_pos that
@@ -536,7 +544,7 @@ using ScanFetchFn = bool (*)(Index::Cursor, IndexScanKey::KeyPartRef *,
                              IndexScanKey::KeyPartRef *,
                              IndexScanKey::KeyPartData *,
                              IndexScanKey::KeyPartData *, Segment::TrxRef *,
-                             char *, uint32_t);
+                             bool *, char *, uint32_t);
 
 using ScanSaveFn = bool (*)(Index::Cursor, char *, uint32_t);
 
@@ -716,10 +724,10 @@ struct ScanFetchWrapper {
                      vef_storage_col_ref_t *key_column_refs,
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns,
-                     vef_storage_trx_ref_t *trx_ref, char *error_msg,
-                     uint32_t error_msg_len) {
+                     vef_storage_trx_ref_t *trx_ref, bool *delete_mark,
+                     char *error_msg, uint32_t error_msg_len) {
     return F(cursor, key_ref, key_column_refs, key_columns, pkey_columns,
-             trx_ref, error_msg, error_msg_len);
+             trx_ref, delete_mark, error_msg, error_msg_len);
   }
 };
 
@@ -985,7 +993,7 @@ class ScanBuilder {
         std::is_same_v<decltype(F), detail::ScanFetchFn>,
         "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
         "KeyPartRef* key_refs, KeyPartData* keys, KeyPartData* pkeys, "
-        "TrxRef*, char*, uint32_t)");
+        "TrxRef*, bool* delete_mark, char*, uint32_t)");
     intf_.scan_fetch = detail::ScanFetchWrapper<F>::invoke;
     return {name_, intf_};
   }
