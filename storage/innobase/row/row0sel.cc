@@ -3984,13 +3984,6 @@ The cursor is an iterator over the table/index.
 dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
                            row_prebuilt_t *prebuilt, ulint match_mode,
                            ulint direction) {
-  using villagesql::innodb::Custom_index;
-
-  if (Custom_index::is_custom(prebuilt->index)) {
-    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
-                                    /*is_mvcc=*/false);
-  }
-
   dict_index_t *index = prebuilt->index;
   ut_ad(index->table->is_intrinsic());
 
@@ -4041,6 +4034,12 @@ dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
     moves_up = false;
   }
 
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::is_custom(prebuilt->index)) {
+    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
+                                    /*range_lock=*/false, moves_up,
+                                    /*is_mvcc=*/false);
+  }
   /* Step-2: Open or Restore the cursor.
   If search key is specified, cursor is open using the key else
   cursor is open to return all the records. */
@@ -4457,13 +4456,6 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
                         row_prebuilt_t *prebuilt, ulint match_mode,
                         const ulint direction) {
   DBUG_TRACE;
-
-  using villagesql::innodb::Custom_index;
-
-  if (Custom_index::is_custom(prebuilt->index)) {
-    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
-                                    /*is_mvcc=*/true);
-  }
 
   dict_index_t *index = prebuilt->index;
   bool comp = dict_table_is_comp(index->table);
@@ -4886,6 +4878,14 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     prebuilt->sql_stat_start = false;
   }
 
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::is_custom(prebuilt->index)) {
+    ut_ad(!index->is_clustered());
+    mtr_commit(&mtr);
+    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
+                                    set_also_gap_locks, moves_up,
+                                    /*is_mvcc=*/true);
+  }
   /* Open or restore index cursor position */
 
   if (UNIV_LIKELY(direction != 0)) {
