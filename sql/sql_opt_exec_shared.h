@@ -44,6 +44,8 @@ struct POSITION;
 struct KnnScanInfo {
   Item *query_point;
   ha_rows limit;
+  // True if limit is an exact KNN row count needed by the query.
+  bool limit_is_exact;
 };
 
 /**
