@@ -627,9 +627,10 @@ typedef struct {
 // ===========================================================================
 //
 // Registers index profiles. Each profile binds a custom type to an index type
-// and declares the helper functions (distance, compare, etc.) used by the
-// index storage implementation. The server registers those functions as SQL
-// VDFs automatically when the profile is loaded.
+// and declares the function and helper bindings (distance, compare, etc.)
+// used by the index storage implementation. The SQL functions referenced by
+// the profile must be VDFs that are eligible for index scans.
+
 //
 // Pass a vef_preview_index_profile_ext_desc_t as
 // vef_required_capability_t.capability_config when requiring this capability.
