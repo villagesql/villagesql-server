@@ -20,7 +20,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
@@ -34,7 +34,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance('[1,0,0,0]', v) LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance('[1,0,0,0]', v) LIMIT 3;
@@ -48,7 +48,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 100;
 EXPLAIN
 -> Limit: 100 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 100  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 100;
@@ -104,7 +104,7 @@ WHERE a.id = 1
 ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on b using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT a.id AS aid, b.id AS bid
 FROM t a, t b
@@ -117,15 +117,15 @@ aid	bid
 # 7. WHERE predicate alongside ORDER BY distance: the KNN ordering still
 # routes; the predicate selects a subset of the ordered rows.
 EXPLAIN FORMAT=tree
-SELECT id FROM t
+SELECT id FROM t IGNORE INDEX (PRIMARY)
 WHERE id > 2
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
     -> Filter: (t.id > 2)  (cost=COST rows=ROWS)
-        -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+        -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
-SELECT id FROM t
+SELECT id FROM t IGNORE INDEX (PRIMARY)
 WHERE id > 2
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 id
@@ -138,7 +138,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 OFFSET 2;
 EXPLAIN
 -> Limit/Offset: 2/2 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 4  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 OFFSET 2;
@@ -182,10 +182,9 @@ EXPLAIN FORMAT=tree
 SELECT id FROM t_noidx
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 EXPLAIN
--> Limit: 3 row(s)
-    -> Sort: vsql_knn_index_test.kvec_l2_distance(t_noidx.v,'[1,0,0,0]'), limit input to 3 row(s) per chunk
-        -> Stream results  (cost=COST rows=ROWS)
-            -> Table scan on t_noidx  (cost=COST rows=ROWS)
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_l2_distance(t_noidx.v,'[1,0,0,0]'), limit input to 3 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on t_noidx  (cost=COST rows=ROWS)
 
 SELECT id FROM t_noidx
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;

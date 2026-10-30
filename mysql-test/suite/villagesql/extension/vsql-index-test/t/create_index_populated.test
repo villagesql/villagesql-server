@@ -12,17 +12,11 @@
 #   Empty table: standalone CREATE INDEX ... USING EXTENDED succeeds.
 #   Populated table: the same CREATE INDEX succeeds, building over existing rows.
 #   The server is alive and the rows are intact afterwards.
-#
-# The debug flag lets the custom-index DDL path run in this build.
---source include/have_debug.inc
 
 --source include/villagesql/not_implemented.inc
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
---disable_query_log
-SET SESSION debug='+d,villagesql_custom_index_proceed';
---enable_query_log
 
 --echo # --- Empty table: standalone CREATE INDEX succeeds ---
 CREATE TABLE t_empty (id INT PRIMARY KEY, a dummy_type_vector);
@@ -58,9 +52,6 @@ CREATE TABLE t_ok (id INT PRIMARY KEY, a dummy_type_vector,
 INSERT INTO t_ok VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
 DROP TABLE t_ok;
 
---disable_query_log
-SET SESSION debug='-d,villagesql_custom_index_proceed';
---enable_query_log
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

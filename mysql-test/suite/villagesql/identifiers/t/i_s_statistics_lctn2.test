@@ -4,16 +4,11 @@
 # counterpart of i_s_columns_lctn2.test: without the case-insensitive join a
 # mixed-case table would fail to match and INDEX_TYPE would fall back to BTREE.
 
-# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
-# custom index execution is fully implemented and the guard in
-# PT_custom_index_type::do_contextualize() is removed.
---source include/have_debug.inc
 --source include/have_case_insensitive_file_system.inc
 --source include/have_lowercase2.inc
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 
 CREATE DATABASE MixedDb;
 USE MixedDb;
@@ -47,7 +42,6 @@ SHOW INDEX FROM MixedTab;
 --echo # --- Cleanup ---
 DROP DATABASE MixedDb;
 
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

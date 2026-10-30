@@ -18,7 +18,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 #
 # The same query with the vector as a parameter must route the same way
@@ -35,7 +35,7 @@ PREPARE pe FROM 'EXPLAIN FORMAT=tree SELECT id FROM t ORDER BY vsql_knn_index_te
 EXECUTE pe USING @q;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 #
 # A different vector on the same prepared statement gives a different

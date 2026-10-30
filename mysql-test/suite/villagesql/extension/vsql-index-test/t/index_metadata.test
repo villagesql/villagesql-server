@@ -7,10 +7,6 @@
 #   dummy_index_hnsw      - no-op custom index type
 #   dummy_profile_hnsw_l2 - index profile binding dummy_index_hnsw to dummy_type_vector
 #
-# villagesql_custom_index_proceed bypasses the "not yet implemented" guard in
-# PT_custom_index_type::do_contextualize() so that the full DDL path runs and
-# metadata is committed.
-#
 # Covers:
 #   CREATE TABLE with inline custom index
 #   CREATE INDEX and ALTER TABLE ADD INDEX (unqualified and qualified type/profile)
@@ -18,14 +14,8 @@
 #   DROP TABLE
 #   SHOW CREATE TABLE rendering of all of the above
 
-# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
-# custom index execution is fully implemented and the guard in
-# PT_custom_index_type::do_contextualize() is removed.
---source include/have_debug.inc
-
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 
 --echo # --- Initial state: empty ---
 --source include/villagesql/query_custom_indexes.inc
@@ -152,7 +142,6 @@ SHOW CREATE TABLE t_roundtrip;
 DROP TABLE t_roundtrip;
 --source include/villagesql/query_custom_indexes.inc
 
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;
