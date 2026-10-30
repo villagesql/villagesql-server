@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2022, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -417,7 +418,7 @@ dberr_t Loader::Thread_data::fill_tuple(const row_prebuilt_t *prebuilt,
 
     /* For integer data, the column is passed as integer and not in mysql
     format. We use empty column buffer to store column in innobase format. */
-    if (dtype->mtype == DATA_INT) {
+    if (dtype->mtype == DATA_INT && !dtype->extended_storage) {
       if (!store_int_col(sql_col, data_ptr, data_len)) {
         ib::info(ER_BULK_LOADER_INFO, "Innodb wrong integer data length");
         ut_ad(false);
