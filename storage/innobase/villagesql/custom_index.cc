@@ -36,6 +36,8 @@
 #include "storage/innobase/include/ha_prototypes.h"
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
+#include "storage/innobase/include/que0que.h"
+#include "storage/innobase/include/row0mysql.h"
 #include "storage/innobase/include/univ.i"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/index_context.h"
@@ -46,6 +48,21 @@
 
 namespace villagesql {
 namespace innodb {
+
+class Mtr_guard {
+ public:
+  Mtr_guard() { mtr_start(&m_mtr); }
+  ~Mtr_guard() {
+    if (m_mtr.is_active()) mtr_commit(&m_mtr);
+  }
+  Mtr_guard(const Mtr_guard &) = delete;
+  Mtr_guard &operator=(const Mtr_guard &) = delete;
+
+  mtr_t *get() { return &m_mtr; }
+
+ private:
+  mtr_t m_mtr;
+};
 
 // Number of primary key columns for the table owning this index. The clustered
 // index's unique-prefix length is the primary key column count.
@@ -834,8 +851,114 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
   return DB_SUCCESS;
 }
 
-dberr_t Custom_index::row_search(byte *, page_cur_mode_t, row_prebuilt_t *,
-                                 ulint, ulint, bool is_mvcc) {
+dberr_t Custom_index::fill_profile(const row_prebuilt_t *prebuilt,
+                                   vef_index_scan_desc_t *scan_desc,
+                                   page_cur_mode_t) {
+  // TODO(villagesql-indexing): Support scans for other types based on mode.
+  if (!prebuilt->is_knn_query()) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index scan is supported only for KNN queries.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  const IndexProfileDescriptor *profile = profile_for_key(0);
+  const vef_index_profile_fn_binding_t *order_fn = nullptr;
+  for (const auto &fn : profile->functions()) {
+    if (fn.kind == VEF_INDEX_PROFILE_FN_KIND_ORDER) {
+      order_fn = &fn;
+      break;
+    }
+  }
+  if (order_fn == nullptr) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index profile has no ORDER function.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  scan_desc->keys[0].profile_function_id = order_fn->fn_id;
+  scan_desc->limit = static_cast<uint32_t>(prebuilt->get_knn_limit());
+  scan_desc->limit_is_exact = prebuilt->knn_limit_is_exact();
+  return DB_SUCCESS;
+}
+
+dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
+                                  page_cur_mode_t mode, bool reverse,
+                                  bool *eof) {
+  const auto &intf = interface();
+  const dtuple_t *search_tuple = prebuilt->search_tuple;
+
+  const ulint n_fields = dtuple_get_n_fields(search_tuple);
+  ut_a(n_fields <= MAX_REF_PARTS);
+
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
+  for (ulint i = 0; i < n_fields; i++) {
+    key_columns[i] = to_col_data(dtuple_get_nth_field(search_tuple, i));
+  }
+
+  vef_index_scan_key_t scan_key{};
+  scan_key.num_key_columns = static_cast<uint32_t>(n_fields);
+  scan_key.key_columns = key_columns.data();
+
+  // Without a search tuple the scan covers the whole index and has no keys.
+  vef_index_scan_desc_t scan_desc{};
+  scan_desc.reverse = reverse;
+  scan_desc.num_keys = n_fields > 0 ? 1 : 0;
+  scan_desc.keys = n_fields > 0 ? &scan_key : nullptr;
+  scan_desc.readview = static_cast<vef_readview_ref_t>(
+      const_cast<ReadView *>(trx_get_read_view(prebuilt->trx)));
+  if (n_fields > 0) {
+    dberr_t err = fill_profile(prebuilt, &scan_desc, mode);
+    if (err != DB_SUCCESS) return err;
+  }
+
+  CursorRef cursor = nullptr;
+  char error_msg[ERROR_MSG_SIZE] = {};
+  bool failed = intf.scan_begin(
+      index_ctx(), storage_ctx(), static_cast<vef_storage_mtr_ref_t>(mtr),
+      &scan_desc, &cursor, eof, error_msg, sizeof(error_msg));
+
+  error_msg[sizeof(error_msg) - 1] = '\0';
+  if (failed) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error opening custom index scan: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  prebuilt->pcur->custom_cursor = cursor;
+  return DB_SUCCESS;
+}
+
+dberr_t Custom_index::restore_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
+                                     bool *eof) {
+  const auto &intf = interface();
+  CursorRef cursor = prebuilt->pcur->custom_cursor;
+  ut_a(cursor != nullptr);
+
+  char error_msg[ERROR_MSG_SIZE] = {};
+  bool failed =
+      intf.scan_restore(cursor, static_cast<vef_storage_mtr_ref_t>(mtr), eof,
+                        error_msg, sizeof(error_msg));
+
+  error_msg[sizeof(error_msg) - 1] = '\0';
+  if (failed) {
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error restoring custom index scan: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+  return DB_SUCCESS;
+}
+
+void Custom_index::close_cursor(row_prebuilt_t *prebuilt) {
+  CursorRef cursor = prebuilt->pcur->custom_cursor;
+  if (cursor == nullptr) return;
+  interface().scan_end(&cursor);
+  prebuilt->pcur->custom_cursor = nullptr;
+}
+
+dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
+                                 row_prebuilt_t *prebuilt, ulint match_mode,
+                                 ulint direction, bool range_lock,
+                                 bool scan_forward, bool is_mvcc) {
   ut_ad(is_mvcc);
   if (!is_mvcc) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
@@ -843,8 +966,64 @@ dberr_t Custom_index::row_search(byte *, page_cur_mode_t, row_prebuilt_t *,
     return DB_VILLAGESQL_ERROR;
   }
 
-  // TODO(villagesql-indexing): Drive the custom index type's scan_begin /
-  // scan_fetch / scan_end interface instead of rejecting every scan.
+  if (range_lock && prebuilt->select_lock_type != LOCK_NONE) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index doesn't support range lock.";
+    return DB_VILLAGESQL_ERROR;
+  }
+  // We come here from row_search_mvcc after PHASE 1, PHASE 2, and part of
+  // PHASE 3, before opening the cursor. Keep this functionally aligned with
+  // PHASE 3, 4 nd 5 of row_search_mvcc. We cannot reuse the code directly
+  // because it depends on the B-tree record format.
+
+  que_thr_t *thr = que_fork_get_first_thr(prebuilt->sel_graph);
+  dict_index_t *index = prebuilt->index;
+
+  ut_ad(Custom_index::is_custom(index));
+  Custom_index *custom_index = index->custom_index;
+
+  dict_index_t *clust_index = index->table->first_index();
+  ut_ad(!index->is_clustered());
+  ut_ad(!dict_index_is_spatial(index));
+
+  dtuple_t *search_tuple = prebuilt->search_tuple;
+  trx_t *trx = prebuilt->trx;
+  bool clust_templ_for_sec = prebuilt->need_to_access_clustered;
+
+  (void)thr;
+  (void)clust_index;
+  (void)trx;
+  (void)clust_templ_for_sec;
+
+  // PHASE 3: Open or restore index cursor position
+  Mtr_guard mtr_guard;
+  mtr_t *mtr = mtr_guard.get();
+  bool eof = false;
+
+  if (direction != 0) {
+    // Restore Cursor.
+    ut_ad(prebuilt->row_read_type != ROW_READ_TRY_SEMI_CONSISTENT);
+    ut_ad(prebuilt->row_read_type != ROW_READ_DID_SEMI_CONSISTENT);
+    dberr_t err = custom_index->restore_cursor(prebuilt, mtr, &eof);
+    if (err != DB_SUCCESS) return err;
+  } else if (dtuple_get_n_fields(search_tuple) > 0) {
+    // Open Cursor using search tuple and mode.
+    dberr_t err =
+        custom_index->open_cursor(prebuilt, mtr, mode, !scan_forward, &eof);
+    if (err != DB_SUCCESS) return err;
+  } else {
+    // Open cursor to read all.
+    ut_ad(mode == PAGE_CUR_G || mode == PAGE_CUR_L);
+    dberr_t err =
+        custom_index->open_cursor(prebuilt, mtr, mode, !scan_forward, &eof);
+    if (err != DB_SUCCESS) return err;
+  }
+  // PHASE 4: Look for matching records in a loop
+
+  // PHASE 5: Move the cursor to the next index record
+
+  if (eof) custom_index->close_cursor(prebuilt);
   ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
       << "Row search on a custom index is not supported yet.";
   return DB_VILLAGESQL_ERROR;

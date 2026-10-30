@@ -38,6 +38,7 @@ struct mem_block_info_t;
 typedef mem_block_info_t mem_heap_t;
 struct TABLE_SHARE;
 struct row_prebuilt_t;
+struct mtr_t;
 namespace dd {
 class Index;
 class Table;
@@ -62,6 +63,7 @@ class Custom_index {
   using StorageCtx = vef_storage_ctx_t;
   using StorageRef = vef_storage_ref_t;
   using KeyRef = vef_storage_col_ref_t;
+  using CursorRef = vef_index_cursor_ref_t;
 
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
   static constexpr uint32_t MAX_EXTRA_FIELDS = 1;
@@ -173,7 +175,8 @@ class Custom_index {
   // being scanned is a custom index.
   static dberr_t row_search(byte *buf, page_cur_mode_t mode,
                             row_prebuilt_t *prebuilt, ulint match_mode,
-                            ulint direction, bool is_mvcc);
+                            ulint direction, bool range_lock, bool scan_forward,
+                            bool is_mvcc);
 
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.
@@ -188,6 +191,25 @@ class Custom_index {
   // Loads the extension-managed storage of an attached custom index that has
   // a storage reference.
   static dberr_t load_storage(dict_index_t *new_index);
+
+  // Fills the scan descriptor fields that depend on the query: the profile
+  // function of the scan key, and the KNN limit.
+  dberr_t fill_profile(const row_prebuilt_t *prebuilt,
+                       vef_index_scan_desc_t *scan_desc, page_cur_mode_t mode);
+
+  // Opens an extension cursor on the custom index positioned at the first
+  // record of the scan described by search_tuple. On success the cursor is
+  // stored in prebuilt->pcur->custom_cursor, even when eof is true.
+  dberr_t open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
+                      page_cur_mode_t mode, bool reverse, bool *eof);
+
+  // Re-attaches the saved extension cursor in prebuilt->pcur->custom_cursor to
+  // the new mini-transaction mtr and repositions it.
+  dberr_t restore_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr, bool *eof);
+
+  // Ends the extension cursor in prebuilt->pcur->custom_cursor, if any, and
+  // clears it.
+  void close_cursor(row_prebuilt_t *prebuilt);
 
   std::shared_ptr<const IndexContext> index_metadata_;
   std::vector<std::shared_ptr<const IndexProfileDescriptor>> key_profiles_;
