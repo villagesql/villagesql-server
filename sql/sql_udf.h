@@ -166,6 +166,13 @@ class udf_handler {
            u_d->vdf_func_desc->deterministic;
   }
 
+  // For a VDF, returns the extension's function descriptor (nullptr for
+  // classic UDFs). Used to match a resolved VDF call against the function
+  // bindings declared by an index profile.
+  const vef_func_desc_t *vdf_func_desc() const {
+    return is_vdf() ? u_d->vdf_func_desc : nullptr;
+  }
+
   // Check if this VDF returns a text string (VEF_TYPE_STRING) as opposed to
   // binary data (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available before
   // m_vdf is instantiated.
