@@ -175,7 +175,7 @@ void register_builtin_capabilities() {
   register_capability(VEF_PREVIEW_INDEX_TYPE_NAME,
                       {.vtable = preview_index_type_vtable(),
                        .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1"});
+                       .capability_config_hash = "ver-2"});
   // Auth: on_populate validates the method config and adds it to the auth
   // capability's own in-memory registry; on_depopulate removes it and drains
   // any in-flight login before unload. No auth-specific code in core.

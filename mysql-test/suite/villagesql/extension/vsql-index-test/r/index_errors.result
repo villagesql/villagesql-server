@@ -32,8 +32,22 @@ ERROR HY000: Column 'id' is not of type 'dummy_type_vector' (extension 'vsql_ind
 # --- CREATE INDEX: WITH incorrect parameter N ---
 CREATE INDEX idx_ext ON t (b) USING EXTENDED(dummy_index_hnsw)
 WITH (N = 16, ef_construction = 200);
-ERROR HY000: InnoDB: Custom type operation failed. See server error log for details.
-Pattern "VillageSQL: Error parsing custom index options" found
+ERROR HY000: Index 'idx_ext' on custom index type 'dummy_index_hnsw': unknown option 'n'
+# --- CREATE INDEX: WITH out-of-range and non-numeric values ---
+CREATE INDEX idx_zero ON t (b) USING EXTENDED(dummy_index_hnsw) WITH (M = 0);
+ERROR HY000: Index 'idx_zero' on custom index type 'dummy_index_hnsw': M must be a positive integer <= 65536, got '0'
+CREATE INDEX idx_big ON t (b) USING EXTENDED(dummy_index_hnsw) WITH (M = 99999);
+ERROR HY000: Index 'idx_big' on custom index type 'dummy_index_hnsw': M must be a positive integer <= 65536, got '99999'
+CREATE INDEX idx_nan ON t (b) USING EXTENDED(dummy_index_hnsw) WITH (M = 'abc');
+ERROR HY000: Index 'idx_nan' on custom index type 'dummy_index_hnsw': M must be a positive integer <= 65536, got 'abc'
+# The second option is validated the same way as the first.
+CREATE INDEX idx_ef ON t (b) USING EXTENDED(dummy_index_hnsw)
+WITH (ef_construction = 0);
+ERROR HY000: Index 'idx_ef' on custom index type 'dummy_index_hnsw': ef_construction must be a positive integer <= 65536, got '0'
+# A bad value is rejected even when every other option is valid.
+CREATE INDEX idx_mixed ON t (b) USING EXTENDED(dummy_index_hnsw)
+WITH (M = 16, ef_construction = 99999, label = 'l2');
+ERROR HY000: Index 'idx_mixed' on custom index type 'dummy_index_hnsw': ef_construction must be a positive integer <= 65536, got '99999'
 # --- Drop+re-add: old type matches profile but new type does not (error) ---
 CREATE TABLE t_readd (id INT PRIMARY KEY, a dummy_type_vector);
 ALTER TABLE t_readd DROP COLUMN a, ADD COLUMN a INT,
