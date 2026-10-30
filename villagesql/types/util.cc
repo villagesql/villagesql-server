@@ -44,6 +44,7 @@
 #include "sql/sp_pcontext.h"
 #include "sql/sql_alter.h"
 #include "sql/sql_class.h"
+#include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_show.h"  // append_identifier
 #include "sql/sql_udf.h"
@@ -1018,6 +1019,11 @@ std::optional<size_t> TryComputeHash(const TypeContext &tc, const uchar *data,
   const auto &hash_op = tc.hash_op();
   if (!hash_op.has_value()) return std::nullopt;
   return hash_op->invoke(data, len);
+}
+
+bool IsFirstPrepareBeforeReprepare(const THD *thd) {
+  return thd->stmt_arena->is_stmt_prepare() &&
+         !thd->stmt_arena->is_repreparing && thd->lex->has_udf();
 }
 
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
@@ -2209,8 +2215,13 @@ static bool CallBindTypesHook(
     // Provide constant string values where available, in the charset of the
     // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
     // unconverted for any other. A prepared-statement parameter has no value
-    // until EXECUTE.
-    if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
+    // at PREPARE; it has one when the statement is prepared again at EXECUTE
+    // (see MaybeCopyPsParamStringValues).
+    const bool param_without_string =
+        args[i]->type() == Item::PARAM_ITEM &&
+        down_cast<Item_param *>(args[i])->param_state() !=
+            Item_param::STRING_VALUE;
+    if (args[i]->const_for_execution() && !param_without_string &&
         arg_types[i].id == VEF_TYPE_STRING) {
       const vef_type_id param_id =
           declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
@@ -2424,15 +2435,37 @@ static bool BuildVarargsExpectedTypes(
   return false;
 }
 
+// Returns true if any argument is a prepared-statement parameter with no value
+// yet.
+static bool UnboundPSParamsPresent(uint arg_count, Item **args) {
+  for (uint i = 0; i < arg_count; i++) {
+    if (args[i]->type() == Item::PARAM_ITEM &&
+        down_cast<Item_param *>(args[i])->param_state() ==
+            Item_param::NO_VALUE) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     std::string_view extension_name,
                                     uint arg_count, Item **args,
                                     const vef_signature_t *signature,
                                     TypeParameters *out_return_params,
                                     const vef_bind_types_func_t bind_and_check,
-                                    vef_context_t &ctx) {
+                                    vef_context_t &ctx,
+                                    bool *out_bind_hook_postponed) {
   const bool has_bind_hook = nullptr != bind_and_check;
   const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
+  *out_bind_hook_postponed = false;
+
+  // At a first PREPARE an argument may be a parameter with no value yet. The
+  // bind_and_check_types hook (and pass 2) then waits until the statement is
+  // prepared again at EXECUTE with the values bound.
+  const bool postpone_bind_hook = has_bind_hook &&
+                                  IsFirstPrepareBeforeReprepare(thd) &&
+                                  UnboundPSParamsPresent(arg_count, args);
 
   // Varargs without a hook: skip both arg-count and per-arg type validation.
   // The function's prerun hook is responsible for inspecting arg_count and
@@ -2451,7 +2484,11 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   if (varargs) {
     // Varargs runs the hook first, because there is no signature to check
     // arguments against and the hook supplies what signature->params would
-    // have.
+    // have. Postponing the hook thus postpones every check.
+    if (postpone_bind_hook) {
+      *out_bind_hook_postponed = true;
+      return false;
+    }
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
                           nullptr, &hook_arg_params, out_return_params,
@@ -2499,6 +2536,11 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                            expected_types,
                            has_bind_hook ? nullptr : &known_params)) {
     return true;
+  }
+
+  if (postpone_bind_hook) {
+    *out_bind_hook_postponed = true;
+    return false;
   }
 
   // Fixed arity runs the hook here. The hook sits between the passes:

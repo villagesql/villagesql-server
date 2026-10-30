@@ -1,0 +1,56 @@
+Creating extension vdf_postrun_leak using SDK...
+Created vdf_postrun_leak.veb
+INSTALL EXTENSION vdf_postrun_leak;
+CREATE TABLE t (id INT PRIMARY KEY);
+INSERT INTO t VALUES (1), (2), (3);
+# Baseline
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+0	0	0	0
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.hooked_probe(?) AS r FROM t ORDER BY id';
+# After PREPARE: neither the hook nor prerun has run
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+0	0	0	0
+SET @v = 'a';
+EXECUTE s USING @v;
+id	r
+1	1:a
+2	2:a
+3	3:a
+# After the first EXECUTE
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+1	1	1	0
+SET @v = 'bc';
+EXECUTE s USING @v;
+id	r
+1	1:bc
+2	2:bc
+3	3:bc
+# After the second EXECUTE
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+2	2	2	0
+DEALLOCATE PREPARE s;
+# After DEALLOCATE: every prerun has had its postrun
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+2	2	2	0
+# Without a parameter, the hook and prerun run at PREPARE as well
+PREPARE s FROM 'SELECT vdf_postrun_leak.hooked_probe(''x'') AS r';
+# After PREPARE
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+3	3	3	0
+EXECUTE s;
+r
+1:x
+DEALLOCATE PREPARE s;
+# After EXECUTE and DEALLOCATE
+SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
+bind	pre	post	live
+4	4	4	0
+SET @v = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vdf_postrun_leak;
