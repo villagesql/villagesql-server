@@ -39,10 +39,12 @@ namespace {
 
 // Checks that `item` is a candidate KNN ordering expression -- a
 // deterministic VDF, returning REAL, called with exactly one field reference
-// and one constant argument, like any other predicate. On success, returns
+// and one constant argument (possibly a bound parameter), like any other
+// predicate. On success, returns
 // the VDF call, sets *field_arg to the field-referencing argument, and sets
 // *query_point_arg to the constant argument (the KNN query point).
-const Item_udf_func *knn_order_call(Item *item, Item_field **field_arg,
+const Item_udf_func *knn_order_call(const THD *thd, Item *item,
+                                    Item_field **field_arg,
                                     Item **query_point_arg) {
   if (!is_deterministic_vdf(item)) return nullptr;
   const auto *func = down_cast<const Item_udf_func *>(item->real_item());
@@ -53,29 +55,39 @@ const Item_udf_func *knn_order_call(Item *item, Item_field **field_arg,
   Item *query_point = nullptr;
   for (uint i = 0; i < func->argument_count(); ++i) {
     Item *arg = func->arguments()[i]->real_item();
-    if (arg->type() == Item::FIELD_ITEM) {
+    // A column of a const table is constant, so it can be the query point.
+    if (arg->type() == Item::FIELD_ITEM && !arg->const_for_execution()) {
       if (field != nullptr) return nullptr;  // Only one field ref allowed.
       field = down_cast<Item_field *>(arg);
-    } else if (!arg->const_item()) {
-      return nullptr;  // The other argument must be constant.
+    } else if (!arg->const_for_execution()) {
+      // The other argument must be constant, possibly a bound parameter.
+      return nullptr;
     } else {
+      // Two constant arguments leave no column to scan.
+      if (query_point != nullptr) return nullptr;
       query_point = arg;
     }
   }
   if (field == nullptr || query_point == nullptr) return nullptr;
+  // A NULL query point cannot produce meaningful KNN results.
+  if (query_point->may_eval_const_item(thd) && query_point->is_null())
+    return nullptr;
   *field_arg = field;
   *query_point_arg = query_point;
   return func;
 }
 
 // Returns the profile function binding that `order_call` was
-// registered from, or nullptr if `profile` does not declare it.
+// registered from, or nullptr if `profile` does not declare it as an ORDER
+// function.
 const vef_index_profile_fn_binding_t *find_profile_function(
     const IndexProfileDescriptor *profile, const Item_udf_func *order_call) {
   const vef_func_desc_t *desc = order_call->vdf_func_desc();
   if (desc == nullptr) return nullptr;
   for (const auto &binding : profile->functions()) {
-    if (binding.vdf == desc->vdf) return &binding;
+    if (binding.vdf == desc->vdf &&
+        binding.kind == VEF_INDEX_PROFILE_FN_KIND_ORDER)
+      return &binding;
   }
   return nullptr;
 }
@@ -87,7 +99,8 @@ const vef_index_profile_fn_binding_t *find_profile_function(
 // Returns true if a KNN scan on `tab` returning `select_limit` rows fully
 // satisfies the query block's LIMIT.
 bool knn_limit_is_exact(const JOIN_TAB *tab) {
-  return tab->condition() == nullptr && tab->join()->plan_is_single_table();
+  return tab->condition() == nullptr && tab->join()->plan_is_single_table() &&
+         tab->table()->reginfo.lock_type == TL_READ;
 }
 
 int find_knn_capable_key(const Field *field, const Key_map *map,
@@ -134,6 +147,20 @@ bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
   // scan used to satisfy ordering.
   if (!tab->join()->group_list.empty()) return false;
 
+  // KNN scans are not supported under SERIALIZABLE isolation because KNN
+  // indexes cannot provide the required range-locking guarantees.
+  const enum_tx_isolation isolation = tab->join()->thd->tx_isolation;
+  if (isolation == ISO_SERIALIZABLE) return false;
+
+  // A locking read using a KNN scan is unsafe for statement based replication,
+  // but the logging format is decided before optimization and cannot be
+  // changed here. So do not use KNN for locking reads logged as statements.
+  const THD *thd = tab->join()->thd;
+  if (tab->table()->reginfo.lock_type != TL_READ &&
+      !thd->is_current_stmt_binlog_format_row() &&
+      !thd->is_current_stmt_binlog_disabled())
+    return false;
+
   // TODO(villagesql-indexing): Consider replacing the existing index plan with
   // KNN based on cost analysis, similar to test_if_cheaper_ordering() called
   // from test_if_skip_sort_order().
@@ -149,8 +176,8 @@ bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
   // one field reference and one constant argument, returning REAL.
   Item_field *field_arg = nullptr;
   Item *query_point_arg = nullptr;
-  const auto *order_call =
-      knn_order_call(*order.order->item, &field_arg, &query_point_arg);
+  const auto *order_call = knn_order_call(tab->join()->thd, *order.order->item,
+                                          &field_arg, &query_point_arg);
   if (order_call == nullptr) return false;
 
   // The ordered field must have a KNN-capable index whose profile
