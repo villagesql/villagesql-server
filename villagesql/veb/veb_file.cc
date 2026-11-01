@@ -1839,6 +1839,7 @@ static bool is_known_type_id(vef_type_id id, vef_protocol_t protocol) {
     case VEF_TYPE_REAL:
     case VEF_TYPE_INT:
     case VEF_TYPE_CUSTOM:
+    case VEF_TYPE_NULL:
       return true;
     case VEF_TYPE_BINARY:
       return protocol >= VEF_PROTOCOL_4;
