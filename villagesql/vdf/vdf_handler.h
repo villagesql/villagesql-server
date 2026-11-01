@@ -79,8 +79,10 @@ class vdf_handler {
   bool m_active{false};
   const villagesql::TypeContext *m_return_type_context{nullptr};
 
-  // Marshal arguments into m_invalues array based on declared parameter types
-  void marshal_args();
+  // Marshal arguments into m_invalues array based on declared parameter types.
+  // Returns true if an argument could not be converted; the error is already
+  // reported.
+  bool marshal_args();
 
   // Helper for VDF functions that return numeric types (double or longlong)
   // Returns true on success with value in out_value, false otherwise
@@ -96,6 +98,9 @@ class vdf_handler {
   // trigger a fresh allocation each time. No-op if already large enough.
   // Returns true on allocation failure.
   bool MaybeResizeBuffer(size_t needed);
+
+  // Call the VDF's postrun function, if any, and clear user_data.
+  void RunPostrun();
 };
 
 }  // namespace vdf

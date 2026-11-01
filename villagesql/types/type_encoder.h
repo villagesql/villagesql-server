@@ -29,6 +29,17 @@ struct MEM_ROOT;
 
 namespace villagesql {
 
+// Why an encode produced no value: VEF_RESULT_NULL for an explicit SQL NULL,
+// VEF_RESULT_WARNING or VEF_RESULT_ERROR for a failure.
+struct EncodeOutcome {
+  vef_return_value_type_t result_type{VEF_RESULT_VALUE};
+  // Points into the SpecialVdfCall's buffer; valid until the next encode().
+  const char *message{nullptr};
+
+  bool is_null() const { return result_type == VEF_RESULT_NULL; }
+  bool has_message() const { return message != nullptr && message[0] != '\0'; }
+};
+
 // TypeEncoder holds per-Field (or per-Item) encoding state, lazily allocated
 // from the owning object's mem_root on first encode and reused for all
 // subsequent encodes within the same lifetime.
@@ -64,10 +75,10 @@ class TypeEncoder {
   TypeEncoder &operator=(TypeEncoder &&) = delete;
 
   // Encode 'from' into the pre-allocated buffer_/result_.
-  // Returns the encoded String* on success, nullptr on error (is_valid is
-  // false for encoding errors, true for OOM with my_error already called).
+  // Returns the encoded String* on success, nullptr on failure, in which case
+  // outcome says why an encode VDF produced no value.
   // The returned String* is valid until the next encode() call.
-  String *encode(const String &from, bool &is_valid);
+  String *encode(const String &from, EncodeOutcome &outcome);
 
  private:
   MEM_ROOT *mem_root_{nullptr};  // owning mem_root, used for overflow growth

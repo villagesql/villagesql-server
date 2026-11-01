@@ -39,8 +39,10 @@
 #include "sql/item_func.h"
 #include "sql/item_sum.h"
 #include "sql/key.h"
+#include "sql/key_spec.h"
 #include "sql/parse_tree_column_attrs.h"
 #include "sql/sp_pcontext.h"
+#include "sql/sql_alter.h"
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
 #include "sql/sql_show.h"  // append_identifier
@@ -651,44 +653,124 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
   return encoder;
 }
 
-// Encode from for item's custom type. Returns the encoded String* on success.
-// On failure returns nullptr; is_valid=true means OOM (my_error already
-// called), is_valid=false means invalid value for the type.
-static String *EncodeForItem(Item *item, const String &from, bool &is_valid) {
-  TypeEncoder *encoder = GetTypeEncoderFor(item);
-  if (encoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
+// Put from into utf8mb4 for a type's encode, which parses text and so
+// needs to know which charset the bytes are in. Returns from itself when it
+// is already utf8mb4, the usual case since that is the default connection
+// charset, and otherwise converts it into *converted and returns that.
+// Converting does not decide validity: the type still accepts or rejects the
+// value.
+//
+// Returns nullptr with status set on failure: kOom (my_error already called),
+// or kBadValue when from is not valid in its own charset. For kBadValue,
+// *converted holds what the conversion made of it, to quote in the error.
+static const String *ConvertToUtf8mb4(const String &from, String *converted,
+                                      EncodeStatus &status) {
+  // Already utf8mb4 under any collation, which is the usual case. The encode
+  // reads the bytes as text and never consults the collation, so only the
+  // character set has to match, and every utf8mb4 collation shares one
+  // handler. Asked before needs_conversion(), which compares character sets
+  // by name and so reaches a strcmp for any collation other than the
+  // utf8mb4_bin converted to.
+  if (from.charset()->cset == my_charset_utf8mb4_bin.cset) return &from;
+  if (!from.needs_conversion(&my_charset_utf8mb4_bin)) return &from;
+  uint errors = 0;
+  if (converted->copy(from.ptr(), from.length(), from.charset(),
+                      &my_charset_utf8mb4_bin, &errors)) {
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  return encoder->encode(from, is_valid);
+  if (errors != 0) {
+    // Malformed in the charset it claims to be; nothing valid to parse.
+    status = EncodeStatus::kBadValue;
+    return nullptr;
+  }
+  return converted;
 }
 
-String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
+// Encode from for item's custom type, converting it to utf8mb4 first. Returns
+// the encoded String*, or nullptr with status saying why. *given is set to the
+// value the type was given, held in from or *converted, so an error message
+// can quote the value as the user wrote it.
+static String *EncodeForItem(Item *item, const String &from, String *converted,
+                             const String **given, EncodeStatus &status) {
+  *given = &from;
+  TypeEncoder *encoder = GetTypeEncoderFor(item);
+  if (encoder == nullptr) {
+    status = EncodeStatus::kOom;  // my_error already called
+    return nullptr;
+  }
+  const String *value = ConvertToUtf8mb4(from, converted, status);
+  if (value == nullptr) {
+    if (status == EncodeStatus::kBadValue) *given = converted;
+    return nullptr;
+  }
+  *given = value;
+  EncodeOutcome outcome;
+  String *encoded = encoder->encode(*value, outcome);
+  if (encoded == nullptr) status = EncodeStatus::kBadValue;
+  return encoded;
+}
+
+// Push the warning for a value the type would not accept. Consistent with
+// MySQL built-in types: the caller decides whether to promote it to an error.
+// 'value' is what the converter was given, so the message names what the user
+// wrote rather than the bytes their charset encoded it as.
+static void ReportBadCustomFieldValue(const Field *field, const String &value) {
+  const TypeContext *tc = field->get_type_context();
+  THD *thd = current_thd;
+  const ErrConvString errmsg(value.ptr(), value.length(), value.charset());
+  const Diagnostics_area *da = thd->get_stmt_da();
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
+      errmsg.ptr(), field->field_name, da->current_row_for_condition());
+}
+
+String *EncodeStringForField(Field *field, const String &from,
+                             EncodeStatus &status) {
   assert(field->has_type_context());
 
   TypeEncoder *encoder = GetTypeEncoderFor(field);
   if (encoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
+    status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  String *encoded = encoder->encode(from, is_valid);
-  if (encoded == nullptr) {
-    if (is_valid) return nullptr;  // OOM, my_error already called
-    // Encoding failed - invalid value for custom type
-    // Always push a warning (consistent with MySQL built-in types)
-    // Caller decides whether to also promote to error
-    const TypeContext *tc = field->get_type_context();
-    THD *thd = current_thd;
-    const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
-    const Diagnostics_area *da = thd->get_stmt_da();
-    push_warning_printf(thd, Sql_condition::SL_WARNING,
-                        ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-                        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-                        tc->type_name().c_str(), errmsg.ptr(),
-                        field->field_name, da->current_row_for_condition());
+
+  String converted;
+  const String *value = ConvertToUtf8mb4(from, &converted, status);
+  if (value == nullptr) {
+    if (status == EncodeStatus::kBadValue) {
+      ReportBadCustomFieldValue(field, converted);
+    }
     return nullptr;
   }
-  return encoded;
+
+  EncodeOutcome outcome;
+  String *encoded = encoder->encode(*value, outcome);
+  if (encoded != nullptr) return encoded;
+
+  // set_null() states a value rather than reporting a bad one.
+  if (outcome.is_null()) {
+    status = EncodeStatus::kNull;
+    return nullptr;
+  }
+
+  // error() aborts the statement with the extension's own message.
+  if (outcome.result_type == VEF_RESULT_ERROR && outcome.has_message()) {
+    villagesql_error("%s", MYF(0), outcome.message);
+    status = EncodeStatus::kErrorRaised;
+    return nullptr;
+  }
+
+  // Encoding failed - invalid value for custom type
+  // Always push a warning (consistent with MySQL built-in types)
+  // Caller decides whether to also promote to error
+  // TODO(villagesql-general): an extension's own warning() message is dropped
+  // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
+  // the user.
+  ReportBadCustomFieldValue(field, *value);
+  status = EncodeStatus::kBadValue;
+  return nullptr;
 }
 
 // Lazily allocate a TypeDecoder for field, reused for all subsequent decodes.
@@ -763,6 +845,8 @@ static void ReportDecodeError(DecodeResult result, const char *column_name,
   LogVSQL(WARNING_LEVEL, "%s '%s' of type '%s' at row %llu (value: %s): %s",
           label, column_name, type_name, static_cast<unsigned long long>(row),
           value_prefix.ptr(), decoder_error_msg);
+  // TODO(villagesql-general): say the decode failed instead of "Invalid value
+  // ... check server log for details".
   villagesql_error(
       "%s '%s' of type '%s' at row %llu: check server log for details", MYF(0),
       label, column_name, type_name, static_cast<unsigned long long>(row));
@@ -810,6 +894,9 @@ void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
   // Convert to the output charset. MySQL's dictionary type description uses
   // utf8mb3; the separately stored parameter JSON keeps the full UTF-8 text.
   out->append(name.c_str(), name.length(), type_parameter_collation());
+  // A converting append NUL-terminates its worst-case reservation, not the
+  // text, so terminate here for callers that use c_ptr().
+  (void)out->c_ptr_quick();
 }
 
 // Appends "extension_name.name", quoting each half.
@@ -891,12 +978,14 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
     return false;  // NULL value, nothing to encode
   }
 
-  bool is_valid = true;
-  String *encoded = EncodeForItem(item, *str_val, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String converted;
+  const String *given = nullptr;
+  String *encoded = EncodeForItem(item, *str_val, &converted, &given, status);
   if (encoded == nullptr) {
-    if (!is_valid) {
-      const ErrConvString errmsg(str_val->ptr(), str_val->length(),
-                                 str_item->collation.collation);
+    if (status == EncodeStatus::kBadValue) {
+      const ErrConvString errmsg(given->ptr(), given->length(),
+                                 given->charset());
       my_error(ER_WRONG_VALUE, MYF(0), tc.type_name().c_str(), errmsg.ptr());
     }
     return true;
@@ -1253,6 +1342,27 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   return false;
 }
 
+type_conversion_status HandleFailedEncode(Field *field, EncodeStatus status,
+                                          bool no_conversions) {
+  switch (status) {
+    case EncodeStatus::kNull:
+      return set_field_to_null_with_conversions(field, no_conversions);
+    case EncodeStatus::kOom:
+      return TYPE_ERR_OOM;
+    case EncodeStatus::kErrorRaised:
+      return TYPE_ERR_BAD_VALUE;
+    case EncodeStatus::kBadValue:
+      break;
+  }
+  // A warning for the bad value is already pushed. Store the type's intrinsic
+  // default so the row reads back if it survives, as a built-in stores 0 or ''
+  // for a value it cannot parse; nullability does not enter into it. A failure
+  // here has reported itself, so pass its status on.
+  const type_conversion_status store_stat =
+      StoreCustomFieldIntrinsicDefault(field);
+  return store_stat != TYPE_OK ? store_stat : TYPE_ERR_BAD_VALUE;
+}
+
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                     Field *to_field) {
   assert(!from_field->has_type_context());
@@ -1264,42 +1374,60 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
     return set_field_to_null_with_conversions(to_field, false);
   }
 
-  bool is_oom = false;
-  String *encoded = EncodeStringForField(to_field, *str, is_oom);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(to_field, *str, status);
   if (encoded == nullptr) {
-    return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+    return HandleFailedEncode(to_field, status, false);
   }
 
   to_field->set_notnull();
   return to_field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
-type_conversion_status EncodeAndStoreStringToCustomField(
-    const String &str_value, Field *field) {
-  bool is_valid = true;
-  String *encoded = EncodeStringForField(field, str_value, is_valid);
+// The charset a parameter's bytes are in. set_str() labels them binary, and
+// convert_value() relabels them (converting if needed) only for a
+// string-typed parameter. Bytes still labelled binary are in the charset they
+// arrived in, collation_source(). A custom type's encode reads them as text,
+// so it needs that charset.
+static const String ParamValueInItsCharset(const Item_param *param,
+                                           const String &str_value) {
+  const CHARSET_INFO *cs = str_value.charset() == &my_charset_bin
+                               ? param->collation_source()
+                               : str_value.charset();
+  return String(str_value.ptr(), str_value.length(), cs);
+}
+
+type_conversion_status ParamEncodeAndStoreCustomField(const Item_param *param,
+                                                      const String &str_value,
+                                                      Field *field) {
+  const String value = ParamValueInItsCharset(param, str_value);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(field, value, status);
   if (encoded == nullptr) {
-    return is_valid ? TYPE_ERR_OOM : TYPE_WARN_OUT_OF_RANGE;
+    return HandleFailedEncode(field, status, false);
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
-String *EncodeStringForCustomParam(Item *item, const String &str_value,
+String *EncodeStringForCustomParam(Item_param *param, const String &str_value,
                                    bool &null_value) {
-  bool is_valid = true;
-  String *encoded = EncodeForItem(item, str_value, is_valid);
+  const String value = ParamValueInItsCharset(param, str_value);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String converted;
+  const String *given = nullptr;
+  String *encoded = EncodeForItem(param, value, &converted, &given, status);
   if (encoded == nullptr) {
-    if (!is_valid) {
+    if (status == EncodeStatus::kBadValue) {
       // Invalid value for custom type
-      const TypeContext *tc = item->get_type_context();
-      const ErrConvString errmsg(str_value.ptr(), str_value.length(),
-                                 str_value.charset());
+      const TypeContext *tc = param->get_type_context();
+      const ErrConvString errmsg(given->ptr(), given->length(),
+                                 given->charset());
       villagesql_error("Incorrect %s value: '%s' for parameter '%s'", MYF(0),
                        tc->qualified_name().c_str(), errmsg.ptr(),
-                       item->item_name.ptr());
+                       param->item_name.ptr());
     }
-
-    // else OOM - my_error already called
+    // kErrorRaised has already raised its own diagnostic.
+    // Signal "no string" to val_str() the usual way.
     null_value = true;
     return nullptr;
   }
@@ -1332,13 +1460,34 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
 
 bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
                                    const String &input_str) {
-  bool is_valid = false;
-  String *encoded = EncodeStringForField(field, input_str, is_valid);
+  EncodeStatus status = EncodeStatus::kBadValue;
+  String *encoded = EncodeStringForField(field, input_str, status);
   if (encoded != nullptr) {
     field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
     return false;
   }
-  if (is_valid) return true;  // OOM case
+  switch (status) {
+    case EncodeStatus::kNull:
+      // Mirror a literal \N in the input: mark the field NULL and leave the
+      // NOT NULL decision to the row-level check once the row is complete,
+      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
+      // would satisfy that check and let a NOT NULL column through.
+      if (!field->is_nullable() && thd->lex->is_ignore()) {
+        // IGNORE keeps the row, so give it the type's intrinsic default
+        // rather than zero bytes, as the \N path does.
+        if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
+        field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
+                           1);
+        return false;
+      }
+      field->set_null();
+      return false;
+    case EncodeStatus::kOom:
+    case EncodeStatus::kErrorRaised:
+      return true;
+    case EncodeStatus::kBadValue:
+      break;  // handled below: whether this fails the row depends on the mode
+  }
   if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
     // EncodeStringForField already pushed a warning; promote to error
     my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
@@ -1583,12 +1732,47 @@ static bool insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
   return false;
 }
 
-bool PrepareTmpTableCustomColumns(
-    THD *thd, const char *db, const char *table_name,
-    List<Create_field> &create_fields,
-    [[maybe_unused]] const HA_CREATE_INFO *create_info) {
+bool EnsureEngineIsInnodb(const handlerton *hton, const char *operation) {
+  assert(hton);
+  if (hton && hton->db_type != DB_TYPE_INNODB) {
+    villagesql_error(
+        "Custom types are only supported with InnoDB storage engine. "
+        "Cannot %s with %s storage engine.",
+        MYF(0), operation, ha_resolve_storage_engine_name(hton));
+    return true;
+  }
+  return false;
+}
+
+// Check that the tmp table is InnoDB if any column or index is custom-typed.
+static bool EnsureInnodbEngineForTmpTable(const HA_CREATE_INFO *create_info,
+                                          const Alter_info *alter_info,
+                                          const char *operation) {
   assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
-  List_iterator_fast<Create_field> it(create_fields);
+
+  bool has_custom = false;
+  for (const Create_field &cdef : alter_info->create_list) {
+    if (cdef.custom_type_context != nullptr) {
+      has_custom = true;
+      break;
+    }
+  }
+  for (const Key_spec *key : alter_info->key_list) {
+    if (has_custom) break;
+    has_custom = key->key_create_info.is_custom_index();
+  }
+
+  return has_custom && EnsureEngineIsInnodb(create_info->db_type, operation);
+}
+
+bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
+                                  const char *table_name,
+                                  Alter_info *alter_info,
+                                  const HA_CREATE_INFO *create_info) {
+  assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
+  if (EnsureInnodbEngineForTmpTable(create_info, alter_info, "create table"))
+    return true;
+  List_iterator_fast<Create_field> it(alter_info->create_list);
   Create_field *cdef;
   while ((cdef = it++) != nullptr) {
     if (cdef->custom_type_context == nullptr) continue;
@@ -1626,13 +1810,20 @@ void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
   RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
 
-void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
+bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
+                              const HA_CREATE_INFO *create_info) {
   thd->villagesql_alter_custom_fields.clear();
-  for (const Create_field &cdef : create_list) {
+
+  if ((create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
+      EnsureInnodbEngineForTmpTable(create_info, alter_info, "alter table"))
+    return true;
+
+  for (const Create_field &cdef : alter_info->create_list) {
     if (cdef.custom_type_context != nullptr)
       thd->villagesql_alter_custom_fields.emplace(cdef.field_name,
                                                   cdef.custom_type_context);
   }
+  return false;
 }
 
 void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table) {
@@ -1670,6 +1861,27 @@ bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
   // rebuilt key keeps its type and extension but not custom_index_params, so a
   // CREATE TABLE ... LIKE of a custom index loses its WITH clause (the ALTER
   // rebuild path is unaffected, as it does not re-register the index).
+  return false;
+}
+
+bool MaybeCarryCustomKeyPartProfileForRebuild(
+    THD *thd, const KEY_PART_INFO *key_part, LEX_CSTRING *out_profile,
+    LEX_CSTRING *out_profile_extension) {
+  *out_profile = {nullptr, 0};
+  *out_profile_extension = {nullptr, 0};
+  const IndexProfileDescriptor *profile = key_part->custom_index_profile;
+  if (profile == nullptr) return false;
+
+  const std::string &name = profile->profile_name();
+  const std::string &ext = profile->extension_name();
+  char *name_copy = strmake_root(thd->mem_root, name.c_str(), name.length());
+  char *ext_copy = strmake_root(thd->mem_root, ext.c_str(), ext.length());
+  if (name_copy == nullptr || ext_copy == nullptr) {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), name.length() + ext.length());
+    return true;
+  }
+  *out_profile = {name_copy, name.length()};
+  *out_profile_extension = {ext_copy, ext.length()};
   return false;
 }
 
@@ -1950,9 +2162,15 @@ static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
 // true on error (error already raised).
+//
+// declared_params is the signature's parameter types, or nullptr for a varargs
+// call, which has none and reads each argument as its own type. It decides
+// only how a constant string argument is read; each argument's type is what
+// the caller passed.
 static bool CallBindTypesHook(
     const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
     const char *func_name, uint arg_count, Item **args,
+    const vef_type_t *declared_params,
     std::vector<TypeParameters> *out_arg_params,
     TypeParameters *out_return_params,
     std::vector<std::string> *out_arg_type_names = nullptr) {
@@ -1988,9 +2206,16 @@ static bool CallBindTypesHook(
       arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available
-    if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
-      String *v = args[i]->val_str(&const_store[i]);
+    // Provide constant string values where available, in the charset of the
+    // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
+    // unconverted for any other. A prepared-statement parameter has no value
+    // until EXECUTE.
+    if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
+        arg_types[i].id == VEF_TYPE_STRING) {
+      const vef_type_id param_id =
+          declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
+      String *v = ReadVdfValue(param_id, args[i], &const_store[i]);
+      if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
         const_lengths[i] = v->length();
@@ -2065,7 +2290,7 @@ static bool CallBindTypesHook(
   }
   if (out_return.actual_len > 0 && out_return_params != nullptr) {
     *out_return_params = TypeParameters::from_raw(
-        std::string(return_buf, out_return.actual_len));
+        std::string_view(return_buf, out_return.actual_len));
     const std::string validation_error = out_return_params->validation_error();
     if (!validation_error.empty()) {
       villagesql_error("Invalid inferred return parameters: %s", MYF(0),
@@ -2084,7 +2309,7 @@ static bool CallBindTypesHook(
     }
     if (out_args[i].actual_len > 0) {
       (*out_arg_params)[i] = TypeParameters::from_raw(
-          std::string(out_args[i].buf, out_args[i].actual_len));
+          std::string_view(out_args[i].buf, out_args[i].actual_len));
       const std::string validation_error =
           (*out_arg_params)[i].validation_error();
       if (!validation_error.empty()) {
@@ -2120,6 +2345,37 @@ vef_type_id InferArgTypeId(const Item *item) {
     default:
       return VEF_TYPE_STRING;
   }
+}
+
+const CHARSET_INFO *VdfValueCharset(vef_type_id id) {
+  return id == VEF_TYPE_STRING ? &my_charset_utf8mb4_bin : &my_charset_bin;
+}
+
+String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
+  // eval_string_arg() labels a value it does not convert with the charset
+  // asked for, and that value can be a constant's own: reading a text literal
+  // as binary would leave the literal labelled binary for everything after.
+  if (id != VEF_TYPE_STRING) return arg->val_str(buffer);
+  const CHARSET_INFO *to_cs = VdfValueCharset(id);
+  // In any other charset, eval_string_arg() either converts the value into
+  // buffer or returns it with at most its collation changed to utf8mb4_bin;
+  // only a binary value would be relabelled to another charset.
+  if (arg->collation.collation != &my_charset_bin) {
+    return eval_string_arg(to_cs, arg, buffer);
+  }
+  // The same steps for a binary value, with the relabelled value copied into
+  // buffer. It is read into local, not buffer, because a value such as
+  // SUBSTRING()'s can be a view into the buffer it is given, which the copy
+  // would overwrite.
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> local(nullptr, 0, &my_charset_bin);
+  String *res = arg->val_str(&local);
+  if (res == nullptr) return nullptr;
+  if (!res->is_valid_string(to_cs)) {
+    report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
+    return nullptr;
+  }
+  if (buffer->copy(res->ptr(), res->length(), to_cs)) return nullptr;
+  return buffer;
 }
 
 // Turns a varargs hook's answers into the expected-type array the two passes
@@ -2198,7 +2454,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // have.
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params,
+                          nullptr, &hook_arg_params, out_return_params,
                           &hook_arg_type_names)) {
       return true;
     }
@@ -2252,7 +2508,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // The type-name argument is left at its default: a fixed-arity signature
     // already declares every argument's type, so the hook has nothing to name.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params)) {
+                          signature->params, &hook_arg_params,
+                          out_return_params)) {
       return true;
     }
   }

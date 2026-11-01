@@ -4509,18 +4509,19 @@ udf_handler::udf_handler(udf_func *udf_arg)
       m_args_extension(),
       m_return_value_extension(&my_charset_bin, result_type()) {}
 
-bool udf_handler::is_vdf_returns_string() const {
+bool udf_handler::is_vdf_returns_string_or_binary() const {
   // Use vdf_func_desc directly instead of m_vdf because this is called from
   // resolve_type() before m_vdf is instantiated.
   return u_d != nullptr &&
          u_d->calling_convention == UdfCallingConvention::VDF &&
          u_d->vdf_func_desc != nullptr &&
-         u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING;
+         (u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING ||
+          u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_BINARY);
 }
 
-void udf_handler::set_vdf_string_result_type(Item *item,
-                                             uint32 default_length) {
-  assert(is_vdf_returns_string());
+void udf_handler::set_vdf_string_or_binary_result_type(Item *item,
+                                                       uint32 default_length) {
+  assert(is_vdf_returns_string_or_binary());
   // Size the result field for a STRING-returning VDF, mirroring a classic
   // loadable UDF. Prefer the max output length the extension declared
   // (max_result_length); otherwise fall back to default_length,
@@ -4533,8 +4534,7 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   // is not clipped to N/4. Both paths are capped at MAX_BLOB_WIDTH, like a
   // classic UDF (see the init path in udf_handler::fix_fields).
   // set_data_type_string then buckets to VARCHAR / MEDIUM / LONG blob by
-  // length.
-  // TODO(villagesql): Allow VDFs to choose an encoding.
+  // length. A BINARY result is sized the same way, in bytes.
   size_t len = 0;
   if (u_d != nullptr && u_d->vdf_func_desc != nullptr &&
       u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_4) {
@@ -4550,10 +4550,12 @@ void udf_handler::set_vdf_string_result_type(Item *item,
   if (len > MAX_BLOB_WIDTH) {
     len = MAX_BLOB_WIDTH;
   }
-  item->set_data_type_string(static_cast<uint32>(len), &my_charset_utf8mb4_bin);
+  const CHARSET_INFO *cs = villagesql::VdfValueCharset(
+      u_d->vdf_func_desc->signature->return_type.id);
+  item->set_data_type_string(static_cast<uint32>(len), cs);
   // Keep the runtime result charset in sync with the item's declared
   // collation.
-  m_return_value_extension.charset_info = &my_charset_utf8mb4_bin;
+  m_return_value_extension.charset_info = cs;
 }
 
 void udf_handler::cleanup() {
@@ -5278,8 +5280,8 @@ bool Item_func_udf_str::resolve_type(THD *) {
   for (uint i = 0; i < arg_count; i++)
     result_length = max(result_length, args[i]->max_length);
   // If the UDF has an init function, this may be overridden later.
-  if (udf.is_vdf_returns_string()) {
-    udf.set_vdf_string_result_type(this, result_length);
+  if (udf.is_vdf_returns_string_or_binary()) {
+    udf.set_vdf_string_or_binary_result_type(this, result_length);
   } else {
     set_data_type_string(result_length, &my_charset_bin);
   }

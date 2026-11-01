@@ -64,6 +64,8 @@ static Item_result vef_type_to_item_result(const vef_type_t &type) {
     case VEF_TYPE_CUSTOM:
       // Custom types are passed as binary strings
       return STRING_RESULT;
+    case VEF_TYPE_BINARY:
+      return STRING_RESULT;
     default:
       return STRING_RESULT;
   }

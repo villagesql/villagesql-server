@@ -1,0 +1,43 @@
+# In strict mode a VDF that fails while computing an inserted value must fail
+# the statement, as a built-in does (e.g. division by zero).
+# Observed (job w1-0008): the VDF error stays warning 3200 because
+# Strict_error_handler does not promote ER_UDF_ERROR. A nullable column gets
+# NULL and the INSERT succeeds; NOT NULL columns fail with ER_BAD_NULL_ERROR.
+--source include/villagesql/not_implemented.inc
+
+--source include/villagesql/install_complex_extension.inc
+
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t2 VALUES (1, '(1,1)');
+
+--error ER_UDF_ERROR
+INSERT INTO t1 VALUES (1, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+
+--error ER_UDF_ERROR
+INSERT INTO t2 VALUES (2, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+
+# Multi-row: the failing row stops the statement; nothing is inserted.
+--error ER_UDF_ERROR
+INSERT INTO t1 VALUES (3, '(1,1)'), (4, vsql_complex.complex_divide('(1,1)', '(-0,0)'));
+
+--error ER_UDF_ERROR
+INSERT INTO t1 SET id = 5, val = vsql_complex.complex_divide('(1,1)', '(0,0)');
+
+--error ER_UDF_ERROR
+INSERT INTO t1 SELECT id + 10, vsql_complex.complex_divide(val, '(0,0)') FROM t2;
+
+# In the ON DUPLICATE KEY UPDATE list.
+--error ER_UDF_ERROR
+INSERT INTO t2 VALUES (1, '(0,0)') AS n
+  ON DUPLICATE KEY UPDATE val = vsql_complex.complex_divide(t2.val, n.val);
+
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t2 ORDER BY id;
+DROP TABLE t1, t2;
+SET sql_mode = @saved_sql_mode;
+
+--source include/villagesql/uninstall_complex_extension.inc

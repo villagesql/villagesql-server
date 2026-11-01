@@ -2779,7 +2779,18 @@ bool plugin_foreach_with_mask(THD *thd, plugin_foreach_func *func, int type,
 // service can allocate THD-local bookmarks; MySQL 9.0+ exports this from
 // sql_plugin_var.cc. Drop this backport on rebase onto a 9.x base.
 st_bookmark *register_var(const char *plugin, const char *name, int flags) {
-  const size_t length = strlen(plugin) + strlen(name) + 3;
+  // TODO(villagesql-rebase): `plugin` may be nullptr, meaning `name` is
+  // already the fully-qualified system variable name and must be used as the
+  // bookmark key verbatim. A component registers its variable as
+  // "component.var" (component_sys_var_service.cc), but joining here with "_"
+  // would key the bookmark as "component_var"; the MEMALLOC strdup loop in
+  // alloc_and_copy_thd_dynamic_variables() resolves a bookmark back to its
+  // sys_var by that key, so a component variable was never found and its
+  // sessions never got their own copy of the string -- they kept aliasing the
+  // global buffer, which the next SET GLOBAL frees (villagesql#1324).
+  // find_bookmark() already accepts a null plugin this way. Drop if upstream
+  // adopts the same shape.
+  const size_t length = (plugin ? strlen(plugin) + 1 : 0) + strlen(name) + 2;
   size_t size = 0, offset, new_size;
   st_bookmark *result;
   char *varname, *p;
@@ -2813,9 +2824,14 @@ st_bookmark *register_var(const char *plugin, const char *name, int flags) {
   };
 
   varname = ((char *)my_alloca(length));
-  strxmov(varname + 1, plugin, "_", name, NullS);
-  for (p = varname + 1; *p; p++)
-    if (*p == '-') *p = '_';
+  if (plugin) {
+    strxmov(varname + 1, plugin, "_", name, NullS);
+    for (p = varname + 1; *p; p++)
+      if (*p == '-') *p = '_';
+  } else {
+    // Pre-composed name: keep it verbatim, including any '.' separator.
+    memcpy(varname + 1, name, strlen(name) + 1);
+  }
 
   if (!(result = find_bookmark(nullptr, varname + 1, flags))) {
     result =

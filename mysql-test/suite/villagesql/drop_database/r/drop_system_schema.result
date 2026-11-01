@@ -1,0 +1,34 @@
+# DROP is rejected, with and without IF EXISTS, and under DROP SCHEMA.
+DROP DATABASE villagesql;
+ERROR HY000: Access to system schema 'villagesql' is rejected.
+DROP DATABASE IF EXISTS villagesql;
+ERROR HY000: Access to system schema 'villagesql' is rejected.
+DROP SCHEMA villagesql;
+ERROR HY000: Access to system schema 'villagesql' is rejected.
+# The name is matched case-insensitively.
+DROP DATABASE villagesql;
+ERROR HY000: Access to system schema 'villagesql' is rejected.
+# ALTER is rejected too, including the options that would wedge the
+# schema without removing it.
+ALTER DATABASE villagesql CHARACTER SET latin1;
+ERROR HY000: Access to system schema 'villagesql' is rejected.
+ALTER DATABASE villagesql READ ONLY = 1;
+ERROR HY000: Access to system schema 'villagesql' is rejected.
+# CREATE is "database exists" error.
+CREATE DATABASE villagesql;
+ERROR HY000: Can't create database 'villagesql'; database exists
+CREATE DATABASE IF NOT EXISTS villagesql;
+Warnings:
+Note	1007	Can't create database 'villagesql'; database exists
+# The schema is intact: the victionary-backed I_S views still resolve.
+SELECT COUNT(*) >= 0 AS ok FROM INFORMATION_SCHEMA.EXTENSIONS;
+ok
+1
+SHOW DATABASES LIKE 'villagesql';
+Database (villagesql)
+villagesql
+# The 'mysql' schema keeps the protection it already had.
+DROP DATABASE mysql;
+ERROR HY000: Access to system schema 'mysql' is rejected.
+ALTER DATABASE mysql CHARACTER SET latin1;
+ERROR HY000: Access to system schema 'mysql' is rejected.

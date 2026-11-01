@@ -20,6 +20,8 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "my_inttypes.h"
 
@@ -65,15 +67,50 @@ inline ParsedQualifiedName parse_qualified_name(std::string_view name) {
   return {std::string(name.substr(0, dot)), std::string(name.substr(dot + 1))};
 }
 
-// Reads the row matching key_buf through the already-initialized index into
-// record[0], then snapshots it into record[1] as the old row for
-// ha_update_row(). Returns the handler error code, 0 on success.
-//
-// The snapshot has to happen after the read. ha_update_row() takes a diff:
-// the engine compares record[1] against record[0] and leaves out every field
-// that compares equal, so a record[1] holding anything but the row just read
-// drops columns from the update with no error.
-int read_row_for_update(TABLE &table, const uchar *key_buf);
+// Looks up the row whose key on index `key_index` matches the key fields the
+// caller has stored in table.record[0]. The index stays open, with the row
+// current, until the lookup goes out of scope, so the caller can then
+// ha_update_row() or ha_delete_row() it.
+class RowLookup {
+ public:
+  RowLookup(TABLE &table, uint key_index)
+      : m_table(table), m_key_index(key_index) {}
+  ~RowLookup();
+
+  RowLookup(const RowLookup &) = delete;
+  RowLookup &operator=(const RowLookup &) = delete;
+
+  // Reads the row into record[0]. Returns the handler error code: 0 if
+  // found, HA_ERR_KEY_NOT_FOUND if there is no such row.
+  int read();
+
+  // As read(), then snapshots the row into record[1] as the old row for
+  // ha_update_row().
+  //
+  // The snapshot has to happen after the read. ha_update_row() takes a diff:
+  // the engine compares record[1] against record[0] and leaves out every field
+  // that compares equal, so a record[1] holding anything but the row just read
+  // drops columns from the update with no error.
+  int read_for_update();
+
+ private:
+  TABLE &m_table;
+  const uint m_key_index;
+  bool m_index_open = false;
+};
+
+// JSON object form of a parameter set, shared by the type_parameters and
+// index_type_parameters columns so escaping is implemented once. Values are
+// always JSON strings; callers render their own types to text first.
+using StringPairs = std::vector<std::pair<std::string, std::string>>;
+
+// Keys are ordered by length then bytes, so the output is deterministic.
+// Returns "{}" on allocation failure.
+std::string json_object_from_pairs(const StringPairs &pairs);
+
+// Returns true if the input is not an object of strings, leaving *out
+// untouched. Empty input or "{}" succeeds with no pairs.
+bool json_object_to_pairs(const std::string &json, StringPairs *out);
 
 // Helper functions for reading a value from a Field.
 void read_string_field(Field *f, std::string &out);

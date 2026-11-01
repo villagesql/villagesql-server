@@ -423,7 +423,6 @@ static bool sock_descriptor_to_sockaddr(int fd, struct sockaddr_storage *sa) {
   */
 static bool sock_descriptor_to_string(int fd, std::string &out) {
   struct sockaddr_storage sa;
-  socklen_t addr_size = static_cast<socklen_t>(INET6_ADDRSTRLEN);
   char saddr[INET6_ADDRSTRLEN];
 
   // get the sockaddr struct
@@ -432,7 +431,7 @@ static bool sock_descriptor_to_string(int fd, std::string &out) {
   // try IPv4
   if (sa.ss_family == AF_INET) {
     if (inet_ntop(AF_INET, &(((struct sockaddr_in *)&sa)->sin_addr), saddr,
-                  addr_size)) {
+                  INET6_ADDRSTRLEN)) {
       out = saddr;
       return false;
     }
@@ -441,7 +440,7 @@ static bool sock_descriptor_to_string(int fd, std::string &out) {
   // try IPv6
   if (sa.ss_family == AF_INET6) {
     if (inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)&sa)->sin6_addr), saddr,
-                  addr_size)) {
+                  INET6_ADDRSTRLEN)) {
       out = saddr;
       return false;
     }

@@ -1707,6 +1707,12 @@ bool Sql_cmd_load_table::read_xml_field(THD *thd, COPY_INFO &info,
           field->set_null();
           if (field == table->next_number_field)
             table->autoinc_field_has_explicit_non_null_value = true;
+          // TODO(villagesql-general): a NOT NULL custom type field is left
+          // NULL below, so it reads back as an undecodable value. The
+          // separated-field reader stores the type's intrinsic default under
+          // IGNORE instead. Unlike that reader, this one makes no field
+          // tmp-nullable and runs no row-level check_constraints(), so the
+          // non-IGNORE case needs that mechanism first.
           if (!field->is_nullable()) {
             if (field->type() == FIELD_TYPE_TIMESTAMP)
               // Specific of TIMESTAMP NOT NULL: set to CURRENT_TIMESTAMP.

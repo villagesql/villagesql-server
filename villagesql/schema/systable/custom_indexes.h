@@ -149,11 +149,10 @@ struct TableTraits<IndexEntry> {
   static bool delete_from_table(TABLE &table, const IndexEntry &entry);
 };
 
-// Serialize a WITH-clause parameter list to a JSON object string.
-// Mirrors TypeParameters::to_json() for the index parameter pipeline.
-// Numeric params (is_string=false) are emitted unquoted; string/identifier
-// params are emitted quoted with backslash and double-quote escaping.
-// An empty list produces "{}".
+// Serialize a WITH-clause parameter list to the same JSON form
+// TypeParameters::to_json() produces and from_json() reads back. Numeric
+// params are rendered to text and emitted as JSON strings, like every other
+// value. An empty list produces "{}".
 std::string params_to_json(const Mem_root_array<IndexWithParam> &params);
 
 }  // namespace villagesql

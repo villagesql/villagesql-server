@@ -148,5 +148,5 @@ engines/rr_trx.rr_u_10-19 : BUG#0 Stress-only suite, not standalone MTR tests
 engines/rr_trx.rr_u_10-19_nolimit : BUG#0 Stress-only suite, not standalone MTR tests
 engines/rr_trx.rr_u_4 : BUG#0 Stress-only suite, not standalone MTR tests
 
-# lock_order suite requires custom server build.  See file for the more details.
-@import disabled-lock_order.def
+# Disable the tests known to fail in vanilla MySQL 8.4.11
+@import disabled-mysql-8.4.11-fails.def

@@ -1,0 +1,42 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_session_var_test;
+# Seed the global before anyone connects
+SET GLOBAL vsql_session_var_test.session_str_var = 'g3';
+SELECT @@global.vsql_session_var_test.session_str_var AS seeded;
+seeded
+g3
+# c1 connects and takes its first read, which allocates its copy
+SELECT @@session.vsql_session_var_test.session_str_var AS c1_first_read;
+c1_first_read
+g3
+# c2 changes the global
+SET GLOBAL vsql_session_var_test.session_str_var = 'g4';
+SELECT @@global.vsql_session_var_test.session_str_var AS global_now;
+global_now
+g4
+# c1 never ran SET SESSION, so it still holds g3
+SELECT @@session.vsql_session_var_test.session_str_var AS c1_after;
+c1_after
+g3
+# ...and so does the session that issued the SET GLOBAL
+SELECT @@session.vsql_session_var_test.session_str_var AS c2_after;
+c2_after
+g3
+# A session connecting after the change starts from the new global
+SELECT @@session.vsql_session_var_test.session_str_var AS c3_fresh;
+c3_fresh
+g4
+# SET SESSION remains local to the session that issues it
+SET SESSION vsql_session_var_test.session_str_var = 'mine';
+SELECT @@session.vsql_session_var_test.session_str_var AS c1_own;
+c1_own
+mine
+SELECT @@session.vsql_session_var_test.session_str_var AS c3_unchanged;
+c3_unchanged
+g4
+SELECT @@global.vsql_session_var_test.session_str_var AS global_unchanged;
+global_unchanged
+g4
+UNINSTALL EXTENSION vsql_session_var_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

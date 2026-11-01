@@ -3621,9 +3621,10 @@ void Item_string::print(const THD *, String *str,
     String decoded;
     if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
                                           &decoded)) {
-      // TODO(villagesql-general): Should we print a placeholder in case of
-      // error?
       str->append(decoded);
+    } else {
+      //  TODO(villagesql-general): Make this error observable.
+      str->append("<error decoding value>");
     }
     str->append('\'');
     return;
@@ -4318,7 +4319,8 @@ type_conversion_status Item_param::save_in_field_inner(Field *field,
       return TYPE_OK;
     case MYSQL_TYPE_VARCHAR: {
       if (field->has_type_context()) {
-        return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+        return villagesql::ParamEncodeAndStoreCustomField(this, str_value,
+                                                          field);
       }
       return field->store(str_value.ptr(), str_value.length(),
                           str_value.charset());
@@ -6624,6 +6626,7 @@ bool Item::eq_by_collation(Item *item, bool binary_cmp,
 /**
   Create a field to hold a string value from an item.
 
+  If the item carries a custom type, ignore CONVERT_IF_BIGGER_TO_BLOB @n
   If max_length > CONVERT_IF_BIGGER_TO_BLOB create a blob @n
   If max_length > 0 create a varchar @n
   If max_length == 0 create a CHAR(0)
@@ -6641,6 +6644,15 @@ Field *Item::make_string_field(TABLE *table) const {
     field = new (*THR_MALLOC)
         Field_geom(max_length, m_nullable, item_name.ptr(),
                    Field::GEOM_GEOMETRY, std::optional<gis::srid_t>());
+  } else if (has_type_context()) {
+    // VillageSQL: don't change the type to a blob if the field is a
+    // custom type.
+    // TODO(villagesql-blob): allow a blob here once custom types can use
+    // blobs as their underlying storage.
+    assert(get_type_context()->descriptor()->implementation_type() ==
+           MYSQL_TYPE_VARCHAR);
+    field = new (*THR_MALLOC) Field_varstring(
+        max_length, m_nullable, item_name.ptr(), table->s, collation.collation);
   } else if (max_length / collation.collation->mbmaxlen >
              CONVERT_IF_BIGGER_TO_BLOB)
     field = new (*THR_MALLOC) Field_blob(
@@ -7047,12 +7059,12 @@ type_conversion_status Item::save_in_field_inner(Field *field,
 
     // For custom types, encode the string value before storing
     if (!has_type_context() && field->has_type_context()) {
-      bool is_valid = false;
+      villagesql::EncodeStatus status = villagesql::EncodeStatus::kBadValue;
       String *encoded =
-          villagesql::EncodeStringForField(field, *result, is_valid);
+          villagesql::EncodeStringForField(field, *result, status);
       if (encoded == nullptr) {
         str_value.set_quick(nullptr, 0, cs);
-        return is_valid ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+        return villagesql::HandleFailedEncode(field, status, no_conversions);
       }
       result = encoded;
       cs = &my_charset_bin;
@@ -7089,7 +7101,8 @@ type_conversion_status Item::save_in_field_inner(Field *field,
   return field->store(nr, unsigned_flag);
 }
 
-type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
+type_conversion_status Item_string::save_in_field_inner(Field *field,
+                                                        bool no_conversions) {
   assert(fixed);
   if (!has_type_context() && field->has_type_context()) {
     // Treat this Item as if it were a custom type.
@@ -7097,11 +7110,11 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
     this->set_type_context(tc);
 
     // Encode str_value into a new representation, based on the type.
-    bool is_oom = false;
+    villagesql::EncodeStatus status = villagesql::EncodeStatus::kBadValue;
     String *encoded =
-        villagesql::EncodeStringForField(field, str_value, is_oom);
+        villagesql::EncodeStringForField(field, str_value, status);
     if (encoded == nullptr) {
-      return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
+      return villagesql::HandleFailedEncode(field, status, no_conversions);
     }
 
     // Now re-cache the new version. The repertoire must match the encoded

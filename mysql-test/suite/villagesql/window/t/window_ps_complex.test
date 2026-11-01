@@ -1,0 +1,39 @@
+# Prepared statements with window functions over COMPLEX, with parameters in
+# the window function, the frame and the WHERE clause.
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+  (5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+
+PREPARE s1 FROM 'SELECT id, val, LAG(val, ?) OVER (ORDER BY val, id) AS lag_v,
+  NTILE(?) OVER (ORDER BY val, id) AS bucket
+FROM t1 WHERE val > ? ORDER BY id';
+SET @off = 1, @n = 2, @lo = '(0,0)';
+EXECUTE s1 USING @off, @n, @lo;
+SET @off = 2, @n = 3, @lo = '(-2,0)';
+EXECUTE s1 USING @off, @n, @lo;
+DEALLOCATE PREPARE s1;
+
+PREPARE s2 FROM 'SELECT id, val, MAX(val) OVER (ORDER BY id
+  ROWS BETWEEN ? PRECEDING AND CURRENT ROW) AS mx FROM t1 ORDER BY id';
+SET @k = 1;
+EXECUTE s2 USING @k;
+SET @k = 3;
+EXECUTE s2 USING @k;
+DEALLOCATE PREPARE s2;
+
+PREPARE s3 FROM 'SELECT id, val, NTH_VALUE(val, ?) OVER w AS nth,
+  FIRST_VALUE(val) OVER w AS fv, LAST_VALUE(val) OVER w AS lv
+FROM t1 WHERE grp = ? WINDOW w AS (ORDER BY val, id
+  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) ORDER BY id';
+SET @n = 2, @g = 1;
+EXECUTE s3 USING @n, @g;
+SET @n = 3, @g = 2;
+EXECUTE s3 USING @n, @g;
+DEALLOCATE PREPARE s3;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

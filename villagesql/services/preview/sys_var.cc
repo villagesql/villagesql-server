@@ -17,9 +17,9 @@
 #include "villagesql/services/preview/sys_var.h"
 
 #include <algorithm>
-#include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,11 +28,11 @@
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
-#include "mysql/service_plugin_registry.h"
 #include "sql/persisted_variable.h"
 #include "sql/sql_plugin_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
+#include "villagesql/services/plugin_registry.h"
 #include "villagesql/services/sys_var_access.h"
 
 namespace villagesql::services {
@@ -41,11 +41,14 @@ namespace villagesql::services {
 // g_sys_vars (which it needs to look up the variable type).
 static bool sys_var_set(const char *component_name, const char *name,
                         const char *scope, const char *val);
+static bool sys_var_set_int(const char *component_name, const char *name,
+                            const char *scope, long long val);
 
 namespace {
 
 static vef_preview_sys_var_t g_sys_var_vtable{VEF_PREVIEW_SYS_VAR_ABI_VERSION,
-                                              get_variable, sys_var_set};
+                                              get_variable, sys_var_set,
+                                              sys_var_set_int};
 
 // A registered system variable together with the extension it belongs to, so
 // we can unregister it on extension uninstall, and with its type so
@@ -175,62 +178,42 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *var,
 
 vef_preview_sys_var_t *preview_sys_var_vtable() { return &g_sys_var_vtable; }
 
-// Dispatches to the appropriate MySQL update service based on the registered
-// variable type. Integer variables go through
-// mysql_system_variable_update_integer; everything else goes through
-// mysql_system_variable_update_string.
+// The declared type of a variable this extension registered, or nullopt if it
+// registered no such name. Each setter checks the type it is for: a name
+// registered as some other type is not settable through the vtable entry
+// asking for it.
+static std::optional<vef_var_type_t> registered_var_type(
+    const char *component_name, const char *name) {
+  std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+  for (const RegisteredSysVar &v : g_sys_vars) {
+    if (v.extension_name == component_name && v.var_name == name) {
+      return v.type;
+    }
+  }
+  return std::nullopt;
+}
+
+// Sets a non-INT variable through mysql_system_variable_update_string.
+// VEF_VAR_STR, VEF_VAR_BOOL, VEF_VAR_DOUBLE and VEF_VAR_ENUM all take a
+// string (an enum is set by its name, which the server maps to the TYPE_LIB
+// index). An INT variable is set through sys_var_set_int(): Sys_var_integer
+// accepts only INT_RESULT, so this path would reject even a well-formed "42".
 static bool sys_var_set(const char *component_name, const char *name,
                         const char *scope, const char *val) {
   if (val == nullptr) return true;
 
-  // Look up the variable type so we can pick the right update service.
-  vef_var_type_t var_type = VEF_VAR_STR;
-  {
-    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-    bool found = false;
-    for (const RegisteredSysVar &v : g_sys_vars) {
-      if (v.extension_name == component_name && v.var_name == name) {
-        var_type = v.type;
-        found = true;
-        break;
-      }
-    }
-    if (!found) return true;
-  }
+  // An unregistered name is refused, and so is an INT variable: it cannot be
+  // set from a string and belongs to sys_var_set_int().
+  const std::optional<vef_var_type_t> var_type =
+      registered_var_type(component_name, name);
+  if (!var_type.has_value() || *var_type == VEF_VAR_INT) return true;
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return true;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return true;
 
   bool result = true;
 
-  if (var_type == VEF_VAR_INT) {
-    my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
-        "mysql_string_factory", registry);
-    my_service<SERVICE_TYPE(mysql_string_converter)> str_conv(
-        "mysql_string_converter", registry);
-    my_service<SERVICE_TYPE(mysql_system_variable_update_integer)> update_svc(
-        "mysql_system_variable_update_integer", registry);
-
-    if (str_factory.is_valid() && str_conv.is_valid() &&
-        update_svc.is_valid()) {
-      my_h_string h_base = nullptr;
-      my_h_string h_name = nullptr;
-
-      if (!str_conv->convert_from_buffer(&h_base, component_name,
-                                         strlen(component_name), "utf8mb3") &&
-          !str_conv->convert_from_buffer(&h_name, name, strlen(name),
-                                         "utf8mb3")) {
-        result = update_svc->set_signed(nullptr, scope, h_base, h_name,
-                                        strtoll(val, nullptr, 10));
-      }
-
-      if (h_base) str_factory->destroy(h_base);
-      if (h_name) str_factory->destroy(h_name);
-    }
-  } else {
-    // VEF_VAR_STR, VEF_VAR_BOOL, VEF_VAR_DOUBLE and VEF_VAR_ENUM all go through
-    // string update (an enum is set by its name, which the server maps to the
-    // TYPE_LIB index).
+  {
     my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
         "mysql_string_factory", registry);
     my_service<SERVICE_TYPE(mysql_string_converter)> str_conv(
@@ -259,6 +242,49 @@ static bool sys_var_set(const char *component_name, const char *name,
     }
   }
 
+  return result;
+}
+
+// Sets an INT variable through mysql_system_variable_update_integer. The
+// value arrives as a long long and is handed straight to set_signed(), so
+// there is no text form to misparse. The server still applies the declared
+// range, PERSIST and any on_change callback.
+static bool sys_var_set_int(const char *component_name, const char *name,
+                            const char *scope, long long val) {
+  const std::optional<vef_var_type_t> var_type =
+      registered_var_type(component_name, name);
+  if (!var_type.has_value() || *var_type != VEF_VAR_INT) return true;
+
+  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
+  if (registry == nullptr) return true;
+
+  bool result = true;
+
+  {
+    my_service<SERVICE_TYPE(mysql_string_factory)> str_factory(
+        "mysql_string_factory", registry);
+    my_service<SERVICE_TYPE(mysql_string_converter)> str_conv(
+        "mysql_string_converter", registry);
+    my_service<SERVICE_TYPE(mysql_system_variable_update_integer)> update_svc(
+        "mysql_system_variable_update_integer", registry);
+
+    if (str_factory.is_valid() && str_conv.is_valid() &&
+        update_svc.is_valid()) {
+      my_h_string h_base = nullptr;
+      my_h_string h_name = nullptr;
+
+      if (!str_conv->convert_from_buffer(&h_base, component_name,
+                                         strlen(component_name), "utf8mb3") &&
+          !str_conv->convert_from_buffer(&h_name, name, strlen(name),
+                                         "utf8mb3")) {
+        result = update_svc->set_signed(nullptr, scope, h_base, h_name, val);
+      }
+
+      if (h_base) str_factory->destroy(h_base);
+      if (h_name) str_factory->destroy(h_name);
+    }
+  }
+
   mysql_plugin_registry_release(registry);
   return result;
 }
@@ -275,8 +301,8 @@ bool on_populate_sys_var(const PopulateContext &ctx,
   // always be available when an extension is installed, but can be absent
   // during early startup or late shutdown if the component infrastructure has
   // not yet initialised (or has already been torn down).
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) {
+  PluginRegistry registry;
+  if (!registry.is_valid()) {
     error_message = "on_populate_sys_var: failed to acquire registry";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
     return true;
@@ -288,7 +314,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
     error_message =
         "on_populate_sys_var: component_sys_variable_register unavailable";
     LogVSQL(ERROR_LEVEL, "%s", error_message.c_str());
-    mysql_plugin_registry_release(registry);
     return true;
   }
 
@@ -455,7 +480,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
                                            name.c_str());
         }
       }
-      mysql_plugin_registry_release(registry);
       return true;
     }
 
@@ -464,7 +488,6 @@ bool on_populate_sys_var(const PopulateContext &ctx,
             extension_name.c_str());
   }
 
-  mysql_plugin_registry_release(registry);
   return false;
 }
 
@@ -532,8 +555,8 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
     }
   }
 
-  SERVICE_TYPE(registry) *registry = mysql_plugin_registry_acquire();
-  if (registry == nullptr) return;
+  PluginRegistry registry;
+  if (!registry.is_valid()) return;
 
   my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
       "component_sys_variable_unregister", registry);
@@ -542,8 +565,6 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
       unreg_svc->unregister_variable(extension_name.c_str(), name.c_str());
     }
   }
-
-  mysql_plugin_registry_release(registry);
 }
 
 }  // namespace villagesql::services

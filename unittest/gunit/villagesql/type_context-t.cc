@@ -475,19 +475,21 @@ TEST_F(TypeParametersTest, ToJsonEmptyIsEmptyObject) {
 TEST_F(TypeParametersTest, ToJsonSingleEntry) {
   villagesql::TypeParameters params =
       villagesql::TypeParameters::from_raw("dimension=1536");
-  EXPECT_EQ(params.to_json(), R"({"dimension":"1536"})");
+  EXPECT_EQ(params.to_json(), R"({"dimension": "1536"})");
 }
 
+// JSON object order: shortest key first, then by bytes. Not the canonical
+// order, and does not need to be -- from_json() re-canonicalizes.
 TEST_F(TypeParametersTest, ToJsonMultipleEntries) {
   villagesql::TypeParameters params =
       villagesql::TypeParameters::from_raw("dimension=1536,metric=cosine");
-  EXPECT_EQ(params.to_json(), R"({"dimension":"1536","metric":"cosine"})");
+  EXPECT_EQ(params.to_json(), R"({"metric": "cosine", "dimension": "1536"})");
 }
 
 TEST_F(TypeParametersTest, ToJsonKeepsEmptyValue) {
   villagesql::TypeParameters params =
       villagesql::TypeParameters::from_raw("metric=");
-  EXPECT_EQ(params.to_json(), R"({"metric":""})");
+  EXPECT_EQ(params.to_json(), R"({"metric": ""})");
 }
 
 // A name without a value must not be silently dropped.
@@ -497,12 +499,11 @@ TEST_F(TypeParametersTest, RejectsTokenWithoutValue) {
   EXPECT_TRUE(params.has_error());
 }
 
-// '=' inside a value survives: the canonical form splits on the first '=' only,
-// and to_json() does the same.
+// '=' inside a value survives: the canonical form splits on the first '=' only.
 TEST_F(TypeParametersTest, ToJsonKeepsEqualsInsideValue) {
   villagesql::TypeParameters params =
       villagesql::TypeParameters::from_raw("a=x=y");
-  EXPECT_EQ(params.to_json(), R"({"a":"x=y"})");
+  EXPECT_EQ(params.to_json(), R"({"a": "x=y"})");
 }
 
 TEST_F(TypeParametersTest, FromJsonEmptyForms) {
@@ -661,6 +662,67 @@ TEST_F(TypeParametersTest, PreservesNormalizationPolicy) {
       villagesql::TypeParameters::from_raw(" MÉTRIC = COSINE , label = É😀 ");
   EXPECT_FALSE(params.has_error());
   EXPECT_EQ(params.str(), "label=é😀,métric=cosine");
+}
+
+// The escaping is JSON's own, so any JSON parser can read the stored form.
+TEST_F(TypeParametersTest, ToJsonEscapesQuoteAsJson) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw(R"(a=x"y)");
+  EXPECT_EQ(params.to_json(), R"({"a": "x\"y"})");
+}
+
+// The serialization TypeParameters and params_to_json() share. Tested here
+// because params_to_json() needs parse-tree structures to reach.
+
+TEST_F(TypeParametersTest, JsonObjectFromPairsEmptyIsEmptyObject) {
+  EXPECT_EQ(villagesql::json_object_from_pairs({}), "{}");
+}
+
+TEST_F(TypeParametersTest, JsonObjectFromPairsOrdersByKeyLengthThenBytes) {
+  EXPECT_EQ(villagesql::json_object_from_pairs(
+                {{"ef_construction", "200"}, {"m", "16"}, {"mode", "fast"}}),
+            R"({"m": "16", "mode": "fast", "ef_construction": "200"})");
+}
+
+// A duplicate key keeps the last value rather than emitting the key twice.
+TEST_F(TypeParametersTest, JsonObjectFromPairsDeduplicatesKeys) {
+  EXPECT_EQ(villagesql::json_object_from_pairs({{"a", "1"}, {"a", "2"}}),
+            R"({"a": "2"})");
+}
+
+TEST_F(TypeParametersTest, JsonObjectToPairsReadsStringMembers) {
+  villagesql::StringPairs pairs;
+  ASSERT_FALSE(
+      villagesql::json_object_to_pairs(R"({"a": "1", "bb": "2"})", &pairs));
+  ASSERT_EQ(pairs.size(), 2u);
+  EXPECT_EQ(pairs[0].first, "a");
+  EXPECT_EQ(pairs[0].second, "1");
+  EXPECT_EQ(pairs[1].first, "bb");
+  EXPECT_EQ(pairs[1].second, "2");
+}
+
+TEST_F(TypeParametersTest, JsonObjectToPairsEmptyInputYieldsNoPairs) {
+  villagesql::StringPairs pairs{{"stale", "entry"}};
+  EXPECT_FALSE(villagesql::json_object_to_pairs("", &pairs));
+  EXPECT_TRUE(pairs.empty());
+
+  pairs.emplace_back("stale", "entry");
+  EXPECT_FALSE(villagesql::json_object_to_pairs("{}", &pairs));
+  EXPECT_TRUE(pairs.empty());
+}
+
+// Rejected whole, with *out left alone so a rejection cannot be mistaken for
+// a successful read of nothing.
+TEST_F(TypeParametersTest, JsonObjectToPairsRejectsNonObjectOfStrings) {
+  for (const char *json :
+       {R"([1, 2])", R"("a string")", R"({"a": 1})", R"({"a": {"b": "c"}})",
+        R"({"a": null})", R"(not json)", R"({"a": "1")"}) {
+    villagesql::StringPairs pairs{{"kept", "value"}};
+    EXPECT_TRUE(villagesql::json_object_to_pairs(json, &pairs))
+        << "input: " << json;
+    ASSERT_EQ(pairs.size(), 1u) << "input: " << json;
+    EXPECT_EQ(pairs[0].first, "kept") << "input: " << json;
+  }
 }
 
 // key_data()/value_data() hand the ABI arrays of const char* that point into

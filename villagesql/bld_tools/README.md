@@ -27,6 +27,12 @@ concerns helps avoid ambiguity and confusion.
 - **Test.** `test_ci.sh` runs the VillageSQL unit tests and the MTR
   integration suites.
 - **Package.** `package_dev_server.sh` produces the dev-server tarball.
+- **Baseline.** `codebase_build_and_test.sh` builds a tag of a source tree
+  and runs the full MTR suite against it.  `prepare_codebase_failures.sh`
+  runs it on a vendor clone of Oracle MySQL and records the tests that already
+  fail there in `mysql-test/collections/disabled-<tag>-fails.def`, using
+  `mtr_extract_tests.sh` to read the MTR XML result file.  Regenerate the list
+  whenever the MySQL baseline is updated.
 
 ## The scripts
 
@@ -37,10 +43,14 @@ concerns helps avoid ambiguity and confusion.
 | `build_info.sh`                  | Version and platform helpers. Sourced, not executed.                                                               |
 | `build_server.sh`                | Run `build_ci.sh` with server platform options.                                                                    |
 | `checkout_bundled_extensions.sh` | Clone the bundled extension repos.  |
+| `codebase_build_and_test.sh`     | Check out a tag, build it, and run the full MTR suite, writing an MTR XML result file.                             |
 | `discover_build_env.sh`          | Print the host OS family (`linux`, `macos`, or `unknown`) on stdout.                                               |
 | `get_sdk.sh`                     | Print the path to the extension SDK directory within a build tree.                                                 |
 | `include_bundled_extensions.sh`  | Copy built `.veb` files into a package tree.                                                                       |
+| `mtr_extract_tests.sh`           | List the `suite.testname` of each failed or unstable test in an MTR XML result file.                               |
 | `package_dev_server.sh`          | Package a completed build as a dev-server tarball.                                                                 |
+| `prepare_codebase_failures.sh`   | Build a vendor MySQL tag, run full MTR, and write its failing tests to `mysql-test/collections/disabled-<tag>-fails.def`. |
+| `prepare_fts_report.sh`          | Print the Slack payload (JSON) reporting a Full Test Suite run: stage ladder, failed MTR tests, and run details.   |
 | `prepare_github_release.sh`      | Create the draft GitHub release for a tag from the release note committed at it.                                   |
 | `prepare_release_notes.sh`       | Finalize a draft release note against the current HEAD and commit it.                                              |
 | `setup_build_env.sh`             | Install the build host's toolchain by dispatching to the matching per-OS script.                     |

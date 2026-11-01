@@ -37,7 +37,13 @@
 //                   placeholder showing that profiles can bind arbitrary
 //                   per-profile helpers). Exercises IndexProfileBuilder and the
 //                   typed with_function() overload that accepts
-//                   IndexFunctionDesc directly.
+//                   IndexFunctionDesc directly. Declares ASC ordering and is
+//                   the default profile for the pair.
+//
+//   dummy_profile_hnsw_desc, dummy_profile_hnsw_none
+//                 - Non-default profiles with the same bindings, declaring DESC
+//                   and NONE ordering, for tests that need a non-default
+//                   profile or another ordering.
 //
 //   dummy_l2_distance - A stub index function (DUMMY_VECTOR, DUMMY_VECTOR ->
 //                       REAL) registered via make_index_function. Exercises the
@@ -183,6 +189,8 @@ static constexpr const char kDummyVECTOR[] = "dummy_type_vector";
 
 static constexpr const char kDummyHNSW[] = "dummy_index_hnsw";
 static constexpr const char kDummyProfileL2[] = "dummy_profile_hnsw_l2";
+static constexpr const char kDummyProfileDesc[] = "dummy_profile_hnsw_desc";
+static constexpr const char kDummyProfileNone[] = "dummy_profile_hnsw_none";
 
 static constexpr const char kDummyHNSWFunc1[] = "dummy_l2_distance";
 static constexpr const char kDummyHNSWFunc2[] = "dummy_helper_fn";
@@ -333,6 +341,24 @@ static const auto DUMMY_HNSW_L2_PROFILE = make_index_profile(kDummyProfileL2)
                                               .default_for_type(true)
                                               .build();
 
+static const auto DUMMY_HNSW_DESC_PROFILE =
+    make_index_profile(kDummyProfileDesc)
+        .for_type(kDummyVECTOR)
+        .using_index(kDummyHNSW)
+        .with_function(1, DUMMY_L2_FN)
+        .with_helper(1, DUMMY_HELPER_FN)
+        .ordering(Index::Ordering::DESC)
+        .build();
+
+static const auto DUMMY_HNSW_NONE_PROFILE =
+    make_index_profile(kDummyProfileNone)
+        .for_type(kDummyVECTOR)
+        .using_index(kDummyHNSW)
+        .with_function(1, DUMMY_L2_FN)
+        .with_helper(1, DUMMY_HELPER_FN)
+        .ordering(Index::Ordering::NONE)
+        .build();
+
 // ============================================================================
 // Extension entry point
 // ============================================================================
@@ -341,8 +367,10 @@ static auto INDEX_TYPE =
     vsql::preview_index_builder::IndexTypeCapability().index_type(
         DUMMY_HNSW_INDEX);
 static auto INDEX_PROFILE =
-    vsql::preview_index_builder::IndexProfileCapability().index_profile(
-        DUMMY_HNSW_L2_PROFILE);
+    vsql::preview_index_builder::IndexProfileCapability()
+        .index_profile(DUMMY_HNSW_L2_PROFILE)
+        .index_profile(DUMMY_HNSW_DESC_PROFILE)
+        .index_profile(DUMMY_HNSW_NONE_PROFILE);
 
 VEF_GENERATE_ENTRY_POINTS(vsql::make_extension()
                               .with(INDEX_TYPE)
