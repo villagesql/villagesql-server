@@ -1,0 +1,3 @@
+# Test 1: Error — unknown method name
+SELECT vsql_complex.COMPLEX::nonexistent('(1,2)') AS result;
+ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: compare, from_string, to_string
