@@ -70,8 +70,9 @@ ABI_SIZE(vef_func_desc_t, 96);
 ABI_FIELD(vef_func_desc_t, max_result_length, 80);
 ABI_FIELD(vef_func_desc_t, bind_and_check_types, 88);
 
-ABI_SIZE(vef_type_desc_t, 144);
+ABI_SIZE(vef_type_desc_t, 152);
 ABI_FIELD(vef_type_desc_t, variable_length, 136);
+ABI_FIELD(vef_type_desc_t, from_binary_vdf_name, 144);
 
 ABI_SIZE(vef_registration_t, 120);
 ABI_FIELD(vef_registration_t, on_init, 104);

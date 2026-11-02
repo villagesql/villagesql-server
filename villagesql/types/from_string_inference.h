@@ -43,11 +43,12 @@ bool LookupTypeForInference(std::string_view extension_name,
                             std::string_view type_name,
                             TypeInferenceSnapshot *out);
 
-// Pre-executes a parameterized type's from_string VDF on a constant string
-// literal at fix_fields time, and returns the inferred TypeParameters along
-// with the encoded bytes the VDF produced.
+// Pre-executes a parameterized type's encode VDF on a constant at fix_fields
+// time, and returns the inferred TypeParameters along with the encoded bytes
+// the VDF produced. The constant is passed as text for a STRING parameter and
+// as bytes for a BINARY one.
 //
-// The extension's from_string is called with MaybeParams<P> in the unknown
+// The encode VDF is called with MaybeParams<P> in the unknown
 // state. The SDK wrapper writes the inferred canonical "k=v,k=v" params
 // string back through the vef_inferred_type_params_t channel on
 // vef_vdf_result_t.
@@ -60,14 +61,13 @@ bool LookupTypeForInference(std::string_view extension_name,
 // the input was NULL). Caller should fall through to its existing ambiguity
 // error path.
 //
-// Returns true and calls my_error() if the extension's from_string signaled
+// Returns true and calls my_error() if the encode VDF signaled
 // a warning or error (malformed literal, etc.) — that's a fix_fields-time
 // failure for the constant-string inference case.
-bool InferFromStringConstant(THD *thd, int64_t max_persisted_length,
-                             const vef_func_desc_t *encode_vdf,
-                             std::string_view input_string,
-                             TypeParameters *out_inferred,
-                             std::string *out_encoded_bytes);
+bool InferFromConstant(THD *thd, int64_t max_persisted_length,
+                       const vef_func_desc_t *encode_vdf,
+                       std::string_view constant, TypeParameters *out_inferred,
+                       std::string *out_encoded_bytes);
 
 }  // namespace villagesql
 
