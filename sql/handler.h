@@ -584,6 +584,10 @@ enum class SelectExecutedIn : bool { kPrimaryEngine, kSecondaryEngine };
 */
 #define HA_KEY_SCAN_NOT_ROR 128
 #define HA_DO_INDEX_COND_PUSHDOWN 256 /* Supports Index Condition Pushdown */
+// TODO(villagesql-rebase): Verify that this flag does not conflict with an
+// upstream MySQL flag; update the value if necessary when rebasing/updating
+// MySQL.
+#define HA_SUPPORT_KNN 512 /* Supports KNN (K-nearest neighbor) search */
 
 /* operations for disable/enable indexes */
 #define HA_KEY_SWITCH_NONUNIQ 0

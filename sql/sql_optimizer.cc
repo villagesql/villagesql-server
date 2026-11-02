@@ -118,6 +118,7 @@
 #include "sql/window.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "villagesql/sql/optimizer.h"
 
 using std::ceil;
 using std::max;
@@ -959,7 +960,9 @@ bool JOIN::optimize(bool finalize_access_paths) {
     for (ORDER *tmp_order = order.order; tmp_order;
          tmp_order = tmp_order->next) {
       Item *item = *tmp_order->item;
-      if (item->cost().IsExpensive()) {
+      // VillageSQL: Consider deterministic VDFs to enable KNN optimization.
+      if (item->cost().IsExpensive() &&
+          !villagesql::optimizer::is_deterministic_vdf(item)) {
         /* Force tmp table without sort */
         simple_order = simple_group = false;
         break;
@@ -2320,11 +2323,16 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
   */
   Key_map usable_keys = *map;
 
+  // Set when the ORDER BY list contains a non-field item (e.g. a KNN
+  // distance function).
+  bool non_field_order = false;
+
   for (ORDER *tmp_order = order.order; tmp_order; tmp_order = tmp_order->next) {
     const Item *item = (*tmp_order->item)->real_item();
     if (item->type() != Item::FIELD_ITEM) {
       usable_keys.clear_all();
-      return false;
+      non_field_order = true;
+      break;
     }
     usable_keys.intersect(
         down_cast<const Item_field *>(item)->field->part_of_sortkey);
@@ -2357,6 +2365,14 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
     ref_key = tab->index();
     ref_key_parts = actual_key_parts(&table->key_info[tab->index()]);
   }
+
+  // Check if a KNN-capable index (HA_SUPPORT_KNN) can be used to retrieve
+  // the result in the required order.
+  if (villagesql::optimizer::try_knn_order(
+          tab, order, ref_key, map, select_limit, no_changes, order_idx)) {
+    return true;
+  }
+  if (non_field_order) return false;
 
   Opt_trace_context *const trace = &thd->opt_trace;
   const Opt_trace_object trace_wrapper_1(trace);

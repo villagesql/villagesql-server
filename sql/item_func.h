@@ -2196,6 +2196,11 @@ class Item_udf_func : public Item_func {
   const char *qualified_name() const { return udf.qualified_name(); }
   // VillageSQL: Returns true if this is a VDF (VillageSQL Defined Function)
   bool is_vdf() const { return udf.is_vdf(); }
+  // VillageSQL: Returns true if this is a deterministic VDF
+  bool is_vdf_deterministic() const { return udf.is_vdf_deterministic(); }
+  // VillageSQL: Returns the VDF function descriptor, for matching against an
+  // index profile's declared functions.
+  const vef_func_desc_t *vdf_func_desc() const { return udf.vdf_func_desc(); }
   enum Functype functype() const override { return UDF_FUNC; }
   table_map get_initial_pseudo_tables() const override {
     return m_non_deterministic ? RAND_TABLE_BIT : 0;
