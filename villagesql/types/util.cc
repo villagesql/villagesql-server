@@ -16,6 +16,7 @@
 
 #include "villagesql/types/util.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cinttypes>
 #include <map>
@@ -687,6 +688,20 @@ static const String *ConvertToUtf8mb4(const String &from, String *converted,
   return converted;
 }
 
+// How an error message shows a value: one in the binary charset as the hex
+// literal that writes it, so it cannot be mistaken for text; any other value
+// as MySQL shows a string. As in MySQL's own messages, a long value shows
+// only its start.
+static ErrConvString ErrValue(const String &value) {
+  if (value.charset() != &my_charset_bin) return ErrConvString(&value);
+  constexpr size_t kMaxBytes = 16;
+  char hex[2 + kMaxBytes * 2 + 4] = "0x";
+  const size_t len = std::min<size_t>(value.length(), kMaxBytes);
+  size_t n = 2 + bin_to_hex_str(hex + 2, sizeof(hex) - 2, value.ptr(), len);
+  if (len < value.length()) n += snprintf(hex + n, sizeof(hex) - n, "...");
+  return ErrConvString(hex, n);
+}
+
 // Encode from for item's custom type, converting it to utf8mb4 first. Returns
 // the encoded String*, or nullptr with status saying why. *given is set to the
 // value the type was given, held in from or *converted, so an error message
@@ -718,7 +733,7 @@ static String *EncodeForItem(Item *item, const String &from, String *converted,
 static void ReportBadCustomFieldValue(const Field *field, const String &value) {
   const TypeContext *tc = field->get_type_context();
   THD *thd = current_thd;
-  const ErrConvString errmsg(value.ptr(), value.length(), value.charset());
+  const ErrConvString errmsg = ErrValue(value);
   const Diagnostics_area *da = thd->get_stmt_da();
   push_warning_printf(
       thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
@@ -984,8 +999,7 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
   String *encoded = EncodeForItem(item, *str_val, &converted, &given, status);
   if (encoded == nullptr) {
     if (status == EncodeStatus::kBadValue) {
-      const ErrConvString errmsg(given->ptr(), given->length(),
-                                 given->charset());
+      const ErrConvString errmsg = ErrValue(*given);
       my_error(ER_WRONG_VALUE, MYF(0), tc.type_name().c_str(), errmsg.ptr());
     }
     return true;
@@ -1420,8 +1434,7 @@ String *EncodeStringForCustomParam(Item_param *param, const String &str_value,
     if (status == EncodeStatus::kBadValue) {
       // Invalid value for custom type
       const TypeContext *tc = param->get_type_context();
-      const ErrConvString errmsg(given->ptr(), given->length(),
-                                 given->charset());
+      const ErrConvString errmsg = ErrValue(*given);
       villagesql_error("Incorrect %s value: '%s' for parameter '%s'", MYF(0),
                        tc->qualified_name().c_str(), errmsg.ptr(),
                        param->item_name.ptr());

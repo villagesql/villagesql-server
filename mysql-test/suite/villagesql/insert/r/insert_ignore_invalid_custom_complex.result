@@ -37,7 +37,7 @@ id	c	is_null
 SET @id = 5, @v = X'00000000000008400000000000001040';
 EXECUTE s USING @id, @v;
 Warnings:
-Warning	1366	Incorrect COMPLEX value: '\x00\x00\x00\x00\x00\x00\x08@\x00\x00\x00\x00\x00\x00\x10@' for column 'c' at row 1
+Warning	1366	Incorrect COMPLEX value: '0x00000000000008400000000000001040' for column 'c' at row 1
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 5;
 id	c	is_null
 5	(0,0)	0
