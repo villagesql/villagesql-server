@@ -55,11 +55,7 @@ typedef uint32_t vef_index_cap_t;
 #define VEF_INDEX_CAP_KNN ((vef_index_cap_t)1u << 4)
 // Index scan may return approximate results (e.g. approximate nearest
 // neighbour search); results may omit or misorder some matching rows.
-#define VEF_INDEX_CAP_APPROXIMATE ((vef_index_cap_t)1u << 4)
-// Index entries carry MVCC visibility information: scan_fetch reports the
-// transaction reference and the delete mark of each entry, so the server can
-// decide visibility from the index entry without a clustered index lookup.
-#define VEF_INDEX_CAP_MVCC_VISIBILITY ((vef_index_cap_t)1u << 5)
+#define VEF_INDEX_CAP_APPROXIMATE ((vef_index_cap_t)1u << 5)
 
 // Physical storage properties (used by InnoDB).
 // Every index entry must carry a back-reference to the data it indexes so the
@@ -112,8 +108,8 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 // vef_index_max_key_len_fn. The server copies the stored value into that
 // buffer and sets col_data->length to the value length.
 // If trx_ref is not NULL, the server sets *trx_ref to the transaction
-// reference of the value read, e.g. for a column-only scan that needs
-// visibility information without a row lookup.
+// reference of the value read. A locking read, which has no read view, needs it
+// to identify the transaction that last wrote the entry.
 // The server reads the value under a mini-transaction of its own, so the
 // extension must not call this while holding page latches in a mini-transaction
 // it started.
@@ -449,7 +445,9 @@ typedef bool (*vef_type_index_scan_position_func_t)(
 //                  index_ctx->num_primary_key_columns vef_storage_col_data_t
 //                  structs; the extension sets each data pointer and length
 //                  to the primary key data for the current row
-//   trx_ref      - Output: transaction that last wrote this entry
+//   trx_ref      - Output: transaction that last wrote this entry. Set only
+//                  when the scan has no read view (locking read); a scan with
+//                  a read view filters entries by visibility itself.
 //   error_msg    - Output: error description on failure
 //   error_msg_len - length of error message buffer
 // Returns false on success, true on error (writes to error_msg).

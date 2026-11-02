@@ -920,7 +920,8 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
   scan_desc.keys = n_fields > 0 ? &scan_key : nullptr;
   scan_desc.readview = nullptr;
   if (prebuilt->select_lock_type == LOCK_NONE) {
-    static_cast<vef_readview_ref_t>(trx_get_read_view(prebuilt->trx));
+    scan_desc.readview =
+        static_cast<vef_readview_ref_t>(trx_get_read_view(prebuilt->trx));
   }
   if (n_fields > 0) {
     dberr_t err = fill_profile(prebuilt, &scan_desc, mode);

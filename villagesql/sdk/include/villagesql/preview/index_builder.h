@@ -154,10 +154,11 @@
 // builder-generated execution context.
 //
 // Binds a custom type to an index type and assigns per-profile function IDs.
-// for_type() takes the type name string. with_function<Desc>(fn_id) and
-// with_helper<Desc>(fn_id) both take their bound VDF as a template argument.
-// with_function() also takes an optional FunctionKind: Restrict (default) for
-// a filter condition, or Order for a function that defines the row order.
+// for_type() takes the type name string. with_function<Desc>(fn_id, kind)
+// and with_helper<Desc>(fn_id) both take their bound VDF as a template
+// argument. with_function() requires a FunctionKind: Restrict for a filter
+// condition (not yet supported), or Order for a function that defines the row
+// order.
 //
 //   static constexpr auto MY_INDEX_FN =
 //       make_func<&my_index_fn>("my_index_fn")
@@ -238,7 +239,7 @@
 //       make_index_profile("my_profile")
 //           .for_type(kMyType)
 //           .using_index(kMyIndex)
-//           .with_function<MY_INDEX_FN>(1, FunctionKind::Restrict)
+//           .with_function<MY_INDEX_FN>(1, FunctionKind::Order)
 //           .with_helper<MY_HELPER_FN>(1)
 //           .ordering(Index::Ordering::ASC)
 //           .build();
@@ -358,7 +359,6 @@ class Index {
     ORDER_BY = VEF_INDEX_CAP_ORDER_BY,
     KNN = VEF_INDEX_CAP_KNN,
     APPROXIMATE = VEF_INDEX_CAP_APPROXIMATE,
-    MVCC_VISIBILITY = VEF_INDEX_CAP_MVCC_VISIBILITY,
   };
 
   // Storage property flags for use with .storage_props(). Can be combined with
@@ -1277,7 +1277,7 @@ enum : uint32_t {
 //   make_index_profile("my_hnsw_l2")
 //       .for_type(kMyType)
 //       .using_index(kMyIndex)
-//       .with_function(1, MY_L2_FN)
+//       .with_function<MY_L2_FN>(1, FunctionKind::Order)
 //       .ordering(Index::Ordering::ASC)
 //       .build();
 //
@@ -1320,7 +1320,8 @@ class IndexProfileBuilder {
   }
 
   // Bind fn_id to a user-visible SQL function. kind says whether the function
-  // restricts the indexed rows (default) or defines their order. FuncDesc is a
+  // restricts the indexed rows or defines their order. There is no default;
+  // only FunctionKind::Order is currently supported. FuncDesc is a
   // VDF built with vsql::make_func(...).build(), e.g. `static constexpr auto
   // MY_FN = make_func<&my_fn>(...).build();`. A descriptor from
   // make_index_function() is rejected at compile time. See
@@ -1328,8 +1329,7 @@ class IndexProfileBuilder {
   // violating it is a compile error. fn_ids must be unique within the
   // functions list (checked by the server at registration time, not here).
   template <const auto &FuncDesc>
-  Self &&with_function(uint32_t fn_id,
-                       FunctionKind kind = FunctionKind::Restrict) && {
+  Self &&with_function(uint32_t fn_id, FunctionKind kind) && {
     static_assert(
         detail::is_static_func_desc_v<detail::DescType<FuncDesc>>,
         "with_function() requires a function built with vsql::make_func(); "
