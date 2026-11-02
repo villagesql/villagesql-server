@@ -59,7 +59,12 @@ A custom type may also declare `from_binary_vdf_name` (protocol >=
 that builds a value from its binary form, next to the required encode from
 text. It is registered as the SQL function `TYPE::from_binary`. As with the
 encode from text, a parameterized type's parameters are inferred from a
-constant argument.
+constant argument. The server uses it for any value in the binary charset that
+becomes a value of the type: a `_binary` string, a parameter bound as a BLOB,
+or a `VARBINARY` column. A value in any other charset is text, converted to
+utf8mb4 for the encode from text. For a type without `from_binary`, a value in
+the binary charset is an error rather than being read as text, so adding
+`from_binary` later never changes what existing input means.
 
 ## Constant arguments in prerun
 

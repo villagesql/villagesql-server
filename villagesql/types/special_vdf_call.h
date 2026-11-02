@@ -137,6 +137,27 @@ struct CustomArg {
   }
 };
 
+struct BinaryArg {
+  using cpp_t = BinarySlice;
+  using init_t = NoInitData;
+  template <typename T>
+  static void init(T &v, NoInitData) {
+    v.type = VEF_TYPE_BINARY;
+    v.is_null = false;
+  }
+  template <typename T>
+  static void fill(T &v, BinarySlice b) {
+    if constexpr (std::is_same_v<T, vef_invalue_t>) {
+      v.binary_len = b.len;
+      v.binary_value = b.data;
+    } else {
+      // VEF_TYPE_BINARY exists only from VEF_PROTOCOL_4, which never uses the
+      // protocol-1 layout.
+      assert(false);
+    }
+  }
+};
+
 // Result type tags for SpecialVdfCall. Each tag defines:
 //   init_t — the type passed to init() for one-time setup of the result
 // The tag also determines which invoke() overload is available:

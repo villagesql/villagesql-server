@@ -688,12 +688,26 @@ static const String *ConvertToUtf8mb4(const String &from, String *converted,
   return converted;
 }
 
-// How an error message shows a value: one in the binary charset as the hex
-// literal that writes it, so it cannot be mistaken for text; any other value
-// as MySQL shows a string. As in MySQL's own messages, a long value shows
-// only its start.
+// Whether from is a value's binary form: bytes in the binary charset. A value
+// in any other charset is its text form.
+static bool IsBinaryForm(const String &from) {
+  return from.charset() == &my_charset_bin;
+}
+
+// Raise the error for a value's binary form given to a type that has no encode
+// from it. The bytes are not read as text instead, so that a type adding a
+// binary form never changes what existing input means.
+static void ReportNoBinaryForm(const TypeContext &tc) {
+  villagesql_error(
+      "Type '%s' cannot read a binary value; give a text value a character set",
+      MYF(0), tc.qualified_name().c_str());
+}
+
+// How an error message shows a value: its binary form as the hex literal that
+// writes it, so it cannot be mistaken for text; any other value as MySQL shows
+// a string. As in MySQL's own messages, a long value shows only its start.
 static ErrConvString ErrValue(const String &value) {
-  if (value.charset() != &my_charset_bin) return ErrConvString(&value);
+  if (!IsBinaryForm(value)) return ErrConvString(&value);
   constexpr size_t kMaxBytes = 16;
   char hex[2 + kMaxBytes * 2 + 4] = "0x";
   const size_t len = std::min<size_t>(value.length(), kMaxBytes);
@@ -702,28 +716,48 @@ static ErrConvString ErrValue(const String &value) {
   return ErrConvString(hex, n);
 }
 
-// Encode from for item's custom type, converting it to utf8mb4 first. Returns
-// the encoded String*, or nullptr with status saying why. *given is set to the
-// value the type was given, held in from or *converted, so an error message
-// can quote the value as the user wrote it.
-static String *EncodeForItem(Item *item, const String &from, String *converted,
-                             const String **given, EncodeStatus &status) {
+// Encode from for owner's custom type, an Item or a Field: the binary form
+// (IsBinaryForm()) with the type's encode from it, any other value converted
+// to utf8mb4 first. Returns the encoded String*, or nullptr with status saying
+// why, and outcome how the encode itself ended. *given is set to the value the
+// type was given, held in from or *converted, so an error message can quote
+// the value as the user wrote it.
+template <typename Owner>
+static String *EncodeByForm(Owner *owner, const String &from, String *converted,
+                            const String **given, EncodeOutcome &outcome,
+                            EncodeStatus &status) {
   *given = &from;
-  TypeEncoder *encoder = GetTypeEncoderFor(item);
+  TypeEncoder *encoder = GetTypeEncoderFor(owner);
   if (encoder == nullptr) {
     status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  const String *value = ConvertToUtf8mb4(from, converted, status);
-  if (value == nullptr) {
-    if (status == EncodeStatus::kBadValue) *given = converted;
-    return nullptr;
+  String *encoded;
+  if (IsBinaryForm(from)) {
+    if (!encoder->has_binary_encode()) {
+      ReportNoBinaryForm(*owner->get_type_context());
+      status = EncodeStatus::kErrorRaised;
+      return nullptr;
+    }
+    encoded = encoder->encode_binary(from, outcome);
+  } else {
+    const String *value = ConvertToUtf8mb4(from, converted, status);
+    if (value == nullptr) {
+      if (status == EncodeStatus::kBadValue) *given = converted;
+      return nullptr;
+    }
+    *given = value;
+    encoded = encoder->encode(*value, outcome);
   }
-  *given = value;
-  EncodeOutcome outcome;
-  String *encoded = encoder->encode(*value, outcome);
   if (encoded == nullptr) status = EncodeStatus::kBadValue;
   return encoded;
+}
+
+// Encode from for item's custom type, as EncodeByForm() does.
+static String *EncodeForItem(Item *item, const String &from, String *converted,
+                             const String **given, EncodeStatus &status) {
+  EncodeOutcome outcome;
+  return EncodeByForm(item, from, converted, given, outcome, status);
 }
 
 // Push the warning for a value the type would not accept. Consistent with
@@ -745,24 +779,15 @@ String *EncodeStringForField(Field *field, const String &from,
                              EncodeStatus &status) {
   assert(field->has_type_context());
 
-  TypeEncoder *encoder = GetTypeEncoderFor(field);
-  if (encoder == nullptr) {
-    status = EncodeStatus::kOom;  // my_error already called
-    return nullptr;
-  }
-
-  String converted;
-  const String *value = ConvertToUtf8mb4(from, &converted, status);
-  if (value == nullptr) {
-    if (status == EncodeStatus::kBadValue) {
-      ReportBadCustomFieldValue(field, converted);
-    }
-    return nullptr;
-  }
-
   EncodeOutcome outcome;
-  String *encoded = encoder->encode(*value, outcome);
+  String converted;
+  const String *given = nullptr;
+  String *encoded =
+      EncodeByForm(field, from, &converted, &given, outcome, status);
   if (encoded != nullptr) return encoded;
+  if (status == EncodeStatus::kOom || status == EncodeStatus::kErrorRaised) {
+    return nullptr;
+  }
 
   // set_null() states a value rather than reporting a bad one.
   if (outcome.is_null()) {
@@ -783,7 +808,7 @@ String *EncodeStringForField(Field *field, const String &from,
   // TODO(villagesql-general): an extension's own warning() message is dropped
   // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
   // the user.
-  ReportBadCustomFieldValue(field, *value);
+  ReportBadCustomFieldValue(field, *given);
   status = EncodeStatus::kBadValue;
   return nullptr;
 }

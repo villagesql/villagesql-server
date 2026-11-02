@@ -80,6 +80,13 @@ class TypeEncoder {
   // The returned String* is valid until the next encode() call.
   String *encode(const String &from, EncodeOutcome &outcome);
 
+  // Whether the type has an encode from its binary form.
+  bool has_binary_encode() const { return binary_call_.has_value(); }
+
+  // Encode 'from', the type's binary form, as encode() does the text form.
+  // Requires has_binary_encode().
+  String *encode_binary(const String &from, EncodeOutcome &outcome);
+
  private:
   MEM_ROOT *mem_root_{nullptr};  // owning mem_root, used for overflow growth
   char *buffer_{nullptr};        // pre-allocated from mem_root_
@@ -97,6 +104,14 @@ class TypeEncoder {
   // VDF path: SpecialVdfCall owns ctx/inputs/vdf_args, error_msg, and alt_buf.
   // The output buffer (buffer_) is passed per encode() call.
   std::optional<SpecialVdfCall<CustomResult, StringArg>> vdf_call_{};
+
+  // The type's binary-form encode, when it has one.
+  std::optional<SpecialVdfCall<CustomResult, BinaryArg>> binary_call_{};
+
+  // Turns a VDF encode call's outcome into the encoded String*, or nullptr.
+  template <typename Call>
+  String *vdf_result(Call &call, std::optional<size_t> r,
+                     EncodeOutcome &outcome);
 };
 
 }  // namespace villagesql
