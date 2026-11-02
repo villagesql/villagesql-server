@@ -947,6 +947,41 @@ void tvector_scale(vsql::CustomArgWith<TVectorParams> a, vsql::RealArg scalar,
   out.set_length(byte_size);
 }
 
+// Binary form: packed little-endian elements, the stored form itself, so the
+// bytes are copied unchanged. As with tvector_from_string, the element count
+// must match p.dimension when p is known, and sets it, with float elements,
+// when p is unknown.
+void tvector_from_binary(vsql::MaybeParams<TVectorParams> &p,
+                         vsql::Span<const unsigned char> from,
+                         vsql::CustomResult out) {
+  const size_t bpe = (p.is_known() && p.value().bytes_per_elem > 0)
+                         ? p.value().bytes_per_elem
+                         : kDefaultBytesPerElem;
+  if (from.size() == 0 || from.size() % bpe != 0) {
+    out.warning("tvector_from_binary: length is not a multiple of " +
+                std::to_string(bpe) + " bytes");
+    return;
+  }
+  const size_t count = from.size() / bpe;
+  if (p.is_known()) {
+    if (count != static_cast<size_t>(p.value().dimension)) {
+      out.warning("tvector_from_binary: dimension mismatch");
+      return;
+    }
+  } else {
+    p.set(TVectorParams{.dimension = static_cast<int64_t>(count),
+                        .bytes_per_elem = bpe});
+  }
+
+  auto buf = out.buffer();
+  if (buf.size() < from.size()) {
+    out.warning("tvector_from_binary: buffer too small");
+    return;
+  }
+  memcpy(buf.data(), from.data(), from.size());
+  out.set_length(from.size());
+}
+
 static constexpr const char kTVectorTypeName[] = "TVECTOR";
 
 // Upper bound on TVECTOR's persisted byte size: kTVectorMaxDimension
@@ -966,6 +1001,7 @@ constexpr auto TVECTOR =
         .int_to_params<&tvector_int_to_params>()
         .resolve_params<&tvector_resolve_params>()
         .from_string<&tvector_from_string>()
+        .from_binary<&tvector_from_binary>()
         .to_string<&tvector_to_string>()
         .compare<&tvector_compare>()
         .intrinsic_default_vdf("tvector_intrinsic_default")

@@ -52,7 +52,8 @@ static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
 // Validate a type method VDF name that uses the "::" convention.
 // If the name contains "::", checks:
 //   - prefix (before "::") matches type_name (case-insensitive)
-//   - suffix (after "::") is one of: from_string, to_string, compare, hash
+//   - suffix (after "::") is one of: from_string, from_binary, to_string,
+//     compare, hash
 // Returns false on success, true on validation error.
 // Names without "::" are always accepted (backward compatibility).
 static bool validate_type_method_vdf_name(const char *vdf_name,
@@ -89,13 +90,13 @@ static bool validate_type_method_vdf_name(const char *vdf_name,
     }
   }
 
-  if (suffix != "from_string" && suffix != "to_string" && suffix != "compare" &&
-      suffix != "hash") {
+  if (suffix != "from_string" && suffix != "from_binary" &&
+      suffix != "to_string" && suffix != "compare" && suffix != "hash") {
     LogVSQL(
         ERROR_LEVEL,
         "Type '%s' in extension '%s': %s '%s' uses '::' but suffix "
-        "'%.*s' is not a valid type method (must be from_string, to_string, "
-        "compare, or hash)",
+        "'%.*s' is not a valid type method (must be from_string, from_binary, "
+        "to_string, compare, or hash)",
         type_name, extension_name.c_str(), field_name, vdf_name,
         static_cast<int>(suffix.size()), suffix.data());
     return true;
@@ -374,6 +375,14 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
       &error);
   if (error) return std::nullopt;
 
+  // Resolve from_binary (optional; VDF only, no function pointer).
+  const vef_type_id binary_id[] = {VEF_TYPE_BINARY};
+  const vef_func_desc_t *from_binary_vdf = resolve_type_vdf(
+      td->from_binary_vdf_name, nullptr, "from_binary_func",
+      "from_binary_vdf_name", reg, td, type_name, extension_name, 1, binary_id,
+      no_custom, VEF_TYPE_CUSTOM, td->name, /*required=*/false, &error);
+  if (error) return std::nullopt;
+
   // 3. Resolve int_to_params / resolve_params (VDF only, no function pointer).
   const vef_func_desc_t *int_to_params_vdf = nullptr;
   if (td->int_to_params_vdf_name != nullptr) {
@@ -470,6 +479,10 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
       std::move(hash_fn), std::move(int_to_params_fn),
       std::move(resolve_params_fn));
+
+  if (from_binary_vdf != nullptr) {
+    descriptor.set_from_binary_fn(EncodeFunction(from_binary_vdf));
+  }
 
   // 7. Set intrinsic default (VDF or string literal, mutually exclusive).
   if (intrinsic_default_vdf != nullptr) {

@@ -238,6 +238,18 @@ class TypeDescriptor {
   // are not.
   bool is_parameterized() const { return resolve_params_fn_.has_value(); }
 
+  // Returns the encode from the type's binary form, or nullopt if the type
+  // has none.
+  const std::optional<EncodeFunction> &from_binary_fn() const {
+    return from_binary_fn_;
+  }
+
+  // Set the binary-form encode after construction (used during type
+  // registration).
+  void set_from_binary_fn(EncodeFunction fn) {
+    from_binary_fn_ = std::move(fn);
+  }
+
   // Returns the intrinsic default function, or nullopt if not set.
   const std::optional<IntrinsicDefaultFunction> &intrinsic_default_fn() const {
     return intrinsic_default_fn_;
@@ -289,6 +301,9 @@ class TypeDescriptor {
   std::optional<DecodeFunction> decode_fn_;
   std::optional<CompareFunction> compare_fn_;
   std::optional<HashFunction> hash_fn_;
+
+  // Optional encode from the binary form
+  std::optional<EncodeFunction> from_binary_fn_;
 
   std::optional<IntToParamsFunction> int_to_params_fn_;
   std::optional<ResolveParamsFunction> resolve_params_fn_;
