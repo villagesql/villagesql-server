@@ -791,7 +791,18 @@ static void kvec_reset_counters(vsql::IntResult out) {
   out.set(0);
 }
 
-static const auto KVEC_L2_FN =
+// KVEC_L2_FN is a normal SQL VDF: registered via .func() below and bound into
+// the profile with with_function(). KVEC_L2_HELPER_FN is the same function
+// declared as an index helper for with_helper().
+static constexpr auto KVEC_L2_FN =
+    vsql::make_func<&kvec_l2_distance_fn>(kKVecL2Func)
+        .returns(vsql::REAL)
+        .param(KVECTOR)
+        .param(KVECTOR)
+        .deterministic()
+        .build();
+
+static constexpr auto KVEC_L2_HELPER_FN =
     make_index_function<&kvec_l2_distance_fn>(kKVecL2Func)
         .returns(vsql::REAL)
         .param(KVECTOR)
@@ -802,8 +813,8 @@ static const auto KVEC_L2_FN =
 static const auto KVEC_L2_PROFILE = make_index_profile(kKVecProfileL2)
                                         .for_type(kKVectorType)
                                         .using_index(kKVecIndexL2)
-                                        .with_function(1, KVEC_L2_FN)
-                                        .with_helper(1, KVEC_L2_FN)
+                                        .with_function<KVEC_L2_FN>(1)
+                                        .with_helper<KVEC_L2_HELPER_FN>(1)
                                         .ordering(Index::Ordering::ASC)
                                         .default_for_type(true)
                                         .build();
@@ -825,7 +836,15 @@ static void kvec_cos_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
   out.set(cosine_distance_floats(va.data() + kRefSize, vb.data() + kRefSize));
 }
 
-static const auto KVEC_COS_FN =
+static constexpr auto KVEC_COS_FN =
+    vsql::make_func<&kvec_cos_distance_fn>(kKVecCosFunc)
+        .returns(vsql::REAL)
+        .param(KVECTOR)
+        .param(KVECTOR)
+        .deterministic()
+        .build();
+
+static constexpr auto KVEC_COS_HELPER_FN =
     make_index_function<&kvec_cos_distance_fn>(kKVecCosFunc)
         .returns(vsql::REAL)
         .param(KVECTOR)
@@ -836,8 +855,8 @@ static const auto KVEC_COS_FN =
 static const auto KVEC_COS_PROFILE = make_index_profile(kKVecProfileCos)
                                          .for_type(kKVectorType)
                                          .using_index(kKVecIndexCos)
-                                         .with_function(1, KVEC_COS_FN)
-                                         .with_helper(1, KVEC_COS_FN)
+                                         .with_function<KVEC_COS_FN>(1)
+                                         .with_helper<KVEC_COS_HELPER_FN>(1)
                                          .ordering(Index::Ordering::ASC)
                                          .build();
 
@@ -866,18 +885,8 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(KVECTOR)
         // Also register the distance function as a plain SQL VDF so it is
         // callable in the ORDER BY (same fn pointer as the index function).
-        .func(make_func<&kvec_l2_distance_fn>(kKVecL2Func)
-                  .returns(REAL)
-                  .param(KVECTOR)
-                  .param(KVECTOR)
-                  .deterministic()
-                  .build())
-        .func(make_func<&kvec_cos_distance_fn>(kKVecCosFunc)
-                  .returns(REAL)
-                  .param(KVECTOR)
-                  .param(KVECTOR)
-                  .deterministic()
-                  .build())
+        .func(KVEC_L2_FN)
+        .func(KVEC_COS_FN)
         .func(make_func<&kvec_scan_begin_count>("kvec_scan_begin_count")
                   .returns(INT)
                   .no_params()
