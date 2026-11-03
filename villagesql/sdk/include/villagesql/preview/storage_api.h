@@ -255,6 +255,10 @@ class Page {
   // Name:        |N|-seg-1-|-seg-2-| . . . |-seg-N-|-------- DATA----------|
   // Size(bytes): |1|--10---|--10---| . . . |--10---|--16338 - (1 + 10*N)---|
 
+  // InnoDB transaction IDs are stored in 6 bytes (48 bits).
+  static constexpr size_t TRX_ID_SIZE = 6;
+  static constexpr uint64_t TRX_ID_MAX = (uint64_t{1} << 48) - 1;
+
   // Get page reference ID.
   Ref get_ref() const;
 
@@ -338,6 +342,18 @@ class Page {
   void write_integer_2(Offset offset, uint16_t value, MtrCtx::Ref mtr);
   void write_integer_4(Offset offset, uint32_t value, MtrCtx::Ref mtr);
   void write_integer_8(Offset offset, uint64_t value, MtrCtx::Ref mtr);
+
+  // Write a transaction ID as a 6-byte big-endian value, matching InnoDB's
+  // on-disk trx_id format (trx_write_trx_id). InnoDB confines transaction IDs
+  // to 48 bits. Asserts and returns without writing if trx_id is 0 (use
+  // clear_trx_id) or does not fit in 6 bytes, plus the same conditions as
+  // write_integer_*.
+  void write_trx_id(Offset offset, uint64_t trx_id, MtrCtx::Ref mtr);
+
+  // Mark the transaction ID at offset as empty (no transaction) by writing
+  // 6 zero bytes with redo logging.
+  void clear_trx_id(Offset offset, MtrCtx::Ref mtr);
+
   void write_string(Offset offset, const unsigned char *str, size_t len,
                     MtrCtx::Ref mtr);
 
@@ -349,6 +365,14 @@ class Page {
   uint16_t read_integer_2(Offset offset) const;
   uint32_t read_integer_4(Offset offset) const;
   uint64_t read_integer_8(Offset offset) const;
+
+  // Read a 6-byte big-endian transaction ID written by write_trx_id (or by
+  // InnoDB itself). Same failure behavior as read_integer_*.
+  uint64_t read_trx_id(Offset offset) const;
+
+  // @return true if the transaction ID at offset is empty (zero), i.e. unset
+  // or cleared by clear_trx_id. Also true if the bounds check fails.
+  bool is_trx_id_empty(Offset offset) const;
 
   // There is no read_string counterpart to write_string. To read back a byte
   // string written at a known offset, use get_data() + offset directly.
@@ -389,6 +413,7 @@ class Page {
   static uint8_t mach_read_from_1(const unsigned char *b);
   static uint16_t mach_read_from_2(const unsigned char *b);
   static uint32_t mach_read_from_4(const unsigned char *b);
+  static uint64_t mach_read_from_6(const unsigned char *b);
   static uint64_t mach_read_from_8(const unsigned char *b);
 
   // Buffer pool block information. Initialized while loading a page.
@@ -701,6 +726,22 @@ inline void Page::write_integer_8(Offset offset, uint64_t value,
                                     VEF_STORAGE_PAGE_INT_8BYTES, mtr);
 }
 
+inline void Page::write_trx_id(Offset offset, uint64_t trx_id,
+                               MtrCtx::Ref mtr) {
+  assert(trx_id > 0);
+  assert(trx_id <= TRX_ID_MAX);
+  if (trx_id == 0 || trx_id > TRX_ID_MAX) return;
+  if (!data_bounds_check(offset, TRX_ID_SIZE)) return;
+  detail::g_abi->page_write_integer(m_block, offset, trx_id,
+                                    VEF_STORAGE_PAGE_INT_6BYTES, mtr);
+}
+
+inline void Page::clear_trx_id(Offset offset, MtrCtx::Ref mtr) {
+  if (!data_bounds_check(offset, TRX_ID_SIZE)) return;
+  detail::g_abi->page_write_integer(m_block, offset, 0,
+                                    VEF_STORAGE_PAGE_INT_6BYTES, mtr);
+}
+
 inline void Page::write_string(Offset offset, const unsigned char *str,
                                size_t len, MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, len)) return;
@@ -740,6 +781,12 @@ inline uint32_t Page::mach_read_from_4(const unsigned char *b) {
          (static_cast<uint32_t>(b[2]) << 8) | static_cast<uint32_t>(b[3]);
 }
 
+inline uint64_t Page::mach_read_from_6(const unsigned char *b) {
+  uint64_t high = mach_read_from_2(b);
+  uint64_t low = mach_read_from_4(b + 2);
+  return (high << 32) | low;
+}
+
 inline uint64_t Page::mach_read_from_8(const unsigned char *b) {
   uint64_t high = mach_read_from_4(b);
   uint64_t low = mach_read_from_4(b + 4);
@@ -757,6 +804,13 @@ inline uint32_t Page::read_integer_4(Offset o) const {
 }
 inline uint64_t Page::read_integer_8(Offset o) const {
   return read_integer<uint64_t>(o);
+}
+inline uint64_t Page::read_trx_id(Offset o) const {
+  if (!data_bounds_check(o, TRX_ID_SIZE)) return 0;
+  return mach_read_from_6(get_data() + o);
+}
+inline bool Page::is_trx_id_empty(Offset o) const {
+  return read_trx_id(o) == 0;
 }
 
 // General-purpose allocator backed by the InnoDB extension memory arena.
