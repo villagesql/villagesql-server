@@ -137,6 +137,37 @@ text8_hooked	STRING	["TEXT8"]
 TEXT8::compare	INT	["TEXT8", "TEXT8"]
 TEXT8::from_string	TEXT8	["STRING"]
 TEXT8::to_string	STRING	["TEXT8"]
+CREATE TABLE custom_text (id INT PRIMARY KEY, v TEXT8);
+INSERT INTO custom_text VALUES (1, _binary 0xFF);
+ERROR HY000: Incorrect TEXT8 value: '\xFF' for column 'v' at row 1
+SELECT vdf_sb.text8_hex(_binary 0xFF);
+ERROR HY000: Incorrect TEXT8 value: '\xFF'
+SELECT vdf_sb.TEXT8::from_string(0xFF);
+ERROR HY000: Cannot convert string '\xFF' from binary to utf8mb4
+INSERT INTO custom_text VALUES (1, _latin1 0xE9), (2, _ucs2 0x00E9), (3, _binary 0xC3A9);
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT id, vdf_sb.text8_hex(v) AS encoded FROM custom_text ORDER BY id;
+id	encoded
+1	C3A9000000000000
+2	C3A9000000000000
+3	C3A9000000000000
+SELECT vdf_sb.text8_hex(vdf_sb.TEXT8::from_string(_latin1 0xE9)) AS explicit_encoded;
+explicit_encoded
+C3A9000000000000
+PREPARE custom_insert FROM 'INSERT INTO custom_text VALUES (4, ?)';
+SET @text = 0xFF;
+EXECUTE custom_insert USING @text;
+ERROR HY000: Incorrect TEXT8 value: '\xFF' for column 'v' at row 1
+SET @text = _ucs2 0x00E9;
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+EXECUTE custom_insert USING @text;
+DEALLOCATE PREPARE custom_insert;
+SELECT vdf_sb.text8_hex(v) AS prepared_encoded FROM custom_text WHERE id = 4;
+prepared_encoded
+C3A9000000000000
+DROP TABLE custom_text;
 #
 # Cleanup
 #

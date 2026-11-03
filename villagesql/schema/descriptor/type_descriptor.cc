@@ -40,6 +40,7 @@ TypeDescriptor::TypeDescriptor(
     std::optional<ResolveParamsFunction> resolve_params)
     : key_(std::move(key)),
       protocol_(protocol),
+      extension_protocol_(protocol),
       implementation_type_(impl_type),
       persisted_length_(persisted_len),
       max_decode_buffer_length_(max_unpersisted_len),
