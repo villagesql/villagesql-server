@@ -16,10 +16,12 @@
 
 #include <gtest/gtest.h>
 
+#include "mysqld_error.h"
 #include "sql/item.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/test_utils.h"
 #include "villagesql/schema/descriptor/type_context.h"
+#include "villagesql/types/util.h"
 
 namespace villagesql_unittest {
 
@@ -28,6 +30,27 @@ class CustomTypeItemTest : public ::testing::Test {
   void SetUp() override { initializer.SetUp(); }
   void TearDown() override { initializer.TearDown(); }
 
+  static villagesql::TypeDescriptor binary_pair_descriptor() {
+    auto encode = +[](unsigned char *out, size_t capacity, const char *input,
+                      size_t length, size_t *written) -> bool {
+      if (capacity < 2 || (length == 1 && input[0] == '!')) return true;
+      out[0] = 0xAB;
+      out[1] = 0xCD;
+      *written = 2;
+      return false;
+    };
+    auto decode = +[](const unsigned char *, size_t, char *, size_t,
+                      size_t *) -> bool { return false; };
+    auto compare = +[](const unsigned char *, size_t, const unsigned char *,
+                       size_t) -> int { return 0; };
+    return villagesql::TypeDescriptor(
+        villagesql::TypeDescriptorKey("BINARY_PAIR", "test_ext", "1.0.0"),
+        VEF_PROTOCOL_1, 1, 2, 16, /*max_persisted_length=*/0,
+        villagesql::LengthKind::Fixed, villagesql::EncodeFunction(encode),
+        villagesql::DecodeFunction(decode),
+        villagesql::CompareFunction(compare));
+  }
+
   my_testing::Server_initializer initializer;
 };
 
@@ -35,23 +58,7 @@ class CustomTypeItemTest : public ::testing::Test {
 // column. Exercise the actual encoding and field-store path, including the
 // metadata on the rewritten literal.
 TEST_F(CustomTypeItemTest, CustomTypeEncodingUpdatesLiteralRepertoire) {
-  auto encode = +[](unsigned char *out, size_t capacity, const char *, size_t,
-                    size_t *written) -> bool {
-    if (capacity < 2) return true;
-    out[0] = 0xAB;
-    out[1] = 0xCD;
-    *written = 2;
-    return false;
-  };
-  auto decode = +[](const unsigned char *, size_t, char *, size_t,
-                    size_t *) -> bool { return false; };
-  auto compare = +[](const unsigned char *, size_t, const unsigned char *,
-                     size_t) -> int { return 0; };
-  villagesql::TypeDescriptor desc(
-      villagesql::TypeDescriptorKey("BINARY_PAIR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_1, 1, 2, 16, /*max_persisted_length=*/0,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(encode),
-      villagesql::DecodeFunction(decode), villagesql::CompareFunction(compare));
+  auto desc = binary_pair_descriptor();
   auto ctx = villagesql::TableTraits<villagesql::TypeContext>::create(
       villagesql::TypeContextKey("BINARY_PAIR", "test_ext", "1.0.0"), &desc);
   ASSERT_NE(ctx, nullptr);
@@ -78,6 +85,37 @@ TEST_F(CustomTypeItemTest, CustomTypeEncodingUpdatesLiteralRepertoire) {
   ASSERT_EQ(stored->length(), 2u);
   EXPECT_EQ(static_cast<unsigned char>(stored->ptr()[0]), 0xAB);
   EXPECT_EQ(static_cast<unsigned char>(stored->ptr()[1]), 0xCD);
+}
+
+// Implicit custom arguments also replace text with encoded bytes.
+TEST_F(CustomTypeItemTest, ImplicitEncodingUpdatesLiteralMetadata) {
+  auto desc = binary_pair_descriptor();
+  auto ctx = villagesql::TableTraits<villagesql::TypeContext>::create(
+      villagesql::TypeContextKey("BINARY_PAIR", "test_ext", "1.0.0"), &desc);
+  ASSERT_NE(ctx, nullptr);
+
+  auto *literal = new Item_string("ascii", 5, &my_charset_utf8mb4_0900_ai_ci,
+                                  DERIVATION_EXPLICIT, MY_REPERTOIRE_ASCII);
+  ASSERT_FALSE(villagesql::InjectAndEncodeCustomType(literal, *ctx));
+  EXPECT_EQ(literal->collation.collation, &my_charset_bin);
+  EXPECT_EQ(literal->collation.derivation, DERIVATION_EXPLICIT);
+  EXPECT_EQ(literal->collation.repertoire, MY_REPERTOIRE_UNICODE30);
+  String buffer;
+  String *encoded = literal->val_str(&buffer);
+  ASSERT_NE(encoded, nullptr);
+  ASSERT_EQ(encoded->length(), 2u);
+  EXPECT_EQ(static_cast<unsigned char>(encoded->ptr()[0]), 0xAB);
+  EXPECT_EQ(static_cast<unsigned char>(encoded->ptr()[1]), 0xCD);
+
+  // A failed conversion must not relabel the original text.
+  auto *invalid = new Item_string("!", 1, &my_charset_utf8mb4_0900_ai_ci,
+                                  DERIVATION_COERCIBLE, MY_REPERTOIRE_ASCII);
+  initializer.set_expected_error(ER_WRONG_VALUE);
+  EXPECT_TRUE(villagesql::InjectAndEncodeCustomType(invalid, *ctx));
+  initializer.set_expected_error(0);
+  EXPECT_EQ(invalid->collation.collation, &my_charset_utf8mb4_0900_ai_ci);
+  EXPECT_EQ(invalid->collation.derivation, DERIVATION_COERCIBLE);
+  EXPECT_EQ(invalid->collation.repertoire, MY_REPERTOIRE_ASCII);
 }
 
 }  // namespace villagesql_unittest
