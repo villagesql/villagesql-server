@@ -61,6 +61,8 @@ EXECUTE p USING @v;
 id
 2
 DEALLOCATE PREPARE p;
+SELECT vsql_complex.complex_real(_binary 0x0028);
+ERROR HY000: Incorrect COMPLEX value: '\x00('
 #
 # Cleanup
 #

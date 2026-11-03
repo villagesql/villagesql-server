@@ -710,7 +710,7 @@ static const String *ConvertToUtf8mb4(const String &from, String *converted,
 // Encode from for item's custom type, converting it to utf8mb4 first. Returns
 // the encoded String*, or nullptr with status saying why. *given is set to the
 // value the type was given, held in from or *converted, so an error message
-// can quote the value as the user wrote it.
+// can quote it. Binary input keeps its original label for escaping.
 static String *EncodeForItem(Item *item, const String &from, String *converted,
                              const String **given, EncodeStatus &status) {
   *given = &from;
@@ -726,7 +726,8 @@ static String *EncodeForItem(Item *item, const String &from, String *converted,
     if (status == EncodeStatus::kBadValue) *given = converted;
     return nullptr;
   }
-  *given = value;
+  // Binary diagnostics must escape NUL instead of truncating the message.
+  *given = from.charset() == &my_charset_bin ? &from : value;
   EncodeOutcome outcome;
   String *encoded = encoder->encode(*value, outcome);
   if (encoded == nullptr) status = EncodeStatus::kBadValue;
@@ -792,7 +793,9 @@ String *EncodeStringForField(Field *field, const String &from,
   // TODO(villagesql-general): an extension's own warning() message is dropped
   // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
   // the user.
-  ReportBadCustomFieldValue(field, *value);
+  // Keep the original binary label so diagnostics escape embedded NUL.
+  ReportBadCustomFieldValue(field,
+                            from.charset() == &my_charset_bin ? from : *value);
   status = EncodeStatus::kBadValue;
   return nullptr;
 }
