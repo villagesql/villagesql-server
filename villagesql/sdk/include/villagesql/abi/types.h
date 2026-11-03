@@ -198,6 +198,10 @@ typedef enum : unsigned int {
                    //   converted from the caller's charset; a BINARY argument
                    //   arrives unconverted, and a BINARY result is labelled
                    //   binary rather than utf8mb4.
+                   // + const_args on vef_prerun_args_t: prerun sees the
+                   //   value of each constant argument, as the VDF will
+                   //   receive it, so it can admit a NULL literal without
+                   //   admitting every STRING.
 } vef_protocol_t;
 
 // =============================================================================
@@ -587,9 +591,9 @@ typedef void (*vef_vdf_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
 //   - Request a specific buffer size via result->result_buffer_size
 //
 // Memory lifetime: The caller owns all arrays in args (arg_types, const_values,
-// const_lengths). The callee must copy any values it needs to retain before
-// the function returns. The caller may overwrite or free this memory after the
-// function returns.
+// const_lengths, const_args and the values it points to). The callee must copy
+// any values it needs to retain before the function returns. The caller may
+// overwrite or free this memory after the function returns.
 //
 // The user_data pointer allows the extension to maintain state across calls.
 // Memory allocated in prerun should be freed in postrun. If prerun succeeds,
@@ -604,14 +608,19 @@ typedef struct {
   // Type of each argument. Array has arg_count elements.
   vef_type_t *arg_types;
 
-  // For each argument: non-NULL if the argument is a constant, NULL otherwise.
-  // If non-NULL, points to the constant's serialized value.
-  // Array has arg_count elements.
+  // Unused: the server always passes NULL for both. Read constant arguments
+  // from const_args.
   char **const_values;
-
-  // Length of each constant value. Only valid where const_values[i] != NULL.
-  // Array has arg_count elements.
   size_t *const_lengths;
+
+  // protocol >= VEF_PROTOCOL_4
+  // For each argument: its value if it is a constant, NULL otherwise. A
+  // constant is an argument the server can evaluate before the first row,
+  // such as a literal or an expression over literals; a prepared-statement
+  // parameter or a subquery never is. Each value is what the VDF will receive
+  // for that argument, so a NULL literal is a STRING with is_null set.
+  // Array has arg_count elements.
+  const vef_invalue_t **const_args;
 } vef_prerun_args_t;
 
 typedef struct {
