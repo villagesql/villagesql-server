@@ -22,7 +22,6 @@
 
 #include "villagesql/veb/veb_register_type.h"
 
-#include <cctype>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -31,6 +30,7 @@
 #include "sql/field.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 #include "villagesql/types/type_function.h"
 
@@ -50,7 +50,7 @@ static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
 
 // Validate a type method VDF name that uses the "::" convention.
 // If the name contains "::", checks:
-//   - prefix (before "::") matches type_name (case-insensitive)
+//   - prefix (before "::") matches type_name using type identifier rules
 //   - suffix (after "::") is one of: from_string, to_string, compare, hash
 // Returns false on success, true on validation error.
 // Names without "::" are always accepted (backward compatibility).
@@ -67,25 +67,13 @@ static bool validate_type_method_vdf_name(const char *vdf_name,
   std::string_view prefix = name.substr(0, sep);
   std::string_view suffix = name.substr(sep + 2);
 
-  std::string_view tname(type_name);
-  if (prefix.size() != tname.size()) {
+  if (!type_names_equal(std::string(prefix), type_name)) {
     LogVSQL(ERROR_LEVEL,
             "Type '%s' in extension '%s': %s '%s' uses '::' but prefix '%.*s' "
             "does not match type name (case-insensitive)",
             type_name, extension_name.c_str(), field_name, vdf_name,
             static_cast<int>(prefix.size()), prefix.data());
     return true;
-  }
-  for (size_t i = 0; i < prefix.size(); i++) {
-    if (std::tolower(static_cast<unsigned char>(prefix[i])) !=
-        std::tolower(static_cast<unsigned char>(tname[i]))) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s': %s '%s' uses '::' but prefix "
-              "'%.*s' does not match type name (case-insensitive)",
-              type_name, extension_name.c_str(), field_name, vdf_name,
-              static_cast<int>(prefix.size()), prefix.data());
-      return true;
-    }
   }
 
   if (suffix != "from_string" && suffix != "to_string" && suffix != "compare" &&
