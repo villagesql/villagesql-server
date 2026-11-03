@@ -174,6 +174,12 @@ server invokes `on_init` after populating the extension's capabilities and
 `on_deinit` before depopulating them, which is the only point at which the
 extension's own system variables and capability vtables exist.
 
+### Preview SQL query ABI 2
+
+SQL query result text is converted to UTF-8; binary cells retain their bytes.
+This behavior change increments the preview capability version from 1 to 2,
+without changing the stable VEF protocol. Preview consumers must rebuild.
+
 ## TODOs
 
 ### 1. Drop support for protocol v1

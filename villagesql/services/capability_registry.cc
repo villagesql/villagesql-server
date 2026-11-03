@@ -191,7 +191,7 @@ void register_builtin_capabilities() {
                        .capability_config_hash = "ver-1"});
   register_capability(
       VEF_PREVIEW_SQL_QUERY_NAME,
-      {.vtable = preview_sql_query_vtable(), .vtable_hash = "ver-1"});
+      {.vtable = preview_sql_query_vtable(), .vtable_hash = "ver-2"});
   // Status var: on_populate registers the extension's variables with
   // MySQL; on_depopulate unregisters them on extension unload.
   register_capability(VEF_PREVIEW_STATUS_VAR_NAME,

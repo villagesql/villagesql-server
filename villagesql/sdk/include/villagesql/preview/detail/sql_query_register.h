@@ -27,7 +27,7 @@ struct CapabilityTraits<::vsql::preview_sql_query::SqlQueryCapability> {
   static constexpr const char *kName = VEF_PREVIEW_SQL_QUERY_NAME;
   static constexpr const char *kCppTypeName =
       "vsql::preview_sql_query::SqlQueryCapability";
-  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kVtableHash = "ver-2";
 
   static constexpr void *vtable_destination(
       ::vsql::preview_sql_query::SqlQueryCapability *p) noexcept {
