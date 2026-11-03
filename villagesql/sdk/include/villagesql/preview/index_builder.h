@@ -434,15 +434,16 @@ class Index {
   // get_max_col_len(key_pos); on success key_data->length is the value length.
   // If trx_ref is not nullptr, it is set to the transaction reference of the
   // value read, e.g. for a column-only scan that needs visibility information
-  // without a row lookup. If delete_mark is not nullptr, it is set to whether
-  // the value is marked as deleted.
+  // without a row lookup. If delete_trx_ref is not nullptr, it is set to the
+  // transaction reference that marked the value as deleted, or 0 if the value
+  // is not marked as deleted.
   // Must not be called while holding page latches.
   bool get_key_data(uint32_t key_pos, IndexScanKey::KeyPartRef key_ref,
                     IndexScanKey::KeyPartData *key_data,
                     Segment::TrxRef *trx_ref = nullptr,
-                    bool *delete_mark = nullptr) const {
+                    Segment::TrxRef *delete_trx_ref = nullptr) const {
     return ctx_->col_ref_to_data_fn(ctx_->index_ref, key_pos, key_ref, key_data,
-                                    trx_ref, delete_mark, tl_error_msg,
+                                    trx_ref, delete_trx_ref, tl_error_msg,
                                     ERROR_MSG_SIZE);
   }
 

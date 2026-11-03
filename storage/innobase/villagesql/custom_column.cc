@@ -1007,7 +1007,7 @@ dberr_t Custom_column::rollback_updated(const dict_table_t *table, ulint type,
 dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
                              byte *dest, ulint dest_len, const byte *src,
                              ulint src_len, TrxRef *trx_ref_out,
-                             bool *delete_mark_out) {
+                             TrxRef *delete_trx_ref_out) {
   ut_a(table->has_extended_storage);
   ut_a(col->stored_by_extn());
 
@@ -1021,7 +1021,7 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
     memset(dest, 0, dest_len);
     return DB_VILLAGESQL_ERROR;
   }
-  bool deleted = false;
+  Custom_column::TrxRef delete_trx_ref = 0;
   Custom_column::TrxRef trx_ref = 0;
   Custom_column::Data rowid_prefix{};
   Custom_column::Data col_data{};
@@ -1035,7 +1035,7 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   char error_msg[Custom_column::ERROR_MSG_SIZE] = {};
   bool failed =
       !intf || intf->select(custom_column->storage_ctx_, &mtr, ref_val,
-                            &col_data, &rowid_prefix, &trx_ref, &deleted,
+                            &col_data, &rowid_prefix, &trx_ref, &delete_trx_ref,
                             error_msg, sizeof(error_msg));
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (!failed && col_data.length != dest_len) {
@@ -1059,8 +1059,8 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   if (trx_ref_out != nullptr) {
     *trx_ref_out = trx_ref;
   }
-  if (delete_mark_out != nullptr) {
-    *delete_mark_out = deleted;
+  if (delete_trx_ref_out != nullptr) {
+    *delete_trx_ref_out = delete_trx_ref;
   }
 
   mtr_commit(&mtr);
