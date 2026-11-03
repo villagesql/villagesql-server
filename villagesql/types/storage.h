@@ -91,10 +91,11 @@ class StorageInterface {
   bool select(vef_storage_ctx_t *storage, vef_storage_mtr_ref_t mctx,
               vef_storage_col_ref_t col_ref, vef_storage_col_data_t *col_data,
               vef_storage_col_data_t *rowid_prefix,
-              vef_storage_trx_ref_t *trx_ref, bool *delete_marked,
-              char *error_msg, uint32_t error_msg_len) const {
+              vef_storage_trx_ref_t *trx_ref,
+              vef_storage_trx_ref_t *delete_trx_ref, char *error_msg,
+              uint32_t error_msg_len) const {
     return select_(storage, mctx, col_ref, col_data, rowid_prefix, trx_ref,
-                   delete_marked, error_msg, error_msg_len);
+                   delete_trx_ref, error_msg, error_msg_len);
   }
 
   bool mark_delete(vef_storage_ctx_t *storage, vef_storage_mtr_ref_t mctx,

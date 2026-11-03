@@ -259,6 +259,9 @@ class Page {
   static constexpr size_t TRX_ID_SIZE = 6;
   static constexpr uint64_t TRX_ID_MAX = (uint64_t{1} << 48) - 1;
 
+  // Transaction ID value meaning no transaction (see clear_trx_id).
+  static constexpr uint64_t EMPTY_TRX_ID = 0;
+
   // Get page reference ID.
   Ref get_ref() const;
 
@@ -345,13 +348,13 @@ class Page {
 
   // Write a transaction ID as a 6-byte big-endian value, matching InnoDB's
   // on-disk trx_id format (trx_write_trx_id). InnoDB confines transaction IDs
-  // to 48 bits. Asserts and returns without writing if trx_id is 0 (use
-  // clear_trx_id) or does not fit in 6 bytes, plus the same conditions as
+  // to 48 bits. Asserts and returns without writing if trx_id is EMPTY_TRX_ID
+  // (use clear_trx_id) or does not fit in 6 bytes, plus the same conditions as
   // write_integer_*.
   void write_trx_id(Offset offset, uint64_t trx_id, MtrCtx::Ref mtr);
 
   // Mark the transaction ID at offset as empty (no transaction) by writing
-  // 6 zero bytes with redo logging.
+  // EMPTY_TRX_ID as 6 bytes with redo logging.
   void clear_trx_id(Offset offset, MtrCtx::Ref mtr);
 
   void write_string(Offset offset, const unsigned char *str, size_t len,
@@ -370,8 +373,8 @@ class Page {
   // InnoDB itself). Same failure behavior as read_integer_*.
   uint64_t read_trx_id(Offset offset) const;
 
-  // @return true if the transaction ID at offset is empty (zero), i.e. unset
-  // or cleared by clear_trx_id. Also true if the bounds check fails.
+  // @return true if the transaction ID at offset is empty (EMPTY_TRX_ID), i.e.
+  // unset or cleared by clear_trx_id. Also true if the bounds check fails.
   bool is_trx_id_empty(Offset offset) const;
 
   // There is no read_string counterpart to write_string. To read back a byte
@@ -728,9 +731,9 @@ inline void Page::write_integer_8(Offset offset, uint64_t value,
 
 inline void Page::write_trx_id(Offset offset, uint64_t trx_id,
                                MtrCtx::Ref mtr) {
-  assert(trx_id > 0);
+  assert(trx_id != EMPTY_TRX_ID);
   assert(trx_id <= TRX_ID_MAX);
-  if (trx_id == 0 || trx_id > TRX_ID_MAX) return;
+  if (trx_id == EMPTY_TRX_ID || trx_id > TRX_ID_MAX) return;
   if (!data_bounds_check(offset, TRX_ID_SIZE)) return;
   detail::g_abi->page_write_integer(m_block, offset, trx_id,
                                     VEF_STORAGE_PAGE_INT_6BYTES, mtr);
@@ -738,7 +741,7 @@ inline void Page::write_trx_id(Offset offset, uint64_t trx_id,
 
 inline void Page::clear_trx_id(Offset offset, MtrCtx::Ref mtr) {
   if (!data_bounds_check(offset, TRX_ID_SIZE)) return;
-  detail::g_abi->page_write_integer(m_block, offset, 0,
+  detail::g_abi->page_write_integer(m_block, offset, EMPTY_TRX_ID,
                                     VEF_STORAGE_PAGE_INT_6BYTES, mtr);
 }
 
@@ -810,7 +813,7 @@ inline uint64_t Page::read_trx_id(Offset o) const {
   return mach_read_from_6(get_data() + o);
 }
 inline bool Page::is_trx_id_empty(Offset o) const {
-  return read_trx_id(o) == 0;
+  return read_trx_id(o) == EMPTY_TRX_ID;
 }
 
 // General-purpose allocator backed by the InnoDB extension memory arena.
