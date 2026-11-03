@@ -8,7 +8,9 @@
 #   url:           Full URL or local filesystem path. git clone accepts both.
 #   branch-or-tag: Branch to clone.
 #   abi=<abi>:     Optional. ABI to test against: "stable" or "dev".
-#                  Omit to test against both.
+#                  Omit to test against both. build_bundled_extensions.sh
+#                  builds abi=dev entries against the dev headers, all
+#                  others against stable.
 #   bundle=false:  Optional. Omit (or bundle=true) to include in dev server.
 #                  Set bundle=false to run compat tests only — not shipped.
 #   build=<tool>:  Optional. Build system: "cmake" or "cargo". Default "cmake".
@@ -21,9 +23,9 @@
 #   /Users/me/src/vsql-ai my-feature-branch
 #
 # Comments and blank lines are ignored.
-https://github.com/villagesql/vsql-ai main abi=stable
+https://github.com/villagesql/vsql-ai main abi=dev
 https://github.com/villagesql/vsql-boolean main
-https://github.com/villagesql/vsql-crypto main abi=stable
+https://github.com/villagesql/vsql-crypto main abi=dev
 https://github.com/villagesql/vsql-currency main build=cargo abi=stable bundle=false
 https://github.com/villagesql/vsql-fuzzystrmatch main
 https://github.com/villagesql/vsql-trgm main
