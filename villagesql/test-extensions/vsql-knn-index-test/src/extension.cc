@@ -152,14 +152,14 @@ static double cosine_distance_floats(const unsigned char *a,
 // One data page per stored value. Page DATA layout:
 //   HEADER_SIZE + 0          [kVecBytes]  float payload (col_data)
 //   HEADER_SIZE + kVecBytes  [8]          last-writer trx_ref
-//   HEADER_SIZE + ...        [1]          delete-mark flag
+//   HEADER_SIZE + ...        [6]          deleting trx_ref (0 if not deleted)
 // The store holds only the vector; the index owns the row identity, so no rowid
 // is persisted here.
 // ============================================================================
 
 constexpr storage::Page::Offset kColOff = storage::Page::HEADER_SIZE;
 constexpr storage::Page::Offset kTrxOff = kColOff + kVecBytes;
-constexpr storage::Page::Offset kFlagOff = kTrxOff + 8;
+constexpr storage::Page::Offset kDelTrxOff = kTrxOff + 8;
 
 struct KVecColCtx {
   storage::Space::Ref space = 0;
@@ -242,7 +242,7 @@ static bool kvec_col_insert(ColCtx *ctx, storage::MtrCtx::Ref mctx,
 
   data_page.write_string(kColOff, col_data.data, col_data.length, mctx);
   data_page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
-  data_page.write_integer_1(kFlagOff, 0, mctx);
+  data_page.clear_trx_id(kDelTrxOff, mctx);
 
   *col_ref = static_cast<storage::Column::Ref>(data_page.get_ref());
   return false;
@@ -253,7 +253,8 @@ static bool kvec_col_select(ColCtx *ctx, storage::MtrCtx::Ref mctx,
                             storage::Column::Data *col_data,
                             storage::Column::Data *rowid_prefix,
                             storage::Segment::TrxRef *trx_ref,
-                            bool *delete_marked, char *err, uint32_t err_len) {
+                            storage::Segment::TrxRef *delete_trx_ref, char *err,
+                            uint32_t err_len) {
   auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
   storage::Page page;
   if (page.load(ctx->user()->space, page_num, storage::Page::Latch::SHARED,
@@ -271,7 +272,8 @@ static bool kvec_col_select(ColCtx *ctx, storage::MtrCtx::Ref mctx,
   rowid_prefix->length = 0;
   *trx_ref =
       static_cast<storage::Segment::TrxRef>(page.read_integer_8(kTrxOff));
-  *delete_marked = page.read_integer_1(kFlagOff) != 0;
+  *delete_trx_ref =
+      static_cast<storage::Segment::TrxRef>(page.read_trx_id(kDelTrxOff));
   return false;
 }
 
@@ -287,7 +289,11 @@ static bool kvec_col_mark_delete(ColCtx *ctx, storage::MtrCtx::Ref mctx,
              storage::last_error().data());
     return true;
   }
-  page.write_integer_1(kFlagOff, delete_mark ? 1 : 0, mctx);
+  if (delete_mark) {
+    page.write_trx_id(kDelTrxOff, static_cast<uint64_t>(trx), mctx);
+  } else {
+    page.clear_trx_id(kDelTrxOff, mctx);
+  }
   page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
   return false;
 }

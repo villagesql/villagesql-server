@@ -88,7 +88,7 @@ constexpr storage::Page::Offset kRowidOff =
     storage::Page::HEADER_SIZE + kColDataSize;
 constexpr storage::Page::Offset kTrxOff =
     storage::Page::HEADER_SIZE + kColDataSize + 8;
-constexpr storage::Page::Offset kFlagOff =
+constexpr storage::Page::Offset kDelTrxOff =
     storage::Page::HEADER_SIZE + kColDataSize + 16;
 
 // StorageRef packs (space_ref, root_page_num) into a uint64:
@@ -223,7 +223,7 @@ bool wide_blob_insert(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
   data_page.write_string(kRowidOff, rowid_buf, 8, mctx);
 
   data_page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
-  data_page.write_integer_1(kFlagOff, 0, mctx);
+  data_page.clear_trx_id(kDelTrxOff, mctx);
 
   *col_ref = static_cast<storage::Column::Ref>(data_page.get_ref());
   return false;
@@ -233,8 +233,9 @@ bool wide_blob_select(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
                       storage::Column::Ref col_ref,
                       storage::Column::Data *col_data,
                       storage::Column::Data *rowid_prefix,
-                      storage::Segment::TrxRef *trx_ref, bool *delete_marked,
-                      char *err, uint32_t err_len) {
+                      storage::Segment::TrxRef *trx_ref,
+                      storage::Segment::TrxRef *delete_trx_ref, char *err,
+                      uint32_t err_len) {
   auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
   storage::Page page;
   if (page.load(ctx->user()->space, page_num, storage::Page::Latch::SHARED,
@@ -253,7 +254,8 @@ bool wide_blob_select(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
   rowid_prefix->length = 8;
   *trx_ref =
       static_cast<storage::Segment::TrxRef>(page.read_integer_8(kTrxOff));
-  *delete_marked = page.read_integer_1(kFlagOff) != 0;
+  *delete_trx_ref =
+      static_cast<storage::Segment::TrxRef>(page.read_trx_id(kDelTrxOff));
   return false;
 }
 
@@ -269,7 +271,11 @@ bool wide_blob_mark_delete(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
              storage::last_error().data());
     return true;
   }
-  page.write_integer_1(kFlagOff, delete_mark ? 1 : 0, mctx);
+  if (delete_mark) {
+    page.write_trx_id(kDelTrxOff, static_cast<uint64_t>(trx), mctx);
+  } else {
+    page.clear_trx_id(kDelTrxOff, mctx);
+  }
   page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
   return false;
 }

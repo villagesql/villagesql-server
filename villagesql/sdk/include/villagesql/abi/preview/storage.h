@@ -200,7 +200,8 @@ typedef bool (*vef_type_storage_insert_func_t)(
 //   col_data       - Output: fetched column data
 //   rowid_prefix   - Output: row identifier prefix
 //   trx_ref        - Output: transaction that last wrote this entry
-//   delete_marked  - Output: whether the entry is marked for deletion
+//   delete_trx_ref - Output: transaction that marked the entry as deleted, or
+//                    0 if the entry is not marked for deletion
 //   error_msg      - Output: error description on failure
 //   error_msg_len  - length of error message buffer
 // Returns false on success, true on error (writes to error_msg).
@@ -208,7 +209,8 @@ typedef bool (*vef_type_storage_select_func_t)(
     vef_storage_ctx_t *storage, vef_storage_mtr_ref_t mctx,
     vef_storage_col_ref_t col_ref, vef_storage_col_data_t *col_data,
     vef_storage_col_data_t *rowid_prefix, vef_storage_trx_ref_t *trx_ref,
-    bool *delete_marked, char *error_msg, uint32_t error_msg_len);
+    vef_storage_trx_ref_t *delete_trx_ref, char *error_msg,
+    uint32_t error_msg_len);
 
 // Mark or unmark column as deleted by the transaction.
 // Parameters:

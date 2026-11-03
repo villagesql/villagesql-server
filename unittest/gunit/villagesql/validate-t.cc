@@ -625,8 +625,8 @@ static bool stub_storage_insert(vef_storage_ctx_t *, vef_storage_mtr_ref_t,
 static bool stub_storage_select(vef_storage_ctx_t *, vef_storage_mtr_ref_t,
                                 vef_storage_col_ref_t, vef_storage_col_data_t *,
                                 vef_storage_col_data_t *,
-                                vef_storage_trx_ref_t *, bool *, char *,
-                                uint32_t) {
+                                vef_storage_trx_ref_t *,
+                                vef_storage_trx_ref_t *, char *, uint32_t) {
   return false;
 }
 static bool stub_storage_mark_delete(vef_storage_ctx_t *, vef_storage_mtr_ref_t,

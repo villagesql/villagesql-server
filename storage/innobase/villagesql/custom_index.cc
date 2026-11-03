@@ -265,7 +265,8 @@ static const dict_col_t *ref_column(const dict_index_t *index, uint32_t key_pos,
 static bool vef_index_col_ref_to_data_impl(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
     vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
-    bool *delete_mark, char *error_msg, uint32_t error_msg_len) {
+    vef_storage_trx_ref_t *delete_trx_ref, char *error_msg,
+    uint32_t error_msg_len) {
   const auto *index = static_cast<const dict_index_t *>(index_ref);
   const dict_col_t *col = ref_column(index, key_pos, error_msg, error_msg_len);
   if (col == nullptr) return true;
@@ -298,7 +299,7 @@ static bool vef_index_col_ref_to_data_impl(
 
   dberr_t err = Custom_column::fetch(index->table, col, value + ref_size,
                                      value_len - ref_size, value, ref_size,
-                                     trx_ref, delete_mark);
+                                     trx_ref, delete_trx_ref);
   if (err != DB_SUCCESS) {
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len,
