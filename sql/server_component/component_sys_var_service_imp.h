@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +27,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/component_sys_var_service.h>
+
+struct CHARSET_INFO;
 
 void mysql_comp_sys_var_services_init();
 
@@ -150,6 +153,13 @@ class mysql_component_sys_variable_imp {
                              mysql_sys_var_check_func check_func,
                              mysql_sys_var_update_func update_func,
                              void *check_arg, void *variable_value));
+
+  // Internal registration option; the public MySQL service ABI is unchanged.
+  static bool register_variable_with_charset(
+      const char *component_name, const char *var_name, int flags,
+      const char *comment, mysql_sys_var_check_func check_func,
+      mysql_sys_var_update_func update_func, void *check_arg,
+      void *variable_value, const CHARSET_INFO *value_charset);
 
   /**
     Get the component system variable value from the global structure.

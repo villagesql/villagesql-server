@@ -17,6 +17,7 @@ Variable_name	Value
 vsql_config_vars_test.label	default_label
 vsql_config_vars_test.max_items	100
 vsql_config_vars_test.mode	grant
+vsql_config_vars_test.unicode_default	café😀
 # Change both variables
 SET GLOBAL vsql_config_vars_test.max_items = 42;
 SET GLOBAL vsql_config_vars_test.label = 'hello';
@@ -32,6 +33,7 @@ Variable_name	Value
 vsql_config_vars_test.label	hello
 vsql_config_vars_test.max_items	42
 vsql_config_vars_test.mode	grant
+vsql_config_vars_test.unicode_default	café😀
 # Persist one variable so it survives restart
 SET PERSIST vsql_config_vars_test.max_items = 99;
 # Persist the enum too, so we exercise a persisted enum being re-applied

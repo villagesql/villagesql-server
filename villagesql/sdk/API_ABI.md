@@ -174,6 +174,12 @@ server invokes `on_init` after populating the extension's capabilities and
 `on_deinit` before depopulating them, which is the only point at which the
 extension's own system variables and capability vtables exist.
 
+### Preview string system-variable encodings
+
+Global system-variable ABI 3 (`ver-3`) and session-variable ABI 2 (`ver-2`)
+require UTF-8 string values without embedded NUL. These preview behavior changes
+require rebuilding consumers; stable VEF protocols are unchanged.
+
 ## TODOs
 
 ### 1. Drop support for protocol v1

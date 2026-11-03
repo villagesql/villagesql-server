@@ -29,6 +29,7 @@
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
 #include "sql/persisted_variable.h"
+#include "sql/server_component/component_sys_var_service_imp.h"
 #include "sql/sql_plugin_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
@@ -200,7 +201,9 @@ static std::optional<vef_var_type_t> registered_var_type(
 // accepts only INT_RESULT, so this path would reject even a well-formed "42".
 static bool sys_var_set(const char *component_name, const char *name,
                         const char *scope, const char *val) {
-  if (val == nullptr) return true;
+  if (val == nullptr || !String(val, strlen(val), &my_charset_utf8mb4_bin)
+                             .is_valid_string(&my_charset_utf8mb4_bin))
+    return true;
 
   // An unregistered name is refused, and so is an INT variable: it cannot be
   // set from a string and belongs to sys_var_set_int().
@@ -232,7 +235,7 @@ static bool sys_var_set(const char *component_name, const char *name,
           !str_conv->convert_from_buffer(&h_name, name, strlen(name),
                                          "utf8mb3") &&
           !str_conv->convert_from_buffer(&h_value, val, strlen(val),
-                                         "utf8mb3")) {
+                                         "utf8mb4")) {
         result = update_svc->set(nullptr, scope, h_base, h_name, h_value);
       }
 
@@ -436,9 +439,11 @@ bool on_populate_sys_var(const PopulateContext &ctx,
       }
     }
 
-    if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
-                                   v->comment ? v->comment : "", nullptr,
-                                   update_fn, check_arg, value_ptr)) {
+    if (mysql_component_sys_variable_imp::register_variable_with_charset(
+            extension_name.c_str(), v->name, flags,
+            v->comment ? v->comment : "", nullptr, update_fn, check_arg,
+            value_ptr,
+            v->type == VEF_VAR_STR ? &my_charset_utf8mb4_bin : nullptr)) {
       // This variable never registered, so drop its entry before the rollback
       // below, which unregisters by name.
       {

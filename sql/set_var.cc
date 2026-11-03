@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -591,6 +592,7 @@ bool throw_bounds_warning(THD *thd, const char *name, bool fixed, double v) {
 }
 
 const CHARSET_INFO *sys_var::charset(THD *thd) {
+  if (m_value_charset != nullptr) return m_value_charset;
   return is_os_charset ? thd->variables.character_set_filesystem
                        : system_charset_info;
 }
