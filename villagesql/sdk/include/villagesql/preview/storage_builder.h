@@ -196,7 +196,8 @@ class ColumnStoreCapability
 //   bool insert(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Data col_data,
 //               Column::Data rowid_prefix, Column::Ref*, char*, uint32_t);
 //   bool select(Ctx*, MtrCtx::Ref, Column::Ref, Column::Data*, Column::Data*,
-//               Segment::TrxRef*, bool* delete_marked, char*, uint32_t);
+//               Segment::TrxRef*, Segment::TrxRef* delete_trx_ref, char*,
+//               uint32_t);
 //   bool mark_delete(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Ref,
 //                    bool delete_mark, char*, uint32_t);
 //   bool purge(Ctx*, MtrCtx::Ref, Segment::TrxRef, Column::Ref, char*,
@@ -255,8 +256,9 @@ using SelectFn = bool (*)(StorageCtx<UserCtx> *,
                           vsql::preview_storage::Column::Ref,
                           vsql::preview_storage::Column::Data *,
                           vsql::preview_storage::Column::Data *,
-                          vsql::preview_storage::Segment::TrxRef *, bool *,
-                          char *, uint32_t);
+                          vsql::preview_storage::Segment::TrxRef *,
+                          vsql::preview_storage::Segment::TrxRef *, char *,
+                          uint32_t);
 
 template <typename UserCtx>
 using MarkDeleteFn = bool (*)(StorageCtx<UserCtx> *,
@@ -378,10 +380,11 @@ struct SelectWrapper {
                      vef_storage_col_ref_t col_ref,
                      vef_storage_col_data_t *col_data,
                      vef_storage_col_data_t *rowid_prefix,
-                     vef_storage_trx_ref_t *trx_ref, bool *delete_marked,
-                     char *error_msg, uint32_t error_msg_len) {
+                     vef_storage_trx_ref_t *trx_ref,
+                     vef_storage_trx_ref_t *delete_trx_ref, char *error_msg,
+                     uint32_t error_msg_len) {
     return F(reinterpret_cast<StorageCtx<UserCtx> *>(storage), mctx, col_ref,
-             col_data, rowid_prefix, trx_ref, delete_marked, error_msg,
+             col_data, rowid_prefix, trx_ref, delete_trx_ref, error_msg,
              error_msg_len);
   }
 };

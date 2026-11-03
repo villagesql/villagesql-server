@@ -115,8 +115,9 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 // If trx_ref is not NULL, the server sets *trx_ref to the transaction
 // reference of the value read. A locking read, which has no read view, needs it
 // to identify the transaction that last wrote the entry.
-// If delete_mark is not NULL, the server sets *delete_mark to whether the
-// stored value is marked as deleted. A locking read needs it for the same
+// If delete_trx_ref is not NULL, the server sets *delete_trx_ref to the
+// reference of the transaction that marked the stored value as deleted, or to 0
+// if the value is not marked as deleted. A locking read needs it for the same
 // reason.
 // The server reads the value under a mini-transaction of its own, so the
 // extension must not call this while holding page latches in a mini-transaction
@@ -125,7 +126,8 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 typedef bool (*vef_index_col_ref_to_data_fn)(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
     vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
-    bool *delete_mark, char *error_msg, uint32_t error_msg_len);
+    vef_storage_trx_ref_t *delete_trx_ref, char *error_msg,
+    uint32_t error_msg_len);
 
 // Check whether the index key column at key_pos is sorted in descending order.
 // key_pos is the 0-based index key column.
