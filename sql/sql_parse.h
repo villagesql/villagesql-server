@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,7 +101,8 @@ bool mysql_test_parse_for_slave(THD *thd);
 bool is_update_query(enum enum_sql_command command);
 bool is_explainable_query(enum enum_sql_command command);
 bool is_log_table_write_query(enum enum_sql_command command);
-bool alloc_query(THD *thd, const char *packet, size_t packet_length);
+bool alloc_query(THD *thd, const char *packet, size_t packet_length,
+                 const CHARSET_INFO *query_charset = nullptr);
 void dispatch_sql_command(THD *thd, Parser_state *parser_state);
 void mysql_reset_thd_for_next_command(THD *thd);
 void create_table_set_open_action_and_adjust_tables(LEX *lex);

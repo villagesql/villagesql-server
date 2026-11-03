@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -938,6 +939,7 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
   thd->set_query_for_display(m_query.str, m_query.length);
 
   const LEX_CSTRING query_backup = thd->query();
+  const CHARSET_INFO *query_charset_backup = thd->query_charset();
 
 #if defined(ENABLED_PROFILING)
   /* This SP-instr is profilable and will be captured. */
@@ -1027,7 +1029,7 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp) {
   assert((thd->query_name_consts == 0) ||
          (thd->rewritten_query().length() == 0));
 
-  thd->set_query(query_backup);
+  thd->set_query(query_backup, query_charset_backup);
   thd->query_name_consts = 0;
 
   return rc || thd->is_error();
