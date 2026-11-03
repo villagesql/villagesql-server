@@ -423,6 +423,8 @@ typedef int32_t vef_storage_integer_bytes_t;
 #define VEF_STORAGE_PAGE_INT_2BYTES 1
 #define VEF_STORAGE_PAGE_INT_4BYTES 2
 #define VEF_STORAGE_PAGE_INT_8BYTES 3
+// 6-byte big-endian, the InnoDB on-disk trx_id format (mach_write_to_6).
+#define VEF_STORAGE_PAGE_INT_6BYTES 4
 
 // Load an existing page into the buffer pool and latch it
 // @param block_p - Output: opaque buffer pool block reference
@@ -498,7 +500,7 @@ uint32_t vef_storage_page_get_size(vef_storage_space_ref_t space_ref);
 // @param block - Buffer pool block reference (page must be latched)
 // @param offset - Byte offset within page (must be in valid range)
 // @param value - Integer value to write
-// @param bytes - Size: VEF_STORAGE_PAGE_INT_1BYTE/2BYTES/4BYTES/8BYTES
+// @param bytes - Size: VEF_STORAGE_PAGE_INT_1BYTE/2BYTES/4BYTES/6BYTES/8BYTES
 // @param mtr_ref - Mini-transaction reference
 void vef_storage_page_write_integer(vef_storage_block_ref_t block,
                                     vef_storage_page_offset_t offset,

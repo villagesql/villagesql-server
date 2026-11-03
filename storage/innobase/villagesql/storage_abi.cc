@@ -484,6 +484,15 @@ extern "C" void vef_storage_page_write_integer(
     case VEF_STORAGE_PAGE_INT_4BYTES:
       mlog_write_ulint(loc, val, MLOG_4BYTES, mtr);
       break;
+    case VEF_STORAGE_PAGE_INT_6BYTES: {
+      // Same layout as trx_write_trx_id(). InnoDB has no MLOG_6BYTES record,
+      // so log the 6 bytes physically with MLOG_WRITE_STRING.
+      ut_ad(value < (uint64_t{1} << 48));
+      byte buf[6];
+      mach_write_to_6(buf, value);
+      mlog_write_string(loc, buf, sizeof(buf), mtr);
+      break;
+    }
     case VEF_STORAGE_PAGE_INT_8BYTES:
       mlog_write_ull(loc, val, mtr);
       break;
