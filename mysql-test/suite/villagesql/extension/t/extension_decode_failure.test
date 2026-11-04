@@ -96,7 +96,7 @@ SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 --echo # Second insert throw row and retest
 INSERT INTO t1 VALUES (6, 'HASH_THROW');
 
-# TODO(villagesql-general): no error reported to client
+# TODO(villagesql-general): Wire error report to client
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 
 --echo # Verify the failure was logged (twice on linux, once on mac)
@@ -106,7 +106,7 @@ SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 --echo # Insert a value that will throw on compare
 INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
 
-# TODO(villagesql-general): no error reported to client
+# TODO(villagesql-general): Wire error report to client
 SELECT id, val FROM t1 ORDER BY val;
 
 --echo # Verify the failure was logged (twice on linux, once on mac)
