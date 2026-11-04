@@ -1,7 +1,7 @@
 # GitHub usernames of people who may apply /lgtm
 reviewers:
-  - '@villagesql/villagesql-team/villagesql-server-reviewers'
+  - '@villagesql/villagesql-server-reviewers'
 
 # GitHub usernames of people who may apply /approve
 approvers:
-  - '@villagesql/villagesql-team/villagesql-approvers'
+  - '@villagesql/villagesql-approvers'
