@@ -273,6 +273,14 @@ typedef struct {
 
   // MVCC read view the scan must be consistent with. It remains valid during
   // the entire duration of the scan.
+  // Non-NULL for a consistent read. The extension must return only entries
+  // visible under the read view, accounting for both insertion and deletion
+  // transactions.
+  // NULL for a locking read. The extension must not filter entries based on
+  // transaction visibility, as the server may need to wait for an active
+  // transaction. It may skip entries whose deleting transaction has committed.
+  // The server validates locking-read entries with scan_validate after locking
+  // the corresponding row.
   vef_readview_ref_t readview;
 
 } vef_index_scan_desc_t;
