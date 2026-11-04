@@ -774,6 +774,40 @@ static dberr_t purge_in_column_store(const dict_col_t *col, mtr_t *mtr,
   return DB_SUCCESS;
 }
 
+// Returns true if the data of an extended column must not be freed by purge
+// yet, as a custom index entry referring to it is not purged yet. A delete
+// marked record reused by another transaction has its index entry purged by
+// the undo record of the delete, which may be handled by another purge thread,
+// or may have failed. Freeing the data before that would leave the index entry
+// referring to freed (or reused) data. The data is then leaked, which is
+// acceptable as this is rare, and a warning is logged.
+// The caller must not hold any page latch.
+static bool purge_skip_indexed(const dict_table_t *table, const dict_col_t *col,
+                               Custom_column::Ref ref) {
+  if (!Custom_index::has_pending_entry(table, col, ref)) {
+    return false;
+  }
+  // A persistent failure of the index entry purge could repeat this for every
+  // purged row. Log at most one warning per window, shared by all tables.
+  static ib::Throttler skip_warn_throttler{std::chrono::seconds{60}};
+  bool throttled = !skip_warn_throttler.apply();
+  // The test of the skipped purge expects a warning for each table.
+  DBUG_EXECUTE_IF("villagesql_skip_custom_index_purge", throttled = false;);
+  if (throttled) {
+    return true;
+  }
+  std::string schema_name;
+  std::string table_name;
+  table->get_table_name(schema_name, table_name);
+  ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+      << "Purge: Skipped freeing data of custom column "
+      << table->get_col_name(col->ind) << " of table " << schema_name << "."
+      << table_name
+      << " as a custom index entry referring to it is not purged yet."
+         " Further such warnings are suppressed for 60 seconds";
+  return true;
+}
+
 dberr_t Custom_column::purge_updated(const dict_table_t *table, trx_id_t trx_id,
                                      const upd_t *upd) {
   if (!table->has_extended_storage) {
@@ -804,6 +838,11 @@ dberr_t Custom_column::purge_updated(const dict_table_t *table, trx_id_t trx_id,
     if (ref_val == Custom_column::EMPTY_REF) {
       continue;
     }
+
+    if (purge_skip_indexed(table, ind_field->col, ref_val)) {
+      continue;
+    }
+
     log_free_check();
     mtr_t mtr;
     mtr_start(&mtr);
@@ -822,8 +861,8 @@ dberr_t Custom_column::purge_updated(const dict_table_t *table, trx_id_t trx_id,
 
 static dberr_t purge_impl(const dict_table_t *table, const upd_t *upd,
                           const dtuple_t *old_row, const dtuple_t *new_row,
-                          btr_pcur_t *pcur, mem_heap_t *&heap,
-                          ulint *&offsets) {
+                          btr_pcur_t *pcur, mem_heap_t *&heap, ulint *&offsets,
+                          bool check_index_entries) {
   ut_ad(table->has_extended_storage);
 
   const dict_index_t *index = table->first_index();
@@ -875,6 +914,14 @@ static dberr_t purge_impl(const dict_table_t *table, const upd_t *upd,
         Custom_column::Ref old_ref = old_field->get_extended_ref();
         if (ref_val == old_ref) continue;
       }
+    }
+
+    // Purge of a deleted row: wait for the custom index entries referring to
+    // the data to be purged first. No page latch is held here; the cursor is
+    // restored below.
+    if (check_index_entries &&
+        purge_skip_indexed(table, ind_field->col, ref_val)) {
+      continue;
     }
 
     log_free_check();
@@ -944,8 +991,8 @@ dberr_t Custom_column::purge_at_pcur(const dict_table_t *table,
       row_build(ROW_COPY_DATA, index, rec, offsets, nullptr, nullptr, nullptr,
                 nullptr, heap);
   mtr_commit(&mtr);
-  dberr_t error =
-      purge_impl(table, nullptr, nullptr, row_entry, pcur, heap, offsets);
+  dberr_t error = purge_impl(table, nullptr, nullptr, row_entry, pcur, heap,
+                             offsets, /*check_index_entries=*/true);
   if (heap != nullptr) {
     mem_heap_free(heap);
   }
@@ -961,7 +1008,8 @@ dberr_t Custom_column::rollback_inserted(const dict_table_t *table,
   mem_heap_t *heap = nullptr;
   ulint *offsets = nullptr;
   dberr_t error =
-      purge_impl(table, nullptr, nullptr, row_entry, pcur, heap, offsets);
+      purge_impl(table, nullptr, nullptr, row_entry, pcur, heap, offsets,
+                 /*check_index_entries=*/false);
   if (heap != nullptr) {
     mem_heap_free(heap);
   }
@@ -982,7 +1030,8 @@ dberr_t Custom_column::rollback_updated(const dict_table_t *table, ulint type,
 
   if (type == TRX_UNDO_UPD_EXIST_REC) {
     // Free new version(post-update) of extended columns.
-    err = purge_impl(table, upd, undo_row, cur_row, pcur, heap, offsets);
+    err = purge_impl(table, upd, undo_row, cur_row, pcur, heap, offsets,
+                     /*check_index_entries=*/false);
 
     if (err == DB_SUCCESS) {
       // Remove Delete mark from old version(pre-update) of updated columns.
@@ -995,7 +1044,8 @@ dberr_t Custom_column::rollback_updated(const dict_table_t *table, ulint type,
   } else {
     ut_a(type == TRX_UNDO_UPD_DEL_REC);
     // Free new version(post-update) of extended columns.
-    err = purge_impl(table, upd, nullptr, cur_row, pcur, heap, offsets);
+    err = purge_impl(table, upd, nullptr, cur_row, pcur, heap, offsets,
+                     /*check_index_entries=*/false);
   }
 
   if (heap != nullptr) {
