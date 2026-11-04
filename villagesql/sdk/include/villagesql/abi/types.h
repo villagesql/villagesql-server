@@ -200,6 +200,12 @@ typedef enum : unsigned int {
                    //   binary rather than utf8mb4.
 } vef_protocol_t;
 
+// This is the protocol version of these headers: the version the server
+// advertises and the SDK registers. A new protocol bumps only this value.
+// Never use it as a feature check. Features should use the specific enum
+// value of the version that added it.
+#define VEF_PROTOCOL_CURRENT VEF_PROTOCOL_4
+
 // =============================================================================
 // PRACTICAL LIMITS
 // =============================================================================
