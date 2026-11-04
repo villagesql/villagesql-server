@@ -26,6 +26,7 @@
 #include "page0types.h"
 #include "trx0types.h"
 
+#include "villagesql/custom_column.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 
 // Forward declarations
@@ -151,6 +152,29 @@ class Custom_index {
 
   // Returns true if it is custom index entry and safe to purge.
   static bool purge_check(const dict_index_t *index, const dtuple_t *entry);
+
+  // Returns true if the mapping B-tree of any custom index whose first key
+  // column is col still contains an entry for the column reference ref.
+  // Such an entry has not been purged and still references the extended
+  // column data associated with ref, which must not be freed.
+  //
+  // This is a rare case. Normally, the index entry and the column data are
+  // purged by the same undo record, in that order, so the entry is always
+  // gone before the data is freed. The exception occurs when a delete-marked
+  // clustered index record is reused by another transaction: the new
+  // transaction's undo record frees the data, while the earlier delete's
+  // undo record purges the index entry. The entry can still be present if:
+  // - Purging the index entry failed, but purge continued with the remaining
+  //   undo records.
+  // - The table's undo records are distributed across multiple purge threads
+  //   when the history list exceeds innodb_max_purge_lag. The thread purging
+  //   the later undo record can then run ahead of the thread purging the
+  //   delete.
+  // @param table The table.
+  // @param col The extended column.
+  // @param ref The reference to the extended column data.
+  static bool has_pending_entry(const dict_table_t *table,
+                                const dict_col_t *col, Custom_column::Ref ref);
 
   // Returns true if a scan on index must always read the clustered index.
   static bool needs_clustered_access(const dict_index_t *index);
