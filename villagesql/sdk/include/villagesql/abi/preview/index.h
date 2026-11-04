@@ -166,6 +166,15 @@ typedef bool (*vef_index_trx_is_visible_fn)(vef_index_ref_t index_ref,
                                             vef_readview_ref_t read_view,
                                             vef_storage_trx_ref_t trx_ref);
 
+// Check whether a transaction is still active.
+// A true result only means the transaction was active at some point during the
+// call; it may have finished before the call returns. A false result is
+// permanent: the transaction has committed or rolled back. Use
+// vef_index_trx_is_visible_fn to tell whether its changes are visible.
+// Must not be called while holding page latches or transaction mutexes.
+typedef bool (*vef_index_trx_is_active_fn)(vef_index_ref_t index_ref,
+                                           vef_storage_trx_ref_t trx_ref);
+
 // Index context passed by the server to every extension function. The pointer
 // remains valid for the lifetime of the loaded index storage; the extension
 // may cache it inside its storage or cursor state.
@@ -204,6 +213,9 @@ typedef struct {
 
   // Check if a transaction is visible under a read view. Always non-NULL.
   vef_index_trx_is_visible_fn trx_is_visible_fn;
+
+  // Check if a transaction is still active. Always non-NULL.
+  vef_index_trx_is_active_fn trx_is_active_fn;
 
   // Check if an index key column is descending. Always non-NULL.
   vef_index_key_is_desc_fn key_is_desc_fn;
