@@ -1027,6 +1027,56 @@ static void lookup_key_ref(dict_index_t *index, const dtuple_t *entry,
   pcur.close();
 }
 
+// Returns true if the mapping B-tree has a record for the column reference of
+// the first key column.
+static bool mapping_has_col_ref(dict_index_t *index, Custom_column::Ref ref) {
+  ut_ad(index->has_mapping_btree());
+
+  mem_heap_t *heap = mem_heap_create(256, UT_LOCATION_HERE);
+  dtuple_t *tuple = dtuple_create(heap, 1);
+  dict_index_copy_types(tuple, index, 1);
+  dtuple_set_n_fields_cmp(tuple, 1);
+
+  byte ref_data[sizeof(vef_storage_col_ref_t)];
+  static_assert(sizeof(ref_data) == sizeof(ref));
+  mach_write_to_8(ref_data, ref);
+  dfield_set_data(dtuple_get_nth_field(tuple, 0), ref_data, sizeof(ref_data));
+
+  Mtr_guard mtr_guard;
+  mtr_t *mtr = mtr_guard.get();
+
+  btr_pcur_t pcur;
+  pcur.open_no_init(index, tuple, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr,
+                    UT_LOCATION_HERE);
+  const rec_t *rec = pcur.get_rec();
+  const bool found = page_rec_is_user_rec(rec) && pcur.get_low_match() >= 1;
+  pcur.close();
+
+  mem_heap_free(heap);
+  return found;
+}
+
+bool Custom_index::has_pending_entry(const dict_table_t *table,
+                                     const dict_col_t *col,
+                                     Custom_column::Ref ref) {
+  // The mapping B-tree search needs a mutable index; the table is not modified.
+  auto *mutable_table = const_cast<dict_table_t *>(table);
+
+  for (dict_index_t *index = mutable_table->first_index()->next();
+       index != nullptr; index = index->next()) {
+    if (!is_custom(index) || !index->has_mapping_btree()) continue;
+
+    // The mapping record is found by the column reference only if the index
+    // stores column references, in its first key column.
+    const auto &intf = index->custom_index->interface();
+    if ((intf.storage_props & VEF_INDEX_STORAGE_HAS_COLUMN_REF) == 0) continue;
+    if (index->get_field(0)->col != col) continue;
+
+    if (mapping_has_col_ref(index, ref)) return true;
+  }
+  return false;
+}
+
 dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
                             const dtuple_t *entry, bool *is_key_null) {
   *is_key_null = false;
