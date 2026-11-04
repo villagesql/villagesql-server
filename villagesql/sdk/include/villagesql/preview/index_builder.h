@@ -468,6 +468,12 @@ class Index {
     return ctx_->trx_is_visible_fn(ctx_->index_ref, read_view, trx_ref);
   }
 
+  // Checks whether trx_ref is still active. True is a snapshot that may be
+  // stale; false is permanent (committed or rolled back).
+  bool is_transaction_active(Segment::TrxRef trx_ref) const {
+    return ctx_->trx_is_active_fn(ctx_->index_ref, trx_ref);
+  }
+
  private:
   const vef_index_ctx_t *ctx_;
 };
