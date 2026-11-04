@@ -47,6 +47,8 @@ jobs:
   prow:
     if: github.event_name != 'workflow_dispatch' && github.event_name != 'push'
     uses: cncf/prow-github-actions/.github/workflows/prow.yml@e3119adfdf11b3b9491f7a3ed807f48687e18733
+    secrets:
+      token: ${{ secrets.PROW_TOKEN }}
 
   label-sync:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
