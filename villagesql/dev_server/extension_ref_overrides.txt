@@ -1,0 +1,22 @@
+# Per-server-ref overrides for the extensions tested by extension-compat-suite.yml.
+#
+# The suite builds its extension list from the bundled_extensions.txt at the
+# server ref under test, and that list tracks each extension's main branch. A
+# released server ref cannot be changed, so once an extension's main moves to
+# an SDK API the release lacks, the release's compatibility run fails. This
+# file is read from the workflow's own branch, not from the ref under test, so
+# it can fix up a release after the fact.
+#
+# Format: <server-ref> <extension> <branch-or-tag | skip>
+#   server-ref:    The suite's `ref` input, matched exactly (e.g. release/0.0.7).
+#   extension:     Extension name, as json_extensions.sh derives it.
+#   branch-or-tag: Test the extension at this branch or tag instead.
+#                  Commit SHAs are not supported: the clone uses --branch.
+#   skip:          Do not test the extension against this server ref.
+#
+# Comments and blank lines are ignored.
+
+# vsql-ai and vsql-crypto main need the VDF STRING and BINARY API (#1411),
+# which 0.0.7 lacks.
+release/0.0.7 vsql-ai 0.0.7
+release/0.0.7 vsql-crypto 0.0.7
