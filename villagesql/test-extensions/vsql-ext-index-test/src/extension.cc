@@ -371,10 +371,14 @@ static bool ext_index_fetch(Index::Cursor /*cursor*/,
                             IndexScanKey::KeyPartRef * /*key_column_refs*/,
                             IndexScanKey::KeyPartData * /*key_columns*/,
                             IndexScanKey::KeyPartData * /*pkey_columns*/,
-                            Segment::TrxRef * /*trx_ref*/,
-                            bool * /*delete_mark*/, char * /*err*/,
+                            Segment::TrxRef * /*trx_ref*/, char * /*err*/,
                             uint32_t /*err_len*/) {
   return false;
+}
+
+static bool ext_index_validate(Index::Cursor /*cursor*/,
+                               Segment::TrxRef /*trx_ref*/) {
+  return true;
 }
 
 static bool ext_index_save(Index::Cursor /*cursor*/, char * /*err*/,
@@ -463,6 +467,7 @@ static constexpr auto EXT_INDEX =
             .begin<&ext_index_begin>()
             .position<&ext_index_position>()
             .fetch<&ext_index_fetch>()
+            .validate<&ext_index_validate>()
             .save<&ext_index_save>()
             .restore<&ext_index_restore>()
             .end<&ext_index_end>()

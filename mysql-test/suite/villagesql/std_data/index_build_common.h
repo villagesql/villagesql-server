@@ -112,9 +112,14 @@ inline bool dup_fetch(Index::Cursor /*cursor*/,
                       IndexScanKey::KeyPartRef * /*key_column_refs*/,
                       IndexScanKey::KeyPartData * /*key_columns*/,
                       IndexScanKey::KeyPartData * /*pkey_columns*/,
-                      Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
-                      char * /*err*/, uint32_t /*err_len*/) {
+                      Segment::TrxRef * /*trx_ref*/, char * /*err*/,
+                      uint32_t /*err_len*/) {
   return false;
+}
+
+inline bool dup_validate(Index::Cursor /*cursor*/,
+                         Segment::TrxRef /*trx_ref*/) {
+  return true;
 }
 
 inline bool dup_save(Index::Cursor /*cursor*/, char * /*err*/,
