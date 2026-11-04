@@ -24,26 +24,29 @@
 // hardware behaves as though the threads share data even though the program
 // shares nothing, hence "false sharing".
 //
-// How objects private to a thread end up on one line is the part that is not
-// obvious, and it is the allocator doing its job rather than bad luck. It keeps
-// a separate chunk of memory per size class and cuts every request of that size
-// from it: an 8-byte state takes a 16-byte slot, the next one the 16 bytes
-// after that, and so on. The chunk is far larger than a page. Measured here,
-// 200,000 live 8-byte allocations came from two of them at a stride of exactly
-// 16 bytes.
+// That leaves the obvious question: if each statement has its own state, how do
+// two of them ever share a line?
 //
-// Short-lived state does not march along the chunk, though, and that is what
-// concentrates it. A state freed at the end of its statement goes back to the
-// front of the free list and is handed straight to the next statement, so no
-// more are alive at once than there are statements running and the same few
-// slots circulate: 161,289 allocations in a running server used 22 distinct
-// addresses. Eight concurrent 8-byte states are eight 16-byte slots, which is
-// 128 bytes, one line exactly. Logged at 8 connections, six live states sat at
-// offsets 0, 32, 64, 80, 96 and 112 of a single line, used by all eight
-// connection threads.
+// The allocator rounds every request up to a fixed slot size, so an 8-byte
+// state occupies 16 bytes. It cuts those slots from one large chunk of memory,
+// laid end to end, so any two slots it hands out are close together.
 //
-// Packing same-sized objects tightly is what makes an allocator fast everywhere
-// else; this is the one workload where that virtue is the problem.
+// Then the statements give them straight back. A state is freed when its
+// statement ends, so only as many are alive at once as there are statements
+// running at once. The allocator never needs more slots than that. A freed slot
+// returns to the front of the free list for the next statement to take, so the
+// same few slots circulate for the life of the server.
+//
+// Eight of those slots is 128 bytes, which is one cache line.
+//
+// Measured, not reasoned. Holding 200,000 such allocations open walks two
+// chunks at a stride of exactly 16 bytes. Letting them free normally, a running
+// server made 161,289 of them and used only 22 distinct addresses; at 8
+// connections, six live states sat at offsets 0, 32, 64, 80, 96 and 112 of one
+// line, written by all eight connection threads.
+//
+// Nothing is choosing to pack them together. Keeping same-sized objects close
+// is what makes an allocator fast in every other situation.
 //
 // This is not a micro-optimization. Benchmarking the VEF call boundary found a
 // VDF whose 8-byte per-statement state cost about 110 ns per row at 8 threads
