@@ -53,6 +53,7 @@ static constexpr auto DUP_INDEX =
             .begin<&ibc::dup_begin>()
             .position<&ibc::dup_position>()
             .fetch<&ibc::dup_fetch>()
+            .validate<&ibc::dup_validate>()
             .save<&ibc::dup_save>()
             .restore<&ibc::dup_restore>()
             .end<&ibc::dup_end>()

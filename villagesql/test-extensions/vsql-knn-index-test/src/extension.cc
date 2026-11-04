@@ -623,8 +623,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
                        IndexScanKey::KeyPartRef *key_column_refs,
                        IndexScanKey::KeyPartData * /*key_columns*/,
                        IndexScanKey::KeyPartData *pkey_columns,
-                       Segment::TrxRef *trx_ref, bool *delete_mark, char *err,
-                       uint32_t err_len) {
+                       Segment::TrxRef *trx_ref, char *err, uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
   if (c->pos >= c->results.size()) {
     snprintf(err, err_len, "kvec_l2: fetch past end of cursor");
@@ -634,9 +633,6 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   const KVecCursor::Result &res = c->results[c->pos];
   if (key_ref != nullptr) *key_ref = res.ref;
   if (trx_ref != nullptr) *trx_ref = res.trx;
-  // Entries are never marked in this brute-force index; staleness is detected
-  // by the server through the row's clustered record.
-  if (delete_mark != nullptr) *delete_mark = false;
   // Single key column (kKeyPos): its col_ref is the stored vector reference.
   if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
 
@@ -655,6 +651,13 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
 static bool kvec_save(Index::Cursor /*cursor*/, char * /*err*/,
                       uint32_t /*err_len*/) {
   return false;
+}
+
+static bool kvec_validate(Index::Cursor cursor, Segment::TrxRef trx_ref) {
+  // Entries are never marked in this brute-force index; the entry is valid if
+  // it was created by trx_ref.
+  auto *c = static_cast<KVecCursor *>(cursor);
+  return c->pos < c->results.size() && c->results[c->pos].trx == trx_ref;
 }
 
 static bool kvec_restore(Index::Cursor cursor, MtrCtx::Ref /*mctx*/, bool *eof,
@@ -735,6 +738,7 @@ static constexpr auto KVEC_STORE_INDEX =
             .begin<&kvec_begin>()
             .position<&kvec_position>()
             .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
             .save<&kvec_save>()
             .restore<&kvec_restore>()
             .end<&kvec_end>()
@@ -768,6 +772,7 @@ static constexpr auto KVEC_STORE_COS_INDEX =
             .begin<&kvec_begin>()
             .position<&kvec_position>()
             .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
             .save<&kvec_save>()
             .restore<&kvec_restore>()
             .end<&kvec_end>()

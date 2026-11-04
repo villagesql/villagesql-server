@@ -473,9 +473,9 @@ typedef bool (*vef_type_index_scan_position_func_t)(
 //                  index_ctx->num_primary_key_columns vef_storage_col_data_t
 //                  structs; the extension sets each data pointer and length
 //                  to the primary key data for the current row
-//   trx_ref      - Output: transaction that last wrote this entry
-//   delete_mark  - Output: true if the entry is marked as deleted. Meaningful
-//                  when VEF_INDEX_CAP_MVCC_VISIBILITY is set.
+//   trx_ref      - Output: transaction that created (inserted) this entry.
+//                  Delete marks and the transaction that deleted the entry
+//                  are ignored, even if the entry is marked as deleted.
 //   error_msg    - Output: error description on failure
 //   error_msg_len - length of error message buffer
 // Returns false on success, true on error (writes to error_msg).
@@ -483,7 +483,22 @@ typedef bool (*vef_type_index_scan_fetch_func_t)(
     vef_index_cursor_ref_t cursor, vef_storage_col_ref_t *key_ref,
     vef_storage_col_ref_t *key_column_refs, vef_storage_col_data_t *key_columns,
     vef_storage_col_data_t *pkey_columns, vef_storage_trx_ref_t *trx_ref,
-    bool *delete_mark, char *error_msg, uint32_t error_msg_len);
+    char *error_msg, uint32_t error_msg_len);
+
+// Validate the index entry at the current cursor position.
+// The server calls this after it has locked the clustered index record for the
+// row, to confirm the index entry is still current. trx_ref is the transaction
+// returned by scan_fetch for this entry. The extension checks, that the entry
+// still exists, was created by trx_ref and is not marked as deleted.
+// It is called by server only while the cursor is attached to a live
+// mini-transaction, that is, not between scan_save and scan_restore.
+// Parameters:
+//   cursor  - Cursor positioned on the entry returned by the last scan_fetch
+//   trx_ref - Transaction that created the entry, as returned by scan_fetch
+// Returns true if the entry exists, matches trx_ref and is not marked as
+// deleted; false otherwise.
+typedef bool (*vef_type_index_scan_validate_func_t)(
+    vef_index_cursor_ref_t cursor, vef_storage_trx_ref_t trx_ref);
 
 // Save the current cursor position before the active mini-transaction commits.
 // The server calls this when it is about to commit the mini-transaction the
@@ -583,6 +598,7 @@ typedef struct {
   vef_type_index_scan_begin_func_t scan_begin;
   vef_type_index_scan_position_func_t scan_position;
   vef_type_index_scan_fetch_func_t scan_fetch;
+  vef_type_index_scan_validate_func_t scan_validate;
   vef_type_index_scan_save_func_t scan_save;
   vef_type_index_scan_restore_func_t scan_restore;
   vef_type_index_scan_end_func_t scan_end;

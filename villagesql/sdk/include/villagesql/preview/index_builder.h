@@ -63,6 +63,7 @@
 //               .begin<&hnsw_begin_scan>()
 //               .position<&hnsw_position>()
 //               .fetch<&hnsw_fetch>()
+//               .validate<&hnsw_validate>()
 //               .save<&hnsw_save>()
 //               .restore<&hnsw_restore>()
 //               .end<&hnsw_end_scan>()
@@ -118,6 +119,7 @@
 //                IndexScanKey::KeyPartData* keys,
 //                IndexScanKey::KeyPartData* pkeys,
 //                Segment::TrxRef* trx_ref, char*, uint32_t);
+//     bool validate(Index::Cursor, Segment::TrxRef);
 //     bool save(Index::Cursor, char*, uint32_t);
 //     bool restore(Index::Cursor, MtrCtx::Ref, bool*,
 //                  char*, uint32_t);
@@ -223,6 +225,7 @@
 //               .begin<&my_begin_scan>()
 //               .position<&my_position>()
 //               .fetch<&my_fetch>()
+//               .validate<&my_validate>()
 //               .save<&my_save>()
 //               .restore<&my_restore>()
 //               .end<&my_end_scan>()
@@ -551,7 +554,9 @@ using ScanFetchFn = bool (*)(Index::Cursor, IndexScanKey::KeyPartRef *,
                              IndexScanKey::KeyPartRef *,
                              IndexScanKey::KeyPartData *,
                              IndexScanKey::KeyPartData *, Segment::TrxRef *,
-                             bool *, char *, uint32_t);
+                             char *, uint32_t);
+
+using ScanValidateFn = bool (*)(Index::Cursor, Segment::TrxRef);
 
 using ScanSaveFn = bool (*)(Index::Cursor, char *, uint32_t);
 
@@ -731,10 +736,18 @@ struct ScanFetchWrapper {
                      vef_storage_col_ref_t *key_column_refs,
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns,
-                     vef_storage_trx_ref_t *trx_ref, bool *delete_mark,
-                     char *error_msg, uint32_t error_msg_len) {
+                     vef_storage_trx_ref_t *trx_ref, char *error_msg,
+                     uint32_t error_msg_len) {
     return F(cursor, key_ref, key_column_refs, key_columns, pkey_columns,
-             trx_ref, delete_mark, error_msg, error_msg_len);
+             trx_ref, error_msg, error_msg_len);
+  }
+};
+
+template <auto F>
+struct ScanValidateWrapper {
+  static bool invoke(vef_index_cursor_ref_t cursor,
+                     vef_storage_trx_ref_t trx_ref) {
+    return F(cursor, trx_ref);
   }
 };
 
@@ -958,8 +971,8 @@ class DMLBuilder {
 };
 
 // ScanBuilder — entered via DMLBuilder::scan().
-// Mandatory before .global(): begin(), position(), fetch(), save(), restore(),
-// end().
+// Mandatory before .global(): begin(), position(), fetch(), validate(), save(),
+// restore(), end().
 template <typename Context, uint32_t Bits>
 class ScanBuilder {
   static constexpr uint32_t kBegin = 1u << 0;
@@ -968,6 +981,7 @@ class ScanBuilder {
   static constexpr uint32_t kSave = 1u << 3;
   static constexpr uint32_t kRestore = 1u << 4;
   static constexpr uint32_t kEnd = 1u << 5;
+  static constexpr uint32_t kValidate = 1u << 6;
 
  public:
   constexpr ScanBuilder(const char *name, vef_type_index_intf_t intf)
@@ -1000,8 +1014,16 @@ class ScanBuilder {
         std::is_same_v<decltype(F), detail::ScanFetchFn>,
         "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
         "KeyPartRef* key_refs, KeyPartData* keys, KeyPartData* pkeys, "
-        "TrxRef*, bool* delete_mark, char*, uint32_t)");
+        "TrxRef*, char*, uint32_t)");
     intf_.scan_fetch = detail::ScanFetchWrapper<F>::invoke;
+    return {name_, intf_};
+  }
+
+  template <auto F>
+  constexpr ScanBuilder<Context, Bits | kValidate> validate() && {
+    static_assert(std::is_same_v<decltype(F), detail::ScanValidateFn>,
+                  "validate: expected bool(*)(Index::Cursor, TrxRef)");
+    intf_.scan_validate = detail::ScanValidateWrapper<F>::invoke;
     return {name_, intf_};
   }
 
@@ -1039,6 +1061,9 @@ class ScanBuilder {
         "scan: position() must be registered before calling global()");
     static_assert((Bits & kFetch) != 0,
                   "scan: fetch() must be registered before calling global()");
+    static_assert(
+        (Bits & kValidate) != 0,
+        "scan: validate() must be registered before calling global()");
     static_assert((Bits & kSave) != 0,
                   "scan: save() must be registered before calling global()");
     static_assert((Bits & kRestore) != 0,

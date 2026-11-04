@@ -320,8 +320,8 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
       const vef_type_index_intf_t *intf = reg_entry.intf;
       if (!intf->create || !intf->drop || !intf->load || !intf->insert ||
           !intf->mark_delete || !intf->purge || !intf->scan_begin ||
-          !intf->scan_position || !intf->scan_fetch || !intf->scan_save ||
-          !intf->scan_restore || !intf->scan_end) {
+          !intf->scan_position || !intf->scan_fetch || !intf->scan_validate ||
+          !intf->scan_save || !intf->scan_restore || !intf->scan_end) {
         error_out = std::string("index type '") + reg_entry.name +
                     "': not all required function pointers are set";
         LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
