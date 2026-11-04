@@ -163,9 +163,14 @@ static bool dummy_fetch(Index::Cursor /*cursor*/,
                         IndexScanKey::KeyPartRef * /*key_column_refs*/,
                         IndexScanKey::KeyPartData * /*key_columns*/,
                         IndexScanKey::KeyPartData * /*pkey_columns*/,
-                        Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
-                        char * /*err*/, uint32_t /*err_len*/) {
+                        Segment::TrxRef * /*trx_ref*/, char * /*err*/,
+                        uint32_t /*err_len*/) {
   return false;
+}
+
+static bool dummy_validate(Index::Cursor /*cursor*/,
+                           Segment::TrxRef /*trx_ref*/) {
+  return true;
 }
 
 static bool dummy_save(Index::Cursor /*cursor*/, char * /*err*/,
@@ -290,6 +295,7 @@ static constexpr auto DUMMY_HNSW_INDEX =
             .begin<&dummy_begin>()
             .position<&dummy_position>()
             .fetch<&dummy_fetch>()
+            .validate<&dummy_validate>()
             .save<&dummy_save>()
             .restore<&dummy_restore>()
             .end<&dummy_end>()

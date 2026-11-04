@@ -1601,10 +1601,9 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
 
     vef_storage_col_ref_t key_ref{};
     vef_storage_trx_ref_t entry_trx = 0;
-    bool entry_delete_mark = false;
     if (intf.scan_fetch(cursor, &key_ref, key_column_refs.data(),
                         key_columns.data(), pkey_columns.data(), &entry_trx,
-                        &entry_delete_mark, error_msg, sizeof(error_msg))) {
+                        error_msg, sizeof(error_msg))) {
       err = failed("Fetch index key", true);
       break;
     }

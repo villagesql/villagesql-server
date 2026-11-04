@@ -391,6 +391,10 @@ using PrimaryKey = std::vector<std::vector<unsigned char>>;
 struct KVecEntry {
   IndexScanKey::KeyPartRef ref;  // vector's column reference
   PrimaryKey pkey;               // owning row's primary key (all parts)
+  // Transaction that inserted the entry. A locking read compares it with the
+  // clustered record's transaction to detect stale entries, so scan_fetch must
+  // return it.
+  Segment::TrxRef trx;
 };
 struct KVecIndexCtx {
   std::vector<KVecEntry> entries;
@@ -413,6 +417,7 @@ struct KVecCursor {
   struct Result {
     IndexScanKey::KeyPartRef ref;  // vector column reference
     PrimaryKey pkey;  // owning row's primary key (copied, all parts)
+    Segment::TrxRef trx;  // transaction that inserted the entry
   };
   std::vector<Result> results;
   size_t pos = 0;
@@ -440,7 +445,7 @@ static bool kvec_load(IdxCtx * /*ctx*/, const Index & /*index*/,
 }
 
 static bool kvec_insert(IdxCtx *ctx, const Index &index,
-                        Segment::TrxRef /*trx_ref*/,
+                        Segment::TrxRef trx_ref,
                         IndexScanKey::KeyPartData *key_columns,
                         IndexScanKey::KeyPartData *pkey_columns,
                         IndexScanKey::KeyPartRef * /*key_ref*/, char *err,
@@ -468,6 +473,7 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   }
   KVecEntry entry;
   entry.ref = ref;
+  entry.trx = trx_ref;
   // Primary-key parts are NOT NULL, but a part may be zero-length (an empty
   // VARCHAR/VARBINARY) -- a valid key value.
   entry.pkey.reserve(num_pk_parts);
@@ -536,6 +542,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   struct Hit {
     IndexScanKey::KeyPartRef ref;
     const PrimaryKey *pkey;  // points into ctx entries
+    Segment::TrxRef trx;
     double distance;
   };
   std::vector<Hit> hits;
@@ -572,7 +579,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     // helper silently corrupts the ordering.
     double d = 0.0;
     index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
-    hits.push_back(Hit{entry.ref, &entry.pkey, d});
+    hits.push_back(Hit{entry.ref, &entry.pkey, entry.trx, d});
   }
 
   std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
@@ -596,7 +603,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // so the pointers into entries are valid). The cursor outlives the lock, so
   // it must own the bytes.
   for (const Hit &hit : hits) {
-    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey});
+    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey, hit.trx});
   }
 
   *cursor = c;
@@ -616,8 +623,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
                        IndexScanKey::KeyPartRef *key_column_refs,
                        IndexScanKey::KeyPartData * /*key_columns*/,
                        IndexScanKey::KeyPartData *pkey_columns,
-                       Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
-                       char *err, uint32_t err_len) {
+                       Segment::TrxRef *trx_ref, char *err, uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
   if (c->pos >= c->results.size()) {
     snprintf(err, err_len, "kvec_l2: fetch past end of cursor");
@@ -626,6 +632,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   ++g_scan_fetch_count;
   const KVecCursor::Result &res = c->results[c->pos];
   if (key_ref != nullptr) *key_ref = res.ref;
+  if (trx_ref != nullptr) *trx_ref = res.trx;
   // Single key column (kKeyPos): its col_ref is the stored vector reference.
   if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
 
@@ -644,6 +651,13 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
 static bool kvec_save(Index::Cursor /*cursor*/, char * /*err*/,
                       uint32_t /*err_len*/) {
   return false;
+}
+
+static bool kvec_validate(Index::Cursor cursor, Segment::TrxRef trx_ref) {
+  // Entries are never marked in this brute-force index; the entry is valid if
+  // it was created by trx_ref.
+  auto *c = static_cast<KVecCursor *>(cursor);
+  return c->pos < c->results.size() && c->results[c->pos].trx == trx_ref;
 }
 
 static bool kvec_restore(Index::Cursor cursor, MtrCtx::Ref /*mctx*/, bool *eof,
@@ -724,6 +738,7 @@ static constexpr auto KVEC_STORE_INDEX =
             .begin<&kvec_begin>()
             .position<&kvec_position>()
             .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
             .save<&kvec_save>()
             .restore<&kvec_restore>()
             .end<&kvec_end>()
@@ -757,6 +772,7 @@ static constexpr auto KVEC_STORE_COS_INDEX =
             .begin<&kvec_begin>()
             .position<&kvec_position>()
             .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
             .save<&kvec_save>()
             .restore<&kvec_restore>()
             .end<&kvec_end>()

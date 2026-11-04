@@ -973,9 +973,12 @@ static bool stub_idx_scan_fetch(vef_index_cursor_ref_t, vef_storage_col_ref_t *,
                                 vef_storage_col_ref_t *,
                                 vef_storage_col_data_t *,
                                 vef_storage_col_data_t *,
-                                vef_storage_trx_ref_t *, bool *, char *,
-                                uint32_t) {
+                                vef_storage_trx_ref_t *, char *, uint32_t) {
   return false;
+}
+static bool stub_idx_scan_validate(vef_index_cursor_ref_t,
+                                   vef_storage_trx_ref_t) {
+  return true;
 }
 static bool stub_idx_scan_save(vef_index_cursor_ref_t, char *, uint32_t) {
   return false;
@@ -998,6 +1001,7 @@ static vef_type_index_intf_t make_index_intf() {
   intf.scan_begin = stub_idx_scan_begin;
   intf.scan_position = stub_idx_scan_position;
   intf.scan_fetch = stub_idx_scan_fetch;
+  intf.scan_validate = stub_idx_scan_validate;
   intf.scan_save = stub_idx_scan_save;
   intf.scan_restore = stub_idx_scan_restore;
   intf.scan_end = stub_idx_scan_end;
