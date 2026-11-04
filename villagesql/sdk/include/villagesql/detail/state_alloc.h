@@ -26,6 +26,18 @@
 // threads: about 110 ns per row, a third of the statement, and nothing at 1
 // thread.
 //
+// How much this buys depends on how small the state is, because the allocator
+// rounds every request up to a size class. On an 8-byte state that is a 16-byte
+// slot, so eight concurrent states fit one 128-byte line; addresses logged from
+// a real server under 8 connections showed six live states at offsets 0, 32,
+// 64, 80, 96 and 112 of a single line, touched by all eight threads. On a
+// 24-byte state it is a 32-byte slot and only four fit, and there the same
+// sweep measured no improvement from this header at all: a custom-type
+// aggregate kept 88.9% of its baseline's 1-to-16-thread scaling without it and
+// 90.1% with it, which is one run's noise. Past roughly half a line there is
+// nothing left for a neighbour to occupy and this only costs memory. Reach for
+// it when the state is small and written per row, not by default.
+//
 // alloc_state and free_state must be read as a pair: the alignment passed to
 // operator delete has to match the one passed to operator new, and a mismatch
 // is undefined behaviour no test would catch. They are kept adjacent for that
