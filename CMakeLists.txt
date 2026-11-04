@@ -1937,6 +1937,7 @@ IF(WITH_CUSTOM_LIBRARIES)
 ENDIF()
 
 # Add system/custom openssl.
+INCLUDE(${CMAKE_SOURCE_DIR}/villagesql/cmake/macos_openssl.cmake)
 MYSQL_CHECK_SSL()
 
 # Other system libs which use OpenSSL must be disabled.
