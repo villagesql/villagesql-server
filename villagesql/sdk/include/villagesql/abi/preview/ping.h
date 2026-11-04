@@ -47,6 +47,13 @@ extern "C" {
 // which fields the server supports.
 #define VEF_PREVIEW_PING_ABI_VERSION 1
 
+// Structural fingerprint, per target, of vef_preview_ping_t.  Matched at
+// extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for
+// a target whose pin is not recorded yet.
+#define VEF_PREVIEW_PING_VTABLE_HASH_MAC "hash-d51bd5e5b09abd0a"
+#define VEF_PREVIEW_PING_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_PING_VTABLE_HASH_LINUX_ARM ""
+
 // Returns a monotonically incrementing counter. Used to verify that the
 // capability system is wired up correctly end-to-end.
 typedef uint64_t (*vef_ping_fn)(void);

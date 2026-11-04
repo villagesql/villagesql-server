@@ -248,6 +248,7 @@
 #include <vector>
 
 #include <villagesql/abi/preview/index.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_base.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/storage_api.h>
@@ -1520,8 +1521,10 @@ struct CapabilityTraits<::vsql::preview_index_builder::IndexTypeCapability<N>> {
   static constexpr const char *kCppTypeName =
       "vsql::preview_index_builder::IndexTypeCapability";
   using CapabilityConfigType = vef_preview_index_type_ext_desc_t;
-  static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_INDEX_TYPE_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_INDEX_TYPE_CONFIG_HASH);
 
   static void *vtable_destination(
       ::vsql::preview_index_builder::IndexTypeCapability<N> *p) noexcept {
@@ -1541,8 +1544,10 @@ struct CapabilityTraits<
   static constexpr const char *kCppTypeName =
       "vsql::preview_index_builder::IndexProfileCapability";
   using CapabilityConfigType = vef_preview_index_profile_ext_desc_t;
-  static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_INDEX_PROFILE_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_INDEX_PROFILE_CONFIG_HASH);
 
   static void *vtable_destination(
       ::vsql::preview_index_builder::IndexProfileCapability<N> *p) noexcept {

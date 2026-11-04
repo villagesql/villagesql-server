@@ -1,0 +1,7 @@
+{
+  "name": "vsql_preview_ping_legacy_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension: requires the ping capability by its legacy \"ver-1\" tag, as SDKs before structural fingerprints did",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

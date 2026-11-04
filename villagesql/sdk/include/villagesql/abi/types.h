@@ -309,6 +309,9 @@ typedef struct {
   vef_type_id type;
   bool is_null;
 
+  // ABI fingerprinting lists this struct's fields and union arms by hand
+  // (VEF_ABI_MANUAL_FIELDS in villagesql/services/abi_specializations.h);
+  // add any new one there too.
   union {
     struct {
       size_t str_len;
@@ -369,6 +372,9 @@ typedef struct {
   vef_type_id type;
   bool is_null;
 
+  // ABI fingerprinting lists this struct's fields and union arms by hand
+  // (VEF_ABI_MANUAL_FIELDS in villagesql/services/abi_specializations.h);
+  // add any new one there too.
   union {
     // For TYPE_STRING: human-readable text, in utf8mb4
     struct {
@@ -441,6 +447,9 @@ typedef struct {
   // Write a null-terminated string here if type == IS_ERROR.
   char *error_msg;
 
+  // ABI fingerprinting lists this struct's fields and union arms by hand
+  // (VEF_ABI_MANUAL_FIELDS in villagesql/services/abi_specializations.h);
+  // add any new one there too.
   union {
     // For STRING type: caller-provided buffer for text result
     struct {
@@ -541,6 +550,10 @@ typedef struct {
   unsigned int value_count;
 
   // Check ctx->protocol to determine which union member to read.
+  //
+  // ABI fingerprinting lists this struct's fields and union arms by hand
+  // (VEF_ABI_MANUAL_FIELDS in villagesql/services/abi_specializations.h);
+  // add any new one there too.
   union {
     // protocol == VEF_PROTOCOL_1: flat array of value_count vef_invalue_v1_t.
     vef_invalue_v1_t *values_v1;
@@ -1048,12 +1061,13 @@ typedef struct {
   // identity up front -- useful when diagnosing capability load failures
   // from a core file.
   //
-  // Version tag for the ABI struct type ("ver-1", "ver-2", ...).  The
-  // server's capability registry holds one or more (vtable, version)
-  // entries per capability name; the server picks the entry whose
-  // version matches this field, allowing a single capability to ship
-  // multiple ABI versions simultaneously.  Must point to a string
-  // literal (or otherwise static-lifetime storage).
+  // Structural fingerprint of the vtable struct the extension was compiled
+  // against, "hash-XXXXXXXXXXXXXXXX" (see villagesql/detail/abi_pin.h),
+  // or a legacy "ver-N" tag from an SDK that predates fingerprints.  The
+  // server's capability registry holds one or more (vtable, fingerprint)
+  // entries per capability name and picks the one whose fingerprint equals
+  // this field, so a capability can serve several ABI versions at once.
+  // Must point to a string literal (or otherwise static-lifetime storage).
   const char *vtable_hash;
 
   // Address of the abi-pointer slot inside the extension's capability
@@ -1061,8 +1075,8 @@ typedef struct {
   // remain valid for the lifetime of the extension.
   void **vtable_dest;
 
-  // Version tag for the capability_config struct type pointed to by
-  // capability_config, same form as vtable_hash.  NULL when
+  // Structural fingerprint of the capability_config struct type pointed to
+  // by capability_config, same form as vtable_hash.  NULL when
   // capability_config is NULL (capability has no config).  Same matching
   // semantics as vtable_hash.
   const char *capability_config_hash;

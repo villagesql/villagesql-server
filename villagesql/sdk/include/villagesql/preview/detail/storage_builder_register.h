@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_STORAGE_BUILDER_REGISTER_H
 
 #include <villagesql/abi/preview/storage.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/storage_builder.h>
 
@@ -27,7 +28,8 @@ struct CapabilityTraits<::vsql::preview_storage_builder::StorageCapability> {
   static constexpr const char *kName = VEF_PREVIEW_STORAGE_NAME;
   static constexpr const char *kCppTypeName =
       "vsql::preview_storage_builder::StorageCapability";
-  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_STORAGE_VTABLE_HASH);
 
   static void *vtable_destination(
       ::vsql::preview_storage_builder::StorageCapability * /*p*/) noexcept {
@@ -42,8 +44,10 @@ struct CapabilityTraits<
   static constexpr const char *kCppTypeName =
       "vsql::preview_storage_builder::ColumnStoreCapability";
   using CapabilityConfigType = vef_preview_column_store_ext_desc_t;
-  static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_COLUMN_STORE_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_COLUMN_STORE_CONFIG_HASH);
 
   static void *vtable_destination(
       ::vsql::preview_storage_builder::ColumnStoreCapability<N> *p) noexcept {

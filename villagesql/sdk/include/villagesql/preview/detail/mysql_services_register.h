@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_MYSQL_SERVICES_REGISTER_H
 
 #include <villagesql/abi/preview/mysql_services.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/mysql_services.h>
 
@@ -28,10 +29,12 @@ struct CapabilityTraits<::vsql::preview_mysql_services::MysqlServices> {
   static constexpr const char *kName = VEF_PREVIEW_MYSQL_SERVICES_NAME;
   static constexpr const char *kCppTypeName =
       "vsql::preview_mysql_services::MysqlServices";
-  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_MYSQL_SERVICES_VTABLE_HASH);
 
   using CapabilityConfigType = vef_preview_mysql_services_t;
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_MYSQL_SERVICES_CONFIG_HASH);
 
   static constexpr void *vtable_destination(Cap *p) noexcept {
     return static_cast<void *>(&p->presence_gate_);

@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_THREAD_WORKER_REGISTER_H
 
 #include <villagesql/abi/preview/thread_worker.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/thread_worker.h>
 
@@ -30,8 +31,10 @@ struct CapabilityTraits<
   static constexpr const char *kCppTypeName =
       "vsql::preview_thread_worker::ThreadWorkerCapability";
   using CapabilityConfigType = vef_thread_worker_descriptor_t;
-  static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_THREAD_WORKER_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_THREAD_WORKER_CONFIG_HASH);
 
   static constexpr void *vtable_destination(Cap *p) noexcept {
     return static_cast<void *>(&p->abi_);

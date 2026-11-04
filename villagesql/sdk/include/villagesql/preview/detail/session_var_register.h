@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_SESSION_VAR_REGISTER_H
 
 #include <villagesql/abi/preview/session_var.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/session_var.h>
 
@@ -28,8 +29,10 @@ struct CapabilityTraits<::vsql::preview_session_var::SessionVarCapability<N>> {
   static constexpr const char *kCppTypeName =
       "vsql::preview_session_var::SessionVarCapability";
   using CapabilityConfigType = vef_session_var_descriptor_list_t;
-  static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_SESSION_VAR_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_SESSION_VAR_CONFIG_HASH);
 
   static constexpr void *vtable_destination(
       ::vsql::preview_session_var::SessionVarCapability<N> *p) noexcept {

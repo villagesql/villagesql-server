@@ -28,10 +28,11 @@ namespace vsql::detail {
 //       registry (verify-with check), so authors see the same name they
 //       wrote in source rather than the ABI string.
 //   static constexpr const char* kVtableHash;
-//       Version tag for the capability's C ABI vtable struct ("ver-1",
-//       "ver-2", ...).  Sent on the wire and matched by strcmp against
-//       the server's registered version.  Bump the literal whenever the
-//       struct's layout changes in a way the server cannot tolerate.
+//       Structural fingerprint of the capability's C ABI vtable struct for
+//       this target, "hash-XXXXXXXXXXXXXXXX", selected with
+//       VEF_PIN_OF from the literals in the capability's ABI header (see
+//       villagesql/detail/abi_pin.h).  Sent on the wire and matched by
+//       strcmp against the server's registered fingerprint.
 //   using CapabilityConfigType = ...;  (optional, present iff the
 //       capability carries a configuration struct)
 //       The C ABI struct type the extension passes as capability_config.
@@ -39,19 +40,16 @@ namespace vsql::detail {
 //       "this capability has a capability_config."
 //   static constexpr const char* kCapabilityConfigHash;  (required if
 //       CapabilityConfigType is defined)
-//       Version tag for the capability_config struct, same form as
-//       kVtableHash.
+//       Structural fingerprint of the capability_config struct, same form
+//       as kVtableHash.
 //   static constexpr void* vtable_destination(Capability* p);
 //       The address inside *p where the server should write the
 //       capability's vtable pointer at registration time. Returned as
 //       void*; vef_register_impl casts it to void** for the wire entry.
 //
-// TODO(villagesql): kVtableHash and kCapabilityConfigHash are manually
-// maintained version strings ("ver-1", "ver-2", ...), not actual hashes of
-// the struct layout. Either compute a real hash of the ABI struct at compile
-// time (e.g. a constexpr CRC over field sizes) so mismatches are caught
-// automatically, or rename these to kVtableVersion / kCapabilityConfigVersion
-// to reflect what they actually are.
+// SDKs before structural fingerprints sent "ver-N" tags here instead.  The
+// server still accepts the tags it registered then, so those extensions keep
+// loading; new ABI versions get fingerprints only.
 //
 // .with(Capability&) on ExtensionBuilder reads these from the
 // specialization keyed by the user's wrapper type.

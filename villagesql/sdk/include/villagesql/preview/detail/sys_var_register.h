@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_SYS_VAR_REGISTER_H
 
 #include <villagesql/abi/preview/sys_var.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/sys_var.h>
 
@@ -28,8 +29,10 @@ struct CapabilityTraits<::vsql::preview_sys_var::SysVarCapability<N>> {
   static constexpr const char *kCppTypeName =
       "vsql::preview_sys_var::SysVarCapability";
   using CapabilityConfigType = vef_sys_var_descriptor_list_t;
-  static constexpr const char *kVtableHash = "ver-2";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_SYS_VAR_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_SYS_VAR_CONFIG_HASH);
 
   static constexpr void *vtable_destination(
       ::vsql::preview_sys_var::SysVarCapability<N> *p) noexcept {

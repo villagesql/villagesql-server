@@ -17,6 +17,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_PING_REGISTER_H
 
 #include <villagesql/abi/preview/ping.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/ping.h>
 
@@ -27,7 +28,8 @@ struct CapabilityTraits<::vsql::preview_ping::PingCapability> {
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
   static constexpr const char *kCppTypeName =
       "vsql::preview_ping::PingCapability";
-  static constexpr const char *kVtableHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_PING_VTABLE_HASH);
 
   static constexpr void *vtable_destination(
       ::vsql::preview_ping::PingCapability *p) noexcept {

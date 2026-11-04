@@ -119,6 +119,17 @@ typedef struct {
 // Current ABI version for the "vsql::preview::thread_worker" capability.
 #define VEF_PREVIEW_THREAD_WORKER_ABI_VERSION 1
 
+// Structural fingerprints, per target, of vef_preview_thread_worker_t (the
+// vtable) and vef_thread_worker_descriptor_t (the capability_config).  Matched
+// at extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for
+// a target whose pin is not recorded yet.
+#define VEF_PREVIEW_THREAD_WORKER_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_THREAD_WORKER_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_THREAD_WORKER_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_THREAD_WORKER_CONFIG_HASH_MAC "hash-00f31518f917775f"
+#define VEF_PREVIEW_THREAD_WORKER_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_THREAD_WORKER_CONFIG_HASH_LINUX_ARM ""
+
 // Server-side vtable. The version field is always first, matching the
 // convention used by other preview capabilities.
 typedef struct {

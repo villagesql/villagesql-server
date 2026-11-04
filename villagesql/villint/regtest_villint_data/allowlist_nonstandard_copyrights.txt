@@ -4,3 +4,5 @@
 # extra/some_third_party/file.cc
 extra/libbacktrace/sha793921876c981/internal.h
 extra/libarchive/
+extra/boost/boost_1_84_0/boost/pfr/
+extra/boost/boost_1_84_0/boost/pfr.hpp

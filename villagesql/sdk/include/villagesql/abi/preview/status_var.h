@@ -47,6 +47,17 @@ extern "C" {
 // Capability ABI version compiled into this SDK snapshot.
 #define VEF_PREVIEW_STATUS_VAR_ABI_VERSION 1
 
+// Structural fingerprints, per target, of vef_preview_status_var_t (the vtable)
+// and vef_status_var_descriptor_list_t (the capability_config).  Matched at
+// extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for a
+// target whose pin is not recorded yet.
+#define VEF_PREVIEW_STATUS_VAR_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_STATUS_VAR_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_STATUS_VAR_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_STATUS_VAR_CONFIG_HASH_MAC "hash-90d2be65d12576ff"
+#define VEF_PREVIEW_STATUS_VAR_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_STATUS_VAR_CONFIG_HASH_LINUX_ARM ""
+
 // Status variable type. Unlike system variables (which are configurable),
 // status variables are read-only counters and gauges exposed via SHOW STATUS.
 typedef enum {
@@ -68,6 +79,10 @@ typedef struct {
   // Pointer to storage in the extension .so. Must remain valid for the
   // lifetime of the extension. The extension writes to this; the server reads
   // it at SHOW STATUS time.
+  //
+  // ABI fingerprinting lists this struct's fields and union arms by hand
+  // (VEF_ABI_MANUAL_FIELDS in villagesql/services/abi_specializations.h);
+  // add any new one there too.
   union {
     long long *integer_ptr;
     double *double_ptr;

@@ -529,6 +529,13 @@ void vef_storage_page_write_string(vef_storage_block_ref_t block,
 
 #define VEF_PREVIEW_STORAGE_NAME "vsql::preview::storage"
 
+// Structural fingerprint, per target, of vef_preview_storage_t.  Matched at
+// extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for
+// a target whose pin is not recorded yet.
+#define VEF_PREVIEW_STORAGE_VTABLE_HASH_MAC "hash-e2262ee52a49fcbf"
+#define VEF_PREVIEW_STORAGE_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_STORAGE_VTABLE_HASH_LINUX_ARM ""
+
 typedef vef_storage_mtr_ref_t (*vef_storage_mtr_start_fn)(
     void *buffer, uint32_t buffer_size, uint32_t *required_size,
     uint32_t *required_alignment, char *error_msg, uint32_t error_msg_len);
@@ -606,6 +613,17 @@ typedef struct {
 
 #define VEF_COLUMN_STORE_INTF_VERSION_1 1
 #define VEF_COLUMN_STORE_INTF_VERSION VEF_COLUMN_STORE_INTF_VERSION_1
+
+// Structural fingerprints, per target, of vef_preview_column_store_t (the
+// vtable) and vef_preview_column_store_ext_desc_t (the capability_config).
+// Matched at extension load; see villagesql/detail/abi_pin.h.  "" is a
+// placeholder for a target whose pin is not recorded yet.
+#define VEF_PREVIEW_COLUMN_STORE_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_COLUMN_STORE_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_COLUMN_STORE_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_COLUMN_STORE_CONFIG_HASH_MAC "hash-8281197b1cf8050a"
+#define VEF_PREVIEW_COLUMN_STORE_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_COLUMN_STORE_CONFIG_HASH_LINUX_ARM ""
 
 // Extension descriptor for vsql::preview::column_store.
 // Pass as vef_required_capability_t.capability_config.

@@ -21,16 +21,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "villagesql/sdk/include/villagesql/abi/preview/keyring.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/mysql_services.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/ping.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/session_var.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/sql_query.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/statement_event.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/status_var.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
-#include "villagesql/sdk/include/villagesql/abi/preview/thread_worker.h"
+#include "villagesql/services/abi_specializations.h"
 #include "villagesql/services/preview/auth.h"
 #include "villagesql/services/preview/column_store.h"
 #include "villagesql/services/preview/index_profile.h"
@@ -46,13 +37,13 @@
 #include "villagesql/services/preview/sys_var.h"
 #include "villagesql/services/preview/thread_worker.h"
 
-// Each register_capability() call declares the version of each ABI
-// struct this server is willing to serve.  Extensions carry the same
-// version literal in their CapabilityTraits specializations; the
-// literals are matched at extension load time via strcmp on
-// vtable_hash + capability_config_hash on the wire.  Bump the literal
-// (e.g. "ver-1" -> "ver-2") whenever the struct's layout changes in a
-// way the server cannot tolerate.
+// Each register_capability() call declares the exact ABI struct shapes this
+// server serves, as structural fingerprints (villagesql/detail/abi_pin.h).
+// Extensions send the fingerprint pinned in the SDK header they were built
+// against, and populate_capabilities() matches it by strcmp, so an extension
+// loads only into a server serving the shape it expects.  VEF_PIN_VERIFY_OF
+// recomputes each fingerprint from the C type and fails this file's build if
+// the pinned literal is stale.
 
 bool vsql_allow_preview_extensions = false;
 
@@ -67,12 +58,12 @@ namespace {
 // if the capability has a descriptor).
 struct CapabilityVersion {
   void *vtable;
-  // Static-lifetime version tag ("ver-1", "ver-2", ...) identifying the
-  // ABI struct shape this entry serves.  Comparison with
+  // Static-lifetime fingerprint ("hash-...") or legacy tag ("ver-N")
+  // identifying the ABI struct shape this entry serves.  Comparison with
   // vef_required_capability_t::vtable_hash is by strcmp.
   const char *vtable_hash;
-  // Version tag of the descriptor struct type for capabilities that take
-  // one (e.g. thread_worker).  nullptr for capabilities without a
+  // Fingerprint or legacy tag of the descriptor struct type for capabilities
+  // that take one (e.g. thread_worker).  nullptr for capabilities without a
   // descriptor.  Comparison with
   // vef_required_capability_t::capability_config_hash is by strcmp, treating
   // nullptr as a sentinel that only matches another nullptr.
@@ -129,102 +120,178 @@ const CapabilityVersion *find_capability_version(
 
 void register_capability(std::string name, CapabilityRegistration reg) {
   if (reg.on_server_startup != nullptr) reg.on_server_startup();
-  g_registry[std::move(name)].push_back({reg.vtable, reg.vtable_hash,
-                                         reg.capability_config_hash,
-                                         reg.on_populate, reg.on_depopulate});
+  std::vector<CapabilityVersion> &versions = g_registry[std::move(name)];
+  versions.push_back({reg.vtable, reg.vtable_hash, reg.capability_config_hash,
+                      reg.on_populate, reg.on_depopulate});
+  if (reg.legacy_vtable_tag != nullptr) {
+    versions.push_back({reg.vtable, reg.legacy_vtable_tag,
+                        reg.legacy_config_tag, reg.on_populate,
+                        reg.on_depopulate});
+  }
 }
 
 void unregister_capability(const std::string &name) { g_registry.erase(name); }
 
 void register_builtin_capabilities() {
-  // Each (capability, ABI version) is registered as a separate entry.
-  // To add a new ABI version for an existing capability, register an
-  // additional entry under the same name with the new vtable and its
-  // new version tag (e.g. "ver-2").  The corresponding extension-side
-  // literal in each capability's _register.h must use the same value;
-  // that is what makes the wire-level strcmp at extension load time
-  // meaningful.
-  register_capability(VEF_PREVIEW_PING_NAME, {.vtable = preview_ping_vtable(),
-                                              .vtable_hash = "ver-1"});
+  // Each (capability, ABI version) is registered as a separate entry.  To
+  // serve a new ABI version of an existing capability alongside the old one,
+  // register another entry under the same name with the new vtable and its
+  // fingerprint.
+  //
+  // The legacy tags are the "ver-N" strings registered before structural
+  // fingerprints.  Extensions built with those SDKs (including the
+  // stable_sdk/v3 snapshot and the Rust SDK) still send them, so they stay
+  // registered for good.  A new ABI version gets a fingerprint only.
+  register_capability(VEF_PREVIEW_PING_NAME,
+                      {.vtable = preview_ping_vtable(),
+                       .vtable_hash = VEF_PIN_VERIFY_OF(
+                           vef_preview_ping_t, VEF_PREVIEW_PING_VTABLE_HASH),
+                       .legacy_vtable_tag = "ver-1"});
   register_capability(
       VEF_PREVIEW_KEYRING_NAME,
-      {.vtable = preview_keyring_vtable(), .vtable_hash = "ver-1"});
+      {.vtable = preview_keyring_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_keyring_t,
+                                        VEF_PREVIEW_KEYRING_VTABLE_HASH),
+       .legacy_vtable_tag = "ver-1"});
   register_capability(
       VEF_PREVIEW_STORAGE_NAME,
-      {.vtable = preview_storage_vtable(), .vtable_hash = "ver-1"});
-  register_capability(VEF_PREVIEW_THREAD_WORKER_NAME,
-                      {.vtable = preview_thread_worker_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1",
-                       .on_server_startup = init_thread_worker_psi_keys,
-                       .on_populate = on_populate_thread_worker,
-                       .on_depopulate = on_depopulate_thread_worker});
+      {.vtable = preview_storage_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_storage_t,
+                                        VEF_PREVIEW_STORAGE_VTABLE_HASH),
+       .legacy_vtable_tag = "ver-1"});
+  register_capability(
+      VEF_PREVIEW_THREAD_WORKER_NAME,
+      {.vtable = preview_thread_worker_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_thread_worker_t,
+                                        VEF_PREVIEW_THREAD_WORKER_VTABLE_HASH),
+       .capability_config_hash =
+           VEF_PIN_VERIFY_OF(vef_thread_worker_descriptor_t,
+                             VEF_PREVIEW_THREAD_WORKER_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-1",
+       .legacy_config_tag = "ver-1",
+       .on_server_startup = init_thread_worker_psi_keys,
+       .on_populate = on_populate_thread_worker,
+       .on_depopulate = on_depopulate_thread_worker});
   // mysql_services carries no server vtable — the server acquires services and
   // writes their pointers back through the config's destination slots. The
-  // extension's vtable_dest receives a null write (an unused sink).
+  // extension's vtable_dest receives a null write (an unused sink), and its
+  // vtable fingerprint is that of `void`.
   register_capability(VEF_PREVIEW_MYSQL_SERVICES_NAME,
                       {.vtable = nullptr,
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1",
+                       .vtable_hash = VEF_PIN_VERIFY_OF(
+                           void, VEF_PREVIEW_MYSQL_SERVICES_VTABLE_HASH),
+                       .capability_config_hash = VEF_PIN_VERIFY_OF(
+                           vef_preview_mysql_services_t,
+                           VEF_PREVIEW_MYSQL_SERVICES_CONFIG_HASH),
+                       .legacy_vtable_tag = "ver-1",
+                       .legacy_config_tag = "ver-1",
                        .on_populate = on_populate_mysql_services,
                        .on_depopulate = on_depopulate_mysql_services});
-  register_capability(VEF_PREVIEW_COLUMN_STORE_NAME,
-                      {.vtable = preview_column_store_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1"});
-  register_capability(VEF_PREVIEW_INDEX_TYPE_NAME,
-                      {.vtable = preview_index_type_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1"});
+  register_capability(
+      VEF_PREVIEW_COLUMN_STORE_NAME,
+      {.vtable = preview_column_store_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_column_store_t,
+                                        VEF_PREVIEW_COLUMN_STORE_VTABLE_HASH),
+       .capability_config_hash =
+           VEF_PIN_VERIFY_OF(vef_preview_column_store_ext_desc_t,
+                             VEF_PREVIEW_COLUMN_STORE_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-1",
+       .legacy_config_tag = "ver-1"});
+  register_capability(
+      VEF_PREVIEW_INDEX_TYPE_NAME,
+      {.vtable = preview_index_type_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_index_type_t,
+                                        VEF_PREVIEW_INDEX_TYPE_VTABLE_HASH),
+       .capability_config_hash =
+           VEF_PIN_VERIFY_OF(vef_preview_index_type_ext_desc_t,
+                             VEF_PREVIEW_INDEX_TYPE_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-1",
+       .legacy_config_tag = "ver-1"});
   // Auth: on_populate validates the method config and adds it to the auth
   // capability's own in-memory registry; on_depopulate removes it and drains
   // any in-flight login before unload. No auth-specific code in core.
   register_capability(VEF_PREVIEW_AUTH_NAME,
                       {.vtable = preview_auth_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1",
+                       .vtable_hash = VEF_PIN_VERIFY_OF(
+                           vef_preview_auth_t, VEF_PREVIEW_AUTH_VTABLE_HASH),
+                       .capability_config_hash = VEF_PIN_VERIFY_OF(
+                           vef_auth_cc_t, VEF_PREVIEW_AUTH_CONFIG_HASH),
+                       .legacy_vtable_tag = "ver-1",
+                       .legacy_config_tag = "ver-1",
                        .on_populate = on_populate_auth,
                        .on_depopulate = on_depopulate_auth});
-  register_capability(VEF_PREVIEW_INDEX_PROFILE_NAME,
-                      {.vtable = preview_index_profile_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1"});
+  register_capability(
+      VEF_PREVIEW_INDEX_PROFILE_NAME,
+      {.vtable = preview_index_profile_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_index_profile_t,
+                                        VEF_PREVIEW_INDEX_PROFILE_VTABLE_HASH),
+       .capability_config_hash =
+           VEF_PIN_VERIFY_OF(vef_preview_index_profile_ext_desc_t,
+                             VEF_PREVIEW_INDEX_PROFILE_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-1",
+       .legacy_config_tag = "ver-1"});
   register_capability(
       VEF_PREVIEW_SQL_QUERY_NAME,
-      {.vtable = preview_sql_query_vtable(), .vtable_hash = "ver-1"});
+      {.vtable = preview_sql_query_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_sql_query_t,
+                                        VEF_PREVIEW_SQL_QUERY_VTABLE_HASH),
+       .legacy_vtable_tag = "ver-1"});
   // Status var: on_populate registers the extension's variables with
   // MySQL; on_depopulate unregisters them on extension unload.
-  register_capability(VEF_PREVIEW_STATUS_VAR_NAME,
-                      {.vtable = preview_status_var_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1",
-                       .on_populate = on_populate_status_var,
-                       .on_depopulate = on_depopulate_status_var});
+  register_capability(
+      VEF_PREVIEW_STATUS_VAR_NAME,
+      {.vtable = preview_status_var_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_status_var_t,
+                                        VEF_PREVIEW_STATUS_VAR_VTABLE_HASH),
+       .capability_config_hash =
+           VEF_PIN_VERIFY_OF(vef_status_var_descriptor_list_t,
+                             VEF_PREVIEW_STATUS_VAR_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-1",
+       .legacy_config_tag = "ver-1",
+       .on_populate = on_populate_status_var,
+       .on_depopulate = on_depopulate_status_var});
   // Sys var: on_populate registers the extension's system variables
   // with MySQL; on_depopulate unregisters them on extension unload.
-  register_capability(VEF_PREVIEW_SYS_VAR_NAME,
-                      {.vtable = preview_sys_var_vtable(),
-                       .vtable_hash = "ver-2",
-                       .capability_config_hash = "ver-1",
-                       .on_populate = on_populate_sys_var,
-                       .on_depopulate = on_depopulate_sys_var});
+  register_capability(
+      VEF_PREVIEW_SYS_VAR_NAME,
+      {.vtable = preview_sys_var_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_sys_var_t,
+                                        VEF_PREVIEW_SYS_VAR_VTABLE_HASH),
+       .capability_config_hash = VEF_PIN_VERIFY_OF(
+           vef_sys_var_descriptor_list_t, VEF_PREVIEW_SYS_VAR_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-2",
+       .legacy_config_tag = "ver-1",
+       .on_populate = on_populate_sys_var,
+       .on_depopulate = on_depopulate_sys_var});
   // Session variables: per-session (THD-local) sibling of sys_var. on_populate
   // registers each variable with PLUGIN_VAR_THDLOCAL; on_depopulate
   // unregisters them on extension unload.
-  register_capability(VEF_PREVIEW_SESSION_VAR_NAME,
-                      {.vtable = preview_session_var_vtable(),
-                       .vtable_hash = "ver-1",
-                       .capability_config_hash = "ver-1",
-                       .on_populate = on_populate_session_var,
-                       .on_depopulate = on_depopulate_session_var});
+  register_capability(
+      VEF_PREVIEW_SESSION_VAR_NAME,
+      {.vtable = preview_session_var_vtable(),
+       .vtable_hash = VEF_PIN_VERIFY_OF(vef_preview_session_var_t,
+                                        VEF_PREVIEW_SESSION_VAR_VTABLE_HASH),
+       .capability_config_hash =
+           VEF_PIN_VERIFY_OF(vef_session_var_descriptor_list_t,
+                             VEF_PREVIEW_SESSION_VAR_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-1",
+       .legacy_config_tag = "ver-1",
+       .on_populate = on_populate_session_var,
+       .on_depopulate = on_depopulate_session_var});
   // Statement event: on_populate appends to the global dispatch list;
   // on_depopulate removes the handler on extension unload.
-  register_capability(VEF_PREVIEW_STATEMENT_EVENT_NAME,
-                      {.vtable = preview_statement_event_vtable(),
-                       .vtable_hash = "ver-2",
-                       .capability_config_hash = "ver-1",
-                       .on_populate = on_populate_statement_event,
-                       .on_depopulate = on_depopulate_statement_event});
+  register_capability(
+      VEF_PREVIEW_STATEMENT_EVENT_NAME,
+      {.vtable = preview_statement_event_vtable(),
+       .vtable_hash =
+           VEF_PIN_VERIFY_OF(vef_preview_statement_event_t,
+                             VEF_PREVIEW_STATEMENT_EVENT_VTABLE_HASH),
+       .capability_config_hash = VEF_PIN_VERIFY_OF(
+           vef_statement_event_cc_t, VEF_PREVIEW_STATEMENT_EVENT_CONFIG_HASH),
+       .legacy_vtable_tag = "ver-2",
+       .legacy_config_tag = "ver-1",
+       .on_populate = on_populate_statement_event,
+       .on_depopulate = on_depopulate_statement_event});
 }
 
 // TODO(villagesql-preview): Verify that the capabilities declared in
@@ -248,10 +315,9 @@ bool populate_capabilities(const PopulateContext &ctx,
     const vef_required_capability_t &req = reg->required_capabilities[i];
     if (req.name == nullptr || req.vtable_dest == nullptr) continue;
 
-    // vtable_hash is mandatory: every extension built against the current
-    // SDK has it populated by vef_register.h.  An extension that arrives
-    // without one was built against an SDK that predates the structural
-    // fingerprint, which we do not support.
+    // vtable_hash is mandatory: every SDK since per-capability ABI tags
+    // populates it (vef_register.h), with a fingerprint or a legacy "ver-N"
+    // tag.
     if (req.vtable_hash == nullptr) {
       error_message =
           std::string("required capability missing ABI fingerprint: ") +

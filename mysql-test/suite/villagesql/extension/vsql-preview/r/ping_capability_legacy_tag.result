@@ -1,0 +1,19 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_preview_ping_legacy_test;
+# ping() reaches the server vtable through the legacy registration
+SELECT vsql_preview_ping_legacy_test.ping() > 0 AS ping_positive;
+ping_positive
+1
+SELECT vsql_preview_ping_legacy_test.ping() <
+vsql_preview_ping_legacy_test.ping() AS ping_increases;
+ping_increases
+1
+# A fingerprint-pinned extension loads alongside it
+INSTALL EXTENSION vsql_preview_ping_test;
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+ping_positive
+1
+UNINSTALL EXTENSION vsql_preview_ping_test;
+UNINSTALL EXTENSION vsql_preview_ping_legacy_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

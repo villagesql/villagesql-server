@@ -16,6 +16,7 @@
 #define VILLAGESQL_PREVIEW_DETAIL_AUTH_REGISTER_H
 
 #include <villagesql/abi/preview/auth.h>
+#include <villagesql/detail/abi_pin.h>
 #include <villagesql/detail/capability_traits.h>
 #include <villagesql/preview/auth.h>
 
@@ -28,8 +29,10 @@ struct CapabilityTraits<::vsql::preview_auth::AuthCapability> {
   static constexpr const char *kCppTypeName =
       "vsql::preview_auth::AuthCapability";
   using CapabilityConfigType = vef_auth_cc_t;
-  static constexpr const char *kVtableHash = "ver-1";
-  static constexpr const char *kCapabilityConfigHash = "ver-1";
+  static constexpr const char *kVtableHash =
+      VEF_PIN_OF(VEF_PREVIEW_AUTH_VTABLE_HASH);
+  static constexpr const char *kCapabilityConfigHash =
+      VEF_PIN_OF(VEF_PREVIEW_AUTH_CONFIG_HASH);
 
   static constexpr void *vtable_destination(Cap *p) noexcept {
     return static_cast<void *>(&p->abi_);

@@ -54,6 +54,17 @@ extern "C" {
 // Capability ABI version compiled into this SDK snapshot.
 #define VEF_PREVIEW_SESSION_VAR_ABI_VERSION 1
 
+// Structural fingerprints, per target, of vef_preview_session_var_t (the
+// vtable) and vef_session_var_descriptor_list_t (the capability_config).
+// Matched at extension load; see villagesql/detail/abi_pin.h.  "" is a
+// placeholder for a target whose pin is not recorded yet.
+#define VEF_PREVIEW_SESSION_VAR_VTABLE_HASH_MAC "hash-b2fe832df36a4604"
+#define VEF_PREVIEW_SESSION_VAR_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_SESSION_VAR_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_SESSION_VAR_CONFIG_HASH_MAC "hash-f75ba6375220e25b"
+#define VEF_PREVIEW_SESSION_VAR_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_SESSION_VAR_CONFIG_HASH_LINUX_ARM ""
+
 // Session variable value type. Only INT and STR are supported in v1.
 typedef enum {
   VEF_SESSION_VAR_INT = 0,
@@ -72,6 +83,10 @@ typedef struct {
   // Type-specific default and constraints. Only the field matching type is
   // used. The def_val becomes the global default; each session starts from it
   // until it runs SET SESSION.
+  //
+  // ABI fingerprinting lists this struct's fields and union arms by hand
+  // (VEF_ABI_MANUAL_FIELDS in villagesql/services/abi_specializations.h);
+  // add any new one there too.
   union {
     struct {
       long long def_val;

@@ -619,6 +619,17 @@ typedef struct {
 #define VEF_PREVIEW_INDEX_TYPE_ABI_VERSION_1 1
 #define VEF_PREVIEW_INDEX_TYPE_ABI_VERSION VEF_PREVIEW_INDEX_TYPE_ABI_VERSION_1
 
+// Structural fingerprints, per target, of vef_preview_index_type_t (the vtable)
+// and vef_preview_index_type_ext_desc_t (the capability_config).  Matched at
+// extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for a
+// target whose pin is not recorded yet.
+#define VEF_PREVIEW_INDEX_TYPE_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_INDEX_TYPE_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_INDEX_TYPE_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_INDEX_TYPE_CONFIG_HASH_MAC "hash-1634805399dd1501"
+#define VEF_PREVIEW_INDEX_TYPE_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_INDEX_TYPE_CONFIG_HASH_LINUX_ARM ""
+
 // One index type entry: name plus a pointer to the interface struct.
 // Both pointers must remain valid for the lifetime of the extension.
 typedef struct {
@@ -659,6 +670,17 @@ typedef struct {
 #define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1 1
 #define VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION \
   VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION_1
+
+// Structural fingerprints, per target, of vef_preview_index_profile_t (the
+// vtable) and vef_preview_index_profile_ext_desc_t (the capability_config).
+// Matched at extension load; see villagesql/detail/abi_pin.h.  "" is a
+// placeholder for a target whose pin is not recorded yet.
+#define VEF_PREVIEW_INDEX_PROFILE_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_INDEX_PROFILE_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_INDEX_PROFILE_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_INDEX_PROFILE_CONFIG_HASH_MAC "hash-76f7e2ec63aca1b2"
+#define VEF_PREVIEW_INDEX_PROFILE_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_INDEX_PROFILE_CONFIG_HASH_LINUX_ARM ""
 
 // Maximum number of parameters a single index profile/helper function may
 // declare in its signature. The server rejects registration of any binding

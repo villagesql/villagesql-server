@@ -2,13 +2,10 @@
 # fails to load against a server that only provides ping v1.
 #
 # The extension uses a local ping_abi_v2.h (vef_preview_ping_v2_t with pong())
-# and a deliberately-unreachable kVtableHash of "hash-0000000000000000" --
-# valid format, guaranteed not to match the server's pinned
-# vef_preview_ping_t hash.  populate_capabilities() looks up the
-# (name, hash) pair and rejects the extension because no registered ABI
-# version matches.  See vsql-preview-ping-v2-test/src/extension.cc for
-# why the hash is a literal stand-in rather than a structurally computed
-# fingerprint (extensions don't carry the PFR-based compute path).
+# and requires ping as "ver-2", which matches neither the server's
+# fingerprint for vef_preview_ping_t nor its one legacy tag, "ver-1".
+# populate_capabilities() looks up the (name, hash) pair and rejects the
+# extension because no registered ABI version matches.
 
 call mtr.add_suppression("no matching ABI version for capability");
 call mtr.add_suppression("vsql_allow_preview_extensions");

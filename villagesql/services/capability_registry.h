@@ -56,13 +56,23 @@ struct DepopulateContext {
 struct CapabilityRegistration {
   // Required: server-side vtable pointer.
   void *vtable = nullptr;
-  // Required: version tag of the vtable type ("ver-1", "ver-2", ...).
-  // Matched by strcmp against the extension-side literal.  Bump when
-  // the vtable layout changes in a way the server cannot tolerate.
+  // Required: structural fingerprint of the vtable type for this target,
+  // from VEF_PIN_VERIFY_OF (villagesql/services/abi_signature_compute.h),
+  // which fails the build if the pinned literal is stale.  Matched by strcmp
+  // against the extension-side literal.
   const char *vtable_hash = nullptr;
-  // Version tag of the capability_config struct type, same form as
+  // Fingerprint of the capability_config struct type, same form as
   // vtable_hash.  Null if the capability has no capability_config.
   const char *capability_config_hash = nullptr;
+  // The "ver-N" tags SDKs sent for this capability before structural
+  // fingerprints.  When set, the same vtable and hooks are also registered
+  // under them so extensions built with those SDKs keep loading.  They are a
+  // frozen compatibility promise: never set them for a new capability, and
+  // never change them.  If the vtable changes in a way an extension built
+  // against the tagged shape cannot tolerate, move the tags to a separate
+  // registration that still serves that shape.
+  const char *legacy_vtable_tag = nullptr;
+  const char *legacy_config_tag = nullptr;
   // Called once at server startup (e.g. to register PSI keys). May be null.
   void (*on_server_startup)() = nullptr;
   // Called after the (vtable_hash, capability_config_hash) match succeeds

@@ -1,0 +1,25 @@
+# An extension built before structural ABI fingerprints requires capabilities
+# by the "ver-N" tags those SDKs sent.  The server keeps those tags registered
+# alongside the fingerprints, so such an extension still loads and works.
+#
+# vsql_preview_ping_legacy_test requires vsql::preview::ping as "ver-1"; the
+# current SDK would send the fingerprint pinned in abi/preview/ping.h.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_preview_ping_legacy_test;
+
+--echo # ping() reaches the server vtable through the legacy registration
+SELECT vsql_preview_ping_legacy_test.ping() > 0 AS ping_positive;
+SELECT vsql_preview_ping_legacy_test.ping() <
+       vsql_preview_ping_legacy_test.ping() AS ping_increases;
+
+--echo # A fingerprint-pinned extension loads alongside it
+INSTALL EXTENSION vsql_preview_ping_test;
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+
+UNINSTALL EXTENSION vsql_preview_ping_test;
+UNINSTALL EXTENSION vsql_preview_ping_legacy_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

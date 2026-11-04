@@ -112,6 +112,46 @@ protocol 1.
 as any changes to the size will impact the layout of the struct that contains
 it.
 
+### Preview Capability ABIs
+
+Preview capabilities (`abi/preview/`) are versioned per capability, not by
+protocol. For each capability it requires, an extension sends a structural
+fingerprint of the capability's vtable struct and, if it has one, of its
+`capability_config` struct (`vef_required_capability_t::vtable_hash` and
+`capability_config_hash`). The server serves the capability only if it
+registered an entry with exactly those fingerprints; otherwise the extension
+fails to load with "no matching ABI version".
+
+A fingerprint looks like `hash-d51bd5e5b09abd0a`: a scheme tag and a hash of
+the C type's whole shape, meaning every field, pointee, function signature and
+enum underlying type it reaches. The fingerprint is the version: there is no
+number to bump, and the shapes a server serves form a set, not a sequence.
+Each one is pinned per target as a `#define` next to its struct in the ABI
+header, and the SDK sends the pin for the target it is compiled for
+(`detail/abi_pin.h`). An SDK in another language copies the pins; it never
+computes a hash.
+
+The server recomputes every fingerprint from the C type at compile time
+(`villagesql/services/abi_signature_compute.h`, using Boost.PFR), and its build
+fails if a pin is stale, so a shape change cannot ship with an old pin. To
+change a preview ABI struct:
+
+1. Edit the struct. If it has an anonymous union, also update its
+   `VEF_ABI_MANUAL_FIELDS` list in `villagesql/services/abi_specializations.h`.
+1. Build `villagesql-unit-tests`, run `abi_pin_literals-t` on each target, and
+   paste the `#define` lines it prints over the stale pins.
+1. Decide whether extensions built against the old shape must keep loading. If
+   so, register a second entry for the capability that serves the old shape
+   under the old pins.
+
+SDKs from before fingerprints sent `ver-N` tags instead. The server keeps
+registering the tags it accepted then (`legacy_vtable_tag` and
+`legacy_config_tag` in `capability_registry.cc`), so those extensions keep
+loading; new ABI versions get fingerprints only. A legacy tag is served by the
+capability's current vtable, so a change that an extension built against the
+tagged shape cannot tolerate must move the tag to an entry that still serves
+that shape.
+
 ## How the API and ABI Evolve Together
 
 Adding new functionality often requires modifying both the ABI and the API — that

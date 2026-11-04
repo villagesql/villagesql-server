@@ -14,7 +14,10 @@ able to try, but that we have not committed to keeping stable. Concretely:
   window.
 - **ABI may change.** A preview capability's ABI version is independent of
   the VEF protocol version; an extension built against one server's preview
-  ABI is not guaranteed to load on a newer server.
+  ABI is not guaranteed to load on a newer server. The server compares a
+  fingerprint of each capability's ABI structs at load time, so a mismatched
+  extension fails to load with "no matching ABI version" rather than
+  misbehaving.
 - **The capability may be removed.** A preview capability can be withdrawn
   entirely if the design doesn't pan out.
 - **No backwards-compatibility guarantee.** Unlike code that uses only the

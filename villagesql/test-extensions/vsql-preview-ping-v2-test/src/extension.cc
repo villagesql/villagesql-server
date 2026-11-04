@@ -18,9 +18,9 @@
 //
 // Uses a local ping_abi_v2.h instead of the SDK's ping header.  The
 // extension's CapabilityTraits<PingV2Capability>::kVtableHash is
-// "ver-2" -- guaranteed not to match the server's "ver-1" entry for
-// vef_preview_ping_t, so INSTALL EXTENSION fails with "no matching
-// ABI version for capability 'vsql::preview::ping'".
+// "ver-2", which matches neither the server's fingerprint for
+// vef_preview_ping_t nor its legacy "ver-1" tag, so INSTALL EXTENSION fails
+// with "no matching ABI version for capability 'vsql::preview::ping'".
 
 #include "ping_abi_v2.h"
 
@@ -58,9 +58,10 @@ template <>
 struct CapabilityTraits<PingV2Capability> {
   static constexpr const char *kName = VEF_PREVIEW_PING_NAME;
   static constexpr const char *kCppTypeName = "PingV2Capability";
-  // Deliberately mismatched version -- the server registers
-  // vef_preview_ping_t as "ver-1", so "ver-2" guarantees INSTALL hits
-  // the "no matching ABI version" path which this test exercises.
+  // Deliberately unregistered -- the server registers vef_preview_ping_t
+  // under its fingerprint and the legacy "ver-1" only, so "ver-2"
+  // guarantees INSTALL hits the "no matching ABI version" path which this
+  // test exercises.
   static constexpr const char *kVtableHash = "ver-2";
 
   static constexpr void *vtable_destination(PingV2Capability *p) noexcept {

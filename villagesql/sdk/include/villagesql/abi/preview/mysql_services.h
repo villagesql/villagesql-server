@@ -47,6 +47,17 @@ extern "C" {
 
 #define VEF_PREVIEW_MYSQL_SERVICES_NAME "vsql::preview::mysql_services"
 
+// Structural fingerprints, per target, of `void` (this capability has no
+// vtable) and of vef_preview_mysql_services_t, its capability_config.  Matched
+// at extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for
+// a target whose pin is not recorded yet.
+#define VEF_PREVIEW_MYSQL_SERVICES_VTABLE_HASH_MAC "hash-0629c6f72cf9ed3a"
+#define VEF_PREVIEW_MYSQL_SERVICES_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_MYSQL_SERVICES_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_MYSQL_SERVICES_CONFIG_HASH_MAC "hash-9ff292f382a49f49"
+#define VEF_PREVIEW_MYSQL_SERVICES_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_MYSQL_SERVICES_CONFIG_HASH_LINUX_ARM ""
+
 // One service the extension consumes. The server acquires `service_name`'s
 // default implementation from the MySQL component registry and writes the
 // resulting SERVICE_TYPE* into *destination.

@@ -18,6 +18,8 @@
 # List of all VillageSQL unit tests.
 # Place additional test here as necesssary.
 SET(VILLAGESQL_UNIT_TESTS
+  abi_pin_literals-t
+  abi_signature-t
   abi_v1_check-t
   abi_v2_check-t
   custom_indexes-t
@@ -72,6 +74,7 @@ MACRO(ADD_VILLAGESQL_TEST test_name)
     mysys
     strings
     ${GTEST_LIBRARIES}
+    extra::boost
   )
 
   ADD_DEPENDENCIES(${test_name} GenError)

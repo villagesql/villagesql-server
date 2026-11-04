@@ -50,6 +50,17 @@ extern "C" {
 // Capability ABI version compiled into this SDK snapshot.
 #define VEF_PREVIEW_STATEMENT_EVENT_ABI_VERSION 1
 
+// Structural fingerprints, per target, of vef_preview_statement_event_t (the
+// vtable) and vef_statement_event_cc_t (the capability_config).  Matched at
+// extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for a
+// target whose pin is not recorded yet.
+#define VEF_PREVIEW_STATEMENT_EVENT_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_STATEMENT_EVENT_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_STATEMENT_EVENT_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_STATEMENT_EVENT_CONFIG_HASH_MAC "hash-737a8e39c1a6c75d"
+#define VEF_PREVIEW_STATEMENT_EVENT_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_STATEMENT_EVENT_CONFIG_HASH_LINUX_ARM ""
+
 // Phase at which a handler fires.
 //
 // Only POSTEXECUTE is implemented today. The other values are reserved so

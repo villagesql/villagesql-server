@@ -56,6 +56,13 @@ extern "C" {
 #define VEF_PREVIEW_SQL_QUERY_NAME "vsql::preview::sql_query"
 #define VEF_PREVIEW_SQL_QUERY_ABI_VERSION 1
 
+// Structural fingerprint, per target, of vef_preview_sql_query_t.  Matched at
+// extension load; see villagesql/detail/abi_pin.h.  "" is a placeholder for
+// a target whose pin is not recorded yet.
+#define VEF_PREVIEW_SQL_QUERY_VTABLE_HASH_MAC "hash-edf651be211d9b9e"
+#define VEF_PREVIEW_SQL_QUERY_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_SQL_QUERY_VTABLE_HASH_LINUX_ARM ""
+
 // Forward declaration — defined in abi/preview/thread_worker.h.
 struct vef_thread_handle_t;
 

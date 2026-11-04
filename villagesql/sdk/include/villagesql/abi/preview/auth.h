@@ -58,6 +58,17 @@ extern "C" {
 // Capability ABI version compiled into this SDK snapshot.
 #define VEF_PREVIEW_AUTH_ABI_VERSION 1
 
+// Structural fingerprints, per target, of vef_preview_auth_t (the vtable)
+// and vef_auth_cc_t (the capability_config).  Matched at extension
+// load; see villagesql/detail/abi_pin.h.  "" is a placeholder for a target
+// whose pin is not recorded yet.
+#define VEF_PREVIEW_AUTH_VTABLE_HASH_MAC "hash-e3cbaf4b1fcbabf1"
+#define VEF_PREVIEW_AUTH_VTABLE_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_AUTH_VTABLE_HASH_LINUX_ARM ""
+#define VEF_PREVIEW_AUTH_CONFIG_HASH_MAC "hash-bc5913b219707225"
+#define VEF_PREVIEW_AUTH_CONFIG_HASH_LINUX_X86 ""
+#define VEF_PREVIEW_AUTH_CONFIG_HASH_LINUX_ARM ""
+
 // Maximum length of an auth-method name (bytes, excluding NUL).
 #define VEF_AUTH_MAX_NAME_LEN 64
 
