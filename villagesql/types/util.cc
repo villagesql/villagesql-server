@@ -1434,6 +1434,39 @@ String *EncodeStringForCustomParam(Item_param *param, const String &str_value,
   return encoded;
 }
 
+bool MaybeSetOutParamCustomType(THD *thd, Item_param *param, Item *proc_var,
+                                const CHARSET_INFO *text_cs) {
+  const TypeContext *tc = proc_var->get_type_context();
+  if (tc == nullptr) return false;
+
+  // Item_param::set_value() marked the text as binary. Put its real charset
+  // back, so Item_param::val_str can encode it with the type.
+  param->str_value_ptr.set_charset(text_cs);
+  param->collation.set(text_cs, DERIVATION_COERCIBLE);
+
+  // The procedure's own reference to the type ends with the procedure, so
+  // take one that lasts until the end of the statement.
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  const TypeContext *held =
+      vclient.type_contexts().acquire(tc->key(), *thd->mem_root);
+  if (held == nullptr) {
+    if (!thd->is_error()) {
+      villagesql_error("Type '%s' is not available", MYF(0),
+                       tc->qualified_name().c_str());
+    }
+    return true;
+  }
+  param->set_type_context(held);
+  return false;
+}
+
+void MaybeClearOutParamTypeContext(Item_param *param) {
+  // Only a CALL's OUT or INOUT `?` has the info, and its type comes only from
+  // MaybeSetOutParamCustomType.
+  if (param->get_out_param_info() != nullptr) param->set_type_context(nullptr);
+}
+
 type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
   assert(field->has_type_context());
   const TypeContext &tc = *field->get_type_context();
