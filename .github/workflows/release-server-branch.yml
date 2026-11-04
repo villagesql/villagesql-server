@@ -60,8 +60,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Linux builds run in a pinned image so the shipped binaries' glibc
-        # requirement doesn't follow whatever OS the runner host has.
+        # Linux builds use a pinned image so the shipped binaries' minimum
+        # glibc does not depend on the runner host OS.
         include:
           - runner: [self-hosted, linux, x86_64]
             platform: linux-x86_64

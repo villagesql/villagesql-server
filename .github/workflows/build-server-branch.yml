@@ -132,7 +132,11 @@ jobs:
   build-package:
     name: Build (${{ inputs.platform }})
     runs-on: ${{ fromJSON(inputs.runner) }}
-    container: ${{ inputs.container }}
+    container:
+      image: ${{ inputs.container }}
+      # InnoDB NUMA calls (mbind, set_mempolicy) require CAP_SYS_NICE under
+      # Docker's default seccomp profile.
+      options: --cap-add=SYS_NICE
 
     env:
       SOURCE_DIR: ${{ github.workspace }}/source
@@ -164,13 +168,12 @@ jobs:
           echo "Upload SDK: $UPLOAD_SDK (${{ inputs.upload_sdk }})"
           echo "Container: ${{ inputs.container }}"
 
-      # Base images lack git; without it actions/checkout downloads a tarball
-      # and later `git -C source` calls fail.
-      - name: Install checkout prerequisites (container)
+      # git: required for a git checkout. python3: required by extension tests.
+      - name: Install container prerequisites
         if: inputs.container != ''
         run: |
           apt-get update -q
-          apt-get install -y -q --no-install-recommends git ca-certificates
+          apt-get install -y -q --no-install-recommends git ca-certificates python3
 
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -251,8 +254,7 @@ jobs:
           BUILD_BUNDLED_EXTENSIONS="${BUILD_BUNDLED_EXTENSIONS:-0}" \
             source/villagesql/bld_tools/package_dev_server.sh
 
-      # Shipped binaries must run on the container's distro. Fails when any
-      # binary in the tarball needs a newer glibc than the build image has.
+      # Fails if any shipped binary requires a newer glibc than the build image.
       - name: Check glibc compatibility
         if: inputs.container != ''
         run: |
