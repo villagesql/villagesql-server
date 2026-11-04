@@ -26,14 +26,14 @@ DROP TABLE t_vdf;
 --source include/villagesql/decode_failure_log_init.inc
 
 --echo # intrinsic_default VDF: same as previous but function returns error
---error 3219
+--error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_ERR_TYPE NOT NULL);
 
 --echo # Verify the failure was logged
 --source include/villagesql/decode_failure_log_print.inc
 
 --echo # intrinsic_default VDF: same as previous but function throws
---error 3219
+--error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_THROW_TYPE NOT NULL);
 
 --echo # Verify the failure was logged

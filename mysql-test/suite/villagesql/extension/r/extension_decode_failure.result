@@ -37,6 +37,10 @@ ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' a
 VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_THROW\x00\x00\x00\x00): VDF threw an exception (fault blob decode throw)
 # UPDATE: overwrite the DECODE_THROW row with a good value
 UPDATE t1 SET val = 'OK fixed' WHERE id = 5;
+# SELECT again after throw trigger removed
+SELECT id, val FROM t1 WHERE id = 5;
+id	val
+5	OK fixed
 # SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
 SELECT id, val FROM t1 ORDER BY id;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4: check server log for details

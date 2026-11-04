@@ -63,7 +63,7 @@ CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,'));
 SHOW WARNINGS;
 
 --echo # generate a throw within parse()
---error 3219
+--error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=100'));
 
 #--echo # generate a throw within to_strings()
@@ -85,12 +85,12 @@ DROP TABLE t;
 
 --echo # throw in strict_int_to_params
 --replace_result strict_int_to_params "strict int to params"
---error 1064
+--error ER_PARSE_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(86));
 
 --echo # generate a throw within strict_resolve_params()
 --replace_result strict_resolve_params "strict resolve params"
---error 1064
+--error ER_PARSE_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('throw=13'));
 
 UNINSTALL EXTENSION vsql_test_only;

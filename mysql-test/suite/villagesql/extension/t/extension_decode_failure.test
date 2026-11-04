@@ -74,6 +74,9 @@ SELECT id, val FROM t1 WHERE id = 5;
 --echo # UPDATE: overwrite the DECODE_THROW row with a good value
 UPDATE t1 SET val = 'OK fixed' WHERE id = 5;
 
+--echo # SELECT again after throw trigger removed
+SELECT id, val FROM t1 WHERE id = 5;
+
 --echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT id, val FROM t1 ORDER BY id;
@@ -135,7 +138,7 @@ INSERT INTO t2 VALUES (2, 'ENCODE_FAIL');
 SELECT id, val FROM t2 ORDER BY id;
 
 --replace_result fault_blob_encode "fault blob encode"
---error 3219
+--error ER_VILLAGESQL_GENERIC_ERROR
 INSERT INTO t2 VALUES (3, 'ENCODE_THROW');
 
 DROP TABLE t2;
