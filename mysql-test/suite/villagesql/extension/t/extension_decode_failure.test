@@ -95,9 +95,11 @@ SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 
 --echo # Second insert throw row and retest
 INSERT INTO t1 VALUES (6, 'HASH_THROW');
+
+# TODO(villagesql-general): no error reported to client
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 
---echo # Verify the failure was logged (two ERRORs)
+--echo # Verify the failure was logged (twice on linux, once on mac)
 --replace_result fault_blob_hash "fault blob hash"
 --source include/villagesql/decode_failure_log_print.inc
 
@@ -107,7 +109,7 @@ INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
 # TODO(villagesql-general): no error reported to client
 SELECT id, val FROM t1 ORDER BY val;
 
-# TODO(villagesql-general): three log lines written, need test
+--echo # Verify the failure was logged (twice on linux, once on mac)
 --replace_result fault_blob_compare "fault blob compare"
 --source include/villagesql/decode_failure_log_print.inc
 
