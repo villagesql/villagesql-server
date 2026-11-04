@@ -59,7 +59,8 @@ Protocol version parity encodes stability:
   snapshot, and its ABI/API may still change.
 
 The server advertises a single "current" version, `vef_server_protocol_version`
-in `villagesql/veb/veb_file.cc`. At load time it negotiates
+in `villagesql/veb/veb_file.cc`, set from `VEF_PROTOCOL_CURRENT` in
+`abi/types.h`. At load time it negotiates
 `min(server_version, extension_version)` and then enforces the parity rule (also
 in `veb_file.cc`):
 
@@ -113,20 +114,24 @@ diff as the reference for the full set of edit sites.
    stable) and `VEF_PROTOCOL_{M+2}` (new unstable). Mark the old even value `M` as
    deprecated/rejected.
 
-**3. Bump the "current version" to `M+2`** everywhere it is hardcoded:
-   - `villagesql/veb/veb_file.cc` — `vef_server_protocol_version` (the server's
-     advertised max; also the value the parity check compares against).
-   - `villagesql/sdk/include/villagesql/detail/vef_register.h` — the
-     `reg.protocol` / `desc.protocol` the dev SDK advertises.
-   - Per-feature minimum-protocol gates in the builder headers
-     (`detail/func_builder.h`, `func_builder.h`, `type_builder.h`,
-     `vsql/type_builder.h`, `vsql/extension_builder.h`, `vsql/var_args.h`) and any
-     server-side gates (e.g. `sql/sql_udf.h`,
-     `villagesql/schema/descriptor/type_context.cc`,
-     `villagesql/services/capability_registry.cc`,
-     `villagesql/sql/func_lookup.cc`).
-   TODO(villagesql): Centralize the current-version constant so this step is a
-   single edit instead of many.
+**3. Bump the current version to `M+2`** by changing `VEF_PROTOCOL_CURRENT` in
+   `abi/types.h`. It is the only place the current version is written: the
+   server's advertised version (`vef_server_protocol_version` in
+   `villagesql/veb/veb_file.cc`, which the parity check compares against) and
+   the `reg.protocol` / `desc.protocol` the dev SDK registers
+   (`detail/vef_register.h`) both use it. In the new `stable_sdk/v{M+1}`
+   snapshot, `VEF_PROTOCOL_CURRENT` is `VEF_PROTOCOL_{M+1}`.
+
+   Then retarget every remaining use of `VEF_PROTOCOL_M` outside `stable_sdk/`
+   and the enum to `VEF_PROTOCOL_{M+1}`. These name the version a feature was
+   added in, not the current version, so they do not use `VEF_PROTOCOL_CURRENT`:
+   - Feature gates (`protocol >= VEF_PROTOCOL_M`) in the server and the builder
+     headers.
+   - Versions the SDK or server writes into a descriptor (e.g. the minimum
+     protocol `detail/func_builder.h` reports for a function, and the
+     `veb_register_type_v{M}.cc` registration, renamed to match).
+   An `M` gate still works after the roll, because the server rejects `M`, but
+   leave none behind: `grep VEF_PROTOCOL_M` should match only the enum.
 
 **4. Update the build** — `villagesql/CMakeLists.txt` (`STABLE_SDK_DIR`) and
    `villagesql/cmake/VsqlExtension.cmake` to point the stable include path at
