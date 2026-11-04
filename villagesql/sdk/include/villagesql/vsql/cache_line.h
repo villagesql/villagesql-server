@@ -25,17 +25,23 @@
 // shares nothing, hence "false sharing".
 //
 // How objects private to a thread end up on one line is the part that is not
-// obvious, and it is the allocator doing its job rather than bad luck. Every
-// request is rounded up to a fixed size class, so an 8-byte object takes a
-// 16-byte slot, and the slots are carved from one region laid end to end:
-// neighbours by construction. State that lives for one statement is freed when
-// the statement ends, so no more are alive at once than there are statements
-// running, and a freed slot goes back to the front of the free list for the
-// next statement to take. The working set collapses to a few neighbouring slots
-// every thread cycles through, and eight concurrent 8-byte states occupy eight
-// 16-byte slots, which is 128 bytes: one line exactly. Addresses logged out of
-// a running server at 8 connections put six live states at offsets 0, 32, 64,
-// 80, 96 and 112 of a single line, used by all eight connection threads.
+// obvious, and it is the allocator doing its job rather than bad luck. It keeps
+// a separate chunk of memory per size class and cuts every request of that size
+// from it: an 8-byte state takes a 16-byte slot, the next one the 16 bytes
+// after that, and so on. The chunk is far larger than a page. Measured here,
+// 200,000 live 8-byte allocations came from two of them at a stride of exactly
+// 16 bytes.
+//
+// Short-lived state does not march along the chunk, though, and that is what
+// concentrates it. A state freed at the end of its statement goes back to the
+// front of the free list and is handed straight to the next statement, so no
+// more are alive at once than there are statements running and the same few
+// slots circulate: 161,289 allocations in a running server used 22 distinct
+// addresses. Eight concurrent 8-byte states are eight 16-byte slots, which is
+// 128 bytes, one line exactly. Logged at 8 connections, six live states sat at
+// offsets 0, 32, 64, 80, 96 and 112 of a single line, used by all eight
+// connection threads.
+//
 // Packing same-sized objects tightly is what makes an allocator fast everywhere
 // else; this is the one workload where that virtue is the problem.
 //
