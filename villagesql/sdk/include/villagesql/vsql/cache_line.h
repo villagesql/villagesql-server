@@ -24,6 +24,21 @@
 // hardware behaves as though the threads share data even though the program
 // shares nothing, hence "false sharing".
 //
+// How objects private to a thread end up on one line is the part that is not
+// obvious, and it is the allocator doing its job rather than bad luck. Every
+// request is rounded up to a fixed size class, so an 8-byte object takes a
+// 16-byte slot, and the slots are carved from one region laid end to end:
+// neighbours by construction. State that lives for one statement is freed when
+// the statement ends, so no more are alive at once than there are statements
+// running, and a freed slot goes back to the front of the free list for the
+// next statement to take. The working set collapses to a few neighbouring slots
+// every thread cycles through, and eight concurrent 8-byte states occupy eight
+// 16-byte slots, which is 128 bytes: one line exactly. Addresses logged out of
+// a running server at 8 connections put six live states at offsets 0, 32, 64,
+// 80, 96 and 112 of a single line, used by all eight connection threads.
+// Packing same-sized objects tightly is what makes an allocator fast everywhere
+// else; this is the one workload where that virtue is the problem.
+//
 // This is not a micro-optimization. Benchmarking the VEF call boundary found a
 // VDF whose 8-byte per-statement state cost about 110 ns per row at 8 threads
 // -- a third of the statement -- while costing nothing single-threaded, purely
