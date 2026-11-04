@@ -102,9 +102,21 @@ jobs:
           fetch-depth: 1
           ref: ${{ inputs.ref }}
 
+      # The overrides come from the workflow's own branch, since a released
+      # ref cannot be changed.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          path: workflow-src
+          sparse-checkout: |
+            villagesql/bld_matrix/
+            villagesql/dev_server/
+            villagesql/scripts/
+
       - name: Build test matrix
         id: build-matrix
         env:
+          REF: ${{ inputs.ref }}
           PLATFORM_FILTER: ${{ inputs.platform_filter }}
           EXTENSION_FILTER: ${{ inputs.extension_filter }}
           ABI_FILTER: ${{ inputs.abi_filter }}
@@ -116,11 +128,12 @@ jobs:
 
           BUILD_MATRIX=$("$MATRIX/json_build_matrix.sh" "$PLATFORM_FILTER")
           TESTS=$("$MATRIX/json_test_extensions.sh" \
-            "$PLATFORM_FILTER" "$EXTENSION_FILTER" "$ABI_FILTER")
+            "$PLATFORM_FILTER" "$EXTENSION_FILTER" "$ABI_FILTER" \
+            | "workflow-src/$MATRIX/json_override_extensions.sh" "$REF")
 
           COUNT=$(jq 'length' <<<"$TESTS")
           if [ "$COUNT" -eq 0 ]; then
-            echo "::error::No test jobs matched filters (platform='$PLATFORM_FILTER' extension='$EXTENSION_FILTER' abi='$ABI_FILTER'). Nothing to test."
+            echo "::error::No test jobs matched filters (platform='$PLATFORM_FILTER' extension='$EXTENSION_FILTER' abi='$ABI_FILTER') after extension_ref_overrides.txt. Nothing to test."
             exit 1
           fi
 
