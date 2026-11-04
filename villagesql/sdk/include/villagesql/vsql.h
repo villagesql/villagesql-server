@@ -61,15 +61,16 @@
 //
 // Optional result sizing on the function builder:
 //   .buffer_size(n)        // initial row-time output buffer; grows on demand
-//   .max_result_length(n)  // max STRING result length used to size the result
-//                          // column so a materialized STRING result is not
+//   .max_result_length(n)  // max STRING or BINARY result length used to size
+//                          // the result column so a materialized result is not
 //                          // truncated at the argument width. That is, it is
 //                          // used to determine the type of the materialized
 //                          // field. Without it the column falls back to the
 //                          // argument width, like a classic UDF that does not
 //                          // set initid->max_length.
-//                          // Only valid for a STRING return type: declare
-//                          // .returns(STRING) before it, or the build fails.
+//                          // Only valid for a STRING or BINARY return type:
+//                          // declare .returns(STRING) or .returns(BINARY)
+//                          // before it, or the build fails.
 //
 // For aggregate VDFs (SQL SUM, COUNT, etc.), see make_aggregate_func in
 // vsql/func_builder.h. For per-statement lifecycle hooks (prerun/postrun),
