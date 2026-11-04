@@ -74,7 +74,7 @@
 namespace villagesql {
 namespace veb {
 
-const vef_protocol_t vef_server_protocol_version = VEF_PROTOCOL_4;
+const vef_protocol_t vef_server_protocol_version = VEF_PROTOCOL_CURRENT;
 
 static std::string get_expansion_cache_base_path() {
   char path_buf[FN_REFLEN];
