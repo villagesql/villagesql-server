@@ -1168,21 +1168,23 @@ void Custom_index::close_cursor(row_prebuilt_t *prebuilt) {
   prebuilt->pcur->custom_cursor = nullptr;
 }
 
-// Locks the clustered index record of a locking read if the index entry is
-// still current, that is, the record was last modified by the transaction that
-// created the entry. The record is locked with a no-gap lock because it is
-// found by its full primary key.
-// @param[out] matched false if the entry is stale and no lock was taken
+// Locks the clustered index record of a locking read and decides whether the
+// row qualifies. The record is locked with a no-gap lock because it is found
+// by its full primary key. A delete-marked record is skipped without
+// validating the index entry. Otherwise the extension validates that the entry
+// is still current. The lock is released again for a row that is skipped, in
+// lower isolation levels.
+// @param[out] visible true if the record is live and the extension accepted
+//             the index entry; false on error or if the row is skipped
 // @return DB_SUCCESS, DB_LOCK_WAIT (the caller must save the position and
 // wait),
 //         DB_DEADLOCK or another lock error
 static dberr_t check_and_lock(row_prebuilt_t *prebuilt, const rec_t *rec,
                               dict_index_t *clust_index, const ulint *offsets,
-                              vef_storage_trx_ref_t entry_trx, que_thr_t *thr,
-                              bool *matched) {
-  *matched = row_get_rec_trx_id(rec, clust_index, offsets) ==
-             static_cast<trx_id_t>(entry_trx);
-  if (!*matched) return DB_SUCCESS;
+                              vef_storage_trx_ref_t entry_trx,
+                              vef_index_cursor_ref_t cursor, que_thr_t *thr,
+                              bool *visible) {
+  *visible = false;
 
   dberr_t err = lock_clust_rec_read_check_and_lock(
       lock_duration_t::REGULAR, prebuilt->clust_pcur->get_block(), rec,
@@ -1198,7 +1200,17 @@ static dberr_t check_and_lock(row_prebuilt_t *prebuilt, const rec_t *rec,
     }
     err = DB_SUCCESS;
   }
-  return err;
+  if (err != DB_SUCCESS) return err;
+
+  const auto &intf = prebuilt->index->custom_index->interface();
+  *visible =
+      !rec_get_deleted_flag(rec, dict_table_is_comp(clust_index->table)) &&
+      intf.scan_validate(cursor, entry_trx);
+
+  // No need to keep the lock on a skipped record in lower isolation levels.
+  // The clustered record is still latched by the caller's mini-transaction.
+  if (!*visible) prebuilt->try_unlock(true);
+  return DB_SUCCESS;
 }
 
 // Returns an empty heap kept in the prebuilt, creating it on first use. The
@@ -1214,14 +1226,16 @@ static mem_heap_t *get_empty_heap(mem_heap_t **heap, ulint size) {
 
 // Reads the clustered index row identified by the primary key columns and
 // converts it to MySQL format into buf. For a locking read, the record is
-// locked instead of building an old version, provided entry_trx matches.
+// locked instead of building an old version, provided the extension validates
+// the index entry for entry_trx.
 // @param[out] found false if the row does not exist in the read view of the
 //             transaction, is delete-marked, is not the version the index
 //             entry was created for, or cannot be converted yet
 static dberr_t fetch_cluster_row(
     byte *buf, row_prebuilt_t *prebuilt,
     const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &pkey_columns,
-    vef_storage_trx_ref_t entry_trx, que_thr_t *thr, bool *found) {
+    vef_storage_trx_ref_t entry_trx, vef_index_cursor_ref_t cursor,
+    que_thr_t *thr, bool *found) {
   dict_index_t *index = prebuilt->index;
   dict_index_t *clust_index = index->table->first_index();
   trx_t *trx = prebuilt->trx;
@@ -1265,9 +1279,10 @@ static dberr_t fetch_cluster_row(
 
     bool visible = true;
     if (prebuilt->select_lock_type != LOCK_NONE) {
-      err = check_and_lock(prebuilt, rec, clust_index, offsets, entry_trx, thr,
-                           &visible);
-      if (err != DB_SUCCESS) visible = false;
+      err = check_and_lock(prebuilt, rec, clust_index, offsets, entry_trx,
+                           cursor, thr, &visible);
+      // Store the position for unlock_row() and a later update of the row.
+      if (err == DB_SUCCESS) prebuilt->clust_pcur->store_position(&mtr);
     } else if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
                !lock_clust_rec_cons_read_sees(rec, clust_index, offsets,
                                               trx_get_read_view(trx))) {
@@ -1287,11 +1302,7 @@ static dberr_t fetch_cluster_row(
     }
 
     if (visible &&
-        rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
-      // No need to keep the lock on a delete-marked record in lower isolation
-      // levels. The clustered record is still latched by mtr.
-      if (prebuilt->select_lock_type != LOCK_NONE) prebuilt->try_unlock(true);
-    } else if (visible) {
+        !rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
       if (prebuilt->clust_index_was_generated) {
         row_sel_store_row_id_to_prebuilt(prebuilt, rec, clust_index, offsets);
       }
@@ -1582,6 +1593,10 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
     }
     advance = true;
 
+    // Forget the record locks of the previous index entry, so that only the
+    // locks taken for this entry can be released early.
+    prebuilt->new_rec_lock.reset();
+
     if (eof) {
       err = match_mode != 0 ? DB_RECORD_NOT_FOUND : DB_END_OF_INDEX;
       break;
@@ -1643,8 +1658,8 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
           prebuilt->need_to_access_clustered);
     if (prebuilt->need_to_access_clustered) {
       // Get the clustered index record and store in MySQL format.
-      err = fetch_cluster_row(buf, prebuilt, pkey_columns, entry_trx, thr,
-                              &record_found);
+      err = fetch_cluster_row(buf, prebuilt, pkey_columns, entry_trx, cursor,
+                              thr, &record_found);
       if (err == DB_SKIP_LOCKED) {
         err = DB_SUCCESS;
         continue;
@@ -1677,10 +1692,6 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
           err = failed("Restore cursor", true);
           break;
         }
-        // The cursor may not be on the same record, so the record locks taken
-        // so far cannot be tracked for early release.
-        prebuilt->new_rec_lock.reset();
-
         // Retry the row the cursor was saved on.
         err = DB_SUCCESS;
         advance = false;
