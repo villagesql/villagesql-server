@@ -40,11 +40,10 @@
 // Eight of those slots is 128 bytes, which is one cache line.
 //
 // Measured, not reasoned. Allocate 200,000 of these and keep them all: each new
-// one sits 16 bytes after the one before, filling two chunks. Free them as
-// normal instead, and a running server allocated 161,289 of them but only ever
-// used 22 different addresses; at 8 connections, six live states sat at offsets
-// 0, 32, 64, 80, 96 and 112 of one line, written by all eight connection
-// threads.
+// one sits 16 bytes after the one before. Free them as normal instead, and a
+// running server allocated 161,289 of them but only ever used 22 different
+// addresses; at 8 connections, six live states sat at offsets 0, 32, 64, 80, 96
+// and 112 of one line, written by all eight connection threads.
 //
 // Nothing is choosing to pack them together. Keeping same-sized objects close
 // is what makes an allocator fast in every other situation.
