@@ -200,10 +200,10 @@ typedef enum : unsigned int {
                    //   binary rather than utf8mb4.
 } vef_protocol_t;
 
-// The protocol version these headers speak: the version the server advertises
-// and the SDK registers. A protocol roll bumps only this value. It moves with
-// every roll, so never use it as a feature gate; gate a feature on the
-// enumerator of the version that added it.
+// This is the protocol version of these headers: the version the server
+// advertises and the SDK registers. A new protocol bumps only this value.
+// Never use it as a feature check. Features should use the specific enumerator
+// value of the version that added it.
 #define VEF_PROTOCOL_CURRENT VEF_PROTOCOL_4
 
 // =============================================================================
