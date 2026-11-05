@@ -416,9 +416,9 @@ struct AggResultWithOutputWrapper {
 // Used by FuncBuilder::prerun/postrun when the user's hook is typed.
 
 template <auto Hook>
-void typed_prerun_wrapper(vef_context_t *, vef_prerun_args_t *args,
+void typed_prerun_wrapper(vef_context_t *ctx, vef_prerun_args_t *args,
                           vef_prerun_result_t *result) {
-  Hook(PrerunArgs(args), PrerunResult(result));
+  Hook(PrerunArgs(args, ctx->protocol), PrerunResult(result));
 }
 
 template <auto Hook>

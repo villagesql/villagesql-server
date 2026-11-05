@@ -11,6 +11,9 @@ INSTALL EXTENSION vsql_test_only;
 SELECT vsql_test_only.int_sum_all(1, 2, 3) AS total;
 SELECT vsql_test_only.int_sum_all(10) AS total;
 SELECT vsql_test_only.int_sum_all(1, 2, 3, 4, 5) AS total;
+SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
+SELECT vsql_test_only.int_sum_all(NULL) AS total;
+SELECT vsql_test_only.int_sum_all(1, CAST(NULL AS CHAR), 2) AS total;
 
 # Varargs prerun rejects zero arguments
 --error ER_CANT_INITIALIZE_UDF
@@ -19,6 +22,38 @@ SELECT vsql_test_only.int_sum_all();
 # Varargs prerun rejects non-INT arguments
 --error ER_CANT_INITIALIZE_UDF
 SELECT vsql_test_only.int_sum_all(1.5);
+
+# Admitting constant NULLs does not admit strings, though a NULL literal is
+# typed STRING
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_test_only.int_sum_all(1, 'abc');
+
+# A constant NULL is admitted in a view definition too
+CREATE VIEW v_sum AS SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
+SELECT * FROM v_sum;
+DROP VIEW v_sum;
+
+# A NULL read from a table is not a constant: prerun checks the column's type,
+# and the body skips the NULL row by row
+CREATE TABLE t_sum (id INT PRIMARY KEY, i INT, s VARCHAR(10));
+INSERT INTO t_sum VALUES (1, 5, NULL), (2, NULL, NULL);
+SELECT id, vsql_test_only.int_sum_all(1, i) AS total FROM t_sum ORDER BY id;
+
+# A VARCHAR column is rejected even when every row is NULL
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_test_only.int_sum_all(1, s) AS total FROM t_sum;
+DROP TABLE t_sum;
+
+# A NULL literal in a prepared statement is a constant
+PREPARE s_lit FROM 'SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total';
+EXECUTE s_lit;
+DEALLOCATE PREPARE s_lit;
+
+# Prerun runs at PREPARE, when a ? parameter has no value and is typed STRING,
+# so a prerun that admits only INT or a constant NULL rejects it whatever is
+# bound later
+--error ER_CANT_INITIALIZE_UDF
+PREPARE s_param FROM 'SELECT vsql_test_only.int_sum_all(1, ?, 2) AS total';
 
 # Parameterized type: PVEC(N) column stores N int16 elements
 CREATE TABLE t1 (
