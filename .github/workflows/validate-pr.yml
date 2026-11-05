@@ -67,6 +67,16 @@ jobs:
         SINGLE_COMMIT_TITLE: ${{ env.SINGLE_COMMIT_TITLE }}
       run: ./scripts/validate-pr-title.sh "$PR_TITLE"
 
+    - name: Check for retired protocol versions
+      # Checks only the lines this PR adds, so a reference another PR left on
+      # main fails that PR, not this one. The protocol version comes from the
+      # merge commit, so a PR opened before a protocol roll is checked against
+      # the roll it will merge into. The push check on main
+      # (check-retired-protocols.yml) catches what slips past.
+      run: |
+        ./scripts/check_retired_protocols.sh --added \
+          "$VILLINT_COMMIT" HEAD "${{ github.sha }}"
+
     - name: Install clang-format
       # Pinned via PyPI to the release villint reports
       # `villint.sh --clang-format-version`) so CI uses a deterministic
