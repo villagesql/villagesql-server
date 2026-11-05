@@ -10387,14 +10387,13 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
     return error;
   }
 
-  // A KNN-capable custom index should use  knn_index_init() instead.
-  ut_ad(!Custom_index::is_knn(m_prebuilt->index));
-
+  // A KNN-capable custom index should use knn_index_init() instead. A query
+  // plan never calls index_init() for it, but a HANDLER statement can.
   if (Custom_index::is_knn(m_prebuilt->index)) {
     villagesql_error(
         "InnoDB: Incorrect handler method index_init() called for KNN scan.",
         MYF(0));
-    return ER_VILLAGESQL_GENERIC_ERROR;
+    return HA_ERR_GENERIC;
   }
 
   return 0;
@@ -12397,7 +12396,7 @@ inline int create_index(
     villagesql_error(
         "InnoDB: Custom index is not supported on partitioned tables", MYF(0));
     dict_mem_index_free(index);
-    error = ER_VILLAGESQL_GENERIC_ERROR;
+    error = HA_ERR_GENERIC;
     goto do_cleanup;
   }
 
@@ -12459,7 +12458,7 @@ inline int create_index(
           "with custom index.",
           MYF(0));
       dict_mem_index_free(index);
-      error = ER_VILLAGESQL_GENERIC_ERROR;
+      error = HA_ERR_GENERIC;
       goto do_cleanup;
     }
 
