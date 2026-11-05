@@ -28,8 +28,6 @@
 #include <vector>
 
 #include "custom_column.h"
-#include "my_sqlcommand.h"
-#include "mysql/plugin.h"
 #include "sql/dd/types/index.h"
 #include "sql/dd/types/table.h"
 #include "sql/handler.h"
@@ -1537,16 +1535,11 @@ static dberr_t check_row_search_conditions(const row_prebuilt_t *prebuilt,
   }
 
   // A custom index cannot provide the range locks that SERIALIZABLE needs.
-  // The optimizer does not choose it under SERIALIZABLE, so reaching here is a
-  // bug, except for HANDLER READ. It bypasses the optimizer and names the index
-  // directly, so it can reach here. It is rejected with an error, without the
-  // assert.
   // Under REPEATABLE READ, a custom index does not acquire the range (gap)
   // locks that InnoDB usually takes on a secondary index. Phantoms are then
   // possible, which differs from InnoDB's usual behavior but is allowed by
   // REPEATABLE READ in the ANSI SQL standard.
   if (prebuilt->trx->isolation_level == TRX_ISO_SERIALIZABLE) {
-    ut_ad(thd_sql_command(prebuilt->trx->mysql_thd) == SQLCOM_HA_READ);
     return unsupported("SERIALIZABLE isolation level");
   }
 
