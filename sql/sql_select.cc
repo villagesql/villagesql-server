@@ -129,6 +129,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "villagesql/sql/optimizer.h"
 
 using std::max;
 using std::min;
@@ -5377,8 +5378,8 @@ bool test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER_with_src *order,
 */
 
 uint get_index_for_order(ORDER_with_src *order, TABLE *table, ha_rows limit,
-                         AccessPath *range_scan, bool *need_sort,
-                         bool *reverse) {
+                         AccessPath *range_scan, bool *need_sort, bool *reverse,
+                         KnnScanInfo *knn_scan_info) {
   if (range_scan &&
       unique_key_range(range_scan)) {  // Single row select (always
                                        // "ordered"): Ok to use with
@@ -5398,6 +5399,13 @@ uint get_index_for_order(ORDER_with_src *order, TABLE *table, ha_rows limit,
     else
       return table->file
           ->key_used_on_scan;  // MAX_KEY or index for some engines
+  }
+
+  uint knn_key;
+  if (villagesql::optimizer::try_knn_order(table, order, limit, range_scan,
+                                           knn_scan_info, &knn_key)) {
+    *need_sort = false;
+    return knn_key;
   }
 
   if (!is_simple_order(order->order))  // just to cut further expensive checks

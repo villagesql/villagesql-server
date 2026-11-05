@@ -2,6 +2,7 @@
 #define SQL_SELECT_INCLUDED
 
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -914,8 +915,8 @@ uint actual_key_parts(const KEY *key_info);
 class ORDER_with_src;
 
 uint get_index_for_order(ORDER_with_src *order, TABLE *table, ha_rows limit,
-                         AccessPath *range_scan, bool *need_sort,
-                         bool *reverse);
+                         AccessPath *range_scan, bool *need_sort, bool *reverse,
+                         KnnScanInfo *knn_scan_info = nullptr);
 int test_if_order_by_key(ORDER_with_src *order, TABLE *table, uint idx,
                          uint *used_key_parts, bool *skip_quick);
 bool test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER_with_src *order,

@@ -4,10 +4,12 @@
 # after the scan returns the row. Two server paths depend on that:
 #  1. unlock_row(): in READ COMMITTED the SQL layer calls it for a returned row
 #     that fails the WHERE condition, and the lock taken for it is released.
-#  2. UPDATE and DELETE: the update is applied at the cursor position of the
-#     row the scan has just returned. A single-table UPDATE or DELETE does not
-#     use the KNN scan today, so the test only records that it filesorts.
-# TODO(villagesql-indexing): cover this path once such statements use KNN.
+#  2. UPDATE and DELETE ordered by distance, which use the KNN scan:
+#     - DELETE removes the row at the cursor position of the row the scan has
+#       just returned.
+#     - UPDATE first collects the positions of the rows the scan returns, then
+#       updates them by position. Rows rejected by the WHERE condition are
+#       unlocked by unlock_row() as for a locking read.
 #
 # The locks held after each read are read from performance_schema.data_locks.
 #
@@ -67,33 +69,42 @@ WHERE object_name = 't' AND lock_type = 'RECORD' ORDER BY lock_data;
 COMMIT;
 
 --echo # --- UPDATE ordered by distance ---
---echo # A single-table UPDATE or DELETE does not use the KNN scan: it sorts the
---echo # rows itself (Using filesort), so it does not reach the locking read of
---echo # the custom index. EXPLAIN FORMAT=tree prints no plan for these statements.
+--echo # Row 1 still has a stale entry at distance 1. The scan skips it, and
+--echo # fetches rows 2, 3 and 4. Row 3 (n = 0) is rejected by the WHERE
+--echo # condition and unlocked. Only the updated rows 2 and 4 stay locked.
 --disable_warnings
---replace_column 10 ROWS 11 FILTERED
+--replace_column 8 KEY_LEN 10 ROWS 11 FILTERED
 EXPLAIN
-UPDATE t SET n = n + 10
+UPDATE t SET n = n + 10 WHERE n = 1
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
 --enable_warnings
 
 START TRANSACTION;
-UPDATE t SET n = n + 10
+UPDATE t SET n = n + 10 WHERE n = 1
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+
+SELECT index_name, lock_mode, lock_data FROM performance_schema.data_locks
+WHERE object_name = 't' AND lock_type = 'RECORD' ORDER BY lock_data;
 SELECT id, n FROM t ORDER BY id;
 COMMIT;
 
 --echo # --- DELETE ordered by distance ---
+--echo # The scan skips the stale entry of row 1, rejects row 3 (n < 11) and
+--echo # deletes rows 2 and 4 at the cursor position. Only the deleted rows stay
+--echo # locked.
 --disable_warnings
---replace_column 10 ROWS 11 FILTERED
+--replace_column 8 KEY_LEN 10 ROWS 11 FILTERED
 EXPLAIN
-DELETE FROM t
+DELETE FROM t WHERE n >= 11
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
 --enable_warnings
 
 START TRANSACTION;
-DELETE FROM t
+DELETE FROM t WHERE n >= 11
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+
+SELECT index_name, lock_mode, lock_data FROM performance_schema.data_locks
+WHERE object_name = 't' AND lock_type = 'RECORD' ORDER BY lock_data;
 SELECT id, n FROM t ORDER BY id;
 COMMIT;
 
