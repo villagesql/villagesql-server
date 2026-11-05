@@ -1,0 +1,52 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[3,0,0,0]'),
+(3, '[5,0,0,0]'),
+(4, '[10,0,0,0]'),
+(5, '[20,0,0,0]');
+CREATE TABLE q (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+INSERT INTO q VALUES (1, '[0,0,0,0]'), (2, NULL);
+# --- A custom type value of a const table is printed in readable form ---
+EXPLAIN SELECT v FROM q WHERE id = 1;
+SHOW WARNINGS;
+Level	Code	Message
+Note	1003	/* select#1 */ select '[0,0,0,0]' AS `v` from `test`.`q` where true
+# --- A NULL value of a const table is printed as NULL ---
+EXPLAIN SELECT v FROM q WHERE id = 2;
+SHOW WARNINGS;
+Level	Code	Message
+Note	1003	/* select#1 */ select NULL AS `v` from `test`.`q` where true
+# --- A const table column as the query point of a KNN scan ---
+EXPLAIN FORMAT=tree
+SELECT t.id FROM t, q WHERE q.id = 1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, q.v) LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[0,0,0,0]'), limit 2  (cost=COST rows=ROWS)
+
+SELECT t.id FROM t, q WHERE q.id = 1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, q.v) LIMIT 2;
+id
+1
+2
+# --- A NULL const table column as the query point gives no KNN scan ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT t.id FROM t, q WHERE q.id = 2
+ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, q.v) LIMIT 2;
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand must not be NULL
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+DROP TABLE q;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

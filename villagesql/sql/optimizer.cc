@@ -74,7 +74,9 @@ const Item_udf_func *knn_order_call(const THD *thd, Item *item,
   }
   if (field == nullptr || query_point == nullptr) return nullptr;
   // A NULL query point cannot produce meaningful KNN results.
-  if (query_point->may_eval_const_item(thd) && query_point->is_null())
+  if (evaluate_during_optimization(query_point,
+                                   thd->lex->current_query_block()) &&
+      query_point->is_null())
     return nullptr;
   *field_arg = field;
   *query_point_arg = query_point;
@@ -104,6 +106,7 @@ const vef_index_profile_fn_binding_t *find_profile_function(
 // satisfies the query block's LIMIT.
 bool knn_limit_is_exact(const JOIN_TAB *tab) {
   return tab->condition() == nullptr && tab->join()->plan_is_single_table() &&
+         !tab->join()->select_distinct &&
          tab->table()->reginfo.lock_type == TL_READ;
 }
 
