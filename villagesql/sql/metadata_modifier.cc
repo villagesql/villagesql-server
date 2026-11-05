@@ -151,7 +151,8 @@ static bool find_default_profile(VictionaryClient &vclient,
                                  const std::string &index_type_ext_name,
                                  std::string &out_profile_name,
                                  std::string &out_prof_ext_name,
-                                 std::string &out_prof_ext_version) {
+                                 std::string &out_prof_ext_version,
+                                 const IndexProfileDescriptor *&out_prof_desc) {
   std::string col_type_name;
   std::string col_ext_name;
   // Common case: column already exists in the table.
@@ -222,6 +223,7 @@ static bool find_default_profile(VictionaryClient &vclient,
     out_profile_name = pd->profile_name();
     out_prof_ext_name = pd->extension_name();
     out_prof_ext_version = pd->extension_version();
+    out_prof_desc = pd;
     return false;
   }
   villagesql_error(
@@ -280,6 +282,7 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
         assert(kp->get_field_name());
 
         std::string profile_name, prof_ext_name, prof_ext_version;
+        const IndexProfileDescriptor *prof_desc = nullptr;
         if (kp->has_index_profile()) {
           LEX_CSTRING prof = kp->get_index_profile();
           profile_name = std::string(prof.str, prof.length);
@@ -288,12 +291,11 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
                   ? std::string(kp->get_index_profile_extension().str,
                                 kp->get_index_profile_extension().length)
                   : "";
-          const auto *prof_desc =
-              resolve_unique_descriptor<IndexProfileDescriptor>(
-                  vclient.index_profile_descriptors(),
-                  IndexProfileDescriptorKeyPrefix(profile_name, prof_extension),
-                  "index profile", profile_name.c_str(),
-                  "'extension.profile_name'");
+          prof_desc = resolve_unique_descriptor<IndexProfileDescriptor>(
+              vclient.index_profile_descriptors(),
+              IndexProfileDescriptorKeyPrefix(profile_name, prof_extension),
+              "index profile", profile_name.c_str(),
+              "'extension.profile_name'");
           if (!prof_desc) return true;
 
           // Validate that the column's type matches the profile's expected
@@ -341,12 +343,6 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
                 profile_name.c_str());
             return true;
           }
-          // TODO(villagesql-indexing): Validate that the requested sort
-          // direction (kp->is_ascending()) is supported by
-          // prof_desc->ordering(). Return an error if the profile's ordering
-          // bitmask does not include the requested direction (e.g., an
-          // unordered profile with ordering == VEF_INDEX_ORDERING_NONE used
-          // with ASC/DESC).
           prof_ext_name = prof_desc->extension_name();
           prof_ext_version = prof_desc->extension_version();
 
@@ -354,8 +350,23 @@ bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
           if (find_default_profile(vclient, alter_info, db, table_name,
                                    kp->get_field_name(), type_name, ext_name,
                                    profile_name, prof_ext_name,
-                                   prof_ext_version))
+                                   prof_ext_version, prof_desc))
             return true;
+        }
+
+        // Reject a direction the user wrote explicitly that the profile does
+        // not support. With no direction written, the profile's own ordering
+        // applies.
+        if (kp->is_explicit()) {
+          const uint8_t dir_bit = kp->is_ascending() ? VEF_INDEX_ORDERING_ASC
+                                                     : VEF_INDEX_ORDERING_DESC;
+          if ((prof_desc->ordering() & dir_bit) == 0) {
+            villagesql_error(
+                "Index profile '%s' does not support %s order on column '%s'",
+                MYF(0), profile_name.c_str(),
+                kp->is_ascending() ? "ASC" : "DESC", kp->get_field_name());
+            return true;
+          }
         }
 
         to_add_index_columns_.emplace_back(IndexColumnKey(index_id, key_pos),
