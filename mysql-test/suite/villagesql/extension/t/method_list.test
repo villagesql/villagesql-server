@@ -1,10 +1,13 @@
 # This test installs extensions with the sampe type COMPLEX and shows
 # that only the methods of the specified type are listed.
 
---source include/villagesql/install_complex_extension.inc
---source include/villagesql/install_type_test_extension.inc
+INSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_type_test;
 
 --echo # Test 1: Error — unknown method name
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT vsql_complex.COMPLEX::nonexistent('(1,2)') AS result;
+
+UNINSTALL EXTENSION vsql_complex;
+UNINSTALL EXTENSION vsql_type_test;
 
