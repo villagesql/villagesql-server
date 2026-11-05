@@ -37,6 +37,7 @@ value is that the intended behavior is recorded in executable form.
 | `not_implemented_complex_type.inc` | Specifically a missing custom-type capability |
 | `mysql_failure_skip.inc` | The test fails in mainline MySQL too, not because of VillageSQL |
 | `too_old_upgrade.inc` | The test depends on upgrading from pre-8.x, which MySQL dropped |
+| `x86_release_skip.inc` | The result differs on x86 release builds; the test still runs on debug and non-x86 builds |
 
 The pattern is a comment saying what the test pins and why it cannot pass,
 followed by the marker near the top of the file:
@@ -54,6 +55,8 @@ followed by the marker near the top of the file:
 ```
 
 The test never runs past the marker, so its `.result` file is committed empty.
+The exception is `x86_release_skip.inc`: those tests still run on debug and
+non-x86 builds, so their `.result` holds the expected output.
 
 ### Why the shared marker, and not your own `--skip`
 
