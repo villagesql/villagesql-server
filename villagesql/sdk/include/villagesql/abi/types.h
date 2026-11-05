@@ -106,7 +106,7 @@
 //          │   ┌─────────────────────────────┐                 │
 //          │   │ vef_prerun_args_t:          │                 │
 //          │   │   arg_count, arg_types      │                 │
-//          │   │   const_values/lengths      │                 │
+//          │   │   const_args                │                 │
 //          │   │                             │                 │
 //          │   │ vef_prerun_result_t:        │                 │
 //          │   │   user_data (set by callee) │                 │
@@ -590,10 +590,10 @@ typedef void (*vef_vdf_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
 //   - Allocate resources and store state in result->user_data
 //   - Request a specific buffer size via result->result_buffer_size
 //
-// Memory lifetime: The caller owns all arrays in args (arg_types, const_values,
-// const_lengths, const_args and the values it points to). The callee must copy
-// any values it needs to retain before the function returns. The caller may
-// overwrite or free this memory after the function returns.
+// Memory lifetime: The caller owns all arrays in args (arg_types, const_args
+// and the values it points to). The callee must copy any values it needs to
+// retain before the function returns. The caller may overwrite or free this
+// memory after the function returns.
 //
 // The user_data pointer allows the extension to maintain state across calls.
 // Memory allocated in prerun should be freed in postrun. If prerun succeeds,
@@ -608,10 +608,11 @@ typedef struct {
   // Type of each argument. Array has arg_count elements.
   vef_type_t *arg_types;
 
-  // Unused: the server always passes NULL for both. Read constant arguments
-  // from const_args.
-  char **const_values;
-  size_t *const_lengths;
+  // Deprecated: never filled, the server always passes NULL for both. These
+  // fields exist only to preserve struct layout for v1 binary compatibility.
+  // Read constant arguments from const_args.
+  char **deprecated_const_values;
+  size_t *deprecated_const_lengths;
 
   // protocol >= VEF_PROTOCOL_4
   // For each argument: its value if it is a constant, NULL otherwise. A

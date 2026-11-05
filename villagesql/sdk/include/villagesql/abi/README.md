@@ -66,4 +66,5 @@ argument that is not a constant.
 An argument's type is always the type it arrives as, so a NULL literal is a
 STRING with `is_null` set. A prerun that admits NULL checks that rather than
 admitting every STRING. An extension at an older protocol gets no
-`const_args`. The older `const_values` and `const_lengths` are never filled.
+`const_args`. The older `deprecated_const_values` and
+`deprecated_const_lengths` are never filled.

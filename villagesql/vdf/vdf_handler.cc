@@ -277,8 +277,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   if (m_udf->vdf_func_desc->prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
-    prerun_args.const_values = nullptr;
-    prerun_args.const_lengths = nullptr;
+    prerun_args.deprecated_const_values = nullptr;
+    prerun_args.deprecated_const_lengths = nullptr;
 
     // Populate arg_types from Item types
     vef_type_t *arg_types = nullptr;
