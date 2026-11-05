@@ -1,0 +1,61 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id  INT PRIMARY KEY,
+grp INT,
+v   KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+# Rows 1 and 2 have the same vector. Nearest first: 1 and 2, 3, 4, 5.
+INSERT INTO t VALUES
+(1, 10, '[1,0,0,0]'),
+(2, 10, '[1,0,0,0]'),
+(3, 20, '[2,0,0,0]'),
+(4, 30, '[3,0,0,0]'),
+(5, 40, '[4,0,0,0]');
+# --- Exact limit: no condition, join or DISTINCT. The K nearest rows ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT grp FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 3;
+grp
+10
+10
+20
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+1
+# --- Exact limit with an OFFSET: 2 + 2 nearest rows, the last 2 returned ---
+SELECT grp FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2 OFFSET 2;
+grp
+20
+30
+# --- A condition can drop rows: the limit is not exact ---
+# The nearest rows 1 and 2 fail the condition. Rows 3 and 4 are returned.
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t WHERE grp <> 10
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+id
+3
+4
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+1
+# --- DISTINCT can drop rows: the limit is not exact ---
+# Rows 1 and 2 give the same (grp, distance), so 3 distinct rows come from
+# the 4 nearest rows: groups 10, 20 and 30.
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT grp FROM
+(SELECT DISTINCT grp,
+vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d
+FROM t ORDER BY d LIMIT 3) AS nearest
+ORDER BY grp;
+grp
+10
+20
+30
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

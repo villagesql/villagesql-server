@@ -10637,7 +10637,8 @@ const char *get_field_name_or_expression(THD *thd, const Field *field) {
 }
 
 String *Field::val_external_str(String *buf) const {
-  if (!has_type_context()) return val_str(buf);
+  // A NULL value has nothing to decode.
+  if (!has_type_context() || is_null()) return val_str(buf);
 
   if (villagesql::DecodeStringForField(this, buf)) {
     // Return empty string to satisfy the String* contract; the actual error
