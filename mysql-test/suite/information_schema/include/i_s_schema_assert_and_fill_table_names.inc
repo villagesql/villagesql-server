@@ -34,6 +34,8 @@ eval INSERT INTO $I_S_view_names (name) VALUES
   ('COLUMNS'),
   ('COLUMNS_EXTENSIONS'),
   ('COLUMN_STATISTICS'),
+  ('CUSTOM_INDEXES'),
+  ('CUSTOM_INDEX_COLUMNS'),
   ('EVENTS'),
   ('EXTENSIONS'),
   ('FILES'),

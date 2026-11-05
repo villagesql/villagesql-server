@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1728,6 +1729,8 @@ static const std::pair<const char *, Create_func *> func_array[] = {
      SQL_FN_LIST_INTERNAL_V(Item_func_internal_check_time, 8, 9)},
     {"INTERNAL_KEYS_DISABLED",
      SQL_FN_INTERNAL(Item_func_internal_keys_disabled, 1)},
+    {"INTERNAL_GET_CUSTOM_INDEX_PROPERTY",
+     SQL_FN_INTERNAL(Item_func_internal_get_custom_index_property, 2)},
     {"INTERNAL_INDEX_COLUMN_CARDINALITY",
      SQL_FN_LIST_INTERNAL(Item_func_internal_index_column_cardinality, 11)},
     {"INTERNAL_GET_COMMENT_OR_ERROR",
