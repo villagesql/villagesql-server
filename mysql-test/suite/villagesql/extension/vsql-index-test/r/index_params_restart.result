@@ -1,0 +1,61 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE t (id INT PRIMARY KEY,
+a dummy_type_vector,
+b dummy_type_vector);
+# --- Before restart ---
+CREATE INDEX idx_defaults ON t (a) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX idx_explicit ON t (b) USING EXTENDED(dummy_index_hnsw)
+WITH (M = 8, label = 'l2');
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_defaults	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+test	t	idx_explicit	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "label": "l2", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_defaults	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_explicit	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_defaults` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16),
+  KEY `idx_explicit` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 8)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t VALUES (1, '[0,0,0,0]', '[0,0,0,0]');
+# --- Restart ---
+# restart
+# --- After restart ---
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+# Opening the table loads both indexes, which re-runs the index type's
+# completion against the stored parameters and requires an exact match.
+SELECT id FROM t;
+id
+1
+# Stored parameters are what they were:
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_defaults	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+test	t	idx_explicit	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "label": "l2", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_defaults	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_explicit	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# And so is the rendering:
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_defaults` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16),
+  KEY `idx_explicit` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 8)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -34,6 +34,16 @@
 
 namespace vsql {
 
+// Builds a params map from the ABI's parallel key/value arrays.
+inline std::map<std::string, std::string> map_from_raw(
+    const vef_type_params_t &raw) {
+  std::map<std::string, std::string> m;
+  for (unsigned i = 0; i < raw.count; ++i) {
+    m.emplace(raw.keys[i], raw.values[i]);
+  }
+  return m;
+}
+
 // MaybeParams<P> carries a parameterized type's parsed parameters in either
 // "known" or "unknown" state. It is the first argument to from_string for
 // parameterized custom types in the ::vsql API.
@@ -250,15 +260,6 @@ class TypeParamsCache {
       key += raw.values[j];
     }
     return key;
-  }
-
-  static std::map<std::string, std::string> map_from_raw(
-      const vef_type_params_t &raw) {
-    std::map<std::string, std::string> m;
-    for (unsigned i = 0; i < raw.count; ++i) {
-      m.emplace(raw.keys[i], raw.values[i]);
-    }
-    return m;
   }
 };
 

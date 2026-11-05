@@ -1,0 +1,51 @@
+# Custom index parameters survive a restart, and the index still opens.
+#
+# Covers:
+#   Stored parameters unchanged across a restart
+#   SHOW CREATE TABLE rendering unchanged across a restart
+#   The table opening and serving a query afterwards
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE t (id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b dummy_type_vector);
+
+--echo # --- Before restart ---
+CREATE INDEX idx_defaults ON t (a) USING EXTENDED(dummy_index_hnsw);
+CREATE INDEX idx_explicit ON t (b) USING EXTENDED(dummy_index_hnsw)
+  WITH (M = 8, label = 'l2');
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t;
+
+INSERT INTO t VALUES (1, '[0,0,0,0]', '[0,0,0,0]');
+
+--echo # --- Restart ---
+--source include/restart_mysqld.inc
+
+--echo # --- After restart ---
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+--echo # Opening the table loads both indexes, which re-runs the index type's
+--echo # completion against the stored parameters and requires an exact match.
+SELECT id FROM t;
+
+--echo # Stored parameters are what they were:
+--source include/villagesql/query_custom_indexes.inc
+--echo # And so is the rendering:
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

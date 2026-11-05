@@ -183,9 +183,10 @@ typedef struct {
   // VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props; otherwise NULL.
   vef_index_col_data_to_ref_fn col_data_to_ref_fn;
 
-  // Pointer to the options struct filled by parse() at CREATE INDEX time.
-  // Valid only during the create() call; NULL for all other calls and when
-  // the index type declared no options.
+  // The options struct this index type's parse filled for this index. Owned by
+  // the server: one per index, allocated from the index's own memory and
+  // released with it, so nothing here outlives the index. Valid for every
+  // call. NULL when the index type takes no parameters.
   const void *options;
 
   // Report the registered name of a profile helper's bound function, so the
@@ -525,23 +526,19 @@ typedef bool (*vef_type_index_scan_restore_func_t)(
 //   cursor - Pointer to the cursor to destroy; set to NULL on return.
 typedef void (*vef_type_index_scan_end_func_t)(vef_index_cursor_ref_t *cursor);
 
-// One key=value parameter from a WITH (...) clause on a custom index.
-// Both strings are null-terminated. Numeric literal values (e.g. M = 16) are
-// represented as their decimal string ("16").
-typedef struct {
-  const char *key;
-  const char *value;
-} vef_index_param_t;
-
-// Parse and validate WITH (...) parameters at CREATE INDEX time.
-// The server calls this before creating the index entry. The extension fills
-// options_out (server-allocated, options_size bytes) with the validated result,
-// which the server then passes as index_ctx->options to create().
-// Returns false on success, true on error (writes to error_msg).
-typedef bool (*vef_type_index_parse_func_t)(const vef_index_param_t *params,
-                                            uint32_t count, void *options_out,
-                                            char *error_msg,
-                                            uint32_t error_msg_len);
+// Complete a custom index's WITH (...) parameters and hand back its options.
+//
+// The server calls this from two places:
+//
+//   - once per index while executing CREATE INDEX or ALTER TABLE ... ADD
+//     INDEX
+//   - every time the index is opened
+//
+// Fill in a parameter that is missing, never overwrite one that is present,
+// and validate a value. To reject an unwanted parameter, return an error.
+typedef bool (*vef_type_index_parse_func_t)(
+    const vef_type_params_t *params, vef_inferred_type_params_t *params_out,
+    void *options_out, char *error_msg, uint32_t error_msg_len);
 
 // Index type interface version constants.
 #define VEF_INDEX_TYPE_INTF_VERSION_1 1
@@ -591,9 +588,10 @@ typedef struct {
   vef_type_index_scan_restore_func_t scan_restore;
   vef_type_index_scan_end_func_t scan_end;
 
-  // WITH (...) parameter parsing. Set options_size to sizeof(Options) and
-  // parse to the validation function. Both must be zero/NULL together; either
-  // both are set or neither is.
+  // WITH (...) parameter completion. Set options_size to sizeof(Options) and
+  // parse to the completion function. Both must be zero/NULL together; either
+  // both are set or neither is, and neither being set means the index type
+  // takes no parameters at all.
   uint32_t options_size;
   vef_type_index_parse_func_t parse;
 

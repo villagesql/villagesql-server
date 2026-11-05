@@ -1,0 +1,45 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE tw (
+id INT PRIMARY KEY,
+v KVECTOR
+);
+#
+# A parameter this index type has never heard of.
+#
+CREATE INDEX idx_w ON tw (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2) WITH (foo = 1);
+ERROR HY000: Index 'idx_w': custom index type 'kvec_l2' takes no WITH (...) parameters
+CREATE INDEX idx_w ON tw (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2) WITH (M = 16);
+ERROR HY000: Index 'idx_w': custom index type 'kvec_l2' takes no WITH (...) parameters
+#
+# Same rejection through ALTER TABLE ADD INDEX.
+#
+ALTER TABLE tw ADD INDEX idx_w (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2) WITH (foo = 1);
+ERROR HY000: Index 'idx_w': custom index type 'kvec_l2' takes no WITH (...) parameters
+#
+# Nothing was created by any of the above.
+#
+SHOW CREATE TABLE tw;
+Table	Create Table
+tw	CREATE TABLE `tw` (
+  `id` int NOT NULL,
+  `v` vsql_knn_index_test.kvector DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Without a WITH clause the same DDL succeeds.
+#
+CREATE INDEX idx_w ON tw (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+SHOW CREATE TABLE tw;
+Table	Create Table
+tw	CREATE TABLE `tw` (
+  `id` int NOT NULL,
+  `v` vsql_knn_index_test.kvector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_w` (`v` `vsql_knn_index_test`.`kvec_profile_l2`) USING EXTENDED(`vsql_knn_index_test`.`kvec_l2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE tw;
+UNINSTALL EXTENSION vsql_knn_index_test;

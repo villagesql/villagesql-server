@@ -11,7 +11,7 @@ t	CREATE TABLE `t` (
   `k` varbinary(8) NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`k`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # Modifying a primary-key column is rejected: INPLACE, COPY, and default.
 ALTER TABLE t MODIFY k VARBINARY(64) NOT NULL, ALGORITHM=INPLACE;
@@ -32,7 +32,7 @@ t	CREATE TABLE `t` (
   `k` varbinary(8) NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`k`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # An ALTER that does not touch the primary key is allowed.
 ALTER TABLE t ADD COLUMN note INT DEFAULT 0;
@@ -43,7 +43,7 @@ t	CREATE TABLE `t` (
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   `note` int DEFAULT '0',
   PRIMARY KEY (`k`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 # Same rejection for a multi-part (composite) primary key.
@@ -61,7 +61,7 @@ tm	CREATE TABLE `tm` (
   `k2` varbinary(8) NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`k1`,`k2`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # Modifying either primary-key part is rejected (INPLACE, COPY, default).
 ALTER TABLE tm MODIFY k2 VARBINARY(64) NOT NULL, ALGORITHM=INPLACE;
@@ -83,7 +83,7 @@ tm	CREATE TABLE `tm` (
   `k2` varbinary(8) NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`k1`,`k2`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # An ALTER that does not touch the primary key is allowed.
 ALTER TABLE tm ADD COLUMN note INT DEFAULT 0;
@@ -95,7 +95,7 @@ tm	CREATE TABLE `tm` (
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   `note` int DEFAULT '0',
   PRIMARY KEY (`k1`,`k2`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE tm;
 # Composite primary key whose parts are the custom (vector) type, with the
@@ -112,7 +112,7 @@ tv	CREATE TABLE `tv` (
   `v1` vsql_index_test.dummy_type_vector NOT NULL,
   `v2` vsql_index_test.dummy_type_vector NOT NULL,
   PRIMARY KEY (`v1`,`v2`),
-  KEY `idx` (`v1` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`v1` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 # Changing a vector primary-key part's type is rejected.
 ALTER TABLE tv MODIFY v1 VARBINARY(32) NOT NULL;
@@ -129,7 +129,7 @@ tv	CREATE TABLE `tv` (
   `v1` vsql_index_test.dummy_type_vector NOT NULL,
   `v2` vsql_index_test.dummy_type_vector NOT NULL,
   PRIMARY KEY (`v1`,`v2`),
-  KEY `idx` (`v1` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`v1` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE tv;
 # With no custom index, a primary-key change is allowed.

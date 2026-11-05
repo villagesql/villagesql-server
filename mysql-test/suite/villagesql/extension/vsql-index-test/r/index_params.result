@@ -1,0 +1,160 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+CREATE TABLE t (id INT PRIMARY KEY,
+a dummy_type_vector,
+b dummy_type_vector,
+c dummy_type_vector,
+d dummy_type_vector,
+e dummy_type_vector);
+# --- No WITH clause: the index type supplies every default ---
+CREATE INDEX idx_none ON t (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_none` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_none	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- Partial WITH: what the user gave is kept, the rest is filled ---
+CREATE INDEX idx_partial ON t (b) USING EXTENDED(dummy_index_hnsw) WITH (M = 8);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_none` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16),
+  KEY `idx_partial` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 8)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_none	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+test	t	idx_partial	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_partial	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- Values are canonicalized, not just keys ---
+CREATE INDEX idx_case ON t (c) USING EXTENDED(dummy_index_hnsw)
+WITH (M = 8, mode = 'FAST', label = 'Primary');
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_none` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16),
+  KEY `idx_partial` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 8),
+  KEY `idx_case` (`c` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'primary', `m` = 8, `mode` = 'fast')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_case	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "mode": "fast", "label": "primary", "ef_construction": "200"}
+test	t	idx_none	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+test	t	idx_partial	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_case	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_partial	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- Surrounding whitespace is trimmed ---
+CREATE INDEX idx_ws ON t (d) USING EXTENDED(dummy_index_hnsw)
+WITH ( M = 8 , label = '  l2  ' );
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_none` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16),
+  KEY `idx_partial` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 8),
+  KEY `idx_case` (`c` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'primary', `m` = 8, `mode` = 'fast'),
+  KEY `idx_ws` (`d` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 8)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_case	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "mode": "fast", "label": "primary", "ef_construction": "200"}
+test	t	idx_none	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+test	t	idx_partial	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "ef_construction": "200"}
+test	t	idx_ws	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "label": "l2", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_case	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_partial	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ws	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+# --- The upper bound is accepted at its boundary ---
+CREATE INDEX idx_max ON t (e) USING EXTENDED(dummy_index_hnsw)
+WITH (M = 65536, ef_construction = 65536);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `c` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `d` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `e` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_none` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16),
+  KEY `idx_partial` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 8),
+  KEY `idx_case` (`c` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'primary', `m` = 8, `mode` = 'fast'),
+  KEY `idx_ws` (`d` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 8),
+  KEY `idx_max` (`e` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 65536, `m` = 65536)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t	idx_case	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "mode": "fast", "label": "primary", "ef_construction": "200"}
+test	t	idx_max	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "65536", "ef_construction": "65536"}
+test	t	idx_none	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+test	t	idx_partial	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "ef_construction": "200"}
+test	t	idx_ws	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "8", "label": "l2", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t	idx_case	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_max	0	e	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_none	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_partial	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t	idx_ws	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+DROP TABLE t;
+CREATE TABLE t_fix (id INT PRIMARY KEY, a dummy_type_vector);
+CREATE INDEX idx_fix ON t_fix (a) USING EXTENDED(dummy_index_hnsw);
+DROP TABLE t_fix;
+CREATE TABLE `t_fix` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_fix` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+# Replay produced the same parameters and the same rendering:
+SHOW CREATE TABLE t_fix;
+Table	Create Table
+t_fix	CREATE TABLE `t_fix` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_fix` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t_fix	idx_fix	vsql_index_test	0.0.1	dummy_index_hnsw	{"m": "16", "ef_construction": "200"}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t_fix	idx_fix	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+DROP TABLE t_fix;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -1,0 +1,41 @@
+# An index type that declares no options must reject a WITH (...) clause.
+# kvec_l2 registers no options struct and no parse hook.
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE tw (
+  id INT PRIMARY KEY,
+  v KVECTOR
+);
+
+--echo #
+--echo # A parameter this index type has never heard of.
+--echo #
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx_w ON tw (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2) WITH (foo = 1);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx_w ON tw (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2) WITH (M = 16);
+
+--echo #
+--echo # Same rejection through ALTER TABLE ADD INDEX.
+--echo #
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tw ADD INDEX idx_w (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2) WITH (foo = 1);
+
+--echo #
+--echo # Nothing was created by any of the above.
+--echo #
+SHOW CREATE TABLE tw;
+
+--echo #
+--echo # Without a WITH clause the same DDL succeeds.
+--echo #
+CREATE INDEX idx_w ON tw (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+SHOW CREATE TABLE tw;
+
+DROP TABLE tw;
+UNINSTALL EXTENSION vsql_knn_index_test;
