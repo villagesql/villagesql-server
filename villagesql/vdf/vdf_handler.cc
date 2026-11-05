@@ -16,6 +16,7 @@
 #include "villagesql/vdf/vdf_handler.h"
 
 #include <type_traits>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_sys.h"
@@ -56,6 +57,21 @@ static bool is_inferrable_string_const(Item *arg) {
 static vef_type_id StringReadType(vef_protocol_t protocol) {
   return protocol >= VEF_PROTOCOL_4 ? VEF_TYPE_STRING : VEF_TYPE_BINARY;
 }
+
+// Whether prerun sees arg as a constant: one a UDF's init would read as
+// constant (udf_handler::call_init_func()), which leaves out subqueries, and
+// never a prepared-statement parameter, which has no value until EXECUTE.
+static bool IsPrerunConstArg(Item *arg) {
+  return arg->type() != Item::PARAM_ITEM && arg->const_for_execution() &&
+         !arg->has_subquery();
+}
+
+template <typename InvalueType>
+static bool marshal_args_typed(const vef_signature_t *sig,
+                               vef_protocol_t protocol, uint value_count,
+                               Item **args, String *buffers,
+                               InvalueType *invalues,
+                               const bool *args_to_marshal = nullptr);
 
 // Default result-buffer size for STRING/BINARY/CUSTOM returns when the
 // extension does not declare its own buffer_size. Most JSON/text results fit in
@@ -254,11 +270,15 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   });
 
   // Call prerun if present
+  // TODO(villagesql-general): prerun also runs at PREPARE, where a ?
+  // parameter has no value and is typed STRING, so a prerun that checks types
+  // can reject the statement before EXECUTE binds one. udf_handler::fix_fields
+  // defers a UDF's init at PREPARE when an argument is not constant.
   if (m_udf->vdf_func_desc->prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
-    prerun_args.const_values = nullptr;
-    prerun_args.const_lengths = nullptr;
+    prerun_args.deprecated_const_values = nullptr;
+    prerun_args.deprecated_const_lengths = nullptr;
 
     // Populate arg_types from Item types
     vef_type_t *arg_types = nullptr;
@@ -278,6 +298,34 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
       }
     }
     prerun_args.arg_types = arg_types;
+
+    // From VEF_PROTOCOL_4, prerun sees each constant argument's value,
+    // marshalled as the VDF will receive it. As a UDF's init does, this
+    // evaluates the constant once more than the rows do.
+    std::vector<String> const_buffers;
+    if (m_udf->vdf_protocol >= VEF_PROTOCOL_4 && signature != nullptr &&
+        arg_count > 0) {
+      auto *is_const =
+          pointer_cast<bool *>((*THR_MALLOC)->Alloc(sizeof(bool) * arg_count));
+      auto *const_invalues = pointer_cast<vef_invalue_t *>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
+      auto *const_args = pointer_cast<const vef_invalue_t **>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t *) * arg_count));
+      if (!is_const || !const_invalues || !const_args) return true;
+      for (uint i = 0; i < arg_count; i++) {
+        is_const[i] = IsPrerunConstArg(m_args[i]);
+      }
+      const_buffers.resize(arg_count);
+      if (marshal_args_typed(signature, m_udf->vdf_protocol, arg_count, m_args,
+                             const_buffers.data(), const_invalues, is_const) ||
+          thd->is_error()) {
+        return true;
+      }
+      for (uint i = 0; i < arg_count; i++) {
+        const_args[i] = is_const[i] ? &const_invalues[i] : nullptr;
+      }
+      prerun_args.const_args = const_args;
+    }
 
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
     vef_prerun_result_t prerun_result{};
@@ -403,13 +451,16 @@ void vdf_handler::RunPostrun() {
 }
 
 // Returns true if an argument could not be converted for the VDF; the error is
-// already reported.
+// already reported. If args_to_marshal is given, only the arguments it marks
+// are marshalled, and the others are left as they are.
 template <typename InvalueType>
 static bool marshal_args_typed(const vef_signature_t *sig,
                                vef_protocol_t protocol, uint value_count,
                                Item **args, String *buffers,
-                               InvalueType *invalues) {
+                               InvalueType *invalues,
+                               const bool *args_to_marshal) {
   for (unsigned int i = 0; i < value_count; i++) {
+    if (args_to_marshal != nullptr && !args_to_marshal[i]) continue;
     Item *arg_item = args[i];
     vef_type_id param_type;
     if (sig->params != nullptr && i < sig->param_count) {
