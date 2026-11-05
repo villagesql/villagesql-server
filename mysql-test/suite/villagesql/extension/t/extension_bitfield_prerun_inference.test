@@ -1,0 +1,15 @@
+# A deterministic VDF returning a parameterized type is pre-executed on a
+# constant argument to infer the return type's parameters. That call happens
+# before prerun, so a VDF whose state prerun allocates must not be
+# pre-executed, whether its parameter is BINARY or STRING.
+
+INSTALL EXTENSION vsql_bitfield_test;
+
+--echo # BINARY parameter.
+SELECT vsql_bitfield_test.bitfield_from_bytes_counted(_binary x'FF') IS NOT NULL AS computed;
+SELECT vsql_bitfield_test.bitfield_from_bytes_counted(x'FF') IS NOT NULL AS computed;
+
+--echo # STRING parameter.
+SELECT vsql_bitfield_test.bitfield_from_text_counted('A') IS NOT NULL AS computed;
+
+UNINSTALL EXTENSION vsql_bitfield_test;

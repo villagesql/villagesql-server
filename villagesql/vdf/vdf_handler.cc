@@ -249,6 +249,8 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // bit literal.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
+  // A VDF with a prerun is not pre-executed: the call would come before prerun,
+  // with none of the state prerun sets up.
   const vef_type_id param_id =
       signature != nullptr && signature->param_count == 1
           ? signature->params[0].id
@@ -256,7 +258,8 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   if (!postponed && signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
-      m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
+      m_udf->vdf_func_desc->deterministic &&
+      m_udf->vdf_func_desc->prerun == nullptr && arg_count == 1 &&
       (param_id == VEF_TYPE_STRING || param_id == VEF_TYPE_BINARY) &&
       (is_inferrable_string_const(arguments[0]) ||
        (param_id == VEF_TYPE_BINARY &&
@@ -286,7 +289,7 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
         // encode function.
         std::string encoded_bytes;
         if (!villagesql::InferFromConstant(
-                thd, snap.max_persisted_length, m_udf->vdf_func_desc,
+                thd, snap.max_persisted_length, m_udf->vdf_func_desc, param_id,
                 std::string_view(val->ptr(), val->length()), &inferred,
                 &encoded_bytes)) {
           return_params = std::move(inferred);
