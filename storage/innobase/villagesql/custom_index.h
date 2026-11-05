@@ -237,8 +237,7 @@ class Custom_index {
   // being scanned is a custom index.
   static dberr_t row_search(byte *buf, page_cur_mode_t mode,
                             row_prebuilt_t *prebuilt, ulint match_mode,
-                            ulint direction, bool range_lock, bool scan_forward,
-                            bool is_mvcc);
+                            ulint direction, bool scan_forward, bool is_mvcc);
 
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.

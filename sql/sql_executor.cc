@@ -113,6 +113,7 @@
 #include "sql/window.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "villagesql/sql/optimizer.h"
 #include "villagesql/types/util.h"
 
 using std::any_of;
@@ -3839,15 +3840,11 @@ AccessPath *QEP_TAB::access_path() {
                                     m_reversed_access,
                                     /*count_examined_rows=*/true);
       break;
-    case JT_KNN_SCAN: {
-      auto *knn_scan_info = this->knn_scan_info();
-      assert(knn_scan_info != nullptr);
-      path = NewIndexKnnScanAccessPath(
-          join()->thd, table(), index(), knn_scan_info->query_point,
-          knn_scan_info->limit, knn_scan_info->limit_is_exact,
+    case JT_KNN_SCAN:
+      path = villagesql::optimizer::new_knn_scan_path(
+          join()->thd, table(), index(), this->knn_scan_info(),
           /*count_examined_rows=*/true);
       break;
-    }
     case JT_ALL:
     case JT_RANGE:
     case JT_INDEX_MERGE:
