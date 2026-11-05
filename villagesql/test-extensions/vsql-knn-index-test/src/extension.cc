@@ -62,6 +62,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <shared_mutex>
@@ -391,10 +392,14 @@ using PrimaryKey = std::vector<std::vector<unsigned char>>;
 struct KVecEntry {
   IndexScanKey::KeyPartRef ref;  // vector's column reference
   PrimaryKey pkey;               // owning row's primary key (all parts)
-  // Transaction that inserted the entry. A locking read compares it with the
-  // clustered record's transaction to detect stale entries, so scan_fetch must
-  // return it.
+  // Transaction that inserted the entry, returned by scan_fetch.
   Segment::TrxRef trx;
+  // Transaction that deleted the row or updated its key, set by mark_delete;
+  // 0 if the entry is not delete-marked. A consistent read compares it with its
+  // read view, and scan_validate rejects a marked entry. Shared with the scan
+  // cursors so a locking read sees a mark made after the scan began.
+  std::shared_ptr<std::atomic<uint64_t>> delete_trx =
+      std::make_shared<std::atomic<uint64_t>>(0);
 };
 struct KVecIndexCtx {
   std::vector<KVecEntry> entries;
@@ -418,6 +423,7 @@ struct KVecCursor {
     IndexScanKey::KeyPartRef ref;  // vector column reference
     PrimaryKey pkey;  // owning row's primary key (copied, all parts)
     Segment::TrxRef trx;  // transaction that inserted the entry
+    std::shared_ptr<std::atomic<uint64_t>> delete_trx;  // entry's delete mark
   };
   std::vector<Result> results;
   size_t pos = 0;
@@ -490,13 +496,41 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   return false;
 }
 
-static bool kvec_mark_delete(IdxCtx * /*ctx*/, const Index & /*index*/,
-                             Segment::TrxRef /*trx_ref*/,
+static bool kvec_mark_delete(IdxCtx *ctx, const Index &index,
+                             Segment::TrxRef trx_ref,
                              IndexScanKey::KeyPartRef * /*key_ref*/,
-                             IndexScanKey::KeyPartData * /*key_columns*/,
-                             IndexScanKey::KeyPartData * /*pkey_columns*/,
-                             bool /*delete_mark*/, char * /*err*/,
-                             uint32_t /*err_len*/) {
+                             IndexScanKey::KeyPartData *key_columns,
+                             IndexScanKey::KeyPartData *pkey_columns,
+                             bool delete_mark, char *err, uint32_t err_len) {
+  if (key_columns == nullptr || key_columns[0].data == nullptr ||
+      pkey_columns == nullptr) {
+    snprintf(err, err_len, "kvec_l2: missing key at mark_delete");
+    return true;
+  }
+  // This index has no REF_LOOKUP capability, so key_ref is not provided.
+  // Identify the entry the way insert created it: by the column reference of
+  // the key value and the primary key of the row.
+  IndexScanKey::KeyPartRef ref;
+  if (index.get_key_ref(kKeyPos, key_columns[0], &ref)) {
+    snprintf(err, err_len, "kvec_l2: get_key_ref failed: %s",
+             index.get_error());
+    return true;
+  }
+  const uint32_t num_pk_parts = index.get_primary_num_key_cols();
+  std::shared_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  for (const KVecEntry &entry : ctx->user()->entries) {
+    if (entry.ref != ref || entry.pkey.size() != num_pk_parts) continue;
+    bool same_pk = true;
+    for (uint32_t i = 0; i < num_pk_parts && same_pk; i++) {
+      same_pk = entry.pkey[i].size() == pkey_columns[i].length &&
+                (entry.pkey[i].empty() ||
+                 memcmp(entry.pkey[i].data(), pkey_columns[i].data,
+                        pkey_columns[i].length) == 0);
+    }
+    if (same_pk) {
+      entry.delete_trx->store(delete_mark ? static_cast<uint64_t>(trx_ref) : 0);
+    }
+  }
   return false;
 }
 
@@ -543,6 +577,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     IndexScanKey::KeyPartRef ref;
     const PrimaryKey *pkey;  // points into ctx entries
     Segment::TrxRef trx;
+    std::shared_ptr<std::atomic<uint64_t>> delete_trx;
     double distance;
   };
   std::vector<Hit> hits;
@@ -561,7 +596,18 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // exactly like vsql-vector.
   const uint32_t max_col_len = index.get_max_col_len(kKeyPos);
   std::vector<unsigned char> stored(max_col_len);
+  // A consistent read has a read view and gets only the entries visible under
+  // it. A locking read has none and gets every entry; scan_validate rejects the
+  // stale ones after the row is locked.
+  const auto read_view = scan_desc.read_view();
   for (const KVecEntry &entry : entries) {
+    if (read_view != nullptr) {
+      // Skip an entry whose deletion is visible to the read view.
+      const uint64_t del = entry.delete_trx->load();
+      if (del != 0 && index.is_trx_visible(read_view, del)) continue;
+      // Skip an entry whose insertion is not visible to the read view.
+      if (!index.is_trx_visible(read_view, entry.trx)) continue;
+    }
     IndexScanKey::KeyPartData raw;
     raw.data = stored.data();
     raw.length = max_col_len;
@@ -579,7 +625,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     // helper silently corrupts the ordering.
     double d = 0.0;
     index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
-    hits.push_back(Hit{entry.ref, &entry.pkey, entry.trx, d});
+    hits.push_back(Hit{entry.ref, &entry.pkey, entry.trx, entry.delete_trx, d});
   }
 
   std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
@@ -603,7 +649,8 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // so the pointers into entries are valid). The cursor outlives the lock, so
   // it must own the bytes.
   for (const Hit &hit : hits) {
-    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey, hit.trx});
+    c->results.push_back(
+        KVecCursor::Result{hit.ref, *hit.pkey, hit.trx, hit.delete_trx});
   }
 
   *cursor = c;
@@ -654,10 +701,12 @@ static bool kvec_save(Index::Cursor /*cursor*/, char * /*err*/,
 }
 
 static bool kvec_validate(Index::Cursor cursor, Segment::TrxRef trx_ref) {
-  // Entries are never marked in this brute-force index; the entry is valid if
-  // it was created by trx_ref.
+  // The entry is valid if it was created by trx_ref and has not been marked as
+  // deleted, for example by an update of the key column.
   auto *c = static_cast<KVecCursor *>(cursor);
-  return c->pos < c->results.size() && c->results[c->pos].trx == trx_ref;
+  if (c->pos >= c->results.size()) return false;
+  const KVecCursor::Result &res = c->results[c->pos];
+  return res.trx == trx_ref && res.delete_trx->load() == 0;
 }
 
 static bool kvec_restore(Index::Cursor cursor, MtrCtx::Ref /*mctx*/, bool *eof,

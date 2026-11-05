@@ -1337,6 +1337,8 @@ static dberr_t fetch_cluster_row(
     if (prebuilt->select_lock_type != LOCK_NONE) {
       err = check_and_lock(prebuilt, rec, clust_index, offsets, entry_trx,
                            cursor, thr, &visible);
+      // Store the position for unlock_row() and a later update of the row.
+      if (err == DB_SUCCESS) prebuilt->clust_pcur->store_position(&mtr);
     } else if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
                !lock_clust_rec_cons_read_sees(rec, clust_index, offsets,
                                               trx_get_read_view(trx))) {
@@ -1647,6 +1649,10 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
     }
     advance = true;
 
+    // Forget the record locks of the previous index entry, so that only the
+    // locks taken for this entry can be released early.
+    prebuilt->new_rec_lock.reset();
+
     if (eof) {
       err = match_mode != 0 ? DB_RECORD_NOT_FOUND : DB_END_OF_INDEX;
       break;
@@ -1738,10 +1744,6 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
           err = failed("Restore cursor", true);
           break;
         }
-        // The cursor may not be on the same record, so the record locks taken
-        // so far cannot be tracked for early release.
-        prebuilt->new_rec_lock.reset();
-
         // Retry the row the cursor was saved on.
         err = DB_SUCCESS;
         advance = false;
