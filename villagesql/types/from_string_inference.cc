@@ -55,7 +55,7 @@ bool LookupTypeForInference(std::string_view extension_name,
 }
 
 bool InferFromConstant(THD * /*thd*/, int64_t max_persisted_length,
-                       const vef_func_desc_t *encode_vdf,
+                       const vef_func_desc_t *encode_vdf, vef_type_id arg_type,
                        std::string_view constant, TypeParameters *out_inferred,
                        std::string *out_encoded_bytes) {
   // Pre-conditions: the caller should have already verified that the type is
@@ -84,12 +84,11 @@ bool InferFromConstant(THD * /*thd*/, int64_t max_persisted_length,
   inferred_workspace.max_buf_len = sizeof(stack_params_buf);
 
   // Build the single input arg holding the constant literal, as text or as
-  // bytes depending on the encode VDF's parameter.
+  // bytes depending on arg_type.
   // TODO(villagesql): change this to use the encoding wrapper.
   vef_invalue_t arg{};
   arg.is_null = false;
-  if (encode_vdf->signature != nullptr &&
-      encode_vdf->signature->params[0].id == VEF_TYPE_BINARY) {
+  if (arg_type == VEF_TYPE_BINARY) {
     arg.type = VEF_TYPE_BINARY;
     arg.binary_value = reinterpret_cast<const unsigned char *>(constant.data());
     arg.binary_len = constant.size();
@@ -165,7 +164,7 @@ bool InferFromConstant(THD * /*thd*/, int64_t max_persisted_length,
 
   // VEF_RESULT_VALUE path. If the wrapper didn't write any inferred params,
   // the extension either has no params_to_strings registered or its
-  // encode VDF did not call p.set(). Either way, we can't bind a
+  // VDF did not call p.set(). Either way, we can't bind a
   // TypeContext from this call; fall back to ambiguity.
   if (inferred_workspace.actual_len == 0) {
     return true;
