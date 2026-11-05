@@ -1085,8 +1085,12 @@ dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
 
   if (!storage_ctx) {
     ut_ad(false);
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Custom index storage context is not initialized.";
+    uint64_t suppressed = 0;
+    if (purge_error_log_allowed(suppressed)) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "Custom index storage context is not initialized."
+          << purge_error_suppressed_note(suppressed);
+    }
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -1114,8 +1118,12 @@ dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
                            error_msg, sizeof(error_msg));
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "Error purging custom index entry: " << error_msg;
+    uint64_t suppressed = 0;
+    if (purge_error_log_allowed(suppressed)) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "Error purging custom index entry: " << error_msg
+          << purge_error_suppressed_note(suppressed);
+    }
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
