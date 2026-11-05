@@ -165,6 +165,14 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       const vef_func_desc_t *func_desc = reg->funcs[i];
       std::string func_name(func_desc->name);
 
+      if (func_name.size() > NAME_CHAR_LEN) {
+        error_out = "VDF '" + func_name +
+                    "' is too long, function names should not have more "
+                    "than " +
+                    std::to_string(NAME_CHAR_LEN) + " characters";
+        return std::nullopt;
+      }
+
       // clear/accumulate were added in PROTOCOL_3. The negotiated protocol is
       // the only gate needed: check_vef_registration() has already rejected a
       // descriptor declaring less than its registration, so a v3+ negotiation
