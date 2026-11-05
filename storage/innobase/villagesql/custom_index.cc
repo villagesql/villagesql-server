@@ -18,8 +18,10 @@
 #include <scope_guard.h>
 #include <sql_const.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
+#include <limits>
 #include <memory>
 #include <new>
 #include <string>
@@ -1157,8 +1159,13 @@ dberr_t Custom_index::fill_profile(const row_prebuilt_t *prebuilt,
   }
 
   scan_desc->keys[0].profile_function_id = order_fn->fn_id;
-  scan_desc->limit = static_cast<uint32_t>(prebuilt->get_knn_limit());
-  scan_desc->limit_is_exact = prebuilt->knn_limit_is_exact();
+  // The scan descriptor holds a 32-bit limit. Use the largest 32 BIT limit
+  // when limit exceeds that and set limit as inexact.
+  constexpr ulonglong max_limit = std::numeric_limits<uint32_t>::max();
+  const ulonglong limit = prebuilt->get_knn_limit();
+  const bool saturated = limit > max_limit;
+  scan_desc->limit = static_cast<uint32_t>(std::min(limit, max_limit));
+  scan_desc->limit_is_exact = prebuilt->knn_limit_is_exact() && !saturated;
   return DB_SUCCESS;
 }
 
@@ -1207,6 +1214,8 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
   // stale position instead of clust_pcur, the cursor on the row fetched by
   // this scan.
   prebuilt->pcur->reset();
+  // End the cursor of a previous scan that was not ended, if any.
+  close_cursor(prebuilt);
   prebuilt->pcur->custom_cursor = cursor;
   return DB_SUCCESS;
 }
@@ -1783,6 +1792,12 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
     return failed("Save cursor position", true);
   }
   return DB_SUCCESS;
+}
+
+void Custom_index::end_scan(row_prebuilt_t *prebuilt) {
+  if (is_custom(prebuilt->index)) {
+    prebuilt->index->custom_index->close_cursor(prebuilt);
+  }
 }
 
 void Custom_index::free_all(dict_index_t *index) {

@@ -10429,6 +10429,8 @@ int ha_innobase::index_end(void) {
     m_prebuilt->index->last_sel_cur->release();
   }
 
+  villagesql::innodb::Custom_index::end_scan(m_prebuilt);
+
   active_index = MAX_KEY;
 
   in_range_check_pushed_down = false;
@@ -10798,6 +10800,9 @@ int ha_innobase::change_active_index(
 
     return convert_error_code_to_mysql(DB_FORCED_ABORT, 0, m_user_thd);
   }
+
+  // End a custom scan that is still open on the index being replaced.
+  villagesql::innodb::Custom_index::end_scan(m_prebuilt);
 
   active_index = keynr;
 
