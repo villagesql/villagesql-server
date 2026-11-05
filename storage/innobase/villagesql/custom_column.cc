@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <thread>
 #include <unordered_set>
 
 #include "sql/create_field.h"
@@ -820,13 +821,33 @@ static dberr_t purge_in_column_store(const dict_col_t *col, mtr_t *mtr,
 // marked record reused by another transaction has its index entry purged by
 // the undo record of the delete, which may be handled by another purge thread,
 // or may have failed. Freeing the data before that would leave the index entry
-// referring to freed (or reused) data. The data is then leaked, which is
-// acceptable as this is rare, and a warning is logged.
+// referring to freed (or reused) data. The entry is rechecked for a short time
+// in case a concurrent purge thread is about to remove it. If it is still
+// there, the data is leaked, which is acceptable as this is rare, and a
+// warning is logged.
 // The caller must not hold any page latch.
 static bool purge_skip_indexed(const dict_table_t *table, const dict_col_t *col,
                                Custom_column::Ref ref) {
-  if (!Custom_index::has_pending_entry(table, col, ref)) {
+  bool pending = Custom_index::has_pending_entry(table, col, ref);
+  if (!pending) {
     return false;
+  }
+  // The entry may be about to be purged by a concurrent purge thread. Recheck
+  // with exponential backoff (1, 2, 4, 8 ms, 15 ms in total). Once a wait has
+  // failed, the entry purge is likely failing persistently, so later calls
+  // do not wait.
+  static std::atomic<bool> wait_failed{false};
+  if (!wait_failed.load(std::memory_order_relaxed)) {
+    constexpr std::chrono::milliseconds max_delay{8};
+    for (std::chrono::milliseconds delay{1}; pending && delay <= max_delay;
+         delay *= 2) {
+      std::this_thread::sleep_for(delay);
+      pending = Custom_index::has_pending_entry(table, col, ref);
+    }
+    if (!pending) {
+      return false;
+    }
+    wait_failed.store(true, std::memory_order_relaxed);
   }
   // A persistent failure of the index entry purge could repeat this for every
   // purged row. Log at most one warning per window, shared by all tables.
