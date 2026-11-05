@@ -1,0 +1,116 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR,
+n  INT DEFAULT 0
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+# Distances from [0,0,0,0] are 10, 1, 20, 3 and 5. Nearest first: 2, 4, 5, 1, 3.
+INSERT INTO t (id, v) VALUES
+(1, '[10,0,0,0]'),
+(2, '[1,0,0,0]'),
+(3, '[20,0,0,0]'),
+(4, '[3,0,0,0]'),
+(5, '[5,0,0,0]');
+# --- LIMIT 4294967295 fits: the KNN scan is used ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4294967295;
+id
+2
+4
+5
+1
+3
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+1
+# --- LIMIT 4294967296 does not fit: no KNN scan, same rows ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4294967296;
+id
+2
+4
+5
+1
+3
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+# --- LIMIT 4294967297, a value that would truncate to 1 ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4294967297;
+id
+2
+4
+5
+1
+3
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+# --- The largest LIMIT ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 18446744073709551615;
+id
+2
+4
+5
+1
+3
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+# --- The OFFSET counts: 4294967295 + 1 does not fit ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 4294967295 OFFSET 1;
+id
+4
+5
+1
+3
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+# --- 4294967290 + 2 fits ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 4294967290 OFFSET 2;
+id
+5
+1
+3
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+1
+# --- UPDATE with a LIMIT that fits and one that does not ---
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+UPDATE t SET n = n + 1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4294967295;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+1
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+UPDATE t SET n = n + 1
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 4294967296;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+SELECT id, n FROM t ORDER BY id;
+id	n
+1	2
+2	2
+3	2
+4	2
+5	2
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
