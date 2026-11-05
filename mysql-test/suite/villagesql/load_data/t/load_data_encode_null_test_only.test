@@ -25,8 +25,15 @@ EOF
 3	OK three
 EOF
 
+--write_file $MYSQLTEST_VARDIR/tmp/encode_warn.dat
+1	OK one
+2	ENCODE_WARN
+3	OK three
+EOF
+
 let $datafile = $MYSQLTEST_VARDIR/tmp/encode_null.dat;
 let $errorfile = $MYSQLTEST_VARDIR/tmp/encode_error.dat;
+let $warnfile = $MYSQLTEST_VARDIR/tmp/encode_warn.dat;
 
 # A nullable column takes SQL NULL, in either mode.
 CREATE TABLE t1 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
@@ -76,6 +83,26 @@ SHOW WARNINGS;
 SELECT COUNT(*) AS rows_in_t5 FROM t5;
 DROP TABLE t5;
 
+# A value the encode cannot parse fails the statement in strict mode,
+# reporting the bad value once.
+CREATE TABLE t6 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+eval LOAD DATA INFILE '$warnfile' INTO TABLE t6;
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_in_t6 FROM t6;
+DROP TABLE t6;
+
+# Non-strict keeps the row with the type's intrinsic default.
+CREATE TABLE t7 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+SET @@session.sql_mode = '';
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$warnfile' INTO TABLE t7;
+SET @@session.sql_mode = DEFAULT;
+SELECT id, val FROM t7 ORDER BY id;
+DROP TABLE t7;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/encode_warn.dat
 --remove_file $MYSQLTEST_VARDIR/tmp/encode_error.dat
 --remove_file $MYSQLTEST_VARDIR/tmp/encode_null.dat
 UNINSTALL EXTENSION vsql_test_only;
