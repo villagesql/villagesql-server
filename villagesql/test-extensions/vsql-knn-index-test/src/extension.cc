@@ -417,6 +417,9 @@ using IdxCtx = Index::StorageCtx<KVecIndexCtx>;
 static std::atomic<long long> g_scan_begin_count{0};
 static std::atomic<long long> g_scan_fetch_count{0};
 static std::atomic<long long> g_insert_count{0};
+// Number of scan cursors that were created and not yet ended. Unlike the
+// counters above, it is not reset: it shows a cursor the server never ended.
+static std::atomic<long long> g_open_cursor_count{0};
 
 struct KVecCursor {
   struct Result {
@@ -653,6 +656,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
         KVecCursor::Result{hit.ref, *hit.pkey, hit.trx, hit.delete_trx});
   }
 
+  ++g_open_cursor_count;
   *cursor = c;
   *eof = c->results.empty();
   return false;
@@ -719,6 +723,7 @@ static bool kvec_restore(Index::Cursor cursor, MtrCtx::Ref /*mctx*/, bool *eof,
 }
 
 static void kvec_end(Index::Cursor *cursor) {
+  if (*cursor != nullptr) --g_open_cursor_count;
   delete static_cast<KVecCursor *>(*cursor);
   *cursor = nullptr;
 }
@@ -864,6 +869,9 @@ static void kvec_scan_fetch_count(vsql::IntResult out) {
 static void kvec_insert_count(vsql::IntResult out) {
   out.set(g_insert_count.load());
 }
+static void kvec_open_cursors(vsql::IntResult out) {
+  out.set(g_open_cursor_count.load());
+}
 // Reset all observability counters to 0 (for a clean per-test baseline).
 // Returns 0; the return exists only because a SQL function must return a value.
 static void kvec_reset_counters(vsql::IntResult out) {
@@ -980,6 +988,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .build())
         .func(make_func<&kvec_insert_count>("kvec_insert_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&kvec_open_cursors>("kvec_open_cursors")
                   .returns(INT)
                   .no_params()
                   .build())

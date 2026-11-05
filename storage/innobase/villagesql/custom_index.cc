@@ -1207,6 +1207,8 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
   // stale position instead of clust_pcur, the cursor on the row fetched by
   // this scan.
   prebuilt->pcur->reset();
+  // End the cursor of a previous scan that was not ended, if any.
+  close_cursor(prebuilt);
   prebuilt->pcur->custom_cursor = cursor;
   return DB_SUCCESS;
 }
@@ -1784,6 +1786,12 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
     return failed("Save cursor position", true);
   }
   return DB_SUCCESS;
+}
+
+void Custom_index::end_scan(row_prebuilt_t *prebuilt) {
+  if (is_custom(prebuilt->index)) {
+    prebuilt->index->custom_index->close_cursor(prebuilt);
+  }
 }
 
 void Custom_index::free_all(dict_index_t *index) {

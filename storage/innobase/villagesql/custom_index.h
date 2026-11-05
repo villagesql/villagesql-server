@@ -239,6 +239,12 @@ class Custom_index {
                             row_prebuilt_t *prebuilt, ulint match_mode,
                             ulint direction, bool scan_forward, bool is_mvcc);
 
+  // Ends the extension cursor of a scan on a custom index, if one is open. The
+  // scan may stop before the end of the index, for example at a LIMIT, so the
+  // cursor is not always closed by row_search(). Called when the server ends
+  // the index scan.
+  static void end_scan(row_prebuilt_t *prebuilt);
+
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.
   template <typename Index>
