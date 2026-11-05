@@ -17,7 +17,9 @@
 #ifndef STORAGE_INNOBASE_VILLAGESQL_CUSTOM_COLUMN_H_
 #define STORAGE_INNOBASE_VILLAGESQL_CUSTOM_COLUMN_H_
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "data0type.h"
@@ -344,6 +346,17 @@ class Custom_column {
   StorageCtx *storage_ctx_ = nullptr;
   dtype_t mysql_type_{};
 };
+
+// Throttle for errors logged by the purge paths. A persistent failure would
+// otherwise log the same error for every purged row. At most one error is
+// logged per window, shared by all purge error sites and all purge threads.
+// @param[out] suppressed Number of errors suppressed since the last one logged.
+// @return true if the error should be logged now.
+bool purge_error_log_allowed(uint64_t &suppressed);
+
+// Returns the note to append to a logged purge error when errors were
+// suppressed before it.
+std::string purge_error_suppressed_note(uint64_t suppressed);
 
 }  // namespace innodb
 }  // namespace villagesql

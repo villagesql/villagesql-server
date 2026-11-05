@@ -16,6 +16,8 @@
 #include "custom_column.h"
 #include "custom_index.h"
 
+#include <atomic>
+#include <chrono>
 #include <unordered_set>
 
 #include "sql/create_field.h"
@@ -162,7 +164,7 @@ void Custom_column::load(dict_table_t *table, dict_col_t *col,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (err) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error loading extended column store: " << error_msg;
+        << "Error loading extended column store: " << error_msg;
     col->custom_column->set_storage_ctx(nullptr);
   } else {
     custom_column->storage_ctx_->ref = storage_ref;
@@ -181,7 +183,7 @@ void Custom_column::free_all(dict_table_t *table) {
                                  sizeof(error_msg))) {
           error_msg[sizeof(error_msg) - 1] = '\0';
           ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-              << "InnoDB: Error unloading extended column store: " << error_msg;
+              << "Error unloading extended column store: " << error_msg;
         }
       }
       custom_column->~Custom_column();
@@ -280,6 +282,27 @@ void Custom_column::load_all(dict_table_t *table) {
   release_uncached_table(&ts, &td);
 }
 
+bool purge_error_log_allowed(uint64_t &suppressed) {
+  static ib::Throttler throttler{std::chrono::seconds{60}};
+  static std::atomic<uint64_t> n_suppressed{0};
+
+  if (!throttler.apply()) {
+    n_suppressed.fetch_add(1, std::memory_order_relaxed);
+    suppressed = 0;
+    return false;
+  }
+  suppressed = n_suppressed.exchange(0, std::memory_order_relaxed);
+  return true;
+}
+
+std::string purge_error_suppressed_note(uint64_t suppressed) {
+  if (suppressed == 0) {
+    return "";
+  }
+  return " (" + std::to_string(suppressed) +
+         " similar purge errors suppressed in the last 60 seconds)";
+}
+
 static void log_extended_error(const char *operation, const dict_table_t *table,
                                const dict_index_t *index, uint32_t field_num) {
   if (table == nullptr) {
@@ -297,7 +320,7 @@ static void log_extended_error(const char *operation, const dict_table_t *table,
   table->get_table_name(schema_name, table_name);
 
   ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-      << "InnoDB: Failed custom column store operation: " << operation
+      << "Failed custom column store operation: " << operation
       << ", schema: " << schema_name << ", table: " << table_name
       << ", column: " << table->get_col_name(field_num);
 }
@@ -311,7 +334,7 @@ void Custom_column::save_ref(dict_col_t *col, dd::Column *dd_col) {
   auto &custom_column = col->custom_column;
   if (!custom_column->storage_ctx()) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: dd_write: Uninitialized custom column store";
+        << "dd_write: Uninitialized custom column store";
     return;
   }
   dd_col->se_private_data().set(store_key, custom_column->storage_ctx_->ref);
@@ -346,7 +369,7 @@ static dberr_t create_column_storage(const dict_col_t *col, mem_heap_t *heap,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error creating custom column store: " << error_msg;
+        << "Error creating custom column store: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
   custom_column->set_storage_ctx(ctx);
@@ -377,7 +400,7 @@ static dberr_t drop_column_storage(const dict_col_t *col, trx_id_t trx_id) {
   auto &custom_column = col->custom_column;
   if (!custom_column->storage_ctx()) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Drop: Uninitialized custom column store";
+        << "Drop: Uninitialized custom column store";
     return DB_VILLAGESQL_ERROR;
   }
   const auto &intf = custom_column->storage_interface();
@@ -391,7 +414,7 @@ static dberr_t drop_column_storage(const dict_col_t *col, trx_id_t trx_id) {
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error dropping custom column store: " << error_msg;
+        << "Error dropping custom column store: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
@@ -429,14 +452,14 @@ static dberr_t insert_in_column_store(const dict_col_t *col, mtr_t *mtr,
 
   if (!col_data.data || col_data.length == 0) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Insert: Invalid custom column data";
+        << "Insert: Invalid custom column data";
     return DB_VILLAGESQL_ERROR;
   }
 
   auto &custom_column = col->custom_column;
   if (!custom_column->storage_ctx()) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Insert: Uninitialized custom column store";
+        << "Insert: Uninitialized custom column store";
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -451,8 +474,7 @@ static dberr_t insert_in_column_store(const dict_col_t *col, mtr_t *mtr,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error inserting data into custom column store: "
-        << error_msg;
+        << "Error inserting data into custom column store: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
@@ -610,7 +632,7 @@ static dberr_t mark_in_column_store(dict_col_t *col, mtr_t *mtr,
   auto &custom_column = col->custom_column;
   if (!custom_column->storage_ctx()) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: " << (del_mark ? "Delete" : "Un-Delete")
+        << (del_mark ? "Delete" : "Un-Delete")
         << ": Uninitialized custom column store.";
     return DB_VILLAGESQL_ERROR;
   }
@@ -625,7 +647,7 @@ static dberr_t mark_in_column_store(dict_col_t *col, mtr_t *mtr,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: " << (del_mark ? "Delete" : "Un-Delete")
+        << (del_mark ? "Delete" : "Un-Delete")
         << ": Error marking data in custom column store: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
@@ -652,7 +674,7 @@ static dberr_t mark_impl(const dict_index_t *index, uint32_t index_field_num,
 
   if (ref_val == Custom_column::EMPTY_REF) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Delete: Invalid custom column reference.";
+        << "Delete: Invalid custom column reference.";
     return DB_VILLAGESQL_ERROR;
   }
   dberr_t error = mark_in_column_store(col, &mtr, trx_id, ref_val, del_mark);
@@ -747,14 +769,29 @@ dberr_t Custom_column::update(const dict_table_t *table, trx_id_t trx_id,
   return error;
 }
 
+// Frees the data of an extended column in the column store.
+// @param[in] is_purge True if called by purge, where a persistent failure
+// could repeat for every purged row, and the error is throttled. Rollback
+// errors are always logged.
+// @param[out] logged False if the error was suppressed by the throttle. The
+// caller should then also skip its own error message, which would otherwise
+// be logged without the throttle decision made here.
 static dberr_t purge_in_column_store(const dict_col_t *col, mtr_t *mtr,
-                                     trx_id_t trx_id, Custom_column::Ref ref) {
+                                     trx_id_t trx_id, Custom_column::Ref ref,
+                                     bool is_purge, bool &logged) {
   ut_a(col->stored_by_extn());
+  logged = true;
 
   auto &custom_column = col->custom_column;
   if (!custom_column->storage_ctx()) {
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Purge: Uninitialized custom column store.";
+    ut_ad(false);
+    uint64_t suppressed = 0;
+    logged = !is_purge || purge_error_log_allowed(suppressed);
+    if (logged) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "Purge: Uninitialized custom column store."
+          << purge_error_suppressed_note(suppressed);
+    }
     return DB_VILLAGESQL_ERROR;
   }
   const auto &intf = custom_column->storage_interface();
@@ -766,9 +803,13 @@ static dberr_t purge_in_column_store(const dict_col_t *col, mtr_t *mtr,
 
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (failed) {
-    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Purge: Error freeing data in custom column store: "
-        << error_msg;
+    uint64_t suppressed = 0;
+    logged = !is_purge || purge_error_log_allowed(suppressed);
+    if (logged) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "Purge: Error freeing data in custom column store: " << error_msg
+          << purge_error_suppressed_note(suppressed);
+    }
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;
@@ -847,12 +888,16 @@ dberr_t Custom_column::purge_updated(const dict_table_t *table, trx_id_t trx_id,
     mtr_t mtr;
     mtr_start(&mtr);
 
-    error = purge_in_column_store(ind_field->col, &mtr, trx_id, ref_val);
+    bool logged = true;
+    error = purge_in_column_store(ind_field->col, &mtr, trx_id, ref_val,
+                                  /*is_purge=*/true, logged);
 
     mtr_commit(&mtr);
 
     if (error != DB_SUCCESS) {
-      log_extended_error("Remove Updated", nullptr, index, index_i);
+      if (logged) {
+        log_extended_error("Remove Updated", nullptr, index, index_i);
+      }
       break;
     }
   }
@@ -932,11 +977,17 @@ static dberr_t purge_impl(const dict_table_t *table, const upd_t *upd,
     ut_a(pcur->m_rel_pos == BTR_PCUR_ON);
 
     // 1. Remove Extended column
-    error = purge_in_column_store(ind_field->col, &mtr, trx_id, ref_val);
+    // check_index_entries is true only for purge of a deleted row. Rollback
+    // errors are not throttled.
+    bool logged = true;
+    error = purge_in_column_store(ind_field->col, &mtr, trx_id, ref_val,
+                                  /*is_purge=*/check_index_entries, logged);
 
     if (error != DB_SUCCESS) {
       mtr_commit(&mtr);
-      log_extended_error("Remove", nullptr, index, index_i);
+      if (logged) {
+        log_extended_error("Remove", nullptr, index, index_i);
+      }
       break;
     }
 
@@ -1067,7 +1118,7 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   auto &custom_column = col->custom_column;
   if (!custom_column->storage_ctx()) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Fetch: Uninitialized custom column store.";
+        << "Fetch: Uninitialized custom column store.";
     memset(dest, 0, dest_len);
     return DB_VILLAGESQL_ERROR;
   }
@@ -1090,7 +1141,7 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   error_msg[sizeof(error_msg) - 1] = '\0';
   if (!failed && col_data.length != dest_len) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Fetch: Invalid custom data length: " << col_data.length
+        << "Fetch: Invalid custom data length: " << col_data.length
         << ", expected length: " << dest_len;
     failed = true;
   }
@@ -1098,8 +1149,7 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   if (failed) {
     mtr_commit(&mtr);
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Error fetching data from custom column store: "
-        << error_msg;
+        << "Error fetching data from custom column store: " << error_msg;
     log_extended_error("Fetch", table, nullptr, col->ind);
 
     memset(dest, 0, dest_len);
@@ -1180,7 +1230,7 @@ dberr_t Custom_column::fetch_for_bulk_ddl(const dict_index_t *new_index,
     auto err = allocate_fetch(old_index->table, col, data, len, heap);
     if (err != DB_SUCCESS) {
       ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-          << "InnoDB: DDL rebuild: Custom column allocate and fetch failed";
+          << "DDL rebuild: Custom column allocate and fetch failed";
       return err;
     }
 
@@ -1243,7 +1293,7 @@ dberr_t Custom_column::allocate_fetch(const dict_table_t *table,
 
   if (new_data == nullptr) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-        << "InnoDB: Fetch: Failed to allocate " << new_len << " bytes";
+        << "Fetch: Failed to allocate " << new_len << " bytes";
     log_extended_error("Fetch", table, nullptr, col->ind);
     return DB_VILLAGESQL_ERROR;
   }
