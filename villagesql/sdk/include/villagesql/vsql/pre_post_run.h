@@ -57,6 +57,7 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/vsql/var_args.h>
 
 namespace vsql {
 
@@ -86,7 +87,8 @@ class PrerunArgType {
 
 class PrerunArgs {
  public:
-  explicit PrerunArgs(const vef_prerun_args_t *a) : a_(a) {}
+  PrerunArgs(const vef_prerun_args_t *a, vef_protocol_t protocol)
+      : a_(a), protocol_(protocol) {}
 
   size_t size() const { return a_->arg_count; }
 
@@ -94,13 +96,28 @@ class PrerunArgs {
     return PrerunArgType(&a_->arg_types[i]);
   }
 
-  // TODO(villagesql-general): expose const_at(i) returning the serialized
-  // literal bytes for constant arguments. Blocked on vdf_handler.cc
-  // populating vef_prerun_args_t::const_values / const_lengths; today both
-  // are unconditionally nullptr at the prerun call site.
+  // Whether argument i is a constant: one the server can evaluate before the
+  // first row, such as a literal or CAST(NULL AS SIGNED). A prepared-statement
+  // parameter or a subquery never is.
+  bool is_const(size_t i) const {
+    return protocol_ >= VEF_PROTOCOL_4 && a_->const_args != nullptr &&
+           a_->const_args[i] != nullptr;
+  }
+
+  // The value of constant argument i, as the VDF will receive it.
+  // Precondition: is_const(i).
+  AnyArg const_at(size_t i) const { return AnyArg(a_->const_args[i]); }
+
+  // Whether argument i is a constant whose value is NULL. A NULL literal is
+  // typed STRING, so a prerun that admits NULL checks this rather than
+  // admitting every STRING.
+  bool is_const_null(size_t i) const {
+    return is_const(i) && const_at(i).is_null();
+  }
 
  private:
   const vef_prerun_args_t *a_;
+  vef_protocol_t protocol_;
 };
 
 class PrerunResult {
