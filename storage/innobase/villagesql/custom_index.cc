@@ -566,9 +566,10 @@ ulong Custom_index::flags(const IndexContext *meta) {
   ulong flags = HA_READ_NEXT | HA_ONLY_WHOLE_INDEX | HA_TABLE_SCAN_ON_NULL |
                 HA_KEY_SCAN_NOT_ROR;
 
-  if (caps & VEF_INDEX_CAP_RANGE_SCAN) flags |= HA_READ_RANGE;
+  // TODO(villagesql-indexing): Advertise HA_READ_RANGE and HA_READ_ORDER for
+  // VEF_INDEX_CAP_RANGE_SCAN and VEF_INDEX_CAP_ORDER_BY once row_search
+  // supports range matches and end range conditions.
   if (caps & VEF_INDEX_CAP_REVERSE_SCAN) flags |= HA_READ_PREV;
-  if (caps & VEF_INDEX_CAP_ORDER_BY) flags |= HA_READ_ORDER;
   if (caps & VEF_INDEX_CAP_KNN) flags |= HA_SUPPORT_KNN;
 
   return flags;
@@ -1201,6 +1202,11 @@ dberr_t Custom_index::open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
     return DB_VILLAGESQL_ERROR;
   }
 
+  // A custom scan does not position pcur, which may still hold the index and
+  // position of an earlier scan. row_update_for_mysql() would then use that
+  // stale position instead of clust_pcur, the cursor on the row fetched by
+  // this scan.
+  prebuilt->pcur->reset();
   prebuilt->pcur->custom_cursor = cursor;
   return DB_SUCCESS;
 }
@@ -1507,8 +1513,7 @@ static void fetch_pkey_from_mapping_btree(
 }
 
 static dberr_t check_row_search_conditions(const row_prebuilt_t *prebuilt,
-                                           ulint match_mode, bool range_lock,
-                                           bool is_mvcc) {
+                                           ulint match_mode, bool is_mvcc) {
   auto unsupported = [](const char *what) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "Custom index doesn't support " << what << ".";
@@ -1522,8 +1527,13 @@ static dberr_t check_row_search_conditions(const row_prebuilt_t *prebuilt,
     return DB_VILLAGESQL_ERROR;
   }
 
-  if (range_lock && prebuilt->select_lock_type != LOCK_NONE) {
-    return unsupported("Secondary index range lock");
+  // A custom index cannot provide the range locks that SERIALIZABLE needs.
+  // Under REPEATABLE READ, a custom index does not acquire the range (gap)
+  // locks that InnoDB usually takes on a secondary index. Phantoms are then
+  // possible, which differs from InnoDB's usual behavior but is allowed by
+  // REPEATABLE READ in the ANSI SQL standard.
+  if (prebuilt->trx->isolation_level == TRX_ISO_SERIALIZABLE) {
+    return unsupported("SERIALIZABLE isolation level");
   }
 
   // TODO(villagesql-indexing): Support virtual column
@@ -1557,8 +1567,8 @@ static dberr_t check_row_search_conditions(const row_prebuilt_t *prebuilt,
 
 dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
                                  row_prebuilt_t *prebuilt, ulint match_mode,
-                                 ulint direction, bool range_lock,
-                                 bool scan_forward, bool is_mvcc) {
+                                 ulint direction, bool scan_forward,
+                                 bool is_mvcc) {
   que_thr_t *thr = que_fork_get_first_thr(prebuilt->sel_graph);
   trx_t *trx = prebuilt->trx;
   bool lock_failed = false;
@@ -1566,8 +1576,7 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
     if (is_mvcc && !lock_failed) que_thr_stop_for_mysql_no_error(thr, trx);
   });
 
-  dberr_t cond_err =
-      check_row_search_conditions(prebuilt, match_mode, range_lock, is_mvcc);
+  dberr_t cond_err = check_row_search_conditions(prebuilt, match_mode, is_mvcc);
   if (cond_err != DB_SUCCESS) return cond_err;
 
   char error_msg[ERROR_MSG_SIZE] = {};

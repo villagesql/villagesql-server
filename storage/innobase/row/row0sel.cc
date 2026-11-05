@@ -4037,8 +4037,7 @@ dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
   using villagesql::innodb::Custom_index;
   if (Custom_index::is_custom(prebuilt->index)) {
     return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
-                                    /*range_lock=*/false, moves_up,
-                                    /*is_mvcc=*/false);
+                                    moves_up, /*is_mvcc=*/false);
   }
   /* Step-2: Open or Restore the cursor.
   If search key is specified, cursor is open using the key else
@@ -4883,8 +4882,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     ut_ad(!index->is_clustered());
     mtr_commit(&mtr);
     return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
-                                    set_also_gap_locks, moves_up,
-                                    /*is_mvcc=*/true);
+                                    moves_up, /*is_mvcc=*/true);
   }
   /* Open or restore index cursor position */
 

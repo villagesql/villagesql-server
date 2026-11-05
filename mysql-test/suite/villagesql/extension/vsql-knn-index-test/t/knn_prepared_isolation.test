@@ -1,0 +1,102 @@
+# A prepared KNN statement executed under a different isolation level.
+#
+# A KNN scan is not used under SERIALIZABLE, because a custom index cannot take
+# range locks. The isolation level is read when the statement is executed, so a
+# statement prepared under READ COMMITTED must stop using the KNN scan when it
+# is executed under SERIALIZABLE, and use it again under READ COMMITTED. The
+# rows must be right in every case. The number of KNN scans started tells which
+# plan was used.
+
+--source include/have_binlog_format_row.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR,
+  n  INT DEFAULT 0
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+--echo # Distances from [0,0,0,0] are 1, 3, 5, 10 and 20: all distinct.
+INSERT INTO t (id, v) VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[3,0,0,0]'),
+  (3, '[5,0,0,0]'),
+  (4, '[10,0,0,0]'),
+  (5, '[20,0,0,0]');
+
+SET @q = '[0,0,0,0]';
+
+--echo # --- SELECT prepared under READ COMMITTED ---
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+PREPARE sel FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 2';
+
+--echo # Executed under READ COMMITTED: the KNN scan is used.
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+EXECUTE sel USING @q;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+
+--echo # Executed under SERIALIZABLE: no KNN scan, same rows.
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+EXECUTE sel USING @q;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+
+--echo # Executed again under READ COMMITTED: the KNN scan is used again.
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+EXECUTE sel USING @q;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+DEALLOCATE PREPARE sel;
+
+--echo # --- SELECT prepared under SERIALIZABLE, executed under READ COMMITTED ---
+--echo # The plan is not checked: only the rows must be right.
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+PREPARE sel FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 2';
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+EXECUTE sel USING @q;
+DEALLOCATE PREPARE sel;
+
+--echo # --- UPDATE prepared under READ COMMITTED ---
+PREPARE upd FROM 'UPDATE t SET n = n + 1 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 2';
+
+--echo # Executed under READ COMMITTED: the KNN scan is used.
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+EXECUTE upd USING @q;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+
+--echo # Executed under SERIALIZABLE: no KNN scan, same rows updated.
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+EXECUTE upd USING @q;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+
+--echo # Executed again under READ COMMITTED: the KNN scan is used again.
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+EXECUTE upd USING @q;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+DEALLOCATE PREPARE upd;
+
+--echo # Rows 1 and 2 were updated by each of the three executions.
+SELECT id, n FROM t ORDER BY id;
+
+--echo # --- HANDLER READ on the KNN index ---
+--echo # HANDLER does not start a KNN scan, so it is rejected at any isolation
+--echo # level.
+--disable_query_log
+call mtr.add_suppression("mysql_ha_read: Got error .* when reading table");
+--enable_query_log
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+HANDLER t OPEN;
+--error ER_VILLAGESQL_GENERIC_ERROR,ER_GET_ERRNO
+HANDLER t READ idx_v FIRST;
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+--error ER_VILLAGESQL_GENERIC_ERROR,ER_GET_ERRNO
+HANDLER t READ idx_v FIRST;
+HANDLER t CLOSE;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -88,6 +89,7 @@
 #include "sql/transaction_info.h"
 #include "sql/trigger_def.h"
 #include "sql/uniques.h"  // Unique
+#include "villagesql/sql/optimizer.h"
 
 class COND_EQUAL;
 class Item_exists_subselect;
@@ -220,6 +222,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
   bool need_sort = false;
 
   uint usable_index = MAX_KEY;
+  KnnScanInfo knn_scan_info{};
   Query_block *const query_block = lex->query_block;
   Query_expression *const unit = query_block->master_query_expression();
   ORDER *order = query_block->order_list.first;
@@ -479,7 +482,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
     order = simple_remove_const(order, *conds);
     ORDER_with_src order_src(order, ESC_ORDER_BY, /*const_optimized=*/true);
     usable_index = get_index_for_order(&order_src, table, limit, range_scan,
-                                       &need_sort, &reverse);
+                                       &need_sort, &reverse, &knn_scan_info);
     if (range_scan != nullptr) {
       // May have been changed by get_index_for_order().
       type = calc_join_type(range_scan);
@@ -521,6 +524,10 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
           create_table_access_path(thd, table, range_scan,
                                    /*table_ref=*/nullptr, /*position=*/nullptr,
                                    /*count_examined_rows=*/true);
+    } else if (knn_scan_info.query_point != nullptr) {
+      path = villagesql::optimizer::new_knn_scan_path(
+          thd, table, usable_index, &knn_scan_info,
+          /*count_examined_rows=*/false);
     } else {
       empty_record(table);
       path = NewIndexScanAccessPath(thd, table, usable_index,
