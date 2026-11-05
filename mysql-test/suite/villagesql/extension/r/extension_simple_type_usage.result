@@ -95,19 +95,17 @@ SELECT vsql_simple.ba_concat_all();
 ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all requires at least one argument
 # ba_concat_all rejects non-BYTEARRAY arguments via prerun
 SELECT vsql_simple.ba_concat_all(1);
-ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all: argument 0 must be BYTEARRAY
+ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all: argument 0 must be either BYTEARRAY or NULL
 # ba_concat_all propagates NULL
 SELECT vsql_simple.ba_concat_all(t1.data, NULL) AS with_null
 FROM test_bytearray t1 WHERE t1.id = 1;
 with_null
 NULL
-# ba_concat_all treats a non-NULL STRING literal as NULL: prerun lets
-# STRING through so NULL literals (typed STRING) work, but cannot
-# distinguish them from real strings, so the body checks is_custom().
+# ba_concat_all rejects a STRING literal via prerun, which tells it apart
+# from a constant NULL
 SELECT vsql_simple.ba_concat_all(t1.data, 'abc') AS with_str
 FROM test_bytearray t1 WHERE t1.id = 1;
-with_str
-NULL
+ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all: argument 1 must be either BYTEARRAY or NULL
 # Test ba_call_index (exercises typed prerun/postrun + state-passing VDF)
 SELECT vsql_simple.ba_call_index() as idx FROM test_bytearray ORDER BY id;
 idx

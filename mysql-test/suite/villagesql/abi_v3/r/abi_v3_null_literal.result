@@ -1,0 +1,13 @@
+Found VillageSQL SDK paths
+INSTALL EXTENSION abi_v3_null;
+SELECT NEGOTIATED_PROTOCOL FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION
+WHERE EXTENSION_NAME = 'abi_v3_null';
+NEGOTIATED_PROTOCOL
+3
+SELECT abi_v3_null.int_or_null_sum(1, NULL, 2) AS total;
+total
+3
+SELECT abi_v3_null.int_or_null_sum(NULL) AS total;
+total
+0
+UNINSTALL EXTENSION abi_v3_null;
