@@ -180,7 +180,7 @@ pipx ensurepath   # adds ~/.local/bin to PATH in your shell startup file; open a
 
 ### Running Tests
 
-Verify your build with the test suite:
+Verify your build with the test suite. Run the tests as an ordinary user: as root, the test runner skips some tests, and one of them fails.
 
 ```bash
 # From your build directory
