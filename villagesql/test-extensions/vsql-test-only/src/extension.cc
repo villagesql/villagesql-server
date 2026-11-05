@@ -142,7 +142,6 @@ constexpr int64_t THROW_TRIGGER_20 = 20;
 constexpr int64_t THROW_TRIGGER_86 = 86;
 constexpr int64_t THROW_TRIGGER_100 = 100;
 
-
 void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   if (from == kEncodeFail) {
     return;  // encode failure - wrapper default warning surfaces

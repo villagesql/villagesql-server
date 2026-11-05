@@ -181,8 +181,8 @@ struct FromStringWrapper {
     bool failed{true};
 
     VDF_EXCEPTIONS_TRY {
-        failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
-                       arg.str_len, &length);
+      failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
+                    arg.str_len, &length);
     }
     VDF_EXCEPTIONS_CATCH(result);
 
@@ -197,8 +197,8 @@ struct FromStringWrapper {
           ellipsis = "...";
         }
         snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-                 "failed to parse string '%.*s%s'", static_cast<int>(display_len),
-                 arg.str_value, ellipsis);
+                 "failed to parse string '%.*s%s'",
+                 static_cast<int>(display_len), arg.str_value, ellipsis);
         return;
       }
 
