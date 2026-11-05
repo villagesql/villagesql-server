@@ -100,12 +100,12 @@ negotiated_protocol = min(server_max_protocol, extension_max_protocol)
 ```
 
 The `protocol` field is always the **first member** of any versioned descriptor
-struct. When reading fields beyond the protocol-1 baseline, code checks
-`descriptor->protocol >= VEF_PROTOCOL_2` before accessing those fields.
+struct. Code checks for the version that added a field before accessing it:
+`descriptor->protocol >= VEF_PROTOCOL_3` for a field that protocol 3 added.
 
-New protocol versions are strict supersets: a protocol-2 struct contains all
+New protocol versions are strict supersets: a protocol-3 struct contains all
 protocol-1 fields at the same offsets, followed by new fields. This allows a
-server running protocol 2 to safely load an extension that only understands
+server running protocol 3 to safely load an extension that only understands
 protocol 1.
 
 **Structs nested inline** (not accessed through a pointer) require special care
