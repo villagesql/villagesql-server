@@ -1159,6 +1159,11 @@ static unique_ptr<Json_object> SetObjectMembers(
       const TABLE &table = *path->index_knn_scan().table;
 
       const KEY &key = table.key_info[path->index_knn_scan().idx];
+      // TODO(villagesql-indexing): Extend the interface to let the distance
+      // function author provide a description of the metric, which EXPLAIN
+      // could display, e.g.:
+      // -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]', metric: cosine),
+      // limit 3
       const string lookup_condition =
           string(key.key_part[0].field->field_name) + " <-> " +
           ItemToString(path->index_knn_scan().query_point);
