@@ -16,6 +16,8 @@
 #ifndef VILLAGESQL_DETAIL_EXCEPTIONS_H
 #define VILLAGESQL_DETAIL_EXCEPTIONS_H
 
+#include <exception>
+
 // NOTE: The following two macros are "decorated" when used to
 // emphasize variable scoping.  The TRY macro is followed
 // " {".  The CATCH macro is preceded by "} " and followed

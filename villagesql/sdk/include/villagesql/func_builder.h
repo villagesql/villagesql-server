@@ -34,6 +34,7 @@
 #include <type_traits>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/exceptions.h>
 
 // Forward-declare materialize_func_desc in vsql::func_builder.  The definition
 // lives in vef_register.h.  The using-declaration below makes
@@ -177,35 +178,38 @@ struct FromStringWrapper {
     }
 
     size_t length;
+    bool failed{true};
 
     VDF_EXCEPTIONS_TRY {
-    bool failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
+        failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
                        arg.str_len, &length);
     }
     VDF_EXCEPTIONS_CATCH(result);
 
-    if (failed) {
-      result->type = VEF_RESULT_WARNING;
-      constexpr size_t kMaxInputDisplay = 64;
-      size_t display_len = arg.str_len;
-      const char *ellipsis = "";
-      if (display_len > kMaxInputDisplay) {
-        display_len = kMaxInputDisplay;
-        ellipsis = "...";
+    if (VEF_RESULT_ERROR != result->type) {
+      if (failed) {
+        result->type = VEF_RESULT_WARNING;
+        constexpr size_t kMaxInputDisplay = 64;
+        size_t display_len = arg.str_len;
+        const char *ellipsis = "";
+        if (display_len > kMaxInputDisplay) {
+          display_len = kMaxInputDisplay;
+          ellipsis = "...";
+        }
+        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+                 "failed to parse string '%.*s%s'", static_cast<int>(display_len),
+                 arg.str_value, ellipsis);
+        return;
       }
-      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-               "failed to parse string '%.*s%s'", static_cast<int>(display_len),
-               arg.str_value, ellipsis);
-      return;
-    }
 
-    if (length == SIZE_MAX) {
-      result->type = VEF_RESULT_NULL;
-      return;
-    }
+      if (length == SIZE_MAX) {
+        result->type = VEF_RESULT_NULL;
+        return;
+      }
 
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = length;
+      result->type = VEF_RESULT_VALUE;
+      result->actual_len = length;
+    }
   }
 };
 
