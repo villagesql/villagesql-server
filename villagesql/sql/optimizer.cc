@@ -188,6 +188,9 @@ bool find_knn_order_key(THD *thd, TABLE *table, const ORDER *order,
   // KNN requires a limit.
   if (select_limit == HA_POS_ERROR) return false;
 
+  // The limit must fit in the scan descriptor.
+  if (select_limit > MAX_KNN_LIMIT) return false;
+
   // KNN scans are not supported under SERIALIZABLE, or under REPEATABLE READ
   // for locking reads, because KNN indexes cannot provide the required
   // range-locking guarantees.

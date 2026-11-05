@@ -18,8 +18,10 @@
 #include <scope_guard.h>
 #include <sql_const.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
+#include <limits>
 #include <memory>
 #include <new>
 #include <string>
@@ -1157,8 +1159,13 @@ dberr_t Custom_index::fill_profile(const row_prebuilt_t *prebuilt,
   }
 
   scan_desc->keys[0].profile_function_id = order_fn->fn_id;
-  scan_desc->limit = static_cast<uint32_t>(prebuilt->get_knn_limit());
-  scan_desc->limit_is_exact = prebuilt->knn_limit_is_exact();
+  // The scan descriptor holds a 32-bit limit. Use the largest 32 BIT limit
+  // when limit exceeds that and set limit as inexact.
+  constexpr ulonglong max_limit = std::numeric_limits<uint32_t>::max();
+  const ulonglong limit = prebuilt->get_knn_limit();
+  const bool saturated = limit > max_limit;
+  scan_desc->limit = static_cast<uint32_t>(std::min(limit, max_limit));
+  scan_desc->limit_is_exact = prebuilt->knn_limit_is_exact() && !saturated;
   return DB_SUCCESS;
 }
 
