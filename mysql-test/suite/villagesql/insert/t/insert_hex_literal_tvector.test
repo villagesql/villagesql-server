@@ -1,0 +1,44 @@
+# A hex or bit literal stored into a custom column is a binary string, so it
+# is the type's binary form, encoded with its from_binary, as the same bytes
+# written with _binary are.
+#
+# TVECTOR's binary form is packed little-endian float32 elements:
+#   [1,2,3] is 0x0000803F0000004000004040
+#   [4,5,6] is 0x000080400000A0400000C040
+
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, 0x0000803F0000004000004040);
+INSERT INTO t VALUES (2, X'000080400000A0400000C040');
+INSERT INTO t VALUES (3, _binary 0x0000803F0000004000004040);
+SELECT id, v FROM t ORDER BY id;
+
+# Two elements where the column has three: rejected, and under IGNORE a
+# warning that quotes the value, with the row taking the intrinsic default.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (4, 0x0000803F00000040);
+INSERT IGNORE INTO t VALUES (4, 0x0000803F00000040);
+# A bit literal: one byte, not a whole element.
+INSERT IGNORE INTO t VALUES (5, b'101');
+SELECT id, v FROM t WHERE id IN (4, 5) ORDER BY id;
+DROP TABLE t;
+
+# The other ways a hex literal is stored: UPDATE, ON DUPLICATE KEY UPDATE, and
+# a column DEFAULT.
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[0,0,0]'), (2, '[0,0,0]');
+UPDATE t SET v = 0x0000803F0000004000004040 WHERE id = 1;
+INSERT INTO t VALUES (2, '[0,0,0]')
+  ON DUPLICATE KEY UPDATE v = 0x000080400000A0400000C040;
+SELECT id, v FROM t ORDER BY id;
+DROP TABLE t;
+
+CREATE TABLE t (id INT PRIMARY KEY,
+                v TVECTOR(3) DEFAULT 0x0000803F0000004000004040);
+SHOW CREATE TABLE t;
+INSERT INTO t (id) VALUES (1);
+SELECT id, v FROM t;
+DROP TABLE t;
+
+--source include/villagesql/uninstall_tvector_extension.inc
