@@ -186,7 +186,7 @@ void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   // Unrecognised prefix - crash loudly so tests cannot silently pass bad input.
   assert(false &&
          "fault_blob_encode: unrecognised prefix (expected 'OK ', "
-         "'DECODE_FAIL', 'DECODE_THROW', 'ENCODE_FAIL', 'ENCODE_THROW',"
+         "'DECODE_FAIL', 'DECODE_THROW', 'ENCODE_FAIL', 'ENCODE_THROW', "
          "'ENCODE_NULL', 'ENCODE_WARN', 'ENCODE_ERROR', 'HASH_THROW', or "
          "'COMPARE_THROW')");
   abort();
