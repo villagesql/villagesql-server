@@ -4,9 +4,6 @@
 # uncommitted change is waited for (reported by NOWAIT), not skipped.
 # Index type: kvec_l2, which stores the primary key.
 
---let $knn_issue = KNN-15 A READ COMMITTED locking KNN read drops rows whose entry is current
---source suite/knn_review/include/known_issue.inc
-
 --source include/count_sessions.inc
 
 INSTALL EXTENSION vsql_knn_index_test;

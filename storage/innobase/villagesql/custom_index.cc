@@ -1005,21 +1005,47 @@ void Custom_index::close_cursor(row_prebuilt_t *prebuilt) {
   prebuilt->pcur->custom_cursor = nullptr;
 }
 
-// Locks the clustered index record of a locking read if the index entry is
-// still current, that is, the record was last modified by the transaction that
-// created the entry. The record is locked with a no-gap lock because it is
-// found by its full primary key.
-// @param[out] matched false if the entry is stale and no lock was taken
+// Returns true if the clustered index record still holds the key the index
+// entry was built from. For a column reference index the key is the column
+// reference, which changes exactly when the indexed column is updated; an
+// update of any other column leaves the entry current.
+static bool entry_matches_rec(
+    const dict_index_t *index, const rec_t *rec,
+    const dict_index_t *clust_index, const ulint *offsets,
+    const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &key_columns) {
+  const uint32_t n_key = index->custom_index->index_ctx()->num_key_columns;
+  for (uint32_t i = 0; i < n_key; i++) {
+    const dict_col_t *col = index->get_field(i)->col;
+    ulint len;
+    const byte *field =
+        rec_get_nth_field(clust_index, rec, offsets,
+                          dict_col_get_clust_pos(col, clust_index), &len);
+    const vef_storage_col_data_t &key = key_columns[i];
+    if (len == UNIV_SQL_NULL || key.data == nullptr) {
+      if (len != UNIV_SQL_NULL || key.data != nullptr) return false;
+      continue;
+    }
+    if (len != key.length || memcmp(field, key.data, len) != 0) return false;
+  }
+  return true;
+}
+
+// Locks the clustered index record of a locking read, then checks that the
+// index entry is still current for it, like row_sel_sec_rec_is_for_clust_rec()
+// for a secondary index. Locking first makes a record changed by an active
+// transaction wait for that transaction instead of being skipped. The record is
+// locked with a no-gap lock because it is found by its full primary key.
+// @param[out] matched false if the entry is stale; the lock is then released
+//             where the isolation level allows it
 // @return DB_SUCCESS, DB_LOCK_WAIT (the caller must save the position and
 // wait),
 //         DB_DEADLOCK or another lock error
-static dberr_t check_and_lock(row_prebuilt_t *prebuilt, const rec_t *rec,
-                              dict_index_t *clust_index, const ulint *offsets,
-                              vef_storage_trx_ref_t entry_trx, que_thr_t *thr,
-                              bool *matched) {
-  *matched = row_get_rec_trx_id(rec, clust_index, offsets) ==
-             static_cast<trx_id_t>(entry_trx);
-  if (!*matched) return DB_SUCCESS;
+static dberr_t check_and_lock(
+    row_prebuilt_t *prebuilt, const rec_t *rec, dict_index_t *clust_index,
+    const ulint *offsets,
+    const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &key_columns,
+    que_thr_t *thr, bool *matched) {
+  *matched = false;
 
   dberr_t err = lock_clust_rec_read_check_and_lock(
       lock_duration_t::REGULAR, prebuilt->clust_pcur->get_block(), rec,
@@ -1035,7 +1061,12 @@ static dberr_t check_and_lock(row_prebuilt_t *prebuilt, const rec_t *rec,
     }
     err = DB_SUCCESS;
   }
-  return err;
+  if (err != DB_SUCCESS) return err;
+
+  *matched = entry_matches_rec(prebuilt->index, rec, clust_index, offsets,
+                               key_columns);
+  if (!*matched) prebuilt->try_unlock(true);
+  return DB_SUCCESS;
 }
 
 // Returns an empty heap kept in the prebuilt, creating it on first use. The
@@ -1051,14 +1082,16 @@ static mem_heap_t *get_empty_heap(mem_heap_t **heap, ulint size) {
 
 // Reads the clustered index row identified by the primary key columns and
 // converts it to MySQL format into buf. For a locking read, the record is
-// locked instead of building an old version, provided entry_trx matches.
+// locked instead of building an old version, provided the entry built from
+// key_columns is still current for it.
 // @param[out] found false if the row does not exist in the read view of the
 //             transaction, is delete-marked, is not the version the index
 //             entry was created for, or cannot be converted yet
 static dberr_t fetch_cluster_row(
     byte *buf, row_prebuilt_t *prebuilt,
     const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &pkey_columns,
-    vef_storage_trx_ref_t entry_trx, que_thr_t *thr, bool *found) {
+    const std::array<vef_storage_col_data_t, MAX_REF_PARTS> &key_columns,
+    que_thr_t *thr, bool *found) {
   dict_index_t *index = prebuilt->index;
   dict_index_t *clust_index = index->table->first_index();
   trx_t *trx = prebuilt->trx;
@@ -1102,8 +1135,8 @@ static dberr_t fetch_cluster_row(
 
     bool visible = true;
     if (prebuilt->select_lock_type != LOCK_NONE) {
-      err = check_and_lock(prebuilt, rec, clust_index, offsets, entry_trx, thr,
-                           &visible);
+      err = check_and_lock(prebuilt, rec, clust_index, offsets, key_columns,
+                           thr, &visible);
       if (err != DB_SUCCESS) visible = false;
     } else if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
                !lock_clust_rec_cons_read_sees(rec, clust_index, offsets,
@@ -1477,7 +1510,7 @@ dberr_t Custom_index::row_search(byte *buf, page_cur_mode_t mode,
 
     if (prebuilt->need_to_access_clustered) {
       // Get the clustered index record and store in MySQL format.
-      err = fetch_cluster_row(buf, prebuilt, pkey_columns, entry_trx, thr,
+      err = fetch_cluster_row(buf, prebuilt, pkey_columns, key_columns, thr,
                               &record_found);
       if (err == DB_SKIP_LOCKED) {
         err = DB_SUCCESS;

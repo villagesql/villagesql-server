@@ -2,9 +2,6 @@
 # rows, the same as a plain read and as a locking read with the index
 # ignored.
 
---let $knn_issue = KNN-15 A READ COMMITTED locking KNN read drops rows whose entry is current
---source suite/knn_review/include/known_issue.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 --source suite/knn_review/include/knn_table.inc
 SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;

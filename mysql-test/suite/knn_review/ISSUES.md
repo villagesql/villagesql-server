@@ -26,7 +26,7 @@ mark the issue fixed here.
 | KNN-12 | After RENAME TABLE a KNN query crashes (ha_innodb.cc:10390 !Custom_index::is_knn) | open | ddl/rename_table |
 | KNN-13 | Entries invisible to the reader use up the KNN LIMIT (too few rows) | open | rollback/other_session_insert, rollback/snapshot_insert |
 | KNN-14 | An MVCC_VISIBILITY index shows a row committed after the reader's snapshot (phantom) | open | rollback/snapshot_insert_mvcc_index |
-| KNN-15 | A READ COMMITTED locking KNN read drops rows whose entry is current | open | locking/current_entry_pk, locking/current_entry_btree, locking/read_committed |
+| KNN-15 | A READ COMMITTED locking KNN read drops rows whose entry is current | fixed | locking/current_entry_pk, locking/current_entry_btree, locking/read_committed |
 | KNN-16 | VEF_INDEX_CAP_APPROXIMATE has the same bit as VEF_INDEX_CAP_KNN | open | unit test index_capability_bits-t (DISABLED_) |
 
 ## Not implemented yet
@@ -309,6 +309,8 @@ known issues; they are not bugs until the feature is done.
 ## KNN-15: A READ COMMITTED locking KNN read drops rows whose entry is current
 
 - Seen on: deb/custom-index/26 (0094de4). Earlier name: D2.
+- Fixed: custom_index.cc, check_and_lock locks first, then compares the
+  clustered record's column reference with the entry's (entry_matches_rec).
 - Repro: READ COMMITTED, `SELECT ... ORDER BY kvec_l2_distance(v, ...) LIMIT 3
   FOR UPDATE`. With an extension that reports trx_ref 0 it returns no rows;
   with one that reports the inserting transaction (vsql_knn_index_test) it
