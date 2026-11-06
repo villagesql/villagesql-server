@@ -381,10 +381,12 @@ using PrimaryKey = std::vector<std::vector<unsigned char>>;
 // the primary key at insert (pkey_columns, HAS_ROW_REF), the index stores it
 // here and returns it at scan_fetch via pkey_columns, and the server resolves
 // the row from it. A real index would page-back this store; a brute-force test
-// index keeps it arena-resident.
+// index keeps it arena-resident. The kvec_l2_btree index type stores no primary
+// key (pkey stays empty); see kvec_btree_insert.
 struct KVecEntry {
   IndexScanKey::KeyPartRef ref;  // vector's column reference
   PrimaryKey pkey;               // owning row's primary key (all parts)
+  Segment::TrxRef trx = 0;       // transaction that inserted the entry
 };
 struct KVecIndexCtx {
   std::vector<KVecEntry> entries;
@@ -402,11 +404,15 @@ using IdxCtx = Index::StorageCtx<KVecIndexCtx>;
 static std::atomic<long long> g_scan_begin_count{0};
 static std::atomic<long long> g_scan_fetch_count{0};
 static std::atomic<long long> g_insert_count{0};
+// Cursors returned by kvec_begin and not yet ended by kvec_end. Not reset by
+// kvec_reset_counters: a test reads it before and after and compares.
+static std::atomic<long long> g_open_cursors{0};
 
 struct KVecCursor {
   struct Result {
     IndexScanKey::KeyPartRef ref;  // vector column reference
     PrimaryKey pkey;  // owning row's primary key (copied, all parts)
+    Segment::TrxRef trx;  // transaction that inserted the entry
   };
   std::vector<Result> results;
   size_t pos = 0;
@@ -434,7 +440,7 @@ static bool kvec_load(IdxCtx * /*ctx*/, const Index & /*index*/,
 }
 
 static bool kvec_insert(IdxCtx *ctx, const Index &index,
-                        Segment::TrxRef /*trx_ref*/,
+                        Segment::TrxRef trx_ref,
                         IndexScanKey::KeyPartData *key_columns,
                         IndexScanKey::KeyPartData *pkey_columns,
                         IndexScanKey::KeyPartRef * /*key_ref*/, char *err,
@@ -462,6 +468,7 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   }
   KVecEntry entry;
   entry.ref = ref;
+  entry.trx = trx_ref;
   // Primary-key parts are NOT NULL, but a part may be zero-length (an empty
   // VARCHAR/VARBINARY) -- a valid key value.
   entry.pkey.reserve(num_pk_parts);
@@ -472,6 +479,38 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   // Exclusive lock: a concurrent DDL build inserts each scanned row from
   // multiple worker threads (like vsql-vector's unique_lock on its operation
   // mutex).
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  ctx->user()->entries.push_back(std::move(entry));
+  ++g_insert_count;
+  return false;
+}
+
+// Insert for the kvec_l2_btree index type (HAS_COLUMN_REF | REF_LOOKUP, no
+// HAS_ROW_REF). The index does not own the row identity: the server passes no
+// primary key and resolves each hit's row through its own col_ref -> primary
+// key mapping B-tree. The entry's pkey stays empty, so kvec_fetch returns none.
+// The col_ref doubles as the entry's key_ref, which REF_LOOKUP requires to be
+// unique per live entry.
+static bool kvec_btree_insert(IdxCtx *ctx, const Index &index,
+                              Segment::TrxRef trx_ref,
+                              IndexScanKey::KeyPartData *key_columns,
+                              IndexScanKey::KeyPartData * /*pkey_columns*/,
+                              IndexScanKey::KeyPartRef *key_ref, char *err,
+                              uint32_t err_len) {
+  if (key_columns == nullptr || key_columns[0].data == nullptr) {
+    snprintf(err, err_len, "kvec_l2_btree: missing key column");
+    return true;
+  }
+  IndexScanKey::KeyPartRef ref;
+  if (index.get_key_ref(kKeyPos, key_columns[0], &ref)) {
+    snprintf(err, err_len, "kvec_l2_btree: get_key_ref failed: %s",
+             index.get_error());
+    return true;
+  }
+  if (key_ref != nullptr) *key_ref = ref;
+  KVecEntry entry;
+  entry.ref = ref;
+  entry.trx = trx_ref;
   std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
   ctx->user()->entries.push_back(std::move(entry));
   ++g_insert_count;
@@ -497,11 +536,11 @@ static bool kvec_purge(IdxCtx * /*ctx*/, const Index & /*index*/,
   return false;
 }
 
-// fn_id the L2 distance helper is registered under (with_helper<...>(1)).
-static constexpr uint32_t kDistanceHelperFnId = 1;
-// fn_id of the ORDER profile function (with_function<...>(1, Order)); a KNN
-// scan carries it as its key's profile function ID.
-static constexpr uint32_t kDistanceFunctionFnId = 1;
+// A KNN scan carries the fn_id of the ORDER profile function the query uses
+// as its key's profile function ID. Every profile here registers the helper
+// computing the same distance under the same fn_id as the ORDER function, so
+// the scan ranks with helper(profile_function_id). The range fixture uses no
+// profile function and handles its equality key directly.
 
 static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
                        const IndexScanDesc &scan_desc, Index::Cursor *cursor,
@@ -515,8 +554,9 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     return true;
   }
   const IndexScanKey scan_key = scan_desc[0];
-  if (scan_key.profile_function_id() != kDistanceFunctionFnId ||
-      scan_key.num_columns() != 1 || !scan_key.is_bounded() ||
+  const uint32_t fn_id = scan_key.profile_function_id();
+  if (fn_id > 2 || scan_key.num_columns() != 1 ||
+      !scan_key.is_bounded() ||
       scan_key[0].data == nullptr) {
     snprintf(err, err_len, "kvec_l2: bad KNN query key");
     return true;
@@ -530,6 +570,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   struct Hit {
     IndexScanKey::KeyPartRef ref;
     const PrimaryKey *pkey;  // points into ctx entries
+    Segment::TrxRef trx;
     double distance;
   };
   std::vector<Hit> hits;
@@ -559,14 +600,22 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     }
     const IndexScanKey::KeyPartData stored_val{stored.data(), raw.length};
 
+    // The range fixture has no profile function. It returns only byte-identical
+    // values so the handler receives a valid equality range result.
+    if (fn_id == 0 &&
+        (stored_val.length != query.length ||
+         std::memcmp(stored_val.data, query.data, query.length) != 0)) {
+      continue;
+    }
+
     // helper() returns void: the ABI's helper_fn has no error channel, so a
     // distance computation that fails server-side cannot be detected here and
     // leaves d at 0.0, ranking that row as the nearest neighbour. Giving
     // helper_fn an error return is a separate ABI change; until then a failing
     // helper silently corrupts the ordering.
     double d = 0.0;
-    index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
-    hits.push_back(Hit{entry.ref, &entry.pkey, d});
+    if (fn_id != 0) index.helper<double>(kKeyPos, fn_id, &d, query, stored_val);
+    hits.push_back(Hit{entry.ref, &entry.pkey, entry.trx, d});
   }
 
   std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
@@ -575,12 +624,14 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     return a.ref < b.ref;
   });
 
-  // Return every ranked hit, not just scan_desc.limit() of them. The server
-  // owns the final LIMIT/OFFSET and any WHERE filter above this scan; it needs
-  // the whole distance-ordered pool to slice from. Truncating to the raw limit
-  // here starves those operators -- an OFFSET or a filter would drop rows the
-  // scan never handed up. (A real index may cap the pool for cost; a
-  // brute-force test index returns all.)
+  // Exact scans may stop at the requested top-K. This makes LIMIT/OFFSET
+  // regressions visible: the SQL executor applies OFFSET after this callback.
+  if (scan_desc.is_limit_exact() && hits.size() > scan_desc.limit()) {
+    hits.resize(scan_desc.limit());
+  }
+
+  // Non-exact scans return the full candidate pool so SQL filters and OFFSET
+  // can run before the final LIMIT. An exact scan may safely return top-K.
   auto *c = new (std::nothrow) KVecCursor();
   if (c == nullptr) {
     snprintf(err, err_len, "kvec_l2: out of memory allocating cursor");
@@ -590,10 +641,11 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // so the pointers into entries are valid). The cursor outlives the lock, so
   // it must own the bytes.
   for (const Hit &hit : hits) {
-    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey});
+    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey, hit.trx});
   }
 
   *cursor = c;
+  ++g_open_cursors;
   *eof = c->results.empty();
   return false;
 }
@@ -610,7 +662,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
                        IndexScanKey::KeyPartRef *key_column_refs,
                        IndexScanKey::KeyPartData * /*key_columns*/,
                        IndexScanKey::KeyPartData *pkey_columns,
-                       Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
+                       Segment::TrxRef *trx_ref, bool *delete_mark,
                        char *err, uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
   if (c->pos >= c->results.size()) {
@@ -622,6 +674,8 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   if (key_ref != nullptr) *key_ref = res.ref;
   // Single key column (kKeyPos): its col_ref is the stored vector reference.
   if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
+  if (trx_ref != nullptr) *trx_ref = res.trx;
+  if (delete_mark != nullptr) *delete_mark = false;
 
   // The index owns the row identity: return the primary key stored at insert
   // (all parts), so the server resolves the row directly from pkey_columns.
@@ -650,6 +704,7 @@ static bool kvec_restore(Index::Cursor cursor, MtrCtx::Ref /*mctx*/, bool *eof,
 }
 
 static void kvec_end(Index::Cursor *cursor) {
+  if (*cursor != nullptr) --g_open_cursors;
   delete static_cast<KVecCursor *>(*cursor);
   *cursor = nullptr;
 }
@@ -672,6 +727,25 @@ static constexpr const char kKVecL2Func[] = "kvec_l2_distance";
 static constexpr const char kKVecIndexCos[] = "kvec_cos";
 static constexpr const char kKVecProfileCos[] = "kvec_profile_cos";
 static constexpr const char kKVecCosFunc[] = "kvec_cos_distance";
+
+// A third index type with the same L2 metric whose entries hold only the
+// vector's col_ref, like vsql-vector's HNSW. The server resolves each hit's row
+// through its col_ref -> primary key mapping B-tree instead of a primary key
+// stored in the index. Its profile is not default_for_type, so a test names it
+// explicitly: (v kvec_profile_l2_btree) USING EXTENDED(...kvec_l2_btree).
+static constexpr const char kKVecIndexL2Btree[] = "kvec_l2_btree";
+static constexpr const char kKVecProfileL2Btree[] = "kvec_profile_l2_btree";
+
+// A fourth index type whose profile binds two ORDER functions, L2 (fn_id 1)
+// and cosine (fn_id 2), so a KNN scan must rank by the one the query uses.
+// Not default_for_type, so a test names it explicitly:
+// (v kvec_profile_multi) USING EXTENDED(...kvec_multi).
+static constexpr const char kKVecIndexMulti[] = "kvec_multi";
+static constexpr const char kKVecProfileMulti[] = "kvec_profile_multi";
+static constexpr const char kKVecIndexMvcc[] = "kvec_l2_mvcc";
+static constexpr const char kKVecProfileMvcc[] = "kvec_profile_l2_mvcc";
+static constexpr const char kKVecIndexRange[] = "kvec_range";
+static constexpr const char kKVecProfileRange[] = "kvec_profile_range";
 
 // ============================================================================
 // Type + column-store registration
@@ -763,6 +837,122 @@ static constexpr auto KVEC_STORE_COS_INDEX =
         .build();
 // clang-format on
 
+// The mapping B-tree variant: no HAS_ROW_REF, so the server never passes or
+// expects a primary key from the extension. Shares the scan callbacks with
+// kvec_l2; kvec_fetch returns no primary key because the entries hold none.
+// clang-format off
+static constexpr auto KVEC_STORE_BTREE_INDEX =
+    make_index_type<kKVecIndexL2Btree, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_btree_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::REF_LOOKUP)
+
+        .build();
+// clang-format on
+
+// The two-metric variant: same callbacks and storage as kvec_l2, only its
+// profile differs (kvec_profile_multi).
+// clang-format off
+static constexpr auto KVEC_STORE_MULTI_INDEX =
+    make_index_type<kKVecIndexMulti, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
+
+        .build();
+// clang-format on
+
+// Test variant that promises InnoDB will honor entry transaction metadata.
+// The test deliberately leaves visibility filtering to the server.
+// clang-format off
+static constexpr auto KVEC_STORE_MVCC_INDEX =
+    make_index_type<kKVecIndexMvcc, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+        .dml()
+            .insert<&kvec_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+        .global()
+            .capabilities(Index::Support::KNN | Index::Support::MVCC_VISIBILITY)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
+        .build();
+// clang-format on
+
+// Range-capable fixture used to exercise keyed non-KNN equality reads.
+// clang-format off
+static constexpr auto KVEC_STORE_RANGE_INDEX =
+    make_index_type<kKVecIndexRange, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+        .dml()
+            .insert<&kvec_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+        .global()
+            .capabilities(Index::Support::RANGE_SCAN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
+        .build();
+// clang-format on
+
 // ============================================================================
 // Distance function + profile
 // ============================================================================
@@ -792,6 +982,9 @@ static void kvec_scan_fetch_count(vsql::IntResult out) {
 }
 static void kvec_insert_count(vsql::IntResult out) {
   out.set(g_insert_count.load());
+}
+static void kvec_open_cursor_count(vsql::IntResult out) {
+  out.set(g_open_cursors.load());
 }
 // Reset all observability counters to 0 (for a clean per-test baseline).
 // Returns 0; the return exists only because a SQL function must return a value.
@@ -829,6 +1022,17 @@ static const auto KVEC_L2_PROFILE =
         .with_helper<KVEC_L2_HELPER_FN>(1)
         .ordering(Index::Ordering::ASC)
         .default_for_type(true)
+        .build();
+
+// Same L2 function and helper as kvec_profile_l2, bound to the mapping B-tree
+// index type.
+static const auto KVEC_L2_BTREE_PROFILE =
+    make_index_profile(kKVecProfileL2Btree)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexL2Btree)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
         .build();
 
 // Cosine metric, bound to the kvec_cos index (NOT kvec_l2). Not
@@ -873,6 +1077,35 @@ static const auto KVEC_COS_PROFILE =
         .ordering(Index::Ordering::ASC)
         .build();
 
+// Both metrics on one index type: each ORDER function's helper is registered
+// under the same fn_id, which kvec_begin relies on.
+static const auto KVEC_MULTI_PROFILE =
+    make_index_profile(kKVecProfileMulti)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexMulti)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_function<KVEC_COS_FN>(2, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .with_helper<KVEC_COS_HELPER_FN>(2)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
+static const auto KVEC_MVCC_PROFILE =
+    make_index_profile(kKVecProfileMvcc)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexMvcc)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
+static const auto KVEC_RANGE_PROFILE =
+    make_index_profile(kKVecProfileRange)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexRange)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
 // ============================================================================
 // Extension entry point
 // ============================================================================
@@ -882,10 +1115,18 @@ static auto COLUMN_STORE =
     ColumnStoreCapability().column_store(kKVectorStorage);
 static auto INDEX_TYPE = IndexTypeCapability()
                              .index_type(KVEC_STORE_INDEX)
-                             .index_type(KVEC_STORE_COS_INDEX);
+                             .index_type(KVEC_STORE_COS_INDEX)
+                             .index_type(KVEC_STORE_BTREE_INDEX)
+                             .index_type(KVEC_STORE_MULTI_INDEX)
+                             .index_type(KVEC_STORE_MVCC_INDEX)
+                             .index_type(KVEC_STORE_RANGE_INDEX);
 static auto INDEX_PROFILE = IndexProfileCapability()
                                 .index_profile(KVEC_L2_PROFILE)
-                                .index_profile(KVEC_COS_PROFILE);
+                                .index_profile(KVEC_COS_PROFILE)
+                                .index_profile(KVEC_L2_BTREE_PROFILE)
+                                .index_profile(KVEC_MULTI_PROFILE)
+                                .index_profile(KVEC_MVCC_PROFILE)
+                                .index_profile(KVEC_RANGE_PROFILE);
 
 using namespace vsql;
 
@@ -909,6 +1150,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .build())
         .func(make_func<&kvec_insert_count>("kvec_insert_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&kvec_open_cursor_count>("kvec_open_cursor_count")
                   .returns(INT)
                   .no_params()
                   .build())
