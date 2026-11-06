@@ -1,0 +1,6 @@
+INSTALL EXTENSION vsql_knn_index_test;
+# SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t HAVING d <= 1.3 ORDER BY d LIMIT 10
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

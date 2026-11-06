@@ -1,0 +1,18 @@
+# Queries a KNN scan cannot answer on its own: descending order, a second
+# ORDER BY key, and a join that does not start from the indexed table.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 2
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]'), id LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+CREATE TABLE g (grp INT PRIMARY KEY, name VARCHAR(10));
+INSERT INTO g VALUES (1,'one'),(2,'two'),(3,'three');
+--let $knn_query = SELECT t.id, g.name FROM t JOIN g ON t.grp = g.grp ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, '[1,0,0,0]') LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE g;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

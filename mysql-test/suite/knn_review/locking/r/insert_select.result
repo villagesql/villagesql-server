@@ -1,0 +1,10 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t_out (id INT PRIMARY KEY);
+INSERT INTO t_out SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t_out ORDER BY id;
+id
+1
+4
+DROP TABLE t_out;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

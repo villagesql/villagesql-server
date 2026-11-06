@@ -1,0 +1,23 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]'), (3, '[0,0,2,0]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+id
+1
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+id
+1
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+id
+1
+# Cursors left open: expect 0
+cursors_left_open
+0
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

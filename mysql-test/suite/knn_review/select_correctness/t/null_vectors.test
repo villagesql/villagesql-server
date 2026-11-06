@@ -1,0 +1,16 @@
+# NULL vectors in the indexed column. Inserting one succeeds, and a KNN query
+# that filters the NULL row out works. kvec_l2_distance rejects a NULL operand,
+# so with the index ignored, ordering every row by distance fails with the
+# function's error.
+
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE nv (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON nv (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO nv VALUES (1, '[1,0,0,0]'), (2, NULL), (3, '[2,0,0,0]');
+SELECT id, v IS NULL AS is_null FROM nv ORDER BY id;
+SELECT id FROM nv IGNORE INDEX (idx_v) WHERE v IS NOT NULL ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM nv WHERE v IS NOT NULL ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--error ER_UDF_ERROR
+SELECT id FROM nv IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE nv;
+UNINSTALL EXTENSION vsql_knn_index_test;

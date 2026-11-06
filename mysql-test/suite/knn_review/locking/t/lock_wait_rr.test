@@ -1,0 +1,27 @@
+# REPEATABLE READ: a row locked by another session makes a locking KNN read wait
+# (reported here by NOWAIT), not skip it; SKIP LOCKED skips it; a plain read
+# does not wait.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--connect (con1, localhost, root,,)
+START TRANSACTION;
+SELECT id FROM t WHERE id = 4 FOR UPDATE;
+--connection default
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+--error ER_LOCK_NOWAIT
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE NOWAIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE SKIP LOCKED;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+--connection con1
+COMMIT;
+--disconnect con1
+--connection default
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

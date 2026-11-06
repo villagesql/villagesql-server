@@ -1,0 +1,13 @@
+# A row deleted and inserted again with the same key appears once, with its new
+# vector.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+DELETE FROM t WHERE id = 1;
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DELETE FROM t WHERE id = 4;
+INSERT INTO t VALUES (4, 2, 'd', '[9,9,9,9]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

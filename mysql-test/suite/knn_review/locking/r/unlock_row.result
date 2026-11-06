@@ -1,0 +1,22 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+# The nearest row (1) fails the WHERE clause
+SELECT id FROM t WHERE pay <> 'a' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 FOR UPDATE;
+id
+4
+8
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+# Row 1 was rejected, so its lock was released
+SELECT id FROM t WHERE id = 1 FOR UPDATE NOWAIT;
+id
+1
+# Row 4 was returned, so it is still locked
+SELECT id FROM t WHERE id = 4 FOR UPDATE NOWAIT;
+ERROR HY000: Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.
+ROLLBACK;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
