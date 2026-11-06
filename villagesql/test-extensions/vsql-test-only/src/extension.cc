@@ -243,7 +243,7 @@ int fault_blob_compare(vsql::CustomArg a, vsql::CustomArg b) {
   return 0;
 }
 
-// not a real hash, but sufficient for throw test
+// Not a real hash, but sufficient for the throw test.
 size_t fault_blob_hash(vsql::CustomArg in) {
   auto va = in.value();
   if (kHashThrow.size() <= va.size() &&
