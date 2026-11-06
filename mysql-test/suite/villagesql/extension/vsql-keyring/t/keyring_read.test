@@ -15,6 +15,13 @@ SELECT vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value
 --echo # Read it back
 SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
 
+--echo # Store a large secret in the keyring
+SELECT vsql_keyring_reader.keyring_store('big', NULL, REPEAT('a', 5000));
+
+--echo # Read stored large key
+SELECT vsql_keyring_reader.keyring_read('big', NULL);
+
+
 --echo # Restart server - keyring component reloads from its backing file
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR $KEYRING_FILE_COMPONENT_DIR KEYRING_FILE_COMPONENT_DIR
 --let $restart_parameters = restart: $KEYRING_FILE_COMPONENT_OPT
