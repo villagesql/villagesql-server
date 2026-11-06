@@ -291,15 +291,11 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // any argument is not constant, e.g. a column. We defer only for an argument
   // with a ?, because a column's type is known at PREPARE and prerun can check
   // it there. A call whose bind hook is postponed defers prerun too.
-  bool defer_prerun = postponed;
-  if (!defer_prerun) {
-    const bool is_in_prepare =
-        thd->stmt_arena->is_stmt_prepare() && !thd->stmt_arena->is_repreparing;
-    defer_prerun =
-        is_in_prepare && std::any_of(m_args, m_args + arg_count, [](Item *arg) {
-          return villagesql::HasPSParamWithoutValue(arg);
-        });
-  }
+  const bool defer_prerun =
+      postponed || (villagesql::IsFirstPrepareBeforeReprepare(thd) &&
+                    std::any_of(m_args, m_args + arg_count, [](Item *arg) {
+                      return villagesql::HasPSParamWithoutValue(arg);
+                    }));
   if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
