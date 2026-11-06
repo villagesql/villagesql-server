@@ -26,6 +26,7 @@
 #include "my_sys.h"
 #include "mysql/plugin_auth_common.h"
 #include "mysqld_error.h"
+#include "scope_guard.h"
 #include "sql/auth/auth_common.h"
 #include "sql/auth/auth_internal.h"
 #include "sql/auth/sql_auth_cache.h"
@@ -183,7 +184,7 @@ bool vef_auth_account_unknown(vef_auth_ctx_t *ctx) {
 // true on failure (logged). One Auto_THD per statement: reusing one trips a
 // binlog-XID assert on the 2nd DDL. Auto_THD's ctor repoints current_thd at its
 // THD via store_globals(), so capture the connection's THD first and restore it
-// after -- otherwise, once ~Auto_THD frees its THD, the rest of
+// on the way out -- otherwise, once ~Auto_THD frees its THD, the rest of
 // acl_authenticate runs with current_thd still pointing at that freed THD.
 //
 // Provisioning is never written to the binary log. The account and its roles
@@ -196,6 +197,9 @@ bool vef_auth_account_unknown(vef_auth_ctx_t *ctx) {
 // source, when an account first logs in to it.
 static bool provision_run(const std::string &sql) {
   THD *const conn_thd = current_thd;
+  // Declared before the Auto_THD block, so it runs after ~Auto_THD.
+  auto restore_conn_thd =
+      create_scope_guard([conn_thd] { conn_thd->store_globals(); });
   bool failed = false;
   {
     Auto_THD provisioner;
@@ -211,8 +215,7 @@ static bool provision_run(const std::string &sql) {
               conn.get_last_errno(),
               conn.get_last_error() ? conn.get_last_error() : "");
     }
-  }  // ~Auto_THD frees its THD; current_thd now points at freed memory
-  conn_thd->store_globals();  // restore the connection thread's globals
+  }  // ~Auto_THD frees its THD; restore_conn_thd then resets current_thd
   return failed;
 }
 
