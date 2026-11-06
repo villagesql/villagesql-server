@@ -61,10 +61,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -407,13 +409,29 @@ struct KVecEntry {
   std::shared_ptr<std::atomic<uint64_t>> delete_trx =
       std::make_shared<std::atomic<uint64_t>>(0);
 };
-struct KVecIndexCtx {
+struct KVecStore {
   std::vector<KVecEntry> entries;
   // Guards entries. Like vsql-vector's operation mutex: writers (insert) take
   // it exclusive, readers (scan) take it shared, so a concurrent DDL build can
   // insert from multiple threads and a scan sees a consistent list.
   std::shared_mutex mutex;
 };
+// The entries outlive the index context: InnoDB unloads and loads an index
+// again when it reloads the table (instant DDL, eviction from the dictionary
+// cache), and a real index keeps its entries on pages across that. Each
+// store is registered under the storage ref create gives the index, and load
+// finds it again. A server restart still loses the entries.
+struct KVecIndexCtx {
+  std::shared_ptr<KVecStore> store = std::make_shared<KVecStore>();
+};
+static std::mutex g_store_registry_mutex;
+static std::map<Index::StorageRef, std::shared_ptr<KVecStore>>
+    g_store_registry;
+// Seeded from the clock so that refs handed out after a restart do not repeat
+// refs stored in the dictionary before it.
+static std::atomic<Index::StorageRef> g_next_storage_ref{static_cast<
+    Index::StorageRef>(
+    std::chrono::system_clock::now().time_since_epoch().count())};
 
 using IdxCtx = Index::StorageCtx<KVecIndexCtx>;
 
@@ -444,25 +462,37 @@ struct KVecCursor {
   size_t pos = 0;
 };
 
-static bool kvec_create(IdxCtx * /*ctx*/, const Index & /*index*/,
+static bool kvec_create(IdxCtx *ctx, const Index & /*index*/,
                         Space::Ref /*space_ref*/, Segment::TrxRef /*trx_ref*/,
                         char * /*err*/, uint32_t /*err_len*/) {
+  const Index::StorageRef ref = g_next_storage_ref++;
+  ctx->set_ref(ref);
+  std::lock_guard<std::mutex> lock(g_store_registry_mutex);
+  g_store_registry[ref] = ctx->user()->store;
   return false;
 }
 
 static bool kvec_drop(IdxCtx *ctx, const Index & /*index*/,
                       Segment::TrxRef /*trx_ref*/, char * /*err*/,
                       uint32_t /*err_len*/) {
+  {
+    std::lock_guard<std::mutex> registry_lock(g_store_registry_mutex);
+    g_store_registry.erase(ctx->get_ref());
+  }
   // Exclusive, like insert: entries is only ever touched under the mutex.
-  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  g_entry_count -= static_cast<long long>(ctx->user()->entries.size());
-  ctx->user()->entries.clear();
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  g_entry_count -= static_cast<long long>(ctx->user()->store->entries.size());
+  ctx->user()->store->entries.clear();
   return false;
 }
 
-static bool kvec_load(IdxCtx * /*ctx*/, const Index & /*index*/,
-                      Index::StorageRef /*storage_ref*/, char * /*err*/,
+static bool kvec_load(IdxCtx *ctx, const Index & /*index*/,
+                      Index::StorageRef storage_ref, char * /*err*/,
                       uint32_t /*err_len*/) {
+  ctx->set_ref(storage_ref);
+  std::lock_guard<std::mutex> lock(g_store_registry_mutex);
+  auto [it, added] = g_store_registry.try_emplace(storage_ref, ctx->user()->store);
+  if (!added) ctx->user()->store = it->second;
   return false;
 }
 
@@ -506,8 +536,8 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   // Exclusive lock: a concurrent DDL build inserts each scanned row from
   // multiple worker threads (like vsql-vector's unique_lock on its operation
   // mutex).
-  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  ctx->user()->entries.push_back(std::move(entry));
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  ctx->user()->store->entries.push_back(std::move(entry));
   ++g_insert_count;
   ++g_entry_count;
   return false;
@@ -534,8 +564,8 @@ static bool kvec_mark_delete(IdxCtx *ctx, const Index &index,
     return true;
   }
   const uint32_t num_pk_parts = index.get_primary_num_key_cols();
-  std::shared_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  for (const KVecEntry &entry : ctx->user()->entries) {
+  std::shared_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  for (const KVecEntry &entry : ctx->user()->store->entries) {
     if (entry.ref != ref || entry.pkey.size() != num_pk_parts) continue;
     bool same_pk = true;
     for (uint32_t i = 0; i < num_pk_parts && same_pk; i++) {
@@ -574,8 +604,8 @@ static bool kvec_purge(IdxCtx *ctx, const Index &index, Segment::TrxRef trx_ref,
   }
   const uint32_t num_pk_parts = index.get_primary_num_key_cols();
   const auto trx = static_cast<uint64_t>(trx_ref);
-  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  auto &entries = ctx->user()->entries;
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  auto &entries = ctx->user()->store->entries;
   const auto matches = [&](const KVecEntry &entry) {
     if (entry.ref != ref || entry.pkey.size() != num_pk_parts) return false;
     for (uint32_t i = 0; i < num_pk_parts; i++) {
@@ -621,8 +651,8 @@ static bool kvec_ref_insert(IdxCtx *ctx, const Index &index,
   entry.trx = trx_ref;
   entry.key_ref = g_next_key_ref++;
   *key_ref = entry.key_ref;
-  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  ctx->user()->entries.push_back(std::move(entry));
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  ctx->user()->store->entries.push_back(std::move(entry));
   ++g_insert_count;
   ++g_entry_count;
   return false;
@@ -639,8 +669,8 @@ static bool kvec_ref_mark_delete(IdxCtx *ctx, const Index & /*index*/,
     snprintf(err, err_len, "kvec_l2_ref: missing entry reference");
     return true;
   }
-  std::shared_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  for (const KVecEntry &entry : ctx->user()->entries) {
+  std::shared_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  for (const KVecEntry &entry : ctx->user()->store->entries) {
     if (entry.key_ref == *key_ref) {
       entry.delete_trx->store(delete_mark ? static_cast<uint64_t>(trx_ref) : 0);
       break;
@@ -662,8 +692,8 @@ static bool kvec_ref_purge(IdxCtx *ctx, const Index & /*index*/,
     return true;
   }
   const auto trx = static_cast<uint64_t>(trx_ref);
-  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  auto &entries = ctx->user()->entries;
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  auto &entries = ctx->user()->store->entries;
   const auto matches = [&](const KVecEntry &entry) {
     if (entry.key_ref != *key_ref) return false;
     const uint64_t del = entry.delete_trx->load();
@@ -675,11 +705,11 @@ static bool kvec_ref_purge(IdxCtx *ctx, const Index & /*index*/,
   return false;
 }
 
-// fn_id the L2 distance helper is registered under (with_helper<...>(1)).
-static constexpr uint32_t kDistanceHelperFnId = 1;
-// fn_id of the ORDER profile function (with_function<...>(1, Order)); a KNN
-// scan carries it as its key's profile function ID.
-static constexpr uint32_t kDistanceFunctionFnId = 1;
+// A KNN scan carries the fn_id of the ORDER profile function the query uses
+// as its key's profile function ID. Every profile here registers the helper
+// computing the same distance under the same fn_id as the ORDER function, so
+// the scan ranks with helper(profile_function_id). The range fixture uses no
+// profile function and handles its equality key directly.
 
 static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
                        const IndexScanDesc &scan_desc, Index::Cursor *cursor,
@@ -693,8 +723,8 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     return true;
   }
   const IndexScanKey scan_key = scan_desc[0];
-  if (scan_key.profile_function_id() != kDistanceFunctionFnId ||
-      scan_key.num_columns() != 1 || !scan_key.is_bounded() ||
+  const uint32_t fn_id = scan_key.profile_function_id();
+  if (fn_id > 2 || scan_key.num_columns() != 1 || !scan_key.is_bounded() ||
       scan_key[0].data == nullptr) {
     snprintf(err, err_len, "kvec_l2: bad KNN query key");
     return true;
@@ -717,8 +747,8 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // Shared lock: readers don't block each other, but they exclude a concurrent
   // insert mutating entries (mirrors vsql-vector's shared_lock on reads). Held
   // for the whole scan of the list -- and keeps the rowid pointers valid.
-  std::shared_lock<std::shared_mutex> lock(ctx->user()->mutex);
-  const auto &entries = ctx->user()->entries;
+  std::shared_lock<std::shared_mutex> lock(ctx->user()->store->mutex);
+  const auto &entries = ctx->user()->store->entries;
   hits.reserve(entries.size());
 
   // get_key_data is caller-provides-buffer: raw.data points at a buffer of at
@@ -751,13 +781,21 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     }
     const IndexScanKey::KeyPartData stored_val{stored.data(), raw.length};
 
+    // The range fixture has no profile function. It returns only byte-identical
+    // values so the handler receives a valid equality range result.
+    if (fn_id == 0 &&
+        (stored_val.length != query.length ||
+         std::memcmp(stored_val.data, query.data, query.length) != 0)) {
+      continue;
+    }
+
     // helper() returns void: the ABI's helper_fn has no error channel, so a
     // distance computation that fails server-side cannot be detected here and
     // leaves d at 0.0, ranking that row as the nearest neighbour. Giving
     // helper_fn an error return is a separate ABI change; until then a failing
     // helper silently corrupts the ordering.
     double d = 0.0;
-    index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
+    if (fn_id != 0) index.helper<double>(kKeyPos, fn_id, &d, query, stored_val);
     hits.push_back(Hit{entry.ref, &entry.pkey, entry.key_ref, entry.trx,
                        entry.delete_trx, d});
   }
@@ -891,6 +929,22 @@ static constexpr const char kKVecIndexCos[] = "kvec_cos";
 static constexpr const char kKVecProfileCos[] = "kvec_profile_cos";
 static constexpr const char kKVecCosFunc[] = "kvec_cos_distance";
 
+// The REF_LOOKUP storage of kvec_l2_ref, bound to the kvec_l2_distance function
+// so the same queries run against both storage models. Not default_for_type,
+// so a test names it explicitly:
+// (v kvec_profile_l2_btree) USING EXTENDED(...kvec_l2_btree).
+static constexpr const char kKVecIndexL2Btree[] = "kvec_l2_btree";
+static constexpr const char kKVecProfileL2Btree[] = "kvec_profile_l2_btree";
+
+// An index type whose profile binds two ORDER functions, L2 (fn_id 1) and
+// cosine (fn_id 2), so a KNN scan must rank by the one the query uses. Not
+// default_for_type, so a test names it explicitly:
+// (v kvec_profile_multi) USING EXTENDED(...kvec_multi).
+static constexpr const char kKVecIndexMulti[] = "kvec_multi";
+static constexpr const char kKVecProfileMulti[] = "kvec_profile_multi";
+static constexpr const char kKVecIndexRange[] = "kvec_range";
+static constexpr const char kKVecProfileRange[] = "kvec_profile_range";
+
 // ============================================================================
 // Type + column-store registration
 // ============================================================================
@@ -1013,6 +1067,100 @@ static constexpr auto KVEC_STORE_COS_INDEX =
         .build();
 // clang-format on
 
+// Same callbacks and storage as kvec_l2_ref, a distinct profile target.
+// clang-format off
+static constexpr auto KVEC_STORE_BTREE_INDEX =
+    make_index_type<kKVecIndexL2Btree, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_ref_insert>()
+            .mark_delete<&kvec_ref_mark_delete>()
+            .purge<&kvec_ref_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::REF_LOOKUP)
+
+        .build();
+// clang-format on
+
+// The two-metric variant: same callbacks and storage as kvec_l2, only its
+// profile differs (kvec_profile_multi).
+// clang-format off
+static constexpr auto KVEC_STORE_MULTI_INDEX =
+    make_index_type<kKVecIndexMulti, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
+
+        .build();
+// clang-format on
+
+// Range-capable fixture used to exercise keyed non-KNN equality reads.
+// clang-format off
+static constexpr auto KVEC_STORE_RANGE_INDEX =
+    make_index_type<kKVecIndexRange, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::RANGE_SCAN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
+
+        .build();
+// clang-format on
+
 // ============================================================================
 // Distance function + profile
 // ============================================================================
@@ -1113,6 +1261,17 @@ static const auto KVEC_L2_REF_PROFILE =
         .ordering(Index::Ordering::ASC)
         .build();
 
+// Same L2 function and helper as kvec_profile_l2, bound to the kvec_l2_btree
+// index type.
+static const auto KVEC_L2_BTREE_PROFILE =
+    make_index_profile(kKVecProfileL2Btree)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexL2Btree)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
 // Cosine metric, bound to the kvec_cos index (NOT kvec_l2). Not
 // default_for_type -- a type may have only one default profile, and L2 owns it.
 static void kvec_cos_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
@@ -1155,6 +1314,26 @@ static const auto KVEC_COS_PROFILE =
         .ordering(Index::Ordering::ASC)
         .build();
 
+// Both metrics on one index type: each ORDER function's helper is registered
+// under the same fn_id, which kvec_begin relies on.
+static const auto KVEC_MULTI_PROFILE =
+    make_index_profile(kKVecProfileMulti)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexMulti)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_function<KVEC_COS_FN>(2, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .with_helper<KVEC_COS_HELPER_FN>(2)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
+static const auto KVEC_RANGE_PROFILE =
+    make_index_profile(kKVecProfileRange)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexRange)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
 // ============================================================================
 // Extension entry point
 // ============================================================================
@@ -1165,11 +1344,17 @@ static auto COLUMN_STORE =
 static auto INDEX_TYPE = IndexTypeCapability()
                              .index_type(KVEC_STORE_INDEX)
                              .index_type(KVEC_STORE_REF_INDEX)
-                             .index_type(KVEC_STORE_COS_INDEX);
+                             .index_type(KVEC_STORE_COS_INDEX)
+                             .index_type(KVEC_STORE_BTREE_INDEX)
+                             .index_type(KVEC_STORE_MULTI_INDEX)
+                             .index_type(KVEC_STORE_RANGE_INDEX);
 static auto INDEX_PROFILE = IndexProfileCapability()
                                 .index_profile(KVEC_L2_PROFILE)
                                 .index_profile(KVEC_L2_REF_PROFILE)
-                                .index_profile(KVEC_COS_PROFILE);
+                                .index_profile(KVEC_COS_PROFILE)
+                                .index_profile(KVEC_L2_BTREE_PROFILE)
+                                .index_profile(KVEC_MULTI_PROFILE)
+                                .index_profile(KVEC_RANGE_PROFILE);
 
 using namespace vsql;
 
