@@ -22,7 +22,7 @@ INSERT INTO t_vdf VALUES (2, '(42)');
 SELECT id, v FROM t_vdf ORDER BY id;
 DROP TABLE t_vdf;
 
-# Record log file position before first decode failure.
+# Record log file position before the intrinsic_default failures.
 --source include/villagesql/decode_failure_log_init.inc
 
 --echo # intrinsic_default VDF: same as previous but function returns error
