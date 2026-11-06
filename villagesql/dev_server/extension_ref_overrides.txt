@@ -20,3 +20,7 @@
 # which 0.0.7 lacks.
 release/0.0.7 vsql-ai 0.0.7
 release/0.0.7 vsql-crypto 0.0.7
+
+# vsql-rust-sdk main moved sys_var to capability ver-2 (vsql-rust-sdk#68),
+# which 0.0.7 lacks (it only serves ver-1).
+release/0.0.7 vsql_sys_var v0.0.6
