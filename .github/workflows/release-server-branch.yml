@@ -60,16 +60,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Linux builds use a pinned image so the shipped binaries' minimum
+        # glibc does not depend on the runner host OS.
         include:
           - runner: [self-hosted, linux, x86_64]
             platform: linux-x86_64
             os: linux
+            container: ubuntu:24.04
           - runner: ubuntu-24.04-arm
             platform: linux-aarch64
             os: linux
+            container: ubuntu:24.04
           - runner: [self-hosted, macOS, ARM64]
             platform: macos-arm64
             os: macos
+            container: ''
     uses: ./.github/workflows/build-server-branch.yml
     with:
       ref: ${{ inputs.ref }}
@@ -77,6 +82,7 @@ jobs:
       os: ${{ matrix.os }}
       platform: ${{ matrix.platform }}
       release_build: ${{ inputs.release_build }}
+      container: ${{ matrix.container }}
 
   attach-release-artifacts:
     name: Attach Release Artifacts
