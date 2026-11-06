@@ -178,7 +178,7 @@ struct FromStringWrapper {
     }
 
     size_t length;
-    bool failed{true};
+    bool failed = true;
 
     VDF_EXCEPTIONS_TRY {
       failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
@@ -186,30 +186,31 @@ struct FromStringWrapper {
     }
     VDF_EXCEPTIONS_CATCH(result);
 
-    if (VEF_RESULT_ERROR != result->type) {
-      if (failed) {
-        result->type = VEF_RESULT_WARNING;
-        constexpr size_t kMaxInputDisplay = 64;
-        size_t display_len = arg.str_len;
-        const char *ellipsis = "";
-        if (display_len > kMaxInputDisplay) {
-          display_len = kMaxInputDisplay;
-          ellipsis = "...";
-        }
-        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-                 "failed to parse string '%.*s%s'",
-                 static_cast<int>(display_len), arg.str_value, ellipsis);
-        return;
-      }
+    // Exception was thrown; result reflects that to the caller.
+    if (VEF_RESULT_ERROR == result->type) return;
 
-      if (length == SIZE_MAX) {
-        result->type = VEF_RESULT_NULL;
-        return;
+    if (failed) {
+      result->type = VEF_RESULT_WARNING;
+      constexpr size_t kMaxInputDisplay = 64;
+      size_t display_len = arg.str_len;
+      const char *ellipsis = "";
+      if (display_len > kMaxInputDisplay) {
+        display_len = kMaxInputDisplay;
+        ellipsis = "...";
       }
-
-      result->type = VEF_RESULT_VALUE;
-      result->actual_len = length;
+      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+               "failed to parse string '%.*s%s'",
+               static_cast<int>(display_len), arg.str_value, ellipsis);
+      return;
     }
+
+    if (length == SIZE_MAX) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+
+    result->type = VEF_RESULT_VALUE;
+    result->actual_len = length;
   }
 };
 

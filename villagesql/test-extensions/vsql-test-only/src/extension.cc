@@ -982,7 +982,9 @@ bool strict_resolve_params(const std::map<std::string, std::string> &params,
   for (const auto &kv : params) {
     if (kv.first == "throw") {
       throw std::runtime_error("strict_resolve_params throw");
-    } else if (kv.first != "length") {
+    }
+
+    if (kv.first != "length") {
       snprintf(error_msg, VEF_MAX_ERROR_LEN,
                "STRICT_PARAM_TYPE: unknown parameter '%s'", kv.first.c_str());
       return true;
