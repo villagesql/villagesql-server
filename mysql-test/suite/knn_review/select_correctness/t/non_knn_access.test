@@ -1,0 +1,15 @@
+# Queries on the vector column that are not KNN: equality, IS NULL, a range,
+# FORCE INDEX on the KNN index, and ORDER BY the column itself. A KNN-only index
+# cannot serve them, so each is answered without it.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id FROM t WHERE v = '[0,1,0,0]';
+SELECT id FROM t WHERE v IN ('[0,1,0,0]', '[4,0,0,0]') ORDER BY id;
+SELECT id FROM t WHERE v IS NULL;
+SELECT id FROM t WHERE v > '[0,1,0,0]' ORDER BY id;
+SELECT id FROM t FORCE INDEX (idx_v) WHERE v = '[0,1,0,0]';
+SELECT COUNT(*) FROM t FORCE INDEX (idx_v);
+SELECT id FROM t ORDER BY v LIMIT 2;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

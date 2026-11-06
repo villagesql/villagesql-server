@@ -1,0 +1,14 @@
+# KNN ordering with DISTINCT and GROUP BY. Ordering by a distance that is not
+# selected, or not grouped, is rejected as for any expression.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--error ER_FIELD_IN_ORDER_NOT_SELECT
+SELECT DISTINCT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT DISTINCT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 3;
+SELECT DISTINCT grp FROM (SELECT grp FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4) s ORDER BY grp;
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md FROM t GROUP BY grp ORDER BY md, grp LIMIT 3;
+--error ER_WRONG_FIELD_WITH_GROUP
+SELECT grp FROM t GROUP BY grp ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,14 @@
+# After RENAME TABLE the KNN index is complete and usable under the new name, and
+# again after renaming back.
+
+--let $knn_issue = KNN-12 After RENAME TABLE a KNN query fails (index_init called for a KNN scan)
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+RENAME TABLE t TO t2;
+SELECT id FROM t2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+RENAME TABLE t2 TO t;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

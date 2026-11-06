@@ -1,0 +1,17 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+# SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR SHARE
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+# SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+# SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+plan_uses_knn	knn_scan_ran	query_errno
+0	0	0
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

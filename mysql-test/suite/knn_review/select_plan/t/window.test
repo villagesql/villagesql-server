@@ -1,0 +1,13 @@
+# Window functions with KNN ordering. A KNN ORDER BY ... LIMIT over a window
+# and a KNN derived table under a window run as a KNN scan.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_query = SELECT id, COUNT(*) OVER () AS total FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4) AS nearest ORDER BY id
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

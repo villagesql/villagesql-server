@@ -1,0 +1,17 @@
+INSTALL EXTENSION vsql_knn_index_test;
+DELETE FROM t WHERE grp = 2;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+2
+5
+6
+7
+DELETE FROM t WHERE id > 5;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+2
+5
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

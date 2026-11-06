@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_knn_index_test;
+UPDATE t SET pay = 'zz' WHERE id = 1;
+UPDATE t SET grp = 3 WHERE id = 4;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+SELECT id, grp, pay FROM t WHERE id IN (1, 4) ORDER BY id;
+id	grp	pay
+1	1	zz
+4	3	d
+UPDATE t SET pay = 'yy' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE pay = 'yy' ORDER BY id;
+id
+1
+4
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

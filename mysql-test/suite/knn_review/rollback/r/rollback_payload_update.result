@@ -1,0 +1,19 @@
+INSTALL EXTENSION vsql_knn_index_test;
+START TRANSACTION;
+UPDATE t SET pay = 'zz' WHERE id = 1;
+SELECT pay FROM t WHERE id = 1;
+pay
+zz
+SELECT id, pay FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id	pay
+1	zz
+4	d
+8	h
+ROLLBACK;
+SELECT id, pay FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id	pay
+1	a
+4	d
+8	h
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

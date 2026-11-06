@@ -1,0 +1,12 @@
+# A transaction sees its own uncommitted primary key update in KNN results, and
+# a rollback restores the old key.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION;
+UPDATE t SET id = 100 WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

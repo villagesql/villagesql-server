@@ -1,0 +1,14 @@
+# An UPDATE that does not change the vector leaves KNN results unchanged, also
+# UPDATE ... ORDER BY distance LIMIT n.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+UPDATE t SET pay = 'zz' WHERE id = 1;
+UPDATE t SET grp = 3 WHERE id = 4;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id, grp, pay FROM t WHERE id IN (1, 4) ORDER BY id;
+UPDATE t SET pay = 'yy' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE pay = 'yy' ORDER BY id;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

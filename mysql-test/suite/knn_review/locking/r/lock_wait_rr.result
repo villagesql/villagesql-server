@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_knn_index_test;
+START TRANSACTION;
+SELECT id FROM t WHERE id = 4 FOR UPDATE;
+id
+4
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE NOWAIT;
+ERROR HY000: Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE SKIP LOCKED;
+id
+1
+8
+2
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+COMMIT;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

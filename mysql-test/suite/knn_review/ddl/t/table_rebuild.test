@@ -1,0 +1,17 @@
+# Table rebuilds keep the KNN index complete and usable.
+
+--let $knn_issue = NYI-4 Building a KNN index over existing rows is not implemented yet
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+ALTER TABLE t FORCE;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ALTER TABLE t ADD COLUMN extra INT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ALTER TABLE t DROP COLUMN extra, ALGORITHM=COPY;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+OPTIMIZE TABLE t;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

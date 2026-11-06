@@ -1,0 +1,11 @@
+# A KNN query on a table with no rows returns nothing, and finds rows inserted
+# later.
+
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE e (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON e (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+SELECT id FROM e ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+INSERT INTO e VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]');
+SELECT id FROM e ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE e;
+UNINSTALL EXTENSION vsql_knn_index_test;

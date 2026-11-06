@@ -1,0 +1,39 @@
+# A READ COMMITTED locking KNN read returns the rows whose index entry is
+# current, whatever else happened to the row: after an UPDATE of a non-indexed
+# column the row is still returned, and a row locked by another session's
+# uncommitted change is waited for (reported by NOWAIT), not skipped.
+# Index type: kvec_l2_btree, which stores no primary key (the server maps the column reference).
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_index_type = kvec_l2_btree
+--let $knn_profile = kvec_profile_l2_btree
+--source suite/knn_review/include/require_index_type.inc
+CREATE TABLE t (id INT PRIMARY KEY, c INT, v KVECTOR);
+CREATE INDEX idx_v ON t (v kvec_profile_l2_btree) USING EXTENDED(vsql_knn_index_test.kvec_l2_btree);
+INSERT INTO t VALUES (1, 0, '[1,0,0,0]'), (2, 0, '[0,1,0,0]'), (3, 0, '[0,0,2,0]');
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+COMMIT;
+UPDATE t SET c = 1 WHERE id = 1;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+COMMIT;
+--connect (con1, localhost, root,,)
+START TRANSACTION;
+UPDATE t SET c = 2 WHERE id = 2;
+--connection default
+START TRANSACTION;
+--error ER_LOCK_NOWAIT
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE NOWAIT;
+COMMIT;
+--connection con1
+ROLLBACK;
+--disconnect con1
+--connection default
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

@@ -1,0 +1,11 @@
+# KNN ordering combined with window functions: a distance as the window's sort
+# key, a window over the rows of a KNN derived table, and the nearest row per
+# group.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id, ROW_NUMBER() OVER (ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS rn FROM t ORDER BY id;
+SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4) AS nearest ORDER BY id;
+SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS rn FROM t) s WHERE rn = 1 ORDER BY id;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

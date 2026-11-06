@@ -1,0 +1,40 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR SHARE;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+1
+4
+8
+SELECT id FROM t WHERE pay <> 'a' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 FOR UPDATE;
+id
+4
+8
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+1
+4
+8
+COMMIT;
+# After an UPDATE of a non-indexed column of row 1
+UPDATE t SET pay = 'zz' WHERE id = 1;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+1
+4
+8
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

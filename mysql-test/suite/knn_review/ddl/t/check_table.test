@@ -1,0 +1,14 @@
+# CHECK TABLE on a table with a custom index reports it OK, and the index keeps
+# working afterwards.
+
+--let $knn_issue = KNN-10 CHECK TABLE reports the KNN index corrupt and marks it so
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+CHECK TABLE t;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+CHECK TABLE t EXTENDED;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,12 @@
+# A transaction sees its own uncommitted insert in KNN results, and a rollback
+# removes it (removing the index entry).
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
