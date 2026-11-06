@@ -38,9 +38,7 @@ DEALLOCATE PREPARE s;
 --echo # After DEALLOCATE: every prerun has had its postrun
 --eval $counts
 
---echo #
 --echo # An argument with a ?: no prerun at PREPARE
---echo #
 PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe_arg(?) AS n FROM t ORDER BY id';
 --echo # After PREPARE: unchanged
 --eval $counts
