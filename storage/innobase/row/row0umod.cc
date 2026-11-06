@@ -53,6 +53,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 #include "current_thd.h"
 #include "debug_sync.h"
@@ -481,6 +482,7 @@ check_if_purged:
     mode |= BTR_RTREE_UNDO_INS;
   }
 
+  using villagesql::innodb::Custom_index;
   search_result = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
   switch (UNIV_EXPECT(search_result, ROW_FOUND)) {
@@ -526,8 +528,14 @@ check_if_purged:
       node->pcur.restore_position(BTR_SEARCH_LEAF, &mtr_vers, UT_LOCATION_HERE);
   ut_a(success);
 
-  old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(), &mtr_vers,
-                                         index, entry, 0, 0);
+  // VillageSQL: Mapping index entries are never reused before purge, so an
+  // old version cannot match.
+  old_has = false;
+  if (!Custom_index::is_custom(index)) {
+    old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(),
+                                           &mtr_vers, index, entry, 0, 0);
+  }
+
   if (old_has) {
     err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr,
                                        &mtr);
@@ -590,6 +598,14 @@ func_exit_no_pcur:
     dtuple_t *entry)     /*!< in: index entry */
 {
   dberr_t err;
+
+  using villagesql::innodb::Custom_index;
+  bool skip_index = false;
+  err =
+      Custom_index::rollback_inserted(index, node->trx.id, entry, &skip_index);
+  if (err != DB_SUCCESS || skip_index) {
+    return (err);
+  }
 
   err = row_undo_mod_del_mark_or_remove_sec_low(node, thr, index, entry,
                                                 BTR_MODIFY_LEAF);
@@ -673,6 +689,7 @@ try_again:
 
   btr_cur->thr = thr;
 
+  using villagesql::innodb::Custom_index;
   search_result = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
   switch (search_result) {
@@ -686,6 +703,9 @@ try_again:
       flags BTR_INSERT, BTR_DELETE, or BTR_DELETE_MARK. */
       ut_error;
     case ROW_NOT_FOUND:
+      err = Custom_index::rollback_missing_entry(index, entry);
+      if (err != DB_SUCCESS) break;
+
       /* For spatial index, if first search didn't find an
       undel-marked rec, try to find a del-marked rec. */
       if (dict_index_is_spatial(index) && btr_cur->rtr_info->fd_del) {
@@ -761,6 +781,10 @@ try_again:
                                          thr, &mtr);
 
       ut_a(err == DB_SUCCESS);
+      // VillageSQL: Mapping index entries remain unique until purged, so no
+      // update check is needed.
+      if (Custom_index::is_custom(index)) break;
+
       heap = mem_heap_create(
           sizeof(upd_t) + dtuple_get_n_fields(entry) * sizeof(upd_field_t),
           UT_LOCATION_HERE);
@@ -1014,6 +1038,12 @@ This is the specific function to handle the modify on multi-value indexes.
 
     ut_a(entry);
 
+    using villagesql::innodb::Custom_index;
+    bool skip_index = false;
+    err =
+        Custom_index::rollback_deleted(index, node->trx.id, entry, &skip_index);
+    if (err != DB_SUCCESS || skip_index) goto check_err;
+
     err = row_undo_mod_del_unmark_sec_and_undo_update(
         BTR_MODIFY_LEAF, thr, index, entry, node->undo_no);
     if (err == DB_FAIL) {
@@ -1021,6 +1051,7 @@ This is the specific function to handle the modify on multi-value indexes.
           BTR_MODIFY_TREE, thr, index, entry, node->undo_no);
     }
 
+  check_err:
     if (err == DB_DUPLICATE_KEY) {
       row_undo_mod_sec_flag_corrupted(thr_get_trx(thr), index);
       err = DB_SUCCESS;
@@ -1208,6 +1239,12 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
 
     ut_a(entry);
 
+    using villagesql::innodb::Custom_index;
+    bool skip_index = false;
+    err =
+        Custom_index::rollback_deleted(index, node->trx.id, entry, &skip_index);
+    if (err != DB_SUCCESS || skip_index) goto check_err;
+
     err = row_undo_mod_del_unmark_sec_and_undo_update(
         BTR_MODIFY_LEAF, thr, index, entry, node->undo_no);
     if (err == DB_FAIL) {
@@ -1215,6 +1252,7 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
           BTR_MODIFY_TREE, thr, index, entry, node->undo_no);
     }
 
+  check_err:
     if (err == DB_DUPLICATE_KEY) {
       row_undo_mod_sec_flag_corrupted(thr_get_trx(thr), index);
       err = DB_SUCCESS;

@@ -940,6 +940,9 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
     return DB_VILLAGESQL_ERROR;
   }
 
+  // TODO(villagesql-indexing): Make the custom index insert and mapping B-tree
+  // insert atomic. A crash between them would leave a stale entry in the
+  // custom index.
   const uint32_t n_extra = n_extra_fields(index);
   if (n_extra > 0) {
     ut_a(entry->n_fields > n_extra);
@@ -1131,6 +1134,108 @@ dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
     }
     return DB_VILLAGESQL_ERROR;
   }
+  return DB_SUCCESS;
+}
+
+dberr_t Custom_index::rollback_inserted(dict_index_t *index, trx_id_t trx_id,
+                                        const dtuple_t *entry,
+                                        bool *skip_mapping) {
+  *skip_mapping = false;
+  if (!is_custom(index)) return DB_SUCCESS;
+
+  return rollback(index, trx_id, entry, Rollback_op::REMOVE_INSERTED,
+                  skip_mapping);
+}
+
+dberr_t Custom_index::rollback_deleted(dict_index_t *index, trx_id_t trx_id,
+                                       const dtuple_t *entry,
+                                       bool *skip_mapping) {
+  *skip_mapping = false;
+  if (!is_custom(index)) return DB_SUCCESS;
+
+  return rollback(index, trx_id, entry, Rollback_op::UNMARK_DELETED,
+                  skip_mapping);
+}
+
+dberr_t Custom_index::rollback_missing_entry(const dict_index_t *index,
+                                             const dtuple_t *entry) {
+  if (!is_custom(index)) return DB_SUCCESS;
+
+  ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+      << "Mapping B-tree record in index " << index->name << " of table "
+      << index->table->name << " was not found on rollback: " << *entry;
+  return DB_VILLAGESQL_ERROR;
+}
+
+dberr_t Custom_index::rollback(dict_index_t *index, trx_id_t trx_id,
+                               const dtuple_t *entry, Rollback_op op,
+                               bool *skip_mapping) {
+  *skip_mapping = false;
+
+  Custom_index *custom_index = index->custom_index;
+  const auto &intf = custom_index->interface();
+  auto *storage_ctx = custom_index->storage_ctx();
+
+  if (!storage_ctx) {
+    ut_ad(false);
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Custom index storage context is not initialized.";
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
+  std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
+  bool is_key_null = false;
+  get_entry_columns(index, entry, key_columns, pkey_columns, &is_key_null);
+
+  // NULL keys are not inserted into the mapping B-tree or the index.
+  if (index->has_mapping_btree() && is_key_null) {
+    *skip_mapping = true;
+    return DB_SUCCESS;
+  }
+
+  KeyRef key_ref = EMPTY_KEY_REF;
+  if (needs_mapping_key(index)) {
+    bool found = false;
+    lookup_key_ref(index, entry, &key_ref, &found);
+    // The custom index entry may have already been removed or never inserted.
+    if (!found) {
+      // Nothing to roll back when removing an inserted entry. A delete-marked
+      // entry must have a mapping record, as it cannot be purged before the
+      // transaction commits.
+      *skip_mapping = true;
+      return op == Rollback_op::UNMARK_DELETED
+                 ? rollback_missing_entry(index, entry)
+                 : DB_SUCCESS;
+    }
+  }
+
+  char error_msg[ERROR_MSG_SIZE] = {};
+  const auto trx_ref = static_cast<vef_storage_trx_ref_t>(trx_id);
+  bool failed = true;
+  switch (op) {
+    case Rollback_op::REMOVE_INSERTED:
+      failed = intf.purge(custom_index->index_ctx(), storage_ctx, trx_ref,
+                          &key_ref, key_columns.data(), pkey_columns.data(),
+                          error_msg, sizeof(error_msg));
+      break;
+    case Rollback_op::UNMARK_DELETED:
+      failed =
+          intf.mark_delete(custom_index->index_ctx(), storage_ctx, trx_ref,
+                           &key_ref, key_columns.data(), pkey_columns.data(),
+                           false, error_msg, sizeof(error_msg));
+      break;
+  }
+
+  if (failed) {
+    error_msg[sizeof(error_msg) - 1] = '\0';
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error rolling back custom index entry: " << error_msg;
+    return DB_VILLAGESQL_ERROR;
+  }
+
+  // No mapping B-tree record to undo.
+  *skip_mapping = !index->has_mapping_btree();
   return DB_SUCCESS;
 }
 

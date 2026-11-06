@@ -1,0 +1,233 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v KVECTOR,
+n INT DEFAULT 0
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+# Distances from [0,0,0,0] are 1, 3 and 5.
+INSERT INTO t (id, v) VALUES
+(1, '[1,0,0,0]'),
+(2, '[3,0,0,0]'),
+(3, '[0,5,0,0]');
+SET @base = vsql_knn_index_test.kvec_entry_count();
+# --- TRX_UNDO_INSERT_REC: rollback of an insert removes the entry ---
+BEGIN;
+INSERT INTO t (id, v) VALUES (4, '[2,0,0,0]');
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- TRX_UNDO_DEL_MARK_REC: rollback of a delete unmarks the entry ---
+BEGIN;
+DELETE FROM t WHERE id = 1;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+2
+3
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+ROLLBACK;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+# --- TRX_UNDO_UPD_EXIST_REC: rollback of an update of the indexed column ---
+# The new entry is removed and the old entry is unmarked.
+BEGIN;
+UPDATE t SET v = '[30,0,0,0]' WHERE id = 2;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+3
+2
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- Update of a column that is not indexed does not touch the index ---
+BEGIN;
+UPDATE t SET n = 5 WHERE id = 2;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- Update of the indexed column to NULL: the new key is not indexed ---
+BEGIN;
+UPDATE t SET v = NULL WHERE id = 3;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- Insert of a NULL key: nothing was indexed, nothing to undo ---
+BEGIN;
+INSERT INTO t (id, v) VALUES (7, NULL);
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- TRX_UNDO_UPD_DEL_REC: insert over a committed delete-marked row ---
+# A second connection holds an older read view, so that the delete is not
+# purged while the test runs. The test does not depend on purge.
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+SET @base = vsql_knn_index_test.kvec_entry_count();
+INSERT INTO t (id, v) VALUES (5, '[0,0,2,0]');
+DELETE FROM t WHERE id = 5;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+BEGIN;
+INSERT INTO t (id, v) VALUES (5, '[0,0,0,2]');
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+2
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+5
+2
+3
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+SET @base = vsql_knn_index_test.kvec_entry_count();
+# --- Insert and delete of the same row in one transaction ---
+BEGIN;
+INSERT INTO t (id, v) VALUES (6, '[0,0,0,3]');
+DELETE FROM t WHERE id = 6;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- Partial rollback to a savepoint ---
+BEGIN;
+INSERT INTO t (id, v) VALUES (8, '[0,0,0,2]');
+SAVEPOINT sp;
+UPDATE t SET v = '[0,0,0,40]' WHERE id = 8;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+2
+ROLLBACK TO SAVEPOINT sp;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+8
+2
+3
+ROLLBACK;
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- Statement rollback: the second row fails with a duplicate key ---
+INSERT INTO t (id, v) VALUES (9, '[0,0,3,0]'), (1, '[0,0,0,3]');
+ERROR 23000: Duplicate entry '1' for key 't.PRIMARY'
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+0
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+3
+# --- Control: a committed insert keeps its entry ---
+INSERT INTO t (id, v) VALUES (10, '[0,0,0,4]');
+SELECT vsql_knn_index_test.kvec_entry_count() - @base AS entries;
+entries
+1
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 10;
+id
+1
+2
+10
+3
+COMMIT;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
