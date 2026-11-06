@@ -266,6 +266,8 @@ static bool do_init_extension_infrastructure(THD *thd) {
   }
 
   rollback_guard.release();
+
+  // A failure here is rolled back internally, and the caller aborts startup.
   return trans_commit_stmt(thd) || trans_commit(thd);
 }
 
