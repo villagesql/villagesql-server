@@ -199,8 +199,8 @@ struct FromStringWrapper {
         ellipsis = "...";
       }
       snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
-               "failed to parse string '%.*s%s'",
-               static_cast<int>(display_len), arg.str_value, ellipsis);
+               "failed to parse string '%.*s%s'", static_cast<int>(display_len),
+               arg.str_value, ellipsis);
       return;
     }
 
