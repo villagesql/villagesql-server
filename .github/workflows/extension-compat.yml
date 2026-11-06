@@ -17,6 +17,15 @@ name: Extension SDK Compatibility
 # to download the `devserver-*` and `sdk-*` artifacts. That action is consumed
 # by every extension repo (vsql-ai, etc.), so renaming this file silently
 # breaks nightly CI across all of them. See cpp/action.yml in extension-actions.
+#
+# A non-empty run-tag is appended to the run name as [<run-tag>].
+# nightly-dispatch.yml passes run-tag=nightly, and extension-actions selects
+# the latest successful [nightly] run by its displayTitle.
+
+run-name: >-
+  ${{ inputs.run-tag
+      && format('Extension SDK Compatibility [{0}]', inputs.run-tag)
+      || 'Extension SDK Compatibility' }}
 
 on:
   workflow_dispatch:
@@ -37,6 +46,10 @@ on:
         description: 'Branch, tag, or commit SHA to test, or leave empty for the default branch'
         required: false
         default: ''
+      run-tag:
+        description: 'Tag appended to the run name as [<run-tag>], or leave empty for none'
+        required: false
+        default: ''
       slack_notify:
         description: 'Send Slack notification with results'
         required: false
@@ -48,7 +61,7 @@ permissions:
 
 jobs:
   run:
-    name: Extension compatibility
+    name: Extension SDK Compatibility
     uses: ./.github/workflows/extension-compat-suite.yml
     with:
       ref: ${{ inputs.ref || github.ref }}
