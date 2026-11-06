@@ -6952,6 +6952,12 @@ type_conversion_status Item::save_in_field(Field *field, bool no_conversions) {
 
   const type_conversion_status ret = save_in_field_inner(field, no_conversions);
 
+  // VillageSQL: check a value whose type params are learned from each row
+  if (ret == TYPE_OK &&
+      villagesql::MaybeCheckRowTypeForCustomFieldStore(this, field)) {
+    return TYPE_ERR_BAD_VALUE;
+  }
+
   /*
     If an error was raised during evaluation of the item,
     save_in_field_inner() might not notice and return TYPE_OK. Make

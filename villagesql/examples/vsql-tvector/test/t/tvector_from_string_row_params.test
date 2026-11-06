@@ -1,0 +1,91 @@
+# TVECTOR::from_string on a value that is not constant, e.g. a column. The
+# dimension is not known when the statement is resolved, so the extension
+# learns it from each row's string, as it does once for a constant.
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE src (id INT PRIMARY KEY, s VARCHAR(64));
+INSERT INTO src VALUES (1, '[1,2,3]'), (2, '[4,5,6]'), (3, '[7,8]'), (4, NULL);
+
+--echo #
+--echo # SELECT: each row is decoded with its own dimension
+--echo #
+SELECT id, TVECTOR::from_string(s) AS v FROM src ORDER BY id;
+SELECT id, TVECTOR::from_string(CONCAT(s, '')) AS v FROM src ORDER BY id;
+
+--echo #
+--echo # INSERT ... SELECT into a column with a dimension
+--echo #
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t SELECT id, TVECTOR::from_string(s) FROM src WHERE id <> 3;
+SELECT id, v FROM t ORDER BY id;
+
+--echo # A row with another dimension is rejected, and nothing is inserted
+DELETE FROM t;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t SELECT id, TVECTOR::from_string(s) FROM src;
+SELECT COUNT(*) FROM t;
+
+--echo # A NOT NULL column still rejects a NULL row
+CREATE TABLE t_nn (id INT PRIMARY KEY, v TVECTOR(3) NOT NULL);
+--error ER_BAD_NULL_ERROR
+INSERT INTO t_nn SELECT id, TVECTOR::from_string(s) FROM src WHERE id = 4;
+DROP TABLE t_nn;
+
+--echo #
+--echo # INSERT ... VALUES and UPDATE
+--echo #
+SET @s = '[1,2';
+INSERT INTO t VALUES (10, TVECTOR::from_string(CONCAT(@s, ',3]')));
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t VALUES (11, TVECTOR::from_string(CONCAT(@s, ']')));
+UPDATE t SET v = TVECTOR::from_string(
+  (SELECT s FROM src WHERE src.id = 2)) WHERE id = 10;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE t SET v = TVECTOR::from_string(
+  (SELECT s FROM src WHERE src.id = 3)) WHERE id = 10;
+SELECT id, v FROM t ORDER BY id;
+
+--echo #
+--echo # A prepared statement with ? inside an expression
+--echo #
+PREPARE s FROM
+  'INSERT INTO t VALUES (?, TVECTOR::from_string(CONCAT(?, '''')))';
+SET @id = 20, @v = '[7,8,9]';
+EXECUTE s USING @id, @v;
+SET @id = 21, @v = '[7,8]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+SET @id = 22, @v = '[0,0,1]';
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t ORDER BY id;
+
+--echo #
+--echo # A constant still sets the dimension when the statement is resolved
+--echo #
+INSERT INTO t VALUES (30, TVECTOR::from_string('[3,3,3]'));
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t VALUES (31, TVECTOR::from_string('[3,3]'));
+
+--echo #
+--echo # Not covered yet: the value is passed on before it is decoded
+--echo #
+--echo # A function argument needs the dimension when it is resolved
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::to_string(TVECTOR::from_string(s)) FROM src WHERE id = 1;
+--echo # A temporary table's column keeps the value, but not its dimension
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string(s) AS v, COUNT(*) FROM src GROUP BY v;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string(s) AS v FROM src ORDER BY v;
+--echo # A derived table merged into the query is not a temporary table
+SELECT id, v FROM (SELECT id, TVECTOR::from_string(s) AS v FROM src) d
+  ORDER BY id;
+
+DROP TABLE t, src;
+SET @s = NULL, @id = NULL, @v = NULL;
+
+UNINSTALL EXTENSION vsql_tvector;

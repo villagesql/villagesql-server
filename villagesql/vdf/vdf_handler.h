@@ -30,6 +30,7 @@ struct udf_func;
 
 namespace villagesql {
 class TypeContext;
+class TypeDecoder;
 namespace vdf {
 
 // Handler for VDF (VillageSQL Defined Function) calling convention.
@@ -62,6 +63,21 @@ class vdf_handler {
   String *val_str(String *str, String *save_str, const char *func_name,
                   const CHARSET_INFO *charset);
 
+  // A VDF that returns a parameterized custom type may not know the params
+  // when the statement is resolved, as in TVECTOR::from_string(column). Its
+  // extension then learns them from each row's value, and reports them back.
+  //
+  // True if this VDF asks for those params on each row.
+  bool learns_row_params() const { return m_row_params.buf != nullptr; }
+  // Sets *out to the type of the value val_str() returned last, with the
+  // params the extension reported for it, or to nullptr if it reported none.
+  // Returns true on error (error already raised).
+  bool row_type_context(const villagesql::TypeContext **out);
+  // Sets *out to a decoder for the value val_str() returned last, or to
+  // nullptr if the extension reported no params for it. Returns true on error
+  // (error already raised).
+  bool row_type_decoder(villagesql::TypeDecoder **out);
+
  private:
   udf_func *m_udf;
   Item **m_args{nullptr};
@@ -78,6 +94,15 @@ class vdf_handler {
   char *m_error_msg{nullptr};
   bool m_active{false};
   const villagesql::TypeContext *m_return_type_context{nullptr};
+
+  // Where the extension reports the params of each row's value. buf is set
+  // only when learns_row_params().
+  vef_inferred_type_params_t m_row_params{};
+  // The type and decoder for the last params reported, kept so that rows with
+  // the same params share them. They live on the execution's mem_root, so
+  // cleanup() clears them.
+  const villagesql::TypeContext *m_row_type_context{nullptr};
+  villagesql::TypeDecoder *m_row_type_decoder{nullptr};
 
   // Marshal arguments into m_invalues array based on declared parameter types.
   // Returns true if an argument could not be converted; the error is already

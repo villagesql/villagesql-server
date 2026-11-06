@@ -67,6 +67,7 @@
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/type_decoder.h"
 #include "villagesql/types/type_encoder.h"
+#include "villagesql/vdf/vdf_handler.h"
 
 namespace villagesql {
 
@@ -803,6 +804,17 @@ static TypeDecoder *GetTypeDecoderFor(const Field *field) {
   return decoder;
 }
 
+// The handler of a VDF that learns its type params from each row's value, or
+// nullptr if item is not such a VDF.
+static vdf::vdf_handler *RowParamsVdfHandler(const Item *item) {
+  if (item->type() != Item::FUNC_ITEM) return nullptr;
+  const auto *func = down_cast<const Item_func *>(item);
+  if (func->functype() != Item_func::UDF_FUNC) return nullptr;
+  vdf::vdf_handler *handler = down_cast<const Item_udf_func *>(func)->vdf();
+  if (handler == nullptr || !handler->learns_row_params()) return nullptr;
+  return handler;
+}
+
 // Lazily allocate a TypeDecoder for an Item from thd->mem_root. The context
 // is reused for all subsequent decodes on the same Item within a query.
 // Item::cleanup() nulls type_decoder_ between executions (e.g. PS re-exec),
@@ -874,9 +886,17 @@ bool DecodeStringForItem(Item *item, const String &from, String *out) {
   if (should_assert_if_false(item->has_type_context())) {
     return true;
   }
-  TypeDecoder *decoder = GetTypeDecoderFor(item);
+  TypeDecoder *decoder = nullptr;
+  // A VDF that learns its params from each row decodes each value with the
+  // params of its own row.
+  if (vdf::vdf_handler *handler = RowParamsVdfHandler(item)) {
+    if (handler->row_type_decoder(&decoder)) return true;
+  }
   if (decoder == nullptr) {
-    return true;  // OOM, my_error already called
+    decoder = GetTypeDecoderFor(item);
+    if (decoder == nullptr) {
+      return true;  // OOM, my_error already called
+    }
   }
   // Extract ptr/len before decode() writes to out: from and *out may alias.
   const uchar *data = pointer_cast<const uchar *>(from.ptr());
@@ -1133,8 +1153,13 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
 
   // If item also has custom type context, check compatibility
   if (item->has_type_context()) {
-    return item->get_type_context()->is_compatible_with(
-        *field->get_type_context());
+    const TypeContext *item_tc = item->get_type_context();
+    if (item_tc->is_compatible_with(*field->get_type_context())) return true;
+    // A VDF that learns its params from each row, as from_string on a column
+    // does. MaybeCheckRowTypeForCustomFieldStore checks each row's params once
+    // the value is computed.
+    return item_tc->is_assignable_with(*field->get_type_context()) &&
+           RowParamsVdfHandler(item) != nullptr;
   }
 
   // For non-custom items storing into custom fields:
@@ -1255,6 +1280,31 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
   }
 
   return true;  // Error
+}
+
+bool MaybeCheckRowTypeForCustomFieldStore(const Item *item,
+                                          const Field *field) {
+  if (!field->has_type_context() || !item->has_type_context()) return false;
+  // A field with no params either, like a temporary table's column, takes
+  // the value as it is.
+  const TypeContext *field_tc = field->get_type_context();
+  if (field_tc->is_unknown()) return false;
+  vdf::vdf_handler *handler = RowParamsVdfHandler(item);
+  if (handler == nullptr || item->null_value) return false;
+
+  const TypeContext *row_tc = nullptr;
+  if (handler->row_type_context(&row_tc)) return true;
+  if (row_tc != nullptr && row_tc->is_compatible_with(*field_tc)) return false;
+
+  // No params reported, or not the field's.
+  const TypeContext *src_tc =
+      row_tc != nullptr ? row_tc : item->get_type_context();
+  villagesql_error(
+      "Cannot implicitly cast from %s to %s for column '%s' at row %ld", MYF(0),
+      src_tc->qualified_name().c_str(), field_tc->qualified_name().c_str(),
+      field->field_name,
+      current_thd->get_stmt_da()->current_row_for_condition());
+  return true;
 }
 
 void CopyCustomToCustomField(const Field *from, Field *to) {

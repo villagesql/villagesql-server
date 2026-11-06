@@ -29,8 +29,10 @@
 #include "sql/sql_error.h"
 #include "sql/sql_udf.h"
 #include "sql_string.h"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/types/from_string_inference.h"
+#include "villagesql/types/type_decoder.h"
 #include "villagesql/types/util.h"
 
 namespace villagesql {
@@ -343,6 +345,23 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
           static_cast<uint32>(buffer_len) != func->max_length) {
         func->max_length = static_cast<uint32>(buffer_len);
       }
+
+      // The params are still unknown, e.g. from_string on a column. Ask the
+      // extension for them on each row, as InferFromStringConstant does once
+      // for a constant, and size the result for any params, as it does. The
+      // channel is there from VEF_PROTOCOL_3.
+      if (m_return_type_context->is_unknown() &&
+          m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
+        m_row_params.buf = static_cast<char *>(
+            (*THR_MALLOC)->Alloc(VEF_MAX_TYPE_PARAMS_STRING_LEN));
+        if (m_row_params.buf == nullptr) return true;
+        m_row_params.max_buf_len = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+        const int64_t max_len =
+            m_return_type_context->descriptor()->max_persisted_length();
+        if (max_len > 0 && MaybeResizeBuffer(static_cast<size_t>(max_len))) {
+          return true;
+        }
+      }
     }
   }
 
@@ -391,6 +410,55 @@ void vdf_handler::accumulate(bool *null_value) {
 void vdf_handler::cleanup() {
   if (m_active) RunPostrun();
   m_active = false;
+  m_row_type_context = nullptr;
+  m_row_type_decoder = nullptr;
+}
+
+bool vdf_handler::row_type_context(const villagesql::TypeContext **out) {
+  *out = nullptr;
+  if (!learns_row_params() || m_row_params.actual_len == 0) return false;
+
+  const villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw(
+          std::string_view(m_row_params.buf, m_row_params.actual_len));
+  if (params.has_error()) {
+    villagesql_error("Invalid inferred type parameters: %s", MYF(0),
+                     params.validation_error().c_str());
+    return true;
+  }
+  if (m_row_type_context == nullptr ||
+      !(m_row_type_context->parameters() == params)) {
+    const villagesql::TypeContext *tc = nullptr;
+    if (villagesql::AcquireOrCreateTypeContext(
+            m_return_type_context->descriptor(), params, *current_thd->mem_root,
+            tc)) {
+      return true;
+    }
+    m_row_type_context = tc;
+    m_row_type_decoder = nullptr;
+  }
+  *out = m_row_type_context;
+  return false;
+}
+
+bool vdf_handler::row_type_decoder(villagesql::TypeDecoder **out) {
+  *out = nullptr;
+  const villagesql::TypeContext *tc = nullptr;
+  if (row_type_context(&tc)) return true;
+  if (tc == nullptr) return false;
+  if (m_row_type_decoder == nullptr) {
+    MEM_ROOT *mem_root = current_thd->mem_root;
+    auto *decoder = new (mem_root) villagesql::TypeDecoder(*tc, *mem_root);
+    if (decoder == nullptr) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
+               sizeof(villagesql::TypeDecoder));
+      return true;
+    }
+    if (decoder->Init()) return true;
+    m_row_type_decoder = decoder;
+  }
+  *out = m_row_type_decoder;
+  return false;
 }
 
 void vdf_handler::RunPostrun() {
@@ -633,6 +701,11 @@ String *vdf_handler::val_str(String *str, String *save_str,
       } else {
         result.type_params = {0, nullptr, nullptr};
       }
+      if (learns_row_params()) {
+        m_row_params.actual_len = 0;
+        m_row_params.overflow = false;
+        result.out_type_params = &m_row_params;
+      }
     } else if (return_type == VEF_TYPE_BINARY) {
       result.binary_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
       result.max_binary_len = m_result_buffer_size;
@@ -676,6 +749,14 @@ String *vdf_handler::val_str(String *str, String *save_str,
   // Handle result
   switch (result.type) {
     case VEF_RESULT_VALUE: {
+      // The buffer holds the longest params string the ABI allows.
+      if (learns_row_params() && m_row_params.overflow) {
+        villagesql_error(
+            "Type parameters reported by function '%s' are longer than %d "
+            "bytes",
+            MYF(0), func_name, VEF_MAX_TYPE_PARAMS_STRING_LEN);
+        return nullptr;
+      }
       char *res;
       if (is_binary) {
         res = result.alt_bin_buf ? reinterpret_cast<char *>(*result.alt_bin_buf)

@@ -382,6 +382,13 @@ extern bool CanStoreInCustomField(const Item *item, const Field *field);
 extern bool ValidateAndReportCustomFieldStore(const Item *item,
                                               const Field *field);
 
+// Called after an Item's value is stored into a Field. A VDF whose type params
+// are unknown until it runs (e.g. TVECTOR::from_string on a column) learns
+// them from each row's value. Its value fits the field only if those params
+// are the field's. Returns true on error (error already reported).
+extern bool MaybeCheckRowTypeForCustomFieldStore(const Item *item,
+                                                 const Field *field);
+
 // Copy custom type field data directly between fields with the same type.
 // REQUIRES: from must have a custom type (has_type_context() == true).
 // Returns false if copy was performed successfully or an error was generated,

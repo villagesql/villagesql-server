@@ -339,14 +339,16 @@ typedef struct {
   const char *const *values;
 } vef_type_params_t;
 
-// Server-supplied output channel for at-parse-time (fix_fields) inference of
-// from_string parameters from a constant string literal. The SDK wrapper
-// writes the canonical "k=v,k=v" form of the inferred params here when the
-// extension's parameterized from_string transitions MaybeParams<P> from
-// unknown to known during the call.
+// Server-supplied output channel for inference of from_string parameters from
+// the input string. The SDK wrapper writes the canonical "k=v,k=v" form of the
+// inferred params here when the extension's parameterized from_string
+// transitions MaybeParams<P> from unknown to known during the call.
 //
-// Used only on the constant-string inference path. NULL on the normal
-// row-time path; see vef_vdf_result_t::out_type_params.
+// The server sets it in two cases; see vef_vdf_result_t::out_type_params:
+//   - at fix_fields time, for a constant string;
+//   - at row time, when the return type's params are still unknown, as for
+//     from_string on a column. Each row's value then has the params inferred
+//     from its own string.
 //
 // Overflow contract (snprintf-style): the wrapper always sets actual_len to
 // the number of bytes that *would* have been written. If actual_len exceeds
@@ -511,12 +513,15 @@ typedef struct {
 
   // protocol >= VEF_PROTOCOL_3
   //
-  // Optional out-channel for constant-string from_string inference at
-  // fix_fields time. NULL on the normal row-time path. When non-NULL AND the
-  // extension's parameterized from_string transitions MaybeParams<P> from
-  // unknown to known, the SDK wrapper writes the inferred params as a
-  // canonical "k=v,k=v" string via the type's registered params_to_strings
-  // callback. See vef_inferred_type_params_t for the overflow contract.
+  // Optional out-channel for from_string inference: at fix_fields time for a
+  // constant string, and at row time when the return type's params are still
+  // unknown (type_params is empty). NULL on the row-time path when the params
+  // are known. When non-NULL AND the extension's parameterized from_string
+  // transitions MaybeParams<P> from unknown to known, the SDK wrapper writes
+  // the inferred params as a canonical "k=v,k=v" string via the type's
+  // registered params_to_strings callback. See vef_inferred_type_params_t for
+  // the overflow contract; at row time the server offers
+  // VEF_MAX_TYPE_PARAMS_STRING_LEN bytes and does not retry.
   vef_inferred_type_params_t *out_type_params;
 } vef_vdf_result_t;
 
@@ -1008,7 +1013,8 @@ typedef struct {
   // end of the struct so that adding it does not shift earlier offsets,
   // preserving binary compatibility for v1 extensions.
   //
-  // Used only on the fix_fields-time constant-string inference path: the
+  // Used only where from_string infers the parameters: at fix_fields time for
+  // a constant string, and at row time when they are still unknown. The
   // server doesn't yet know the parameters (those are about to be inferred),
   // so it cannot consult resolve_params to size the encode buffer. It
   // allocates max_persisted_length bytes, runs from_string with

@@ -26,9 +26,13 @@ ERROR HY000: Cannot initialize function 'tvector_dot_product': conflicting type 
 DROP TABLE t_dim3, t_dim4;
 call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
 CREATE TABLE t_str (s VARCHAR(32));
-INSERT INTO t_str (s) VALUES ('[1,2,3]');
-SELECT TVECTOR::from_string(s) FROM t_str;
-ERROR HY000: Invalid value in column 'TVECTOR::from_string(s)' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+INSERT INTO t_str (s) VALUES ('[1,2,3]'), ('[4,5,6]');
+SELECT TVECTOR::from_string(s) FROM t_str ORDER BY s;
+TVECTOR::from_string(s)
+[1,2,3]
+[4,5,6]
+SELECT TVECTOR::from_string(s) AS v FROM t_str GROUP BY v;
+ERROR HY000: Invalid value in column 'v' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
 DROP TABLE t_str;
 CREATE TABLE t_dim3 (v TVECTOR(3));
 INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');

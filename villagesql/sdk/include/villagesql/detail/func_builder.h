@@ -816,16 +816,17 @@ struct TypeEncodeWithCacheVdfWrapper {
       }
     }
     VDF_EXCEPTIONS_CATCH(result);
-    // Two call sites reach this wrapper:
-    //   - Row time: the server has already resolved the return type's params,
-    //     and they arrive via result->type_params (count > 0). We construct
-    //     MaybeParams<P> in the known state from the cache.
-    //   - fix_fields-time constant-string inference: the server invokes the
-    //     encode VDF on a literal to learn the params, passing empty
-    //     type_params (count == 0). We leave MaybeParams<P> in the unknown
-    //     state so the extension's from_string can call p.set() to publish
-    //     them; the wrapper then writes them back via result->out_type_params
-    //     below.
+    // Two kinds of call reach this wrapper:
+    //   - Row time with known params: the server has already resolved the
+    //     return type's params, and they arrive via result->type_params
+    //     (count > 0). We construct MaybeParams<P> in the known state from the
+    //     cache.
+    //   - Inference: empty type_params (count == 0). At fix_fields time the
+    //     server invokes the encode VDF on a constant to learn the params; at
+    //     row time it does so when they are still unknown, as for from_string
+    //     on a column. We leave MaybeParams<P> in the unknown state so the
+    //     extension's from_string can call p.set() to publish them; the
+    //     wrapper then writes them back via result->out_type_params below.
     MaybeParams<P> maybe_params;
     const bool input_params_known = result->type_params.count > 0;
     VDF_EXCEPTIONS_TRY {

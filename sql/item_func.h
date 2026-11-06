@@ -2196,6 +2196,9 @@ class Item_udf_func : public Item_func {
   const char *qualified_name() const { return udf.qualified_name(); }
   // VillageSQL: Returns true if this is a VDF (VillageSQL Defined Function)
   bool is_vdf() const { return udf.is_vdf(); }
+  // VillageSQL: the VDF's handler, or nullptr before fix_fields or for a
+  // classic UDF
+  villagesql::vdf::vdf_handler *vdf() const { return udf.vdf(); }
   enum Functype functype() const override { return UDF_FUNC; }
   table_map get_initial_pseudo_tables() const override {
     return m_non_deterministic ? RAND_TABLE_BIT : 0;

@@ -1,0 +1,102 @@
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE src (id INT PRIMARY KEY, s VARCHAR(64));
+INSERT INTO src VALUES (1, '[1,2,3]'), (2, '[4,5,6]'), (3, '[7,8]'), (4, NULL);
+#
+# SELECT: each row is decoded with its own dimension
+#
+SELECT id, TVECTOR::from_string(s) AS v FROM src ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+3	[7,8]
+4	NULL
+SELECT id, TVECTOR::from_string(CONCAT(s, '')) AS v FROM src ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+3	[7,8]
+4	NULL
+#
+# INSERT ... SELECT into a column with a dimension
+#
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t SELECT id, TVECTOR::from_string(s) FROM src WHERE id <> 3;
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+4	NULL
+# A row with another dimension is rejected, and nothing is inserted
+DELETE FROM t;
+INSERT INTO t SELECT id, TVECTOR::from_string(s) FROM src;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 3
+SELECT COUNT(*) FROM t;
+COUNT(*)
+0
+# A NOT NULL column still rejects a NULL row
+CREATE TABLE t_nn (id INT PRIMARY KEY, v TVECTOR(3) NOT NULL);
+INSERT INTO t_nn SELECT id, TVECTOR::from_string(s) FROM src WHERE id = 4;
+ERROR 23000: Column 'v' cannot be null
+DROP TABLE t_nn;
+#
+# INSERT ... VALUES and UPDATE
+#
+SET @s = '[1,2';
+INSERT INTO t VALUES (10, TVECTOR::from_string(CONCAT(@s, ',3]')));
+INSERT INTO t VALUES (11, TVECTOR::from_string(CONCAT(@s, ']')));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+UPDATE t SET v = TVECTOR::from_string(
+(SELECT s FROM src WHERE src.id = 2)) WHERE id = 10;
+UPDATE t SET v = TVECTOR::from_string(
+(SELECT s FROM src WHERE src.id = 3)) WHERE id = 10;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 2
+SELECT id, v FROM t ORDER BY id;
+id	v
+10	[4,5,6]
+#
+# A prepared statement with ? inside an expression
+#
+PREPARE s FROM
+'INSERT INTO t VALUES (?, TVECTOR::from_string(CONCAT(?, '''')))';
+SET @id = 20, @v = '[7,8,9]';
+EXECUTE s USING @id, @v;
+SET @id = 21, @v = '[7,8]';
+EXECUTE s USING @id, @v;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+SET @id = 22, @v = '[0,0,1]';
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t ORDER BY id;
+id	v
+10	[4,5,6]
+20	[7,8,9]
+22	[0,0,1]
+#
+# A constant still sets the dimension when the statement is resolved
+#
+INSERT INTO t VALUES (30, TVECTOR::from_string('[3,3,3]'));
+INSERT INTO t VALUES (31, TVECTOR::from_string('[3,3]'));
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+#
+# Not covered yet: the value is passed on before it is decoded
+#
+# A function argument needs the dimension when it is resolved
+SELECT TVECTOR::to_string(TVECTOR::from_string(s)) FROM src WHERE id = 1;
+ERROR HY000: Cannot initialize function 'TVECTOR::to_string': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+# A temporary table's column keeps the value, but not its dimension
+SELECT TVECTOR::from_string(s) AS v, COUNT(*) FROM src GROUP BY v;
+ERROR HY000: Invalid value in column 'v' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+SELECT TVECTOR::from_string(s) AS v FROM src ORDER BY v;
+ERROR HY000: Invalid value in column 'v' of type 'vsql_tvector.TVECTOR' at row 2: check server log for details
+# A derived table merged into the query is not a temporary table
+SELECT id, v FROM (SELECT id, TVECTOR::from_string(s) AS v FROM src) d
+ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+3	[7,8]
+4	NULL
+DROP TABLE t, src;
+SET @s = NULL, @id = NULL, @v = NULL;
+UNINSTALL EXTENSION vsql_tvector;

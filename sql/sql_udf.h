@@ -152,6 +152,9 @@ class udf_handler {
 
   bool is_initialized() const { return m_initialized; }
 
+  // The VDF's handler, or nullptr before fix_fields or for a classic UDF.
+  villagesql::vdf::vdf_handler *vdf() const { return m_vdf; }
+
   // Returns true if this is a VDF. Uses vdf_func_desc (available before
   // fix_fields) rather than m_vdf (only set after fix_fields).
   bool is_vdf() const {

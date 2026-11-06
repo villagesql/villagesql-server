@@ -169,12 +169,13 @@ class TypeBuilder {
   // static_asserts the pairing. Ignored for non-parameterized types
   // (persisted_length suffices there).
   //
-  // Used only on the fix_fields-time constant-string inference path, where
-  // the server has not yet inferred the params and so cannot consult
-  // resolve_params to size the encode buffer. The server allocates this many
-  // bytes, runs from_string with MaybeParams<P> unknown, then trims to
-  // actual_len. After inference, normal row-time calls continue to use the
-  // params-resolved persisted_length as today.
+  // Used only where from_string infers the params: at fix_fields time for a
+  // constant string, and at row time when they are still unknown (e.g.
+  // from_string on a column). The server has not yet inferred the params and
+  // so cannot consult resolve_params to size the encode buffer. It allocates
+  // this many bytes, runs from_string with MaybeParams<P> unknown, then trims
+  // to actual_len. Calls with known params use the params-resolved
+  // persisted_length.
   constexpr auto max_persisted_length(int64_t len) const {
     detail::TypeBuilderState s = state_;
     s.desc.vef_desc.max_persisted_length = len;
