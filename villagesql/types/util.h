@@ -422,6 +422,24 @@ extern String *EncodeStringForCustomParam(Item_param *param,
                                           const String &str_value,
                                           bool &null_value);
 
+// Called when a procedure hands an OUT or INOUT parameter back through a `?`.
+// If the procedure's variable has a custom type, the `?` gets that type too.
+//   thd      - the session; the `?` keeps the type until its statement ends.
+//   param    - the `?`.
+//   proc_var - the procedure's variable.
+//   text_cs  - the charset of the variable's value as text. The text is
+//              already stored in the `?`, but marked as binary, and the `?`
+//              needs the real charset to encode the text with the type.
+// Returns true on error.
+extern bool MaybeSetOutParamCustomType(THD *thd, Item_param *param,
+                                       Item *proc_var,
+                                       const CHARSET_INFO *text_cs);
+
+// Called when a `?` is reset after EXECUTE. Clears the type that
+// MaybeSetOutParamCustomType gave to an OUT or INOUT `?`, so the next
+// EXECUTE binds a new value to a `?` with no type.
+extern void MaybeClearOutParamTypeContext(Item_param *param);
+
 // Store intrinsic default value for a NOT NULL custom field receiving NULL via
 // INSERT/UPDATE IGNORE or LOAD DATA IGNORE.
 // Returns TYPE_OK on success. On failure (no intrinsic default registered),

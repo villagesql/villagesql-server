@@ -1,0 +1,61 @@
+CREATE PROCEDURE p_out(IN x COMPLEX, OUT y COMPLEX) SET y = x;
+CREATE PROCEDURE p_inout(INOUT y COMPLEX)
+SET y = vsql_complex.complex_add(y, '(1,1)');
+CREATE PROCEDURE p_null(OUT y COMPLEX) SET y = NULL;
+#
+# OUT parameter
+#
+# A direct CALL, for comparison
+CALL p_out('(1,2)', @y);
+SELECT @y;
+@y
+(1,2)
+# The variable has the custom type, so HEX() is rejected
+SELECT HEX(@y);
+ERROR HY000: Incorrect usage of hex and COMPLEX
+SET @y = NULL;
+PREPARE s FROM 'CALL p_out(?, ?)';
+SET @x = '(1,2)';
+EXECUTE s USING @x, @y;
+SELECT @y;
+@y
+(1,2)
+SELECT HEX(@y);
+ERROR HY000: Incorrect usage of hex and COMPLEX
+# Executed again with another value
+SET @x = '(3,4)';
+EXECUTE s USING @x, @y;
+SELECT @y;
+@y
+(3,4)
+DEALLOCATE PREPARE s;
+#
+# INOUT parameter
+#
+PREPARE s FROM 'CALL p_inout(?)';
+SET @y = '(3,4)';
+EXECUTE s USING @y;
+SELECT @y;
+@y
+(4,5)
+# Executed again with a new text value
+SET @y = '(10,20)';
+EXECUTE s USING @y;
+SELECT @y;
+@y
+(11,21)
+DEALLOCATE PREPARE s;
+#
+# A NULL OUT value
+#
+PREPARE s FROM 'CALL p_null(?)';
+SET @y = '(1,2)';
+EXECUTE s USING @y;
+SELECT @y IS NULL;
+@y IS NULL
+1
+DEALLOCATE PREPARE s;
+SET @x = NULL, @y = NULL;
+DROP PROCEDURE p_out;
+DROP PROCEDURE p_inout;
+DROP PROCEDURE p_null;
