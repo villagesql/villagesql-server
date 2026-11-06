@@ -107,7 +107,7 @@ class vdf_handler {
 // Every EXECUTE of a prepared statement that calls a VDF prepares the
 // statement again (the same happens for classic UDFs). A VDF can deduce a
 // custom type's params from a string value, e.g. TVECTOR::from_string(?)
-// with '...' bound to the `?`. Preparing again makes new `?` object, and
+// with '...' bound to the `?`. Preparing again makes new `?` objects, and
 // MySQL gives it the bound values only after the statement is resolved.
 // So for a statement that calls a VDF, copy the string ('...') to the new
 // `?` object before resolving, so that the params can be deduced from it.
