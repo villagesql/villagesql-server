@@ -21,6 +21,14 @@ id	v
 1	(9)
 2	(42)
 DROP TABLE t_vdf;
+# intrinsic_default VDF: same as previous but function returns error
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_ERR_TYPE NOT NULL);
+ERROR HY000: Type 'vsql_test_only.DEFAULT_VDF_ERR_TYPE' failed to initialize: intrinsic_default function failed: default_vdf_err_default error
+# Verify the failure was logged
+# intrinsic_default VDF: same as previous but function throws
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_THROW_TYPE NOT NULL);
+ERROR HY000: Type 'vsql_test_only.DEFAULT_VDF_THROW_TYPE' failed to initialize: intrinsic_default function failed: VDF threw an exception (default_vdf_throw_default throw)
+# Verify the failure was logged
 # Parameterized type
 CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
 INSERT IGNORE INTO t_param VALUES (1, NULL);
