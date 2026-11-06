@@ -585,7 +585,7 @@ static bool marshal_args_typed(const vef_signature_t *sig,
 
 bool vdf_handler::marshal_args() {
   // Prerun must have run. fix_fields defers it only at a first PREPARE.
-  // For statements that calls VDFs every EXECUTE prepares the statement again
+  // For statements that call VDFs, every EXECUTE prepares the statement again
   // with a new handler whose prerun runs.
   if (should_assert_if_false(m_prerun_ran)) {
     villagesql_error("internal: function '%s' called before its prerun", MYF(0),
