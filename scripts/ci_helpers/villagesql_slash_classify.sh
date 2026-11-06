@@ -30,6 +30,11 @@ AUTHOR_ASSOCIATION="${AUTHOR_ASSOCIATION:-}"
 COMMANDS="${COMMANDS:-testall testextensions}"
 ALLOWED="OWNER MEMBER COLLABORATOR"
 
+# Split on CR as well. GitHub submits comment bodies with CRLF line endings,
+# and CR is not in the default IFS, so "/testextensions\r" would never match
+# COMMANDS and the command would be silently ignored.
+IFS=$' \t\n\r'
+
 # Scan tokens for the first known /command (or /help), anywhere in the body.
 name=""
 for tok in $BODY; do
