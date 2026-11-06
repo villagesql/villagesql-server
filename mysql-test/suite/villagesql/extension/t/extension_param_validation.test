@@ -67,7 +67,7 @@ SHOW WARNINGS;
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=100'));
 
 #--echo # generate a throw within to_strings()
-# TODO(villagesql-general): this does not excersize the throw in to_strings
+# TODO(villagesql-production): this does not excersize the throw in to_strings
 # CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=20'));
 # SHOW CREATE TABLE t;
 
