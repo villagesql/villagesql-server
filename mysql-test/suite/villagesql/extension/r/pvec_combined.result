@@ -43,7 +43,18 @@ total
 3
 DEALLOCATE PREPARE s_lit;
 PREPARE s_param FROM 'SELECT vsql_test_only.int_sum_all(1, ?, 2) AS total';
+SET @p = 5;
+EXECUTE s_param USING @p;
+total
+8
+SET @p = NULL;
+EXECUTE s_param USING @p;
 ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 1 must be either INT or NULL
+SET @p = 'five';
+EXECUTE s_param USING @p;
+ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 1 must be either INT or NULL
+DEALLOCATE PREPARE s_param;
+SET @p = NULL;
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
 v PVEC(3)

@@ -22,6 +22,7 @@
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
 class Item;
+class Item_param;
 class Item_result_field;
 class String;
 class THD;
@@ -77,6 +78,9 @@ class vdf_handler {
   size_t m_result_buffer_size{0};
   char *m_error_msg{nullptr};
   bool m_active{false};
+  // True once fix_fields has run prerun, or the function has none. False only
+  // when fix_fields deferred prerun, at a first PREPARE.
+  bool m_prerun_ran{false};
   const villagesql::TypeContext *m_return_type_context{nullptr};
 
   // Marshal arguments into m_invalues array based on declared parameter types.
@@ -102,6 +106,16 @@ class vdf_handler {
   // Call the VDF's postrun function, if any, and clear user_data.
   void RunPostrun();
 };
+
+// Every EXECUTE of a prepared statement that calls a VDF prepares the
+// statement again (the same happens for classic UDFs). A VDF can deduce a
+// custom type's params from a string value, e.g. TVECTOR::from_string(?)
+// with '...' bound to the `?`. Preparing again makes new `?` objects, and
+// MySQL gives it the bound values only after the statement is resolved.
+// So for a statement that calls a VDF, copy the string ('...') to the new
+// `?` object before resolving, so that the params can be deduced from it.
+void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
+                                  Item_param *const *from, uint count);
 
 }  // namespace vdf
 }  // namespace villagesql
