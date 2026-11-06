@@ -92,7 +92,7 @@ SELECT id, val FROM t1 ORDER BY id;
 --echo # GROUP BY works with the test hash
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 
---echo # Second insert throw row and retest
+--echo # Insert a value that will throw on hash
 INSERT INTO t1 VALUES (6, 'HASH_THROW');
 
 # TODO(villagesql-production): Wire error report to client
