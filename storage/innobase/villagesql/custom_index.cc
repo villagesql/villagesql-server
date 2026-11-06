@@ -894,8 +894,8 @@ static void get_entry_columns(
 
 dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
                              const dtuple_t *entry, bool dup_chk_only,
-                             bool *is_key_null) {
-  *is_key_null = false;
+                             bool *skip_index) {
+  *skip_index = !index->has_mapping_btree();
 
   // Custom indexes are not supported on intrinsic tables, and dup_chk_only is
   // only used for intrinsic tables because they cannot be rolled back.
@@ -916,12 +916,14 @@ dberr_t Custom_index::insert(dict_index_t *index, trx_id_t trx_id,
 
   std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
   std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
-  get_entry_columns(index, entry, key_columns, pkey_columns, is_key_null);
+  bool is_key_null = false;
+  get_entry_columns(index, entry, key_columns, pkey_columns, &is_key_null);
 
   // NULL keys are not inserted into the custom index, or into the mapping
   // B-tree when the index needs one. For example, an HNSW index neither indexes
   // nor returns NULL values.
-  if (*is_key_null && index->has_mapping_btree()) {
+  if (is_key_null && index->has_mapping_btree()) {
+    *skip_index = true;
     return DB_SUCCESS;
   }
 
@@ -972,10 +974,23 @@ Custom_index::KeyRef Custom_index::get_key_ref(const dict_index_t *index,
   return mach_read_from_8(data);
 }
 
+dberr_t Custom_index::mark_delete_pre(dict_index_t *index, trx_id_t trx_id,
+                                      const dtuple_t *entry, bool *skip_index) {
+  return mark_delete(index, trx_id, entry, EMPTY_KEY_REF, skip_index);
+}
+
+dberr_t Custom_index::mark_delete_post(dict_index_t *index, trx_id_t trx_id,
+                                       const dtuple_t *entry, KeyRef key_ref) {
+  if (!needs_mapping_key(index)) return DB_SUCCESS;
+
+  bool skip_index;
+  return mark_delete(index, trx_id, entry, key_ref, &skip_index);
+}
+
 dberr_t Custom_index::mark_delete(dict_index_t *index, trx_id_t trx_id,
                                   const dtuple_t *entry, KeyRef key_ref,
-                                  bool delete_mark, bool *is_key_null) {
-  *is_key_null = false;
+                                  bool *skip_index) {
+  *skip_index = !index->has_mapping_btree();
 
   Custom_index *custom_index = index->custom_index;
   const auto &intf = custom_index->interface();
@@ -990,22 +1005,27 @@ dberr_t Custom_index::mark_delete(dict_index_t *index, trx_id_t trx_id,
 
   std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
   std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
-  get_entry_columns(index, entry, key_columns, pkey_columns, is_key_null);
+  bool is_key_null = false;
+  get_entry_columns(index, entry, key_columns, pkey_columns, &is_key_null);
 
   // NULL keys are not inserted into the mapping B-tree or the index. If the
   // entry reference is needed, it is only known after the mapping B-tree
   // lookup.
-  if (index->has_mapping_btree() &&
-      (*is_key_null ||
-       (needs_mapping_key(index) && key_ref == EMPTY_KEY_REF))) {
-    return DB_SUCCESS;
+  if (index->has_mapping_btree()) {
+    if (is_key_null) {
+      *skip_index = true;
+      return DB_SUCCESS;
+    }
+    if (needs_mapping_key(index) && key_ref == EMPTY_KEY_REF) {
+      return DB_SUCCESS;
+    }
   }
 
   char error_msg[ERROR_MSG_SIZE] = {};
   bool failed = intf.mark_delete(
       custom_index->index_ctx(), storage_ctx,
       static_cast<vef_storage_trx_ref_t>(trx_id), &key_ref, key_columns.data(),
-      pkey_columns.data(), delete_mark, error_msg, sizeof(error_msg));
+      pkey_columns.data(), true, error_msg, sizeof(error_msg));
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
@@ -1084,8 +1104,8 @@ bool Custom_index::has_pending_entry(const dict_table_t *table,
 }
 
 dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
-                            const dtuple_t *entry, bool *is_key_null) {
-  *is_key_null = false;
+                            const dtuple_t *entry, bool *skip_index) {
+  *skip_index = !index->has_mapping_btree();
 
   Custom_index *custom_index = index->custom_index;
   const auto &intf = custom_index->interface();
@@ -1104,10 +1124,14 @@ dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
 
   std::array<vef_storage_col_data_t, MAX_REF_PARTS> key_columns;
   std::array<vef_storage_col_data_t, MAX_REF_PARTS> pkey_columns{};
-  get_entry_columns(index, entry, key_columns, pkey_columns, is_key_null);
+  bool is_key_null = false;
+  get_entry_columns(index, entry, key_columns, pkey_columns, &is_key_null);
 
   // NULL keys are not inserted into the mapping B-tree or the index.
-  if (index->has_mapping_btree() && *is_key_null) return DB_SUCCESS;
+  if (index->has_mapping_btree() && is_key_null) {
+    *skip_index = true;
+    return DB_SUCCESS;
+  }
 
   KeyRef key_ref = EMPTY_KEY_REF;
   if (needs_mapping_key(index)) {
@@ -1139,22 +1163,22 @@ dberr_t Custom_index::purge(dict_index_t *index, purge_node_t *node,
 
 dberr_t Custom_index::rollback_inserted(dict_index_t *index, trx_id_t trx_id,
                                         const dtuple_t *entry,
-                                        bool *skip_mapping) {
-  *skip_mapping = false;
+                                        bool *skip_index) {
+  *skip_index = false;
   if (!is_custom(index)) return DB_SUCCESS;
 
   return rollback(index, trx_id, entry, Rollback_op::REMOVE_INSERTED,
-                  skip_mapping);
+                  skip_index);
 }
 
 dberr_t Custom_index::rollback_deleted(dict_index_t *index, trx_id_t trx_id,
                                        const dtuple_t *entry,
-                                       bool *skip_mapping) {
-  *skip_mapping = false;
+                                       bool *skip_index) {
+  *skip_index = false;
   if (!is_custom(index)) return DB_SUCCESS;
 
   return rollback(index, trx_id, entry, Rollback_op::UNMARK_DELETED,
-                  skip_mapping);
+                  skip_index);
 }
 
 dberr_t Custom_index::rollback_missing_entry(const dict_index_t *index,
@@ -1169,8 +1193,8 @@ dberr_t Custom_index::rollback_missing_entry(const dict_index_t *index,
 
 dberr_t Custom_index::rollback(dict_index_t *index, trx_id_t trx_id,
                                const dtuple_t *entry, Rollback_op op,
-                               bool *skip_mapping) {
-  *skip_mapping = false;
+                               bool *skip_index) {
+  *skip_index = false;
 
   Custom_index *custom_index = index->custom_index;
   const auto &intf = custom_index->interface();
@@ -1190,7 +1214,7 @@ dberr_t Custom_index::rollback(dict_index_t *index, trx_id_t trx_id,
 
   // NULL keys are not inserted into the mapping B-tree or the index.
   if (index->has_mapping_btree() && is_key_null) {
-    *skip_mapping = true;
+    *skip_index = true;
     return DB_SUCCESS;
   }
 
@@ -1203,7 +1227,7 @@ dberr_t Custom_index::rollback(dict_index_t *index, trx_id_t trx_id,
       // Nothing to roll back when removing an inserted entry. A delete-marked
       // entry must have a mapping record, as it cannot be purged before the
       // transaction commits.
-      *skip_mapping = true;
+      *skip_index = true;
       return op == Rollback_op::UNMARK_DELETED
                  ? rollback_missing_entry(index, entry)
                  : DB_SUCCESS;
@@ -1235,7 +1259,7 @@ dberr_t Custom_index::rollback(dict_index_t *index, trx_id_t trx_id,
   }
 
   // No mapping B-tree record to undo.
-  *skip_mapping = !index->has_mapping_btree();
+  *skip_index = !index->has_mapping_btree();
   return DB_SUCCESS;
 }
 
