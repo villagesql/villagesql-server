@@ -1,0 +1,22 @@
+# READ COMMITTED locking KNN reads (FOR SHARE, FOR UPDATE) return the nearest
+# rows, the same as a plain read and as a locking read with the index
+# ignored.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR SHARE;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+SELECT id FROM t WHERE pay <> 'a' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 FOR UPDATE;
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+COMMIT;
+--echo # After an UPDATE of a non-indexed column of row 1
+UPDATE t SET pay = 'zz' WHERE id = 1;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

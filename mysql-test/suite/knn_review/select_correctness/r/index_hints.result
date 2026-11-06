@@ -1,0 +1,23 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id FROM t FORCE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t FORCE INDEX (PRIMARY) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t USE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

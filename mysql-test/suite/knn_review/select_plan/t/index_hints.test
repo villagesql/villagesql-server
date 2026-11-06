@@ -1,0 +1,17 @@
+# Index hints: forcing the KNN index, or naming it in USE INDEX, keeps the KNN
+# scan; ignoring it, or forcing the primary key, does not use it.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_query = SELECT id FROM t FORCE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t USE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t FORCE INDEX (PRIMARY) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

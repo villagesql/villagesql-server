@@ -1,0 +1,18 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id, v FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id	v
+1	[1,0,0,0]
+4	[1,1,0,0]
+8	[1,0,1.2,0]
+SELECT id, pay FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id	pay
+1	a
+4	d
+8	h
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 3;
+id	d
+1	0
+4	1
+8	1.2000000476837158
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

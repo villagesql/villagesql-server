@@ -1,0 +1,21 @@
+# Locking reads. A READ COMMITTED locking read runs as a KNN scan, and EXPLAIN
+# shows the plan that runs. A SERIALIZABLE read needs predicate locks a KNN scan
+# cannot take, so it is sorted instead.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR SHARE
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE
+--source suite/knn_review/include/plan_check.inc
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+--source suite/knn_review/include/plan_check.inc
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

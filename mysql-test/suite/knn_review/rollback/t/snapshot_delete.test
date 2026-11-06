@@ -1,0 +1,18 @@
+# A REPEATABLE READ snapshot does not see a row another session deletes and commits after the
+# snapshot starts; a new snapshot does.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+--connect (con1, localhost, root,,)
+DELETE FROM t WHERE id = 4;
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

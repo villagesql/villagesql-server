@@ -1,0 +1,30 @@
+INSTALL EXTENSION vsql_knn_index_test;
+# Primary key
+# SELECT id FROM t WHERE id = 4 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+plan_uses_knn	knn_scan_ran	query_errno
+0	0	0
+# SELECT id FROM t WHERE id > 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+plan_uses_knn	knn_scan_ran	query_errno
+0	0	0
+# SELECT id FROM t WHERE id BETWEEN 2 AND 5 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+plan_uses_knn	knn_scan_ran	query_errno
+0	0	0
+# Secondary index
+# SELECT id FROM t WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+plan_uses_knn	knn_scan_ran	query_errno
+0	0	0
+# SELECT id FROM t WHERE grp >= 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+plan_uses_knn	knn_scan_ran	query_errno
+0	0	0
+# The other index ignored, or the KNN index forced
+# SELECT id FROM t IGNORE INDEX (PRIMARY) WHERE id > 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+# SELECT id FROM t IGNORE INDEX (k_grp) WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+# SELECT id FROM t FORCE INDEX (idx_v) WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

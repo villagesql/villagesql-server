@@ -1,0 +1,28 @@
+INSTALL EXTENSION vsql_knn_index_test;
+DELETE FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,3]') LIMIT 1;
+SELECT id FROM t ORDER BY id;
+id
+1
+2
+3
+4
+5
+6
+8
+DELETE FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t ORDER BY id;
+id
+2
+3
+5
+6
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+8
+2
+5
+3
+6
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

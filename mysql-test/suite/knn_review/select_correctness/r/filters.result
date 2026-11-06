@@ -1,0 +1,59 @@
+INSTALL EXTENSION vsql_knn_index_test;
+# No index on the filter
+SELECT id FROM t WHERE pay IN ('b','c','h') ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+8
+2
+3
+SELECT id FROM t WHERE id + 0 IN (2,3,8) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+8
+2
+3
+SELECT id FROM t WHERE pay = 'g' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+7
+SELECT id FROM t WHERE pay = 'zz' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+# Primary key
+SELECT id FROM t WHERE id > 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+4
+8
+5
+SELECT id FROM t WHERE id BETWEEN 2 AND 5 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+id
+4
+2
+SELECT id FROM t WHERE id = 4 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+4
+SELECT id FROM t IGNORE INDEX (PRIMARY) WHERE id > 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+4
+8
+5
+# Secondary index on grp
+SELECT id FROM t WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+id
+4
+8
+SELECT id FROM t WHERE grp >= 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+4
+8
+5
+SELECT id FROM t WHERE grp = 2 AND pay <> 'd' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+id
+8
+3
+SELECT id FROM t IGNORE INDEX (k_grp) WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+id
+4
+8
+SELECT id FROM t FORCE INDEX (idx_v) WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+id
+4
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

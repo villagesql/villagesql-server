@@ -1,0 +1,11 @@
+# A deleted row is gone from KNN results.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+DELETE FROM t WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DELETE FROM t WHERE id = 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
