@@ -11,5 +11,5 @@
 --perl
 use strict;
 my $pos_file = $ENV{MYSQLTEST_VARDIR} . "/tmp/decode_fail_log_pos.txt";
-unlink($pos_file)
+unlink($pos_file);
 EOF
