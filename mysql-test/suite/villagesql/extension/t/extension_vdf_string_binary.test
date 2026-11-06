@@ -122,6 +122,31 @@ JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
 WHERE EXTENSION_NAME = 'vdf_sb'
 ORDER BY jt.name;
 
+# Result collation is fixed even when the argument has an explicit collation.
+SELECT COLLATION(vdf_sb.str_echo('a' COLLATE utf8mb4_0900_ai_ci)) AS result_collation,
+       COERCIBILITY(vdf_sb.str_echo('a')) AS coercibility;
+SELECT vdf_sb.str_echo('A') = vdf_sb.str_echo('a') AS case_equal,
+       vdf_sb.str_echo('e') = vdf_sb.str_echo('é') AS accent_equal,
+       vdf_sb.str_echo('a') = vdf_sb.str_echo('a ') AS space_equal,
+       vdf_sb.str_echo('a') LIKE vdf_sb.str_echo('a ') AS space_like,
+       HEX(vdf_sb.str_echo('a ')) AS preserved_spaces;
+
+# A column or an explicit COLLATE can determine the comparison rules.
+CREATE TABLE result_policy (s VARCHAR(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci);
+INSERT INTO result_policy VALUES ('a'), ('A'), ('a '), ('é'), ('e');
+SELECT s, s = vdf_sb.str_echo('A') AS column_equal,
+       s = (vdf_sb.str_echo('A') COLLATE utf8mb4_bin) AS explicit_equal
+FROM result_policy ORDER BY HEX(s);
+SELECT COUNT(DISTINCT vdf_sb.str_echo(s)) AS distinct_values FROM result_policy;
+SELECT MIN(HEX(s)) AS representative, COUNT(*) AS members
+FROM result_policy GROUP BY vdf_sb.str_echo(s) ORDER BY representative;
+
+# CTAS retains the result collation and gives it column precedence.
+CREATE TABLE materialized_policy AS SELECT vdf_sb.str_echo(s) AS s FROM result_policy;
+SELECT DISTINCT CHARSET(s), COLLATION(s), COERCIBILITY(s) FROM materialized_policy;
+SELECT HEX(s) FROM materialized_policy ORDER BY HEX(s);
+DROP TABLE materialized_policy, result_policy;
+
 --echo #
 --echo # Cleanup
 --echo #
