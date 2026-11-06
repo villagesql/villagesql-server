@@ -64,7 +64,7 @@ CREATE TABLE t34 (a TVECTOR(3), b TVECTOR(4));
 PREPARE s FROM
   'INSERT INTO t34 VALUES (TVECTOR::from_string(?), TVECTOR::from_string(?))';
 EXECUTE s USING @v3, @v4;
---echo # Swapped, infrerred dimensions do not match the column definition
+--echo # Swapped, inferred dimensions do not match the column definition
 --error ER_VILLAGESQL_GENERIC_ERROR
 EXECUTE s USING @v4, @v3;
 DEALLOCATE PREPARE s;
