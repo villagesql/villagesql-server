@@ -1,0 +1,10 @@
+# A KNN query returns the right values for the selected columns, including the
+# vector and the distance.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id, v FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id, pay FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,10 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE n (a INT, v KVECTOR);
+CREATE INDEX idx_v ON n (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO n VALUES (10, '[1,0,0,0]'), (20, '[0,1,0,0]'), (30, '[2,0,0,0]');
+SELECT a FROM n ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+a
+10
+30
+DROP TABLE n;
+UNINSTALL EXTENSION vsql_knn_index_test;

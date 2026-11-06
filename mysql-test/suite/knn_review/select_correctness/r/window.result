@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id, ROW_NUMBER() OVER (ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS rn FROM t ORDER BY id;
+id	rn
+1	1
+2	4
+3	6
+4	2
+5	5
+6	7
+7	8
+8	3
+SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4) AS nearest ORDER BY id;
+id	rn
+1	1
+2	2
+4	3
+8	4
+SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS rn FROM t) s WHERE rn = 1 ORDER BY id;
+id
+1
+4
+5
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

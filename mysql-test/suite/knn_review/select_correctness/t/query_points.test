@@ -1,0 +1,28 @@
+# The query point can be a literal, a type constructor, a scalar subquery, a
+# column of a const table, or a prepared-statement parameter.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[4,0,0,0]') LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, vsql_knn_index_test.KVECTOR::from_string('[1,0,0,0]')) LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, (SELECT v FROM t WHERE id = 1)) LIMIT 3;
+CREATE TABLE c (k INT PRIMARY KEY, q KVECTOR);
+INSERT INTO c VALUES (1, '[1,0,0,0]');
+SELECT t.id FROM c, t WHERE c.k = 1 ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, c.q) LIMIT 3;
+DROP TABLE c;
+--echo # A user variable is not a constant the function accepts (a general VDF
+--echo # restriction, not specific to KNN)
+SET @q = '[1,0,0,0]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, @q) LIMIT 3;
+PREPARE ps FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT ?';
+SET @q = '[1,0,0,0]', @k = 2;
+EXECUTE ps USING @q, @k;
+SET @k = 4;
+EXECUTE ps USING @q, @k;
+SET @q = '[4,0,0,0]', @k = 2;
+EXECUTE ps USING @q, @k;
+DEALLOCATE PREPARE ps;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

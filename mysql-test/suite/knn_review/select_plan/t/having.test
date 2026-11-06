@@ -1,0 +1,14 @@
+# A HAVING clause on the selected distance does not stop the KNN scan: HAVING is
+# applied to the rows the scan returns.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+--let $knn_issue = KNN-8 A HAVING clause stops the KNN scan
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_query = SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t HAVING d <= 1.3 ORDER BY d LIMIT 10
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

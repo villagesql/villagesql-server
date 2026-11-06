@@ -1,0 +1,13 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand must not be NULL
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL);
+ERROR HY000: VDF error in function 'kvec_l2_distance': kvec_l2_distance: operand must not be NULL
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '') LIMIT 2;
+ERROR HY000: Incorrect kvector value: ''
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[2,0,0,0]') LIMIT 2;
+id
+5
+1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
