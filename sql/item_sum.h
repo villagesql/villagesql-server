@@ -1967,6 +1967,8 @@ class Item_udf_sum : public Item_sum {
 
   bool do_itemize(Parse_context *pc, Item **res) override;
   const char *func_name() const override { return udf.name(); }
+  // VillageSQL: Returns true if this is a VDF (VillageSQL Defined Function)
+  bool is_vdf() const { return udf.is_vdf(); }
   bool fix_fields(THD *thd, Item **ref) override {
     assert(!fixed);
 

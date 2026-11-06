@@ -15,6 +15,7 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <algorithm>
 #include <type_traits>
 #include <vector>
 
@@ -26,10 +27,12 @@
 #include "sql/derror.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
+#include "sql/item_sum.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_udf.h"
 #include "sql_string.h"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/types/from_string_inference.h"
 #include "villagesql/types/util.h"
@@ -39,11 +42,19 @@ namespace vdf {
 
 // Returns true when `arg` is an input the from_string-inference path can
 // safely pre-execute at fix_fields time: a constant-for-execution Item whose
-// val_str() has no side effects. Today this covers string literals and
-// read-only user variables (e.g. @v after `SET @v = '[...]'`).
+// val_str() has no side effects. Today this covers string literals, read-only
+// user variables (e.g. @v after `SET @v = '[...]'`) and prepared-statement
+// parameters holding a string. A parameter has no value at PREPARE, but every
+// EXECUTE of a statement calling a VDF prepares it again with the values bound
+// (see MaybeCopyPsParamStringValues). If the parameter is STRING_VALUE there,
+// we can infer the params from it.
 static bool is_inferrable_string_const(Item *arg) {
   if (!arg->const_for_execution()) return false;
   if (arg->type() == Item::STRING_ITEM) return true;
+  if (arg->type() == Item::PARAM_ITEM) {
+    return down_cast<Item_param *>(arg)->param_state() ==
+           Item_param::STRING_VALUE;
+  }
   if (arg->type() == Item::FUNC_ITEM &&
       down_cast<Item_func *>(arg)->functype() == Item_func::GUSERVAR_FUNC) {
     return true;
@@ -109,9 +120,8 @@ bool vdf_handler::MaybeResizeBuffer(size_t needed) {
   return false;
 }
 
-bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
-                             uint arg_count, Item **arguments,
-                             String *buffers) {
+bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
+                             Item **arguments, String *buffers) {
   m_args = arguments;
   m_buffers = buffers;
   m_arg_count = arg_count;
@@ -211,10 +221,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   // return TypeContext. The VDF re-runs at row time on the original argument,
   // this time with known params, and encodes normally.
   //
-  // "String const" here covers string literals and user variables — anything
-  // is_inferrable_string_const() accepts. Only a STRING parameter is
-  // pre-executed: the constant is read as utf8mb4 text, which would change or
-  // reject the bytes meant for a parameter of any other type.
+  // "String const" here covers string literals, user variables and string
+  // prepared-statement parameters, i.e. anything is_inferrable_string_const()
+  // accepts. Only a STRING parameter is pre-executed: the constant is read as
+  // utf8mb4 text, which would change or reject the bytes meant for a parameter
+  // of any other type.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
   if (signature != nullptr && return_params.empty() &&
@@ -269,12 +280,20 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     if (prerun_completed) RunPostrun();
   });
 
-  // Call prerun if present
-  // TODO(villagesql-general): prerun also runs at PREPARE, where a ?
-  // parameter has no value and is typed STRING, so a prerun that checks types
-  // can reject the statement before EXECUTE binds one. udf_handler::fix_fields
-  // defers a UDF's init at PREPARE when an argument is not constant.
-  if (m_udf->vdf_func_desc->prerun) {
+  // Call prerun if present, except at PREPARE when an argument has a ? with no
+  // value. Such a ? looks like a STRING to prerun, so its checks cannot work
+  // yet. We defer prerun until EXECUTE, when the ? has the type of the value
+  // bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
+  // any argument is not constant, e.g. a column. We defer only for an argument
+  // with a ?, because a column's type is known at PREPARE and prerun can check
+  // it there.
+  const bool is_in_prepare =
+      thd->stmt_arena->is_stmt_prepare() && !thd->stmt_arena->is_repreparing;
+  const bool defer_prerun =
+      is_in_prepare && std::any_of(m_args, m_args + arg_count, [](Item *arg) {
+        return villagesql::HasPSParamWithoutValue(arg);
+      });
+  if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
     prerun_args.deprecated_const_values = nullptr;
@@ -394,12 +413,16 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     }
   }
 
-  m_active = true;
+  // cleanup() runs postrun only if prerun had its turn here.
+  m_active = !defer_prerun;
+  m_prerun_ran = !defer_prerun;
   postrun_guard.release();
   return false;
 }
 
 void vdf_handler::clear() {
+  // See marshal_args().
+  if (should_assert_if_false(m_prerun_ran)) return;
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
@@ -561,6 +584,14 @@ static bool marshal_args_typed(const vef_signature_t *sig,
 }
 
 bool vdf_handler::marshal_args() {
+  // Prerun must have run. fix_fields defers it only at a first PREPARE.
+  // For statements that call VDFs, every EXECUTE prepares the statement again
+  // with a new handler whose prerun runs.
+  if (should_assert_if_false(m_prerun_ran)) {
+    villagesql_error("internal: function '%s' called before its prerun", MYF(0),
+                     m_udf->name.str);
+    return true;
+  }
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
     return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
@@ -755,6 +786,36 @@ String *vdf_handler::val_str(String *str, String *save_str,
       return nullptr;
   }
   return nullptr;
+}
+
+// Returns true if any of the items in `item_list` is a VDF
+// call, scalar or aggregate.
+static bool CallsVdf(Item *item_list) {
+  for (Item *item = item_list; item != nullptr; item = item->next_free) {
+    if (item->type() == Item::FUNC_ITEM &&
+        down_cast<Item_func *>(item)->functype() == Item_func::UDF_FUNC &&
+        down_cast<Item_udf_func *>(item)->is_vdf()) {
+      return true;
+    }
+    if (item->type() == Item::SUM_FUNC_ITEM &&
+        down_cast<Item_sum *>(item)->sum_func() == Item_sum::UDF_SUM_FUNC &&
+        down_cast<Item_udf_sum *>(item)->is_vdf()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
+                                  Item_param *const *from, uint count) {
+  if (!CallsVdf(item_list)) return;
+  // TODO(villagesql-general): a value sent with mysql_stmt_send_long_data() is
+  // LONG_DATA_VALUE and is not copied, so from_string(?) does not infer its
+  // params from it. Check with a binary-protocol client test.
+  for (uint i = 0; i < count; i++) {
+    if (from[i]->param_state() == Item_param::STRING_VALUE)
+      to[i]->str_value_ptr.copy(from[i]->str_value_ptr);
+  }
 }
 
 }  // namespace vdf
