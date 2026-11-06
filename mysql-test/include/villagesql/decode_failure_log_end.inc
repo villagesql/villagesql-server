@@ -1,6 +1,5 @@
-# Record the current end-of-file position in the MySQL error log so that
-# subsequent calls to decode_failure_log_print.inc only show entries written
-# after this point.
+# Remove the saved error-log position file written by
+# decode_failure_log_init.inc.
 #
 # Usage:
 #   --source include/villagesql/decode_failure_log_init.inc
