@@ -3259,6 +3259,9 @@ and return. don't execute actual insert. */
     if (err != DB_SUCCESS || !index->has_mapping_btree() || is_key_null) {
       return err;
     }
+    // Fails after the custom index insert, before the mapping B-tree insert.
+    DBUG_EXECUTE_IF("villagesql_fail_mapping_insert",
+                    return DB_VILLAGESQL_ERROR;);
   }
 
   offsets_heap = mem_heap_create(1024, UT_LOCATION_HERE);

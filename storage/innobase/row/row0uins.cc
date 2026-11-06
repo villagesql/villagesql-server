@@ -53,6 +53,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -283,6 +284,14 @@ func_exit_no_pcur:
                                                      undo_node_t *node) {
   dberr_t err;
   ulint n_tries = 0;
+
+  using villagesql::innodb::Custom_index;
+  bool skip_index = false;
+  err =
+      Custom_index::rollback_inserted(index, node->trx.id, entry, &skip_index);
+  if (err != DB_SUCCESS || skip_index) {
+    return (err);
+  }
 
   /* Try first optimistic descent to the B-tree */
 

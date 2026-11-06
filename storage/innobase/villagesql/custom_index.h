@@ -228,6 +228,30 @@ class Custom_index {
   static dberr_t purge(dict_index_t *index, purge_node_t *node,
                        const dtuple_t *entry, bool *is_key_null);
 
+  // Rolls back an entry inserted by the transaction, by removing it from the
+  // extension storage. Used when undoing an insert, and for the new entry when
+  // undoing an update. Does nothing if index is not a custom index.
+  // @param[in] trx_id the rolling back transaction
+  // @param[in] entry index entry built from the undo record
+  // @param[out] skip_mapping true if the caller must not undo the mapping
+  //             B-tree record: the index has none, or the entry has none
+  //             because its key is NULL.
+  static dberr_t rollback_inserted(dict_index_t *index, trx_id_t trx_id,
+                                   const dtuple_t *entry, bool *skip_mapping);
+
+  // Rolls back an entry delete-marked by the transaction, by removing the
+  // delete mark in the extension storage. Used when undoing a delete, and for
+  // the old entry when undoing an update. Does nothing if index is not a custom
+  // index. The caller must not undo the mapping B-tree record on failure.
+  static dberr_t rollback_deleted(dict_index_t *index, trx_id_t trx_id,
+                                  const dtuple_t *entry, bool *skip_mapping);
+
+  // Notification that the B-tree record of an index entry being rolled back
+  // was not found during rollback. For custom index entry the function
+  // returns error as the mapping index entry should not be missing.
+  static dberr_t rollback_missing_entry(const dict_index_t *index,
+                                        const dtuple_t *entry);
+
   // Returns the entry reference stored in a mapping B-tree record, or
   // EMPTY_KEY_REF if the index does not store one.
   static KeyRef get_key_ref(const dict_index_t *index, const rec_t *rec,
@@ -255,6 +279,13 @@ class Custom_index {
   static void free_all(dict_index_t *index);
 
  private:
+  // The undo operation applied to an extension entry by rollback().
+  enum class Rollback_op { REMOVE_INSERTED, UNMARK_DELETED };
+
+  static dberr_t rollback(dict_index_t *index, trx_id_t trx_id,
+                          const dtuple_t *entry, Rollback_op op,
+                          bool *skip_mapping);
+
   // Loads the extension-managed storage of an attached custom index that has
   // a storage reference.
   static dberr_t load_storage(dict_index_t *new_index);

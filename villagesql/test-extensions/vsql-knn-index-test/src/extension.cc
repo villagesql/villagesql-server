@@ -47,9 +47,12 @@
 // scan is exact brute force (no graph); HNSW-graph correctness stays in
 // vsql-vector's own tests.
 //
-// Not implemented: mark_delete and purge are no-op stubs -- this extension does
-// not remove entries, so DELETE leaves a stale entry that the server's
-// MVCC-at-fetch filters out.
+// mark_delete only marks an entry, and purge removes the entries of a purged
+// delete or of a rolled back insert (see kvec_purge).
+//
+// A second index type, kvec_l2_ref, declares REF_LOOKUP instead of HAS_ROW_REF.
+// It finds entries by the entry reference that insert returns, and the server
+// takes the primary key from the mapping B-tree.
 
 #include <villagesql/preview/index_builder.h>
 #include <villagesql/preview/storage_api.h>
@@ -392,6 +395,9 @@ using PrimaryKey = std::vector<std::vector<unsigned char>>;
 struct KVecEntry {
   IndexScanKey::KeyPartRef ref;  // vector's column reference
   PrimaryKey pkey;               // owning row's primary key (all parts)
+  // Entry reference returned by insert and passed back by mark_delete and
+  // purge. Set only by the REF_LOOKUP index type; 0 otherwise.
+  uint64_t key_ref = 0;
   // Transaction that inserted the entry, returned by scan_fetch.
   Segment::TrxRef trx;
   // Transaction that deleted the row or updated its key, set by mark_delete;
@@ -417,14 +423,20 @@ using IdxCtx = Index::StorageCtx<KVecIndexCtx>;
 static std::atomic<long long> g_scan_begin_count{0};
 static std::atomic<long long> g_scan_fetch_count{0};
 static std::atomic<long long> g_insert_count{0};
+// Number of entries currently held by all indexes, delete-marked ones included.
+// Not reset: insert, purge and drop keep it exact.
+static std::atomic<long long> g_entry_count{0};
 // Number of scan cursors that were created and not yet ended. Unlike the
 // counters above, it is not reset: it shows a cursor the server never ended.
 static std::atomic<long long> g_open_cursor_count{0};
+// Source of the entry references handed out by the REF_LOOKUP index type.
+static std::atomic<uint64_t> g_next_key_ref{1};
 
 struct KVecCursor {
   struct Result {
     IndexScanKey::KeyPartRef ref;  // vector column reference
     PrimaryKey pkey;  // owning row's primary key (copied, all parts)
+    uint64_t key_ref;     // entry reference of a REF_LOOKUP index, else 0
     Segment::TrxRef trx;  // transaction that inserted the entry
     std::shared_ptr<std::atomic<uint64_t>> delete_trx;  // entry's delete mark
   };
@@ -443,6 +455,7 @@ static bool kvec_drop(IdxCtx *ctx, const Index & /*index*/,
                       uint32_t /*err_len*/) {
   // Exclusive, like insert: entries is only ever touched under the mutex.
   std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  g_entry_count -= static_cast<long long>(ctx->user()->entries.size());
   ctx->user()->entries.clear();
   return false;
 }
@@ -496,6 +509,7 @@ static bool kvec_insert(IdxCtx *ctx, const Index &index,
   std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
   ctx->user()->entries.push_back(std::move(entry));
   ++g_insert_count;
+  ++g_entry_count;
   return false;
 }
 
@@ -537,12 +551,127 @@ static bool kvec_mark_delete(IdxCtx *ctx, const Index &index,
   return false;
 }
 
-static bool kvec_purge(IdxCtx * /*ctx*/, const Index & /*index*/,
-                       Segment::TrxRef /*trx_ref*/,
+// Removes the entry of the key value and row that purge or rollback names:
+//  * purge of a delete-marked entry names the deleting transaction;
+//  * rollback of an insert names the inserting transaction, and the entry is
+//    not delete-marked, as undo of a delete unmarks it first.
+// Removing nothing is not an error: the entry may already be gone.
+static bool kvec_purge(IdxCtx *ctx, const Index &index, Segment::TrxRef trx_ref,
                        IndexScanKey::KeyPartRef * /*key_ref*/,
-                       IndexScanKey::KeyPartData * /*key_columns*/,
-                       IndexScanKey::KeyPartData * /*pkey_columns*/,
-                       char * /*err*/, uint32_t /*err_len*/) {
+                       IndexScanKey::KeyPartData *key_columns,
+                       IndexScanKey::KeyPartData *pkey_columns, char *err,
+                       uint32_t err_len) {
+  if (key_columns == nullptr || key_columns[0].data == nullptr ||
+      pkey_columns == nullptr) {
+    snprintf(err, err_len, "kvec_l2: missing key at purge");
+    return true;
+  }
+  IndexScanKey::KeyPartRef ref;
+  if (index.get_key_ref(kKeyPos, key_columns[0], &ref)) {
+    snprintf(err, err_len, "kvec_l2: get_key_ref failed: %s",
+             index.get_error());
+    return true;
+  }
+  const uint32_t num_pk_parts = index.get_primary_num_key_cols();
+  const auto trx = static_cast<uint64_t>(trx_ref);
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  auto &entries = ctx->user()->entries;
+  const auto matches = [&](const KVecEntry &entry) {
+    if (entry.ref != ref || entry.pkey.size() != num_pk_parts) return false;
+    for (uint32_t i = 0; i < num_pk_parts; i++) {
+      if (entry.pkey[i].size() != pkey_columns[i].length ||
+          (!entry.pkey[i].empty() &&
+           memcmp(entry.pkey[i].data(), pkey_columns[i].data,
+                  pkey_columns[i].length) != 0)) {
+        return false;
+      }
+    }
+    const uint64_t del = entry.delete_trx->load();
+    return del == trx || (del == 0 && static_cast<uint64_t>(entry.trx) == trx);
+  };
+  const auto last = std::remove_if(entries.begin(), entries.end(), matches);
+  g_entry_count -= static_cast<long long>(entries.end() - last);
+  entries.erase(last, entries.end());
+  return false;
+}
+
+// The REF_LOOKUP index type. Unlike the index type above it does not store the
+// primary key (the server maps the column reference to it through the mapping
+// B-tree), and it finds an entry only by the entry reference that insert
+// returned and the server passes back.
+static bool kvec_ref_insert(IdxCtx *ctx, const Index &index,
+                            Segment::TrxRef trx_ref,
+                            IndexScanKey::KeyPartData *key_columns,
+                            IndexScanKey::KeyPartData * /*pkey_columns*/,
+                            IndexScanKey::KeyPartRef *key_ref, char *err,
+                            uint32_t err_len) {
+  if (key_columns == nullptr || key_columns[0].data == nullptr ||
+      key_ref == nullptr) {
+    snprintf(err, err_len, "kvec_l2_ref: missing key column");
+    return true;
+  }
+  IndexScanKey::KeyPartRef ref;
+  if (index.get_key_ref(kKeyPos, key_columns[0], &ref)) {
+    snprintf(err, err_len, "kvec_l2_ref: get_key_ref failed: %s",
+             index.get_error());
+    return true;
+  }
+  KVecEntry entry;
+  entry.ref = ref;
+  entry.trx = trx_ref;
+  entry.key_ref = g_next_key_ref++;
+  *key_ref = entry.key_ref;
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  ctx->user()->entries.push_back(std::move(entry));
+  ++g_insert_count;
+  ++g_entry_count;
+  return false;
+}
+
+static bool kvec_ref_mark_delete(IdxCtx *ctx, const Index & /*index*/,
+                                 Segment::TrxRef trx_ref,
+                                 IndexScanKey::KeyPartRef *key_ref,
+                                 IndexScanKey::KeyPartData * /*key_columns*/,
+                                 IndexScanKey::KeyPartData * /*pkey_columns*/,
+                                 bool delete_mark, char *err,
+                                 uint32_t err_len) {
+  if (key_ref == nullptr || *key_ref == 0) {
+    snprintf(err, err_len, "kvec_l2_ref: missing entry reference");
+    return true;
+  }
+  std::shared_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  for (const KVecEntry &entry : ctx->user()->entries) {
+    if (entry.key_ref == *key_ref) {
+      entry.delete_trx->store(delete_mark ? static_cast<uint64_t>(trx_ref) : 0);
+      break;
+    }
+  }
+  return false;
+}
+
+// Same removal rule as kvec_purge, by entry reference. An entry that is already
+// gone is not an error.
+static bool kvec_ref_purge(IdxCtx *ctx, const Index & /*index*/,
+                           Segment::TrxRef trx_ref,
+                           IndexScanKey::KeyPartRef *key_ref,
+                           IndexScanKey::KeyPartData * /*key_columns*/,
+                           IndexScanKey::KeyPartData * /*pkey_columns*/,
+                           char *err, uint32_t err_len) {
+  if (key_ref == nullptr || *key_ref == 0) {
+    snprintf(err, err_len, "kvec_l2_ref: missing entry reference");
+    return true;
+  }
+  const auto trx = static_cast<uint64_t>(trx_ref);
+  std::unique_lock<std::shared_mutex> lock(ctx->user()->mutex);
+  auto &entries = ctx->user()->entries;
+  const auto matches = [&](const KVecEntry &entry) {
+    if (entry.key_ref != *key_ref) return false;
+    const uint64_t del = entry.delete_trx->load();
+    return del == trx || (del == 0 && static_cast<uint64_t>(entry.trx) == trx);
+  };
+  const auto last = std::remove_if(entries.begin(), entries.end(), matches);
+  g_entry_count -= static_cast<long long>(entries.end() - last);
+  entries.erase(last, entries.end());
   return false;
 }
 
@@ -579,6 +708,7 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   struct Hit {
     IndexScanKey::KeyPartRef ref;
     const PrimaryKey *pkey;  // points into ctx entries
+    uint64_t key_ref;
     Segment::TrxRef trx;
     std::shared_ptr<std::atomic<uint64_t>> delete_trx;
     double distance;
@@ -628,7 +758,8 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     // helper silently corrupts the ordering.
     double d = 0.0;
     index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
-    hits.push_back(Hit{entry.ref, &entry.pkey, entry.trx, entry.delete_trx, d});
+    hits.push_back(Hit{entry.ref, &entry.pkey, entry.key_ref, entry.trx,
+                       entry.delete_trx, d});
   }
 
   std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
@@ -658,8 +789,8 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // so the pointers into entries are valid). The cursor outlives the lock, so
   // it must own the bytes.
   for (const Hit &hit : hits) {
-    c->results.push_back(
-        KVecCursor::Result{hit.ref, *hit.pkey, hit.trx, hit.delete_trx});
+    c->results.push_back(KVecCursor::Result{hit.ref, *hit.pkey, hit.key_ref,
+                                            hit.trx, hit.delete_trx});
   }
 
   ++g_open_cursor_count;
@@ -688,7 +819,7 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   }
   ++g_scan_fetch_count;
   const KVecCursor::Result &res = c->results[c->pos];
-  if (key_ref != nullptr) *key_ref = res.ref;
+  if (key_ref != nullptr) *key_ref = res.key_ref != 0 ? res.key_ref : res.ref;
   if (trx_ref != nullptr) *trx_ref = res.trx;
   // Single key column (kKeyPos): its col_ref is the stored vector reference.
   if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
@@ -749,6 +880,13 @@ static constexpr const char kKVecL2Func[] = "kvec_l2_distance";
 // index, never a kvec_l2 (L2) one. knn_profile_mismatch exercises the negative
 // case (a cosine ORDER BY must not drive an L2-only table); knn_cos_index
 // exercises the positive case (a kvec_cos index serving a cosine KNN query).
+// A third index type that declares REF_LOOKUP (and no HAS_ROW_REF), the way a
+// real HNSW index does. The server keeps the entry reference in the mapping
+// B-tree and passes it to mark_delete and purge, so DML and rollback take the
+// reference lookup path. It has its own L2 function and profile.
+static constexpr const char kKVecIndexL2Ref[] = "kvec_l2_ref";
+static constexpr const char kKVecProfileL2Ref[] = "kvec_profile_l2_ref";
+static constexpr const char kKVecL2RefFunc[] = "kvec_l2_ref_distance";
 static constexpr const char kKVecIndexCos[] = "kvec_cos";
 static constexpr const char kKVecProfileCos[] = "kvec_profile_cos";
 static constexpr const char kKVecCosFunc[] = "kvec_cos_distance";
@@ -807,6 +945,36 @@ static constexpr auto KVEC_STORE_INDEX =
             .capabilities(Index::Support::KNN)
             .storage_props(Index::Storage::HAS_COLUMN_REF |
                            Index::Storage::HAS_ROW_REF)
+
+        .build();
+// clang-format on
+
+// clang-format off
+static constexpr auto KVEC_STORE_REF_INDEX =
+    make_index_type<kKVecIndexL2Ref, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_ref_insert>()
+            .mark_delete<&kvec_ref_mark_delete>()
+            .purge<&kvec_ref_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::REF_LOOKUP)
 
         .build();
 // clang-format on
@@ -875,6 +1043,9 @@ static void kvec_scan_fetch_count(vsql::IntResult out) {
 static void kvec_insert_count(vsql::IntResult out) {
   out.set(g_insert_count.load());
 }
+static void kvec_entry_count(vsql::IntResult out) {
+  out.set(g_entry_count.load());
+}
 static void kvec_open_cursors(vsql::IntResult out) {
   out.set(g_open_cursor_count.load());
 }
@@ -914,6 +1085,32 @@ static const auto KVEC_L2_PROFILE =
         .with_helper<KVEC_L2_HELPER_FN>(1)
         .ordering(Index::Ordering::ASC)
         .default_for_type(true)
+        .build();
+
+static constexpr auto KVEC_L2_REF_FN =
+    vsql::make_func<&kvec_l2_distance_fn>(kKVecL2RefFunc)
+        .returns(vsql::REAL)
+        .param(KVECTOR)
+        .param(KVECTOR)
+        .deterministic()
+        .build();
+
+static constexpr auto KVEC_L2_REF_HELPER_FN =
+    make_index_function<&kvec_l2_distance_fn>(kKVecL2RefFunc)
+        .returns(vsql::REAL)
+        .param(KVECTOR)
+        .param(KVECTOR)
+        .deterministic()
+        .build();
+
+// Not default_for_type: L2 owns it.
+static const auto KVEC_L2_REF_PROFILE =
+    make_index_profile(kKVecProfileL2Ref)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexL2Ref)
+        .with_function<KVEC_L2_REF_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_REF_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
         .build();
 
 // Cosine metric, bound to the kvec_cos index (NOT kvec_l2). Not
@@ -967,9 +1164,11 @@ static auto COLUMN_STORE =
     ColumnStoreCapability().column_store(kKVectorStorage);
 static auto INDEX_TYPE = IndexTypeCapability()
                              .index_type(KVEC_STORE_INDEX)
+                             .index_type(KVEC_STORE_REF_INDEX)
                              .index_type(KVEC_STORE_COS_INDEX);
 static auto INDEX_PROFILE = IndexProfileCapability()
                                 .index_profile(KVEC_L2_PROFILE)
+                                .index_profile(KVEC_L2_REF_PROFILE)
                                 .index_profile(KVEC_COS_PROFILE);
 
 using namespace vsql;
@@ -984,6 +1183,7 @@ VEF_GENERATE_ENTRY_POINTS(
         // Also register the distance function as a plain SQL VDF so it is
         // callable in the ORDER BY (same fn pointer as the index function).
         .func(KVEC_L2_FN)
+        .func(KVEC_L2_REF_FN)
         .func(KVEC_COS_FN)
         .func(make_func<&kvec_scan_begin_count>("kvec_scan_begin_count")
                   .returns(INT)
@@ -994,6 +1194,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .build())
         .func(make_func<&kvec_insert_count>("kvec_insert_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&kvec_entry_count>("kvec_entry_count")
                   .returns(INT)
                   .no_params()
                   .build())
