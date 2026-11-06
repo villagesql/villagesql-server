@@ -206,47 +206,59 @@ class Custom_index {
   static dberr_t drop(dict_index_t *index, trx_id_t trx_id);
 
   // Inserts a key into extension-managed storage for a custom index.
-  // @param[out] is_key_null true if all the key columns of the entry are NULL
+  // @param[out] skip_index true if the caller must not insert the mapping
+  //             B-tree record: the index has none, or the entry has none
+  //             because its key is NULL.
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
                         const dtuple_t *entry, bool dup_chk_only,
-                        bool *is_key_null);
+                        bool *skip_index);
 
-  // Marks (or unmarks) the entry in extension-managed storage as deleted by
-  // the transaction.
-  // @param[in] key_ref entry reference from the mapping B-tree record, or
-  //            EMPTY_KEY_REF if not yet known. When the index needs the
-  //            reference (needs_mapping_key()), the call is a no-op without it.
-  // @param[out] is_key_null true if all the key columns of the entry are NULL
-  static dberr_t mark_delete(dict_index_t *index, trx_id_t trx_id,
-                             const dtuple_t *entry, KeyRef key_ref,
-                             bool delete_mark, bool *is_key_null);
+  // Marks the entry in extension-managed storage as deleted by the transaction,
+  // before the mapping B-tree record is delete-marked. Does nothing for an
+  // index that needs the entry reference (needs_mapping_key()) as it is known
+  // only from the mapping B-tree record; see mark_delete_post().
+  // @param[out] skip_index true if the caller must not delete-mark the mapping
+  //             B-tree record: the index has none, or the entry has none
+  //             because its key is NULL.
+  static dberr_t mark_delete_pre(dict_index_t *index, trx_id_t trx_id,
+                                 const dtuple_t *entry, bool *skip_index);
+
+  // Marks the entry in extension-managed storage as deleted by the transaction,
+  // after the mapping B-tree record was found and delete-marked. Does nothing
+  // for an index that does not need the entry reference (needs_mapping_key()),
+  // as mark_delete_pre() has handled it.
+  // @param[in] key_ref entry reference from the mapping B-tree record
+  static dberr_t mark_delete_post(dict_index_t *index, trx_id_t trx_id,
+                                  const dtuple_t *entry, KeyRef key_ref);
 
   // Removes the entry of a delete-marked row version from the extension
   // storage, if the purge view allows it. Called by the purge system with the
   // entry built from the undo record of node->trx_id. The entry reference is
   // looked up in the mapping B-tree when needed, but the mapping B-tree record
   // is left for the caller to purge. Does nothing if the entry is already gone.
-  // @param[out] is_key_null true if all the key columns of the entry are NULL
+  // @param[out] skip_index true if the caller must not purge the mapping
+  //             B-tree record: the index has none, or the entry has none
+  //             because its key is NULL.
   static dberr_t purge(dict_index_t *index, purge_node_t *node,
-                       const dtuple_t *entry, bool *is_key_null);
+                       const dtuple_t *entry, bool *skip_index);
 
   // Rolls back an entry inserted by the transaction, by removing it from the
   // extension storage. Used when undoing an insert, and for the new entry when
   // undoing an update. Does nothing if index is not a custom index.
   // @param[in] trx_id the rolling back transaction
   // @param[in] entry index entry built from the undo record
-  // @param[out] skip_mapping true if the caller must not undo the mapping
+  // @param[out] skip_index true if the caller must not undo the mapping
   //             B-tree record: the index has none, or the entry has none
   //             because its key is NULL.
   static dberr_t rollback_inserted(dict_index_t *index, trx_id_t trx_id,
-                                   const dtuple_t *entry, bool *skip_mapping);
+                                   const dtuple_t *entry, bool *skip_index);
 
   // Rolls back an entry delete-marked by the transaction, by removing the
   // delete mark in the extension storage. Used when undoing a delete, and for
   // the old entry when undoing an update. Does nothing if index is not a custom
   // index. The caller must not undo the mapping B-tree record on failure.
   static dberr_t rollback_deleted(dict_index_t *index, trx_id_t trx_id,
-                                  const dtuple_t *entry, bool *skip_mapping);
+                                  const dtuple_t *entry, bool *skip_index);
 
   // Notification that the B-tree record of an index entry being rolled back
   // was not found during rollback. For custom index entry the function
@@ -284,9 +296,16 @@ class Custom_index {
   // The undo operation applied to an extension entry by rollback().
   enum class Rollback_op { REMOVE_INSERTED, UNMARK_DELETED };
 
+  // Marks the entry as deleted in the extension storage. Does nothing if the
+  // index needs the entry reference and key_ref is EMPTY_KEY_REF.
+  // @param[out] skip_index see mark_delete_pre()
+  static dberr_t mark_delete(dict_index_t *index, trx_id_t trx_id,
+                             const dtuple_t *entry, KeyRef key_ref,
+                             bool *skip_index);
+
   static dberr_t rollback(dict_index_t *index, trx_id_t trx_id,
                           const dtuple_t *entry, Rollback_op op,
-                          bool *skip_mapping);
+                          bool *skip_index);
 
   // Loads the extension-managed storage of an attached custom index that has
   // a storage reference.
