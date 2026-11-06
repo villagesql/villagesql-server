@@ -242,7 +242,7 @@ static bool do_init_extension_infrastructure(THD *thd) {
   const dd::cache::Dictionary_client::Auto_releaser scope_releaser(
       thd->dd_client());
 
-  // Roll back on any failure below; released before the commit.
+  // Roll back on any failure below, including the commit.
   auto rollback_guard = create_scope_guard([thd] {
     trans_rollback_stmt(thd);
     // Full rollback in case we have THD::transaction_rollback_request.
@@ -265,10 +265,12 @@ static bool do_init_extension_infrastructure(THD *thd) {
     return true;
   }
 
-  rollback_guard.release();
+  if (trans_commit_stmt(thd) || trans_commit(thd)) {
+    return true;
+  }
 
-  // A failure here is rolled back internally, and the caller aborts startup.
-  return trans_commit_stmt(thd) || trans_commit(thd);
+  rollback_guard.release();
+  return false;
 }
 
 }  // namespace
