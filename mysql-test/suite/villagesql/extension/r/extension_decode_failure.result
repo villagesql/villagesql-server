@@ -34,7 +34,7 @@ VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at
 SELECT id, val FROM t1 WHERE id = 5;
 ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
 # Verify the failure was logged
-VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_THROW\x00\x00\x00\x00): VDF threw an exception (fault blob decode throw)
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_THROW\x00\x00\x00\x00): VDF threw an exception (fault_blob_decode throw)
 # UPDATE: overwrite the DECODE_THROW row with a good value
 UPDATE t1 SET val = 'OK fixed' WHERE id = 5;
 # SELECT again after throw trigger removed
@@ -72,8 +72,8 @@ sum(id)	val
 9	OK fixed
 1	OK hello
 2	OK world
-# Verify the failure was logged (twice on linux, once on mac)
-VillageSQL: hash VDF 'FAULT_BLOB::hash' returned error: VDF threw an exception (fault blob hash throw)
+# Verify the failure was logged
+VillageSQL: hash VDF 'FAULT_BLOB::hash' returned error: VDF threw an exception (fault_blob_hash throw)
 # Insert a value that will throw on compare
 INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
 SELECT id, val FROM t1 ORDER BY val;
@@ -85,8 +85,8 @@ id	val
 1	OK hello
 2	OK world
 7	COMPARE_THROW
-# Verify the failure was logged (twice on linux, once on mac)
-VillageSQL: compare VDF 'FAULT_BLOB::compare' returned error: VDF threw an exception (fault blob compare throw)
+# Verify the failure was logged
+VillageSQL: compare VDF 'FAULT_BLOB::compare' returned error: VDF threw an exception (fault_blob_compare throw)
 # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
 # The updated row now causes an error on SELECT
@@ -109,7 +109,7 @@ SELECT id, val FROM t2 ORDER BY id;
 id	val
 1	OK good
 INSERT INTO t2 VALUES (3, 'ENCODE_THROW');
-ERROR HY000: VDF threw an exception (fault blob encode throw)
+ERROR HY000: VDF threw an exception (fault_blob_encode throw)
 DROP TABLE t2;
 UNINSTALL EXTENSION vsql_test_only;
 # Verify extension was removed
