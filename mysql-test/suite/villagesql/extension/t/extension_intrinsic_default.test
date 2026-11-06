@@ -74,5 +74,5 @@ DROP TABLE t_again;
 --echo # An ordinary VDF in the same extension is still callable.
 SELECT vsql_test_only.test_result_kind('ok') AS k;
 
---remove_file $MYSQLTEST_VARDIR/tmp/decode_fail_log_pos.txt
+--source include/villagesql/decode_failure_log_end.inc
 UNINSTALL EXTENSION vsql_test_only;
