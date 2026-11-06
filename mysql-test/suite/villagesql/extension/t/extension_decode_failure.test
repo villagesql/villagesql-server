@@ -68,7 +68,7 @@ SELECT id, val FROM t1 WHERE id = 4;
 SELECT id, val FROM t1 WHERE id = 5;
 
 --echo # Verify the failure was logged
---replace_result fault_blob_decode "fault blob decode"
+#--replace_result fault_blob_decode "fault blob decode"
 --source include/villagesql/decode_failure_log_print.inc
 
 --echo # UPDATE: overwrite the DECODE_THROW row with a good value
@@ -99,8 +99,8 @@ INSERT INTO t1 VALUES (6, 'HASH_THROW');
 # TODO(villagesql-general): Wire error report to client
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 
---echo # Verify the failure was logged (twice on linux, once on mac)
---replace_result fault_blob_hash "fault blob hash"
+--echo # Verify the failure was logged
+#--replace_result fault_blob_hash "fault blob hash"
 --source include/villagesql/decode_failure_log_print.inc
 
 --echo # Insert a value that will throw on compare
@@ -109,8 +109,8 @@ INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
 # TODO(villagesql-general): Wire error report to client
 SELECT id, val FROM t1 ORDER BY val;
 
---echo # Verify the failure was logged (twice on linux, once on mac)
---replace_result fault_blob_compare "fault blob compare"
+--echo # Verify the failure was logged
+#--replace_result fault_blob_compare "fault blob compare"
 --source include/villagesql/decode_failure_log_print.inc
 
 --echo # UPDATE: overwrite a good row with a DECODE_FAIL value
@@ -139,7 +139,7 @@ INSERT INTO t2 VALUES (2, 'ENCODE_FAIL');
 --echo # Only the successful row was stored
 SELECT id, val FROM t2 ORDER BY id;
 
---replace_result fault_blob_encode "fault blob encode"
+#--replace_result fault_blob_encode "fault blob encode"
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSERT INTO t2 VALUES (3, 'ENCODE_THROW');
 
