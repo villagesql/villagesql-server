@@ -281,8 +281,8 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
 
   // Call prerun if present, except at PREPARE when an argument has a ? with no
   // value. Such a ? looks like a STRING to prerun, so its checks cannot work
-  //  yet. We defer prerun until EXECUTE, when the ? has the type of the value
-  //  bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
+  // yet. We defer prerun until EXECUTE, when the ? has the type of the value
+  // bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
   // any argument is not constant, e.g. a column. We defer only for an argument
   // with a ?, because a column's type is known at PREPARE and prerun can check
   // it there.
