@@ -123,8 +123,6 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         return std::nullopt;
       }
 
-      maybe_descriptor->set_extension_protocol(ext_reg.negotiated_protocol);
-
       // A fixed non-parameterized type declares persisted_length
       // (max_persisted_length stays 0); parameterized and variable-length types
       // declare max_persisted_length, and a parameterized type's resolved

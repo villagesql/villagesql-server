@@ -54,10 +54,9 @@ argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
 
-The protocol-4 STRING input rules also apply when SQL implicitly converts text
-into a custom type through its `from_string` callback. Direct assignment and
-explicit `from_string` calls both reject binary input that is not valid UTF-8.
-Earlier custom-type protocols retain their existing binary-input behavior.
+Direct assignment and implicit text conversion to a custom type require binary
+input to contain valid UTF-8, matching explicit protocol-4 STRING `from_string`
+calls.
 
 ## Constant arguments in prerun
 

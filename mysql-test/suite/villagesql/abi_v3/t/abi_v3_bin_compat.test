@@ -49,11 +49,6 @@ CREATE TABLE t_bin (b VARBINARY(8));
 INSERT INTO t_bin VALUES (0xFF), (0xC3A9);
 SELECT HEX(b), abi_v3_test.test_result_kind(b) AS result FROM t_bin ORDER BY b;
 DROP TABLE t_bin;
-# Legacy custom encoders retain binary input even when it is not valid UTF-8.
-CREATE TABLE t_custom (v FAULT_BLOB);
-INSERT INTO t_custom VALUES (_binary 0x4F4B20FF);
-SELECT HEX(abi_v3_test.FAULT_BLOB::to_string(v)) AS legacy_bytes FROM t_custom;
-DROP TABLE t_custom;
 UNINSTALL EXTENSION abi_v3_test;
 
 --echo # Cleanup

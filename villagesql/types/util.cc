@@ -673,16 +673,15 @@ static bool CopyBinaryAsUtf8mb4(const String &from, String *buffer,
 // needs to know which charset the bytes are in. Returns from itself when it
 // is already utf8mb4, the usual case since that is the default connection
 // charset, and otherwise converts it into *converted and returns that.
-// Protocol 4 also validates binary input as UTF-8. The type still decides
+// Binary input must already be valid UTF-8. The type still decides
 // whether the text is valid in its own syntax.
 //
 // Returns nullptr with status set on failure: kOom (my_error already called),
 // or kBadValue when from is not valid in its own charset. For kBadValue,
 // *converted holds what the conversion made of it, to quote in the error.
 static const String *ConvertToUtf8mb4(const String &from, String *converted,
-                                      EncodeStatus &status,
-                                      vef_protocol_t protocol) {
-  if (protocol >= VEF_PROTOCOL_4 && from.charset() == &my_charset_bin) {
+                                      EncodeStatus &status) {
+  if (from.charset() == &my_charset_bin) {
     return CopyBinaryAsUtf8mb4(from, converted, status) ? nullptr : converted;
   }
   // Already utf8mb4 under any collation, which is the usual case. The encode
@@ -719,9 +718,7 @@ static String *EncodeForItem(Item *item, const String &from, String *converted,
     status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  const String *value = ConvertToUtf8mb4(
-      from, converted, status,
-      item->get_type_context()->descriptor()->extension_protocol());
+  const String *value = ConvertToUtf8mb4(from, converted, status);
   if (value == nullptr) {
     if (status == EncodeStatus::kBadValue) *given = converted;
     return nullptr;
@@ -760,9 +757,7 @@ String *EncodeStringForField(Field *field, const String &from,
   }
 
   String converted;
-  const String *value = ConvertToUtf8mb4(
-      from, &converted, status,
-      field->get_type_context()->descriptor()->extension_protocol());
+  const String *value = ConvertToUtf8mb4(from, &converted, status);
   if (value == nullptr) {
     if (status == EncodeStatus::kBadValue) {
       ReportBadCustomFieldValue(field, converted);
