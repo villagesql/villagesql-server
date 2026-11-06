@@ -54,6 +54,10 @@ argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
 
+Direct assignment and implicit text conversion to a custom type require binary
+input to contain valid UTF-8, matching explicit protocol-4 STRING `from_string`
+calls.
+
 ## Constant arguments in prerun
 
 From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in
