@@ -1161,7 +1161,6 @@ std::string default_vdf_err_default(char *error_msg) {
 }
 std::string default_vdf_throw_default(char * /*error_msg*/) {
   throw std::runtime_error("default_vdf_throw_default throw");
-  return std::string();
 }
 
 static constexpr const char kDefaultStrTypeName[] = "DEFAULT_STR_TYPE";
