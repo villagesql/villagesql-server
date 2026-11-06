@@ -89,7 +89,7 @@ UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
 --echo # The previously-failing row should now decode successfully
 SELECT id, val FROM t1 ORDER BY id;
 
---echo # First show weird hash function works
+--echo # GROUP BY works with the test hash
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 
 --echo # Second insert throw row and retest
