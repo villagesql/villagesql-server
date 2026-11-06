@@ -484,6 +484,10 @@ extern const CHARSET_INFO *VdfValueCharset(vef_type_id id);
 // as eval_string_arg() does.
 extern String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer);
 
+// True if `item` is, or contains, a prepared-statement parameter that has no
+// value yet (usually at PREPARE).
+extern bool HasPSParamWithoutValue(Item *item);
+
 // Validate VDF arguments against function signature and convert string
 // constants to custom types where appropriate. Applies type disambiguation
 // rules to the arguments (args of the same custom type share params) to resolve

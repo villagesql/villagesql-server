@@ -15,6 +15,7 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <algorithm>
 #include <type_traits>
 #include <vector>
 
@@ -118,9 +119,8 @@ bool vdf_handler::MaybeResizeBuffer(size_t needed) {
   return false;
 }
 
-bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
-                             uint arg_count, Item **arguments,
-                             String *buffers) {
+bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
+                             Item **arguments, String *buffers) {
   m_args = arguments;
   m_buffers = buffers;
   m_arg_count = arg_count;
@@ -279,12 +279,20 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     if (prerun_completed) RunPostrun();
   });
 
-  // Call prerun if present
-  // TODO(villagesql-general): prerun also runs at PREPARE, where a ?
-  // parameter has no value and is typed STRING, so a prerun that checks types
-  // can reject the statement before EXECUTE binds one. udf_handler::fix_fields
-  // defers a UDF's init at PREPARE when an argument is not constant.
-  if (m_udf->vdf_func_desc->prerun) {
+  // Call prerun if present, except at PREPARE when an argument has a ? with no
+  // value. Such a ? looks like a STRING to prerun, so its checks cannot work
+  //  yet. We defer prerun until EXECUTE, when the ? has the type of the value
+  //  bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
+  // any argument is not constant, e.g. a column. We defer only for an argument
+  // with a ?, because a column's type is known at PREPARE and prerun can check
+  // it there.
+  const bool is_in_prepare =
+      thd->stmt_arena->is_stmt_prepare() && !thd->stmt_arena->is_repreparing;
+  const bool defer_prerun =
+      is_in_prepare && std::any_of(m_args, m_args + arg_count, [](Item *arg) {
+        return villagesql::HasPSParamWithoutValue(arg);
+      });
+  if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
     prerun_args.deprecated_const_values = nullptr;
@@ -404,7 +412,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     }
   }
 
-  m_active = true;
+  // cleanup() runs postrun only if prerun had its turn here.
+  m_active = !defer_prerun;
   postrun_guard.release();
   return false;
 }
