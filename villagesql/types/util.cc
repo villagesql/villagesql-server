@@ -2169,6 +2169,15 @@ static void InferVDFReturnParams(
 // Buffer for one canonical "k=v,k=v" params string.
 static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 
+// True if `item` is, or contains, a prepared-statement parameter that has no
+// value yet (usually at PREPARE).
+static bool HasPSParamWithoutValue(Item *item) {
+  return WalkItem(item, enum_walk::SUBQUERY_PREFIX, [](Item *sub) {
+    return sub->type() == Item::PARAM_ITEM &&
+           down_cast<Item_param *>(sub)->param_state() == Item_param::NO_VALUE;
+  });
+}
+
 // Invokes a function's bind_and_check_types hook.
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
@@ -2220,8 +2229,9 @@ static bool CallBindTypesHook(
     // Provide constant string values where available, in the charset of the
     // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
     // unconverted for any other. A prepared-statement parameter has no value
-    // until EXECUTE.
+    // until EXECUTE, also when it is inside an expression like CONCAT(?, '').
     if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
+        !HasPSParamWithoutValue(args[i]) &&
         arg_types[i].id == VEF_TYPE_STRING) {
       const vef_type_id param_id =
           declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
