@@ -5,9 +5,9 @@
 #
 #   "OK <payload>"  - encodes and decodes successfully
 #   "DECODE_FAIL"   - encodes successfully but decode fails on read
-#   "DECODE_THROW"  - encodes successfully but decode fails on read
+#   "DECODE_THROW"  - encodes successfully but decode throws on read
 #   "ENCODE_FAIL"   - encode fails immediately, value is never stored
-#   "ENCODE_THROW"  - encode fails immediately, value is never stored
+#   "ENCODE_THROW"  - encode throws, value is never stored
 #   "HASH_THROW"    - GROUP BY causes throw, currently only logged
 #   "COMPARE_THROW" - ORDER BY causes throw, currently only logged
 #
