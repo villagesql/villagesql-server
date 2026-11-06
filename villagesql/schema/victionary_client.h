@@ -38,7 +38,6 @@
 #include "sql/handler.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
-#include "sql/sql_list.h"
 #include "sql/table.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/extension_descriptor.h"
@@ -81,7 +80,6 @@ enum class OperationType {
 enum class PersistenceMode { PERSISTENT, MEMORY_ONLY };
 
 // Wrapper for a pending operation on a system table entry
-// This is an intrusive list node for use with SQL_I_List
 //
 // Uses shared_ptr<EntryType> to:
 // - Avoid requiring copy constructors on EntryType
@@ -99,18 +97,15 @@ struct PendingOperation {
   // TODO(villagesql): maybe adding a DELETE+INSERT would be simpler?
   key_type key;
 
-  // Intrusive list pointer for SQL_I_List
-  PendingOperation *next;
-
   PendingOperation() = delete;
 
   // Constructor for INSERT (no key needed)
   PendingOperation(OperationType type, std::shared_ptr<EntryType> e)
-      : op_type(type), entry(std::move(e)), key(), next(nullptr) {}
+      : op_type(type), entry(std::move(e)), key() {}
 
   // Constructor for UPDATE (with old key) or DELETE (with key to delete)
   PendingOperation(OperationType type, std::shared_ptr<EntryType> e, key_type k)
-      : op_type(type), entry(std::move(e)), key(std::move(k)), next(nullptr) {}
+      : op_type(type), entry(std::move(e)), key(std::move(k)) {}
 };
 
 // Generic map for any VillageSQL system object or table row. Each collection
@@ -136,12 +131,6 @@ class SystemTableMap {
   // Constructor takes pointer to parent's lock for assertions
   explicit SystemTableMap(mysql_rwlock_t *lock) : m_parent_lock(lock) {}
 
-  // Free any pending operations still staged at teardown. m_uncommitted holds
-  // an intrusive list that does not own its nodes, so a map destroyed with
-  // uncommitted operations (i.e. without a prior commit/rollback/clear) would
-  // otherwise leak them.
-  ~SystemTableMap() { delete_all_uncommitted(); }
-
   // Disable copy/move
   SystemTableMap(const SystemTableMap &) = delete;
   SystemTableMap &operator=(const SystemTableMap &) = delete;
@@ -164,15 +153,14 @@ class SystemTableMap {
         // Search through the list of pending operations recording the most
         // recent operation on this key
         const PendingOperation<EntryType> *most_recent_op = nullptr;
-        for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
-             op = op->next) {
+        for (const PendingOperation<EntryType> &op : thd_it->second) {
           // Get the key for this operation
           // For ops with entry, use entry's key; otherwise use stored key
           const std::string &op_key =
-              op->entry ? op->entry->key().str() : op->key.str();
-          if (op_key == key_str || (op->op_type == OperationType::UPDATE &&
-                                    op->key.str() == key_str)) {
-            most_recent_op = op;
+              op.entry ? op.entry->key().str() : op.key.str();
+          if (op_key == key_str || (op.op_type == OperationType::UPDATE &&
+                                    op.key.str() == key_str)) {
+            most_recent_op = &op;
           }
         }
 
@@ -351,7 +339,7 @@ class SystemTableMap {
   bool has_uncommitted(THD *thd) const {
     assert_read_or_write_lock_held();
     auto thd_it = m_uncommitted.find(thd);
-    return (thd_it != m_uncommitted.end() && thd_it->second.elements != 0);
+    return (thd_it != m_uncommitted.end() && !thd_it->second.empty());
   }
 
   // ===== High-level operation marking APIs =====
@@ -408,17 +396,8 @@ class SystemTableMap {
       return true;
     }
 
-    // Allocate pending operation on heap - cleaned up in commit() or rollback()
-    PendingOperation<EntryType> *op = new PendingOperation<EntryType>(
-        op_type, std::move(entry_ptr), std::move(key));
-    if (should_assert_if_null(op)) {
-      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
-               sizeof(PendingOperation<EntryType>));
-      return true;
-    }
-
-    // Append to the list for this THD
-    m_uncommitted[&thd].link_in_list(op, &op->next);
+    m_uncommitted[&thd].emplace_back(op_type, std::move(entry_ptr),
+                                     std::move(key));
     return false;
   }
 
@@ -427,18 +406,9 @@ class SystemTableMap {
   bool add_uncommitted_delete(THD &thd, key_type key) {
     assert_write_lock_held();
 
-    // Allocate pending operation on heap - cleaned up in commit() or rollback()
     // entry is nullptr for DELETE-by-key
-    PendingOperation<EntryType> *op = new PendingOperation<EntryType>(
-        OperationType::DELETE, nullptr, std::move(key));
-    if (should_assert_if_null(op)) {
-      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
-               sizeof(PendingOperation<EntryType>));
-      return true;
-    }
-
-    // Append to the list for this THD
-    m_uncommitted[&thd].link_in_list(op, &op->next);
+    m_uncommitted[&thd].emplace_back(OperationType::DELETE, nullptr,
+                                     std::move(key));
     return false;
   }
 
@@ -456,20 +426,17 @@ class SystemTableMap {
     }
 
     // Apply all pending operations to committed map in order
-    PendingOperation<EntryType> *op = thd_it->second.first;
-    while (op) {
-      PendingOperation<EntryType> *next_op = op->next;
-
-      switch (op->op_type) {
+    for (PendingOperation<EntryType> &op : thd_it->second) {
+      switch (op.op_type) {
         case OperationType::INSERT:
         case OperationType::UPDATE: {
           // For INSERT and UPDATE, add/replace entry in committed map
-          assert(op->entry);
-          const std::string key = op->entry->key().str();
-          m_committed[key] = std::move(op->entry);
+          assert(op.entry);
+          const std::string key = op.entry->key().str();
+          m_committed[key] = std::move(op.entry);
           // For UPDATE with key change, also remove old key
-          const std::string old_key = op->key.str();
-          if (op->op_type == OperationType::UPDATE && !old_key.empty() &&
+          const std::string old_key = op.key.str();
+          if (op.op_type == OperationType::UPDATE && !old_key.empty() &&
               old_key != key) {
             m_committed.erase(old_key);
           }
@@ -478,13 +445,9 @@ class SystemTableMap {
 
         case OperationType::DELETE:
           // For DELETE, remove from committed map using stored key
-          m_committed.erase(op->key.str());
+          m_committed.erase(op.key.str());
           break;
       }
-
-      // Delete the node (heap allocated)
-      delete op;
-      op = next_op;
     }
 
     m_uncommitted.erase(thd);
@@ -495,25 +458,20 @@ class SystemTableMap {
     assert_write_lock_held();
     if (!thd) return;
 
-    auto thd_it = m_uncommitted.find(thd);
-    if (thd_it != m_uncommitted.end()) {
-      delete_operations(thd_it->second.first);
-    }
-
     m_uncommitted.erase(thd);
   }
 
   // A position in this THD's uncommitted operations. rollback_to() discards
   // the operations marked after it and keeps the earlier ones.
   struct SavepointPosition {
-    uint elements;
+    size_t elements;
   };
 
   // Requires read or write lock
   SavepointPosition savepoint(THD *thd) const {
     assert_read_or_write_lock_held();
     auto thd_it = m_uncommitted.find(thd);
-    return {thd_it == m_uncommitted.end() ? 0 : thd_it->second.elements};
+    return {thd_it == m_uncommitted.end() ? 0 : thd_it->second.size()};
   }
 
   // Requires write lock
@@ -528,19 +486,12 @@ class SystemTableMap {
     }
 
     UncommittedList &list = thd_it->second;
-    assert(list.elements >= savepoint.elements);
+    assert(list.size() >= savepoint.elements);
     if (savepoint.elements == 0) {
       rollback(thd);
       return;
     }
-
-    // Cut the list after the last operation the savepoint keeps.
-    PendingOperation<EntryType> *last_kept = list.first;
-    for (uint i = 1; i < savepoint.elements; i++) last_kept = last_kept->next;
-    delete_operations(last_kept->next);
-    last_kept->next = nullptr;
-    list.next = &last_kept->next;
-    list.elements = savepoint.elements;
+    list.erase(list.begin() + savepoint.elements, list.end());
   }
 
   // ===== Bulk operations =====
@@ -549,7 +500,7 @@ class SystemTableMap {
   void clear() {
     assert_write_lock_held();
     m_committed.clear();
-    delete_all_uncommitted();
+    m_uncommitted.clear();
   }
 
   // ===== Table I/O (PERSISTENT mode only) =====
@@ -613,7 +564,7 @@ class SystemTableMap {
     if (!thd) return get_prefix_committed<T>(prefix);
 
     auto thd_it = m_uncommitted.find(thd);
-    if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+    if (thd_it == m_uncommitted.end() || thd_it->second.empty()) {
       return get_prefix_committed<T>(prefix);
     }
 
@@ -626,14 +577,13 @@ class SystemTableMap {
     // Walk staged ops in order; the most recent op per key wins. A nullptr
     // entry means the key is hidden (DELETE, or the old key of a rename).
     std::map<std::string, const EntryType *> staged;
-    for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
-         op = op->next) {
-      if (op->op_type == OperationType::UPDATE) {
-        const std::string &old_key = op->key.str();
+    for (const PendingOperation<EntryType> &op : thd_it->second) {
+      if (op.op_type == OperationType::UPDATE) {
+        const std::string &old_key = op.key.str();
         if (!old_key.empty() && in_range(old_key)) staged[old_key] = nullptr;
       }
-      const std::string &k = op->entry ? op->entry->key().str() : op->key.str();
-      if (in_range(k)) staged[k] = op->entry.get();
+      const std::string &k = op.entry ? op.entry->key().str() : op.key.str();
+      if (in_range(k)) staged[k] = op.entry.get();
     }
 
     std::map<std::string, const EntryType *> merged;
@@ -651,7 +601,7 @@ class SystemTableMap {
 
     std::vector<const EntryType *> result;
     result.reserve(merged.size());
-    for (const auto &[key, entry] : merged) result.push_back(entry);
+    for (const auto &[_, entry] : merged) result.push_back(entry);
     return result;
   }
 
@@ -666,7 +616,7 @@ class SystemTableMap {
     std::vector<const EntryType *> result;
     result.reserve(m_committed.size());
 
-    for (const auto &[key, entry] : m_committed) {
+    for (const auto &[_, entry] : m_committed) {
       result.push_back(entry.get());
     }
 
@@ -685,7 +635,7 @@ class SystemTableMap {
     if (!thd) return get_all_committed();
 
     auto thd_it = m_uncommitted.find(thd);
-    if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+    if (thd_it == m_uncommitted.end() || thd_it->second.empty()) {
       return get_all_committed();
     }
 
@@ -693,11 +643,10 @@ class SystemTableMap {
     // Records both the op type and the entry pointer (nullptr for delete).
     std::unordered_map<std::string, OperationType> op_by_key;
     std::unordered_map<std::string, const EntryType *> entry_by_key;
-    for (const PendingOperation<EntryType> *op = thd_it->second.first; op;
-         op = op->next) {
-      const std::string &k = op->entry ? op->entry->key().str() : op->key.str();
-      op_by_key[k] = op->op_type;
-      entry_by_key[k] = op->entry.get();
+    for (const PendingOperation<EntryType> &op : thd_it->second) {
+      const std::string &k = op.entry ? op.entry->key().str() : op.key.str();
+      op_by_key[k] = op.op_type;
+      entry_by_key[k] = op.entry.get();
     }
 
     std::vector<const EntryType *> result;
@@ -755,8 +704,8 @@ class SystemTableMap {
     assert_read_or_write_lock_held();
 
     size_t uncommitted_count = 0;
-    for (const auto &[thd, list] : m_uncommitted) {
-      uncommitted_count += list.elements;
+    for (const auto &[_, list] : m_uncommitted) {
+      uncommitted_count += list.size();
     }
 
     return {m_committed.size(), uncommitted_count, m_hits.load(),
@@ -766,7 +715,7 @@ class SystemTableMap {
  private:
   using EntryKeyType = typename EntryType::key_type;
   using CommittedMap = std::map<std::string, std::shared_ptr<EntryType>>;
-  using UncommittedList = SQL_I_List<PendingOperation<EntryType>>;
+  using UncommittedList = std::vector<PendingOperation<EntryType>>;
 
   CommittedMap m_committed;
   std::map<THD *, UncommittedList> m_uncommitted;
@@ -795,26 +744,6 @@ class SystemTableMap {
     // Try to acquire write lock - should fail if we have any lock
     assert(mysql_rwlock_trywrlock(m_parent_lock) != 0 &&
            "No lock held - able to acquire write lock");
-  }
-
-  // Delete every heap-allocated PendingOperation node across all THDs and empty
-  // the uncommitted map. SQL_I_List is intrusive and does not own its nodes, so
-  // they must be deleted explicitly, mirroring what commit()/rollback() do per
-  // THD. Used by clear() and the destructor; does not assert the lock so it is
-  // safe to call during teardown.
-  void delete_all_uncommitted() {
-    for (auto &[_, list] : m_uncommitted) delete_operations(list.first);
-    m_uncommitted.clear();
-  }
-
-  // Delete the heap-allocated PendingOperation nodes from `op` to the end of
-  // its list. Does not update the list that held them.
-  static void delete_operations(PendingOperation<EntryType> *op) {
-    while (op) {
-      PendingOperation<EntryType> *next_op = op->next;
-      delete op;
-      op = next_op;
-    }
   }
 
   // Note: No locks - parent VictionaryClient's lock protects all access
