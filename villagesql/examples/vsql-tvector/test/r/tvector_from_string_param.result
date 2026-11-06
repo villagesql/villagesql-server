@@ -35,7 +35,7 @@ ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_fr
 INSERT INTO t VALUES (5, TVECTOR::from_string('not a vector'));
 ERROR HY000: error encountered during TVECTOR::from_string inference: tvector_from_string: missing '['
 DEALLOCATE PREPARE s;
-# Multi-row VALUES: each call infers from its own parameter
+# Multi-row VALUES, one parameter per row
 PREPARE s FROM 'INSERT INTO t VALUES (6, TVECTOR::from_string(?)),
                                      (7, TVECTOR::from_string(?))';
 SET @v = '[1,1,1]';
@@ -44,6 +44,28 @@ DELETE FROM t WHERE id IN (6, 7);
 SET @v = '[7,8,9]', @w = '[10,11,12]';
 EXECUTE s USING @v, @w;
 DEALLOCATE PREPARE s;
+# Each call infers from its own parameter, here of dimensions 3 and 4
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS a, TVECTOR::from_string(?) AS b';
+SET @v3 = '[1,2,3]', @v4 = '[1,2,3,4]';
+EXECUTE s USING @v3, @v4;
+a	b
+[1,2,3]	[1,2,3,4]
+EXECUTE s USING @v4, @v3;
+a	b
+[1,2,3,4]	[1,2,3]
+DEALLOCATE PREPARE s;
+CREATE TABLE t34 (a TVECTOR(3), b TVECTOR(4));
+PREPARE s FROM
+'INSERT INTO t34 VALUES (TVECTOR::from_string(?), TVECTOR::from_string(?))';
+EXECUTE s USING @v3, @v4;
+# Swapped, infrerred dimensions do not match the column definition
+EXECUTE s USING @v4, @v3;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(4) to vsql_tvector.TVECTOR(3) for column 'a' at row 1
+DEALLOCATE PREPARE s;
+SELECT TVECTOR::to_string(a), TVECTOR::to_string(b) FROM t34;
+TVECTOR::to_string(a)	TVECTOR::to_string(b)
+[1,2,3]	[1,2,3,4]
+DROP TABLE t34;
 # UPDATE
 PREPARE s FROM 'UPDATE t SET v = TVECTOR::from_string(?) WHERE id = ?';
 SET @v = '[0,0,1]', @id = 1;
@@ -130,6 +152,6 @@ NULL
 Warnings:
 Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: missing '['
 DEALLOCATE PREPARE s;
-SET @id = NULL, @v = NULL, @w = NULL, @i = NULL;
+SET @id = NULL, @v = NULL, @w = NULL, @i = NULL, @v3 = NULL, @v4 = NULL;
 DROP TABLE t;
 UNINSTALL EXTENSION vsql_tvector;

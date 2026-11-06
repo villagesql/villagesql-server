@@ -44,7 +44,7 @@ EXECUTE s USING @id, @v;
 INSERT INTO t VALUES (5, TVECTOR::from_string('not a vector'));
 DEALLOCATE PREPARE s;
 
---echo # Multi-row VALUES: each call infers from its own parameter
+--echo # Multi-row VALUES, one parameter per row
 PREPARE s FROM 'INSERT INTO t VALUES (6, TVECTOR::from_string(?)),
                                      (7, TVECTOR::from_string(?))';
 SET @v = '[1,1,1]';
@@ -53,6 +53,23 @@ DELETE FROM t WHERE id IN (6, 7);
 SET @v = '[7,8,9]', @w = '[10,11,12]';
 EXECUTE s USING @v, @w;
 DEALLOCATE PREPARE s;
+
+--echo # Each call infers from its own parameter, here of dimensions 3 and 4
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS a, TVECTOR::from_string(?) AS b';
+SET @v3 = '[1,2,3]', @v4 = '[1,2,3,4]';
+EXECUTE s USING @v3, @v4;
+EXECUTE s USING @v4, @v3;
+DEALLOCATE PREPARE s;
+CREATE TABLE t34 (a TVECTOR(3), b TVECTOR(4));
+PREPARE s FROM
+  'INSERT INTO t34 VALUES (TVECTOR::from_string(?), TVECTOR::from_string(?))';
+EXECUTE s USING @v3, @v4;
+--echo # Swapped, infrerred dimensions do not match the column definition
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v4, @v3;
+DEALLOCATE PREPARE s;
+SELECT TVECTOR::to_string(a), TVECTOR::to_string(b) FROM t34;
+DROP TABLE t34;
 
 --echo # UPDATE
 PREPARE s FROM 'UPDATE t SET v = TVECTOR::from_string(?) WHERE id = ?';
@@ -111,6 +128,6 @@ EXECUTE s USING @i;
 SELECT TVECTOR::from_string(5) AS v;
 DEALLOCATE PREPARE s;
 
-SET @id = NULL, @v = NULL, @w = NULL, @i = NULL;
+SET @id = NULL, @v = NULL, @w = NULL, @i = NULL, @v3 = NULL, @v4 = NULL;
 DROP TABLE t;
 UNINSTALL EXTENSION vsql_tvector;
