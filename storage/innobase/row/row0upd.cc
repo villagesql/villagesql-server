@@ -2219,13 +2219,12 @@ code or DB_LOCK_WAIT */
   }
 
   if (Custom_index::is_custom(index)) {
-    bool is_key_null = false;
-    err = Custom_index::mark_delete(index, trx->id, entry, custom_key_ref, true,
-                                    &is_key_null);
+    bool skip_index = false;
+    err = Custom_index::mark_delete_pre(index, trx->id, entry, &skip_index);
     if (err != DB_SUCCESS) {
       goto func_exit;
     }
-    if (!index->has_mapping_btree() || is_key_null) {
+    if (skip_index) {
       goto key_insert;
     }
   }
@@ -2401,10 +2400,8 @@ code or DB_LOCK_WAIT */
   mtr_commit(&mtr);
 
   if (err == DB_SUCCESS && search_result == ROW_FOUND &&
-      Custom_index::needs_mapping_key(index)) {
-    bool is_key_null;
-    err = Custom_index::mark_delete(index, trx->id, entry, custom_key_ref, true,
-                                    &is_key_null);
+      Custom_index::is_custom(index)) {
+    err = Custom_index::mark_delete_post(index, trx->id, entry, custom_key_ref);
   }
 
 key_insert:
