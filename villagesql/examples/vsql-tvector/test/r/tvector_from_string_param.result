@@ -58,7 +58,7 @@ CREATE TABLE t34 (a TVECTOR(3), b TVECTOR(4));
 PREPARE s FROM
 'INSERT INTO t34 VALUES (TVECTOR::from_string(?), TVECTOR::from_string(?))';
 EXECUTE s USING @v3, @v4;
-# Swapped, infrerred dimensions do not match the column definition
+# Swapped, inferred dimensions do not match the column definition
 EXECUTE s USING @v4, @v3;
 ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(4) to vsql_tvector.TVECTOR(3) for column 'a' at row 1
 DEALLOCATE PREPARE s;

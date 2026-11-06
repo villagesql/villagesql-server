@@ -78,6 +78,9 @@ class vdf_handler {
   size_t m_result_buffer_size{0};
   char *m_error_msg{nullptr};
   bool m_active{false};
+  // True once fix_fields has run prerun, or the function has none. False only
+  // when fix_fields deferred prerun, at a first PREPARE.
+  bool m_prerun_ran{false};
   const villagesql::TypeContext *m_return_type_context{nullptr};
 
   // Marshal arguments into m_invalues array based on declared parameter types.

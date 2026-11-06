@@ -36,9 +36,7 @@ DEALLOCATE PREPARE s;
 SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;
 pre	post	live
 3	3	0
-#
 # An argument with a ?: no prerun at PREPARE
-#
 PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe_arg(?) AS n FROM t ORDER BY id';
 # After PREPARE: unchanged
 SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live;

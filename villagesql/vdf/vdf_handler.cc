@@ -32,6 +32,7 @@
 #include "sql/sql_error.h"
 #include "sql/sql_udf.h"
 #include "sql_string.h"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/types/from_string_inference.h"
 #include "villagesql/types/util.h"
@@ -414,11 +415,14 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
 
   // cleanup() runs postrun only if prerun had its turn here.
   m_active = !defer_prerun;
+  m_prerun_ran = !defer_prerun;
   postrun_guard.release();
   return false;
 }
 
 void vdf_handler::clear() {
+  // See marshal_args().
+  if (should_assert_if_false(m_prerun_ran)) return;
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
@@ -580,6 +584,14 @@ static bool marshal_args_typed(const vef_signature_t *sig,
 }
 
 bool vdf_handler::marshal_args() {
+  // Prerun must have run. fix_fields defers it only at a first PREPARE.
+  // For statements that calls VDFs every EXECUTE prepares the statement again
+  // with a new handler whose prerun runs.
+  if (should_assert_if_false(m_prerun_ran)) {
+    villagesql_error("internal: function '%s' called before its prerun", MYF(0),
+                     m_udf->name.str);
+    return true;
+  }
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
     return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
@@ -797,6 +809,9 @@ static bool CallsVdf(Item *item_list) {
 void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
                                   Item_param *const *from, uint count) {
   if (!CallsVdf(item_list)) return;
+  // TODO(villagesql-general): a value sent with mysql_stmt_send_long_data() is
+  // LONG_DATA_VALUE and is not copied, so from_string(?) does not infer its
+  // params from it. Check with a binary-protocol client test.
   for (uint i = 0; i < count; i++) {
     if (from[i]->param_state() == Item_param::STRING_VALUE)
       to[i]->str_value_ptr.copy(from[i]->str_value_ptr);
