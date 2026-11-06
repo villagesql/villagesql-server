@@ -1,7 +1,7 @@
 # Print decode-failure log entries written since the last call to
 # decode_failure_log_init.inc or this file, then advance the saved position.
 # Matches lines containing "Invalid value in column",
-# "Extension error decoding column", or "VDF threw an exception" stripping
+# "Extension error decoding column", or "VDF threw an exception", stripping
 # the timestamp/thread prefix.
 #
 # Usage:
