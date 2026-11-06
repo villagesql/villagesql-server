@@ -51,4 +51,26 @@ SELECT COUNT(*) AS rows_in_t5 FROM t5;
 rows_in_t5
 0
 DROP TABLE t5;
+CREATE TABLE t6 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_warn.dat' INTO TABLE t6;
+ERROR HY000: Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 2
+SHOW WARNINGS;
+Level	Code	Message
+Error	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 2
+SELECT COUNT(*) AS rows_in_t6 FROM t6;
+rows_in_t6
+0
+DROP TABLE t6;
+CREATE TABLE t7 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+SET @@session.sql_mode = '';
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/encode_warn.dat' INTO TABLE t7;
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'ENCODE_WARN' for column 'val' at row 2
+SET @@session.sql_mode = DEFAULT;
+SELECT id, val FROM t7 ORDER BY id;
+id	val
+1	OK one
+2	OK default
+3	OK three
+DROP TABLE t7;
 UNINSTALL EXTENSION vsql_test_only;

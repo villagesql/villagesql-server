@@ -29,11 +29,12 @@ CREATE TABLE t1 (id INT, val COMPLEX);
 </rows>
 EOF
 
-# Row 2 has an invalid COMPLEX value; in non-strict mode NULL is stored (nullable column).
+# Row 2 has an invalid COMPLEX value; in non-strict mode the intrinsic
+# default is stored, as it is for the built-in column below.
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --eval LOAD XML INFILE '$MYSQLTEST_VARDIR/tmp/non_strict_complex.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>'
 
-# All three rows inserted; row 2 gets NULL.
+# All three rows inserted; row 2 gets the type's intrinsic default.
 SELECT * FROM t1 ORDER BY id;
 
 DROP TABLE t1;

@@ -4,7 +4,6 @@ about: A scenario that one or more extensions can address (e.g. vector search, f
 title: "[VEF Epic]: "
 labels: ["vef", "epic"]
 assignees:
-  - villagesql-adam
 type: feature
 ---
 

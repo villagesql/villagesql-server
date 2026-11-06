@@ -264,6 +264,7 @@ jobs:
           gh workflow run extension-compat.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
+            -f run-tag=nightly \
             -f slack_notify=true
           echo "Started extension-compat on $REF" >> "$GITHUB_STEP_SUMMARY"
 

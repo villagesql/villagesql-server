@@ -86,10 +86,13 @@ ENTRIES="$("$SOURCE_DIR/villagesql/bld_matrix/json_extensions.sh" \
     | jq -r --arg f "$EXTENSION_FILTER" '
         .[]
         | select($f == "" or .extension == $f)
-        | [.extension, .url, .branch, .build, (.bundle | tostring), .path]
+        | [.extension, .url, .branch, .build, (.bundle | tostring),
+           (.abis | join(",")), .path]
         | @tsv')"
 
-while IFS=$'\t' read -r EXTENSION SOURCE BRANCH BUILD_TOOL BUNDLE EXT_PATH; do
+# path stays last: read merges consecutive tabs, so an empty field mid-row
+# would shift the columns after it.
+while IFS=$'\t' read -r EXTENSION SOURCE BRANCH BUILD_TOOL BUNDLE ABIS EXT_PATH; do
     [[ -z "$EXTENSION" ]] && continue
 
     # This script builds with cmake. Skip entries that use another build tool
@@ -114,8 +117,14 @@ while IFS=$'\t' read -r EXTENSION SOURCE BRANCH BUILD_TOOL BUNDLE EXT_PATH; do
     CLONE_DIR="$EXTENSION_CLONES_DIR/${SOURCE##*/}${EXT_PATH:+/$EXT_PATH}"
     EXT_BUILD_DIR="$BUILD_BASE/$EXTENSION"
 
+    # An entry pinned to abi=dev does not build against the stable headers.
+    EXT_CMAKE_FLAGS=("${CMAKE_FLAGS[@]}")
+    if [[ "$ABIS" == "dev" ]]; then
+        EXT_CMAKE_FLAGS+=("-DVSQL_USE_DEV_ABI=ON")
+    fi
+
     if ! cmake -S "$CLONE_DIR" -B "$EXT_BUILD_DIR" \
-            "${CMAKE_FLAGS[@]}" 2>&1; then
+            "${EXT_CMAKE_FLAGS[@]}" 2>&1; then
         log_error "CMake configure failed for $EXTENSION"
         FAILED=$((FAILED + 1))
         continue

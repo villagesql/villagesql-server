@@ -92,3 +92,18 @@ the destination charset cannot represent cannot be preserved by conversion.
 CREATE TABLE AS SELECT inherits the expression's charset/collation unless
 overridden. Once stored, the value has column collation precedence rather than
 the VDF expression's COERCIBLE precedence.
+
+## Constant arguments in prerun
+
+From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in
+`const_args`: an argument the server can evaluate before the first row, such
+as a literal or `CAST(NULL AS SIGNED)`. A prepared-statement parameter or a
+subquery is never a constant here. Each value is the `vef_invalue_t` the VDF
+will receive for that argument, of any type, and `const_args[i]` is NULL for an
+argument that is not a constant.
+
+An argument's type is always the type it arrives as, so a NULL literal is a
+STRING with `is_null` set. A prerun that admits NULL checks that rather than
+admitting every STRING. An extension at an older protocol gets no
+`const_args`. The older `deprecated_const_values` and
+`deprecated_const_lengths` are never filled.

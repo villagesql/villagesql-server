@@ -4,7 +4,6 @@ about: A proposed new extension. Improvements to existing extensions should be f
 title: "[Extension]: "
 labels: ["extension"]
 assignees:
-  - villagesql-adam
 type: feature
 ---
 

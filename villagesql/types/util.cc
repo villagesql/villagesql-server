@@ -1468,13 +1468,18 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
   }
   switch (status) {
     case EncodeStatus::kNull:
-      // Mirror a literal \N in the input: mark the field NULL and leave the
-      // NOT NULL decision to the row-level check once the row is complete,
-      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
-      // would satisfy that check and let a NOT NULL column through.
-      if (!field->is_nullable() && thd->lex->is_ignore()) {
-        // IGNORE keeps the row, so give it the type's intrinsic default
-        // rather than zero bytes, as the \N path does.
+      // Mirror a literal \N in the input: mark the field NULL so the
+      // row-level check reports ER_WARN_NULL_TO_NOTNULL once the row is
+      // complete. Storing a value here instead would satisfy that check and
+      // let a NOT NULL column through.
+      //
+      // Report it here instead when that check will not: under IGNORE, which
+      // keeps the row whatever the check finds, and when the field is not
+      // tmp-nullable. LOAD XML arrives that way, since it runs no row-level
+      // check and marks nothing tmp-nullable.
+      if (!field->is_nullable() &&
+          (thd->lex->is_ignore() || !field->is_tmp_nullable())) {
+        // Warn and default the column, as the row-level check would have.
         if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
         field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
                            1);
@@ -1486,19 +1491,14 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
     case EncodeStatus::kErrorRaised:
       return true;
     case EncodeStatus::kBadValue:
-      break;  // handled below: whether this fails the row depends on the mode
+      break;
   }
-  if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-    // EncodeStringForField already pushed a warning; promote to error
-    my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
-             field->get_type_context()->type_name().c_str(),
-             ErrConvString(&input_str).ptr(), field->field_name,
-             thd->get_stmt_da()->current_row_for_condition());
-    return true;
-  }
-  // EncodeStringForField already pushed a warning. Store the intrinsic default,
-  // mirroring MySQL built-in behavior of storing 0, '', etc. for bad values in
-  // IGNORE or non-strict mode.
+  // EncodeStringForField pushed ER_TRUNCATED_WRONG_VALUE_FOR_FIELD as a
+  // warning. In strict mode the statement's Strict_error_handler raised it as
+  // an error, so the row fails here.
+  if (thd->is_error()) return true;
+  // Otherwise the row survives, so store the intrinsic default, mirroring the
+  // 0 or '' a built-in stores for a bad value.
   return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
 }
 
@@ -2158,6 +2158,15 @@ static void InferVDFReturnParams(
 // Buffer for one canonical "k=v,k=v" params string.
 static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 
+// True if `item` is, or contains, a prepared-statement parameter that has no
+// value yet (usually at PREPARE).
+static bool HasPSParamWithoutValue(Item *item) {
+  return WalkItem(item, enum_walk::SUBQUERY_PREFIX, [](Item *sub) {
+    return sub->type() == Item::PARAM_ITEM &&
+           down_cast<Item_param *>(sub)->param_state() == Item_param::NO_VALUE;
+  });
+}
+
 // Invokes a function's bind_and_check_types hook.
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
@@ -2209,8 +2218,9 @@ static bool CallBindTypesHook(
     // Provide constant string values where available, in the charset of the
     // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
     // unconverted for any other. A prepared-statement parameter has no value
-    // until EXECUTE.
+    // until EXECUTE, also when it is inside an expression like CONCAT(?, '').
     if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
+        !HasPSParamWithoutValue(args[i]) &&
         arg_types[i].id == VEF_TYPE_STRING) {
       const vef_type_id param_id =
           declared_params != nullptr ? declared_params[i].id : arg_types[i].id;

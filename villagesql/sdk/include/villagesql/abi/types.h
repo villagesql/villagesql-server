@@ -106,7 +106,7 @@
 //          │   ┌─────────────────────────────┐                 │
 //          │   │ vef_prerun_args_t:          │                 │
 //          │   │   arg_count, arg_types      │                 │
-//          │   │   const_values/lengths      │                 │
+//          │   │   const_args                │                 │
 //          │   │                             │                 │
 //          │   │ vef_prerun_result_t:        │                 │
 //          │   │   user_data (set by callee) │                 │
@@ -198,7 +198,17 @@ typedef enum : unsigned int {
                    //   converted from the caller's charset; a BINARY argument
                    //   arrives unconverted, and a BINARY result is labelled
                    //   binary rather than utf8mb4.
+                   // + const_args on vef_prerun_args_t: prerun sees the
+                   //   value of each constant argument, as the VDF will
+                   //   receive it, so it can admit a NULL literal without
+                   //   admitting every STRING.
 } vef_protocol_t;
+
+// This is the protocol version of these headers: the version the server
+// advertises and the SDK registers. A new protocol bumps only this value.
+// Never use it as a feature check. Features should use the specific enum
+// value of the version that added it.
+#define VEF_PROTOCOL_CURRENT VEF_PROTOCOL_4
 
 // =============================================================================
 // PRACTICAL LIMITS
@@ -586,10 +596,10 @@ typedef void (*vef_vdf_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
 //   - Allocate resources and store state in result->user_data
 //   - Request a specific buffer size via result->result_buffer_size
 //
-// Memory lifetime: The caller owns all arrays in args (arg_types, const_values,
-// const_lengths). The callee must copy any values it needs to retain before
-// the function returns. The caller may overwrite or free this memory after the
-// function returns.
+// Memory lifetime: The caller owns all arrays in args (arg_types, const_args
+// and the values it points to). The callee must copy any values it needs to
+// retain before the function returns. The caller may overwrite or free this
+// memory after the function returns.
 //
 // The user_data pointer allows the extension to maintain state across calls.
 // Memory allocated in prerun should be freed in postrun. If prerun succeeds,
@@ -604,14 +614,20 @@ typedef struct {
   // Type of each argument. Array has arg_count elements.
   vef_type_t *arg_types;
 
-  // For each argument: non-NULL if the argument is a constant, NULL otherwise.
-  // If non-NULL, points to the constant's serialized value.
-  // Array has arg_count elements.
-  char **const_values;
+  // Deprecated: never filled, the server always passes NULL for both. These
+  // fields exist only to preserve struct layout for v1 binary compatibility.
+  // Read constant arguments from const_args.
+  char **deprecated_const_values;
+  size_t *deprecated_const_lengths;
 
-  // Length of each constant value. Only valid where const_values[i] != NULL.
+  // protocol >= VEF_PROTOCOL_4
+  // For each argument: its value if it is a constant, NULL otherwise. A
+  // constant is an argument the server can evaluate before the first row,
+  // such as a literal or an expression over literals; a prepared-statement
+  // parameter or a subquery never is. Each value is what the VDF will receive
+  // for that argument, so a NULL literal is a STRING with is_null set.
   // Array has arg_count elements.
-  size_t *const_lengths;
+  const vef_invalue_t **const_args;
 } vef_prerun_args_t;
 
 typedef struct {
