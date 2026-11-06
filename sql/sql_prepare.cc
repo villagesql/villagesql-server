@@ -194,6 +194,7 @@ When one supplies long data for a placeholder:
 #include "string_with_len.h"
 #include "template_utils.h"
 #include "villagesql/types/util.h"
+#include "villagesql/vdf/vdf_handler.h"
 #include "violite.h"
 
 namespace resourcegroups {
@@ -2603,7 +2604,11 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
   // A subsystem, such as the Audit plugin, may have set error unnoticed:
   error |= thd->is_error();
 
-  if (orig_param_array != nullptr) copy_parameter_types(orig_param_array);
+  if (orig_param_array != nullptr) {
+    copy_parameter_types(orig_param_array);
+    villagesql::vdf::MaybeCopyPsParamStringValues(
+        m_arena.item_list(), m_param_array, orig_param_array, m_param_count);
+  }
   /*
    The only case where we should have items in the thd->item_list is
    after stmt->set_params_from_vars(), which may in some cases create

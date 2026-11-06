@@ -2169,9 +2169,7 @@ static void InferVDFReturnParams(
 // Buffer for one canonical "k=v,k=v" params string.
 static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 
-// True if `item` is, or contains, a prepared-statement parameter that has no
-// value yet (usually at PREPARE).
-static bool HasPSParamWithoutValue(Item *item) {
+bool HasPSParamWithoutValue(Item *item) {
   return WalkItem(item, enum_walk::SUBQUERY_PREFIX, [](Item *sub) {
     return sub->type() == Item::PARAM_ITEM &&
            down_cast<Item_param *>(sub)->param_state() == Item_param::NO_VALUE;

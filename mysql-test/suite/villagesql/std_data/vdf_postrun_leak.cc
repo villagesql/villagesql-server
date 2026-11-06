@@ -20,7 +20,8 @@
 // (forced via the vdf_fail_after_prerun DBUG point), postrun must still run to
 // free that state. live_state_count() reports the balance so the test can
 // assert it returns to zero. error_probe's prerun reports an error, so its
-// postrun must not run.
+// postrun must not run. leak_probe_arg(x) is leak_probe with an argument, which
+// it adds to the count.
 
 #include <villagesql/vsql.h>
 
@@ -53,6 +54,14 @@ void leak_probe(LeakState &state, StringResult out) {
   out.set_length(static_cast<size_t>(len));
 }
 
+void leak_probe_arg(LeakState &state, IntArg x, StringResult out) {
+  state.n += x.value();
+  auto out_buf = out.buffer();
+  int len = snprintf(reinterpret_cast<char *>(out_buf.data()), out_buf.size(),
+                     "%lld", state.n);
+  out.set_length(static_cast<size_t>(len));
+}
+
 void leak_probe_postrun(PostrunArgs args) {
   g_postrun_count.fetch_add(1);
   args.delete_state<LeakState>();
@@ -76,6 +85,12 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_func<&leak_probe>("leak_probe")
                   .returns(STRING)
                   .no_params()
+                  .prerun<&leak_probe_prerun>()
+                  .postrun<&leak_probe_postrun>()
+                  .build())
+        .func(make_func<&leak_probe_arg>("leak_probe_arg")
+                  .returns(STRING)
+                  .param(INT)
                   .prerun<&leak_probe_prerun>()
                   .postrun<&leak_probe_postrun>()
                   .build())
