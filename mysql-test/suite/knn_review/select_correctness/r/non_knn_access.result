@@ -1,0 +1,29 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id FROM t WHERE v = '[0,1,0,0]';
+id
+2
+SELECT id FROM t WHERE v IN ('[0,1,0,0]', '[4,0,0,0]') ORDER BY id;
+id
+2
+6
+SELECT id FROM t WHERE v IS NULL;
+id
+SELECT id FROM t WHERE v > '[0,1,0,0]' ORDER BY id;
+id
+1
+4
+5
+6
+8
+SELECT id FROM t FORCE INDEX (idx_v) WHERE v = '[0,1,0,0]';
+id
+2
+SELECT COUNT(*) FROM t FORCE INDEX (idx_v);
+COUNT(*)
+8
+SELECT id FROM t ORDER BY v LIMIT 2;
+id
+7
+3
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

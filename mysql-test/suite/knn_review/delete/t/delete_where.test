@@ -1,0 +1,14 @@
+# Rows deleted by a WHERE clause, by the primary key and by a secondary index,
+# are gone from KNN results.
+
+--let $knn_issue = NYI-1 DELETE on a table with a KNN index is not implemented yet
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+DELETE FROM t WHERE grp = 2;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DELETE FROM t WHERE id > 5;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

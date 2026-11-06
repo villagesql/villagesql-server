@@ -1,0 +1,21 @@
+# Each metric's query uses the index whose profile binds its function; a
+# function no index binds is sorted, never answered by another index.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_l2 ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+CREATE INDEX idx_cos ON t (v kvec_profile_cos) USING EXTENDED(vsql_knn_index_test.kvec_cos);
+INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[10,0,0,0]'), (3, '[1,1,0,0]'), (4, '[0,1,0,0]');
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4
+--source suite/knn_review/include/plan_check.inc
+DROP INDEX idx_cos ON t;
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

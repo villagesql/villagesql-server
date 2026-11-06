@@ -1,0 +1,50 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE g (grp INT PRIMARY KEY, name VARCHAR(10));
+INSERT INTO g VALUES (1,'one'),(2,'two'),(3,'three');
+SELECT t.id, g.name FROM t JOIN g ON t.grp = g.grp ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, '[1,0,0,0]') LIMIT 3;
+id	name
+1	one
+4	two
+8	two
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]'), id LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 2;
+id
+7
+6
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]');
+id
+1
+4
+8
+2
+5
+3
+6
+7
+SELECT name FROM g WHERE grp IN (SELECT grp FROM (SELECT grp FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1) s);
+name
+one
+SELECT id FROM (SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 10) s WHERE d <= 1.3;
+id
+1
+4
+8
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t HAVING d <= 1.3 ORDER BY d LIMIT 10;
+id	d
+1	0
+4	1
+8	1.2000000476837158
+CREATE VIEW vw AS SELECT id, v FROM t;
+SELECT id FROM vw ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+DROP VIEW vw;
+DROP TABLE g;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,53 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+id
+1
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 20;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 0;
+id
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 OFFSET 3;
+id
+2
+5
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 OFFSET 6;
+id
+6
+7
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 OFFSET 10;
+id
+# From [0,0,0,0], rows 1 and 2 are both at distance 1
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+id
+1
+2
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 3;
+id
+1
+2
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,13 @@
+# A window under an outer KNN ORDER BY ... LIMIT: window functions are computed
+# over every row before the ORDER BY and LIMIT apply, so COUNT(*) OVER () counts
+# all 8 rows.
+
+--let $knn_issue = KNN-7 A window under a KNN ORDER BY LIMIT sees only LIMIT rows
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id, COUNT(*) OVER () AS total FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id, COUNT(*) OVER () AS total FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

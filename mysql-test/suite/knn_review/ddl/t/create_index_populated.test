@@ -1,0 +1,14 @@
+# CREATE INDEX on a table that already has rows indexes them all.
+
+--let $knn_issue = KNN-11 Building a KNN index from existing rows crashes (custom_column.cc:1109)
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE p (id INT PRIMARY KEY, v KVECTOR);
+INSERT INTO p VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]'), (3, '[2,0,0,0]');
+CREATE INDEX idx_v ON p (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+SELECT id FROM p ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+INSERT INTO p VALUES (4, '[1,0.5,0,0]');
+SELECT id FROM p ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE p;
+UNINSTALL EXTENSION vsql_knn_index_test;

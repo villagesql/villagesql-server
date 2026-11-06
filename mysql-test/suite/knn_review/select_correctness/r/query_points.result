@@ -1,0 +1,55 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[4,0,0,0]') LIMIT 3;
+id
+6
+5
+1
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, vsql_knn_index_test.KVECTOR::from_string('[1,0,0,0]')) LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, (SELECT v FROM t WHERE id = 1)) LIMIT 3;
+id
+1
+4
+8
+CREATE TABLE c (k INT PRIMARY KEY, q KVECTOR);
+INSERT INTO c VALUES (1, '[1,0,0,0]');
+SELECT t.id FROM c, t WHERE c.k = 1 ORDER BY vsql_knn_index_test.kvec_l2_distance(t.v, c.q) LIMIT 3;
+id
+1
+4
+8
+DROP TABLE c;
+# A user variable is not a constant the function accepts (a general VDF
+# restriction, not specific to KNN)
+SET @q = '[1,0,0,0]';
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, @q) LIMIT 3;
+ERROR HY000: Cannot initialize function 'kvec_l2_distance': argument 2 must be a custom type or string constant
+PREPARE ps FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT ?';
+SET @q = '[1,0,0,0]', @k = 2;
+EXECUTE ps USING @q, @k;
+id
+1
+4
+SET @k = 4;
+EXECUTE ps USING @q, @k;
+id
+1
+4
+8
+2
+SET @q = '[4,0,0,0]', @k = 2;
+EXECUTE ps USING @q, @k;
+id
+6
+5
+DEALLOCATE PREPARE ps;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

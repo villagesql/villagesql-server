@@ -1,0 +1,13 @@
+# KNN queries under the hypergraph optimizer return the same rows.
+
+--source include/have_hypergraph.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+--disable_query_log
+SET optimizer_switch = 'hypergraph_optimizer=default';
+--enable_query_log
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

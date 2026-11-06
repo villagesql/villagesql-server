@@ -1,0 +1,21 @@
+# A KNN query returns the nearest rows in distance order for any LIMIT and
+# OFFSET, including LIMIT 0, a LIMIT above the row count and an OFFSET past the
+# end. Ties are returned in either order.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 20;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 0;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 OFFSET 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 OFFSET 6;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 OFFSET 10;
+--echo # From [0,0,0,0], rows 1 and 2 are both at distance 1
+--sorted_result
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+--sorted_result
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

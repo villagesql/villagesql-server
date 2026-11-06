@@ -1,0 +1,11 @@
+INSTALL EXTENSION vsql_knn_index_test;
+TRUNCATE TABLE t;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+INSERT INTO t VALUES (2, 1, 'b', '[0,1,0,0]'), (6, 3, 'f', '[4,0,0,0]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+2
+6
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

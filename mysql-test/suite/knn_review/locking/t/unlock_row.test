@@ -1,0 +1,30 @@
+# A READ COMMITTED locking KNN read releases the lock on a row the WHERE clause
+# rejects, and keeps the locks on the rows it returns.
+
+--let $knn_issue = KNN-9 Unlocking a row rejected by WHERE in a locking KNN read crashes
+--source suite/knn_review/include/known_issue.inc
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+--echo # The nearest row (1) fails the WHERE clause
+SELECT id FROM t WHERE pay <> 'a' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 FOR UPDATE;
+--connect (con1, localhost, root,,)
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+--echo # Row 1 was rejected, so its lock was released
+SELECT id FROM t WHERE id = 1 FOR UPDATE NOWAIT;
+--echo # Row 4 was returned, so it is still locked
+--error ER_LOCK_NOWAIT
+SELECT id FROM t WHERE id = 4 FOR UPDATE NOWAIT;
+ROLLBACK;
+--disconnect con1
+--connection default
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

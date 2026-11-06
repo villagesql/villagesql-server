@@ -1,0 +1,15 @@
+# An UPDATE of the indexed vector moves the row in KNN results.
+
+--let $knn_issue = NYI-2 UPDATE of the indexed vector is not implemented yet
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+UPDATE t SET v = '[1,0.1,0,0]' WHERE id = 6;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+UPDATE t SET v = NULL WHERE id = 6;
+SELECT id FROM t WHERE v IS NOT NULL ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

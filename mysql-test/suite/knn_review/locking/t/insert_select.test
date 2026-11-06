@@ -1,0 +1,14 @@
+# INSERT ... SELECT with KNN ordering. At REPEATABLE READ (the default) the
+# SELECT reads its rows with shared locks, so it is a locking KNN read.
+
+--let $knn_issue = KNN-1 Locking KNN read at REPEATABLE READ fails with ER 3219
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+CREATE TABLE t_out (id INT PRIMARY KEY);
+INSERT INTO t_out SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t_out ORDER BY id;
+DROP TABLE t_out;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

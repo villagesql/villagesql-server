@@ -1,0 +1,12 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON t (v kvec_profile_multi) USING EXTENDED(vsql_knn_index_test.kvec_multi);
+INSERT INTO t VALUES (1, '[10,1,0,0]'), (2, '[0.5,0.5,0,0]'), (3, '[0,1,0,0]'), (4, '[2,0,0,0]');
+# SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+# SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 2
+plan_uses_knn	knn_scan_ran	query_errno
+1	1	0
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

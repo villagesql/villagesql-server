@@ -1,0 +1,24 @@
+# Every extension cursor a KNN scan opens is ended, also when the scan stops
+# before the end of the index (LIMIT smaller than the table).
+# kvec_open_cursor_count() counts cursors begun and not yet ended.
+
+--let $knn_issue = KNN-3 A KNN scan that stops early never ends its cursor
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_function = kvec_open_cursor_count
+--source suite/knn_review/include/require_function.inc
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]'), (3, '[0,0,2,0]');
+--let $before = `SELECT vsql_knn_index_test.kvec_open_cursor_count()`
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 10;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+--echo # Cursors left open: expect 0
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_open_cursor_count() - $before AS cursors_left_open
+--enable_query_log
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

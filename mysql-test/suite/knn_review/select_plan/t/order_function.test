@@ -1,0 +1,17 @@
+# A KNN scan is used for each ORDER BY function the profile binds.
+# Each line shows whether EXPLAIN plans a KNN scan, whether executing the query
+# ran one, and the query's error number.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_index_type = kvec_multi
+--let $knn_profile = kvec_profile_multi
+--source suite/knn_review/include/require_index_type.inc
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON t (v kvec_profile_multi) USING EXTENDED(vsql_knn_index_test.kvec_multi);
+INSERT INTO t VALUES (1, '[10,1,0,0]'), (2, '[0.5,0.5,0,0]'), (3, '[0,1,0,0]'), (4, '[2,0,0,0]');
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 2
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

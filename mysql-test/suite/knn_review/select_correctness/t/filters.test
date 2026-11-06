@@ -1,0 +1,24 @@
+# A KNN query with a WHERE clause returns the nearest rows that satisfy it,
+# whatever access the WHERE could use: none, the primary key, or the secondary
+# index on grp.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--echo # No index on the filter
+SELECT id FROM t WHERE pay IN ('b','c','h') ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE id + 0 IN (2,3,8) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE pay = 'g' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE pay = 'zz' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--echo # Primary key
+SELECT id FROM t WHERE id > 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE id BETWEEN 2 AND 5 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE id = 4 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t IGNORE INDEX (PRIMARY) WHERE id > 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--echo # Secondary index on grp
+SELECT id FROM t WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE grp >= 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE grp = 2 AND pay <> 'd' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t IGNORE INDEX (k_grp) WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t FORCE INDEX (idx_v) WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

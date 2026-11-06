@@ -1,0 +1,17 @@
+# REPEATABLE READ locking KNN reads (FOR SHARE, FOR UPDATE) return the nearest
+# rows. REPEATABLE READ is the default, so this is any locking KNN read run with
+# default settings.
+
+--let $knn_issue = KNN-1 Locking KNN read at REPEATABLE READ fails with ER 3219
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR SHARE;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+SELECT id FROM t WHERE pay <> 'a' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2 FOR UPDATE;
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+COMMIT;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

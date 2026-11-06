@@ -1,0 +1,15 @@
+# Query points the distance function rejects: NULL and an empty string. The
+# error is the function's, whether or not a KNN scan could be planned, and a
+# valid query point works afterwards.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--error ER_UDF_ERROR
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
+--error ER_UDF_ERROR
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL);
+--error ER_WRONG_VALUE
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '') LIMIT 2;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[2,0,0,0]') LIMIT 2;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

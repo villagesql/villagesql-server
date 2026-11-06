@@ -1,0 +1,21 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT DISTINCT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ERROR HY000: Expression #1 of ORDER BY clause is not in SELECT list, references column 'test.t.v' which is not in SELECT list; this is incompatible with DISTINCT
+SELECT DISTINCT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 3;
+id	d
+1	0
+4	1
+8	1.2000000476837158
+SELECT DISTINCT grp FROM (SELECT grp FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4) s ORDER BY grp;
+grp
+1
+2
+SELECT grp, MIN(vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')) AS md FROM t GROUP BY grp ORDER BY md, grp LIMIT 3;
+grp	md
+1	0
+2	1
+3	1.5
+SELECT grp FROM t GROUP BY grp ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ERROR 42000: Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.t.v' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
