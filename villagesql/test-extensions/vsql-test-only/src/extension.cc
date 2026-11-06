@@ -1156,7 +1156,7 @@ void bad_default_len_encode(std::string_view from, vsql::CustomResult out) {
 // intrinsic_default VDF for DEFAULT_VDF_TYPE: computes the text form "(9)".
 std::string default_vdf_default(char * /*error_msg*/) { return "(9)"; }
 std::string default_vdf_err_default(char *error_msg) {
-  strcpy(error_msg, "default_vdf_err_default error");
+  snprintf(error_msg, VEF_MAX_ERROR_LEN, "default_vdf_err_default error");
   return std::string();
 }
 std::string default_vdf_throw_default(char * /*error_msg*/) {
