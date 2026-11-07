@@ -41,6 +41,10 @@ trims surrounding ASCII spaces and lowercases names and values. Names are sorted
 and checked for duplicates using the fixed `utf8mb4_0900_ai_ci` collation (case-
 and accent-insensitive). Extensions cannot configure this collation.
 
+`SHOW CREATE TABLE` preserves supplementary characters in custom type parameters
+when the client result charset supports them. MySQL's utf8mb3 dictionary display
+fields remain limited; the separately stored parameter JSON retains the full text.
+
 ## STRING and BINARY values
 
 A `VEF_TYPE_STRING` value is text in utf8mb4. From `VEF_PROTOCOL_4`, the server
