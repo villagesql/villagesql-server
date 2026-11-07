@@ -31,6 +31,87 @@
 #include "villagesql/sql/custom_vdf.h"
 #include "villagesql/sql/func_lookup.h"
 
+#include <algorithm>
+#include <vector>
+
+static bool type_has_intrinsic_method(const villagesql::TypeDescriptor &td,
+                                      std::string_view method) {
+  if (method == "from_string") {
+    return td.has_encode_fn();
+  }
+  if (method == "to_string") {
+    return td.has_decode_fn();
+  }
+  if (method == "compare") {
+    return td.has_compare_fn();
+  }
+  if (method == "hash") {
+    return td.hash_fn().has_value();
+  }
+  return false;
+}
+
+static std::string make_type_method_func_name(std::string_view type_name,
+                                              std::string_view method) {
+  return std::string(type_name) + "::" + std::string(method);
+}
+
+static bool type_method_registered_for_sql(
+    villagesql::VictionaryClient &victionary, std::string_view ext_name,
+    std::string_view type_name, std::string_view method) {
+  const std::string func_name = make_type_method_func_name(type_name, method);
+  if (!ext_name.empty()) {
+    return villagesql::func_exists_locked(ext_name, func_name);
+  }
+
+  villagesql::FuncKeyPrefix prefix{func_name};
+  auto matches = victionary.funcs().get_prefix_committed(prefix);
+  for (const villagesql::FuncDescriptor *desc : matches) {
+    if (desc->is_callable_from_sql()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static std::vector<std::string> collect_sql_type_methods(
+    villagesql::VictionaryClient &victionary, std::string_view ext_name,
+    std::string_view type_name) {
+  const std::string func_prefix = std::string(type_name) + "::";
+  villagesql::FuncKeyPrefix prefix =
+      ext_name.empty()
+          ? villagesql::FuncKeyPrefix{func_prefix}
+          : villagesql::FuncKeyPrefix{func_prefix, std::string{ext_name}};
+  auto funcs = victionary.funcs().get_prefix_committed(prefix);
+
+  std::vector<std::string> methods;
+  const size_t type_prefix_len = type_name.size() + 2;
+  for (const villagesql::FuncDescriptor *desc : funcs) {
+    if (!desc->is_callable_from_sql()) {
+      continue;
+    }
+    const std::string &fname = desc->function_name();
+    if (fname.size() <= type_prefix_len) {
+      continue;
+    }
+    methods.push_back(fname.substr(type_prefix_len));
+  }
+  std::sort(methods.begin(), methods.end());
+  methods.erase(std::unique(methods.begin(), methods.end()), methods.end());
+  return methods;
+}
+
+static std::string join_methods(const std::vector<std::string> &methods) {
+  std::string joined;
+  for (size_t i = 0; i < methods.size(); ++i) {
+    if (i > 0) {
+      joined += ", ";
+    }
+    joined += methods[i];
+  }
+  return joined;
+}
+
 // Emit a targeted error when a '::' function name fails lookup.
 // Checks whether the type prefix is unknown, the method suffix is invalid,
 // or the type/method combination simply has no '::' VDF registered.
@@ -67,28 +148,37 @@ static void emit_type_method_error(std::string_view ext_name,
     return;
   }
 
-  static const char *valid_methods[] = {"from_string", "to_string", "compare",
-                                        "hash"};
-  bool is_valid_method = false;
-  for (const char *m : valid_methods) {
-    if (method_name == m) {
-      is_valid_method = true;
+  const std::vector<std::string> sql_methods =
+      collect_sql_type_methods(victionary, ext_name, type_name);
+
+  bool has_intrinsic_method = false;
+  for (const villagesql::TypeDescriptor *td : results) {
+    if (type_has_intrinsic_method(*td, method_name)) {
+      has_intrinsic_method = true;
       break;
     }
   }
 
-  if (!is_valid_method) {
+  const bool registered = type_method_registered_for_sql(
+      victionary, ext_name, type_name, method_name);
+  if (has_intrinsic_method && !registered) {
     villagesql_error(
-        "Unknown method '%s' for type '%s'. Valid methods: from_string, "
-        "to_string, compare, hash",
-        MYF(0), method_name.c_str(), type_name.c_str());
+        "Type '%s' method '%s' does not support '::' syntax "
+        "(not registered with a '::' name)",
+        MYF(0), type_name.c_str(), method_name.c_str());
+    return;
+  }
+
+  const std::string valid_methods = join_methods(sql_methods);
+  if (valid_methods.empty()) {
+    villagesql_error("Unknown method '%s' for type '%s'", MYF(0),
+                     method_name.c_str(), type_name.c_str());
     return;
   }
 
   villagesql_error(
-      "Type '%s' method '%s' does not support '::' syntax "
-      "(not registered with a '::' name)",
-      MYF(0), type_name.c_str(), method_name.c_str());
+      "Unknown method '%s' for type '%s'. Valid methods: %s", MYF(0),
+      method_name.c_str(), type_name.c_str(), valid_methods.c_str());
 }
 
 // Intrinsic default function should not be callable. For a parameterized

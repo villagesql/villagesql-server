@@ -1,0 +1,15 @@
+# BITFIELD columns wider than 512 bytes use BLOB fields in internal temp tables.
+# UNION ALL ... ORDER BY must copy custom values into those BLOB fields.
+
+INSTALL EXTENSION vsql_bitfield_test;
+
+CREATE TABLE t1 (id INT, b vsql_bitfield_test.BITFIELD('max_number_of_bits=8'));
+INSERT INTO t1 VALUES (1, '101');
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1;
+
+SELECT id, b FROM t1 UNION ALL SELECT id, b FROM t2 ORDER BY id;
+
+DROP TABLE t2;
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_bitfield_test;
