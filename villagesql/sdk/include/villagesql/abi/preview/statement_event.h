@@ -48,7 +48,7 @@ extern "C" {
 #define VEF_PREVIEW_STATEMENT_EVENT_NAME "vsql::preview::statement_event"
 
 // Capability ABI version compiled into this SDK snapshot.
-#define VEF_PREVIEW_STATEMENT_EVENT_ABI_VERSION 1
+#define VEF_PREVIEW_STATEMENT_EVENT_ABI_VERSION 2
 
 // Phase at which a handler fires.
 //
@@ -112,6 +112,11 @@ typedef struct {
   // Lifetime: copy before return.
   const char *query;
   size_t query_len;
+  // MySQL charset/collation name describing query bytes; never null.
+  // "binary" means no single text encoding is promised (for example, an
+  // expanded prepared statement or an unlabelled redacted buffer).
+  // Bytes are not converted or validated. Lifetime: copy before return.
+  const char *query_charset;
 
   // Authenticated user name, or empty string.
   // Lifetime: connection lifetime.
@@ -210,6 +215,16 @@ typedef struct {
                              // e.g. "libmysql", "mysql-connector-j"
   const char *program_name;  // application name, if the client set it
                              // ("program_name"), e.g. "mysql", "mysqldump"
+  // Attribute lengths include embedded NUL. Charset/collation names describe
+  // the original handshake bytes, independently of later SET NAMES changes.
+  // A missing attribute has a null pointer, zero length and null charset.
+  // Lifetime of all attribute data and metadata: copy before return.
+  size_t client_pid_len;
+  const char *client_pid_charset;
+  size_t client_name_len;
+  const char *client_name_charset;
+  size_t program_name_len;
+  const char *program_name_charset;
 } vef_statement_event_args_t;
 
 // Writable result. For POSTEXECUTE error_msg is advisory: the server logs it

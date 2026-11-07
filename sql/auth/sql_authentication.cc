@@ -2540,6 +2540,7 @@ static bool read_client_connect_attrs(THD *thd, char **ptr,
 
   // assign the connection attributes in the current thread
   thd->m_connection_attributes = std::vector<char>(length);
+  thd->m_connection_attributes_charset = mpvio->charset_adapter->charset();
   std::copy(*ptr, *ptr + length, thd->m_connection_attributes.begin());
 
   *max_bytes_available -= length;

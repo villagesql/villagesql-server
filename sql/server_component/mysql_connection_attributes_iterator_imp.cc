@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -117,7 +118,10 @@ DEFINE_BOOL_METHOD(mysql_connection_attributes_iterator_imp::get,
 
       if (!isParsingSuccessful) return true;
 
-      *client_charset = thd->variables.character_set_client->m_coll_name;
+      // Attributes retain the handshake encoding after SET NAMES.
+      *client_charset = thd->m_connection_attributes_charset != nullptr
+                            ? thd->m_connection_attributes_charset->m_coll_name
+                            : "binary";
 
       return false;  // Success
     } else

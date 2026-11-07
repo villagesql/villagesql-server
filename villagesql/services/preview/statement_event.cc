@@ -165,10 +165,12 @@ void on_statement_postexecute(THD *thd) {
   if (thd->rewritten_query().length() != 0) {
     args.query = thd->rewritten_query().ptr();
     args.query_len = thd->rewritten_query().length();
+    args.query_charset = thd->rewritten_query().charset()->m_coll_name;
   } else {
     const LEX_CSTRING query = thd->query();
     args.query = query.str;
     args.query_len = query.length;
+    args.query_charset = thd->query_charset()->m_coll_name;
   }
 
   const Security_context *sctx = thd->security_context();
@@ -289,20 +291,27 @@ void on_statement_postexecute(THD *thd) {
     while (!mysql_connection_attributes_iterator_imp::get(
         thd, &attr_it, &name, &name_len, &value, &value_len, &charset)) {
       const std::string_view key(name, name_len);
-      if (key == "_pid")
+      if (key == "_pid") {
         client_pid_str.assign(value, value_len);
-      else if (key == "_client_name")
+        args.client_pid_len = value_len;
+        args.client_pid_charset = charset;
+      } else if (key == "_client_name") {
         client_name_str.assign(value, value_len);
-      else if (key == "program_name")
+        args.client_name_len = value_len;
+        args.client_name_charset = charset;
+      } else if (key == "program_name") {
         program_name_str.assign(value, value_len);
+        args.program_name_len = value_len;
+        args.program_name_charset = charset;
+      }
     }
     mysql_connection_attributes_iterator_imp::deinit(attr_it);
   }
-  args.client_pid = client_pid_str.empty() ? nullptr : client_pid_str.c_str();
+  args.client_pid = args.client_pid_charset ? client_pid_str.c_str() : nullptr;
   args.client_name =
-      client_name_str.empty() ? nullptr : client_name_str.c_str();
+      args.client_name_charset ? client_name_str.c_str() : nullptr;
   args.program_name =
-      program_name_str.empty() ? nullptr : program_name_str.c_str();
+      args.program_name_charset ? program_name_str.c_str() : nullptr;
 
   for (const auto &h : *hooks) {
     if (h.cc->phase != VEF_STATEMENT_EVENT_POSTEXECUTE) continue;
