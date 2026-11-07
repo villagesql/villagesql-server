@@ -72,3 +72,9 @@ SQL query results return text cells as UTF-8 in both buffered and streaming quer
 Statement-event ABI 2 reports query bytes with a MySQL charset/collation name. It does not convert or validate SQL text. The metadata follows the query buffer, even if the statement changes the session charset. A `binary` label means the server has not established a single text encoding, as can happen with expanded prepared statements or redacted buffers. Existing password redaction is preserved.
 
 Selected connection attributes include byte lengths and their handshake charset, independent of later `SET NAMES` statements. SDK accessors return `std::string_view` so embedded NUL is retained. Copy callback data before returning if you need to retain it. Preview consumers must rebuild against the new event layout (`ver-4`).
+
+## String system variables
+
+Global and session extension system variables use valid UTF-8 for string defaults, stored values, SDK reads and change callbacks. SQL assignments are converted from their source charset; SQL binary strings must already contain valid UTF-8. Malformed text and embedded NUL are rejected. The SDK's `std::string` setter checks for embedded NUL before passing the value to the NUL-terminated ABI. SQL NULL and empty strings remain distinct.
+
+SQL expressions reading these variables use `utf8mb4_bin` with MySQL's existing SYSCONST derivation.

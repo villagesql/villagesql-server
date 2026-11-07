@@ -294,6 +294,7 @@ class SysVarCapability
   // Convenience overload for a value the caller holds as a std::string.
   bool set(const char *extension_name, const char *var_name, const char *scope,
            const std::string &value) const {
+    if (value.find('\0') != std::string::npos) return true;
     return set(extension_name, var_name, scope, value.c_str());
   }
 
