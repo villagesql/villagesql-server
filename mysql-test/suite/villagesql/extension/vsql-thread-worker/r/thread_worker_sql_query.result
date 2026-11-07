@@ -6,5 +6,26 @@ ERROR:
 RESULT: hello
 WARNING: 
 ERROR: 
+CREATE TABLE query_charset (id INT, amount DOUBLE, latin VARCHAR(10) CHARACTER SET latin1,
+wide VARCHAR(10) CHARACTER SET ucs2, unicode VARCHAR(10) CHARACTER SET utf8mb4,
+bytes VARBINARY(10));
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO query_charset VALUES (42, 1.5, _latin1 0xE9, _ucs2 0x00E9, _utf8mb4 0xF09F9880, 0xFF0041);
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+RESULT: [2:3432,3:312E35,2:C3A9,2:C3A9,4:F09F9880,3:FF0041,NULL,0:]
+WARNING: 
+ERROR: 
+RESULT: [2:3432,3:312E35,2:C3A9,2:C3A9,4:F09F9880,3:FF0041,NULL,0:]
+WARNING: 
+ERROR: 
+RESULT: [2:3432,3:312E35,2:C3A9,2:C3A9,2:FF00]
+WARNING: 1287:'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+ERROR: 
+RESULT: [2:3432,3:312E35,2:C3A9,2:C3A9,2:FF00]
+WARNING: 1287:'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+ERROR: 
+DROP TABLE query_charset;
 SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
 UNINSTALL EXTENSION vsql_thread_worker_test;
