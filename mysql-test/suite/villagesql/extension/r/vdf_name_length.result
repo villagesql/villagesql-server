@@ -1,2 +1,2 @@
 INSTALL EXTENSION vsql_name_test;
-ERROR HY000: Failed to install extension 'vsql_name_test': VDF 'really_loooooooooooooooooooooooooooooooooooooooooooooooooooooooo...' is too long, function names should not have more than 64 characters
+ERROR HY000: Failed to install extension 'vsql_name_test': VDF 'really_loooooooooooooooooooooooooooooooooooooooooooooooooooooooo...' is too long
