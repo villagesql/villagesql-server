@@ -1,0 +1,65 @@
+# A hex literal used as a custom type value outside a column store: compared
+# with a custom column, in IN and CASE, and as a custom-typed VDF argument. It
+# is a binary string, so it is the type's binary form, encoded with its
+# from_binary, as it is when stored into a column.
+#
+# TVECTOR's binary form is packed little-endian float32 elements:
+#   [1,2,3] is 0x0000803F0000004000004040
+#   [4,5,6] is 0x000080400000A0400000C040
+
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
+
+--echo #
+--echo # Test 1: comparisons
+--echo #
+
+SELECT id FROM t WHERE v = 0x0000803F0000004000004040;
+SELECT id FROM t WHERE v = X'000080400000A0400000C040';
+SELECT id FROM t WHERE v <> 0x0000803F0000004000004040;
+SELECT id FROM t WHERE v = _binary 0x0000803F0000004000004040;
+SELECT id FROM t
+WHERE v IN (0x0000803F0000004000004040, 0x000080400000A0400000C040)
+ORDER BY id;
+SELECT id,
+       CASE v WHEN 0x0000803F0000004000004040 THEN 'one-two-three'
+              ELSE 'other' END AS c
+FROM t ORDER BY id;
+
+--echo #
+--echo # Test 2: a custom-typed VDF argument
+--echo #
+
+SELECT id, vsql_tvector.tvector_dot_product(v, 0x0000803F0000004000004040) AS d
+FROM t ORDER BY id;
+
+--echo #
+--echo # Test 3: a prepared statement, executed twice
+--echo #
+
+PREPARE s FROM 'SELECT id FROM t WHERE v = 0x000080400000A0400000C040';
+EXECUTE s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # Test 4: a view prints the literal as its text form
+--echo #
+
+CREATE VIEW vw AS SELECT id FROM t WHERE v = 0x0000803F0000004000004040;
+SHOW CREATE VIEW vw;
+SELECT id FROM vw;
+DROP VIEW vw;
+
+--echo #
+--echo # Test 5: bytes that are not a TVECTOR(3)
+--echo #
+
+--error ER_WRONG_VALUE
+SELECT id FROM t WHERE v = 0x0000803F00000040;
+
+DROP TABLE t;
+
+--source include/villagesql/uninstall_tvector_extension.inc
