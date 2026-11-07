@@ -16,8 +16,10 @@
 
 #include "villagesql/sql/parse_tree_items.h"
 
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "lex_string.h"
 #include "sql/item_create.h"
@@ -66,11 +68,26 @@ static void emit_type_method_error(std::string_view ext_name,
     villagesql_error("Unknown custom type '%s'", MYF(0), type_name.c_str());
     return;
   }
+  std::set<std::string> type_exts;
+  for (const auto *t : results) {
+    type_exts.insert(villagesql::canonical_extension_name(t->extension_name()));
+  }
 
-  static const char *valid_methods[] = {"from_string", "to_string", "compare",
-                                        "hash"};
+  std::string pref = villagesql::canonical_extension_name(type_name) + "::";
+  std::vector<std::string> valid_methods;
+  for (const auto *f : victionary.funcs().get_all_committed()) {
+    auto extension_name =
+        villagesql::canonical_extension_name(f->extension_name());
+    auto method_name = villagesql::canonical_extension_name(f->function_name());
+
+    if (method_name.compare(0, pref.size(), pref) == 0 &&
+        type_exts.contains(extension_name) && f->is_callable_from_sql()) {
+      valid_methods.push_back(method_name.substr(pref.size()));
+    }
+  }
+
   bool is_valid_method = false;
-  for (const char *m : valid_methods) {
+  for (const auto &m : valid_methods) {
     if (method_name == m) {
       is_valid_method = true;
       break;
@@ -78,10 +95,13 @@ static void emit_type_method_error(std::string_view ext_name,
   }
 
   if (!is_valid_method) {
-    villagesql_error(
-        "Unknown method '%s' for type '%s'. Valid methods: from_string, "
-        "to_string, compare, hash",
-        MYF(0), method_name.c_str(), type_name.c_str());
+    auto head = "Unknown method '" + method_name + "' for type '" + type_name +
+                "'. Valid methods: ";
+    auto budget = MYSQL_ERRMSG_SIZE - 1 > head.size()
+                      ? MYSQL_ERRMSG_SIZE - 1 - head.size()
+                      : 0;
+    auto methods = join_names_bounded(valid_methods, budget);
+    villagesql_error("%s%s", MYF(0), head.c_str(), methods.c_str());
     return;
   }
 
@@ -91,9 +111,29 @@ static void emit_type_method_error(std::string_view ext_name,
       MYF(0), type_name.c_str(), method_name.c_str());
 }
 
+std::string join_names_bounded(const std::vector<std::string> &method_names,
+                               size_t budget) {
+  std::string out;
+
+  for (size_t i = 0; i < method_names.size(); i++) {
+    const size_t sep = out.empty() ? 0 : 2;
+
+    if (out.size() + sep + method_names[i].size() > budget) {
+      if (!out.empty()) out += ", ";
+      out += std::to_string(method_names.size() - i) + " more methods";
+      break;
+    }
+
+    if (sep) out += ", ";
+    out += method_names[i];
+  }
+  return out;
+}
+
 // Intrinsic default function should not be callable. For a parameterized
 // types, the parameters are needed to resolve the default value.
-// The type's parameters are unknown during SQL call. Thus, SQL call is blocked.
+// The type's parameters are unknown during SQL call. Thus, SQL call is
+// blocked.
 static void emit_not_callable_error(std::string_view ext_name,
                                     const LEX_STRING &func) {
   villagesql_error(

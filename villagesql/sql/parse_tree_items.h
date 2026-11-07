@@ -17,6 +17,9 @@
 #ifndef VILLAGESQL_SQL_PARSE_TREE_ITEMS_H_
 #define VILLAGESQL_SQL_PARSE_TREE_ITEMS_H_
 
+#include <string>
+#include <vector>
+
 #include "lex_string.h"
 
 class Item;
@@ -39,5 +42,10 @@ bool try_itemize_custom_vdf(Parse_context *pc, const LEX_STRING &extension_name,
 bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
                                  PT_item_list *opt_expr_list, Item **res,
                                  bool *error);
+
+// Join method names with ", " keeping the result within budget bytes. When the
+// next name does not fit, the remainder is summarized as "N more methods".
+std::string join_names_bounded(const std::vector<std::string> &method_names,
+                               size_t budget);
 
 #endif  // VILLAGESQL_SQL_PARSE_TREE_ITEMS_H_
