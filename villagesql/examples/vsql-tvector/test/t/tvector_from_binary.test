@@ -34,13 +34,46 @@ SELECT TVECTOR::from_binary(0x0000803F00) AS v;
 #
 ########################################################################
 
-# #1426: the error is reported as a failure to decode the value.
-call mtr.add_suppression("VillageSQL.*Invalid value in column '\\?\\?\\?' of type 'vsql_tvector.TVECTOR'");
-PREPARE s FROM 'INSERT INTO t VALUES (3, TVECTOR::from_binary(?))';
+# The params are inferred from the value bound at each EXECUTE, as for
+# from_string(?).
+PREPARE s FROM 'SELECT TVECTOR::from_binary(?) AS v';
 SET @v = 0x0000803F0000004000004040;
---error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = 0x0000803F00000040;
 EXECUTE s USING @v;
 DEALLOCATE PREPARE s;
+
+# At PREPARE the ? has no value, so the call has no params yet, and
+# tvector_dim cannot bind its argument.
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(?)) AS n';
+
+PREPARE s FROM 'INSERT INTO t VALUES (?, TVECTOR::from_binary(?))';
+SET @id = 3, @v = 0x0000803F0000004000004040;
+EXECUTE s USING @id, @v;
+
+# A value of another dimension does not fit the column
+SET @id = 4, @v = 0x0000803F00000040;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+# A length that is not a multiple of 4 is malformed
+SET @id = 5, @v = 0x0000803F00;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+# Text bound to a BINARY parameter is read as its bytes: '[1,2,3]' is 7 bytes
+SET @id = 6, @v = '[1,2,3]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+# The failed executions do not affect the next one
+SET @id = 7, @v = 0x000080400000A0400000C040;
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+
+SELECT id, v FROM t ORDER BY id;
+SET @id = NULL, @v = NULL;
 
 ########################################################################
 #
