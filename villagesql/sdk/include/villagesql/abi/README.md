@@ -54,6 +54,13 @@ argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
 
+A custom type may also declare `from_binary_vdf_name` (protocol >=
+`VEF_PROTOCOL_4`), an encode with signature `(BINARY) -> CUSTOM(this type)`
+that builds a value from its binary form, next to the required encode from
+text. It is registered as the SQL function `TYPE::from_binary`. As with the
+encode from text, a parameterized type's parameters are inferred from a
+constant argument.
+
 ## Constant arguments in prerun
 
 From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in

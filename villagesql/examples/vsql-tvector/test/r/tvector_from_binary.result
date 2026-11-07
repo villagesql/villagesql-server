@@ -1,0 +1,55 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, TVECTOR::from_binary(0x0000803F0000004000004040));
+INSERT INTO t VALUES (2, '[1,2,3]');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[1,2,3]
+SELECT a.v = b.v AS same FROM t a, t b WHERE a.id = 1 AND b.id = 2;
+same
+1
+SELECT TVECTOR::from_binary(0x0000803F0000004000004040) AS v;
+v
+[1,2,3]
+SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(0x0000803F)) AS n;
+n
+1
+SELECT TVECTOR::from_binary(0x0000803F00) AS v;
+ERROR HY000: error encountered during TVECTOR::from_binary inference: tvector_from_binary: length is not a multiple of 4 bytes
+PREPARE s FROM 'SELECT TVECTOR::from_binary(?) AS v';
+SET @v = 0x0000803F0000004000004040;
+EXECUTE s USING @v;
+v
+[1,2,3]
+SET @v = 0x0000803F00000040;
+EXECUTE s USING @v;
+v
+[1,2]
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(?)) AS n';
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+PREPARE s FROM 'INSERT INTO t VALUES (?, TVECTOR::from_binary(?))';
+SET @id = 3, @v = 0x0000803F0000004000004040;
+EXECUTE s USING @id, @v;
+SET @id = 4, @v = 0x0000803F00000040;
+EXECUTE s USING @id, @v;
+ERROR HY000: Cannot implicitly cast from vsql_tvector.TVECTOR(2) to vsql_tvector.TVECTOR(3) for column 'v' at row 1
+SET @id = 5, @v = 0x0000803F00;
+EXECUTE s USING @id, @v;
+ERROR HY000: error encountered during TVECTOR::from_binary inference: tvector_from_binary: length is not a multiple of 4 bytes
+SET @id = 6, @v = '[1,2,3]';
+EXECUTE s USING @id, @v;
+ERROR HY000: error encountered during TVECTOR::from_binary inference: tvector_from_binary: length is not a multiple of 4 bytes
+SET @id = 7, @v = 0x000080400000A0400000C040;
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	[1,2,3]
+2	[1,2,3]
+3	[1,2,3]
+7	[4,5,6]
+SET @id = NULL, @v = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

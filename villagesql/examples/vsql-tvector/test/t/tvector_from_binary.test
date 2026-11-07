@@ -1,0 +1,85 @@
+# TVECTOR::from_binary: (BINARY) -> TVECTOR
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+
+########################################################################
+#
+# 1. Packed little-endian float32 bytes store the same value as the text.
+#
+########################################################################
+
+# [1,2,3] as float32: 0x3F800000, 0x40000000, 0x40400000
+INSERT INTO t VALUES (1, TVECTOR::from_binary(0x0000803F0000004000004040));
+INSERT INTO t VALUES (2, '[1,2,3]');
+SELECT id, v FROM t ORDER BY id;
+SELECT a.v = b.v AS same FROM t a, t b WHERE a.id = 1 AND b.id = 2;
+
+########################################################################
+#
+# 2. The dimension comes from the byte length.
+#
+########################################################################
+
+SELECT TVECTOR::from_binary(0x0000803F0000004000004040) AS v;
+SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(0x0000803F)) AS n;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_binary(0x0000803F00) AS v;
+
+########################################################################
+#
+# 3. A prepared-statement parameter.
+#
+########################################################################
+
+# The params are inferred from the value bound at each EXECUTE, as for
+# from_string(?).
+PREPARE s FROM 'SELECT TVECTOR::from_binary(?) AS v';
+SET @v = 0x0000803F0000004000004040;
+EXECUTE s USING @v;
+SET @v = 0x0000803F00000040;
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+# At PREPARE the ? has no value, so the call has no params yet, and
+# tvector_dim cannot bind its argument.
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(?)) AS n';
+
+PREPARE s FROM 'INSERT INTO t VALUES (?, TVECTOR::from_binary(?))';
+SET @id = 3, @v = 0x0000803F0000004000004040;
+EXECUTE s USING @id, @v;
+
+# A value of another dimension does not fit the column
+SET @id = 4, @v = 0x0000803F00000040;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+# A length that is not a multiple of 4 is malformed
+SET @id = 5, @v = 0x0000803F00;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+# Text bound to a BINARY parameter is read as its bytes: '[1,2,3]' is 7 bytes
+SET @id = 6, @v = '[1,2,3]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @id, @v;
+
+# The failed executions do not affect the next one
+SET @id = 7, @v = 0x000080400000A0400000C040;
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+
+SELECT id, v FROM t ORDER BY id;
+SET @id = NULL, @v = NULL;
+
+########################################################################
+#
+# Cleanup
+#
+########################################################################
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

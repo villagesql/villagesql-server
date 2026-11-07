@@ -54,11 +54,10 @@ bool LookupTypeForInference(std::string_view extension_name,
   return false;
 }
 
-bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
-                             const vef_func_desc_t *encode_vdf,
-                             std::string_view input_string,
-                             TypeParameters *out_inferred,
-                             std::string *out_encoded_bytes) {
+bool InferFromConstant(THD * /*thd*/, int64_t max_persisted_length,
+                       const vef_func_desc_t *encode_vdf, vef_type_id arg_type,
+                       std::string_view constant, TypeParameters *out_inferred,
+                       std::string *out_encoded_bytes) {
   // Pre-conditions: the caller should have already verified that the type is
   // parameterized and that the VDF is the type's encode VDF. We still guard
   // defensively so a bad call doesn't crash.
@@ -84,13 +83,20 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
   inferred_workspace.buf = stack_params_buf;
   inferred_workspace.max_buf_len = sizeof(stack_params_buf);
 
-  // Build the single STRING input arg holding the constant literal.
+  // Build the single input arg holding the constant literal, as text or as
+  // bytes depending on arg_type.
   // TODO(villagesql): change this to use the encoding wrapper.
   vef_invalue_t arg{};
-  arg.type = VEF_TYPE_STRING;
   arg.is_null = false;
-  arg.str_value = input_string.data();
-  arg.str_len = input_string.size();
+  if (arg_type == VEF_TYPE_BINARY) {
+    arg.type = VEF_TYPE_BINARY;
+    arg.binary_value = reinterpret_cast<const unsigned char *>(constant.data());
+    arg.binary_len = constant.size();
+  } else {
+    arg.type = VEF_TYPE_STRING;
+    arg.str_value = constant.data();
+    arg.str_len = constant.size();
+  }
   vef_invalue_t *arg_ptr = &arg;
 
   vef_vdf_args_t vdf_args{};
@@ -158,7 +164,7 @@ bool InferFromStringConstant(THD * /*thd*/, int64_t max_persisted_length,
 
   // VEF_RESULT_VALUE path. If the wrapper didn't write any inferred params,
   // the extension either has no params_to_strings registered or its
-  // from_string did not call p.set(). Either way, we can't bind a
+  // VDF did not call p.set(). Either way, we can't bind a
   // TypeContext from this call; fall back to ambiguity.
   if (inferred_workspace.actual_len == 0) {
     return true;
