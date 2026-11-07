@@ -174,15 +174,6 @@ server invokes `on_init` after populating the extension's capabilities and
 `on_deinit` before depopulating them, which is the only point at which the
 extension's own system variables and capability vtables exist.
 
-### Preview string system-variable encodings
-
-The string encoding fix retains global system-variable ABI 2 (`ver-2`) and
-session-variable ABI 1 (`ver-1`). Struct layouts and function signatures are
-unchanged, so existing binaries remain loadable without rebuilding. String
-values must be valid UTF-8 without embedded NUL; malformed or non-UTF-8 input
-that was previously accepted may now be rejected. Stable VEF protocols are
-unchanged.
-
 ## TODOs
 
 ### 1. Drop support for protocol v1
