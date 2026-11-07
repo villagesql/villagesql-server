@@ -457,6 +457,27 @@ constexpr auto FAULT_BLOB = vsql::make_type<kFaultBlobTypeName>()
                                 .intrinsic_default_str(kIntrinsicDefault.data())
                                 .build();
 
+// Register an uppercase type with lowercase method prefixes. Reuse the byte
+// storage callbacks; this fixture tests identifier matching, not a new format.
+static constexpr const char kCafeTypeName[] = "CAFÉ";
+constexpr auto CAFE = [] {
+  auto type = vsql::make_type<kCafeTypeName>()
+                  .persisted_length(kFaultBlobSize)
+                  .max_decode_buffer_length(kFaultBlobSize)
+                  .from_string<&fault_blob_encode>()
+                  .to_string<&fault_blob_decode>()
+                  .compare<&fault_blob_compare>()
+                  .intrinsic_default_str(kIntrinsicDefault.data())
+                  .build();
+  type.descriptor.vef_desc.encode_vdf_name = "café::from_string";
+  type.descriptor.vef_desc.decode_vdf_name = "café::to_string";
+  type.descriptor.vef_desc.compare_vdf_name = "café::compare";
+  std::get<0>(type.embedded_funcs).name_ = "café::from_string";
+  std::get<1>(type.embedded_funcs).name_ = "café::to_string";
+  std::get<2>(type.embedded_funcs).name_ = "café::compare";
+  return type;
+}();
+
 constexpr auto NO_DEFAULT_TYPE = vsql::make_type<kNoDefaultTypeName>()
                                      .persisted_length(kNoDefaultSize)
                                      .max_decode_buffer_length(16)
@@ -1452,6 +1473,7 @@ VEF_GENERATE_ENTRY_POINTS(
         // FAULT_BLOB type: behaviour controlled by
         // "OK"/"DECODE_FAIL"/"ENCODE_FAIL" prefix
         .type(FAULT_BLOB)
+        .type(CAFE)
         .type(NO_DEFAULT_TYPE)
         .type(NO_DEFAULT_PARAM_TYPE)
         .type(NO_DEFAULT_VAR_PARAM_TYPE)

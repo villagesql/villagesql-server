@@ -56,3 +56,17 @@ decoded
 (10,20)
 (30,40)
 DROP TABLE t2;
+INSTALL EXTENSION vsql_test_only;
+SET NAMES utf8mb4;
+CREATE TABLE cafe_values (v `CAFÉ`);
+INSERT INTO cafe_values VALUES ('OK one'), ('OK two');
+SELECT v FROM cafe_values ORDER BY v;
+v
+OK one
+OK two
+SELECT vsql_test_only.`café`::to_string(v) AS value FROM cafe_values ORDER BY v;
+value
+OK one
+OK two
+DROP TABLE cafe_values;
+UNINSTALL EXTENSION vsql_test_only;
