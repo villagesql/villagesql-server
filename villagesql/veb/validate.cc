@@ -166,10 +166,9 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       std::string func_name(func_desc->name);
 
       if (func_name.size() > NAME_CHAR_LEN) {
-        error_out = "VDF '" + func_name +
-                    "' is too long, function names should not have more "
-                    "than " +
-                    std::to_string(NAME_CHAR_LEN) + " characters";
+        error_out = "VDF '" + func_name.substr(0, NAME_CHAR_LEN) +
+                    "..."
+                    "' is too long";
         return std::nullopt;
       }
 
