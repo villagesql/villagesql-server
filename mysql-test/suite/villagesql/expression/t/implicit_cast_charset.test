@@ -65,6 +65,11 @@ PREPARE p FROM 'SELECT id FROM t1 WHERE val = ?';
 EXECUTE p USING @v;
 DEALLOCATE PREPARE p;
 
+# Binary input may contain valid UTF-8 NUL bytes but invalid type syntax.
+# The diagnostic must escape those bytes rather than print an empty value.
+--error ER_WRONG_VALUE
+SELECT vsql_complex.complex_real(_binary 0x0028);
+
 --echo #
 --echo # Cleanup
 --echo #

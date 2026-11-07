@@ -147,6 +147,27 @@ SELECT DISTINCT CHARSET(s), COLLATION(s), COERCIBILITY(s) FROM materialized_poli
 SELECT HEX(s) FROM materialized_policy ORDER BY HEX(s);
 DROP TABLE materialized_policy, result_policy;
 
+# Direct conversion and explicit from_string must agree on protocol-4 text.
+CREATE TABLE custom_text (id INT PRIMARY KEY, v TEXT8);
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO custom_text VALUES (1, _binary 0xFF);
+--error ER_WRONG_VALUE
+SELECT vdf_sb.text8_hex(_binary 0xFF);
+--error ER_CANNOT_CONVERT_STRING
+SELECT vdf_sb.TEXT8::from_string(0xFF);
+INSERT INTO custom_text VALUES (1, _latin1 0xE9), (2, _ucs2 0x00E9), (3, _binary 0xC3A9);
+SELECT id, vdf_sb.text8_hex(v) AS encoded FROM custom_text ORDER BY id;
+SELECT vdf_sb.text8_hex(vdf_sb.TEXT8::from_string(_latin1 0xE9)) AS explicit_encoded;
+PREPARE custom_insert FROM 'INSERT INTO custom_text VALUES (4, ?)';
+SET @text = 0xFF;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE custom_insert USING @text;
+SET @text = _ucs2 0x00E9;
+EXECUTE custom_insert USING @text;
+DEALLOCATE PREPARE custom_insert;
+SELECT vdf_sb.text8_hex(v) AS prepared_encoded FROM custom_text WHERE id = 4;
+DROP TABLE custom_text;
+
 --echo #
 --echo # Cleanup
 --echo #

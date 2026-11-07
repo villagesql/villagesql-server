@@ -54,6 +54,10 @@ argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
 
+Direct assignment and implicit text conversion to a custom type require binary
+input to contain valid UTF-8, matching explicit protocol-4 STRING `from_string`
+calls.
+
 ### SQL result collation
 
 Scalar and aggregate VDF STRING results use the fixed `utf8mb4_bin` collation,
