@@ -23,6 +23,7 @@
 #include "mysql/service_command.h"
 #include "mysql/service_srv_session.h"
 #include "mysql/strings/m_ctype.h"
+#include "mysqld_error.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/srv_session.h"
@@ -68,6 +69,7 @@ struct vef_sql_result_t {
 // static_cast from void*.
 struct CtxBase {
   vef_sql_result_t *result{nullptr};
+  bool conversion_failed{false};
 };
 
 // Context for the streaming for_each_row path.
@@ -86,6 +88,28 @@ struct ForEachCtx : CtxBase {
 };
 
 namespace villagesql::services {
+
+QueryTextStatus copy_query_result_text(const char *value, size_t length,
+                                       const CHARSET_INFO *cs,
+                                       std::string *out) {
+  String converted;
+  uint errors = 0;
+  if (cs != nullptr && cs != &my_charset_bin) {
+    const String source(value, length, cs);
+    if (!source.is_valid_string(cs)) return QueryTextStatus::kInvalid;
+    if (converted.copy(value, length, cs, &my_charset_utf8mb4_bin, &errors))
+      return QueryTextStatus::kOutOfMemory;
+    if (errors != 0) return QueryTextStatus::kInvalid;
+    value = converted.ptr();
+    length = converted.length();
+  }
+  try {
+    out->assign(value, length);
+  } catch (const std::bad_alloc &) {
+    return QueryTextStatus::kOutOfMemory;
+  }
+  return QueryTextStatus::kOk;
+}
 
 namespace {
 
@@ -140,12 +164,36 @@ static int cb_get_null(void *ctx) {
   return 0;
 }
 
+static int copy_result_text(CtxBase *ctx, const char *value, size_t length,
+                            const CHARSET_INFO *cs, std::string *out) {
+  if (ctx->conversion_failed) return 1;
+  const auto status = copy_query_result_text(value, length, cs, out);
+  if (status == QueryTextStatus::kOk) return 0;
+
+  ctx->conversion_failed = true;
+  auto *result = ctx->result;
+  result->has_error = true;
+  result->error.severity = VEF_SQL_DIAG_ERROR;
+  std::memcpy(result->error.sqlstate, "HY000", 6);
+  if (status == QueryTextStatus::kOutOfMemory) {
+    result->error.errno_ = ER_OUT_OF_RESOURCES;
+    result->error.message =
+        "Out of memory converting SQL query result to UTF-8";
+  } else {
+    result->error.errno_ = ER_CANNOT_CONVERT_STRING;
+    result->error.message =
+        "SQL query result contains invalid text in its source charset";
+  }
+  return 1;
+}
+
 static int cb_get_string(void *ctx, const char *value, size_t length,
-                         const CHARSET_INFO *) {
+                         const CHARSET_INFO *cs) {
   auto *c = static_cast<ExecCtx *>(ctx);
   auto &row = c->result->rows.back();
   if (c->col_idx < row.size()) {
-    row[c->col_idx].value.assign(value, length);
+    if (copy_result_text(c, value, length, cs, &row[c->col_idx].value))
+      return 1;
     row[c->col_idx].is_null = false;
     ++c->col_idx;
   }
@@ -191,6 +239,8 @@ static void cb_handle_error(void *ctx, uint sql_errno, const char *err_msg,
             err_msg ? err_msg : "(unknown)");
     return;
   }
+  // Preserve a conversion error if command processing reports a later failure.
+  if (r->has_error) return;
   r->has_error = true;
   r->error.errno_ = sql_errno;
   r->error.severity = VEF_SQL_DIAG_ERROR;
@@ -279,7 +329,7 @@ static int fe_end_row(void *ctx) {
   auto *c = static_cast<ForEachCtx *>(ctx);
   // MySQL provides no way to abort a running query mid-result; set stop=true
   // and discard remaining rows until command_service_run_command returns.
-  if (c->stop) return 0;
+  if (c->stop || c->conversion_failed) return 0;
   for (unsigned int i = 0; i < c->num_columns; ++i) {
     if (c->is_null[i]) {
       c->row_ptrs[i] = nullptr;
@@ -307,10 +357,11 @@ static int fe_get_null(void *ctx) {
 }
 
 static int fe_get_string(void *ctx, const char *value, size_t length,
-                         const CHARSET_INFO *) {
+                         const CHARSET_INFO *cs) {
   auto *c = static_cast<ForEachCtx *>(ctx);
   if (c->col_idx < c->num_columns) {
-    c->values[c->col_idx].assign(value, length);
+    if (copy_result_text(c, value, length, cs, &c->values[c->col_idx]))
+      return 1;
     c->is_null[c->col_idx] = false;
     ++c->col_idx;
   }
@@ -430,6 +481,7 @@ static vef_sql_result_t *sql_execute(vef_sql_session_t *session,
                               &my_charset_utf8mb4_general_ci, &kCallbacks,
                               CS_TEXT_REPRESENTATION, &ctx);
 
+  if (ctx.conversion_failed) result->rows.clear();
   collect_warnings(session->handle->thd, result.get());
 
   return result.release();

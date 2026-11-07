@@ -24,6 +24,7 @@ SET(VILLAGESQL_UNIT_TESTS
   identifier_names-t
   pending_action-t
   semver-t
+  sql_query_text-t
   storage_page_latch-t
   type_builder-t
   type_context-t
