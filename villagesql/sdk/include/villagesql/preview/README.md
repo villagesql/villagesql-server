@@ -65,4 +65,4 @@ assume nothing in this directory is stable.
 
 ## SQL query results
 
-SQL query preview ABI 2 returns text cells as UTF-8 in both buffered and streaming queries. Binary cells remain unchanged; lengths include embedded NUL bytes. Invalid text produces a result error. Buffered queries discard their rows on conversion failure; streaming queries stop delivering rows, but earlier callbacks cannot be undone. Extensions using ABI 1 must rebuild against ABI 2.
+SQL query results return text cells as UTF-8 in both buffered and streaming queries. Binary cells remain unchanged; lengths include embedded NUL bytes. Invalid text produces a result error. Buffered queries discard their rows on conversion failure; streaming queries stop delivering rows, but earlier callbacks cannot be undone.

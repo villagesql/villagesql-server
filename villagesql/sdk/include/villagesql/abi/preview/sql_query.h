@@ -54,7 +54,7 @@ extern "C" {
 // Capability name: VEF_PREVIEW_SQL_QUERY_NAME
 
 #define VEF_PREVIEW_SQL_QUERY_NAME "vsql::preview::sql_query"
-#define VEF_PREVIEW_SQL_QUERY_ABI_VERSION 2
+#define VEF_PREVIEW_SQL_QUERY_ABI_VERSION 1
 
 // Forward declaration — defined in abi/preview/thread_worker.h.
 struct vef_thread_handle_t;
