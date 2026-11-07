@@ -549,9 +549,8 @@ TEST_F(ValidateExtensionRegistrationTest,
     bool valid;
   };
   const TestCase cases[] = {
-      {"MYTYPE", "mytype", true},
-      {"CAFÉ", "café", true},
-      {"CAFÉ", "cafe", false},
+      {"MYTYPE", "mytype", true}, {"MYTYPE", "", false},
+      {"CAFÉ", "café", true},     {"CAFÉ", "cafe", false},
       {"CAFÉ", "thé", false},
   };
   for (const auto protocol : {VEF_PROTOCOL_3, VEF_PROTOCOL_4}) {
