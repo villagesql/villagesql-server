@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "custom_column.h"
-#include "custom_index_helper_fn_name.h"
 #include "storage/innobase/include/data0data.h"
 #include "storage/innobase/include/dict0dd.h"
 #include "storage/innobase/include/dict0dict.h"
@@ -32,11 +31,7 @@
 #include "storage/innobase/include/ha_prototypes.h"
 #include "storage/innobase/include/mach0data.h"
 #include "storage/innobase/include/mem0mem.h"
-#include "storage/innobase/include/mtr0mtr.h"
-#include "storage/innobase/include/trx0sys.h"
-#include "storage/innobase/include/trx0trx.h"
 #include "storage/innobase/include/univ.i"
-#include "storage/innobase/villagesql/custom_column.h"
 #include "villagesql/schema/descriptor/index_context.h"
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
@@ -362,7 +357,6 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->options = nullptr;
-  ctx->helper_fn_name_fn = vef_index_helper_fn_name_impl;
 
   const auto &intf = index->custom_index->interface();
 
@@ -538,9 +532,8 @@ dberr_t Custom_index::create(dict_index_t *index, trx_id_t trx_id) {
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    if (trx_t *trx = trx_rw_is_active(trx_id, false)) {
-      trx_set_detailed_error(trx, error_msg);
-    }
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error creating custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
 
@@ -562,9 +555,8 @@ dberr_t Custom_index::drop(dict_index_t *index, trx_id_t trx_id) {
 
   if (failed) {
     error_msg[sizeof(error_msg) - 1] = '\0';
-    if (trx_t *trx = trx_rw_is_active(trx_id, false)) {
-      trx_set_detailed_error(trx, error_msg);
-    }
+    ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "Error dropping custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
   return DB_SUCCESS;

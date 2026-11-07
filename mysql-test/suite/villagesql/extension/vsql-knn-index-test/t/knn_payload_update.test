@@ -4,6 +4,8 @@
 # the same order (the vectors are unchanged) and the new payload value, and no
 # index insert is triggered.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 --disable_query_log

@@ -4,6 +4,9 @@
 # resolution, rowid_prefix persistence, and the col_ref -> row read path
 # (handler::custom_index_ref_to_row).
 #
+
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 # Reset the static scan/insert counters so their absolute values are

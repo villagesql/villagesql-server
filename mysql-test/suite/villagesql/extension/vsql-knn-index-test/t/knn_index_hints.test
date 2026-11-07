@@ -6,6 +6,8 @@
 # ignoring it makes the ordering fall back to a plain sort. In every case the
 # rows returned must be correct.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (

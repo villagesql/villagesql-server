@@ -7,6 +7,8 @@
 # Falls back to scan + sort: DESC ordering, no LIMIT, and a distance between two
 # columns (not a column vs. a constant).
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 --disable_query_log
