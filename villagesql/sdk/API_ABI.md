@@ -176,9 +176,12 @@ extension's own system variables and capability vtables exist.
 
 ### Preview string system-variable encodings
 
-Global system-variable ABI 3 (`ver-3`) and session-variable ABI 2 (`ver-2`)
-require UTF-8 string values without embedded NUL. These preview behavior changes
-require rebuilding consumers; stable VEF protocols are unchanged.
+The string encoding fix retains global system-variable ABI 2 (`ver-2`) and
+session-variable ABI 1 (`ver-1`). Struct layouts and function signatures are
+unchanged, so existing binaries remain loadable without rebuilding. String
+values must be valid UTF-8 without embedded NUL; malformed or non-UTF-8 input
+that was previously accepted may now be rejected. Stable VEF protocols are
+unchanged.
 
 ## TODOs
 

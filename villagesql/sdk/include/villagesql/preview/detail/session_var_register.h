@@ -28,7 +28,7 @@ struct CapabilityTraits<::vsql::preview_session_var::SessionVarCapability<N>> {
   static constexpr const char *kCppTypeName =
       "vsql::preview_session_var::SessionVarCapability";
   using CapabilityConfigType = vef_session_var_descriptor_list_t;
-  static constexpr const char *kVtableHash = "ver-2";
+  static constexpr const char *kVtableHash = "ver-1";
   static constexpr const char *kCapabilityConfigHash = "ver-1";
 
   static constexpr void *vtable_destination(

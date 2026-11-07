@@ -50,7 +50,7 @@ extern "C" {
 // Getters return UTF-8. SQL NULL remains distinct from an empty string.
 //
 // Capability ABI version compiled into this SDK snapshot.
-#define VEF_PREVIEW_SYS_VAR_ABI_VERSION 3
+#define VEF_PREVIEW_SYS_VAR_ABI_VERSION 2
 
 // System variable value type.
 typedef enum {

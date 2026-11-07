@@ -57,7 +57,7 @@ extern "C" {
 // Getters return UTF-8. SQL NULL remains distinct from an empty string.
 //
 // Capability ABI version compiled into this SDK snapshot.
-#define VEF_PREVIEW_SESSION_VAR_ABI_VERSION 2
+#define VEF_PREVIEW_SESSION_VAR_ABI_VERSION 1
 
 // Session variable value type. Only INT and STR are supported in v1.
 typedef enum {

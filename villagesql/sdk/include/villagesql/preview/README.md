@@ -65,6 +65,6 @@ assume nothing in this directory is stable.
 
 ## String system variables
 
-Global system-variable ABI 3 and session-variable ABI 2 use valid UTF-8 for string defaults, stored values, SDK reads and change callbacks. SQL assignments are converted from their source charset; SQL binary strings must already contain valid UTF-8. Malformed text and embedded NUL are rejected. The SDK's `std::string` setter checks for embedded NUL before passing the value to the NUL-terminated ABI. SQL NULL and empty strings remain distinct.
+Global system-variable ABI 2 and session-variable ABI 1 use valid UTF-8 for string defaults, stored values, SDK reads and change callbacks. SQL assignments are converted from their source charset; SQL binary strings must already contain valid UTF-8. Malformed text and embedded NUL are rejected. The SDK's `std::string` setter checks for embedded NUL before passing the value to the NUL-terminated ABI. SQL NULL and empty strings remain distinct.
 
-SQL expressions reading these variables use `utf8mb4_bin` with MySQL's existing SYSCONST derivation. Other MySQL variables and identifier rules are unchanged. Preview consumers must rebuild.
+SQL expressions reading these variables use `utf8mb4_bin` with MySQL's existing SYSCONST derivation. Other MySQL variables and identifier rules are unchanged. The encoding fix keeps the existing ABI versions, struct layouts and function signatures. Existing binaries remain loadable without rebuilding, but malformed or non-UTF-8 input that was previously accepted may now be rejected.
