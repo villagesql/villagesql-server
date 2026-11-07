@@ -1013,8 +1013,9 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
     return true;
   }
 
-  // Replace the string value with the encoded value
+  // The rewritten literal contains opaque bytes, not its original text.
   str_item->set_str_value(encoded);
+  str_item->collation.set(&my_charset_bin, str_item->collation.derivation);
   return false;
 }
 
