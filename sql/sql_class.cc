@@ -2543,10 +2543,12 @@ void THD::debug_assert_query_locked() const {
   if (current_thd != this) mysql_mutex_assert_owner(&LOCK_thd_query);
 }
 
-void THD::set_query(LEX_CSTRING query_arg) {
+void THD::set_query(LEX_CSTRING query_arg, const CHARSET_INFO *query_charset) {
   assert(this == current_thd);
   mysql_mutex_lock(&LOCK_thd_query);
   m_query_string = query_arg;
+  // SET NAMES can change the session charset before statement events run.
+  m_query_charset = query_charset != nullptr ? query_charset : charset();
   mysql_mutex_unlock(&LOCK_thd_query);
 }
 

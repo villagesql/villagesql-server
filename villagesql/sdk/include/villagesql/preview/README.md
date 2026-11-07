@@ -66,3 +66,9 @@ assume nothing in this directory is stable.
 ## SQL query results
 
 SQL query results return text cells as UTF-8 in both buffered and streaming queries. Binary cells remain unchanged; lengths include embedded NUL bytes. Invalid text produces a result error. Buffered queries discard their rows on conversion failure; streaming queries stop delivering rows, but earlier callbacks cannot be undone.
+
+## Statement-event encodings
+
+Statement-event ABI 2 reports query bytes with a MySQL charset/collation name. It does not convert or validate SQL text. The metadata follows the query buffer, even if the statement changes the session charset. A `binary` label means the server has not established a single text encoding, as can happen with expanded prepared statements or redacted buffers. Existing password redaction is preserved.
+
+Selected connection attributes include byte lengths and their handshake charset, independent of later `SET NAMES` statements. SDK accessors return `std::string_view` so embedded NUL is retained. Copy callback data before returning if you need to retain it. Preview consumers must rebuild against the new event layout (`ver-4`).

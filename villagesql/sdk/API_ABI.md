@@ -174,6 +174,13 @@ server invokes `on_init` after populating the extension's capabilities and
 `on_deinit` before depopulating them, which is the only point at which the
 extension's own system variables and capability vtables exist.
 
+### Preview statement-event ABI 2
+
+Statement events add query encoding metadata and attribute lengths/encodings.
+The new event layout uses the `ver-4` capability tag; old preview consumers
+must rebuild. Attribute accessors now return `std::string_view` instead of
+NUL-terminated pointers. Stable VEF protocols are unchanged.
+
 ## TODOs
 
 ### 1. Drop support for protocol v1

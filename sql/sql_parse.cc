@@ -2676,7 +2676,8 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
     true  error;  In this case thd->fatal_error is set
 */
 
-bool alloc_query(THD *thd, const char *packet, size_t packet_length) {
+bool alloc_query(THD *thd, const char *packet, size_t packet_length,
+                 const CHARSET_INFO *query_charset) {
   DBUG_TRACE;
   /* Remove garbage at start and end of query */
   while (packet_length > 0 && my_isspace(thd->charset(), packet[0])) {
@@ -2695,7 +2696,7 @@ bool alloc_query(THD *thd, const char *packet, size_t packet_length) {
   memcpy(query, packet, packet_length);
   query[packet_length] = '\0';
 
-  thd->set_query(query, packet_length);
+  thd->set_query(query, packet_length, query_charset);
   DBUG_PRINT("thd_query", ("thd->thread_id():%u thd:%p query:%s",
                            thd->thread_id(), thd, query));
   return false;
@@ -5337,7 +5338,7 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
     */
 
     if (!thd->is_error() && found_semicolon && (ulong)(qlen)) {
-      thd->set_query(thd->query().str, qlen - 1);
+      thd->set_query(thd->query().str, qlen - 1, thd->query_charset());
     }
   }
 

@@ -1041,6 +1041,7 @@ class THD : public MDL_context_owner,
     The query associated with this statement.
   */
   LEX_CSTRING m_query_string;
+  const CHARSET_INFO *m_query_charset{nullptr};
   String m_normalized_query;
   std::atomic<bool> m_safe_to_display;
 
@@ -1197,6 +1198,7 @@ class THD : public MDL_context_owner,
     Session's connection attributes for the connected client
   */
   std::vector<char> m_connection_attributes;
+  const CHARSET_INFO *m_connection_attributes_charset{nullptr};
 
   /**
     Current query cost.
@@ -4302,11 +4304,16 @@ class THD : public MDL_context_owner,
     Assign a new value to thd->m_query_string.
     Protected with the LOCK_thd_query mutex.
   */
-  void set_query(const char *query_arg, size_t query_length_arg) {
+  void set_query(const char *query_arg, size_t query_length_arg,
+                 const CHARSET_INFO *query_charset = nullptr) {
     const LEX_CSTRING tmp = {query_arg, query_length_arg};
-    set_query(tmp);
+    set_query(tmp, query_charset);
   }
-  void set_query(LEX_CSTRING query_arg);
+  void set_query(LEX_CSTRING query_arg,
+                 const CHARSET_INFO *query_charset = nullptr);
+  const CHARSET_INFO *query_charset() const {
+    return m_query_charset != nullptr ? m_query_charset : charset();
+  }
   void reset_query() { set_query(LEX_CSTRING()); }
 
   /**
