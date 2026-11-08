@@ -1,0 +1,283 @@
+CREATE TABLE tc (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO tc VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(0.0,5.0)');
+CREATE TABLE tv (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO tv VALUES (1, '[1,0,0]'), (2, '[0,2,0]'), (3, '[0,0,3]');
+#
+# A failed EXECUTE, then more EXECUTEs
+#
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+SET @c = '(7.0,8.0)';
+EXECUTE s USING @c;
+r
+7
+SET @c = 'not a complex';
+EXECUTE s USING @c;
+ERROR HY000: Incorrect vsql_complex.COMPLEX value: 'not a complex' for parameter '?'
+SET @c = '(9.0,1.0)';
+EXECUTE s USING @c;
+r
+9
+SET @c = NULL;
+EXECUTE s USING @c;
+r
+NULL
+SET @c = '(2.0,3.0)';
+EXECUTE s USING @c;
+r
+2
+reprepares
+0
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT id FROM tv ORDER BY tvector_dot_product(vec, ?) DESC LIMIT 2';
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+id
+3
+2
+# A value of another dimension fails
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+ERROR HY000: Incorrect vsql_tvector.TVECTOR(3) value: '[1,2]' for parameter '?'
+SET @v = '[0,0,5]';
+EXECUTE s USING @v;
+id
+3
+1
+reprepares
+0
+DEALLOCATE PREPARE s;
+#
+# A ? next to a VDF, bound with values of other types
+#
+PREPARE s FROM 'SELECT id, complex_real(val) * ? AS x FROM tc WHERE id = 2';
+SET @p = 2;
+EXECUTE s USING @p;
+id	x
+2	6
+SET @p = 2.5;
+EXECUTE s USING @p;
+id	x
+2	7.5
+SET @p = '3';
+EXECUTE s USING @p;
+id	x
+2	9
+SET @p = NULL;
+EXECUTE s USING @p;
+id	x
+2	NULL
+reprepares
+0
+DEALLOCATE PREPARE s;
+#
+# The table recreated between EXECUTEs with another dimension: the
+# statement is prepared again, and the ? takes the new dimension
+#
+PREPARE s FROM 'SELECT id, tvector_dot_product(vec, ?) AS d FROM tv ORDER BY id';
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+id	d
+1	1
+2	2
+3	3
+DROP TABLE tv;
+CREATE TABLE tv (id INT PRIMARY KEY, vec TVECTOR(4) NOT NULL);
+INSERT INTO tv VALUES (1, '[1,0,0,0]'), (2, '[0,0,0,4]');
+SET @v = '[1,1,1,1]';
+EXECUTE s USING @v;
+id	d
+1	1
+2	4
+EXECUTE s USING @v;
+id	d
+1	1
+2	4
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+ERROR HY000: Incorrect vsql_tvector.TVECTOR(4) value: '[1,1,1]' for parameter '?'
+reprepares
+1
+DEALLOCATE PREPARE s;
+#
+# A column added to the table between EXECUTEs
+#
+PREPARE s FROM 'SELECT id, complex_imag(val) AS i FROM tc WHERE id = ?';
+SET @id = 1;
+EXECUTE s USING @id;
+id	i
+1	2
+ALTER TABLE tc ADD COLUMN extra INT;
+SET @id = 2;
+EXECUTE s USING @id;
+id	i
+2	4
+ALTER TABLE tc DROP COLUMN extra;
+SET @id = 3;
+EXECUTE s USING @id;
+id	i
+3	5
+reprepares
+2
+DEALLOCATE PREPARE s;
+#
+# A view calling a VDF, replaced between EXECUTEs
+#
+CREATE VIEW vw AS SELECT id, complex_real(val) AS r FROM tc;
+PREPARE s FROM 'SELECT id, r FROM vw WHERE id <= ? ORDER BY id';
+SET @id = 2;
+EXECUTE s USING @id;
+id	r
+1	1
+2	3
+EXECUTE s USING @id;
+id	r
+1	1
+2	3
+CREATE OR REPLACE VIEW vw AS SELECT id, complex_imag(val) AS r FROM tc;
+EXECUTE s USING @id;
+id	r
+1	2
+2	4
+SET @id = 3;
+EXECUTE s USING @id;
+id	r
+1	2
+2	4
+3	5
+reprepares
+1
+DEALLOCATE PREPARE s;
+DROP VIEW vw;
+#
+# A VDF that needs no reprepare next to one that does: prepared again at
+# every EXECUTE, and both give the bound values
+#
+PREPARE s FROM 'SELECT complex_real(?) AS r, tvector_dim(?) AS d';
+SET @c = '(1.0,0.0)', @v = '[1,2]';
+EXECUTE s USING @c, @v;
+r	d
+1	2
+SET @c = '(2.0,0.0)', @v = '[1,2,3]';
+EXECUTE s USING @c, @v;
+r	d
+2	3
+SET @c = '(3.0,0.0)', @v = '[1,2,3,4]';
+EXECUTE s USING @c, @v;
+r	d
+3	4
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# from_string of a user variable, of a type whose parameters come from
+# the value: prepared again at every EXECUTE, and takes the new value
+#
+PREPARE s FROM 'SELECT tvector_dim(TVECTOR::from_string(@s)) AS d';
+SET @s = '[1,2]';
+EXECUTE s;
+d
+2
+SET @s = '[1,2,3]';
+EXECUTE s;
+d
+3
+SET @s = '[1,2,3,4]';
+EXECUTE s;
+d
+4
+reprepares
+3
+DEALLOCATE PREPARE s;
+SET @s = NULL;
+#
+# INSERT and UPDATE calling a VDF
+#
+CREATE TABLE tr (id INT PRIMARY KEY, i DOUBLE);
+PREPARE s FROM 'INSERT INTO tr VALUES (?, complex_imag(?))';
+SET @id = 1, @c = '(0.0,1.5)';
+EXECUTE s USING @id, @c;
+SET @id = 2, @c = '(0.0,2.5)';
+EXECUTE s USING @id, @c;
+SET @id = 3, @c = NULL;
+EXECUTE s USING @id, @c;
+reprepares
+0
+DEALLOCATE PREPARE s;
+SELECT * FROM tr ORDER BY id;
+id	i
+1	1.5
+2	2.5
+3	NULL
+DROP TABLE tr;
+PREPARE s FROM 'UPDATE tc SET val = complex_conjugate(val) WHERE id = ?';
+SET @id = 1;
+EXECUTE s USING @id;
+EXECUTE s USING @id;
+SET @id = 2;
+EXECUTE s USING @id;
+reprepares
+0
+DEALLOCATE PREPARE s;
+# id 1 conjugated twice, id 2 once
+SELECT id, val FROM tc ORDER BY id;
+id	val
+1	(1,2)
+2	(3,-4)
+3	(0,5)
+UPDATE tc SET val = complex_conjugate(val) WHERE id = 2;
+#
+# A VDF of a ? in a subquery
+#
+PREPARE s FROM 'SELECT id FROM tc WHERE complex_abs(val) > (SELECT complex_abs(?)) ORDER BY id';
+SET @c = '(1.0,0.0)';
+EXECUTE s USING @c;
+id
+1
+2
+3
+SET @c = '(4.0,0.0)';
+EXECUTE s USING @c;
+id
+2
+3
+SET @c = '(6.0,0.0)';
+EXECUTE s USING @c;
+id
+reprepares
+0
+DEALLOCATE PREPARE s;
+#
+# EXECUTE from a procedure, of a statement prepared outside it
+#
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+CREATE PROCEDURE p_exec(c VARCHAR(64))
+BEGIN
+SET @pc = c;
+EXECUTE s USING @pc;
+END//
+CALL p_exec('(4.0,0.0)');
+r
+4
+CALL p_exec('(5.0,0.0)');
+r
+5
+reprepares
+0
+DROP PROCEDURE p_exec;
+DEALLOCATE PREPARE s;
+SET @pc = NULL;
+#
+# Many EXECUTEs in a row, each with its own value
+#
+PREPARE s FROM 'SELECT complex_real(?) + complex_imag(?) INTO @sum';
+SET @total = 0;
+# sum of (i + 1) for i in 1..200 is 20300
+SELECT @total AS total;
+total
+20300
+reprepares
+0
+DEALLOCATE PREPARE s;
+SET @c = NULL, @v = NULL, @p = NULL, @id = NULL, @sum = NULL, @total = NULL;
+DROP TABLE tc;
+DROP TABLE tv;

@@ -1,0 +1,148 @@
+CREATE TABLE tc (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO tc VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(0.0,5.0)');
+CREATE TABLE tv (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO tv VALUES (1, '[1,0,0]'), (2, '[0,2,0]'), (3, '[0,0,3]');
+#
+# A VDF on a column, with a ? elsewhere: prepared once
+#
+PREPARE s FROM 'SELECT id, complex_real(val) AS r FROM tc WHERE id = ?';
+SET @id = 1;
+EXECUTE s USING @id;
+id	r
+1	1
+SET @id = 2;
+EXECUTE s USING @id;
+id	r
+2	3
+SET @id = 3;
+EXECUTE s USING @id;
+id	r
+3	0
+reprepares
+0
+DEALLOCATE PREPARE s;
+#
+# A ? as a VDF argument, of a type with no parameters: prepared once
+#
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+SET @c = '(7.0,8.0)';
+EXECUTE s USING @c;
+r
+7
+SET @c = '(9.0,1.0)';
+EXECUTE s USING @c;
+r
+9
+SET @c = '(2.0,3.0)';
+EXECUTE s USING @c;
+r
+2
+reprepares
+0
+DEALLOCATE PREPARE s;
+#
+# A ? as a VDF argument, its dimension taken from a column, in ORDER BY
+# with LIMIT (the shape of a nearest-neighbour query): prepared once
+#
+PREPARE s FROM 'SELECT id FROM tv ORDER BY tvector_dot_product(vec, ?) DESC LIMIT 2';
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+id
+3
+2
+SET @v = '[3,0,0]';
+EXECUTE s USING @v;
+id
+1
+2
+SET @v = '[0,0,5]';
+EXECUTE s USING @v;
+id
+3
+1
+reprepares
+0
+DEALLOCATE PREPARE s;
+SET @v = NULL;
+#
+# An aggregate VDF: prepared again at every EXECUTE
+#
+PREPARE s FROM 'SELECT complex_sum(val) AS s FROM tc WHERE id <= ?';
+SET @id = 1;
+EXECUTE s USING @id;
+s
+(1,2)
+SET @id = 2;
+EXECUTE s USING @id;
+s
+(4,6)
+SET @id = 3;
+EXECUTE s USING @id;
+s
+(4,11)
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# A bind_and_check_types hook given a ?: prepared again at every EXECUTE
+#
+PREPARE s FROM 'SELECT tvector_dim(?) AS d';
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+d
+2
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+d
+3
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+d
+4
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# from_string(?) of a parameterized type: prepared again at every EXECUTE
+#
+PREPARE s FROM 'SELECT tvector_dim(TVECTOR::from_string(?)) AS d';
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+d
+2
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+d
+3
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+d
+4
+reprepares
+3
+DEALLOCATE PREPARE s;
+SET @v = NULL;
+DROP TABLE tc;
+DROP TABLE tv;
+#
+# The extension cannot be uninstalled while a prepared statement holds
+# one of its VDFs, so a statement prepared once never calls a function
+# whose code is gone. After DEALLOCATE it can.
+#
+PREPARE s FROM 'SELECT complex_real(COMPLEX::from_string(''(5.0,6.0)'')) AS r';
+EXECUTE s;
+r
+5
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': VDF 'COMPLEX::from_string' is currently in use
+EXECUTE s;
+r
+5
+EXECUTE s;
+r
+5
+reprepares
+0
+DEALLOCATE PREPARE s;
+SET @id = NULL;
+SET @c = NULL;

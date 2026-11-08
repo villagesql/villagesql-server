@@ -1,0 +1,77 @@
+# UNINSTALL EXTENSION from another connection while a prepared statement or a
+# stored routine that has run holds one of the extension's VDFs. Neither is
+# resolved again at its next run, so the extension must stay installed until
+# the statement is deallocated or the routine dropped.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_complex;
+
+connect (con2, localhost, root,,);
+connection default;
+
+--echo #
+--echo # A prepared statement
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+SET @c = '(1.0,2.0)';
+EXECUTE s USING @c;
+
+connection con2;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+connection default;
+SET @c = '(3.0,4.0)';
+EXECUTE s USING @c;
+DEALLOCATE PREPARE s;
+SET @c = NULL;
+
+--echo #
+--echo # A stored function, called in this connection
+--echo #
+
+CREATE FUNCTION f_real(s VARCHAR(64)) RETURNS DOUBLE DETERMINISTIC
+  RETURN complex_real(COMPLEX::from_string(s));
+SELECT f_real('(5.0,0.0)') AS r;
+
+connection con2;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+connection default;
+SELECT f_real('(6.0,0.0)') AS r;
+
+--echo #
+--echo # A trigger, fired in this connection
+--echo #
+
+CREATE TABLE tt (id INT PRIMARY KEY, s VARCHAR(64), r DOUBLE);
+CREATE TRIGGER tt_bi BEFORE INSERT ON tt FOR EACH ROW
+  SET NEW.r = complex_real(COMPLEX::from_string(NEW.s));
+INSERT INTO tt (id, s) VALUES (1, '(7.0,0.0)');
+
+DROP FUNCTION f_real;
+
+connection con2;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+connection default;
+INSERT INTO tt (id, s) VALUES (2, '(8.0,0.0)');
+SELECT * FROM tt ORDER BY id;
+DROP TABLE tt;
+
+--echo #
+--echo # With nothing left holding a VDF, the extension can be uninstalled
+--echo #
+
+connection con2;
+UNINSTALL EXTENSION vsql_complex;
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE EXTENSION_NAME = 'vsql_complex';
+
+disconnect con2;
+connection default;
+--source include/wait_until_count_sessions.inc

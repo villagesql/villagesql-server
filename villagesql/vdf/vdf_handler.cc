@@ -202,6 +202,20 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
           ? m_udf->vdf_func_desc->bind_and_check_types
           : nullptr;
   villagesql::TypeParameters return_params;
+
+  // In a prepared statement, a call is resolved here once, at PREPARE, and
+  // every EXECUTE reuses it, unless the statement is marked to be prepared
+  // again at each EXECUTE. Prerun and postrun keep per-execution state, so they
+  // need that, and so does a bind_and_check_types hook, which may read a
+  // constant argument's value (a ? or a user variable) that the next EXECUTE
+  // changes. A check deferred to EXECUTE marks it too (DeferUntilReprepare).
+  // The extension cannot be uninstalled while a prepared statement holds one
+  // of its VDFs, so a call resolved once stays valid.
+  if (m_udf->vdf_func_desc->prerun || m_udf->vdf_func_desc->postrun ||
+      bind_and_check != nullptr) {
+    villagesql::MarkVdfStatementForReprepare(thd);
+  }
+
   // A postponed call waits for the statement to be prepared again with its
   // parameter values: inference and prerun are skipped too, and the return
   // type is set below with its params unknown.
@@ -243,6 +257,11 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
+      // The params come from the argument's value. Only a literal keeps that
+      // value from one EXECUTE to the next.
+      if (arguments[0]->type() != Item::STRING_ITEM) {
+        villagesql::MarkVdfStatementForReprepare(thd);
+      }
       // The parameter is STRING, so the constant is read as the VDF will read
       // it at row time.
       String tmp;
@@ -290,12 +309,16 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
   // any argument is not constant, e.g. a column. We defer only for an argument
   // with a ?, because a column's type is known at PREPARE and prerun can check
-  // it there. A call whose bind hook is postponed defers prerun too.
+  // it there. A call whose bind hook is postponed defers prerun too. A VDF
+  // without prerun has nothing to defer, so a ? alone does not make its
+  // statement prepare again at EXECUTE.
   const bool defer_prerun =
-      postponed || (villagesql::IsFirstPrepareBeforeReprepare(thd) &&
-                    std::any_of(m_args, m_args + arg_count, [](Item *arg) {
-                      return villagesql::HasPSParamWithoutValue(arg);
-                    }));
+      postponed ||
+      (m_udf->vdf_func_desc->prerun != nullptr &&
+       std::any_of(
+           m_args, m_args + arg_count,
+           [](Item *arg) { return villagesql::HasPSParamWithoutValue(arg); }) &&
+       villagesql::DeferUntilReprepare(thd));
   if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
@@ -386,6 +409,17 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
                                         to_string_view(m_udf->extension_name),
                                         signature, func, &return_params);
     m_return_type_context = func->get_type_context();
+
+    // A result whose params are still unknown at the first PREPARE may take
+    // them from the value of a ? at EXECUTE, e.g. from_string(?), so the
+    // statement must be prepared again with the value bound.
+    if (m_return_type_context != nullptr &&
+        m_return_type_context->is_unknown() &&
+        std::any_of(m_args, m_args + arg_count, [](Item *arg) {
+          return villagesql::HasPSParamWithoutValue(arg);
+        })) {
+      villagesql::DeferUntilReprepare(thd);
+    }
 
     // CUSTOM-returning VDFs (e.g. the type's from_string / encode VDF) emit
     // output that fits the resolved return type's field. For a

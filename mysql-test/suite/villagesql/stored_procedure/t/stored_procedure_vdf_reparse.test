@@ -1,0 +1,95 @@
+# A VDF in an expression of a stored routine or trigger, run more than once.
+#
+# The expression of a SET, IF, RETURN or SET NEW.col is kept as text only when
+# the parser sees that it uses metadata (a table, a routine or a UDF). A VDF
+# that keeps per-execution state, or a bind_and_check_types hook as
+# tvector_dim has, makes the instruction parse its expression again at each
+# run after the first, so it needs that text.
+
+--source include/villagesql/install_tvector_extension.inc
+
+--echo #
+--echo # SET in a procedure, called twice
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_set()
+BEGIN
+  DECLARE d INT;
+  SET d = tvector_dim('[1,2]');
+  SELECT d;
+END//
+delimiter ;//
+
+CALL p_set();
+CALL p_set();
+DROP PROCEDURE p_set;
+
+--echo #
+--echo # SET in a loop, run twice in one call
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_loop()
+BEGIN
+  DECLARE i INT DEFAULT 0;
+  DECLARE d INT;
+  WHILE i < 2 DO
+    SET d = tvector_dim('[1,2,3]');
+    SELECT i, d;
+    SET i = i + 1;
+  END WHILE;
+END//
+delimiter ;//
+
+CALL p_loop();
+DROP PROCEDURE p_loop;
+
+--echo #
+--echo # IF condition in a procedure, called twice
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_if(n INT)
+BEGIN
+  IF tvector_dim('[1,2,3]') = n THEN
+    SELECT 'equal' AS r;
+  ELSE
+    SELECT 'different' AS r;
+  END IF;
+END//
+delimiter ;//
+
+CALL p_if(2);
+CALL p_if(3);
+DROP PROCEDURE p_if;
+
+--echo #
+--echo # RETURN in a function, called once per row
+--echo #
+
+CREATE TABLE ts (id INT PRIMARY KEY);
+INSERT INTO ts VALUES (1), (2), (3);
+
+CREATE FUNCTION f_dim(n INT) RETURNS INT DETERMINISTIC
+  RETURN tvector_dim('[1,2,3,4]') + n;
+
+SELECT id, f_dim(id) AS d FROM ts ORDER BY id;
+DROP FUNCTION f_dim;
+
+--echo #
+--echo # SET NEW.col in a trigger, fired for each row
+--echo #
+
+CREATE TABLE tt (id INT PRIMARY KEY, d INT);
+CREATE TRIGGER tt_bi BEFORE INSERT ON tt FOR EACH ROW
+  SET NEW.d = tvector_dim('[1,2]') + NEW.id;
+
+INSERT INTO tt (id) VALUES (1);
+INSERT INTO tt (id) VALUES (2);
+INSERT INTO tt (id) SELECT id + 10 FROM ts;
+SELECT * FROM tt ORDER BY id;
+
+DROP TABLE tt;
+DROP TABLE ts;
+--source include/villagesql/uninstall_tvector_extension.inc
