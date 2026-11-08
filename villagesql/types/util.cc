@@ -1022,17 +1022,23 @@ std::optional<size_t> TryComputeHash(const TypeContext &tc, const uchar *data,
   return hash_op->invoke(data, len);
 }
 
-bool IsFirstPrepareBeforeReprepare(const THD *thd) {
-  return thd->stmt_arena->is_stmt_prepare() &&
-         !thd->stmt_arena->is_repreparing && thd->lex->has_udf();
+// LEX::has_udf() is what makes Prepared_statement::execute_loop prepare a
+// statement again at every EXECUTE. A classic UDF sets it while parsing; a VDF
+// sets it through here only when the statement needs it.
+void MarkVdfStatementForReprepare(THD *thd) { thd->lex->set_has_udf(); }
+
+bool DeferUntilReprepare(THD *thd) {
+  if (!thd->stmt_arena->is_stmt_prepare() || thd->stmt_arena->is_repreparing)
+    return false;
+  MarkVdfStatementForReprepare(thd);
+  return true;
 }
 
-// Calling a VDF or UDF in a prepared statement always makes EXECUTE prepare
-// the statement again. At the first PREPARE we might not yet know all the type
-// params of the custom types in the statement. That's OK: they are resolved at
-// EXECUTE, when the statement is prepared again with the bound values. So at
-// the first PREPARE, when one side's params are unknown, it is enough that the
-// base types match. E.g. in `WHERE v = TVECTOR::from_string(?)`, with `v` a
+// At the first PREPARE we might not yet know all the type params of the custom
+// types in the statement. That's OK: they are resolved at EXECUTE, when the
+// statement is prepared again with the bound values. So at the first PREPARE,
+// when one side's params are unknown, it is enough that the base types
+// match. E.g. in `WHERE v = TVECTOR::from_string(?)`, with `v` a
 // TVECTOR(3) column, the right side is a TVECTOR with unknown params until
 // EXECUTE. It is accepted at PREPARE, and at EXECUTE a value of another
 // dimension, e.g. '[1,2]', is rejected.
@@ -1041,7 +1047,7 @@ static bool CompatibleWhileResolving(const TypeContext &a,
   if (a.is_compatible_with(b)) return true;
   return (a.is_unknown() || b.is_unknown()) &&
          a.key().descriptor_key() == b.key().descriptor_key() &&
-         IsFirstPrepareBeforeReprepare(current_thd);
+         DeferUntilReprepare(current_thd);
 }
 
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
@@ -2084,7 +2090,7 @@ static bool ConvertVDFArguments(
           return true;
         }
         args[i]->set_type_context(resolved_tc);
-      } else if (!IsFirstPrepareBeforeReprepare(thd)) {
+      } else if (!DeferUntilReprepare(thd)) {
         // Neither the hook nor the built-in rules could supply params. At a
         // first PREPARE they may depend on a parameter value, so don't error
         // out just yet.
@@ -2141,7 +2147,7 @@ static bool ConvertVDFArguments(
       // parameter value at a first PREPARE. The argument is then left as it is
       // until the statement is prepared again.
       if (type_ctx->is_unknown()) {
-        if (IsFirstPrepareBeforeReprepare(thd)) continue;
+        if (DeferUntilReprepare(thd)) continue;
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2495,9 +2501,10 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   // values bound, so that it judges the call with them. fix_fields defers
   // prerun on the same condition for a ?.
   const bool postpone_bind_hook =
-      has_bind_hook && IsFirstPrepareBeforeReprepare(thd) &&
+      has_bind_hook &&
       (std::any_of(args, args + arg_count, HasPSParamWithoutValue) ||
-       UnknownCustomTypeParamsPresent(arg_count, args));
+       UnknownCustomTypeParamsPresent(arg_count, args)) &&
+      DeferUntilReprepare(thd);
 
   // Varargs without a hook: skip both arg-count and per-arg type validation.
   // The function's prerun hook is responsible for inspecting arg_count and
