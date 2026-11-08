@@ -511,13 +511,31 @@ extern bool HasPSParamWithoutValue(Item *item);
 // return type (inferred from args via the rule that the return parameters are
 // the same as those matching arguements of the same abstract type).
 // When a bind_and_check_types hook is provided, that hook replaces the
-// otherwise automatically applied type disambiguation rules. Returns false on
-// success, true on error.
+// otherwise automatically applied type disambiguation rules. Sets
+// *out_bind_hook_postponed when the bind hook could not be run yet (see
+// DeferUntilReprepare); the call is then left unchecked and the
+// return params unknown. Returns false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
     uint arg_count, Item **args, const vef_signature_t *signature,
     TypeParameters *out_return_params,
-    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx);
+    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
+    bool *out_bind_hook_postponed);
+
+// For a check that cannot be made yet. Returns true at the first PREPARE of a
+// statement: it has no values for its `?` markers, so custom type params that
+// depend on one, e.g. those of TVECTOR::from_string(?), are unknown. It then
+// marks the statement to be prepared again at every EXECUTE, with the values
+// bound, so the check runs then; the caller accepts the unknown params and
+// leaves the check. Returns false otherwise, and the check must be made now.
+//
+// A statement calling a VDF is prepared once and reused by every EXECUTE
+// unless something marks it: this, or a VDF that keeps per-execution state
+// (see MarkVdfStatementForReprepare).
+extern bool DeferUntilReprepare(THD *thd);
+
+// Marks the statement being prepared to be prepared again at every EXECUTE.
+extern void MarkVdfStatementForReprepare(THD *thd);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.

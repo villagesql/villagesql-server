@@ -306,9 +306,12 @@ class FuncBuilder {
     return *this;
   }
 
-  // Install a type binding/checking hook. Called once at resolution time,
-  // before any row is read, to work out the return type's parameters -- and,
-  // where needed, individual arguments' -- when the built-in rules cannot.
+  // Install a type binding/checking hook. Called at resolution time, before
+  // any row is read, to work out the return type's parameters (and, where
+  // needed, individual arguments' parameters) when the built-in rules cannot.
+  // In a prepared statement it runs at every EXECUTE, and is not called at
+  // PREPARE when an argument has a ? with no value yet; see
+  // vsql/bind_check_types.h.
   //
   // Use it when the relationship between argument and return parameters is
   // something the defaults cannot express (e.g. pvec_concat(PVEC(M), PVEC(N))

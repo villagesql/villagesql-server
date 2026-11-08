@@ -204,11 +204,29 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
           ? m_udf->vdf_func_desc->bind_and_check_types
           : nullptr;
   villagesql::TypeParameters return_params;
+
+  // In a prepared statement, a call is resolved here once, at PREPARE, and
+  // every EXECUTE reuses it, unless the statement is marked to be prepared
+  // again at each EXECUTE. Prerun and postrun keep per-execution state, so they
+  // need that, and so does a bind_and_check_types hook, which may read a
+  // constant argument's value (a ? or a user variable) that the next EXECUTE
+  // changes. A check deferred to EXECUTE marks it too (DeferUntilReprepare).
+  // The extension cannot be uninstalled while a prepared statement holds one
+  // of its VDFs, so a call resolved once stays valid.
+  if (m_udf->vdf_func_desc->prerun || m_udf->vdf_func_desc->postrun ||
+      bind_and_check != nullptr) {
+    villagesql::MarkVdfStatementForReprepare(thd);
+  }
+
+  // A postponed call waits for the statement to be prepared again with its
+  // parameter values: inference and prerun are skipped too, and the return
+  // type is set below with its params unknown.
+  bool postponed = false;
   if (signature != nullptr &&
       villagesql::ValidateAndConvertVDFArguments(
           thd, m_udf->name.str, to_string_view(m_udf->extension_name),
           arg_count, m_args, signature, &return_params, bind_and_check,
-          m_context)) {
+          m_context, &postponed)) {
     return true;
   }
 
@@ -237,7 +255,7 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
       signature != nullptr && signature->param_count == 1
           ? signature->params[0].id
           : VEF_TYPE_STRING;
-  if (signature != nullptr && return_params.empty() &&
+  if (!postponed && signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
       m_udf->vdf_func_desc->deterministic &&
@@ -251,6 +269,12 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
+      // The params come from the argument's value. Only a literal keeps that
+      // value from one EXECUTE to the next.
+      if (arguments[0]->type() != Item::STRING_ITEM &&
+          arguments[0]->type() != Item::HEX_BIN_ITEM) {
+        villagesql::MarkVdfStatementForReprepare(thd);
+      }
       String tmp;
       String *val = ReadVdfValue(ArgReadType(param_id, m_udf->vdf_protocol),
                                  arguments[0], &tmp);
@@ -296,13 +320,16 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
   // any argument is not constant, e.g. a column. We defer only for an argument
   // with a ?, because a column's type is known at PREPARE and prerun can check
-  // it there.
-  const bool is_in_prepare =
-      thd->stmt_arena->is_stmt_prepare() && !thd->stmt_arena->is_repreparing;
+  // it there. A call whose bind hook is postponed defers prerun too. A VDF
+  // without prerun has nothing to defer, so a ? alone does not make its
+  // statement prepare again at EXECUTE.
   const bool defer_prerun =
-      is_in_prepare && std::any_of(m_args, m_args + arg_count, [](Item *arg) {
-        return villagesql::HasPSParamWithoutValue(arg);
-      });
+      postponed ||
+      (m_udf->vdf_func_desc->prerun != nullptr &&
+       std::any_of(
+           m_args, m_args + arg_count,
+           [](Item *arg) { return villagesql::HasPSParamWithoutValue(arg); }) &&
+       villagesql::DeferUntilReprepare(thd));
   if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;

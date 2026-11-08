@@ -45,6 +45,7 @@
 #include "sql/sp_pcontext.h"
 #include "sql/sql_alter.h"
 #include "sql/sql_class.h"
+#include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_show.h"  // append_identifier
 #include "sql/sql_udf.h"
@@ -1073,6 +1074,34 @@ std::optional<size_t> TryComputeHash(const TypeContext &tc, const uchar *data,
   return hash_op->invoke(data, len);
 }
 
+// LEX::has_udf() is what makes Prepared_statement::execute_loop prepare a
+// statement again at every EXECUTE. A classic UDF sets it while parsing; a VDF
+// sets it through here only when the statement needs it.
+void MarkVdfStatementForReprepare(THD *thd) { thd->lex->set_has_udf(); }
+
+bool DeferUntilReprepare(THD *thd) {
+  if (!thd->stmt_arena->is_stmt_prepare() || thd->stmt_arena->is_repreparing)
+    return false;
+  MarkVdfStatementForReprepare(thd);
+  return true;
+}
+
+// At the first PREPARE we might not yet know all the type params of the custom
+// types in the statement. That's OK: they are resolved at EXECUTE, when the
+// statement is prepared again with the bound values. So at the first PREPARE,
+// when one side's params are unknown, it is enough that the base types
+// match. E.g. in `WHERE v = TVECTOR::from_string(?)`, with `v` a
+// TVECTOR(3) column, the right side is a TVECTOR with unknown params until
+// EXECUTE. It is accepted at PREPARE, and at EXECUTE a value of another
+// dimension, e.g. '[1,2]', is rejected.
+static bool CompatibleWhileResolving(const TypeContext &a,
+                                     const TypeContext &b) {
+  if (a.is_compatible_with(b)) return true;
+  return (a.is_unknown() || b.is_unknown()) &&
+         a.key().descriptor_key() == b.key().descriptor_key() &&
+         DeferUntilReprepare(current_thd);
+}
+
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
   const TypeContext *accumulator_tc = accumulator->get_type_context();
   const TypeContext *item_tc = item->get_type_context();
@@ -1097,7 +1126,7 @@ bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
                      MYF(0));
     return true;
   } else if (accumulator_tc != nullptr && item_tc != nullptr &&
-             !accumulator_tc->is_compatible_with(*item_tc)) {
+             !CompatibleWhileResolving(*accumulator_tc, *item_tc)) {
     // Both have custom types but they're incompatible
     villagesql_error(
         "Cannot use UNION with different custom types '%s' and '%s'", MYF(0),
@@ -1122,7 +1151,7 @@ bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
 
   // Case 1: Both sides have custom types
   if (lhs_tc != nullptr && rhs_tc != nullptr) {
-    if (!lhs_tc->is_compatible_with(*rhs_tc)) {
+    if (!CompatibleWhileResolving(*lhs_tc, *rhs_tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        lhs_tc->qualified_name().c_str(),
                        rhs_tc->qualified_name().c_str(), operation_name);
@@ -1601,7 +1630,7 @@ static bool AllArgsCompatible(Item_func *func) {
   for (uint i = 1; any_tc && i < func->arg_count; i++) {
     auto *tc = func->get_arg(i)->get_type_context();
     if (!tc) continue;  // not yet custom-typed, skip
-    if (!any_tc->is_compatible_with(*tc)) {
+    if (!CompatibleWhileResolving(*any_tc, *tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        any_tc->qualified_name().c_str(),
                        tc->qualified_name().c_str(), func->func_name());
@@ -1658,9 +1687,10 @@ static bool CaseArgsCompatible(Item_func *func) {
       villagesql_error(ER_INCOMPARABLE_TYPES, MYF(0), func->func_name());
       return false;
     }
-    if (!tc0->is_compatible_with(*tc1)) {
-      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0), tc0->type_name().c_str(),
-                       tc1->type_name().c_str());
+    if (!CompatibleWhileResolving(*tc0, *tc1)) {
+      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0),
+                       tc0->qualified_name().c_str(),
+                       tc1->qualified_name().c_str());
       return false;
     }
   }
@@ -2120,8 +2150,10 @@ static bool ConvertVDFArguments(
           return true;
         }
         args[i]->set_type_context(resolved_tc);
-      } else {
-        // Neither the hook nor the built-in rules could supply params.
+      } else if (!DeferUntilReprepare(thd)) {
+        // Neither the hook nor the built-in rules could supply params. At a
+        // first PREPARE they may depend on a parameter value, so don't error
+        // out just yet.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2172,8 +2204,11 @@ static bool ConvertVDFArguments(
       }
 
       // If the resolved type is still unknown (parameterized type, no known
-      // params from other args), error.
+      // params from other args), error, unless the params may depend on a
+      // parameter value at a first PREPARE. The argument is then left as it is
+      // until the statement is prepared again.
       if (type_ctx->is_unknown()) {
+        if (DeferUntilReprepare(thd)) continue;
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2277,10 +2312,15 @@ static bool CallBindTypesHook(
     }
     // Provide constant string values where available, in the charset of the
     // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
-    // unconverted for any other. A prepared-statement parameter has no value
-    // until EXECUTE, also when it is inside an expression like CONCAT(?, '').
-    if (args[i]->const_for_execution() && args[i]->type() != Item::PARAM_ITEM &&
-        !HasPSParamWithoutValue(args[i]) &&
+    // unconverted for any other. A bare ? is read only when it holds a string
+    // (see MaybeCopyPsParamStringValues). A ? with no value, possibly nested,
+    // is not expected here: ValidateAndConvertVDFArguments postpones the hook.
+    const bool bare_param_without_string =
+        args[i]->type() == Item::PARAM_ITEM &&
+        down_cast<Item_param *>(args[i])->param_state() !=
+            Item_param::STRING_VALUE;
+    if (args[i]->const_for_execution() && !bare_param_without_string &&
+        !should_assert_if_true(HasPSParamWithoutValue(args[i])) &&
         arg_types[i].id == VEF_TYPE_STRING) {
       const vef_type_id param_id =
           declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
@@ -2494,15 +2534,38 @@ static bool BuildVarargsExpectedTypes(
   return false;
 }
 
+// Returns true if any argument is of a custom type whose params are unknown.
+static bool UnknownCustomTypeParamsPresent(uint arg_count, Item **args) {
+  for (uint i = 0; i < arg_count; i++) {
+    const TypeContext *tc = args[i]->get_type_context();
+    if (tc != nullptr && tc->is_unknown()) return true;
+  }
+  return false;
+}
+
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     std::string_view extension_name,
                                     uint arg_count, Item **args,
                                     const vef_signature_t *signature,
                                     TypeParameters *out_return_params,
                                     const vef_bind_types_func_t bind_and_check,
-                                    vef_context_t &ctx) {
+                                    vef_context_t &ctx,
+                                    bool *out_bind_hook_postponed) {
   const bool has_bind_hook = nullptr != bind_and_check;
   const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
+  *out_bind_hook_postponed = false;
+
+  // At a first PREPARE an argument may have a ? with no value yet, passed
+  // directly or inside an expression like CONCAT(?, ''), or be of a custom
+  // type whose params depend on one. The bind_and_check_types hook (and pass
+  // 2) then waits until the statement is prepared again at EXECUTE with the
+  // values bound, so that it judges the call with them. fix_fields defers
+  // prerun on the same condition for a ?.
+  const bool postpone_bind_hook =
+      has_bind_hook &&
+      (std::any_of(args, args + arg_count, HasPSParamWithoutValue) ||
+       UnknownCustomTypeParamsPresent(arg_count, args)) &&
+      DeferUntilReprepare(thd);
 
   // Varargs without a hook: skip both arg-count and per-arg type validation.
   // The function's prerun hook is responsible for inspecting arg_count and
@@ -2521,7 +2584,11 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   if (varargs) {
     // Varargs runs the hook first, because there is no signature to check
     // arguments against and the hook supplies what signature->params would
-    // have.
+    // have. Postponing the hook thus postpones every check.
+    if (postpone_bind_hook) {
+      *out_bind_hook_postponed = true;
+      return false;
+    }
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
                           nullptr, &hook_arg_params, out_return_params,
@@ -2569,6 +2636,11 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                            expected_types,
                            has_bind_hook ? nullptr : &known_params)) {
     return true;
+  }
+
+  if (postpone_bind_hook) {
+    *out_bind_hook_postponed = true;
+    return false;
   }
 
   // Fixed arity runs the hook here. The hook sits between the passes:

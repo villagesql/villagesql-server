@@ -64,10 +64,15 @@ id
 2
 DEALLOCATE PREPARE stmt5;
 #
-# Test 6: nothing supplies the dimension, so the statement is rejected
+# Test 6: nothing supplies the dimension, so the statement is rejected.
+# PREPARE has no values and leaves that to EXECUTE, which prepares the
+# statement again with them.
 #
 PREPARE stmt6 FROM 'SELECT tvector_dot_product(?, ?)';
+SET @vec = '[1,2,3]';
+EXECUTE stmt6 USING @vec, @vec;
 ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+DEALLOCATE PREPARE stmt6;
 #
 # Test 7: a string constant does not supply it either, with or
 # without a parameter in the call.
@@ -75,7 +80,9 @@ ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine 
 SELECT tvector_dot_product('[1,2,3]', '[4,5,6]') AS dp;
 ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
 PREPARE stmt7 FROM 'SELECT tvector_dot_product(''[1,2,3]'', ?) AS dp';
+EXECUTE stmt7 USING @vec;
 ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+DEALLOCATE PREPARE stmt7;
 #
 # Cleanup
 #
