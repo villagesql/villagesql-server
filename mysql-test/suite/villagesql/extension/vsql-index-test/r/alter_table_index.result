@@ -8,7 +8,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
@@ -19,7 +19,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
@@ -30,7 +30,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`label` = 'l2', `m` = 16)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
@@ -52,7 +52,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
@@ -63,7 +63,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`label` = 'l2', `m` = 16)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
@@ -74,7 +74,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
@@ -85,7 +85,7 @@ t	CREATE TABLE `t` (
   `id` int NOT NULL,
   `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`label` = 'l2', `m` = 16)
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`ef_construction` = 200, `label` = 'l2', `m` = 16)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t;
 UNINSTALL EXTENSION vsql_index_test;

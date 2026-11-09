@@ -1,0 +1,105 @@
+# What a custom index type's WITH (...) parameters look like once stored.
+#
+# The index type completes the clause at CREATE INDEX: it fills in the options
+# the user left out and the server persists the complete set.
+#
+# Covers:
+#   Defaults filled when the clause is absent or partial
+#   Keys AND values canonicalized (lowercased, trimmed)
+#   The upper bound accepted at its boundary
+#   Both observables agreeing: the stored row and the SHOW CREATE rendering
+#   A rendered clause replayed into DDL yielding the same stored set
+#
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE t (id INT PRIMARY KEY,
+  a dummy_type_vector,
+  b dummy_type_vector,
+  c dummy_type_vector,
+  d dummy_type_vector,
+  e dummy_type_vector);
+
+--echo # --- No WITH clause: the index type supplies every default ---
+CREATE INDEX idx_none ON t (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- Partial WITH: what the user gave is kept, the rest is filled ---
+# m stays 8. Were the completion to overwrite a parameter that is present, the
+# user's request would silently become the default.
+CREATE INDEX idx_partial ON t (b) USING EXTENDED(dummy_index_hnsw) WITH (M = 8);
+SHOW CREATE TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- Values are canonicalized, not just keys ---
+# 'FAST' and 'Primary' are stored lowercased. An index type therefore cannot
+# have a case-sensitive parameter value, and a default it writes back must
+# already be lowercase or it would not survive the next index open.
+CREATE INDEX idx_case ON t (c) USING EXTENDED(dummy_index_hnsw)
+  WITH (M = 8, mode = 'FAST', label = 'Primary');
+SHOW CREATE TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- Surrounding whitespace is trimmed ---
+CREATE INDEX idx_ws ON t (d) USING EXTENDED(dummy_index_hnsw)
+  WITH ( M = 8 , label = '  l2  ' );
+SHOW CREATE TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # --- The upper bound is accepted at its boundary ---
+# index_errors.test pins the other side with M = 99999.
+CREATE INDEX idx_max ON t (e) USING EXTENDED(dummy_index_hnsw)
+  WITH (M = 65536, ef_construction = 65536);
+SHOW CREATE TABLE t;
+--source include/villagesql/query_custom_indexes.inc
+
+DROP TABLE t;
+
+CREATE TABLE t_fix (id INT PRIMARY KEY, a dummy_type_vector);
+CREATE INDEX idx_fix ON t_fix (a) USING EXTENDED(dummy_index_hnsw);
+
+# Reading villagesql.custom_indexes directly needs the same debug flag
+# query_custom_indexes.inc sets around its own queries.
+--disable_query_log
+SET SESSION debug='+d,skip_dd_table_access_check';
+--enable_query_log
+
+--let $params_first = `SELECT index_type_parameters FROM villagesql.custom_indexes WHERE db_name = DATABASE() AND index_name = 'idx_fix'`
+--let $ddl_first = query_get_value(SHOW CREATE TABLE t_fix, Create Table, 1)
+DROP TABLE t_fix;
+
+--eval $ddl_first
+--let $params_second = `SELECT index_type_parameters FROM villagesql.custom_indexes WHERE db_name = DATABASE() AND index_name = 'idx_fix'`
+--let $ddl_second = query_get_value(SHOW CREATE TABLE t_fix, Create Table, 1)
+
+--disable_query_log
+SET SESSION debug='-d,skip_dd_table_access_check';
+--enable_query_log
+
+if ($params_first != $params_second) {
+  --echo FIRST:  $params_first
+  --echo SECOND: $params_second
+  --die Completing an already-completed parameter set changed it
+}
+if ($ddl_first != $ddl_second) {
+  --echo FIRST:  $ddl_first
+  --echo SECOND: $ddl_second
+  --die Rendered DDL did not survive a round-trip
+}
+--echo # Replay produced the same parameters and the same rendering:
+SHOW CREATE TABLE t_fix;
+--source include/villagesql/query_custom_indexes.inc
+DROP TABLE t_fix;
+
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

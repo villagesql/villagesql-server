@@ -224,6 +224,13 @@ class Metadata_modifier {
   // extension name and version. Returns false on success, true on error.
   bool validate_entries();
 
+  // Let each custom index type resolve and validate the WITH (...) parameters,
+  // filling in the ones the user left out (defaults).
+  // Must run while the extension MDL is held, and before
+  // mark_victionary_modifications() moves the entries away.
+  // Returns false on success, true on error.
+  bool resolve_index_params();
+
   // Mark all pending column modifications in VictionaryClient.
   // Sets marked_column to true if any column entries were marked.
   // Sets marked_index to true if any index entries were marked.
