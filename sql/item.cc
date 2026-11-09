@@ -8257,7 +8257,7 @@ void Item_field::print(const THD *thd, String *str,
       !(query_type & QT_NO_DATA_EXPANSION)) {
     char buff[MAX_FIELD_WIDTH];
     String tmp(buff, sizeof(buff), str->charset());
-    field->val_str(&tmp);
+    field->val_external_str(&tmp);
     if (field->is_null())
       str->append("NULL");
     else {
