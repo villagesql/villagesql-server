@@ -1,0 +1,76 @@
+# Cross-version cold-boot with a pending ALTER EXTENSION ... AT RESTART.
+#
+# Starts the current server on a canned 0.0.5 datadir (built by
+# scripts/gen_cross_version_fixture.sh). The datadir has update_test
+# 1.0.0 installed with a pending update to 2.0.0. On first boot the
+# villagesql schema is upgraded from 0.0.5 to the current version, and
+# the pending apply runs cleanly (precheck trivially green: v1 and v2
+# share the COUNTER on-disk layout).
+#
+# Only the baseline captured in the fixture (0.0.5) is fixed; the target
+# side is whichever version this checkout is currently at.
+
+--source include/have_debug.inc
+
+# The fixture was built by a dev mysqld, so booting a newer server on it
+# emits this warning even though the upgrade is expected in this test.
+call mtr.add_suppression("Upgrading from a development version.*--villagesql-allow-unsafe-dev-upgrade");
+# On case-insensitive filesystems (default macOS dev boxes) mysqld warns
+# when lower_case_table_names=0 is forced. The fixture pins lctn=0 so it
+# is portable to case-sensitive Linux CI.
+call mtr.add_suppression("Setting lower_case_table_names=2 because file system for .* is case insensitive");
+call mtr.add_suppression("The server option 'lower_case_table_names'");
+
+--echo # Stop the default MTR-provided server so we can start on a canned
+--echo # datadir instead.
+--source include/shutdown_mysqld.inc
+
+--echo # Extract the canned 0.0.5 datadir into MYSQL_TMP_DIR.
+--let $VSQL_FIXTURE_ZIP= $MYSQLTEST_VARDIR/std_data/villagesql_0_0_5_pending_apply.zip
+--let $VSQL_FIXTURE_DIR= $MYSQL_TMP_DIR/villagesql_0_0_5_pending_apply
+--file_exists $VSQL_FIXTURE_ZIP
+--exec unzip -qo $VSQL_FIXTURE_ZIP -d $MYSQL_TMP_DIR
+
+--echo # Boot the current mysqld against the 0.0.5 fixture. Point --veb-dir at
+--echo # the fixture's captured VEBs so the restart-time sha check sees
+--echo # the exact bytes the pending action was recorded against. The
+--echo # fixture was created with --vsql_allow_preview_extensions=ON
+--echo # (update_test exposes a preview sys var), so keep that flag on.
+--echo # --lower_case_table_names=1 must match the fixture's DD setting
+--echo # (also 1, forced by gen_cross_version_fixture.sh for portability).
+--echo # --villagesql-allow-unsafe-dev-upgrade lets us upgrade from a
+--echo # dev-tagged baseline (the fixture is built by a dev mysqld); this
+--echo # would only be needed in real deployments if crossing dev versions.
+--let $restart_parameters= restart: --datadir=$VSQL_FIXTURE_DIR --veb-dir=$VSQL_FIXTURE_DIR/veb --lower_case_table_names=1 --vsql_allow_preview_extensions=ON --villagesql-allow-unsafe-dev-upgrade
+--replace_result $VSQL_FIXTURE_DIR VSQL_FIXTURE_DIR
+--source include/start_mysqld.inc
+
+--echo # Villagesql schema was upgraded past 0.0.5 at startup. The full
+--echo # version string carries the build tag (e.g. "mysql-8.4_0.0.5-dev"),
+--echo # which varies by build type, so assert it is no longer the 0.0.5
+--echo # value rather than matching a specific string.
+--source include/villagesql/internal_schema_test.inc
+SELECT value NOT LIKE '%\_0.0.5%' ESCAPE '\\' AS villagesql_upgraded_past_0_0_5
+  FROM villagesql.properties WHERE name = 'version';
+
+--echo # Pending apply succeeded: extension_version is now 2.0.0 and
+--echo # pending fields are cleared.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+--echo # Existing data is readable through the v2 decoder (COUNTER::to_string
+--echo # emits "v2:N" in 2.0.0, unchanged bytes on disk).
+SELECT id, val FROM test.t ORDER BY id;
+
+--echo # Cleanup.
+DROP TABLE test.t;
+UNINSTALL EXTENSION update_test;
+
+--echo # Restart onto the default MTR datadir so subsequent tests see a
+--echo # clean environment.
+--source include/shutdown_mysqld.inc
+--let $restart_parameters=
+--source include/start_mysqld.inc
+
+--force-rmdir $VSQL_FIXTURE_DIR
