@@ -17,6 +17,7 @@
 #define VILLAGESQL_VDF_VDF_HANDLER_H
 
 #include <cstddef>
+#include <utility>
 
 #include "my_inttypes.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -80,6 +81,7 @@ class vdf_handler {
   char *m_resolved_result_buffer{nullptr};
   size_t m_resolved_result_buffer_size{0};
   char *m_error_msg{nullptr};
+  // True while this statement has had its prerun, so cleanup() runs postrun.
   bool m_active{false};
   // True once fix_fields has run prerun, or the function has none. False only
   // when fix_fields deferred prerun, at a first PREPARE.
@@ -108,6 +110,19 @@ class vdf_handler {
 
   // Call the VDF's postrun function, if any, and clear user_data.
   void RunPostrun();
+
+  // Call the VDF's prerun function and keep the user_data it returns. The
+  // function must have a prerun. Returns {failed, needs_postrun}: failed is
+  // true on error, and needs_postrun is true once prerun has succeeded, so
+  // that its state gets a postrun even if a later step here fails.
+  std::pair<bool, bool> RunPrerun(THD *thd);
+
+  // A generated column, DEFAULT or CHECK constraint expression is resolved
+  // once, when its table is opened, and the same handler is used by every
+  // statement on the table. cleanup() ran postrun at the end of the previous
+  // statement, so run prerun again before the first row of the current
+  // statement. Returns true on error.
+  bool MaybeRerunPrerun();
 };
 
 // A VDF can deduce a custom type's params from a string value, e.g.
