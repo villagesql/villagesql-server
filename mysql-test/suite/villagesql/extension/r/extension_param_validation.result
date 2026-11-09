@@ -78,8 +78,8 @@ id	v
 DROP TABLE t;
 # Throw in strict_int_to_params, 86 is trigger value
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(86));
-ERROR 42000: VDF threw an exception (strict int to params throw) near 'STRICT_PARAM_TYPE(86))' at line 1
+ERROR 42000: VDF threw an exception (strict_int_to_params throw) near 'STRICT_PARAM_TYPE(86))' at line 1
 # generate a throw within strict_resolve_params()
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('throw=13'));
-ERROR 42000: VDF threw an exception (strict resolve params throw) near 'STRICT_PARAM_TYPE('throw=13'))' at line 1
+ERROR 42000: VDF threw an exception (strict_resolve_params throw) near 'STRICT_PARAM_TYPE('throw=13'))' at line 1
 UNINSTALL EXTENSION vsql_test_only;
