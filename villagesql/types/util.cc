@@ -1442,6 +1442,10 @@ bool MaybeSetOutParamCustomType(THD *thd, Item_param *param, Item *proc_var,
   // set_str() labelled the text binary, and collation_source() reflects what
   // the user variable held before the CALL (not set if it was not a string),
   // so put the text's real charset back for the encode in val_str().
+  // TODO(villagesql-general): with the binary protocol (C API), OUT params go
+  // to the client through Protocol_binary::send_parameters(), and the ? now
+  // has the custom type. Check with a binary-protocol client test whether the
+  // client gets the text or the encoded bytes.
   param->str_value_ptr.set_charset(text_cs);
   param->collation.set(text_cs, DERIVATION_COERCIBLE);
 
