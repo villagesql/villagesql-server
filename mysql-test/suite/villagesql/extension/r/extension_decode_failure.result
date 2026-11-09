@@ -56,14 +56,14 @@ id	val
 3	OK abc
 4	OK fixed
 5	OK fixed
-# First show weird hash function works
+# GROUP BY works with the test hash
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 sum(id)	val
 3	OK abc
 9	OK fixed
 1	OK hello
 2	OK world
-# Second insert throw row and retest
+# Insert a value that will throw on hash
 INSERT INTO t1 VALUES (6, 'HASH_THROW');
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 sum(id)	val
