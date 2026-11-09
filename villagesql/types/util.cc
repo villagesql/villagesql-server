@@ -1439,8 +1439,9 @@ bool MaybeSetOutParamCustomType(THD *thd, Item_param *param, Item *proc_var,
   const TypeContext *tc = proc_var->get_type_context();
   if (tc == nullptr) return false;
 
-  // Item_param::set_value() marked the text as binary. Put its real charset
-  // back, so Item_param::val_str can encode it with the type.
+  // set_str() labelled the text binary, and collation_source() reflects what
+  // the user variable held before the CALL (not set if it was not a string),
+  // so put the text's real charset back for the encode in val_str().
   param->str_value_ptr.set_charset(text_cs);
   param->collation.set(text_cs, DERIVATION_COERCIBLE);
 
