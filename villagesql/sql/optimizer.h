@@ -23,6 +23,7 @@
 class Item;
 class JOIN_TAB;
 class ORDER_with_src;
+struct TABLE;
 
 namespace villagesql {
 namespace optimizer {
@@ -44,6 +45,16 @@ bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
 // deterministic by the extension author. Such VDFs are potential candidates
 // for KNN index optimization.
 bool is_deterministic_vdf(const Item *item);
+
+// Removes custom indexes from `table->keys_in_use_for_query` so that ref,
+// range and index merge access do not consider them for WHERE predicates.
+// If `all` is true (hypergraph optimizer, which does not support custom
+// indexes), every custom index is removed. Otherwise only those that do not
+// advertise HA_READ_RANGE are removed. Must be called after index hints have
+// been applied. The order-by and group-by key maps are left untouched:
+// ordering is governed by HA_READ_ORDER (via Field::part_of_sortkey) and KNN
+// ordering.
+void disable_custom_keys_for_query(TABLE *table, bool all);
 
 }  // namespace optimizer
 }  // namespace villagesql
