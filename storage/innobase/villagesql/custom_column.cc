@@ -991,7 +991,8 @@ dberr_t Custom_column::rollback_updated(const dict_table_t *table, ulint type,
 
 dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
                              byte *dest, ulint dest_len, const byte *src,
-                             ulint src_len, TrxRef *trx_ref_out) {
+                             ulint src_len, TrxRef *trx_ref_out,
+                             bool *delete_mark_out) {
   ut_a(table->has_extended_storage);
   ut_a(col->stored_by_extn());
 
@@ -1022,8 +1023,6 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
                             &col_data, &rowid_prefix, &trx_ref, &deleted,
                             error_msg, sizeof(error_msg));
   error_msg[sizeof(error_msg) - 1] = '\0';
-  // Ignore transaction reference and delete mark here. Those outputs would be
-  // useful for a column only scan e.g. HNSW index scan on a vector column.
   if (!failed && col_data.length != dest_len) {
     ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
         << "InnoDB: Fetch: Invalid custom data length: " << col_data.length
@@ -1044,6 +1043,9 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
   memcpy(dest, col_data.data, col_data.length);
   if (trx_ref_out != nullptr) {
     *trx_ref_out = trx_ref;
+  }
+  if (delete_mark_out != nullptr) {
+    *delete_mark_out = deleted;
   }
 
   mtr_commit(&mtr);

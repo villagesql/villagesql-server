@@ -607,11 +607,11 @@ static bool kvec_position(Index::Cursor cursor, Index::CursorOp op, bool *eof,
 }
 
 static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
-                       IndexScanKey::KeyPartRef * /*key_column_refs*/,
+                       IndexScanKey::KeyPartRef *key_column_refs,
                        IndexScanKey::KeyPartData * /*key_columns*/,
                        IndexScanKey::KeyPartData *pkey_columns,
-                       Segment::TrxRef * /*trx_ref*/, char *err,
-                       uint32_t err_len) {
+                       Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
+                       char *err, uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
   if (c->pos >= c->results.size()) {
     snprintf(err, err_len, "kvec_l2: fetch past end of cursor");
@@ -620,12 +620,17 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   ++g_scan_fetch_count;
   const KVecCursor::Result &res = c->results[c->pos];
   if (key_ref != nullptr) *key_ref = res.ref;
+  // Single key column (kKeyPos): its col_ref is the stored vector reference.
+  if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
 
   // The index owns the row identity: return the primary key stored at insert
   // (all parts), so the server resolves the row directly from pkey_columns.
   for (size_t i = 0; i < res.pkey.size(); i++) {
-    pkey_columns[i] = IndexScanKey::KeyPartData{
-        res.pkey[i].data(), static_cast<uint32_t>(res.pkey[i].size())};
+    static const unsigned char kEmpty[] = "";
+    const bool empty = res.pkey[i].empty();
+    pkey_columns[i] =
+        IndexScanKey::KeyPartData{empty ? kEmpty : res.pkey[i].data(),
+                                  static_cast<uint32_t>(res.pkey[i].size())};
   }
   return false;
 }
