@@ -16,7 +16,7 @@
 
 #include "villagesql/sql/parse_tree_items.h"
 
-#include <sstream>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,40 +68,58 @@ static void emit_type_method_error(std::string_view ext_name,
     villagesql_error("Unknown custom type '%s'", MYF(0), type_name.c_str());
     return;
   }
+
   std::set<std::string> type_exts;
   for (const auto *t : results) {
     type_exts.insert(villagesql::canonical_extension_name(t->extension_name()));
   }
 
-  std::string pref = villagesql::canonical_extension_name(type_name) + "::";
+  const std::string type_prefix =
+      villagesql::canonical_extension_name(type_name) + "::";
+  const std::string canonical_method =
+      villagesql::canonical_extension_name(method_name);
   std::vector<std::string> valid_methods;
-  for (const auto *f : victionary.funcs().get_all_committed()) {
-    auto extension_name =
-        villagesql::canonical_extension_name(f->extension_name());
-    auto method_name = villagesql::canonical_extension_name(f->function_name());
 
-    if (method_name.compare(0, pref.size(), pref) == 0 &&
-        type_exts.contains(extension_name) && f->is_callable_from_sql()) {
-      valid_methods.push_back(method_name.substr(pref.size()));
+  for (const auto *f : victionary.funcs().get_all_committed()) {
+    if (!f->is_callable_from_sql() ||
+        f->key().str().compare(0, type_prefix.size(), type_prefix) != 0) {
+      continue;
+    }
+
+    const std::string extension_name =
+        villagesql::canonical_extension_name(f->extension_name());
+    const std::string method =
+        villagesql::canonical_extension_name(f->function_name())
+            .substr(type_prefix.size());
+
+    if (type_exts.contains(extension_name)) {
+      valid_methods.push_back(method);
     }
   }
 
   bool is_valid_method = false;
   for (const auto &m : valid_methods) {
-    if (method_name == m) {
+    if (canonical_method == m) {
       is_valid_method = true;
       break;
     }
   }
 
   if (!is_valid_method) {
-    auto head = "Unknown method '" + method_name + "' for type '" + type_name +
-                "'. Valid methods: ";
-    auto budget = MYSQL_ERRMSG_SIZE - 1 > head.size()
-                      ? MYSQL_ERRMSG_SIZE - 1 - head.size()
-                      : 0;
-    auto methods = join_names_bounded(valid_methods, budget);
-    villagesql_error("%s%s", MYF(0), head.c_str(), methods.c_str());
+    const std::string head =
+        "Unknown method '" + method_name + "' for type '" + type_name + "'";
+    const size_t budget = MYSQL_ERRMSG_SIZE - 1 > head.size()
+                              ? MYSQL_ERRMSG_SIZE - 1 - head.size()
+                              : 0;
+    const std::string methods = join_names_bounded(valid_methods, budget);
+
+    if (methods.empty()) {
+      villagesql_error("%s", MYF(0), head.c_str());
+    } else {
+      villagesql_error("%s%s", MYF(0), (head + ". Valid methods: ").c_str(),
+                       methods.c_str());
+    }
+
     return;
   }
 
@@ -113,20 +131,48 @@ static void emit_type_method_error(std::string_view ext_name,
 
 std::string join_names_bounded(const std::vector<std::string> &method_names,
                                size_t budget) {
-  std::string out;
+  if (method_names.empty() || budget == 0) {
+    return {};
+  }
 
+  std::string out;
+  for (const auto &name : method_names) {
+    if (!out.empty()) out += ", ";
+    out += name;
+  }
+  if (out.size() <= budget) {
+    return out;
+  }
+
+  out.clear();
   for (size_t i = 0; i < method_names.size(); i++) {
     const size_t sep = out.empty() ? 0 : 2;
+    const size_t remaining = method_names.size() - i - 1;
+    const size_t suffix_room =
+        remaining > 0 ? sizeof("and ") - 1 + std::to_string(remaining).size() +
+                            sizeof(" more") - 1
+                      : 0;
 
-    if (out.size() + sep + method_names[i].size() > budget) {
-      if (!out.empty()) out += ", ";
-      out += std::to_string(method_names.size() - i) + " more methods";
+    if (out.size() + sep + method_names[i].size() + suffix_room > budget) {
+      if (!out.empty()) {
+        out += ", and " + std::to_string(method_names.size() - i) +
+               " more methods";
+      }
       break;
     }
 
     if (sep) out += ", ";
     out += method_names[i];
   }
+
+  if (out.empty()) {
+    const std::string not_listed =
+        std::to_string(method_names.size()) + " not listed";
+    if (not_listed.size() <= budget) {
+      return not_listed;
+    }
+  }
+
   return out;
 }
 

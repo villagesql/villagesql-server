@@ -39,22 +39,27 @@ TEST(JoinNamesBoundedTest, AllFitExactly) {
 
 TEST(JoinNamesBoundedTest, BudgetOneByteShort) {
   std::vector<std::string> names{"aaaa", "bbbb", "cccc"};
-  EXPECT_EQ("aaaa, bbbb, 1 more methods", join_names_bounded(names, 15));
+  EXPECT_EQ("aaaa, and 2 more methods", join_names_bounded(names, 15));
 }
 
-TEST(JoinNamesBoundedTest, SmallBudgetSummarizesRest) {
+TEST(JoinNamesBoundedTest, SmallBudgetDoesNotFitNotListedSummary) {
   std::vector<std::string> names{"aaaa", "bbbb", "cccc"};
-  EXPECT_EQ("aaaa, 2 more methods", join_names_bounded(names, 9));
+  EXPECT_EQ("", join_names_bounded(names, 9));
+}
+
+TEST(JoinNamesBoundedTest, FirstNameDoesNotFitButNotListedSummaryDoes) {
+  std::vector<std::string> names{"aaaa", "bbbb", "cccc"};
+  EXPECT_EQ("3 not listed", join_names_bounded(names, 12));
 }
 
 TEST(JoinNamesBoundedTest, FirstNameDoesNotFit) {
   std::vector<std::string> names{"aaaa", "bbbb", "cccc"};
-  EXPECT_EQ("3 more methods", join_names_bounded(names, 3));
+  EXPECT_EQ("", join_names_bounded(names, 3));
 }
 
 TEST(JoinNamesBoundedTest, ZeroBudget) {
   std::vector<std::string> names{"aaaa", "bbbb"};
-  EXPECT_EQ("2 more methods", join_names_bounded(names, 0));
+  EXPECT_EQ("", join_names_bounded(names, 0));
 }
 
 }  // namespace villagesql_unittest

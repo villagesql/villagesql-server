@@ -43,8 +43,8 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
                                  PT_item_list *opt_expr_list, Item **res,
                                  bool *error);
 
-// Join method names with ", " keeping the result within budget bytes. When the
-// next name does not fit, the remainder is summarized as "N more methods".
+// Join method names with ", " up to the budget for listed names. When the next
+// name does not fit, the remainder is summarized as "and N more methods".
 std::string join_names_bounded(const std::vector<std::string> &method_names,
                                size_t budget);
 
