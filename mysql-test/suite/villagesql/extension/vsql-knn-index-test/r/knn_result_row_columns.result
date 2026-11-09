@@ -1,0 +1,86 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+#
+# The distance only orders the rows: the index serves it
+#
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+5
+#
+# v also selected: each returned row carries its own vector, one more read
+# per returned row
+#
+SELECT id, v FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id	v
+1	[1,0,0,0]
+4	[1,1,0,0]
+5	[2,0,0,0]
+extra_reads
+3
+#
+# v also used in the select list: one more read per returned row
+#
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[0,1,0,0]') AS d FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+extra_reads
+3
+#
+# Prepared, with the query vector as a ?: the same reads as the literal
+#
+PREPARE s FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+SET @q = '[1,0,0,0]';
+EXECUTE s USING @q;
+id
+1
+4
+5
+extra_reads
+0
+#
+# Prepared, v also selected, executed after the statement above on the
+# same table: each returned row carries its own vector
+#
+PREPARE s2 FROM 'SELECT id, v FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+EXECUTE s USING @q;
+id
+1
+4
+5
+EXECUTE s2 USING @q;
+id	v
+1	[1,0,0,0]
+4	[1,1,0,0]
+5	[2,0,0,0]
+SET @q = '[3,0,0,0]';
+EXECUTE s2 USING @q;
+id	v
+5	[2,0,0,0]
+1	[1,0,0,0]
+4	[1,1,0,0]
+DEALLOCATE PREPARE s;
+DEALLOCATE PREPARE s2;
+SET @q = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

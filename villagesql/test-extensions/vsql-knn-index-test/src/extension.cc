@@ -248,12 +248,17 @@ static bool kvec_col_insert(ColCtx *ctx, storage::MtrCtx::Ref mctx,
   return false;
 }
 
+// Observability: every read of a stored KVECTOR value, whether the index
+// resolving a vector for a distance or a base-table row reading its column.
+static std::atomic<long long> g_column_select_count{0};
+
 static bool kvec_col_select(ColCtx *ctx, storage::MtrCtx::Ref mctx,
                             storage::Column::Ref col_ref,
                             storage::Column::Data *col_data,
                             storage::Column::Data *rowid_prefix,
                             storage::Segment::TrxRef *trx_ref,
                             bool *delete_marked, char *err, uint32_t err_len) {
+  ++g_column_select_count;
   auto page_num = static_cast<storage::Segment::PageRef>(col_ref);
   storage::Page page;
   if (page.load(ctx->user()->space, page_num, storage::Page::Latch::SHARED,
@@ -782,12 +787,16 @@ static void kvec_scan_fetch_count(vsql::IntResult out) {
 static void kvec_insert_count(vsql::IntResult out) {
   out.set(g_insert_count.load());
 }
+static void kvec_column_select_count(vsql::IntResult out) {
+  out.set(g_column_select_count.load());
+}
 // Reset all observability counters to 0 (for a clean per-test baseline).
 // Returns 0; the return exists only because a SQL function must return a value.
 static void kvec_reset_counters(vsql::IntResult out) {
   g_scan_begin_count.store(0);
   g_scan_fetch_count.store(0);
   g_insert_count.store(0);
+  g_column_select_count.store(0);
   out.set(0);
 }
 
@@ -887,6 +896,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .build())
         .func(make_func<&kvec_insert_count>("kvec_insert_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&kvec_column_select_count>("kvec_column_select_count")
                   .returns(INT)
                   .no_params()
                   .build())
