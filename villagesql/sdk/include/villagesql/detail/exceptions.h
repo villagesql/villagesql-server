@@ -24,6 +24,7 @@
 // ";".  All of the decorations are redundant.  Again,
 // the purpose is to highlight variable scoping between.
 
+// clang-format off
 #define VDF_EXCEPTIONS_TRY try {
 
 #define VDF_EXCEPTIONS_CATCH(result__)                      \
@@ -46,5 +47,6 @@
       }                                                     \
     }                                                       \
   }
+// clang-format on
 
 #endif  // VILLAGESQL_DETAIL_EXCEPTIONS_H
