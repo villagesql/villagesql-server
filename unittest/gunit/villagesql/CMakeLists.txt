@@ -18,8 +18,9 @@
 # List of all VillageSQL unit tests.
 # Place additional test here as necesssary.
 SET(VILLAGESQL_UNIT_TESTS
+  abi_dev_check-t
   abi_v1_check-t
-  abi_v2_check-t
+  abi_v3_check-t
   custom_indexes-t
   identifier_names-t
   pending_action-t
