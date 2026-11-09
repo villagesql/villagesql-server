@@ -1,0 +1,75 @@
+# EXECUTE builds an expanded copy of a prepared statement's text, with each
+# ? replaced by its value formatted as a literal (Item_param::query_val_str),
+# only when something reads that copy: the general log, the slow log, or the
+# binary log for a statement-based update. Otherwise the statement runs with
+# its prepared text, and no parameter value is formatted. For a large
+# parameter, such as a vector bound as 3 KB of binary, formatting it means
+# escaping every byte on every EXECUTE.
+#
+# Each case's statement reads its own processlist INFO, which is the text the
+# statement runs with: the prepared text with its ? when nothing needs the
+# expanded copy, and the expanded text when a log does.
+
+--source include/no_ps_protocol.inc
+
+SET @saved_general_log = @@global.general_log;
+SET @saved_slow_query_log = @@global.slow_query_log;
+SET GLOBAL general_log = OFF;
+SET GLOBAL slow_query_log = OFF;
+
+--echo #
+--echo # No log open: the statement runs with its prepared text
+--echo #
+
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = ''marker''';
+SET @p = 'marker';
+EXECUTE s USING @p;
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # No log open, binary parameter: the statement runs with its prepared text
+--echo #
+
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND LENGTH(?) = 4';
+SET @p = _binary X'0000803F';
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # No log open, statement with RAND(): the parameter still takes the
+--echo # value bound to it
+--echo #
+
+PREPARE s FROM 'SELECT ?, RAND() IS NOT NULL';
+SET @p = 'ab';
+EXECUTE s USING @p;
+SET @p = 42;
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # General log open: the statement runs with the expanded text
+--echo #
+
+SET GLOBAL general_log = ON;
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = ''marker''';
+SET @p = 'marker';
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+SET GLOBAL general_log = OFF;
+
+--echo #
+--echo # Slow log open: the statement runs with the expanded text
+--echo #
+
+SET GLOBAL slow_query_log = ON;
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = ''marker''';
+SET @p = 'marker';
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+SET GLOBAL slow_query_log = OFF;
+
+SET @p = NULL;
+SET GLOBAL general_log = @saved_general_log;
+SET GLOBAL slow_query_log = @saved_slow_query_log;

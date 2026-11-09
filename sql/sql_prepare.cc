@@ -884,16 +884,19 @@ bool Prepared_statement::insert_parameters_from_vars(THD *thd,
 
     user_var_entry *entry =
         find_or_nullptr(thd->user_vars, to_string(*varname));
-    if (m_with_log) {
-      if (entry != nullptr) {
-        set_parameter_type(param, Item::result_to_type(entry->type()),
-                           entry->unsigned_flag, entry->collation.collation);
-      } else {
-        set_parameter_type(param, param->data_type(), param->unsigned_flag,
-                           param->collation.collation);
-      }
+    // VillageSQL: set the parameter's type whether or not the expanded text
+    // is built.
+    if (entry != nullptr) {
+      set_parameter_type(param, Item::result_to_type(entry->type()),
+                         entry->unsigned_flag, entry->collation.collation);
+    } else {
+      set_parameter_type(param, param->data_type(), param->unsigned_flag,
+                         param->collation.collation);
+    }
 
-      if (param->set_from_user_var(thd, entry)) goto error;
+    if (param->set_from_user_var(thd, entry)) goto error;
+
+    if (m_with_log) {
       const String *val = param->query_val_str(thd, &buf);
       if (val == nullptr) goto error;
 
@@ -910,13 +913,7 @@ bool Prepared_statement::insert_parameters_from_vars(THD *thd,
 
       length = param->pos_in_query + 1;
     } else {
-      assert(false);
-      if (param->set_from_user_var(thd, entry)) goto error;
-
-      if (entry) length += entry->length();
-
-      if (length > std::numeric_limits<uint32>::max() || param->convert_value())
-        goto error;
+      if (param->convert_value()) goto error;
     }
     param->sync_clones();
   }
@@ -2177,6 +2174,21 @@ void Prepared_statement::close_cursor() {
   m_used_as_cursor = false;
 }
 
+// VillageSQL: whether an active audit plugin tracks a class whose events
+// carry the statement text, which is the expanded text at EXECUTE. The
+// authentication class carries it too, but its events come from account
+// statements, which take no parameter markers, so there is nothing to expand;
+// and the default plugins (sha2_cache_cleaner, mysqlx) track that class only.
+static bool audit_reads_statement_text(THD *thd) {
+  for (const unsigned long event_class :
+       {MYSQL_AUDIT_GENERAL_CLASS, MYSQL_AUDIT_PARSE_CLASS,
+        MYSQL_AUDIT_AUTHORIZATION_CLASS, MYSQL_AUDIT_TABLE_ACCESS_CLASS,
+        MYSQL_AUDIT_QUERY_CLASS, MYSQL_AUDIT_STORED_PROGRAM_CLASS}) {
+    if (is_audit_plugin_class_active(thd, event_class)) return true;
+  }
+  return false;
+}
+
 void Prepared_statement::setup_stmt_logging(THD *thd) {
   DBUG_EXECUTE_IF("bug16617026_simulate_audit_log_ps",
                   { m_lex->safe_to_cache_query = 0; });
@@ -2190,9 +2202,10 @@ void Prepared_statement::setup_stmt_logging(THD *thd) {
         ((sql_command_flags[m_lex->sql_command] & CF_AUTO_COMMIT_TRANS) ==
          CF_AUTO_COMMIT_TRANS))) ||
       opt_general_log || opt_slow_log ||
-      (m_lex->sql_command == SQLCOM_SELECT && m_lex->safe_to_cache_query &&
-       !m_lex->is_explain()) ||
-      is_global_audit_mask_set()) {
+      // VillageSQL: a cacheable SELECT no longer needs the expanded text (the
+      // query cache is gone), and an audit plugin needs it only for the
+      // classes whose events carry the statement text.
+      audit_reads_statement_text(thd)) {
     m_with_log = true;
   }
   /*
