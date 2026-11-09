@@ -661,6 +661,21 @@ static dberr_t mark_impl(const dict_index_t *index, uint32_t index_field_num,
   return error;
 }
 
+bool Custom_column::primary_key_changed(const dict_table_t *table,
+                                        const upd_t *upd) {
+  if (!table->has_extended_storage) {
+    return false;
+  }
+
+  const ulint n_uniq = dict_index_get_n_unique(table->first_index());
+  for (ulint i = 0; i < upd_get_n_fields(upd); i++) {
+    if (upd_get_nth_field(upd, i)->field_no < n_uniq) {
+      return true;
+    }
+  }
+  return false;
+}
+
 dberr_t Custom_column::mark_delete(const dict_table_t *table, trx_id_t trx_id,
                                    const upd_t *upd, const dtuple_t *row_entry,
                                    bool del_mark) {
