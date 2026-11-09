@@ -742,6 +742,9 @@ struct row_prebuilt_t {
                              to this heap */
   mem_heap_t *old_vers_heap; /*!< memory heap where a previous
                              version is built in consistent read */
+  // VillageSQL: heaps reused across rows of a custom index scan.
+  mem_heap_t *custom_pk_heap;      // search tuple for the mapping B-tree
+  mem_heap_t *custom_offset_heap;  // record offsets
   enum {
     LOCK_PCUR,
     LOCK_CLUST_PCUR,
@@ -866,9 +869,7 @@ struct row_prebuilt_t {
 
   /** @return true if the KNN limit is an exact row count, false if it is
   only an estimate */
-  bool knn_limit_is_exact() const {
-    return m_knn_limit_is_exact;
-  }
+  bool knn_limit_is_exact() const { return m_knn_limit_is_exact; }
 
   /** @return true if the current index scan is a KNN scan */
   bool is_knn_query() const { return m_knn_query; }
