@@ -1036,6 +1036,10 @@ bool IsFirstPrepareBeforeReprepare(const THD *thd) {
 // TVECTOR(3) column, the right side is a TVECTOR with unknown params until
 // EXECUTE. It is accepted at PREPARE, and at EXECUTE a value of another
 // dimension, e.g. '[1,2]', is rejected.
+// Params can also be unknown without a ?, e.g. TVECTOR::from_string(s) with a
+// column s. Accepting those at PREPARE too is deliberate: EXECUTE prepares the
+// statement again and rejects them there, with the same error as without a
+// prepared statement.
 static bool CompatibleWhileResolving(const TypeContext &a,
                                      const TypeContext &b) {
   if (a.is_compatible_with(b)) return true;
@@ -2139,7 +2143,10 @@ static bool ConvertVDFArguments(
       // If the resolved type is still unknown (parameterized type, no known
       // params from other args), error, unless the params may depend on a
       // parameter value at a first PREPARE. The argument is then left as it is
-      // until the statement is prepared again.
+      // until the statement is prepared again. The params are not always
+      // unknown because of a ?, e.g. with TVECTOR::from_string(s) and a column
+      // s. Skipping the error for those too is deliberate: EXECUTE prepares the
+      // statement again and reports the error there.
       if (type_ctx->is_unknown()) {
         if (IsFirstPrepareBeforeReprepare(thd)) continue;
         villagesql_error(
@@ -2468,6 +2475,9 @@ static bool BuildVarargsExpectedTypes(
 }
 
 // Returns true if any argument is of a custom type whose params are unknown.
+// They are not always unknown because of a ?, e.g. TVECTOR::from_string(s)
+// with a column s. Postponing the hook for those too is deliberate: EXECUTE
+// prepares the statement again, and the error is reported there.
 static bool UnknownCustomTypeParamsPresent(uint arg_count, Item **args) {
   for (uint i = 0; i < arg_count; i++) {
     const TypeContext *tc = args[i]->get_type_context();
