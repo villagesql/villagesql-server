@@ -23,6 +23,8 @@ my $prev = "";
 while (my $line = <$fh>) {
   next unless $line =~ /Invalid value in column|Extension error decoding column|VDF threw an exception/;
   $line =~ s/^\S+\s+\d+\s+\[(Warning|ERROR)\]\s+\[MY-\d+\]\s+\[Server\]\s+//;
+# TODO(villagesql-general): Duplicate suppression due to hash/compare double logging
+#                           Fix logging point and remove this.
   if ($prev ne $line) {
     print $line;
   }

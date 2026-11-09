@@ -138,9 +138,9 @@ constexpr std::string_view kEncodeError = "ENCODE_ERROR";
 // Numbers passed from mysql tests to trigger throw operation.
 // Need several different numbers to differentiate which function
 // should throw when not using strings as trigger.
-constexpr int64_t THROW_TO_STRINGS_20 = 20;
-constexpr int64_t THROW_STRICT_INT_TO_PARAMS_86 = 86;
-constexpr int64_t THROW_PARSE_100 = 100;
+constexpr int64_t kThrowToStringsLength = 20;
+constexpr int64_t kThrowStrictIntToParamsValue = 86;
+constexpr int64_t kThrowParseLength = 100;
 
 void fault_blob_encode(std::string_view from, vsql::CustomResult out) {
   if (from == kEncodeFail) {
@@ -857,7 +857,7 @@ struct LenParam {
     LenParam lp{
         it == params.end() ? 0 : std::strtoll(it->second.c_str(), nullptr, 0),
         pad == params.end() ? 0 : static_cast<int64_t>(pad->second.size())};
-    if (THROW_PARSE_100 == lp.length) {
+    if (kThrowParseLength == lp.length) {
       throw std::runtime_error("LenParam.length throw");
     }
 
@@ -867,7 +867,7 @@ struct LenParam {
   static void to_strings(const LenParam &p,
                          std::map<std::string, std::string> &out) {
     // TODO(villagesql-general): this test is not being tickled
-    if (THROW_TO_STRINGS_20 == p.length) {
+    if (kThrowToStringsLength == p.length) {
       throw std::runtime_error("LenParam.to_strings throw");
     }
     out["length"] = std::to_string(p.length);
@@ -971,7 +971,7 @@ bool lenient_resolve_params(const std::map<std::string, std::string> &params,
 bool strict_int_to_params(int64_t value,
                           std::map<std::string, std::string> &params, char *) {
   params["length"] = std::to_string(value);
-  if (THROW_STRICT_INT_TO_PARAMS_86 == value) {
+  if (kThrowStrictIntToParamsValue == value) {
     throw std::runtime_error("strict_int_to_params throw");
   }
   return false;

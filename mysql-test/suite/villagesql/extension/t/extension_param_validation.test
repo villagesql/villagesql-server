@@ -63,6 +63,7 @@ CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,'));
 SHOW WARNINGS;
 
 --echo # Generate a throw within parse(), 100 is trigger value
+# TODO(villagesql-gener) Error message drops throw source, needs fix (type_context.cc?)
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=100'));
 
@@ -84,12 +85,10 @@ SELECT id, v FROM t ORDER BY id;
 DROP TABLE t;
 
 --echo # Throw in strict_int_to_params, 86 is trigger value
---replace_result strict_int_to_params "strict int to params"
 --error ER_PARSE_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(86));
 
 --echo # generate a throw within strict_resolve_params()
---replace_result strict_resolve_params "strict resolve params"
 --error ER_PARSE_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('throw=13'));
 
