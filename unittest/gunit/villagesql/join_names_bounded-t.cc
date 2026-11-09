@@ -39,7 +39,7 @@ TEST(JoinNamesBoundedTest, AllFitExactly) {
 
 TEST(JoinNamesBoundedTest, BudgetOneByteShort) {
   std::vector<std::string> names{"aaaa", "bbbb", "cccc"};
-  EXPECT_EQ("aaaa, and 2 more methods", join_names_bounded(names, 15));
+  EXPECT_EQ("3 not listed", join_names_bounded(names, 15));
 }
 
 TEST(JoinNamesBoundedTest, SmallBudgetDoesNotFitNotListedSummary) {
