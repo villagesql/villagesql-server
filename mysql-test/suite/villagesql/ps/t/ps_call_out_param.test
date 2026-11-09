@@ -8,9 +8,7 @@ CREATE PROCEDURE p_inout(INOUT y COMPLEX)
   SET y = vsql_complex.complex_add(y, '(1,1)');
 CREATE PROCEDURE p_null(OUT y COMPLEX) SET y = NULL;
 
---echo #
 --echo # OUT parameter
---echo #
 --echo # A direct CALL, for comparison
 CALL p_out('(1,2)', @y);
 SELECT @y;
