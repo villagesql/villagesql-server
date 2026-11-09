@@ -67,7 +67,8 @@
 //               .restore<&hnsw_restore>()
 //               .end<&hnsw_end_scan>()
 //           .global()
-//               .capabilities(Index::Support::KNN)
+//               .capabilities(Index::Support::KNN |
+//                             Index::Support::APPROXIMATE)
 //               .storage_props(Index::Storage::HAS_COLUMN_REF |
 //                              Index::Storage::REF_LOOKUP)
 //               .options<HNSWOptions, &HNSWOptions::parse>()
@@ -116,7 +117,7 @@
 //     bool fetch(Index::Cursor, IndexScanKey::KeyPartRef*,
 //                IndexScanKey::KeyPartData* keys,
 //                IndexScanKey::KeyPartData* pkeys,
-//                char*, uint32_t);
+//                Segment::TrxRef* trx_ref, char*, uint32_t);
 //     bool save(Index::Cursor, char*, uint32_t);
 //     bool restore(Index::Cursor, MtrCtx::Ref, bool*,
 //                  char*, uint32_t);
@@ -153,10 +154,11 @@
 // builder-generated execution context.
 //
 // Binds a custom type to an index type and assigns per-profile function IDs.
-// for_type() takes the type name string. with_function<Desc>(fn_id) and
-// with_helper<Desc>(fn_id) both take their bound VDF as a template argument.
-// with_function() also takes an optional FunctionKind: Restrict (default) for
-// a filter condition, or Order for a function that defines the row order.
+// for_type() takes the type name string. with_function<Desc>(fn_id, kind)
+// and with_helper<Desc>(fn_id) both take their bound VDF as a template
+// argument. with_function() requires a FunctionKind: Restrict for a filter
+// condition (not yet supported), or Order for a function that defines the row
+// order.
 //
 //   static constexpr auto MY_INDEX_FN =
 //       make_func<&my_index_fn>("my_index_fn")
@@ -322,6 +324,7 @@ class IndexScanDesc {
   uint32_t limit() const { return desc_.limit; }
   uint32_t num_keys() const { return desc_.num_keys; }
   ReadViewRef read_view() const { return desc_.readview; }
+  bool needs_trx_ref() const { return read_view() == nullptr; }
 
   IndexScanKey operator[](uint32_t i) const {
     return IndexScanKey{desc_.keys[i]};
@@ -355,6 +358,7 @@ class Index {
     REVERSE_SCAN = VEF_INDEX_CAP_REVERSE_SCAN,
     ORDER_BY = VEF_INDEX_CAP_ORDER_BY,
     KNN = VEF_INDEX_CAP_KNN,
+    APPROXIMATE = VEF_INDEX_CAP_APPROXIMATE,
   };
 
   // Storage property flags for use with .storage_props(). Can be combined with
@@ -452,7 +456,7 @@ class Index {
   // Checks whether trx_ref's changes are visible under read_view.
   bool is_trx_visible(IndexScanDesc::ReadViewRef read_view,
                       Segment::TrxRef trx_ref) const {
-    return ctx_->trx_is_visible_fn(read_view, trx_ref);
+    return ctx_->trx_is_visible_fn(ctx_->index_ref, read_view, trx_ref);
   }
 
  private:
@@ -529,8 +533,10 @@ using ScanPositionFn = bool (*)(Index::Cursor, Index::CursorOp, bool *, char *,
                                 uint32_t);
 
 using ScanFetchFn = bool (*)(Index::Cursor, IndexScanKey::KeyPartRef *,
+                             IndexScanKey::KeyPartRef *,
                              IndexScanKey::KeyPartData *,
-                             IndexScanKey::KeyPartData *, char *, uint32_t);
+                             IndexScanKey::KeyPartData *, Segment::TrxRef *,
+                             char *, uint32_t);
 
 using ScanSaveFn = bool (*)(Index::Cursor, char *, uint32_t);
 
@@ -707,11 +713,13 @@ template <auto F>
 struct ScanFetchWrapper {
   static bool invoke(vef_index_cursor_ref_t cursor,
                      vef_storage_col_ref_t *key_ref,
+                     vef_storage_col_ref_t *key_column_refs,
                      vef_storage_col_data_t *key_columns,
-                     vef_storage_col_data_t *pkey_columns, char *error_msg,
+                     vef_storage_col_data_t *pkey_columns,
+                     vef_storage_trx_ref_t *trx_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(cursor, key_ref, key_columns, pkey_columns, error_msg,
-             error_msg_len);
+    return F(cursor, key_ref, key_column_refs, key_columns, pkey_columns,
+             trx_ref, error_msg, error_msg_len);
   }
 };
 
@@ -973,9 +981,11 @@ class ScanBuilder {
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kFetch> fetch() && {
-    static_assert(std::is_same_v<decltype(F), detail::ScanFetchFn>,
-                  "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
-                  "KeyPartData* keys, KeyPartData* pkeys, char*, uint32_t)");
+    static_assert(
+        std::is_same_v<decltype(F), detail::ScanFetchFn>,
+        "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
+        "KeyPartRef* key_refs, KeyPartData* keys, KeyPartData* pkeys, "
+        "TrxRef*, char*, uint32_t)");
     intf_.scan_fetch = detail::ScanFetchWrapper<F>::invoke;
     return {name_, intf_};
   }
@@ -1267,7 +1277,7 @@ enum : uint32_t {
 //   make_index_profile("my_hnsw_l2")
 //       .for_type(kMyType)
 //       .using_index(kMyIndex)
-//       .with_function(1, MY_L2_FN)
+//       .with_function<MY_L2_FN>(1, FunctionKind::Order)
 //       .ordering(Index::Ordering::ASC)
 //       .build();
 //
@@ -1310,7 +1320,8 @@ class IndexProfileBuilder {
   }
 
   // Bind fn_id to a user-visible SQL function. kind says whether the function
-  // restricts the indexed rows (default) or defines their order. FuncDesc is a
+  // restricts the indexed rows or defines their order. There is no default;
+  // only FunctionKind::Order is currently supported. FuncDesc is a
   // VDF built with vsql::make_func(...).build(), e.g. `static constexpr auto
   // MY_FN = make_func<&my_fn>(...).build();`. A descriptor from
   // make_index_function() is rejected at compile time. See
@@ -1318,8 +1329,7 @@ class IndexProfileBuilder {
   // violating it is a compile error. fn_ids must be unique within the
   // functions list (checked by the server at registration time, not here).
   template <const auto &FuncDesc>
-  Self &&with_function(uint32_t fn_id,
-                       FunctionKind kind = FunctionKind::Restrict) && {
+  Self &&with_function(uint32_t fn_id, FunctionKind kind) && {
     static_assert(
         detail::is_static_func_desc_v<detail::DescType<FuncDesc>>,
         "with_function() requires a function built with vsql::make_func(); "
