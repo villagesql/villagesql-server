@@ -23,14 +23,17 @@
 #include "villagesql/sql/custom_index_knn_optimizer_classic.h"
 
 #include "my_base.h"
+#include "my_bitmap.h"
 #include "sql/item.h"
 #include "sql/join_optimizer/access_path.h"
 #include "sql/mysqld.h"
+#include "sql/query_options.h"
 #include "sql/sql_class.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_opt_exec_shared.h"
 #include "sql/sql_optimizer.h"
 #include "sql/table.h"
+#include "template_utils.h"
 #include "villagesql/services/capability_registry.h"
 #include "villagesql/sql/custom_index_knn_recognition.h"
 #include "villagesql/sql/custom_index_knn_scan.h"
@@ -47,6 +50,44 @@ Item *SingleAscOrderItem(ORDER *order) {
   if (order == nullptr || order->next != nullptr) return nullptr;
   if (order->direction != ORDER_ASC) return nullptr;
   return *order->item;
+}
+
+// Whether a SELECT served by the distance scan on key_idx uses the index's
+// column only in the ORDER BY distance: not in the select list, the WHERE or a
+// join condition. The scan already orders the rows, so the result rows need not
+// read that column. Shapes whose other uses of the column are not all visible
+// here keep reading it: a grouped or windowed query, a temporary table (it
+// copies the hidden ORDER BY item too), subqueries, more than one table, and a
+// table with virtual generated columns, which are computed from base columns.
+bool KnnColumnOnlyOrders(TABLE *table, uint key_idx) {
+  Table_ref *const table_ref = table->pos_in_table_list;
+  if (table_ref == nullptr) return false;
+  Query_block *const query_block = table_ref->query_block;
+  if (query_block == nullptr || query_block->join == nullptr) return false;
+  if (query_block->parent_lex->sql_command != SQLCOM_SELECT) return false;
+  if (query_block->is_grouped() || query_block->having_cond() != nullptr ||
+      query_block->has_windows() || query_block->is_distinct() ||
+      (query_block->active_options() & OPTION_BUFFER_RESULT) ||
+      query_block->join->need_tmp_before_win ||
+      query_block->first_inner_query_expression() != nullptr ||
+      query_block->leaf_table_count != 1 || table->vfield != nullptr) {
+    return false;
+  }
+
+  const Field *const field = table->key_info[key_idx].key_part[0].field;
+  bitmap_clear_all(&table->tmp_set);
+  for (Item *item : query_block->visible_fields()) {
+    item->walk(&Item::add_field_to_set_processor, enum_walk::SUBQUERY_POSTFIX,
+               pointer_cast<uchar *>(table));
+  }
+  if (query_block->where_cond() != nullptr) {
+    query_block->where_cond()->walk(&Item::add_field_to_set_processor,
+                                    enum_walk::SUBQUERY_POSTFIX,
+                                    pointer_cast<uchar *>(table));
+  }
+  const bool used = bitmap_is_set(&table->tmp_set, field->field_index());
+  bitmap_clear_all(&table->tmp_set);
+  return !used;
 }
 
 }  // namespace
@@ -145,6 +186,14 @@ AccessPath *BuildCustomKnnDistanceAccessPath(THD *thd, TABLE *table,
   path->index_distance_scan().table = table;
   path->index_distance_scan().idx = key_idx;
   path->index_distance_scan().custom_scan_spec = spec;
+  // Leave the indexed column out of the row each hit reads when nothing but
+  // the ORDER BY distance uses it. The read set is restored from the
+  // statement's saved copy at the start of each execution, so this narrows
+  // only the current one.
+  if (KnnColumnOnlyOrders(table, key_idx)) {
+    bitmap_clear_bit(table->read_set,
+                     table->key_info[key_idx].key_part[0].field->field_index());
+  }
   // Custom-index variant carries no range (nearest-neighbor QUICK_RANGE is only
   // for the spatial variant).
   path->index_distance_scan().range = nullptr;

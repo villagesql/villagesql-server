@@ -1,0 +1,95 @@
+# A KNN query served by the custom index reads, for each returned row, only
+# the columns the statement uses beyond the ordering. The index has already
+# ordered the rows by the distance, so a vector column that appears only in
+# the ORDER BY distance is not read back from its column store for each row.
+# A statement that uses the column anywhere else still reads it.
+#
+# Each case prints how many more stored KVECTOR values a statement read than
+# the same KNN query selecting only id (kvec_column_select_count counts every
+# read: the index resolving vectors for distances, and the result rows).
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo #
+--echo # The distance only orders the rows: the index serves it
+--echo #
+
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--let $before = `SELECT vsql_knn_index_test.kvec_column_select_count()`
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--let $base_reads = `SELECT vsql_knn_index_test.kvec_column_select_count() - $before`
+
+--echo #
+--echo # v also selected: each returned row carries its own vector, one more read
+--echo # per returned row
+--echo #
+
+--let $before = `SELECT vsql_knn_index_test.kvec_column_select_count()`
+SELECT id, v FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--let $reads = `SELECT vsql_knn_index_test.kvec_column_select_count() - $before`
+--disable_query_log
+--eval SELECT $reads - $base_reads AS extra_reads
+--enable_query_log
+
+--echo #
+--echo # v also used in the select list: one more read per returned row
+--echo #
+
+--let $before = `SELECT vsql_knn_index_test.kvec_column_select_count()`
+--disable_result_log
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[0,1,0,0]') AS d FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--enable_result_log
+--let $reads = `SELECT vsql_knn_index_test.kvec_column_select_count() - $before`
+--disable_query_log
+--eval SELECT $reads - $base_reads AS extra_reads
+--enable_query_log
+
+--echo #
+--echo # Prepared, with the query vector as a ?: the same reads as the literal
+--echo #
+
+PREPARE s FROM 'SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+SET @q = '[1,0,0,0]';
+--let $before = `SELECT vsql_knn_index_test.kvec_column_select_count()`
+EXECUTE s USING @q;
+--let $reads = `SELECT vsql_knn_index_test.kvec_column_select_count() - $before`
+--disable_query_log
+--eval SELECT $reads - $base_reads AS extra_reads
+--enable_query_log
+
+--echo #
+--echo # Prepared, v also selected, executed after the statement above on the
+--echo # same table: each returned row carries its own vector
+--echo #
+
+PREPARE s2 FROM 'SELECT id, v FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+EXECUTE s USING @q;
+EXECUTE s2 USING @q;
+SET @q = '[3,0,0,0]';
+EXECUTE s2 USING @q;
+DEALLOCATE PREPARE s;
+DEALLOCATE PREPARE s2;
+
+SET @q = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
