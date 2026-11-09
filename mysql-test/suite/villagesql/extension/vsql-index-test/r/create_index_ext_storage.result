@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_ext_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 # --- Case 1: inline index on a wide externally-stored column ---
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
@@ -32,7 +31,6 @@ t2	CREATE TABLE `t2` (
 # --- Cleanup ---
 DROP TABLE t1;
 DROP TABLE t2;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_ext_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

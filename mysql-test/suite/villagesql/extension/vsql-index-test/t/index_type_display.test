@@ -7,14 +7,9 @@
 # the same view definition (STATISTICS and the hidden SHOW_STATISTICS), so both
 # are checked here. A plain B-tree on the same table must still report BTREE.
 #
-# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
-# custom index execution is fully implemented and the guard in
-# PT_custom_index_type::do_contextualize() is removed.
---source include/have_debug.inc
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 
 CREATE TABLE t1 (
   id INT PRIMARY KEY,
@@ -52,7 +47,6 @@ ORDER BY INDEX_NAME;
 --echo # --- Cleanup ---
 DROP TABLE t1;
 
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

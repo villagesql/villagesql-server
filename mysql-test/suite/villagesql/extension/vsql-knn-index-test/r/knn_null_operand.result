@@ -16,7 +16,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
 EXPLAIN
 -> Limit: 2 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 2  (cost=COST rows=ROWS)
 
 #
 # A NULL operand. The plan is a sort rather than the distance scan, and
@@ -26,10 +26,9 @@ EXPLAIN FORMAT=tree
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;
 EXPLAIN
--> Limit: 2 row(s)
-    -> Sort: vsql_knn_index_test.kvec_l2_distance(t.v,NULL), limit input to 2 row(s) per chunk
-        -> Stream results  (cost=COST rows=ROWS)
-            -> Table scan on t  (cost=COST rows=ROWS)
+-> Limit: 2 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_l2_distance(t.v,NULL), limit input to 2 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on t  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, NULL) LIMIT 2;

@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 CREATE TABLE t (id INT PRIMARY KEY,
 a dummy_type_vector,
 b dummy_type_vector,
@@ -77,7 +76,6 @@ SET SESSION debug='-d,villagesql_skip_uninstall_index_check';
 # --- DROP INDEX + DROP TABLE unblocks UNINSTALL; reinstall succeeds in same session ---
 DROP INDEX idx_block ON t;
 DROP TABLE t;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 INSTALL EXTENSION vsql_index_test;
 UNINSTALL EXTENSION vsql_index_test;

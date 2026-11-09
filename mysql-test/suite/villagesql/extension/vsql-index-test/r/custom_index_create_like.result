@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 CREATE TABLE src (id INT PRIMARY KEY,
 a dummy_type_vector, b dummy_type_vector, c dummy_type_vector,
 d dummy_type_vector,
@@ -63,7 +62,6 @@ src	i_desc	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
 src	i_desc_none	0	c	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
 src	i_none	0	d	vsql_index_test	0.0.1	dummy_profile_hnsw_none
 DROP TABLE dst, src;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;
