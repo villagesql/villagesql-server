@@ -47,5 +47,25 @@ EXPLAIN
 -> Limit: 2 row(s)  (cost=COST rows=ROWS)
     -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 2  (cost=COST rows=ROWS)
 
+# KNN ordering on a nullable column still uses idx_v with a NULL row
+# present; plain ORDER BY still does not.
+INSERT INTO t VALUES (4, NULL);
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 2  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+id
+1
+2
+EXPLAIN SELECT * FROM t ORDER BY v;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	FILTERED	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`v` AS `v` from `test`.`t` order by `test`.`t`.`v`
 DROP TABLE t;
 UNINSTALL EXTENSION vsql_knn_index_test;
