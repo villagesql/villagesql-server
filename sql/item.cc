@@ -5023,6 +5023,8 @@ bool Item_param::set_value(THD *thd, sp_rcontext *, Item **it) {
       str_value_ptr.set(str_value.ptr(), str_value.length(),
                         str_value.charset());
       collation.set(str_value.charset(), DERIVATION_COERCIBLE);
+      // VillageSQL: set_str() above stores the text as binary; this restores
+      // its charset for a custom-typed value and gives the `?` that type.
       if (villagesql::MaybeSetOutParamCustomType(thd, this, arg, sv->charset()))
         return true;
       break;
