@@ -10785,11 +10785,16 @@ bool ha_innobase::custom_index_pkey_to_row(
   ut_a(m_prebuilt->trx == thd_to_trx(ha_thd()));
 
   // Position the prebuilt read on the clustered index and (re)build the row
-  // template so row_search_mvcc materializes the full MySQL row into buf.
-  if (change_active_index(MAX_KEY)) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_pkey_to_row: failed to select clustered index");
-    return true;
+  // template so row_search_mvcc materializes the full MySQL row into buf. The
+  // KNN scan's ha_rnd_init() has already done both before the first hit, so
+  // this switches only when the prebuilt read is on another index.
+  if (m_prebuilt->index != m_prebuilt->table->first_index() ||
+      m_prebuilt->mysql_template == nullptr) {
+    if (change_active_index(MAX_KEY)) {
+      snprintf(error_msg, error_msg_len,
+               "custom_index_pkey_to_row: failed to select clustered index");
+      return true;
+    }
   }
   dict_index_t *clust = m_prebuilt->index;
 
@@ -10812,8 +10817,8 @@ bool ha_innobase::custom_index_pkey_to_row(
     return true;
   }
   dtuple_t *search_tuple = m_prebuilt->search_tuple;
-  dict_index_copy_types(search_tuple, clust, clust->n_fields);
   dtuple_set_n_fields(search_tuple, num_pkey_parts);
+  dict_index_copy_types(search_tuple, clust, num_pkey_parts);
   for (uint32_t i = 0; i < num_pkey_parts; i++) {
     dfield_t *dfield = dtuple_get_nth_field(search_tuple, i);
     dfield_set_data(dfield, pkey_parts[i].data, pkey_parts[i].length);
