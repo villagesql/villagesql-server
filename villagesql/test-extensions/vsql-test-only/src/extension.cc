@@ -866,7 +866,6 @@ struct LenParam {
 
   static void to_strings(const LenParam &p,
                          std::map<std::string, std::string> &out) {
-    // TODO(villagesql-general): this test is not being tickled
     if (kThrowToStringsLength == p.length) {
       throw std::runtime_error("LenParam.to_strings throw");
     }
