@@ -1,0 +1,66 @@
+# A custom-typed OUT or INOUT parameter of a prepared CALL, passed as a `?`.
+# The user variable gets the value with its type, as with a direct CALL.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE PROCEDURE p_out(IN x COMPLEX, OUT y COMPLEX) SET y = x;
+CREATE PROCEDURE p_inout(INOUT y COMPLEX)
+  SET y = vsql_complex.complex_add(y, '(1,1)');
+CREATE PROCEDURE p_null(OUT y COMPLEX) SET y = NULL;
+
+--echo # OUT parameter
+--echo # A direct CALL, for comparison
+CALL p_out('(1,2)', @y);
+SELECT @y;
+--echo # The variable has the custom type, so HEX() is rejected
+--error ER_WRONG_USAGE
+SELECT HEX(@y);
+
+SET @y = NULL;
+PREPARE s FROM 'CALL p_out(?, ?)';
+SET @x = '(1,2)';
+EXECUTE s USING @x, @y;
+SELECT @y;
+--error ER_WRONG_USAGE
+SELECT HEX(@y);
+--echo # Executed again with another value
+SET @x = '(3,4)';
+EXECUTE s USING @x, @y;
+SELECT @y;
+DEALLOCATE PREPARE s;
+--echo # The variable holds an INT before the CALL, so binding it gives the ?
+--echo # no charset. A new statement, so no charset is left from an earlier
+--echo # EXECUTE either.
+PREPARE s FROM 'CALL p_out(?, ?)';
+SET @x = '(5,6)';
+SET @y = 5;
+EXECUTE s USING @x, @y;
+SELECT @y;
+--error ER_WRONG_USAGE
+SELECT HEX(@y);
+DEALLOCATE PREPARE s;
+
+--echo # INOUT parameter
+PREPARE s FROM 'CALL p_inout(?)';
+SET @y = '(3,4)';
+EXECUTE s USING @y;
+SELECT @y;
+--echo # Executed again with a new text value
+SET @y = '(10,20)';
+EXECUTE s USING @y;
+SELECT @y;
+DEALLOCATE PREPARE s;
+
+--echo # A NULL OUT value
+PREPARE s FROM 'CALL p_null(?)';
+SET @y = '(1,2)';
+EXECUTE s USING @y;
+SELECT @y IS NULL;
+DEALLOCATE PREPARE s;
+
+SET @x = NULL, @y = NULL;
+DROP PROCEDURE p_out;
+DROP PROCEDURE p_inout;
+DROP PROCEDURE p_null;
+
+--source include/villagesql/uninstall_complex_extension.inc
