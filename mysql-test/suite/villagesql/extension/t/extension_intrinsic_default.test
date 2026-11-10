@@ -22,6 +22,14 @@ INSERT INTO t_vdf VALUES (2, '(42)');
 SELECT id, v FROM t_vdf ORDER BY id;
 DROP TABLE t_vdf;
 
+--echo # intrinsic_default VDF: same as previous but function returns error
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_ERR_TYPE NOT NULL);
+
+--echo # intrinsic_default VDF: same as previous but function throws
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_THROW_TYPE NOT NULL);
+
 --echo # Parameterized type
 CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
 INSERT IGNORE INTO t_param VALUES (1, NULL);

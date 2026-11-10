@@ -16,14 +16,17 @@
 #ifndef VILLAGESQL_DETAIL_EXCEPTIONS_H
 #define VILLAGESQL_DETAIL_EXCEPTIONS_H
 
+#include <exception>
+
 // NOTE: The following two macros are "decorated" when used to
 // emphasize variable scoping.  The TRY macro is followed
 // " {".  The CATCH macro is preceded by "} " and followed
 // ";".  All of the decorations are redundant.  Again,
 // the purpose is to highlight variable scoping between.
 
+// clang-format off
 #define VDF_EXCEPTIONS_TRY try {
-// TODO(villagesql-general): need a way to log these errors
+
 #define VDF_EXCEPTIONS_CATCH(result__)                      \
   }                                                         \
   catch (const std::exception &ex) {                        \
@@ -44,5 +47,6 @@
       }                                                     \
     }                                                       \
   }
+// clang-format on
 
 #endif  // VILLAGESQL_DETAIL_EXCEPTIONS_H
