@@ -29,6 +29,11 @@ Concretely:
 - `stable_sdk/v{N}/` snapshots are the frozen ABI surface for protocol N.
   An extension compiled against a frozen snapshot must continue to load on
   all future server versions.
+- Compile-time checks in `unittest/gunit/villagesql/` pin the layout of every
+  stable protocol: `abi_v{N}_check-t.cc` checks each frozen snapshot, and
+  `abi_dev_check-t.cc` checks that these headers keep every stable offset.
+  When you add a field to these headers, record it and its struct's new size
+  in `abi_dev_layout.inc`. Never edit a stable `abi_v{N}_layout.inc`.
 - Headers under `abi/preview/` expose preview-capability ABIs and follow
   the preview-capability rules in [../preview/README.md](../preview/README.md).
 
