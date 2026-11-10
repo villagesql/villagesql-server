@@ -4569,6 +4569,8 @@ void udf_handler::cleanup() {
   */
   THD *thd = current_thd;
   // VillageSQL: a reprepare that fails discards its items, so clean them up.
+  // TODO(villagesql-rebase): replace with the upstream fix for Bug #121730
+  // once it lands.
   if (thd->stmt_arena->is_stmt_prepare() && thd->stmt_arena->is_repreparing &&
       !thd->is_error())
     return;
