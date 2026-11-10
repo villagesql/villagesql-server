@@ -299,8 +299,8 @@ class FuncBuilder {
   // any row is read, to work out the return type's parameters (and, where
   // needed, individual arguments' parameters) when the built-in rules cannot.
   // In a prepared statement it runs at every EXECUTE, and is not called at
-  // PREPARE when an argument has a ? with no value yet; see
-  // vsql/bind_check_types.h.
+  // PREPARE when an argument has a ? with no value yet, or a custom type
+  // whose params are not known yet; see vsql/bind_check_types.h.
   //
   // Use it when the relationship between argument and return parameters is
   // something the defaults cannot express (e.g. pvec_concat(PVEC(M), PVEC(N))
