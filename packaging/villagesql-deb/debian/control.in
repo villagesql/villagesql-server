@@ -132,7 +132,7 @@ Description: VillageSQL Extension Framework SDK
  cross-built on a machine that does not run the database.
 
 Package: villagesql-extension-examples
-Architecture: all
+Architecture: any
 Depends: villagesql-server (>= ${source:Version}), ${misc:Depends}
 Description: Example VillageSQL extension bundles
  Reference extension bundles shipped with VillageSQL: vsql_simple (a minimal
