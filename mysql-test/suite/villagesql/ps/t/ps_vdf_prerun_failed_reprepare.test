@@ -1,0 +1,53 @@
+# A prepared statement whose reprepare at EXECUTE fails after a VDF's prerun
+# ran. The failed prepare discards its items, so after DEALLOCATE every
+# prerun must have had its postrun.
+
+--source include/no_ps_protocol.inc
+
+--let $extension_name = vdf_postrun_leak
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_postrun_leak.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION vdf_postrun_leak;
+
+--let $counts = SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live
+
+--echo # Baseline
+--eval $counts
+
+--echo #
+--echo # leak_probe_arg(1) runs prerun, then the WHERE fails on a column dropped
+--echo # since the last EXECUTE
+--echo #
+
+CREATE TABLE tc (id INT PRIMARY KEY, c INT);
+INSERT INTO tc VALUES (1, 1);
+PREPARE s FROM 'SELECT vdf_postrun_leak.leak_probe_arg(1) AS n FROM tc WHERE c = 1';
+EXECUTE s;
+--echo # After a good EXECUTE
+--eval $counts
+ALTER TABLE tc DROP COLUMN c;
+--error ER_BAD_FIELD_ERROR
+EXECUTE s;
+--echo # After the failed EXECUTE
+--eval $counts
+--error ER_BAD_FIELD_ERROR
+EXECUTE s;
+DEALLOCATE PREPARE s;
+--echo # After DEALLOCATE
+--eval $counts
+
+--let $live = query_get_value(SELECT vdf_postrun_leak.live_state_count() AS live, live, 1)
+--let $unbalanced = query_get_value(SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS u, u, 1)
+if ($live != 0)
+{
+  --die A prerun state is still live after DEALLOCATE
+}
+if ($unbalanced != 0)
+{
+  --die A prerun has had no postrun after DEALLOCATE
+}
+
+DROP TABLE tc;
+UNINSTALL EXTENSION vdf_postrun_leak;

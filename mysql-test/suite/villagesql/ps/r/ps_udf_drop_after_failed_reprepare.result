@@ -1,0 +1,35 @@
+CREATE TABLE t (id INT PRIMARY KEY, c INT);
+INSERT INTO t VALUES (1, 1);
+#
+# Without a failed EXECUTE
+#
+CREATE FUNCTION myfunc_int RETURNS INTEGER SONAME "UDF_EXAMPLE_LIB";
+PREPARE s FROM 'SELECT myfunc_int(1) AS u FROM t WHERE c = 1';
+EXECUTE s;
+u
+1
+EXECUTE s;
+u
+1
+DEALLOCATE PREPARE s;
+DROP FUNCTION myfunc_int;
+# Expect no row
+SELECT udf_name, udf_usage_count FROM performance_schema.user_defined_functions WHERE udf_name = 'myfunc_int';
+udf_name	udf_usage_count
+#
+# With a failed EXECUTE
+#
+CREATE FUNCTION myfunc_int RETURNS INTEGER SONAME "UDF_EXAMPLE_LIB";
+PREPARE s FROM 'SELECT myfunc_int(1) AS u FROM t WHERE c = 1';
+EXECUTE s;
+u
+1
+ALTER TABLE t DROP COLUMN c;
+EXECUTE s;
+ERROR 42S22: Unknown column 'c' in 'where clause'
+DEALLOCATE PREPARE s;
+DROP FUNCTION myfunc_int;
+# Expect no row
+SELECT udf_name, udf_usage_count FROM performance_schema.user_defined_functions WHERE udf_name = 'myfunc_int';
+udf_name	udf_usage_count
+DROP TABLE t;
