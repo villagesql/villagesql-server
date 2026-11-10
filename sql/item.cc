@@ -4296,6 +4296,7 @@ void Item_param::reset() {
   m_param_state = NO_VALUE;
   m_data_type_actual = MYSQL_TYPE_INVALID;
   null_value = false;
+  villagesql::MaybeClearOutParamTypeContext(this);
 }
 
 type_conversion_status Item_param::save_in_field_inner(Field *field,
@@ -4999,7 +5000,7 @@ void Item_param::set_param_type_and_swap_value(Item_param *src) {
     @retval false on success
 */
 
-bool Item_param::set_value(THD *, sp_rcontext *, Item **it) {
+bool Item_param::set_value(THD *thd, sp_rcontext *, Item **it) {
   Item *arg = *it;
 
   if (arg->is_null()) {
@@ -5013,7 +5014,8 @@ bool Item_param::set_value(THD *, sp_rcontext *, Item **it) {
     case STRING_RESULT: {
       char str_buffer[STRING_BUFFER_USUAL_SIZE];
       String sv_buffer(str_buffer, sizeof(str_buffer), &my_charset_bin);
-      String *sv = arg->val_str(&sv_buffer);
+      // VillageSQL: a custom-typed value is read as text.
+      String *sv = arg->val_external_str(&sv_buffer);
 
       if (!sv) return true;
 
@@ -5021,6 +5023,10 @@ bool Item_param::set_value(THD *, sp_rcontext *, Item **it) {
       str_value_ptr.set(str_value.ptr(), str_value.length(),
                         str_value.charset());
       collation.set(str_value.charset(), DERIVATION_COERCIBLE);
+      // VillageSQL: set_str() above stores the text as binary; this restores
+      // its charset for a custom-typed value and gives the `?` that type.
+      if (villagesql::MaybeSetOutParamCustomType(thd, this, arg, sv->charset()))
+        return true;
       break;
     }
 
