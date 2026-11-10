@@ -1,0 +1,140 @@
+# Install vsql-tvector extension
+INSTALL EXTENSION vsql_tvector;
+
+########################################################################
+#
+# Test: TVECTOR without length specification
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR);
+
+########################################################################
+#
+# Test: TVECTOR(0) - dimension must be positive
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR(0));
+
+########################################################################
+#
+# Test: TVECTOR(-1) - negative dimension
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR(-1));
+
+########################################################################
+#
+# Test: String params - empty string
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR(''));
+
+########################################################################
+#
+# Test: String params - missing '=' sign
+#
+# The token names a parameter but supplies no value, so it is rejected as a
+# valueless parameter before TVECTOR's resolve_params is consulted.
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR('invalid'));
+
+########################################################################
+#
+# Test: String params - dimension=0 rejected by resolve_params
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR('dimension=0'));
+
+########################################################################
+#
+# Test: String params - unknown key rejected by resolve_params
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR('unknown_key=5'));
+
+########################################################################
+#
+# Test: VDF with two string constants - no type params can be inferred
+#
+########################################################################
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dot_product('[1,2,3]', '[4,5,6]');
+
+########################################################################
+#
+# Test: VDF with conflicting dimensions from table columns
+#
+########################################################################
+
+CREATE TABLE t_dim3 (v TVECTOR(3));
+CREATE TABLE t_dim4 (v TVECTOR(4));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+INSERT INTO t_dim4 (v) VALUES ('[1,2,3,4]');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t_dim3 LIMIT 1),
+    (SELECT v FROM t_dim4 LIMIT 1));
+
+DROP TABLE t_dim3, t_dim4;
+
+########################################################################
+#
+# Test: decoding a TVECTOR with no dimension fails cleanly
+#
+########################################################################
+
+# from_string over a per-row expression yields a TVECTOR with no params.
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+
+CREATE TABLE t_str (s VARCHAR(32));
+INSERT INTO t_str (s) VALUES ('[1,2,3]');
+
+# Minimal case: returning the value decodes it with no dimension.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string(s) FROM t_str;
+
+DROP TABLE t_str;
+
+########################################################################
+#
+# Test: a TVECTOR column does not round trip through from_string
+#
+########################################################################
+
+# The column's dimension is not propagated through to_string, so the
+# from_string result has no params and cannot be decoded.
+# TODO(villagesql-general): Propagate type params through a to_string /
+# from_string round trip so this returns '[1,2,3]'.
+CREATE TABLE t_dim3 (v TVECTOR(3));
+INSERT INTO t_dim3 (v) VALUES ('[1,2,3]');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::to_string(TVECTOR::from_string(TVECTOR::to_string(v)))
+  FROM t_dim3;
+
+DROP TABLE t_dim3;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+UNINSTALL EXTENSION vsql_tvector;

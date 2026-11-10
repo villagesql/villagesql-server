@@ -1,0 +1,16 @@
+# Test basic SELECT of COMPLEX fields
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(5.0,6.0)');
+
+SELECT id, val FROM t_complex ORDER BY id;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

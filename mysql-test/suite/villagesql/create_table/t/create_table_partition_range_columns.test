@@ -1,0 +1,34 @@
+# Test CREATE TABLE with RANGE COLUMNS partitioning and COMPLEX columns
+# Tests RANGE COLUMNS partitioning with COMPLEX type columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE range_columns_partitioned_table (
+    id INT,
+    year_val INT,
+    month_val INT,
+    complex_reading COMPLEX,
+    description TEXT,
+    PRIMARY KEY(id, year_val, month_val)
+) PARTITION BY RANGE COLUMNS(year_val, month_val) (
+    PARTITION p_2023_q1 VALUES LESS THAN (2023, 4),
+    PARTITION p_2023_q2 VALUES LESS THAN (2023, 7),
+    PARTITION p_2023_q3 VALUES LESS THAN (2023, 10),
+    PARTITION p_2023_q4 VALUES LESS THAN (2024, 1),
+    PARTITION p_future VALUES LESS THAN (MAXVALUE, MAXVALUE)
+);
+
+SHOW COLUMNS FROM range_columns_partitioned_table;
+
+INSERT INTO range_columns_partitioned_table VALUES (4, 2023, 11, '(85.0,86.0)', 'Q4 data');
+INSERT INTO range_columns_partitioned_table VALUES (2, 2023, 5, '(81.0,82.0)', 'Q2 data');
+INSERT INTO range_columns_partitioned_table VALUES (1, 2023, 2, '(79.0,80.0)', 'Q1 data');
+INSERT INTO range_columns_partitioned_table VALUES (3, 2023, 8, '(83.0,84.0)', 'Q3 data');
+
+SELECT * FROM range_columns_partitioned_table ORDER BY id, year_val, month_val;
+
+DROP TABLE range_columns_partitioned_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

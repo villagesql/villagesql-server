@@ -1,0 +1,17 @@
+# Test subquery comparisons with numeric
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_numeric (id INT, val DECIMAL(10,2));
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+INSERT INTO t_numeric VALUES (1, 10.50);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t_complex WHERE val > (SELECT AVG(val) FROM t_numeric);
+
+DROP TABLE t_complex;
+DROP TABLE t_numeric;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,32 @@
+SET @a = vsql_complex.COMPLEX::from_string('(1.0,2.0)');
+SET @b = vsql_complex.COMPLEX::from_string('(3.0,4.0)');
+SELECT @a, @b;
+@a	@b
+(1,2)	(3,4)
+SET @sum = vsql_complex.complex_add(@a, @b);
+SELECT @sum;
+@sum
+(4,6)
+SELECT vsql_complex.complex_real(@sum) as real_part;
+real_part
+4
+SELECT vsql_complex.complex_imag(@sum) as imag_part;
+imag_part
+6
+SET @result = vsql_complex.complex_multiply(@a, @b);
+SELECT @result;
+@result
+(-5,10)
+SELECT vsql_complex.complex_real(@result) as real_part;
+real_part
+-5
+SET @nested = vsql_complex.complex_add(
+vsql_complex.complex_multiply(@a, @b),
+vsql_complex.COMPLEX::from_string('(1.0,1.0)')
+);
+SELECT @nested;
+@nested
+(-4,11)
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use
+SET @a = NULL, @b = NULL, @sum = NULL, @result = NULL, @nested = NULL;

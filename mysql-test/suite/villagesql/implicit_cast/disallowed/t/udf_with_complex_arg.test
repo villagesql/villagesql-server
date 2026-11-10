@@ -1,0 +1,32 @@
+# Test that classic MySQL UDFs cannot accept custom type arguments
+# VDFs (VillageSQL Defined Functions) have explicit type signatures and handle
+# custom types properly. Classic UDFs have no awareness of custom types and
+# should reject them.
+
+# Check if server supports dynamic loading
+if (`SELECT @@have_dynamic_loading != 'YES'`) {
+  --skip UDF requires dynamic loading
+}
+
+# Check if the UDF example library is available
+if (!$UDF_EXAMPLE_LIB) {
+  --skip UDF requires the environment variable \$UDF_EXAMPLE_LIB to be set
+}
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create a classic MySQL UDF (not a VDF)
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE FUNCTION metaphon RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+# Calling a classic UDF with a custom type argument should fail
+--error ER_WRONG_USAGE
+SELECT metaphon(val) FROM t_complex WHERE id = 1;
+
+DROP TABLE t_complex;
+DROP FUNCTION metaphon;
+
+--source include/villagesql/uninstall_complex_extension.inc

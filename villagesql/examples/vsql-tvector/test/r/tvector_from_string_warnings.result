@@ -1,0 +1,39 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (v TVECTOR(3));
+INSERT IGNORE INTO t VALUES ('1,2,3');
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '1,2,3' for column 'v' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect TVECTOR value: '1,2,3' for column 'v' at row 1
+DELETE FROM t;
+INSERT IGNORE INTO t VALUES ('[abc,2,3]');
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[abc,2,3]' for column 'v' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect TVECTOR value: '[abc,2,3]' for column 'v' at row 1
+DELETE FROM t;
+INSERT IGNORE INTO t VALUES ('[1,2,3,4]');
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2,3,4]' for column 'v' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect TVECTOR value: '[1,2,3,4]' for column 'v' at row 1
+DELETE FROM t;
+INSERT IGNORE INTO t VALUES ('[1,2,3');
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2,3' for column 'v' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect TVECTOR value: '[1,2,3' for column 'v' at row 1
+DELETE FROM t;
+INSERT IGNORE INTO t VALUES ('[1,2]');
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2]' for column 'v' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect TVECTOR value: '[1,2]' for column 'v' at row 1
+DELETE FROM t;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

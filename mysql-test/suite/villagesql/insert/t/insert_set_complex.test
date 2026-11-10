@@ -1,0 +1,96 @@
+# Test INSERT INTO ... SET with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name SET assignment_list
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert using SET syntax with negative values and zero variants
+INSERT INTO t1 SET id = 1, val = '(1.0,2.0)';
+INSERT INTO t1 SET val = '(0,0)', id = 2;
+INSERT INTO t1 SET id = 3, val = '(-3.5,1.2)';
+INSERT INTO t1 SET val = '(-0,0)', id = 4;
+INSERT INTO t1 SET id = 5, val = '(5.0,-6.0)';
+INSERT INTO t1 SET val = '(0,-0)', id = 6;
+INSERT INTO t1 SET id = 7, val = '(-7.5,-8.5)';
+INSERT INTO t1 SET val = '(-0,-0)', id = 8;
+INSERT INTO t1 SET id = 9, val = '(9.0,10.0)';
+INSERT INTO t1 SET val = '(11.5,-12.5)', id = 10;
+INSERT INTO t1 SET id = 11, val = '(-13.0,14.0)';
+INSERT INTO t1 SET val = '(15.5,16.5)', id = 12;
+INSERT INTO t1 SET id = 13, val = '(-17.0,-18.0)';
+INSERT INTO t1 SET val = '(19.0,20.0)', id = 14;
+INSERT INTO t1 SET id = 15, val = '(21.5,-22.5)';
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t1 ORDER BY val, id;
+
+DROP TABLE t1;
+
+# Test table with multiple COMPLEX columns
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX,
+    val_d COMPLEX
+);
+
+# Insert using SET syntax with multiple COMPLEX columns
+INSERT INTO t2 SET id = 1, val_a = '(1.0,2.0)', val_b = '(3.0,4.0)', val_c = '(5.0,6.0)', val_d = '(7.0,8.0)';
+INSERT INTO t2 SET id = 2, val_a = '(0,0)', val_b = '(-0,0)', val_c = '(0,-0)', val_d = '(-0,-0)';
+INSERT INTO t2 SET val_a = '(-9.0,10.0)', id = 3, val_b = '(11.0,-12.0)', val_c = '(-13.0,-14.0)', val_d = '(15.0,16.0)';
+INSERT INTO t2 SET val_c = '(21.5,-22.5)', val_a = '(17.5,18.5)', val_d = '(-23.5,-24.5)', id = 4, val_b = '(-19.5,20.5)';
+INSERT INTO t2 SET id = 5, val_b = '(27.0,28.0)', val_a = '(25.0,26.0)', val_d = '(31.0,-32.0)', val_c = '(-29.0,30.0)';
+
+SELECT * FROM t2 ORDER BY id;
+
+# Test ordering by multiple COMPLEX columns
+SELECT * FROM t2 ORDER BY val_a, val_b, val_c;
+SELECT * FROM t2 ORDER BY val_b, val_c, val_d;
+
+DROP TABLE t2;
+
+# Test corner cases
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Test NULL handling
+INSERT INTO t3 SET id = 1, val = NULL;
+INSERT INTO t3 SET id = 2, val = '(1.0,2.0)';
+INSERT INTO t3 SET id = 3, val = NULL;
+
+SELECT * FROM t3 ORDER BY id;
+
+# Test very large numbers with scientific notation
+INSERT INTO t3 SET id = 4, val = '(1e10,2e10)';
+INSERT INTO t3 SET id = 5, val = '(1.5e-10,-2.5e-10)';
+INSERT INTO t3 SET id = 6, val = '(1e100,-1e100)';
+
+# Test whitespace in COMPLEX string format
+INSERT INTO t3 SET id = 7, val = '( 1.0 , 2.0 )';
+INSERT INTO t3 SET id = 8, val = '(  -3.5  ,  4.5  )';
+
+SELECT * FROM t3 ORDER BY id;
+
+# Test ORDER BY with explicit ASC/DESC
+SELECT * FROM t3 WHERE val IS NOT NULL ORDER BY val ASC, id ASC;
+SELECT * FROM t3 WHERE val IS NOT NULL ORDER BY val DESC, id DESC;
+
+# Test comparison operators on COMPLEX
+SELECT * FROM t3 WHERE val < '(1e10,2e10)' ORDER BY id;
+SELECT * FROM t3 WHERE val > '(0,0)' ORDER BY id;
+SELECT * FROM t3 WHERE val <= '(1.0,2.0)' ORDER BY id;
+SELECT * FROM t3 WHERE val >= '(-3.5,4.5)' ORDER BY id;
+SELECT * FROM t3 WHERE val BETWEEN '(-10,-10)' AND '(10,10)' ORDER BY id;
+
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

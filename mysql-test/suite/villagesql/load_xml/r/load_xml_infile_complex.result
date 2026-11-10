@@ -1,0 +1,12 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD XML INFILE 'MYSQLTEST_VARDIR/tmp/complex_basic.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>';
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(3,4)
+4	(0,0)
+5	(5,6)
+6	(0,0)
+7	(0,0)
+DROP TABLE t1;

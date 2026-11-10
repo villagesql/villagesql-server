@@ -1,0 +1,94 @@
+# Start from a freshly (gracefully) restarted server so this test's crash does
+# not discard information (like gcov test coverage) accumulated by preceding
+# tests sharing this mysqld.
+--source include/restart_mysqld.inc
+
+--echo #
+--echo # Test crash recovery with uncommitted transactions on COMPLEX columns
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create a table with COMPLEX column
+CREATE TABLE test_complex_recovery (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_val COMPLEX NOT NULL DEFAULT '(0,0)'
+) ENGINE=InnoDB;
+
+# Insert some initial committed data
+INSERT INTO test_complex_recovery VALUES
+    (1, 'Initial 1', '(1,1)'),
+    (2, 'Initial 2', '(2,2)'),
+    (3, 'Initial 3', '(3,3)');
+
+# Verify initial data
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
+FROM test_complex_recovery
+ORDER BY id;
+
+--echo # Starting transaction without commit
+START TRANSACTION;
+
+# Uncommitted inserts
+INSERT INTO test_complex_recovery VALUES
+    (4, 'Uncommitted Insert 1', '(4,4)'),
+    (5, 'Uncommitted Insert 2', '(5,5)');
+
+# Uncommitted updates
+UPDATE test_complex_recovery
+SET complex_val = '(99,99)',
+    name = 'Uncommitted Update'
+WHERE id = 2;
+
+# Uncommitted delete
+DELETE FROM test_complex_recovery WHERE id = 3;
+
+--echo # Transaction started but not committed - data should be visible in current session
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
+FROM test_complex_recovery
+ORDER BY id;
+
+--echo # Shutting down server with innodb_fast_shutdown=1 (without commit)
+SET GLOBAL innodb_fast_shutdown=1;
+
+--source include/kill_and_restart_mysqld.inc
+
+--echo # Server restarted - checking if uncommitted changes were rolled back
+--echo # COMPLEX extension persists across restart
+
+--echo # Verify COMPLEX type is still recognized
+SHOW CREATE TABLE test_complex_recovery;
+
+--echo # Check table integrity after recovery
+CHECK TABLE test_complex_recovery;
+
+--echo # After crash recovery - only committed data should remain
+--echo # Uncommitted INSERT, UPDATE, DELETE should be rolled back
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
+FROM test_complex_recovery
+ORDER BY id;
+
+--echo # Verify counts
+SELECT COUNT(*) AS total_rows FROM test_complex_recovery;
+
+--echo # Verify row 2 was not updated (should still have (2,2))
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
+FROM test_complex_recovery
+WHERE id = 2;
+
+--echo # Verify row 3 was not deleted
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
+FROM test_complex_recovery
+WHERE id = 3;
+
+--echo # Verify rows 4 and 5 were not inserted
+SELECT COUNT(*) AS count_row_4 FROM test_complex_recovery WHERE id = 4;
+SELECT COUNT(*) AS count_row_5 FROM test_complex_recovery WHERE id = 5;
+
+--echo # Test completed - uncommitted transactions correctly rolled back
+
+# Cleanup
+DROP TABLE test_complex_recovery;
+
+--source include/villagesql/uninstall_complex_extension.inc

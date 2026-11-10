@@ -1,0 +1,16 @@
+# Test Basic TABLE statement with COMPLEX type
+# Grammar: TABLE tbl_name
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(3.0,4.0)');
+
+TABLE t1;
+
+# Validate values are COMPLEX by calling a COMPLEX function
+SELECT val, vsql_complex.complex_conjugate(val) as conjugate FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

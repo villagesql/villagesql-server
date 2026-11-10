@@ -1,0 +1,82 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'Docs/**'
+  pull_request:
+    branches: [ main ]
+    # No paths-ignore here — the job must always run on PRs so the required
+    # status check is always reported. Docs-only detection happens inside the job.
+
+# Cancel superseded runs on the same PR branch. main pushes are not cancelled
+# so each merged commit gets its own pass.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-and-test:
+    name: Build and Test VillageSQL
+    runs-on: [self-hosted, linux, x86_64]
+    permissions:
+      actions: write  # Required to read/write caches
+      contents: read
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        # Get enough history for submodules and dependencies
+        fetch-depth: 50
+        path: source
+
+      # The build/skip decision lives in villagesql/bld_tools/workflow_skips_build.sh.
+      # It makes its own git calls against this checkout and returns 'build' or
+      # 'skip' (never blank).
+      # The list of exempt paths is kept in workflow_skip_paths.txt.
+      #
+      # The `push:` trigger's paths-ignore above is a coarse subset shortcut;
+      # The workflow_skip_paths.txt is the authoritative exemption policy for the PR gate.
+    - name: Check if build is needed
+      id: check-commit
+      working-directory: ./source
+      run: |
+        DECISION="$(./villagesql/bld_tools/workflow_skips_build.sh \
+          "${{ github.event_name }}" "${{ github.base_ref }}")"
+        echo "Workflow decision: $DECISION"
+        echo "validate=$DECISION" >> $GITHUB_OUTPUT
+
+    - name: Setup VillageSQL build environment
+      if: steps.check-commit.outputs.validate == 'build'
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        cache-key-prefix: build
+
+    - name: Build VillageSQL
+      if: steps.check-commit.outputs.validate == 'build'
+      working-directory: ./source
+      run: ./villagesql/bld_tools/build_ci.sh
+      env:
+        BUILD_TYPE: debug
+        CMAKE_EXTRA_FLAGS: -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+    - name: Evict stale ccache entries
+      if: steps.check-commit.outputs.validate == 'build'
+      run: ccache --evict-older-than 3600s
+
+    - name: Show ccache statistics
+      if: steps.check-commit.outputs.validate == 'build'
+      run: ccache -s
+
+    - name: Run tests
+      if: steps.check-commit.outputs.validate == 'build'
+      uses: ./source/.github/actions/run-tests
+      with:
+        artifact-name: test-logs

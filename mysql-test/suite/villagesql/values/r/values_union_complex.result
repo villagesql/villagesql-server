@@ -1,0 +1,36 @@
+VALUES ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')) UNION VALUES ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'));
+column_0
+(1,2)
+(3,4)
+VALUES
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'))
+UNION ALL
+VALUES
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,-0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,-0)'));
+column_0
+(1,2)
+(0,0)
+(3,4)
+(1,2)
+(0,0)
+(0,0)
+(0,0)
+VALUES
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'))
+UNION
+VALUES
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,-0)')),
+ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,-0)'));
+column_0
+(1,2)
+(0,0)
+(3,4)

@@ -1,0 +1,62 @@
+# Test SELECT ... WHERE col IN (literal_list) with COMPLEX type
+# Grammar: SELECT ... WHERE expr IN (value1, value2, ...)
+# This tests the make_same() mechanism for cmp_item comparators
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, '(0.0,0.0)'),           # Zero
+  (2, '(1.0,2.0)'),           # Regular positive
+  (3, '(3.0,4.0)'),           # Medium positive
+  (4, '(5.0,6.0)'),           # Medium positive
+  (5, '(7.0,8.0)'),           # Medium positive
+  (6, '(9.0,10.0)'),          # Medium positive
+  (7, '(-1.0,-2.0)'),         # Negative both parts
+  (8, '(-5.0,3.0)'),          # Negative real, positive imaginary
+  (9, '(2.0,-7.0)'),          # Positive real, negative imaginary
+  (10, '(3.0,1.0)'),          # Same real as id=3, different imaginary
+  (11, '(1.5e100,2.3e100)'),  # Very large positive
+  (12, '(-1.5e100,-2.3e100)'), # Very large negative
+  (13, '(4.22e-10,3.14e-15)'), # Very small positive
+  (14, '(-1.17e-9,-8.88e-12)'); # Small negative with neg exponent
+
+# Test IN with multiple literal values - positives
+SELECT id FROM t1 WHERE val IN ('(1.0,2.0)', '(5.0,6.0)', '(9.0,10.0)') ORDER BY id;
+
+# Test IN with single value (should work like =)
+SELECT id FROM t1 WHERE val IN ('(3.0,4.0)');
+
+# Test IN with no matches
+SELECT id FROM t1 WHERE val IN ('(99.0,99.0)', '(88.0,88.0)');
+
+# Test IN with zeros and negatives
+SELECT id FROM t1 WHERE val IN ('(0.0,0.0)', '(-1.0,-2.0)', '(-5.0,3.0)') ORDER BY id;
+
+# Test IN with mixed signs
+SELECT id FROM t1 WHERE val IN ('(2.0,-7.0)', '(-5.0,3.0)', '(1.0,2.0)') ORDER BY id;
+
+# Test IN with very large values
+SELECT id FROM t1 WHERE val IN ('(1.5e100,2.3e100)', '(-1.5e100,-2.3e100)') ORDER BY id;
+
+# Test IN with very small values
+SELECT id FROM t1 WHERE val IN ('(4.22e-10,3.14e-15)', '(-1.17e-9,-8.88e-12)') ORDER BY id;
+
+# Test IN with same real part, different imaginary
+SELECT id FROM t1 WHERE val IN ('(3.0,1.0)', '(3.0,4.0)', '(3.0,9.0)') ORDER BY id;
+
+# Test NOT IN with various values
+SELECT id FROM t1 WHERE val NOT IN ('(1.0,2.0)', '(3.0,4.0)', '(0.0,0.0)') ORDER BY id;
+
+# Test IN with NULL
+INSERT INTO t1 VALUES (15, NULL);
+SELECT id FROM t1 WHERE val IN ('(1.0,2.0)', NULL) ORDER BY id;
+SELECT id FROM t1 WHERE val IN (NULL) ORDER BY id;
+
+# Test IN combined with other conditions
+SELECT id FROM t1 WHERE id > 7 AND val IN ('(-1.0,-2.0)', '(2.0,-7.0)', '(3.0,1.0)') ORDER BY id;
+SELECT id FROM t1 WHERE id < 10 AND val NOT IN ('(0.0,0.0)', '(1.0,2.0)') ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

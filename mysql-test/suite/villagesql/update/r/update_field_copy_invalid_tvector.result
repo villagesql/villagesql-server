@@ -1,0 +1,50 @@
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR");
+CREATE TABLE m (id INT PRIMARY KEY, s VARCHAR(100), v TVECTOR(2));
+INSERT INTO m VALUES (1, '[1,2]', '[9,9]'), (2, '[1,2,3]', '[9,9]');
+UPDATE m SET v = s;
+ERROR HY000: Incorrect TVECTOR value: '[1,2,3]' for column 'v' at row 2
+SELECT id, v, v IS NULL AS is_null FROM m ORDER BY id;
+id	v	is_null
+1	[9,9]	0
+2	[9,9]	0
+SET @@session.sql_mode = '';
+UPDATE m SET v = s;
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2,3]' for column 'v' at row 2
+SET @@session.sql_mode = DEFAULT;
+SELECT id, v, v IS NULL AS is_null FROM m ORDER BY id;
+id	v	is_null
+1	[1,2]	0
+2	[0,0]	0
+CREATE TABLE m_nn (id INT PRIMARY KEY, s VARCHAR(100), v TVECTOR(2) NOT NULL);
+INSERT INTO m_nn (id, s, v) VALUES (1, '[1,2]', '[9,9]'), (2, '[1,2,3]', '[9,9]');
+SET @@session.sql_mode = '';
+UPDATE m_nn SET v = s;
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2,3]' for column 'v' at row 2
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect TVECTOR value: '[1,2,3]' for column 'v' at row 2
+SET @@session.sql_mode = DEFAULT;
+SELECT id, v FROM m_nn ORDER BY id;
+id	v
+1	[1,2]
+2	[0,0]
+DROP TABLE m_nn;
+CREATE TABLE m2 (id INT PRIMARY KEY, s VARCHAR(100), v TVECTOR(2));
+INSERT INTO m2 (id, s) VALUES (1, '[1,2]'), (2, '[1,2,3]');
+SET @@session.sql_mode = '';
+UPDATE m2 SET v = s;
+Warnings:
+Warning	1366	Incorrect TVECTOR value: '[1,2,3]' for column 'v' at row 2
+SET @@session.sql_mode = DEFAULT;
+SELECT id, v, v IS NULL AS is_null FROM m2 ORDER BY id;
+id	v	is_null
+1	[1,2]	0
+2	[0,0]	0
+SELECT id, v FROM m2 ORDER BY id;
+id	v
+1	[1,2]
+2	[0,0]
+DROP TABLE m2;
+DROP TABLE m;

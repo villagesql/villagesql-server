@@ -1,0 +1,7 @@
+{
+  "name": "vsql_resolve_only_test",
+  "version": "0.0.1",
+  "description": "Minimal fixture: a fixed-length parameterized type RPARAM that provides resolve_params but NOT int_to_params. Used to verify that a bare column declaration of such a type is rejected at parse time.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

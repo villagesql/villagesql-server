@@ -1,0 +1,133 @@
+# Test INSERT ... ON DUPLICATE KEY UPDATE with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name VALUES (value_list) ON DUPLICATE KEY UPDATE assignment_list
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+# Insert initial 20 rows with zero variants and negative values
+INSERT INTO t1 VALUES (1, '(15.0,20.0)', 'row1');
+INSERT INTO t1 VALUES (2, '(-0,0)', 'row2');
+INSERT INTO t1 VALUES (3, '(-7.5,-8.5)', 'row3');
+INSERT INTO t1 VALUES (4, '(0,0)', 'row4');
+INSERT INTO t1 VALUES (5, '(22.0,-13.0)', 'row5');
+INSERT INTO t1 VALUES (6, '(0,-0)', 'row6');
+INSERT INTO t1 VALUES (7, '(-18.0,9.0)', 'row7');
+INSERT INTO t1 VALUES (8, '(3.5,4.2)', 'row8');
+INSERT INTO t1 VALUES (9, '(-0,-0)', 'row9');
+INSERT INTO t1 VALUES (10, '(11.5,-12.5)', 'row10');
+INSERT INTO t1 VALUES (11, '(0,0)', 'row11');
+INSERT INTO t1 VALUES (12, '(-25.0,-30.0)', 'row12');
+INSERT INTO t1 VALUES (13, '(19.0,21.0)', 'row13');
+INSERT INTO t1 VALUES (14, '(-0,0)', 'row14');
+INSERT INTO t1 VALUES (15, '(7.0,-5.0)', 'row15');
+INSERT INTO t1 VALUES (16, '(-14.0,16.0)', 'row16');
+INSERT INTO t1 VALUES (17, '(0,-0)', 'row17');
+INSERT INTO t1 VALUES (18, '(26.0,28.0)', 'row18');
+INSERT INTO t1 VALUES (19, '(-9.5,11.5)', 'row19');
+INSERT INTO t1 VALUES (20, '(-0,-0)', 'row20');
+
+# Insert new rows (no duplicates)
+INSERT INTO t1 VALUES (21, '(33.0,-35.0)', 'row21')
+ON DUPLICATE KEY UPDATE val = '(999.0,999.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (22, '(0,0)', 'row22')
+ON DUPLICATE KEY UPDATE val = '(888.0,888.0)', name = 'updated';
+
+# Update existing rows with duplicate keys
+INSERT INTO t1 VALUES (1, '(100.0,100.0)', 'duplicate')
+ON DUPLICATE KEY UPDATE val = '(1.1,2.1)', name = 'updated1';
+
+INSERT INTO t1 VALUES (5, '(200.0,200.0)', 'duplicate')
+ON DUPLICATE KEY UPDATE val = '(5.5,-6.5)', name = 'updated5';
+
+INSERT INTO t1 VALUES (10, '(300.0,300.0)', 'duplicate')
+ON DUPLICATE KEY UPDATE val = '(10.1,-11.1)', name = 'updated10';
+
+# Insert more new rows
+INSERT INTO t1 VALUES (23, '(-22.0,24.0)', 'row23')
+ON DUPLICATE KEY UPDATE val = '(777.0,777.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (24, '(17.5,19.5)', 'row24')
+ON DUPLICATE KEY UPDATE val = '(666.0,666.0)', name = 'updated';
+
+# Update with zero variants
+INSERT INTO t1 VALUES (2, '(500.0,500.0)', 'duplicate')
+ON DUPLICATE KEY UPDATE val = '(0,0)', name = 'updated_zero';
+
+INSERT INTO t1 VALUES (9, '(600.0,600.0)', 'duplicate')
+ON DUPLICATE KEY UPDATE val = '(-0,-0)', name = 'updated_zero';
+
+# Insert remaining rows to reach 30+
+INSERT INTO t1 VALUES (25, '(0,-0)', 'row25')
+ON DUPLICATE KEY UPDATE val = '(555.0,555.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (26, '(-31.0,-32.0)', 'row26')
+ON DUPLICATE KEY UPDATE val = '(444.0,444.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (27, '(29.0,30.0)', 'row27')
+ON DUPLICATE KEY UPDATE val = '(333.0,333.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (28, '(-0,0)', 'row28')
+ON DUPLICATE KEY UPDATE val = '(222.0,222.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (29, '(12.0,-14.0)', 'row29')
+ON DUPLICATE KEY UPDATE val = '(111.0,111.0)', name = 'updated';
+
+INSERT INTO t1 VALUES (30, '(-27.0,28.0)', 'row30')
+ON DUPLICATE KEY UPDATE val = '(000.0,000.0)', name = 'updated';
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t1 ORDER BY val, id;
+
+DROP TABLE t1;
+
+# Test with multiple COMPLEX columns
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX
+);
+
+# Insert initial rows
+INSERT INTO t2 VALUES (1, '(1.0,2.0)', '(3.0,4.0)', '(5.0,6.0)');
+INSERT INTO t2 VALUES (2, '(2.5,3.5)', '(-0,0)', '(0,-0)');
+INSERT INTO t2 VALUES (3, '(-7.0,8.0)', '(9.0,-10.0)', '(-11.0,-12.0)');
+INSERT INTO t2 VALUES (4, '(13.5,14.5)', '(-15.5,16.5)', '(17.5,-18.5)');
+INSERT INTO t2 VALUES (5, '(-19.0,-20.0)', '(21.0,22.0)', '(-23.0,24.0)');
+
+# Insert new row (no duplicate)
+INSERT INTO t2 VALUES (6, '(0,-0)', '(24.0,-25.0)', '(-0,0)')
+ON DUPLICATE KEY UPDATE val_a = '(999.0,999.0)', val_b = '(999.0,999.0)', val_c = '(999.0,999.0)';
+
+# Update existing row (duplicate key)
+INSERT INTO t2 VALUES (1, '(100.0,100.0)', '(100.0,100.0)', '(100.0,100.0)')
+ON DUPLICATE KEY UPDATE val_a = '(1.1,2.1)', val_b = '(3.1,4.1)', val_c = '(5.1,6.1)';
+
+# Update with zero variants
+INSERT INTO t2 VALUES (2, '(200.0,200.0)', '(200.0,200.0)', '(200.0,200.0)')
+ON DUPLICATE KEY UPDATE val_a = '(-0,-0)', val_b = '(0,-0)', val_c = '(-0,0)';
+
+# Insert more rows
+INSERT INTO t2 VALUES (7, '(26.0,27.0)', '(-0,-0)', '(28.0,29.0)')
+ON DUPLICATE KEY UPDATE val_a = '(888.0,888.0)', val_b = '(888.0,888.0)', val_c = '(888.0,888.0)';
+
+INSERT INTO t2 VALUES (8, '(-30.0,31.0)', '(32.0,33.0)', '(0,0)')
+ON DUPLICATE KEY UPDATE val_a = '(777.0,777.0)', val_b = '(777.0,777.0)', val_c = '(777.0,777.0)';
+
+SELECT * FROM t2 ORDER BY id;
+
+# Test ordering by multiple COMPLEX columns
+SELECT * FROM t2 ORDER BY val_a, val_b;
+SELECT * FROM t2 ORDER BY val_b, val_c;
+
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

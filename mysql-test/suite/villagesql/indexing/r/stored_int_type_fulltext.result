@@ -1,0 +1,90 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT, txt TEXT);
+INSERT INTO t1 VALUES (1, '42',   'hello fulltext world');
+INSERT INTO t1 VALUES (2, '-7',   'innodb custom column store');
+INSERT INTO t1 VALUES (3, '0',    'another fulltext custom row');
+INSERT INTO t1 VALUES (4, '-100', 'fulltext at the bottom');
+INSERT INTO t1 VALUES (5, '77',   'top custom entry');
+INSERT INTO t1 VALUES (6, '13',   'middle fulltext custom line');
+# ALTER ADD FULLTEXT: rebuilds the table to add FTS_DOC_ID
+ALTER TABLE t1 ADD FULLTEXT(txt);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	42
+2	-7
+3	0
+4	-100
+5	77
+6	13
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY id;
+id
+1
+3
+4
+6
+SELECT * FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY n;
+id	n	txt
+4	-100	fulltext at the bottom
+3	0	another fulltext custom row
+6	13	middle fulltext custom line
+1	42	hello fulltext world
+SELECT n, id, txt FROM t1 WHERE MATCH(txt) AGAINST ('fulltext') ORDER BY n;
+n	id	txt
+-100	4	fulltext at the bottom
+0	3	another fulltext custom row
+13	6	middle fulltext custom line
+42	1	hello fulltext world
+# OPTIMIZE: recreate with both the FTS index and the custom column
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SELECT id, n FROM t1 ORDER BY id;
+id	n
+1	42
+2	-7
+3	0
+4	-100
+5	77
+6	13
+SELECT id FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY id;
+id
+2
+3
+5
+6
+SELECT * FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY n;
+id	n	txt
+2	-7	innodb custom column store
+3	0	another fulltext custom row
+6	13	middle fulltext custom line
+5	77	top custom entry
+SELECT n, id, txt FROM t1 WHERE MATCH(txt) AGAINST ('custom') ORDER BY n;
+n	id	txt
+-7	2	innodb custom column store
+0	3	another fulltext custom row
+13	6	middle fulltext custom line
+77	5	top custom entry
+# FULLTEXT declared at CREATE TABLE
+CREATE TABLE t2 (id INT PRIMARY KEY, n STORED_INT, txt TEXT, FULLTEXT(txt));
+INSERT INTO t2 SELECT * from t1;
+INSERT INTO t2 VALUES (7, '5', 'inline fulltext definition');
+SELECT id, n FROM t2 WHERE MATCH(txt) AGAINST ('inline');
+id	n
+7	5
+# An out of line custom-type column is rejected the same way as an
+# inline one: the tokenizer never sees an extended storage field
+ALTER TABLE t1 ADD FULLTEXT(n);
+ERROR HY000: Column 'n' cannot be part of FULLTEXT index
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, FULLTEXT(n));
+ERROR HY000: Column 'n' cannot be part of FULLTEXT index
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, txt TEXT, FULLTEXT(txt, n));
+ERROR HY000: Column 'n' cannot be part of FULLTEXT index
+DROP TABLE t1;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

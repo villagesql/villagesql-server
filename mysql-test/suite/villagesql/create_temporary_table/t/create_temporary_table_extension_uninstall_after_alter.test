@@ -1,0 +1,17 @@
+# Test that uninstalling an extension is blocked after ALTER TABLE on a
+# temporary table (COPY path), and succeeds once the temporary table is dropped.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TEMPORARY TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+ALTER TABLE t1 ADD COLUMN extra INT;
+
+--echo # UNINSTALL should fail - t1 still holds a reference
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+DROP TEMPORARY TABLE t1;
+
+--echo # UNINSTALL should now succeed
+--source include/villagesql/uninstall_complex_extension.inc

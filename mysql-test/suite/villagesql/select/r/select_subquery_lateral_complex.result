@@ -1,0 +1,86 @@
+CREATE TABLE t1 (id INT, val COMPLEX, name VARCHAR(20));
+INSERT INTO t1 VALUES (3, '(0,-0)', 'Third'), (2, '(3.0,4.0)', 'Second');
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', 'First'), (4, '(0,0)', 'Fourth');
+INSERT INTO t1 VALUES (-4, '(1.0,2.0)', 'Minus'), (27, '(0,0)', 'Other');
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(10.0,20.0)'), (1, '(30.0,40.0)');
+INSERT INTO t2 VALUES (2, '(7.0,7.0)'), (2, '(-0,-0)');
+INSERT INTO t2 VALUES (2, '(17.0,17.0)'), (2, '(0,-17)');
+INSERT INTO t2 VALUES (1, '(117.0,17.0)'), (1, '(0,-17)');
+INSERT INTO t2 VALUES (-4, '(17.0,17.0)');
+SELECT * FROM t1 ORDER BY id;
+id	val	name
+-4	(1,2)	Minus
+1	(1,2)	First
+2	(3,4)	Second
+3	(0,0)	Third
+4	(0,0)	Fourth
+27	(0,0)	Other
+SELECT * FROM t2 ORDER BY id;
+id	val
+-4	(17,17)
+1	(10,20)
+1	(30,40)
+1	(117,17)
+1	(0,-17)
+2	(7,7)
+2	(0,0)
+2	(17,17)
+2	(0,-17)
+SELECT t1.id, t1.val, lat.val
+FROM t1, LATERAL (SELECT val FROM t2 WHERE t2.id = t1.id) AS lat;
+id	val	val
+1	(1,2)	(10,20)
+1	(1,2)	(30,40)
+2	(3,4)	(7,7)
+2	(3,4)	(0,0)
+2	(3,4)	(17,17)
+2	(3,4)	(0,-17)
+1	(1,2)	(117,17)
+1	(1,2)	(0,-17)
+-4	(1,2)	(17,17)
+SELECT t1.id, t1.val, lat.val
+FROM t1 JOIN LATERAL (SELECT val FROM t2 WHERE t2.id = t1.id) AS lat ON 1=1;
+id	val	val
+1	(1,2)	(10,20)
+1	(1,2)	(30,40)
+2	(3,4)	(7,7)
+2	(3,4)	(0,0)
+2	(3,4)	(17,17)
+2	(3,4)	(0,-17)
+1	(1,2)	(117,17)
+1	(1,2)	(0,-17)
+-4	(1,2)	(17,17)
+SELECT t1.id, t1.val, lat.val
+FROM t1, LATERAL (SELECT val FROM t2 WHERE t2.val = t1.val) AS lat;
+id	val	val
+27	(0,0)	(0,0)
+4	(0,0)	(0,0)
+3	(0,0)	(0,0)
+SELECT t1.id, t1.val, lat.val
+FROM t1 JOIN LATERAL (SELECT val FROM t2 WHERE t2.val = t1.val) AS lat ON 1=1;
+id	val	val
+27	(0,0)	(0,0)
+4	(0,0)	(0,0)
+3	(0,0)	(0,0)
+SELECT a.name AS name, a.id AS id1, b.id AS id2, b.val AS val
+FROM t1 AS a
+LEFT JOIN LATERAL (
+SELECT id, val
+FROM t2
+WHERE a.id = id
+ORDER BY val DESC
+LIMIT 2
+) AS b ON true
+ORDER BY a.name ASC, b.val DESC;
+name	id1	id2	val
+First	1	1	(117,17)
+First	1	1	(30,40)
+Fourth	4	NULL	NULL
+Minus	-4	-4	(17,17)
+Other	27	NULL	NULL
+Second	2	2	(17,17)
+Second	2	2	(7,7)
+Third	3	NULL	NULL
+DROP TABLE t1;
+DROP TABLE t2;

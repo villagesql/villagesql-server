@@ -1,0 +1,16 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1,2)'), (2, NULL), (3, '(3,4)');
+CREATE VIEW v_nullcheck AS
+SELECT id, val FROM t1 WHERE val IS NULL;
+SELECT * FROM v_nullcheck;
+id	val
+2	NULL
+CREATE VIEW v_notnull AS
+SELECT id, val FROM t1 WHERE val IS NOT NULL;
+SELECT * FROM v_notnull ORDER BY id;
+id	val
+1	(1,2)
+3	(3,4)
+DROP VIEW v_nullcheck;
+DROP VIEW v_notnull;
+DROP TABLE t1;

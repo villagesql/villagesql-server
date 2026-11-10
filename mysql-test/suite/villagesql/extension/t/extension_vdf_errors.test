@@ -1,0 +1,39 @@
+# Test VDF error handling
+# Verifies that VDFs can return NULL or errors appropriately
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo # Test COMPLEX::from_string with invalid input returns NULL with warning
+SELECT COMPLEX::from_string('not_a_complex_number') AS result;
+SHOW WARNINGS;
+
+--echo # Test COMPLEX::from_string with malformed string from table column
+CREATE TABLE t_strings (id INT, str_val VARCHAR(100));
+INSERT INTO t_strings VALUES (1, 'not_a_complex_number');
+SELECT id, COMPLEX::from_string(str_val) AS result FROM t_strings;
+SHOW WARNINGS;
+DROP TABLE t_strings;
+
+--echo # Test COMPLEX_DIVIDE division by zero returns NULL with warning
+SELECT vsql_complex.COMPLEX_DIVIDE('(1.0,2.0)', '(0.0,0.0)') AS result;
+SELECT vsql_complex.COMPLEX_DIVIDE('(3.0,4.0)', '(0,0)') AS result;
+
+--echo # Verify non-zero division still works
+SELECT vsql_complex.COMPLEX_DIVIDE('(4.0,2.0)', '(2.0,0.0)') AS result;
+
+--echo # Test with table data
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    numerator COMPLEX,
+    denominator COMPLEX
+);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(0.0,0.0)');
+INSERT INTO t1 VALUES (2, '(3.0,4.0)', '(1.0,1.0)');
+INSERT INTO t1 VALUES (3, '(5.0,0.0)', '(0,0)');
+
+SELECT id, numerator, denominator, vsql_complex.COMPLEX_DIVIDE(numerator, denominator) AS quotient FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

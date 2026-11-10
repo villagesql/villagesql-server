@@ -1,0 +1,37 @@
+# Test Basic Extension Commands
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension foo using SDK...
+Created foo.veb
+# Install an extension
+INSTALL EXTENSION foo;
+# Verify extension was registered
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+foo	1.0.0	NULL	NULL	NULL	NULL
+# Verify direct access to villagesql.extensions is blocked
+SELECT * FROM villagesql.extensions WHERE extension_name = 'foo';
+ERROR HY000: Access to table 'villagesql.extensions' is rejected.
+# Try to install same extension again (should fail)
+INSTALL EXTENSION foo;
+ERROR HY000: Extension 'foo' is already installed
+# Uninstall the extension
+UNINSTALL EXTENSION foo;
+# Verify extension was removed (should return no rows)
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# Try to uninstall non-existent extension (should fail)
+UNINSTALL EXTENSION foo;
+ERROR HY000: Extension 'foo' is not installed
+Creating extension bar using SDK...
+Created bar.veb
+# Install and uninstall a different extension
+INSTALL EXTENSION bar;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+bar	2.0.0	NULL	NULL	NULL	NULL
+UNINSTALL EXTENSION bar;
+# Verify bar was removed (should return no rows)
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+include/rpl/deprecated/show_binlog_events.inc

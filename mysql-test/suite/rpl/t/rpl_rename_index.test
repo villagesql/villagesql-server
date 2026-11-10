@@ -1,0 +1,12 @@
+################################################################################
+# The aim of the test is to ensure that ALTER TABLE..RENAME INDEX is
+# successfully replicated.
+################################################################################
+
+--source include/rpl/init_source_replica.inc
+
+--let $master= master
+--let $slave= slave
+--source common/rpl/rename_index.inc
+
+--source include/rpl/deinit.inc

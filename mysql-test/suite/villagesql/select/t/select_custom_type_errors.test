@@ -1,0 +1,91 @@
+# Test error handling for custom types in SELECT statements
+# This test verifies that proper errors are thrown for incompatible type operations
+
+# Install both COMPLEX and COMPLEX2 types for testing type mismatches
+--source include/villagesql/install_complex_extension.inc
+
+# Create tables with different custom types
+CREATE TABLE t1 (id INT, val1 COMPLEX);
+CREATE TABLE t2 (id INT, val2 COMPLEX2);
+
+# Insert test data only into COMPLEX table (COMPLEX has working functions)
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+# Don't insert into COMPLEX2 table - we only need the schema for type checking
+
+# Test 1: Incompatible type comparison in WHERE clause (equality)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
+
+# Test 2: Incompatible type comparison in WHERE clause (inequality)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 <> t2.val2;
+
+# Test 3: Incompatible type comparison in WHERE clause (less than)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 < t2.val2;
+
+# Test 4: Incompatible type comparison in WHERE clause (greater than)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 > t2.val2;
+
+# Test 5: Incompatible type comparison in WHERE clause (less than or equal)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 <= t2.val2;
+
+# Test 6: Incompatible type comparison in WHERE clause (greater than or equal)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 >= t2.val2;
+
+# Test 7: Incompatible type comparison in WHERE clause (null-safe equal)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 <=> t2.val2;
+
+# Test 8: Incompatible type comparison in simple WHERE clause with single table
+CREATE TABLE t3 (id INT, val1 COMPLEX, val2 COMPLEX2);
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t3 WHERE val1 = val2;
+
+# Test 9: Incompatible type comparison in JOIN condition
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1 JOIN t2 ON t1.val1 = t2.val2;
+
+# Test 10: Compatible type comparisons should work (same type)
+SELECT * FROM t1 t1a, t1 t1b WHERE t1a.val1 = t1b.val1;
+# Note: Not testing t2 compatible comparisons since we didn't insert data
+
+# Cleanup
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;
+
+# Create tables with different custom types
+CREATE TABLE t1 (id INT, val1 COMPLEX);
+CREATE TABLE t2 (id INT, val2 COMPLEX2 INVISIBLE);
+
+# Insert test data only into COMPLEX table (COMPLEX has working functions)
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+# Don't insert into COMPLEX2 table - we only need the schema for type checking
+
+# Test 1: Incompatible type comparison in WHERE clause (equality)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
+
+# Cleanup
+DROP TABLE t1;
+DROP TABLE t2;
+
+# Test: Same custom type (COMPLEX) with INVISIBLE column
+CREATE TABLE t1 (id INT, val1 COMPLEX);
+CREATE TABLE t2 (id INT, val2 COMPLEX INVISIBLE);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+INSERT INTO t2 (id, val2) VALUES (1, '(1.0,2.0)'), (2, '(5.0,6.0)');
+
+SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
+
+# Cleanup
+DROP TABLE t1;
+DROP TABLE t2;
+
+# Uninstall both types
+--source include/villagesql/uninstall_complex_extension.inc

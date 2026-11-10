@@ -1,0 +1,13 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t_complex VALUES
+(0, '(-7.0,7.0)'),
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(13.0,14.0)');
+SELECT id, CASE WHEN id = 1 THEN val ELSE '(0,0)' END as result
+FROM t_complex WHERE id <= 2 ORDER BY id;
+id	result
+0	(0,0)
+1	(1,2)
+2	(0,0)
+DROP TABLE t_complex;

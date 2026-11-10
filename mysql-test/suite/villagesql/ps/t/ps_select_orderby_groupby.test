@@ -1,0 +1,53 @@
+# Test SELECT with ORDER BY and GROUP BY on custom types
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)'), (4, '(1.0,2.0)');
+
+--echo #
+--echo # Test 1: SELECT with ORDER BY on COMPLEX column
+--echo #
+
+PREPARE stmt1 FROM 'SELECT id, val FROM t1 ORDER BY val';
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: SELECT with ORDER BY and LIMIT using parameter
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id, val FROM t1 ORDER BY id LIMIT ?';
+SET @lim = 2;
+EXECUTE stmt2 USING @lim;
+SET @lim = 3;
+EXECUTE stmt2 USING @lim;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: SELECT DISTINCT with COMPLEX column
+--echo #
+
+PREPARE stmt3 FROM 'SELECT DISTINCT val FROM t1 ORDER BY val';
+EXECUTE stmt3;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: SELECT with GROUP BY on COMPLEX column
+--echo #
+
+PREPARE stmt4 FROM 'SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY val';
+EXECUTE stmt4;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

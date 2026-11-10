@@ -1,0 +1,52 @@
+# Test LATERAL Derived Tables with COMPLEX type
+# Grammar: SELECT ... FROM t1, LATERAL (SELECT ... WHERE t1.col = ...)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX, name VARCHAR(20));
+INSERT INTO t1 VALUES (3, '(0,-0)', 'Third'), (2, '(3.0,4.0)', 'Second');
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', 'First'), (4, '(0,0)', 'Fourth');
+INSERT INTO t1 VALUES (-4, '(1.0,2.0)', 'Minus'), (27, '(0,0)', 'Other');
+
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(10.0,20.0)'), (1, '(30.0,40.0)');
+INSERT INTO t2 VALUES (2, '(7.0,7.0)'), (2, '(-0,-0)');
+INSERT INTO t2 VALUES (2, '(17.0,17.0)'), (2, '(0,-17)');
+INSERT INTO t2 VALUES (1, '(117.0,17.0)'), (1, '(0,-17)');
+INSERT INTO t2 VALUES (-4, '(17.0,17.0)');
+
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t2 ORDER BY id;
+
+# Basic LATERAL join
+SELECT t1.id, t1.val, lat.val
+FROM t1, LATERAL (SELECT val FROM t2 WHERE t2.id = t1.id) AS lat;
+
+# JOIN LATERAL syntax
+SELECT t1.id, t1.val, lat.val
+FROM t1 JOIN LATERAL (SELECT val FROM t2 WHERE t2.id = t1.id) AS lat ON 1=1;
+
+# LATERAL join on custom type
+SELECT t1.id, t1.val, lat.val
+FROM t1, LATERAL (SELECT val FROM t2 WHERE t2.val = t1.val) AS lat;
+
+# JOIN LATERAL syntax
+SELECT t1.id, t1.val, lat.val
+FROM t1 JOIN LATERAL (SELECT val FROM t2 WHERE t2.val = t1.val) AS lat ON 1=1;
+
+# Top 2 values per name
+SELECT a.name AS name, a.id AS id1, b.id AS id2, b.val AS val
+FROM t1 AS a
+LEFT JOIN LATERAL (
+    SELECT id, val
+    FROM t2
+    WHERE a.id = id
+    ORDER BY val DESC
+    LIMIT 2
+) AS b ON true
+ORDER BY a.name ASC, b.val DESC;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,26 @@
+# Test LOAD XML INFILE with COMPLEX type - malformed XML
+# Grammar: LOAD XML INFILE ...
+#
+# MySQL's XML parser is lenient: it scans for matching row tags and silently
+# skips unrecognized content. Malformed XML with no valid row elements results
+# in zero rows loaded with no error or warning.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+
+# Create a file with severely malformed XML (garbage data)
+--write_file $MYSQLTEST_VARDIR/tmp/complex_bad_xml.xml
+This is not XML at all < > & random garbage
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD XML INFILE '$MYSQLTEST_VARDIR/tmp/complex_bad_xml.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>'
+
+# No rows loaded - MySQL silently skips invalid XML without error
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_bad_xml.xml
+
+--source include/villagesql/uninstall_complex_extension.inc

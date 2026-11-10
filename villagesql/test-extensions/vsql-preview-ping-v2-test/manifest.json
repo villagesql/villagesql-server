@@ -1,0 +1,7 @@
+{
+  "name": "vsql_preview_ping_v2_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension: simulates extension compiled against future ping ABI v2 (with pong) loading against a v1 server",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

@@ -1,0 +1,43 @@
+# Test DROP DATABASE with tables having foreign key relationships and COMPLEX columns
+# Grammar: DROP DATABASE database_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE DATABASE complex_relationships_db;
+USE complex_relationships_db;
+
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    profile_data COMPLEX
+);
+
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT,
+    complex_metadata COMPLEX,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+# Verify the custom_columns entries
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO users VALUES (1, 'John', '(1.0,1.0)');
+INSERT INTO orders VALUES (1, 1, '(2.0,3.0)');
+
+SHOW CREATE TABLE orders;
+
+USE test;
+
+# Drop database with foreign key relationships
+DROP DATABASE complex_relationships_db;
+
+# Verify database no longer exists
+SHOW DATABASES LIKE 'complex_relationships_db';
+
+# Verify the custom_columns entries are gone
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

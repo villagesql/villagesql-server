@@ -1,0 +1,24 @@
+CREATE TABLE source_signals (
+id INT PRIMARY KEY,
+waveform COMPLEX,
+frequency DOUBLE
+);
+INSERT INTO source_signals VALUES (1, '(27.0,28.0)', 440.0);
+CREATE TEMPORARY TABLE temp_analysis AS
+SELECT id, waveform, frequency
+FROM source_signals
+WHERE frequency > 400.0;
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 'temp_analysis';
+COLUMN_NAME	DATA_TYPE	COLUMN_TYPE
+SHOW COLUMNS FROM temp_analysis;
+Field	Type	Null	Key	Default	Extra
+id	int	NO		NULL	NULL
+waveform	vsql_complex.COMPLEX	YES		NULL	NULL
+frequency	double	YES		NULL	NULL
+SELECT * FROM temp_analysis;
+id	waveform	frequency
+1	(27,28)	440
+DROP TABLE temp_analysis;
+DROP TABLE source_signals;

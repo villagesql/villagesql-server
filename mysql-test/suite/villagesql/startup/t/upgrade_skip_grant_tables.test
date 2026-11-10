@@ -1,0 +1,57 @@
+# Copyright (c) 2026 VillageSQL Contributors
+# Test VillageSQL installation with --skip-grant-tables
+#
+# This test verifies that VillageSQL schema installation works correctly
+# when the server is started with --skip-grant-tables, which is used
+# during certain upgrade scenarios (e.g., portability tests from Windows).
+
+--source include/big_test.inc
+
+--echo # Detect lower_case_table_names setting
+let $lctn= `SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'lower_case_table_names'`;
+
+let DDIR=$MYSQL_TMP_DIR/villagesql_skip_grant_test;
+let MYSQLD_LOG=$MYSQL_TMP_DIR/upgrade_skip_grant.log;
+
+--echo # Extract vanilla MySQL 8.4.6 datadir
+--copy_file $MYSQL_TEST_DIR/suite/villagesql/std_data/upgrade/mysql_8.4.6_lctn$lctn.zip $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip
+# unset LD_PRELOAD so unzip does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds; otherwise uninstrumented unzip trips LeakSanitizer on its
+# own allocations and fails with exitcode=42 (see
+# include/villagesql/create_extension_sdk.inc for the full explanation).
+--exec unset LD_PRELOAD && unzip -qo $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip -d $MYSQL_TMP_DIR
+
+# Rename the extracted directory to match our DDIR
+--move_file $MYSQL_TMP_DIR/villagesql_mysql_8.4.6_test $DDIR
+--file_exists $DDIR
+
+--echo # Restart with vanilla MySQL datadir and --skip-grant-tables
+# Disable mysqlx because --skip-grant-tables disables networking, causing X Plugin to hang
+--let $wait_counter= 10000
+--let $restart_parameters= restart:--datadir=$DDIR --skip-grant-tables --mysqlx=OFF --log-error=$MYSQLD_LOG --log-error-verbosity=3
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld.inc
+
+--echo # Verify VillageSQL schema was installed
+--source include/villagesql/internal_schema_test.inc
+
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS villagesql_schema_exists FROM mysql.schemata WHERE name = 'villagesql';
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+  AND name = 'properties';
+
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+
+--echo # Shutdown and cleanup
+--source include/shutdown_mysqld.inc
+--remove_file $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip
+--force-rmdir $DDIR
+--remove_file $MYSQLD_LOG
+
+--echo # Restart with original datadir
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # Test passed - VillageSQL installed correctly with --skip-grant-tables!

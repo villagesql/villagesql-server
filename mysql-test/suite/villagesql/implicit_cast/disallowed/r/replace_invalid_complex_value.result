@@ -1,0 +1,4 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+REPLACE INTO t_complex VALUES (1, 'not_complex');
+ERROR HY000: Incorrect COMPLEX value: 'not_complex' for column 'val' at row 1
+DROP TABLE t_complex;

@@ -1,0 +1,60 @@
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+INSTALL EXTENSION vsql_tvector;
+#
+# bind_and_check_types hook, parameter inside CONCAT
+#
+SELECT vsql_tvector.tvector_dim(CONCAT('[1,2,', '3]')) AS d;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+SET @v = '[1,2,3]';
+SELECT vsql_tvector.tvector_dim(CONCAT(@v, '')) AS d;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(CONCAT(?, '''')) AS d';
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+#
+# Other expressions around the parameter
+#
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TRIM(?)) AS d';
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(CAST(? AS CHAR)) AS d';
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(COALESCE(?, ''[0]'')) AS d';
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+# A parameter inside a subquery
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim((SELECT CONCAT(?, ''''))) AS d';
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+#
+# Varargs hook
+#
+SELECT vsql_tvector.tvector_concat_all(CONCAT(@v, ''), '[4]') AS c;
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a custom type or string constant
+PREPARE s FROM
+'SELECT vsql_tvector.tvector_concat_all(CONCAT(?, ''''), ''[4]'') AS c';
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a TVECTOR or a constant vector literal
+# With a direct parameter next to it
+PREPARE s FROM
+'SELECT vsql_tvector.tvector_concat_all(CONCAT(?, ''''), ?) AS c';
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a TVECTOR or a constant vector literal
+#
+# from_string inference, parameter inside CONCAT
+#
+# from_string cannot find the dimension of a CONCAT result, so this
+# fails also without a prepared statement.
+SELECT TVECTOR::from_string(CONCAT(@v, '')) AS v;
+ERROR HY000: Invalid value in column 'v' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+PREPARE s FROM 'SELECT TVECTOR::from_string(CONCAT(?, '''')) AS v';
+EXECUTE s USING @v;
+ERROR HY000: Invalid value in column 'v' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+DEALLOCATE PREPARE s;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, TVECTOR::from_string(CONCAT(@v, '')));
+ERROR HY000: Invalid value in column '???' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+PREPARE s FROM
+'INSERT INTO t VALUES (2, TVECTOR::from_string(CONCAT(?, '''')))';
+EXECUTE s USING @v;
+ERROR HY000: Invalid value in column '???' of type 'vsql_tvector.TVECTOR' at row 1: check server log for details
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t ORDER BY id;
+id	v
+DROP TABLE t;
+SET @v = NULL;
+UNINSTALL EXTENSION vsql_tvector;

@@ -1,0 +1,103 @@
+# An encode that cannot parse its input reaches the field through five
+# different callers, and each one decides what the field is left holding. This
+# covers the four that go through a store path, using the vsql_test_only
+# FAULT_BLOB type, whose encode treats "ENCODE_WARN" as a value it cannot
+# parse.
+#
+# A bad value that does not abort the statement stores the type's intrinsic
+# default, whether or not the column is nullable, mirroring the 0 or '' a
+# built-in type stores for a value it cannot parse. Storing nothing would
+# leave the field holding whatever it contained before: either the previous
+# value, silently keeping the row unchanged, or bytes that do not decode when
+# the column had none.
+#
+# Strict mode still rejects the statement, so each case uses IGNORE to keep
+# the row and read it back.
+#
+# extension_encode_result_types.test covers which encode result is which; this
+# covers what the bad-value result stores.
+
+INSTALL EXTENSION vsql_test_only;
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+
+# Item_string: a literal, overwriting a value the row already held.
+INSERT INTO t1 VALUES (1, 'OK one');
+UPDATE IGNORE t1 SET val = 'ENCODE_WARN' WHERE id = 1;
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+
+# ON DUPLICATE KEY UPDATE reaches the field with the old row restored, which
+# is a different path from a plain UPDATE.
+INSERT IGNORE INTO t1 VALUES (1, 'ENCODE_WARN')
+  ON DUPLICATE KEY UPDATE val = 'ENCODE_WARN';
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+
+# IGNORE does not downgrade an encode that called error(): the statement
+# fails and the row keeps the value it had.
+UPDATE t1 SET val = 'OK one' WHERE id = 1;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE IGNORE t1 SET val = 'ENCODE_ERROR' WHERE id = 1;
+SELECT id, val FROM t1 WHERE id = 1;
+
+# Item::save_in_field_inner: a user variable is read at execution rather than
+# folded into a literal, so it takes the generic caller.
+SET @v = 'ENCODE_WARN';
+INSERT IGNORE INTO t1 VALUES (2, @v);
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 2;
+
+# Item_param: a prepared statement parameter.
+PREPARE ps FROM 'INSERT IGNORE INTO t1 VALUES (?, ?)';
+SET @id = 3, @v = 'ENCODE_WARN';
+EXECUTE ps USING @id, @v;
+SHOW WARNINGS;
+DEALLOCATE PREPARE ps;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 3;
+
+# The same parameter path through UPDATE rather than INSERT.
+PREPARE pu FROM 'UPDATE IGNORE t1 SET val = ? WHERE id = ?';
+SET @v = 'ENCODE_WARN', @id = 3;
+EXECUTE pu USING @v, @id;
+SHOW WARNINGS;
+DEALLOCATE PREPARE pu;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 3;
+
+# TryEncodeStringFieldToCustom: a field-to-field copy, with a good row
+# alongside the bad one.
+CREATE TABLE src (id INT, s VARCHAR(32));
+INSERT INTO src VALUES (4, 'ENCODE_WARN'), (5, 'OK five');
+INSERT IGNORE INTO t1 SELECT id, s FROM src;
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id IN (4, 5) ORDER BY id;
+DROP TABLE src;
+
+# Strict mode rejects the statement instead, leaving the row as it was.
+INSERT INTO t1 VALUES (6, 'OK six');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+UPDATE t1 SET val = 'ENCODE_WARN' WHERE id = 6;
+SELECT id, val FROM t1 WHERE id = 6;
+
+# A NOT NULL column takes the same intrinsic default.
+CREATE TABLE t2 (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+INSERT IGNORE INTO t2 VALUES (1, 'ENCODE_WARN');
+SHOW WARNINGS;
+SELECT id, val FROM t2 WHERE id = 1;
+
+# Over a row that already holds a good value, so the default is shown to
+# replace it rather than to fill a column that was never written.
+INSERT INTO t2 VALUES (2, 'OK two');
+UPDATE IGNORE t2 SET val = 'ENCODE_WARN' WHERE id = 2;
+SHOW WARNINGS;
+SELECT id, val FROM t2 WHERE id = 2;
+
+# The whole table reads back, which is what failed before: one undecodable
+# row made every later read of the column fail.
+SELECT COUNT(*) AS readable_rows FROM t1;
+
+DROP TABLE t1;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;

@@ -1,0 +1,103 @@
+# Exercises VDF behaviors that combine the typed prerun/postrun + state
+# machinery (#551) with the varargs machinery (#563). The combined-surface
+# VDFs (counter_add, varargs_indexed) live in a test-only extension built
+# from std_data/state_and_varargs_vdf.cc. The coexistence test also pulls
+# in vsql_simple for its bytearray type, ba_call_index, and ba_concat_all.
+#
+# Tests:
+#   - counter_add: state-style VDF with an SQL parameter
+#   - coexistence: state-style and varargs VDFs in one statement
+#   - varargs_indexed: varargs VDF reading state set by typed prerun
+#   - prerun_const: which arguments prerun sees as constants, and their values
+
+--source include/villagesql/binlog_check_begin.inc
+
+# Build and install the combined-surface test extension via the SDK. It
+# lands in the default @@veb_dir alongside vsql_simple.veb so both
+# extensions can be installed at once.
+--let $extension_name = state_and_varargs
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/state_and_varargs_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION state_and_varargs;
+INSTALL EXTENSION vsql_simple;
+
+CREATE TABLE test_bytearray (
+  id INT PRIMARY KEY,
+  data BYTEARRAY
+);
+INSERT INTO test_bytearray VALUES (1, 'hello');
+INSERT INTO test_bytearray VALUES (2, 'world123');
+INSERT INTO test_bytearray VALUES (3, 'abcdefgh');
+
+--echo # counter_add: state-style VDF with an SQL parameter
+--echo # (exercises WrapperTypedState forwarding SQL args alongside State&)
+SELECT state_and_varargs.counter_add(10) AS sum
+FROM test_bytearray ORDER BY id;
+
+--echo # Coexistence: state-style and varargs VDFs from two different
+--echo # extensions in one statement. ba_call_index has its own counter,
+--echo # counter_add has its own counter, ba_concat_all is varargs/stateless.
+SELECT vsql_simple.ba_call_index() AS idx,
+       state_and_varargs.counter_add(100) AS running,
+       vsql_simple.ba_concat_all(t.data, t.data) AS twice
+FROM test_bytearray t ORDER BY t.id;
+
+--echo # varargs_indexed: varargs VDF reading per-statement state from typed
+--echo # prerun via VarArgs::state<T>(). Combines #551 (set_user_data) with
+--echo # #563 (varargs). Output is "N:" prefix plus concatenation of bytes.
+SELECT state_and_varargs.varargs_indexed(t1.data, t2.data) AS indexed
+FROM test_bytearray t1, test_bytearray t2
+WHERE t1.id = 1 AND t2.id IN (2, 3)
+ORDER BY t2.id;
+
+--echo # prerun_const: prerun sees each constant argument's value as the VDF
+--echo # will receive it. A NULL literal is a STRING NULL; a column, a
+--echo # subquery and a ? parameter are not constants. A subquery without
+--echo # tables, such as (SELECT 1), is folded into its value first.
+SELECT state_and_varargs.prerun_const(42) AS int_lit,
+       state_and_varargs.prerun_const(1 + 2) AS int_expr,
+       state_and_varargs.prerun_const(1.5e0) AS real_lit,
+       state_and_varargs.prerun_const('abc') AS str_lit,
+       state_and_varargs.prerun_const(NULL) AS null_lit,
+       state_and_varargs.prerun_const(CAST(NULL AS SIGNED)) AS null_int;
+SELECT state_and_varargs.prerun_const(id) AS col,
+       state_and_varargs.prerun_const((SELECT 1)) AS folded,
+       state_and_varargs.prerun_const((SELECT MAX(id) FROM test_bytearray))
+         AS subquery
+FROM test_bytearray WHERE id = 1;
+SET @v = 7;
+SELECT state_and_varargs.prerun_const(@v) AS user_var;
+PREPARE s_const FROM 'SELECT state_and_varargs.prerun_const(?) AS param';
+SET @n = NULL;
+EXECUTE s_const USING @n;
+DEALLOCATE PREPARE s_const;
+
+# As a UDF's init does, prerun evaluates each constant before the first row,
+# and each row evaluates it again: a constant that cannot become the VDF's
+# argument fails even when no row is read, and a constant's warning is
+# reported once for prerun and once per row.
+--error ER_CANNOT_CONVERT_STRING
+SELECT state_and_varargs.prerun_const(_binary x'FF') AS bad_utf8
+FROM test_bytearray WHERE id = 0;
+SELECT state_and_varargs.prerun_const(CAST('1x' AS SIGNED)) AS truncated;
+SELECT id, state_and_varargs.prerun_const(CAST('1x' AS SIGNED)) AS truncated
+FROM test_bytearray ORDER BY id;
+
+# Prerun runs again at each EXECUTE, so it sees a user variable's value for
+# that execution.
+SET @v = NULL;
+PREPARE s_var FROM
+  'SELECT state_and_varargs.prerun_const(@v) AS prerun_saw, @v AS row_value';
+SET @v = 7;
+EXECUTE s_var;
+SET @v = 8;
+EXECUTE s_var;
+DEALLOCATE PREPARE s_var;
+
+DROP TABLE test_bytearray;
+UNINSTALL EXTENSION vsql_simple;
+UNINSTALL EXTENSION state_and_varargs;
+
+--source include/villagesql/binlog_check_end.inc

@@ -1,0 +1,15 @@
+INSTALL EXTENSION vsql_thread_worker_test;
+# Thread should NOT be running yet
+SELECT vsql_thread_worker_test.active_port();
+vsql_thread_worker_test.active_port()
+0
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+RESULT: 1
+WARNING: 
+ERROR: 
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+# After disable: active_port should be 0
+SELECT vsql_thread_worker_test.active_port();
+vsql_thread_worker_test.active_port()
+0
+UNINSTALL EXTENSION vsql_thread_worker_test;

@@ -1,0 +1,40 @@
+# Test CREATE TEMPORARY TABLE with multiple aggregate functions on COMPLEX GROUP BY
+# Tests that custom types work correctly as grouping keys with various aggregates
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX, amount DECIMAL(10,2));
+
+INSERT INTO t1 VALUES
+  (1, '(2,0)', 100.50),
+  (2, '(2,0)', 50.25),
+  (3, '(2,0)', 75.00),
+  (4, '(10,0)', 200.75),
+  (5, '(10,0)', 150.00),
+  (6, '(-1,0)', 80.00);
+
+# Create temporary table with multiple aggregates
+CREATE TEMPORARY TABLE temp_stats AS
+SELECT
+  val,
+  COUNT(*) AS cnt,
+  SUM(amount) AS total,
+  AVG(amount) AS avg_amt,
+  MIN(amount) AS min_amt,
+  MAX(amount) AS max_amt
+FROM t1
+GROUP BY val;
+
+# Verify metadata
+SHOW COLUMNS FROM temp_stats;
+
+# Verify data
+SELECT * FROM temp_stats ORDER BY val;
+
+# Test querying the aggregated results
+SELECT val, cnt FROM temp_stats WHERE cnt > 1 ORDER BY val;
+
+DROP TABLE temp_stats;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

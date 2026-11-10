@@ -1,0 +1,139 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(5.0,6.0)'),
+(4, '(7.0,8.0)'),
+(5, '(1.0,2.0)');
+#
+# Test 1: UPDATE with COMPLEX value parameter
+#
+PREPARE stmt1 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @new_val = '(10.0,11.0)';
+SET @update_id = 1;
+EXECUTE stmt1 USING @new_val, @update_id;
+SELECT * FROM t1 WHERE id = 1;
+id	val
+1	(10,11)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: UPDATE multiple rows with same COMPLEX value
+#
+PREPARE stmt2 FROM 'UPDATE t1 SET val = ? WHERE id IN (?, ?)';
+SET @new_val = '(20.0,21.0)';
+SET @id1 = 2;
+SET @id2 = 3;
+EXECUTE stmt2 USING @new_val, @id1, @id2;
+SELECT * FROM t1 WHERE id IN (2, 3) ORDER BY id;
+id	val
+2	(20,21)
+3	(20,21)
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: UPDATE with COMPLEX value in WHERE clause
+#
+PREPARE stmt3 FROM 'UPDATE t1 SET id = ? WHERE val = ?';
+SET @new_id = 100;
+SET @old_val = '(1.0,2.0)';
+EXECUTE stmt3 USING @new_id, @old_val;
+SELECT * FROM t1 WHERE val = '(1.0,2.0)';
+id	val
+100	(1,2)
+SELECT * FROM t1 WHERE id = 100;
+id	val
+100	(1,2)
+DEALLOCATE PREPARE stmt3;
+#
+# Reset data for next tests
+#
+UPDATE t1 SET id = 5 WHERE id = 100;
+#
+# Test 4: UPDATE with multiple executions
+#
+PREPARE stmt4 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @val = '(30.0,31.0)';
+SET @id = 1;
+EXECUTE stmt4 USING @val, @id;
+SET @val = '(32.0,33.0)';
+SET @id = 2;
+EXECUTE stmt4 USING @val, @id;
+SELECT * FROM t1 WHERE id IN (1, 2) ORDER BY id;
+id	val
+1	(30,31)
+2	(32,33)
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: UPDATE to NULL
+#
+PREPARE stmt5 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @null_val = NULL;
+SET @id = 3;
+EXECUTE stmt5 USING @null_val, @id;
+SELECT * FROM t1 WHERE id = 3;
+id	val
+3	NULL
+DEALLOCATE PREPARE stmt5;
+#
+# Test 6: UPDATE with VDF
+#
+PREPARE stmt6 FROM 'UPDATE t1 SET val = vsql_complex.complex_conjugate(val) WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt6 USING @id;
+SELECT * FROM t1 WHERE id = 1;
+id	val
+1	(30,-31)
+DEALLOCATE PREPARE stmt6;
+#
+# Test 7: Multi-table UPDATE
+#
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(60.0,61.0)'), (2, '(62.0,63.0)');
+PREPARE stmt7 FROM 'UPDATE t1, t2 SET t1.val = t2.val WHERE t1.id = t2.id AND t1.id = ?';
+SET @id = 1;
+EXECUTE stmt7 USING @id;
+SELECT * FROM t1 WHERE id = 1;
+id	val
+1	(60,61)
+DEALLOCATE PREPARE stmt7;
+#
+# Test 8: UPDATE with ORDER BY and LIMIT
+#
+INSERT INTO t1 VALUES (40, '(80.0,81.0)'), (41, '(80.0,81.0)'), (42, '(80.0,81.0)');
+PREPARE stmt8 FROM 'UPDATE t1 SET val = ? WHERE val = ? ORDER BY id LIMIT ?';
+SET @new_val = '(90.0,91.0)';
+SET @old_val = '(80.0,81.0)';
+SET @lim = 2;
+EXECUTE stmt8 USING @new_val, @old_val, @lim;
+SELECT * FROM t1 WHERE id >= 40 ORDER BY id;
+id	val
+40	(90,91)
+41	(90,91)
+42	(80,81)
+DEALLOCATE PREPARE stmt8;
+#
+# Test 9: Error case - UPDATE non-existent row
+#
+PREPARE stmt9 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @val = '(100.0,100.0)';
+SET @id = 9999;
+EXECUTE stmt9 USING @val, @id;
+SELECT COUNT(*) FROM t1 WHERE id = 9999;
+COUNT(*)
+0
+DEALLOCATE PREPARE stmt9;
+#
+# Test 10: Error case - Invalid COMPLEX format in UPDATE
+#
+PREPARE stmt10 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @bad_val = 'invalid_complex';
+SET @id = 1;
+EXECUTE stmt10 USING @bad_val, @id;
+ERROR HY000: Incorrect COMPLEX value: 'invalid_complex' for column 'val' at row 1
+DEALLOCATE PREPARE stmt10;
+#
+# Cleanup
+#
+DROP TABLE t1, t2;

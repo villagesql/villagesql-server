@@ -1,0 +1,68 @@
+# Test REPLACE INTO ... SELECT with COMPLEX type
+# Grammar: REPLACE [INTO] tbl_name [(col_name [, col_name] ...)] SELECT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_source (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert rows with zero variants and NULLs
+INSERT INTO t_source VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,4.5)'),
+    (4, NULL),
+    (5, '(5.0,-6.0)'),
+    (6, '(0,-0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, NULL),
+    (9, '(9.0,10.0)'),
+    (10, '(0,0)');
+
+SELECT * FROM t_source ORDER BY id;
+
+CREATE TABLE t_target (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_target VALUES (1, '(11.0,12.0)'), (3, '(13.0,14.0)'), (5, '(15.0,16.0)');
+
+SELECT * FROM t_target ORDER BY id;
+
+# Replace existing rows (id 1, 3, 5) and insert new rows (id 2, 4, 6, 7, 8, 9, 10)
+REPLACE INTO t_target (id, val)
+SELECT id, val FROM t_source ORDER BY id;
+
+SELECT * FROM t_target ORDER BY id;
+
+# Replace with WHERE filter
+REPLACE INTO t_target
+SELECT id + 10 AS id, val FROM t_source WHERE id <= 5 ORDER BY id;
+
+SELECT * FROM t_target ORDER BY id;
+
+# Clear t_target and test with ORDER BY and LIMIT (ensure deterministic ordering)
+DELETE FROM t_target;
+INSERT INTO t_target VALUES (2, '(20.0,20.0)'), (4, '(40.0,40.0)');
+
+REPLACE INTO t_target
+SELECT id, val FROM t_source WHERE val IS NOT NULL ORDER BY val ASC, id ASC LIMIT 5;
+
+SELECT * FROM t_target ORDER BY id;
+
+# Test REPLACE with NULLs from SELECT
+DELETE FROM t_target;
+INSERT INTO t_target VALUES (4, '(44.0,44.0)'), (8, '(88.0,88.0)');
+
+REPLACE INTO t_target
+SELECT id, val FROM t_source WHERE id IN (4, 8);
+
+SELECT * FROM t_target ORDER BY id;
+
+DROP TABLE t_source;
+DROP TABLE t_target;
+
+--source include/villagesql/uninstall_complex_extension.inc

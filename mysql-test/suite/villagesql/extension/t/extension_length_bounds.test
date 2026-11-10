@@ -1,0 +1,17 @@
+# Scenario: a parameterized type whose resolve_params resolves a persisted_length
+# larger than the declared max_persisted_length is rejected at DDL time.
+#
+# Fixture: vsql_test_only exposes OVERSIZED_PARAM_TYPE, whose resolve_params
+# returns 2 * max_persisted_length.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Parameterized type resolving beyond max_persisted_length -> DDL error.
+--error ER_PARSE_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, v OVERSIZED_PARAM_TYPE(4));
+
+--echo # No table was created.
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't';
+
+UNINSTALL EXTENSION vsql_test_only;

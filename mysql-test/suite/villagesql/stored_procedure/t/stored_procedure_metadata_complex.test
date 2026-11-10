@@ -1,0 +1,44 @@
+# Test that COMPLEX type is correctly represented in procedure/function metadata.
+# Verifies SHOW CREATE PROCEDURE/FUNCTION and information_schema output.
+
+--source include/villagesql/install_complex_extension.inc
+
+delimiter //;
+CREATE PROCEDURE p1(IN input_val COMPLEX, OUT output_val COMPLEX)
+BEGIN
+  SET output_val = input_val;
+END//
+delimiter ;//
+
+SHOW CREATE PROCEDURE p1;
+
+SELECT PARAMETER_NAME, PARAMETER_MODE, DTD_IDENTIFIER
+  FROM information_schema.parameters
+  WHERE SPECIFIC_NAME = 'p1'
+  ORDER BY ORDINAL_POSITION;
+
+DROP PROCEDURE p1;
+
+# For functions, SHOW CREATE FUNCTION, information_schema.routines and
+# information_schema.parameters all reflect the custom type name.
+delimiter //;
+CREATE FUNCTION f1(input_val COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+  RETURN input_val;
+END//
+delimiter ;//
+
+SHOW CREATE FUNCTION f1;
+
+SELECT DTD_IDENTIFIER
+  FROM information_schema.routines
+  WHERE ROUTINE_NAME = 'f1';
+
+SELECT PARAMETER_NAME, PARAMETER_MODE, DTD_IDENTIFIER
+  FROM information_schema.parameters
+  WHERE SPECIFIC_NAME = 'f1'
+  ORDER BY ORDINAL_POSITION;
+
+DROP FUNCTION f1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,21 @@
+## Simple list objects with case insensitive table names
+
+--source include/have_case_insensitive_file_system.inc
+--source include/xplugin_preamble.inc
+
+# This is a default value when run on Windows
+--let $expect_case_sensitive_variant= 1
+
+# For other platforms the lower_case_table_names system variable is set to 0
+# by default. In case it is run on case-insensitive FS its value is
+# automatically changed to 2.
+if (`SELECT CONVERT(@@version_compile_os USING LATIN1) RLIKE '^(osx|macos|linux)'`)
+{
+--let $expect_case_sensitive_variant= 2
+}
+
+--let $expect_table_error= ER_TABLE_EXISTS_ERROR
+--let $expect_db_error= ER_DB_CREATE_EXISTS
+--let $result_filter=/XTEST/xtest/ /xTeSt/xtest/ /FRUIT/fruit/ /FrUiT/fruit/
+--source ../include/admin_list_objects_table_names.inc
+

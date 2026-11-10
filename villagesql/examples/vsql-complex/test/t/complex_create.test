@@ -1,0 +1,68 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: CREATE TABLE and INSERT operations for COMPLEX type
+#
+########################################################################
+#
+# Test 1: Basic CREATE TABLE and INSERT operations
+#
+########################################################################
+
+CREATE TABLE test_create_basic (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_val COMPLEX
+);
+
+# Single value inserts
+INSERT INTO test_create_basic (name, complex_val) VALUES ('test1', '(1,2)');
+INSERT INTO test_create_basic (name, complex_val) VALUES ('test2', '(3.14,2.71)');
+INSERT INTO test_create_basic (name, complex_val) VALUES ('test3', '(-5.5,-3.3)');
+INSERT INTO test_create_basic (name, complex_val) VALUES ('test4', '(0,1)');
+INSERT INTO test_create_basic (name, complex_val) VALUES ('test5', '(1,0)');
+INSERT INTO test_create_basic (name, complex_val) VALUES ('scientific', '(1.5e-10,2.3e+15)');
+
+SELECT id, name, complex_val FROM test_create_basic ORDER BY id;
+
+# Multi-value insert
+INSERT INTO test_create_basic (name, complex_val) VALUES
+    ('multi1', '(10,20)'),
+    ('multi2', '(30,40)'),
+    ('multi3', '(50,60)');
+
+SELECT id, name, complex_val FROM test_create_basic WHERE name LIKE 'multi%' ORDER BY id;
+
+########################################################################
+#
+# Test 2: INSERT with NULL values and defaults
+#
+########################################################################
+
+CREATE TABLE test_create_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nullable_complex COMPLEX DEFAULT NULL,
+    not_null_complex COMPLEX NOT NULL DEFAULT '(1,1)'
+);
+
+INSERT INTO test_create_nulls (nullable_complex, not_null_complex) VALUES ('(1,1)', '(2,2)');
+INSERT INTO test_create_nulls (nullable_complex, not_null_complex) VALUES (NULL, '(3,3)');
+
+# Test default values
+INSERT INTO test_create_nulls (nullable_complex) VALUES ('(4,4)');
+INSERT INTO test_create_nulls (not_null_complex) VALUES ('(5,5)');
+
+SELECT id, nullable_complex, not_null_complex FROM test_create_nulls ORDER BY id;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE test_create_basic, test_create_nulls;
+
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_complex;

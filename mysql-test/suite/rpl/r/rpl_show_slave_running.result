@@ -1,0 +1,34 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+SET DEBUG_SYNC= 'RESET';
+include/rpl/stop_replica.inc
+# Adding debug point 'dbug.before_get_running_status_yes' to @@GLOBAL.debug
+# Replica_IO_Running, Replica_SQL_Running, must be OFF, OFF in the following queries
+select rcs.SERVICE_STATE as Replica_IO_Running, ras.SERVICE_STATE as Replica_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
+Replica_IO_Running	Replica_SQL_Running
+OFF	OFF
+START REPLICA io_thread;
+# Replica_IO_Running, Replica_SQL_Running, must be CONNECTING, OFF in the following queries
+select rcs.SERVICE_STATE as Replica_IO_Running, ras.SERVICE_STATE as Replica_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
+Replica_IO_Running	Replica_SQL_Running
+CONNECTING	OFF
+SET DEBUG_SYNC='now SIGNAL signal.io_thread_let_running';
+include/rpl/wait_for_replica_status.inc [Replica_IO_Running]
+# Replica_IO_Running, Replica_SQL_Running, must be ON, OFF in the following queries
+select rcs.SERVICE_STATE as Replica_IO_Running, ras.SERVICE_STATE as Replica_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
+Replica_IO_Running	Replica_SQL_Running
+ON	OFF
+START REPLICA sql_thread;
+include/rpl/wait_for_applier_to_start.inc
+# Replica_IO_Running, Replica_SQL_Running, must be ON, ON in the following queries
+select rcs.SERVICE_STATE as Replica_IO_Running, ras.SERVICE_STATE as Replica_SQL_Running from performance_schema.replication_applier_status ras, performance_schema.replication_connection_status rcs;
+Replica_IO_Running	Replica_SQL_Running
+ON	ON
+include/rpl/sync_to_replica.inc
+# Removing debug point 'dbug.before_get_running_status_yes' from @@GLOBAL.debug
+SET DEBUG_SYNC= 'RESET';
+End of tests
+include/rpl/deinit.inc

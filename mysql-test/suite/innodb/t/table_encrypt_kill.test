@@ -1,0 +1,4 @@
+--source include/big_test.inc
+
+--let $keyring_restart_param=restart:
+--source include/table_encrypt_kill.inc

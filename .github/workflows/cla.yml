@@ -1,0 +1,63 @@
+# Verifies contributors have signed the CLA before their PR can be merged.
+#
+# The "CLAAssistant" job is a required status check on main (see repo ruleset).
+# Because it's required, the job must ALWAYS run and report success — we
+# cannot skip the job at the job level, or the required check never reports
+# and merges are blocked. Instead, we run the job unconditionally and use
+# step-level `if:` to choose between a no-op step and the real CLA check.
+name: "CLA Assistant"
+on:
+  # Fires on every comment in the repo. We filter inside the job because the
+  # contributor-assistant action uses comment bodies as signing/recheck signals.
+  issue_comment:
+    types: [created]
+  # Fires when a PR is opened/updated/closed. This is when we verify CLA status.
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  CLAAssistant:
+    runs-on: ubuntu-latest
+    steps:
+      # No-op step that runs when the PR doesn't need a CLA check:
+      #   - `upstream-merge` label: PRs that bring in vanilla MySQL changes
+      #   - OWNER / MEMBER / COLLABORATOR: people with repo access already
+      #     covered by org-level agreements
+      # When this step runs, the required `CLAAssistant` check reports success
+      # without consulting the CLA signatures.
+      - name: "Skip CLA check (upstream-merge or org member)"
+        if: >
+          contains(github.event.pull_request.labels.*.name, 'upstream-merge') ||
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+        run: echo "CLA check not required for this PR"
+      # Real CLA verification. Runs only when:
+      #   - the PR is NOT exempt (inverse of the skip step above), AND
+      #   - the triggering event is one the action knows how to handle:
+      #       * `pull_request_target`: PR opened/updated/closed — verify status
+      #       * comment containing "recheck": manual re-trigger after signing
+      #       * comment with the exact signing phrase: record a new signature
+      # On a random issue comment with neither phrase, both steps skip and the
+      # job still finishes successfully (no failed step).
+      - name: "CLA Assistant"
+        if: >
+          !contains(github.event.pull_request.labels.*.name, 'upstream-merge') &&
+          !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) &&
+          ((contains(github.event.comment.body, 'recheck') ||
+            contains(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA')) ||
+           github.event_name == 'pull_request_target')
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_PAT }}
+        with:
+          path-to-document: "https://gist.github.com/villagedominic/f2cf93470c0ad7b4d130dde7d17d8bb6"
+          path-to-signatures: "cla/signatures.json"
+          branch: "main"
+          remote-organization-name: villagesql
+          remote-repository-name: villagesql-tools

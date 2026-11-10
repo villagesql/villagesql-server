@@ -1,0 +1,21 @@
+# Test that uninstalling an extension succeeds after a session disconnects
+# without explicitly dropping its temporary table.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/count_sessions.inc
+
+connect (con1,localhost,root);
+CREATE TEMPORARY TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+
+connection default;
+# UNINSTALL should fail - con1 holds a reference via temp table
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+# Disconnect without dropping the table - server cleans up temp tables
+disconnect con1;
+--source include/wait_until_count_sessions.inc
+
+# UNINSTALL should now succeed - session cleanup released the reference
+--source include/villagesql/uninstall_complex_extension.inc

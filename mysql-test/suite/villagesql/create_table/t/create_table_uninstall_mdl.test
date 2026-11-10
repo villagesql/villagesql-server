@@ -1,0 +1,155 @@
+# Test MDL synchronization between CREATE TABLE using custom types
+# and concurrent UNINSTALL EXTENSION.
+#
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+--echo #
+--echo # Test Case 1: CREATE TABLE fails when extension uninstalled before lock
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+connect (con1,localhost,root);
+--echo # Connection con1: Skip refcount to test pure MDL protection
+SET SESSION debug = '+d,skip_victionary_refcount';
+--echo # Connection con1: CREATE TABLE paused BEFORE acquiring extension lock
+SET DEBUG_SYNC= 'metadata_before_extension_lock SIGNAL before_lock WAIT_FOR continue_create';
+--send CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX)
+
+connection default;
+--echo # Connection default: Wait for CREATE TABLE to reach sync point
+SET DEBUG_SYNC= 'now WAIT_FOR before_lock';
+
+--echo # Connection default: UNINSTALL EXTENSION (should succeed - no lock held yet)
+--source include/villagesql/uninstall_complex_extension.inc
+
+--echo # Connection default: Signal CREATE TABLE to continue
+SET DEBUG_SYNC= 'now SIGNAL continue_create';
+
+connection con1;
+--echo # Connection con1: Reaping CREATE TABLE (should fail - extension uninstalled)
+--error ER_VILLAGESQL_GENERIC_ERROR
+reap;
+SET SESSION debug = '-d,skip_victionary_refcount';
+
+disconnect con1;
+connection default;
+SET DEBUG_SYNC= 'RESET';
+
+--echo #
+--echo # Test Case 2: UNINSTALL blocked when CREATE TABLE holds extension lock
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+connect (con1,localhost,root);
+--echo # Connection con1: CREATE TABLE paused AFTER acquiring extension lock
+SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL lock_acquired WAIT_FOR continue_create';
+--send CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX)
+
+connection default;
+--echo # Connection default: Wait for CREATE TABLE to acquire extension lock
+SET DEBUG_SYNC= 'now WAIT_FOR lock_acquired';
+
+--echo # Connection default: Start UNINSTALL EXTENSION (will block on MDL)
+connect (con2,localhost,root);
+SET DEBUG_SYNC='mdl_acquire_lock_wait SIGNAL uninstall_waiting';
+--send UNINSTALL EXTENSION vsql_complex
+
+--echo # Connection default: Wait for UNINSTALL to block on MDL
+connection default;
+SET DEBUG_SYNC='now WAIT_FOR uninstall_waiting';
+
+--echo # Connection default: Check MDL locks in performance_schema
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex'
+ORDER BY LOCK_STATUS;
+
+--echo # Connection default: Check the blocked session's wait event.
+SELECT EVENT_NAME, OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME,
+       OPERATION
+FROM performance_schema.events_waits_current
+WHERE OBJECT_TYPE = 'EXTENSION';
+
+--echo # Connection default: Signal CREATE TABLE to continue
+SET DEBUG_SYNC= 'now SIGNAL continue_create';
+
+connection con1;
+--echo # Connection con1: Reaping CREATE TABLE (should succeed)
+reap;
+SHOW CREATE TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+connection con2;
+--echo # Connection con2: Reaping UNINSTALL (should fail - table t1 uses the type)
+--error ER_VILLAGESQL_GENERIC_ERROR
+reap;
+
+connection con1;
+--echo # Connection con1: DROP TABLE to remove dependency
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+disconnect con1;
+disconnect con2;
+
+connection default;
+--echo # Connection default: Now UNINSTALL should succeed
+--source include/villagesql/uninstall_complex_extension.inc
+
+SET DEBUG_SYNC= 'RESET';
+
+--echo #
+--echo # Test Case 3: CREATE TABLE waits while UNINSTALL holds MDL X, fails after uninstall
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+connect (con1,localhost,root);
+--echo # Connection con1: UNINSTALL paused after acquiring MDL X lock
+SET DEBUG_SYNC= 'uninstall_after_extension_lock SIGNAL uninstall_has_lock WAIT_FOR continue_uninstall';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+--echo # Connection default: Wait for UNINSTALL to acquire exclusive lock
+SET DEBUG_SYNC= 'now WAIT_FOR uninstall_has_lock';
+
+--echo # Connection default: Start CREATE TABLE (will block waiting for MDL)
+connect (con2,localhost,root);
+--echo # Connection con2: Skip refcount to test pure MDL protection
+SET SESSION debug = '+d,skip_victionary_refcount';
+SET DEBUG_SYNC='mdl_acquire_lock_wait SIGNAL create_waiting';
+--send CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX)
+
+connection default;
+--echo # Connection default: Wait for CREATE TABLE to block on MDL
+SET DEBUG_SYNC='now WAIT_FOR create_waiting';
+
+--echo # Connection default: Check MDL locks - UNINSTALL holds EXCLUSIVE, CREATE waits
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex'
+ORDER BY LOCK_STATUS DESC;
+
+--echo # Connection default: Signal UNINSTALL to continue and complete
+SET DEBUG_SYNC= 'now SIGNAL continue_uninstall';
+
+connection con1;
+--echo # Connection con1: Reaping UNINSTALL (should succeed)
+reap;
+
+connection con2;
+--echo # Connection con2: Reaping CREATE TABLE (should fail - extension uninstalled)
+--error ER_VILLAGESQL_GENERIC_ERROR
+reap;
+SET SESSION debug = '-d,skip_victionary_refcount';
+
+disconnect con1;
+disconnect con2;
+
+connection default;
+SET DEBUG_SYNC= 'RESET';
+--source include/wait_until_count_sessions.inc

@@ -1,0 +1,37 @@
+Creating extension vdf_postrun_leak using SDK...
+Created vdf_postrun_leak.veb
+INSTALL EXTENSION vdf_postrun_leak;
+# Baseline
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+#
+# leak_probe_arg(1) runs prerun, then the WHERE fails on a column dropped
+# since the last EXECUTE
+#
+CREATE TABLE tc (id INT PRIMARY KEY, c INT);
+INSERT INTO tc VALUES (1, 1);
+PREPARE s FROM 'SELECT vdf_postrun_leak.leak_probe_arg(1) AS n FROM tc WHERE c = 1';
+EXECUTE s;
+n
+1
+# After a good EXECUTE
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+ALTER TABLE tc DROP COLUMN c;
+EXECUTE s;
+ERROR 42S22: Unknown column 'c' in 'where clause'
+# After the failed EXECUTE
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+EXECUTE s;
+ERROR 42S22: Unknown column 'c' in 'where clause'
+DEALLOCATE PREPARE s;
+# After DEALLOCATE
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+DROP TABLE tc;
+UNINSTALL EXTENSION vdf_postrun_leak;

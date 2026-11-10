@@ -1,0 +1,35 @@
+# Test DROP TABLE with constraints and COMPLEX columns
+# Grammar: DROP TABLE table_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE parent_table (
+    id INT PRIMARY KEY,
+    name VARCHAR(50) UNIQUE
+);
+
+CREATE TABLE child_table (
+    id INT PRIMARY KEY,
+    parent_id INT,
+    complex_data COMPLEX,
+    FOREIGN KEY (parent_id) REFERENCES parent_table(id),
+    CHECK (id > 0)
+);
+
+INSERT INTO parent_table VALUES (1, 'parent1');
+INSERT INTO child_table VALUES (1, 1, '(1.0,2.0)');
+
+SHOW CREATE TABLE child_table;
+
+# Drop child table first (has foreign key reference)
+DROP TABLE child_table;
+
+# Drop parent table
+DROP TABLE parent_table;
+
+# Verify tables no longer exist
+SHOW TABLES LIKE '%_table';
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

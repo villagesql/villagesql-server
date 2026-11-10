@@ -1,0 +1,22 @@
+# Test Stored Procedure with INOUT parameter of COMPLEX type
+# Grammar: CREATE PROCEDURE ... (INOUT name COMPLEX) ...
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+delimiter //;
+CREATE PROCEDURE p1(INOUT val COMPLEX)
+BEGIN
+  SET val = vsql_complex.complex_add(val, '(1.0,1.0)');
+END//
+delimiter ;//
+
+SET @my_val = '(1.0,2.0)';
+CALL p1(@my_val);
+SELECT @my_val;
+SET @my_val = NULL;
+
+DROP PROCEDURE p1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

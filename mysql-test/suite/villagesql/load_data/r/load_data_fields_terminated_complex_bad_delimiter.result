@@ -1,0 +1,6 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/complex_term.dat' INTO TABLE t1 FIELDS TERMINATED BY '.';
+ERROR HY000: Incorrect COMPLEX value: '(1' for column 'val' at row 1
+SELECT * FROM t1 ORDER BY id;
+id	val
+DROP TABLE t1;

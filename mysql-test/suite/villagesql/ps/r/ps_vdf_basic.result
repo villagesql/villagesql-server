@@ -1,0 +1,113 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, str_val VARCHAR(50));
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(0.0,5.0)'),
+(4, '(6.0,0.0)');
+INSERT INTO t2 VALUES
+(1, '(10.0,11.0)'),
+(2, '(12.0,13.0)'),
+(3, '(14.0,15.0)');
+#
+# Test 1: VDF with COMPLEX argument (complex_conjugate)
+#
+PREPARE stmt1 FROM 'SELECT id, vsql_complex.complex_conjugate(val) FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt1 USING @id;
+id	vsql_complex.complex_conjugate(val)
+1	(1,-2)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: VDF with COMPLEX argument (complex_real)
+#
+PREPARE stmt2 FROM 'SELECT id, complex_real(val) FROM t1 WHERE id = ?';
+SET @id = 2;
+EXECUTE stmt2 USING @id;
+id	complex_real(val)
+2	3
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: VDF with COMPLEX argument (complex_imag)
+#
+PREPARE stmt3 FROM 'SELECT id, vsql_complex.complex_imag(val) FROM t1 WHERE id = ?';
+SET @id = 3;
+EXECUTE stmt3 USING @id;
+id	vsql_complex.complex_imag(val)
+3	5
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: VDF returning COMPLEX from string (COMPLEX::from_string)
+#
+PREPARE stmt4 FROM 'SELECT id, COMPLEX::from_string(str_val) FROM t2 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt4 USING @id;
+id	COMPLEX::from_string(str_val)
+1	(10,11)
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: VDF with string parameter
+#
+PREPARE stmt5 FROM 'SELECT vsql_complex.COMPLEX::from_string(?) AS result';
+SET @str = '(20.0,21.0)';
+EXECUTE stmt5 USING @str;
+result
+(20,21)
+DEALLOCATE PREPARE stmt5;
+#
+# Test 6: Multiple VDF calls in SELECT list
+#
+PREPARE stmt6 FROM 'SELECT id, vsql_complex.complex_real(val) AS real_part, vsql_complex.complex_imag(val) AS imag_part FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt6 USING @id;
+id	real_part	imag_part
+1	1	2
+DEALLOCATE PREPARE stmt6;
+#
+# Test 7: Multiple executions with different VDF arguments
+#
+PREPARE stmt7 FROM 'SELECT vsql_complex.complex_real(val) AS real_part FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt7 USING @id;
+real_part
+1
+SET @id = 2;
+EXECUTE stmt7 USING @id;
+real_part
+3
+SET @id = 3;
+EXECUTE stmt7 USING @id;
+real_part
+0
+DEALLOCATE PREPARE stmt7;
+#
+# Test 8: VDF with NULL argument
+#
+INSERT INTO t1 VALUES (20, NULL);
+PREPARE stmt8 FROM 'SELECT id, vsql_complex.complex_real(val) AS result FROM t1 WHERE id = ?';
+SET @id = 20;
+EXECUTE stmt8 USING @id;
+id	result
+20	NULL
+DEALLOCATE PREPARE stmt8;
+#
+# Test 9: Error case - Invalid string format for COMPLEX::from_string
+#
+PREPARE stmt9 FROM 'SELECT vsql_complex.COMPLEX::from_string(?)';
+SET @bad_str = 'not_a_complex_number';
+EXECUTE stmt9 USING @bad_str;
+vsql_complex.COMPLEX::from_string(?)
+NULL
+Warnings:
+Warning	3200	VDF error in function 'COMPLEX::from_string': failed to encode 'not_a_complex_number'
+SHOW WARNINGS;
+Level	Code	Message
+Warning	3200	VDF error in function 'COMPLEX::from_string': failed to encode 'not_a_complex_number'
+DEALLOCATE PREPARE stmt9;
+#
+# Cleanup
+#
+DROP TABLE t1, t2;

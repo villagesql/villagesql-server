@@ -1,0 +1,16 @@
+# Test INSERT with subquery result into COMPLEX field
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+CREATE TABLE temp_strings (val VARCHAR(100));
+
+INSERT INTO temp_strings VALUES ('not_complex');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex VALUES (10, (SELECT val FROM temp_strings LIMIT 1));
+
+DROP TABLE t_complex;
+DROP TABLE temp_strings;
+
+--source include/villagesql/uninstall_complex_extension.inc

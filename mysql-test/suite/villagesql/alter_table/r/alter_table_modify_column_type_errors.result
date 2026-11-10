@@ -1,0 +1,35 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+value INT
+);
+INSERT INTO t1 VALUES (1, 42);
+INSERT INTO t1 VALUES (2, 100);
+ALTER TABLE t1 MODIFY COLUMN value COMPLEX;
+ERROR HY000: Cannot convert column 'value' to custom type 'COMPLEX'
+DROP TABLE t1;
+CREATE TABLE t_varchar (
+id INT PRIMARY KEY,
+value VARCHAR(50)
+);
+INSERT INTO t_varchar VALUES (1, '(1.0,2.0)');
+ALTER TABLE t_varchar MODIFY COLUMN value COMPLEX;
+ERROR HY000: Cannot convert column 'value' to custom type 'COMPLEX'
+DROP TABLE t_varchar;
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+INSERT INTO t2 VALUES (1, '(1.0,2.0)');
+INSERT INTO t2 VALUES (2, '(3.5,-1.2)');
+ALTER TABLE t2 MODIFY COLUMN value DOUBLE;
+ERROR HY000: Cannot convert custom type column 'value' to non-string type
+DROP TABLE t2;
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+INSERT INTO t3 VALUES (1, '(1.0,2.0)');
+INSERT INTO t3 VALUES (2, '(3.5,-1.2)');
+ALTER TABLE t3 MODIFY COLUMN value COMPLEX2;
+ERROR HY000: Cannot convert between incompatible custom types 'vsql_complex.COMPLEX' and 'vsql_complex.COMPLEX2'
+DROP TABLE t3;

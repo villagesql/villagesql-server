@@ -1,0 +1,37 @@
+# Test CREATE TABLE with explicit column definitions AS SELECT with COMPLEX type
+# Grammar: CREATE TABLE table_name (column_defs) AS SELECT ...
+
+# Create source table with COMPLEX data
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE raw_data (
+    sensor_id INT,
+    reading COMPLEX,
+    quality DOUBLE
+);
+
+INSERT INTO raw_data VALUES (1, '(21.0,22.0)', 0.95);
+INSERT INTO raw_data VALUES (2, '(23.0,24.0)', 0.87);
+
+# Create table with explicit column definitions and AS SELECT
+CREATE TABLE processed_data (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sensor_id INT NOT NULL,
+    complex_reading COMPLEX,
+    quality_score DOUBLE DEFAULT 0.0,
+    INDEX idx_sensor (sensor_id)
+) AS SELECT sensor_id, reading, quality FROM raw_data;
+
+SHOW COLUMNS FROM processed_data;
+
+INSERT INTO processed_data (sensor_id, complex_reading, quality_score)
+VALUES (3, '(25.0,26.0)', 0.92);
+
+SELECT * FROM processed_data;
+
+DROP TABLE processed_data;
+DROP TABLE raw_data;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

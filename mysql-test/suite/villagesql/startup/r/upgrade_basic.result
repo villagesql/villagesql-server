@@ -1,0 +1,46 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Test Basic VillageSQL Upgrade Functionality
+# This test verifies that VillageSQL version management works correctly
+# Test 1: Verify initial installation
+SELECT 'Initial Installation Check' AS test_case;
+test_case
+Initial Installation Check
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+AND name = 'properties';
+properties_table_exists
+1
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Test 2: Version update simulation
+SELECT 'Version Update Test' AS test_case;
+test_case
+Version Update Test
+# Save original version
+SET @original_version = (SELECT value FROM villagesql.properties WHERE name = 'version');
+# Simulate upgrade by setting version to older value
+UPDATE villagesql.properties SET value = '0' WHERE name = 'version';
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	0
+# Restore to current version (simulates upgrade completion)
+UPDATE villagesql.properties SET value = @original_version WHERE name = 'version';
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Test 3: Properties completeness
+SELECT 'Properties Completeness' AS test_case;
+test_case
+Properties Completeness
+SELECT COUNT(*) AS all_properties_present
+FROM villagesql.properties
+WHERE name IN ('version', 'created', 'mysql_version_at_creation');
+all_properties_present
+3
+# Test completed successfully
+SELECT 'All Tests Passed' AS final_result;
+final_result
+All Tests Passed

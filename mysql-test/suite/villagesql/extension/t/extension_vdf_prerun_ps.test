@@ -1,0 +1,68 @@
+# prerun and postrun of a VDF in a prepared statement. A statement calling a
+# VDF is prepared again at every EXECUTE, so each EXECUTE runs prerun and
+# postrun once, with fresh per-statement state, and nothing is left 'live' after
+# DEALLOCATE.
+#
+# PREPARE runs prerun too, so that its checks fail the statement early, but not
+# when an argument has a ? with no value: prerun cannot check it.
+
+--let $extension_name = vdf_postrun_leak
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_postrun_leak.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION vdf_postrun_leak;
+
+CREATE TABLE t (id INT PRIMARY KEY);
+INSERT INTO t VALUES (1), (2), (3);
+
+--let $counts = SELECT vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live
+
+--echo # Baseline
+--eval $counts
+
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe() AS n FROM t ORDER BY id';
+--echo # After PREPARE
+--eval $counts
+
+EXECUTE s;
+--echo # After the first EXECUTE
+--eval $counts
+
+--echo # The per-statement state starts again at each EXECUTE
+EXECUTE s;
+--echo # After the second EXECUTE
+--eval $counts
+
+DEALLOCATE PREPARE s;
+--echo # After DEALLOCATE: every prerun has had its postrun
+--eval $counts
+
+--echo # An argument with a ?: no prerun at PREPARE
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe_arg(?) AS n FROM t ORDER BY id';
+--echo # After PREPARE: unchanged
+--eval $counts
+SET @x = 10;
+EXECUTE s USING @x;
+--echo # After EXECUTE: one more prerun and postrun
+--eval $counts
+DEALLOCATE PREPARE s;
+
+--echo # A ? inside an expression
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe_arg(? + 1) AS n FROM t ORDER BY id';
+--echo # After PREPARE: unchanged
+--eval $counts
+EXECUTE s USING @x;
+--echo # After EXECUTE: one more prerun and postrun
+--eval $counts
+DEALLOCATE PREPARE s;
+
+--echo # With no ? at all, PREPARE still runs prerun
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.leak_probe_arg(id) AS n FROM t ORDER BY id';
+--echo # After PREPARE: one more prerun and postrun
+--eval $counts
+DEALLOCATE PREPARE s;
+SET @x = NULL;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vdf_postrun_leak;

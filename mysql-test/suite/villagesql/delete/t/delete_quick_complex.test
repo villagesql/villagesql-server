@@ -1,0 +1,38 @@
+# Test DELETE QUICK ... with COMPLEX type
+# Grammar: DELETE QUICK ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert 10 rows with zero variants
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,4.5)'),
+    (4, '(-0,0)'),
+    (5, '(5.0,-6.0)'),
+    (6, '(0,-0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, '(-0,-0)'),
+    (9, '(9.0,10.0)'),
+    (10, '(0,0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Quick delete single row
+DELETE QUICK FROM t1 WHERE id = 1;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Quick delete multiple rows
+DELETE QUICK FROM t1 WHERE val = '(0,0)';
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

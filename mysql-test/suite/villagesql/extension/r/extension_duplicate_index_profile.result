@@ -1,0 +1,14 @@
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("already exists");
+SET PERSIST vsql_allow_preview_extensions = ON;
+Creating extension dup_index_profile using SDK...
+Created dup_index_profile.veb
+# INSTALL fails: duplicate index-profile name within one extension.
+INSTALL EXTENSION dup_index_profile;
+ERROR HY000: Failed to install extension 'dup_index_profile': index profile 'DUP_PROFILE' already exists
+# Verify extension was NOT installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'dup_index_profile';
+EXTENSION_NAME	EXTENSION_VERSION
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

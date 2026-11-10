@@ -1,0 +1,56 @@
+# Test INSERT with CTE containing malformed COMPLEX string literals
+# The implicit cast is allowed, but encoding fails for invalid formats.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+
+# Valid insert first
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+
+# CTE with malformed COMPLEX string - should fail at encoding time
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1
+WITH cte AS (
+    SELECT 2 AS id, 'not_a_complex_value' AS val
+)
+SELECT * FROM cte;
+
+# Verify original data unchanged
+SELECT * FROM t1 ORDER BY id;
+
+# CTE with partially valid data - first row valid, second malformed
+# The whole statement should fail
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1
+WITH cte AS (
+    SELECT 3 AS id, '(3.0,4.0)' AS val
+    UNION ALL SELECT 4, 'bad_value'
+)
+SELECT * FROM cte;
+
+# Verify original data unchanged
+SELECT * FROM t1 ORDER BY id;
+
+# CTE with empty string
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1
+WITH cte AS (
+    SELECT 5 AS id, '' AS val
+)
+SELECT * FROM cte;
+
+# CTE with incomplete format
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t1
+WITH cte AS (
+    SELECT 6 AS id, '(1.0' AS val
+)
+SELECT * FROM cte;
+
+# Verify original data still unchanged
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

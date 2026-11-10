@@ -1,0 +1,79 @@
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE test_udf_utility (
+id INT AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(50),
+complex_val COMPLEX
+);
+INSERT INTO test_udf_utility (name, complex_val) VALUES
+('basic', '(3,4)'),
+('negative_both', '(-3,-4)'),
+('negative_real', '(-2.7,1.8)'),
+('zero_real', '(0,4.2)'),
+('zero_imag', '(5,0)'),
+('5-12 triangle', '(5,12)'),
+('scientific', '(1.5e-10,2.3e+15)'),
+('pure_real', '(42,0)'),
+('pure_imaginary', '(0,7)');
+SELECT id, name, complex_val,
+vsql_complex.complex_real(complex_val) as real_part,
+vsql_complex.complex_imag(complex_val) as imag_part,
+vsql_complex.complex_abs(complex_val) as magnitude,
+vsql_complex.complex_conjugate(complex_val) as conjugate
+FROM test_udf_utility
+ORDER BY id;
+id	name	complex_val	real_part	imag_part	magnitude	conjugate
+1	basic	(3,4)	3	4	5	(3,-4)
+2	negative_both	(-3,-4)	-3	-4	5	(-3,4)
+3	negative_real	(-2.7,1.8)	-2.7	1.8	3.2449961479175906	(-2.7,-1.8)
+4	zero_real	(0,4.2)	0	4.2	4.2	(0,-4.2)
+5	zero_imag	(5,0)	5	0	5	(5,-0)
+6	5-12 triangle	(5,12)	5	12	13	(5,-12)
+7	scientific	(1.5e-10,2.3e+15)	0.00000000015	2.3e15	2.3e15	(1.5e-10,-2.3e+15)
+8	pure_real	(42,0)	42	0	42	(42,-0)
+9	pure_imaginary	(0,7)	0	7	7	(0,-7)
+SELECT id, name, complex_val, vsql_complex.complex_real(complex_val) as real_part
+FROM test_udf_utility
+WHERE vsql_complex.complex_real(complex_val) > 0
+ORDER BY id;
+id	name	complex_val	real_part
+1	basic	(3,4)	3
+5	zero_imag	(5,0)	5
+6	5-12 triangle	(5,12)	5
+7	scientific	(1.5e-10,2.3e+15)	0.00000000015
+8	pure_real	(42,0)	42
+SELECT id, name, complex_val, vsql_complex.complex_imag(complex_val) as imag_part
+FROM test_udf_utility
+WHERE vsql_complex.complex_imag(complex_val) > 0
+ORDER BY id;
+id	name	complex_val	imag_part
+1	basic	(3,4)	4
+3	negative_real	(-2.7,1.8)	1.8
+4	zero_real	(0,4.2)	4.2
+6	5-12 triangle	(5,12)	12
+7	scientific	(1.5e-10,2.3e+15)	2.3e15
+9	pure_imaginary	(0,7)	7
+SELECT id, name, complex_val, vsql_complex.complex_abs(complex_val) as magnitude
+FROM test_udf_utility
+ORDER BY vsql_complex.complex_abs(complex_val) ASC;
+id	name	complex_val	magnitude
+3	negative_real	(-2.7,1.8)	3.2449961479175906
+4	zero_real	(0,4.2)	4.2
+1	basic	(3,4)	5
+2	negative_both	(-3,-4)	5
+5	zero_imag	(5,0)	5
+9	pure_imaginary	(0,7)	7
+6	5-12 triangle	(5,12)	13
+8	pure_real	(42,0)	42
+7	scientific	(1.5e-10,2.3e+15)	2.3e15
+INSERT INTO test_udf_utility (name, complex_val) VALUES ('null_value', NULL);
+SELECT id, name, complex_val,
+vsql_complex.complex_real(complex_val) as real_part,
+vsql_complex.complex_imag(complex_val) as imag_part,
+vsql_complex.complex_abs(complex_val) as magnitude,
+vsql_complex.complex_conjugate(complex_val) as conjugate
+FROM test_udf_utility
+WHERE name = 'null_value';
+id	name	complex_val	real_part	imag_part	magnitude	conjugate
+10	null_value	NULL	NULL	NULL	NULL	NULL
+DROP TABLE test_udf_utility;
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,22 @@
+# Functional index over a custom-typed column carries a custom_columns
+# dependency on the underlying column. UNINSTALL EXTENSION must be blocked
+# while such a column exists, in both open-cache and cold-cache states.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX,
+                INDEX idx_func ((vsql_complex.complex_real(c))));
+INSERT INTO t VALUES (1, '(1,2)');
+
+--echo # Blocked while the COMPLEX column exists (custom_columns persistent dep).
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Persistent: still blocked after the table cache is flushed.
+FLUSH TABLES;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Dropping the table clears the dependency; uninstall now succeeds.
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,69 @@
+INSTALL EXTENSION vsql_test_only;
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+call mtr.add_suppression("VillageSQL.*Extension error decoding column.*FAULT_BLOB");
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_test_only	0.0.1
+# Create a table with a FAULT_BLOB column
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val vsql_test_only.FAULT_BLOB
+);
+# Insert healthy values
+INSERT INTO t1 VALUES (1, 'OK hello');
+INSERT INTO t1 VALUES (2, 'OK world');
+INSERT INTO t1 VALUES (3, 'OK abc');
+# Normal SELECT round-trip: decode succeeds, values are readable
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	OK hello
+2	OK world
+3	OK abc
+# Insert a value that will fail on decode
+INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
+# SELECT the decode-failing row alone: returns an error
+SELECT id, val FROM t1 WHERE id = 4;
+ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
+# Verify the failure was logged
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
+# SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
+SELECT id, val FROM t1 ORDER BY id;
+ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4: check server log for details
+# Verify the failure was logged
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 4 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
+# UPDATE: overwrite the DECODE_FAIL row with a good value
+UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
+# The previously-failing row should now decode successfully
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	OK hello
+2	OK world
+3	OK abc
+4	OK fixed
+# UPDATE: overwrite a good row with a DECODE_FAIL value
+UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
+# The updated row now causes an error on SELECT
+SELECT id, val FROM t1 ORDER BY id;
+ERROR HY000: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1: check server log for details
+# Verify the failure was logged
+VillageSQL: Invalid value in column 'val' of type 'vsql_test_only.FAULT_BLOB' at row 1 (value: DECODE_FAIL\x00\x00\x00\x00\x00): failed to decode value
+# Clean up
+DROP TABLE t1;
+# ENCODE_FAIL: INSERT is rejected with an error, nothing is stored
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+val vsql_test_only.FAULT_BLOB
+);
+INSERT INTO t2 VALUES (1, 'OK good');
+INSERT INTO t2 VALUES (2, 'ENCODE_FAIL');
+ERROR HY000: Incorrect FAULT_BLOB value: 'ENCODE_FAIL' for column 'val' at row 1
+# Only the successful row was stored
+SELECT id, val FROM t2 ORDER BY id;
+id	val
+1	OK good
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;
+# Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION

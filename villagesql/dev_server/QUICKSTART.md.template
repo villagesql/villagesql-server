@@ -1,0 +1,240 @@
+# VillageSQL Development Server
+
+A standalone VillageSQL server package for extension developers and general experimentation.
+
+**Version:** @VSQL_VERSION@
+**Platform:** @PLATFORM@-@ARCH@
+**Package Date:** @BUILD_DATE@
+
+## Prerequisites
+
+### macOS
+
+VillageSQL requires OpenSSL to run. Install it via Homebrew:
+
+```bash
+brew install openssl
+```
+
+## Quick Start
+
+```bash
+# 1. Initialize the database
+./villagesql init
+
+# 2. Start the server
+./villagesql start
+
+# 3. Check the server is running
+./villagesql status
+
+# 4. Connect to the server
+./villagesql connect
+
+# 5. Stop the server (when done)
+./villagesql stop
+```
+
+To set a root password, pass `--password` to `init`. When run interactively you will be prompted to enter and confirm the password:
+
+```bash
+./villagesql init --password
+./villagesql start
+```
+
+When stdin is not a terminal (e.g. in scripts or CI), the password is read from stdin without a confirmation prompt:
+
+```bash
+echo "mysecretpassword" | ./villagesql init --password
+./villagesql start
+```
+
+The password is stored in `instances/default/my.cnf` (mode 600) and picked up automatically by `connect` and `stop`.
+
+## Managing Extensions
+
+Extension management has two steps: copy the `.veb` file into the instance, then install it in the running server via SQL.
+
+### Adding and removing .veb files
+
+```bash
+# Copy a .veb file into this instance's extension directory
+./villagesql veb add /path/to/my_extension.veb
+
+# List .veb files available to this instance
+./villagesql veb ls
+
+# Remove a .veb file from this instance
+./villagesql veb rm my_extension
+```
+
+### Installing extensions in the running server
+
+```sql
+-- Install an extension (must be in the instance's veb directory)
+INSTALL EXTENSION my_extension;
+
+-- List installed extensions
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+-- Use your custom type in a table
+CREATE TABLE test_table (
+    id INT PRIMARY KEY,
+    custom_col YOUR_CUSTOM_TYPE
+);
+
+-- Uninstall an extension
+UNINSTALL EXTENSION my_extension;
+```
+
+### Example Extensions Included
+
+This package includes two example extensions seeded into new instances automatically:
+
+```sql
+INSTALL EXTENSION vsql_simple;
+INSTALL EXTENSION vsql_complex;
+```
+
+**Tip:** `.veb` files placed in `lib/veb/` are automatically copied into new instances when you run `./villagesql init`.
+
+## Directory Structure
+
+- `bin/` - Server and client binaries
+- `lib/` - Shared libraries and plugins
+  - `lib/veb/` - VillageSQL extension bundles (includes example .veb files)
+- `share/` - SQL files, character sets, error messages
+- `data/` - Database files (created by `./villagesql init`)
+- `mysql-test/` - Test framework for extension testing
+- `support-files/` - Additional support files
+
+## Configuration
+
+The helper script uses these defaults:
+
+- **Instance directory:** `instances/default/` (within the package directory)
+- **Data directory:** `<instance-dir>/data`
+- **Socket:** `<instance-dir>/mysql.sock`
+- **Port:** 3307 (configurable via `$MYSQL_PORT`)
+- **Bind address:** `127.0.0.1` (localhost only)
+- **Error log:** `<instance-dir>/data/error.log`
+- **Root user:** `root` (no password by default; set one with `init --password`)
+
+## Multiple Instances
+
+Use `--dir` to point each instance at its own directory, so their data,
+socket, and PID files don't conflict:
+
+```bash
+# Instance A on port 3307
+./villagesql --dir ./instance-a init
+./villagesql --dir ./instance-a start
+
+# Instance B on port 3308
+./villagesql --dir ./instance-b init
+MYSQL_PORT=3308 ./villagesql --dir ./instance-b start
+
+# Connect to each independently
+./villagesql --dir ./instance-a connect
+./villagesql --dir ./instance-b connect
+```
+
+Use `--here` as a shorthand to create an instance in the current directory
+(equivalent to `--dir $(pwd)/.vsql_here`):
+
+```bash
+cd /path/to/my-project
+./villagesql --here init
+./villagesql --here start
+./villagesql --here connect
+```
+
+## Manual Server Control
+
+If you prefer manual control or need custom options:
+
+```bash
+# Initialize
+./bin/mysqld --initialize-insecure --basedir=$(pwd) --datadir=$(pwd)/data
+
+# Start
+./bin/mysqld --basedir=$(pwd) --datadir=$(pwd)/data \
+    --socket=$(pwd)/mysql.sock --port=3307 \
+    --bind-address=127.0.0.1 &
+
+# Connect
+./bin/mysql --socket=$(pwd)/mysql.sock -u root
+
+# Stop
+./bin/mysqladmin --socket=$(pwd)/mysql.sock -u root shutdown
+```
+
+## Included Binaries
+
+Essential tools included in `bin/`:
+
+- `mysqld` - MySQL/VillageSQL server
+- `mysql` - Command-line client
+- `mysqladmin` - Server administration
+- `mysqldump` - Backup tool
+- `mysqlcheck` - Table maintenance
+- `mysqlimport` - Data import
+- `mysqlshow` - Show databases/tables/columns
+- And more...
+@TEST_DOCS@
+
+## VillageSQL-Specific Features
+
+### Extension Management
+
+```sql
+-- Install an extension (searches lib/veb/ by default)
+INSTALL EXTENSION extension_name;
+
+-- List installed extensions
+SELECT * FROM INFORMATION_SCHEMA.extensions;
+
+-- Uninstall an extension
+UNINSTALL EXTENSION extension_name;
+```
+
+## Troubleshooting
+
+### Server Won't Start
+
+Check the error log:
+```bash
+tail -50 instances/default/data/error.log
+# Or for a custom instance directory:
+tail -50 <instance-dir>/data/error.log
+```
+
+Common issues:
+- Port 3307 already in use: Set `MYSQL_PORT=3308` before running `./villagesql start`
+- Stale socket file: Remove `instances/default/mysql.sock` manually (or `<instance-dir>/mysql.sock`)
+- Permissions: Ensure files are readable/executable
+
+### Can't Connect
+
+Verify the server is running:
+```bash
+ps aux | grep mysqld
+ls -la mysql.sock
+```
+
+### Extension Installation Fails
+
+1. Ensure the .veb file is in `lib/veb/` directory
+2. Check that the extension name matches the .veb filename (without .veb extension)
+3. Verify the extension is compatible with this VillageSQL version
+4. Check the error log for detailed error messages
+
+## Support and Documentation
+
+- **GitHub:** https://github.com/villagesql/villagesql-server
+- **Documentation:** https://docs.villagesql.com
+- **Issues:** https://github.com/villagesql/villagesql-server/issues
+
+## License
+
+See LICENSE file for MySQL/VillageSQL licensing terms.

@@ -1,0 +1,101 @@
+# Test triggers with multi-row (bulk) operations
+# Triggers fire FOR EACH ROW, so we need to verify sequential execution
+# and that custom type handling works correctly for every row in the batch
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  val COMPLEX
+);
+
+delimiter //;
+
+# Track how many times trigger fires and capture last value
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  SET @trigger_count = IFNULL(@trigger_count, 0) + 1;
+  SET @last_val = NEW.val;
+  SET @last_id = NEW.id;
+END//
+
+delimiter ;//
+
+# Initialize counter
+SET @trigger_count = 0;
+
+# Multi-row INSERT - trigger should fire 3 times
+INSERT INTO t1 VALUES (1, 'first', '(1.0,1.0)'), (2, 'second', '(2.0,2.0)'), (3, 'third', '(3.0,3.0)');
+
+# Verify trigger fired for each row
+SELECT @trigger_count, @last_id, @last_val;
+
+# Verify all rows inserted correctly
+SELECT * FROM t1 ORDER BY id;
+
+# Test multi-row UPDATE
+delimiter //;
+
+CREATE TRIGGER tr_before_update BEFORE UPDATE ON t1
+FOR EACH ROW
+BEGIN
+  SET @update_count = IFNULL(@update_count, 0) + 1;
+  SET @update_old = OLD.val;
+  SET @update_new = NEW.val;
+END//
+
+delimiter ;//
+
+SET @update_count = 0;
+
+# Update multiple rows
+UPDATE t1 SET val = '(10.0,10.0)' WHERE id IN (1, 2);
+
+# Verify trigger fired for each updated row
+SELECT @update_count;
+
+# Verify updates applied correctly
+SELECT * FROM t1 ORDER BY id;
+
+# Test multi-row DELETE
+delimiter //;
+
+CREATE TRIGGER tr_before_delete BEFORE DELETE ON t1
+FOR EACH ROW
+BEGIN
+  SET @delete_count = IFNULL(@delete_count, 0) + 1;
+  SET @deleted_val = OLD.val;
+END//
+
+delimiter ;//
+
+SET @delete_count = 0;
+
+# Delete multiple rows
+DELETE FROM t1 WHERE id IN (1, 3);
+
+# Verify trigger fired for each deleted row
+SELECT @delete_count;
+
+# Verify only row 2 remains
+SELECT * FROM t1;
+
+# Cleanup
+DROP TRIGGER tr_before_insert;
+DROP TRIGGER tr_before_update;
+DROP TRIGGER tr_before_delete;
+DROP TABLE t1;
+
+# Clear user variables
+SET @trigger_count = NULL;
+SET @last_val = NULL;
+SET @last_id = NULL;
+SET @update_count = NULL;
+SET @update_old = NULL;
+SET @update_new = NULL;
+SET @delete_count = NULL;
+SET @deleted_val = NULL;
+
+--source include/villagesql/uninstall_complex_extension.inc

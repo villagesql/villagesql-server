@@ -1,0 +1,25 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+#
+# 1. Try to join a member with a different algorithm
+#    It will be disallowed.
+#
+[connection server1]
+SET @@GLOBAL.DEBUG= '+d,group_replication_write_set_extraction_algorithm_murmur32';
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+START GROUP_REPLICATION;
+ERROR HY000: The server is not configured properly to be an active member of the group. Please see more details on error log.
+Matching lines are:
+DATE_TIME [ERROR] [MY-011528] [Repl] Plugin group_replication reported: 'The member is configured with a transaction-write-set-extraction option value 'XXHASH64' different from the group 'MURMUR32'. The member will now exit the group.'
+Occurrences of 'The member is configured with a transaction-write-set-extraction option value' in the input file: 1
+#
+# 2. Cleanup
+#
+[connection server1]
+include/stop_group_replication.inc
+SET @@GLOBAL.DEBUG= '-d,group_replication_write_set_extraction_algorithm_murmur32';
+include/group_replication_end.inc

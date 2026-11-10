@@ -1,0 +1,29 @@
+# Test GROUP BY on COMPLEX in a simple (non-nested) view
+# This determines if the issue is with views in general or only nested views
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)', 100.50),
+  (2, '(1.0,2.0)', 50.25),
+  (3, '(3.0,4.0)', 200.75),
+  (4, '(3.0,4.0)', 150.00);
+
+# Test 1: Simple view with GROUP BY on COMPLEX
+CREATE VIEW v_aggregated AS
+SELECT val, SUM(amount) AS total_amount
+FROM t1
+GROUP BY val;
+
+# Query the view - ORDER BY val
+SELECT * FROM v_aggregated ORDER BY val;
+
+# Query the view - ORDER BY total_amount
+SELECT * FROM v_aggregated ORDER BY total_amount;
+
+DROP VIEW v_aggregated;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

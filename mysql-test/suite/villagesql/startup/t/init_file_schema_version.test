@@ -1,0 +1,84 @@
+# Test VillageSQL schema version accessibility with --init-file and --initialize
+
+let BASEDIR= `select @@basedir`;
+let DDIR=$MYSQL_TMP_DIR/init_file_schema_version_test;
+let MYSQLD_LOG=$MYSQL_TMP_DIR/init_file_schema_version.log;
+let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --tls-version= --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR;
+let INIT_FILE=$MYSQL_TMP_DIR/init_schema_version.sql;
+
+--echo #
+--echo # Test: villagesql_schema_version accessibility during --initialize
+--echo # Verify that @@GLOBAL.villagesql_schema_version can be queried from init-file
+--echo #
+
+# Create an init file that queries the schema version during initialization
+write_file $INIT_FILE;
+CREATE DATABASE test;
+CREATE TABLE test.init_version_check (
+  captured_version VARCHAR(100)
+);
+INSERT INTO test.init_version_check
+  SELECT @@GLOBAL.villagesql_schema_version;
+EOF
+
+--echo # Shut server down
+--source include/shutdown_mysqld.inc
+
+--echo # Run --initialize-insecure with init-file that queries villagesql_schema_version
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --init-file=$INIT_FILE > $MYSQLD_LOG 2>&1
+
+--echo # Start server with initialized datadir
+--exec echo "restart:--datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # Check the value that was captured during --initialize
+# Strip optional pre-release suffix (e.g., -dev, -alpha) so test works for both dev and release builds
+--replace_regex /-[a-zA-Z0-9]+$//
+SELECT captured_version AS version_during_initialize FROM test.init_version_check;
+
+--echo #
+--echo # Test: villagesql_schema_version accessibility with --init-file (without --initialize)
+--echo # Verify that @@GLOBAL.villagesql_schema_version can be queried from init-file during normal startup
+--echo #
+
+# Create a new init file for normal startup test
+let INIT_FILE_STARTUP=$MYSQL_TMP_DIR/init_schema_version_startup.sql;
+write_file $INIT_FILE_STARTUP;
+CREATE TABLE IF NOT EXISTS test.startup_version_check (
+  captured_version VARCHAR(100),
+  check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO test.startup_version_check (captured_version)
+  SELECT @@GLOBAL.villagesql_schema_version;
+EOF
+
+--echo # Restart server with init-file (without --initialize)
+--source include/shutdown_mysqld.inc
+
+--exec echo "restart:--datadir=$DDIR --init-file=$INIT_FILE_STARTUP" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # Check the value that was captured during normal startup with --init-file
+# Strip optional pre-release suffix (e.g., -dev, -alpha) so test works for both dev and release builds
+--replace_regex /-[a-zA-Z0-9]+$//
+SELECT captured_version AS version_during_startup FROM test.startup_version_check;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+--echo # Shut server down
+--source include/shutdown_mysqld.inc
+
+--echo # Clean up all test files
+remove_file $MYSQLD_LOG;
+remove_file $INIT_FILE;
+remove_file $INIT_FILE_STARTUP;
+--force-rmdir $DDIR
+
+--echo # Restart normal server
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # Test completed successfully
+SELECT 'All Tests Passed' AS final_result;

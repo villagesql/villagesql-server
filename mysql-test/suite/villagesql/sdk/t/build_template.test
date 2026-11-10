@@ -1,0 +1,93 @@
+# SDK Build Template Test
+#
+# Tests that the VillageSQL Extension SDK can be used to build an extension:
+# 1. Extract the SDK tarball
+# 2. Build the template project
+# 3. Install and test the extension
+#
+# This test requires the SDK tarball to be built first (make sdk)
+
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # SDK Build Template Test
+
+# Get paths - use @@basedir which points to the build directory where mysqld runs
+--let $veb_dir = `SELECT @@veb_dir`
+--let $build_dir = `SELECT @@basedir`
+# @@villagesql_server_version includes the code base as a prefix, separated
+# from the abbreviated version by an underscore (e.g. "mysql-8.4_0.0.5").
+# The SDK directory name uses the abbreviated version.
+--let $sdk_abbr = `SELECT SUBSTRING_INDEX(@@villagesql_server_version, '_', -1)`
+--let $test_dir = $MYSQLTEST_VARDIR/tmp/sdk_test
+--let $sdk_dir_name = villagesql-extension-sdk-$sdk_abbr
+--let $sdk_tarball = $build_dir/$sdk_dir_name.tar.gz
+--let $sdk_dir = $test_dir/$sdk_dir_name
+
+# Check if SDK tarball exists
+--exec test -f "$sdk_tarball" || (echo "SDK tarball not found. Run 'make sdk' first." && echo "Looked for: $sdk_tarball" && exit 1)
+--echo Found SDK tarball
+
+--echo # Setup test directory
+--exec rm -rf $test_dir
+--exec mkdir -p $test_dir
+
+--echo # Extract SDK tarball
+# unset LD_PRELOAD so tar does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds; otherwise uninstrumented tar/gzip trip LeakSanitizer on
+# their own allocations and fail with exitcode=42 (see
+# include/villagesql/create_extension_sdk.inc for the full explanation).
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec unset LD_PRELOAD && tar -xzf $sdk_tarball -C $test_dir
+
+--echo # Build the template extension
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec mkdir -p $sdk_dir/template/build
+
+# Run cmake
+# unset LD_PRELOAD so the toolchain sub-build does not run under the
+# LD_PRELOAD'd ASan runtime on sanitizer builds; otherwise the uninstrumented
+# system gcc trips LeakSanitizer on GCC's own allocations and fails the build
+# (see include/villagesql/create_extension_sdk.inc for the full explanation).
+--echo # Running cmake...
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec cd $sdk_dir/template/build && unset LD_PRELOAD && cmake .. > cmake_output.txt 2>&1
+
+# Run make
+--echo # Running make...
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--exec cd $sdk_dir/template/build && unset LD_PRELOAD && make > make_output.txt 2>&1
+
+--echo # Verify VEB was created
+--file_exists $sdk_dir/template/build/my_extension.veb
+
+--echo # Copy VEB to server's VEB directory
+--exec cp $sdk_dir/template/build/my_extension.veb $veb_dir/
+
+--echo # Install the extension
+INSTALL EXTENSION my_extension;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'my_extension';
+
+--echo # Test the my_add function (prefixed with extension name)
+SELECT my_extension.my_add(2, 3);
+SELECT my_extension.my_add(10, 20);
+SELECT my_extension.my_add(-5, 5);
+
+--echo # Test NULL handling
+SELECT my_extension.my_add(NULL, 5);
+SELECT my_extension.my_add(5, NULL);
+
+--echo # Uninstall the extension
+UNINSTALL EXTENSION my_extension;
+
+--echo # Verify extension was removed
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'my_extension';
+
+--echo # Cleanup
+--exec rm -rf $test_dir
+--exec rm -f $veb_dir/my_extension.veb
+
+--source include/villagesql/binlog_check_end.inc

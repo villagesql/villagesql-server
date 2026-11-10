@@ -1,0 +1,40 @@
+# Test CREATE TABLE REPLACE AS SELECT with COMPLEX type
+# Tests REPLACE handling for duplicate keys in CREATE TABLE AS SELECT
+
+# Create source table with COMPLEX data including duplicates
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_data (
+    id INT,
+    complex_data COMPLEX
+);
+
+INSERT INTO source_data VALUES (1, '(1.0,2.0)');
+INSERT INTO source_data VALUES (2, '(3.0,4.0)');
+INSERT INTO source_data VALUES (1, '(5.0,6.0)'); # Duplicate key - should replace first
+
+# Validate all three rows.
+SELECT * FROM source_data;
+
+# Create table using REPLACE AS SELECT to handle duplicates
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX
+) REPLACE AS SELECT * FROM source_data ORDER BY complex_data;
+SHOW COLUMNS FROM t1;
+SELECT * FROM t1 ORDER BY id;
+
+# Create table, but insert values in reverse order
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX
+) REPLACE AS SELECT * FROM source_data ORDER BY complex_data DESC;
+SELECT * FROM t2 ORDER BY id;
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE source_data;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,6 @@
+Add test directory with non-compliant files
+
+This directory contains test files that intentionally violate
+the style guide. The entire directory should be ignored.
+
+villint-ignore: mysql-test/villint_test

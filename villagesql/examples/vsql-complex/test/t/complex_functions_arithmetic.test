@@ -1,0 +1,105 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: Arithmetic Functions for COMPLEX type (add, subtract, multiply, divide)
+#
+########################################################################
+#
+# Setup test table
+#
+########################################################################
+
+CREATE TABLE test_udf_arithmetic (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50),
+    val1 COMPLEX,
+    val2 COMPLEX
+);
+
+INSERT INTO test_udf_arithmetic (name, val1, val2) VALUES
+    ('basic', '(1,2)', '(3,4)'),
+    ('with_negatives', '(-1,-2)', '(3,4)'),
+    ('pure_real', '(5,0)', '(3,0)'),
+    ('pure_imag', '(0,2)', '(0,3)'),
+    ('mixed', '(1.5,2.5)', '(-0.5,1.5)'),
+    ('divide_by_zero', '(1,2)', '(0,0)'),
+    ('divide_by_null', '(1,2)', NULL);
+
+########################################################################
+#
+# Test 1: All arithmetic operations together
+#
+########################################################################
+
+SELECT id, name, val1, val2,
+    vsql_complex.complex_add(val1, val2) as sum,
+    vsql_complex.complex_subtract(val1, val2) as difference,
+    vsql_complex.complex_multiply(val1, val2) as product,
+    vsql_complex.complex_divide(val1, val2) as quotient
+FROM test_udf_arithmetic
+ORDER BY id;
+
+########################################################################
+#
+# Test 2: Individual addition tests
+#
+########################################################################
+
+SELECT name, val1, val2,
+    vsql_complex.complex_add(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+
+########################################################################
+#
+# Test 3: Individual subtraction tests
+#
+########################################################################
+
+SELECT name, val1, val2,
+    vsql_complex.complex_subtract(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+
+########################################################################
+#
+# Test 4: Individual multiplication tests
+#
+########################################################################
+
+SELECT name, val1, val2,
+    vsql_complex.complex_multiply(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+
+########################################################################
+#
+# Test 5: Individual division tests
+#
+########################################################################
+
+SELECT name, val1, val2,
+    vsql_complex.complex_divide(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+
+########################################################################
+#
+# Test 6: Direct function calls without table data (1 / i = -i)
+#
+########################################################################
+
+SELECT vsql_complex.complex_divide('(1,0)', '(0,1)') as one_divided_by_i;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE test_udf_arithmetic;
+
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,54 @@
+CREATE TABLE complex_test (
+id INT PRIMARY KEY,
+value vsql_complex.COMPLEX
+);
+INSERT INTO complex_test VALUES
+(1, '(3.0, 4.0)'),
+(2, '(1.0, 2.0)'),
+(3, '(5.0, 1.0)'),
+(4, '(2.0, 3.0)');
+# Test comparison operators first to verify compare function
+SELECT value FROM complex_test WHERE id = 2 AND value < '(2.0, 3.0)';
+value
+(1,2)
+SELECT value FROM complex_test WHERE id = 4 AND value > '(1.0, 2.0)';
+value
+(2,3)
+SELECT value FROM complex_test WHERE id = 2 AND value = '(1.0, 2.0)';
+value
+(1,2)
+# Basic MAX and MIN
+SELECT MAX(value) FROM complex_test;
+MAX(value)
+(5,1)
+SELECT MIN(value) FROM complex_test;
+MIN(value)
+(1,2)
+SELECT MIN(value) AS min_val, MAX(value) AS max_val FROM complex_test;
+min_val	max_val
+(1,2)	(5,1)
+# Test with NULL values
+INSERT INTO complex_test VALUES (5, NULL);
+SELECT MAX(value) FROM complex_test;
+MAX(value)
+(5,1)
+SELECT MIN(value) FROM complex_test;
+MIN(value)
+(1,2)
+# Test empty result set
+DELETE FROM complex_test;
+SELECT MAX(value) FROM complex_test;
+MAX(value)
+NULL
+SELECT MIN(value) FROM complex_test;
+MIN(value)
+NULL
+# Test with all NULL values
+INSERT INTO complex_test (id, value) VALUES (1, NULL), (2, NULL);
+SELECT MAX(value) FROM complex_test;
+MAX(value)
+NULL
+SELECT MIN(value) FROM complex_test;
+MIN(value)
+NULL
+DROP TABLE complex_test;

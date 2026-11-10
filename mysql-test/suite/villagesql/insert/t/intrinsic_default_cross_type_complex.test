@@ -1,0 +1,47 @@
+# Cross-type consistency test for intrinsic defaults.
+# A table with INT NOT NULL, DOUBLE NOT NULL, and COMPLEX NOT NULL columns.
+# Verifies that INSERT IGNORE and UPDATE IGNORE produce the correct intrinsic
+# default for all three types in the same statement.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (
+    id INT PRIMARY KEY,
+    val_int INT NOT NULL,
+    val_double DOUBLE NOT NULL,
+    val_complex COMPLEX NOT NULL
+);
+
+# INSERT IGNORE: all three NOT NULL columns receive NULL simultaneously.
+# Expected intrinsic defaults: 0, 0.0, (0,0)
+INSERT IGNORE INTO t VALUES (1, NULL, NULL, NULL);
+SELECT * FROM t;
+
+# Insert a row with real values to use for UPDATE tests
+INSERT INTO t VALUES (2, 10, 3.14, '(1.0,2.0)');
+SELECT * FROM t ORDER BY id;
+
+# UPDATE IGNORE: all three columns set to NULL simultaneously.
+# Expected: all revert to intrinsic defaults 0, 0.0, (0,0)
+UPDATE IGNORE t SET val_int = NULL, val_double = NULL, val_complex = NULL
+WHERE id = 2;
+SELECT * FROM t ORDER BY id;
+
+# Mixed: only COMPLEX set to NULL; others get valid values.
+INSERT INTO t VALUES (3, 5, 2.71, '(3.0,4.0)');
+UPDATE IGNORE t SET val_int = 99, val_double = NULL, val_complex = NULL
+WHERE id = 3;
+SELECT * FROM t ORDER BY id;
+
+# Multi-row UPDATE IGNORE: affects all rows at once.
+INSERT INTO t VALUES (4, 1, 1.0, '(1.0,1.0)');
+INSERT INTO t VALUES (5, 2, 2.0, '(2.0,2.0)');
+
+UPDATE IGNORE t SET val_int = NULL, val_double = NULL, val_complex = NULL;
+
+# All rows should now have intrinsic defaults
+SELECT * FROM t ORDER BY id;
+
+DROP TABLE t;
+
+--source include/villagesql/uninstall_complex_extension.inc

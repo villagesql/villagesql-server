@@ -1,0 +1,38 @@
+# previous(s) returns the s passed to the previous row (or NULL on the
+# first row). Implemented via the typed prerun/postrun + `void*&` user_data
+# slot (WrapperVoidStarRefState) introduced in #551.
+#
+# The VDF mallocs storage on first need, reuses it when subsequent strings
+# fit, and reallocates when a longer string arrives. Postrun frees the
+# final buffer.
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = test_state_writeback
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/state_writeback_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION test_state_writeback;
+
+CREATE TABLE seq (id INT PRIMARY KEY, s VARCHAR(16));
+INSERT INTO seq VALUES
+  (1, 'a'),
+  (2, 'bb'),
+  (3, 'ccc'),
+  (4, 'dd'),
+  (5, 'ee'),
+  (6, 'ffffffff');
+
+--echo # First row prev is NULL; later rows reflect prior s.
+--echo # Rows 4-5 reuse the same buffer (shorter than capacity);
+--echo # row 6 reallocs because 'ffffffff' doesn't fit.
+SELECT id, s, test_state_writeback.previous(s) AS prev FROM seq ORDER BY id;
+
+DROP TABLE seq;
+UNINSTALL EXTENSION test_state_writeback;

@@ -1,0 +1,81 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(0.0,0.0)'),           # Zero
+(2, '(1.0,2.0)'),           # Regular positive
+(3, '(3.0,4.0)'),           # Medium positive
+(4, '(5.0,6.0)'),           # Medium positive
+(5, '(7.0,8.0)'),           # Medium positive
+(6, '(9.0,10.0)'),          # Medium positive
+(7, '(-1.0,-2.0)'),         # Negative both parts
+(8, '(-5.0,3.0)'),          # Negative real, positive imaginary
+(9, '(2.0,-7.0)'),          # Positive real, negative imaginary
+(10, '(3.0,1.0)'),          # Same real as id=3, different imaginary
+(11, '(1.5e100,2.3e100)'),  # Very large positive
+(12, '(-1.5e100,-2.3e100)'), # Very large negative
+(13, '(4.22e-10,3.14e-15)'), # Very small positive
+(14, '(-1.17e-9,-8.88e-12)');
+SELECT id FROM t1 WHERE val IN ('(1.0,2.0)', '(5.0,6.0)', '(9.0,10.0)') ORDER BY id;
+id
+2
+4
+6
+SELECT id FROM t1 WHERE val IN ('(3.0,4.0)');
+id
+3
+SELECT id FROM t1 WHERE val IN ('(99.0,99.0)', '(88.0,88.0)');
+id
+SELECT id FROM t1 WHERE val IN ('(0.0,0.0)', '(-1.0,-2.0)', '(-5.0,3.0)') ORDER BY id;
+id
+1
+7
+8
+SELECT id FROM t1 WHERE val IN ('(2.0,-7.0)', '(-5.0,3.0)', '(1.0,2.0)') ORDER BY id;
+id
+2
+8
+9
+SELECT id FROM t1 WHERE val IN ('(1.5e100,2.3e100)', '(-1.5e100,-2.3e100)') ORDER BY id;
+id
+11
+12
+SELECT id FROM t1 WHERE val IN ('(4.22e-10,3.14e-15)', '(-1.17e-9,-8.88e-12)') ORDER BY id;
+id
+13
+14
+SELECT id FROM t1 WHERE val IN ('(3.0,1.0)', '(3.0,4.0)', '(3.0,9.0)') ORDER BY id;
+id
+3
+10
+SELECT id FROM t1 WHERE val NOT IN ('(1.0,2.0)', '(3.0,4.0)', '(0.0,0.0)') ORDER BY id;
+id
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+INSERT INTO t1 VALUES (15, NULL);
+SELECT id FROM t1 WHERE val IN ('(1.0,2.0)', NULL) ORDER BY id;
+id
+2
+SELECT id FROM t1 WHERE val IN (NULL) ORDER BY id;
+id
+SELECT id FROM t1 WHERE id > 7 AND val IN ('(-1.0,-2.0)', '(2.0,-7.0)', '(3.0,1.0)') ORDER BY id;
+id
+9
+10
+SELECT id FROM t1 WHERE id < 10 AND val NOT IN ('(0.0,0.0)', '(1.0,2.0)') ORDER BY id;
+id
+3
+4
+5
+6
+7
+8
+9
+DROP TABLE t1;

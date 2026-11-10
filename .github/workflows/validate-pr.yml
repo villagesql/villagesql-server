@@ -1,0 +1,104 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+    types:
+    - opened
+    - edited
+    - reopened
+    - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        # Checkout the merge commit that GitHub creates for PRs
+        ref: ${{ github.sha }}
+        # Fetch enough history to examine merge commit parents and find merge-base
+        fetch-depth: 200
+
+    - name: Checkout PR head
+      run: |
+        # NB: this deserves an explanation. Caveat: this is just what dbentley
+        # understands, and maybe I'm missing something.
+        # We want to check changes:
+        #   from: merge-base(latest commit in PR, origin/main)
+        #   to: latest commit in PR
+        # We could use github.event.pull_request.head.sha as ref to get head
+        # But because of the way actions/checkout does fetching,
+        # we won't have main, so there's no way to merge-base.
+        # Instead, we use github.sha, which is a merge commit that merges:
+        #   * latest commit in PR
+        #   * latest commit in main
+        # Which gives us what we need but requires a bit of work:
+        # * find that commit's two parents
+        # * find the merge-base of those two parents
+        # * checkout the second parent (the latest commit in PR)
+        # GitHub's merge commit has two parents: base branch (^1) and PR head (^2)
+        base_sha=$(git rev-parse ${{ github.sha }}^1)
+        head_sha=$(git rev-parse ${{ github.sha }}^2)
+        merge_base=$(git merge-base "$base_sha" "$head_sha")
+        echo "VILLINT_COMMIT=$merge_base" >> $GITHUB_ENV
+        # When the PR is a single commit, GitHub overwrites the PR title with
+        # that commit's title on merge, so it must pass title validation too.
+        commit_count=$(git rev-list --count "$merge_base..$head_sha")
+        if [ "$commit_count" -eq 1 ]; then
+          echo "SINGLE_COMMIT_TITLE=$(git log -1 --format=%s "$head_sha")" >> $GITHUB_ENV
+        fi
+        # Checkout PR head so villint diffs against the actual PR changes
+        git checkout "$head_sha"
+
+    - name: Validate PR title
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        SINGLE_COMMIT_TITLE: ${{ env.SINGLE_COMMIT_TITLE }}
+      run: ./scripts/validate-pr-title.sh "$PR_TITLE"
+
+    - name: Install clang-format
+      # Pinned via PyPI to the release villint reports
+      # `villint.sh --clang-format-version`) so CI uses a deterministic
+      # version. The previous apt.llvm.org install pulled
+      # `clang-format-22` from `llvm-toolchain-noble-22`, which is a
+      # *moving snapshot* of LLVM main -- two CI runs days apart could see
+      # different formatting behavior even when the package name was unchanged.
+      #
+      # The trailing ".*" makes pip do PEP 440 prefix matching, so the pin can
+      # carry either two or three components and CI honors that precision (the
+      # same way scripts/villint.sh does for the local binary):
+      #   - "22.1"   -> ==22.1.*   accepts any 22.1.x patch release
+      #   - "22.1.8" -> ==22.1.8.* requires that exact patch
+      # We normally pin two components so devs needn't update on every patch,
+      # and pin the full three only when a patch release changes formatting
+      # output and we must force everyone onto the same build.
+      run: pip install "clang-format==$(./scripts/villint.sh --clang-format-version).*"
+
+    - name: Run villint linter
+      run: |
+        ./scripts/villint.sh --commit "$VILLINT_COMMIT"
+        if ! git diff --quiet; then
+          echo ""
+          echo "ERROR: villint.sh found issues that need to be fixed"
+          echo ""
+          echo "Run './scripts/villint.sh' locally to fix these issues, then commit the changes."
+          echo ""
+          echo "To ignore specific files, add 'villint-ignore: path/to/file' to your commit message."
+          echo "Multiple files can be comma-separated or in separate villint-ignore lines."
+          echo ""
+          echo "Changes needed:"
+          git diff
+          exit 1
+        fi
+        echo "All linting checks passed"

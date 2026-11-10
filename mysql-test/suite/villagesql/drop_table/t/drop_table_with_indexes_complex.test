@@ -1,0 +1,28 @@
+# Test DROP TABLE with indexes on COMPLEX columns
+# Grammar: DROP TABLE table_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE indexed_complex (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_col COMPLEX,
+    INDEX idx_name (name)
+);
+
+INSERT INTO indexed_complex VALUES
+    (1, 'first', '(1.0,2.0)'),
+    (2, 'second', '(3.0,4.0)');
+
+SHOW CREATE TABLE indexed_complex;
+--replace_column 7 #
+SHOW INDEX FROM indexed_complex;
+
+DROP TABLE indexed_complex;
+
+# Verify table and its indexes no longer exist
+SHOW TABLES LIKE 'indexed_complex';
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

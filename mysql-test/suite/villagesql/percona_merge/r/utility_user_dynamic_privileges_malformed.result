@@ -1,0 +1,12 @@
+#
+# A valid list of several long privilege names is still accepted.
+#
+# restart
+FOUND /in use with dynamic privileges 'SYSTEM_USER,PRIVILEGE_ALPHA,PRIVILEGE_BRAVO,PRIVILEGE_CHARLIE,PRIVILEGE_DELTA,PRIVILEGE_ECHO'\./ in utility_user_dyn_priv.err
+#
+# The same list with a trailing comma is rejected, and the server neither
+# aborts nor stalls doing it.
+#
+# restart
+FOUND /Wrong format of --utility-user-dynamic-privileges parameter value: SYSTEM_USER,PRIVILEGE_ALPHA,PRIVILEGE_BRAVO,PRIVILEGE_CHARLIE,PRIVILEGE_DELTA,PRIVILEGE_ECHO,/ in utility_user_dyn_priv.err
+# restart

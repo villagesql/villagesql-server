@@ -1,0 +1,33 @@
+# Test correlated subqueries where outer and inner scans reference the same
+# table. MySQL must open two TABLE instances from the same TABLE_SHARE, giving
+# each its own cloned Field objects and independent EncodeContext/buffer. If
+# the same TABLE instance were incorrectly reused for both scans, buffer
+# aliasing would corrupt encoded values and produce wrong comparison results.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1,'(1.0,2.0)'),(2,'(3.0,4.0)'),(3,'(5.0,6.0)'),(4,'(1.0,2.0)');
+
+# Scalar correlated subquery on the same table.
+# Inner scan encodes val for each row with matching id; outer scan compares.
+# Expected: all 4 rows (outer val always equals inner val for same id).
+# If the outer and inner scans shared a buffer, the inner scan would overwrite
+# the outer val before the comparison, producing wrong results.
+SELECT t_outer.id, t_outer.val
+FROM t1 AS t_outer
+WHERE t_outer.val = (SELECT t_inner.val FROM t1 AS t_inner
+                     WHERE t_inner.id = t_outer.id LIMIT 1);
+
+# IN correlated subquery on the same table.
+# Expected: rows 1 and 4 only (both have val=(1,2); each has a peer with a
+# different id that also has val=(1,2)).
+# If buffer aliasing occurred, cross-row comparisons would be wrong.
+SELECT t_outer.id, t_outer.val
+FROM t1 AS t_outer
+WHERE t_outer.val IN (SELECT t_inner.val FROM t1 AS t_inner
+                      WHERE t_inner.id != t_outer.id);
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

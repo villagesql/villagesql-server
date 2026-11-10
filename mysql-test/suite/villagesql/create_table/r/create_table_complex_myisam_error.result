@@ -1,0 +1,26 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+value COMPLEX
+) ENGINE=MyISAM;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot create table with MyISAM storage engine.
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+value COMPLEX
+) ENGINE=MEMORY;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot create table with MEMORY storage engine.
+SHOW CREATE TABLE t2;
+ERROR 42S02: Table 'test.t2' doesn't exist
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+value COMPLEX
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t3;

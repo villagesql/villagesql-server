@@ -1,0 +1,94 @@
+# A VEF auth method decides which client-side auth plugins it accepts as-is. The
+# vsql_auth_test method pins mysql_clear_password (its "pin" = the client plugin
+# the server switches an unaccepted client to); SET GLOBAL
+# vsql_auth_test.accept_client_plugin names one extra plugin it also accepts
+# (empty by default = accept only the pin). This test drives real logins and
+# checks whether the server accepts the client's offered plugin or forces a
+# switch to the pin.
+#
+# The stock client offers the scrambler caching_sha2_password, so:
+#   - offer NOT accepted -> switch to mysql_clear_password; without
+#     --enable_cleartext_plugin the client refuses -> ER 2059
+#     "'mysql_clear_password' cannot be loaded: plugin not enabled".
+#   - offer accepted -> no switch; the scrambler's first reply is a hash, not the
+#     token, so login fails with ER 1045 -- and NO 2059.
+# ER 2059 vs ER 1045 is the "switch forced" vs "offer accepted" signal.
+#
+# Each case uses --exec $MYSQL ... 2>&1 (not --connect) so the exact error line is
+# captured in the .result: the 2059-vs-1045 text IS the assertion; --connect
+# matches only an error code, not the message.
+
+INSTALL EXTENSION vsql_auth_test;
+
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+
+--echo #
+--echo # Default policy (accept_client_plugin empty): the method accepts only its
+--echo # pin. A stock client offers caching_sha2_password, which the callback
+--echo # rejects, so the server switches to mysql_clear_password.
+--echo #
+--echo # With --enable_cleartext_plugin the client complies with the switch and
+--echo # resends the token verbatim -> accepted.
+--echo #
+--exec $MYSQL --enable_cleartext_plugin --user=auth_user --password=vsql-auth-test-token -e "SELECT CURRENT_USER(), @@external_user"
+
+--echo #
+--echo # Without --enable_cleartext_plugin the client refuses the switch to
+--echo # cleartext -> ER 2059 (the switch WAS attempted).
+--echo #
+--error 1
+--exec $MYSQL --user=auth_user --password=vsql-auth-test-token -e "SELECT 1" 2>&1
+
+--echo #
+--echo # Now have the method ALSO accept the offered plugin as-is (no switch).
+--echo # The offer is the scrambler the stock client sends, so its first reply is
+--echo # a hash rather than the token: the handler rejects it (ER 1045) -- and
+--echo # there is NO 2059, proving the server accepted the offer and did not
+--echo # force a switch.
+--echo #
+SET GLOBAL vsql_auth_test.accept_client_plugin = 'caching_sha2_password';
+--error 1
+--exec $MYSQL --user=auth_user --password=vsql-auth-test-token -e "SELECT 1" 2>&1
+
+--echo #
+--echo # A method that accepts the offer is authoritative: even with the client
+--echo # willing to use cleartext, no switch happens, so the scrambled first
+--echo # reply still fails (ER 1045, not 2059).
+--echo #
+--error 1
+--exec $MYSQL --enable_cleartext_plugin --user=auth_user --password=vsql-auth-test-token -e "SELECT 1" 2>&1
+
+--echo #
+--echo # Back to strict pin: clearing the sysvar restores switch-to-pin, so the
+--echo # cleartext client authenticates again.
+--echo #
+SET GLOBAL vsql_auth_test.accept_client_plugin = '';
+--exec $MYSQL --enable_cleartext_plugin --user=auth_user --password=vsql-auth-test-token -e "SELECT CURRENT_USER(), @@external_user"
+
+--echo #
+--echo # Decoy path: the accept decision is consulted for the single auto-create
+--echo # method too. Opt the method into unknown accounts, then a strict pin
+--echo # still switches a stock cleartext client to the pin and provisions.
+--echo #
+call mtr.add_suppression("routing unknown accounts");
+SET GLOBAL vsql_auth_test.auto_create = ON;
+CREATE ROLE vsql_role_granted;
+GRANT SELECT ON *.* TO vsql_role_granted;
+--connect(decoy_con, localhost, decoy_user, vsql-auth-test-token, , , , CLEARTEXT)
+SELECT CURRENT_USER() AS who;
+--connection default
+--disconnect decoy_con
+SELECT user, host, plugin FROM mysql.user WHERE user = 'decoy_user';
+
+--echo #
+--echo # Cleanup.
+--echo #
+SET GLOBAL vsql_auth_test.auto_create = OFF;
+DROP USER 'decoy_user'@'%';
+DROP ROLE vsql_role_granted;
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;
+UNINSTALL EXTENSION vsql_auth_test;

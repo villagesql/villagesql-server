@@ -1,0 +1,6 @@
+# Allowlist for files with non-standard copyright notices
+# Add one file path per line (relative to repository root)
+# Example:
+# extra/some_third_party/file.cc
+extra/libbacktrace/sha793921876c981/internal.h
+extra/libarchive/

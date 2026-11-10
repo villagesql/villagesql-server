@@ -1,0 +1,32 @@
+# Test ALTER TABLE ADD COLUMN with COMPLEX DEFAULT value
+# Grammar: ALTER TABLE table_name ADD COLUMN col_name COMPLEX DEFAULT complex_value
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+INSERT INTO t1 VALUES (1, 'test1');
+INSERT INTO t1 VALUES (2, 'test2');
+
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ADD COLUMN complex_val COMPLEX DEFAULT '(1.0,0.0)';
+
+SHOW CREATE TABLE t1;
+
+# Existing rows should get the default value
+SELECT * FROM t1;
+
+# New row should also get default if not specified
+INSERT INTO t1 (id, name) VALUES (3, 'test3');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

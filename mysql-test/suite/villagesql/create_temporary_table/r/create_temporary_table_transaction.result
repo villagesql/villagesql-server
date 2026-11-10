@@ -1,0 +1,78 @@
+CREATE TEMPORARY TABLE t_trans (
+id INT PRIMARY KEY,
+val COMPLEX,
+amount DECIMAL(10,2)
+) ENGINE=InnoDB;
+START TRANSACTION;
+INSERT INTO t_trans VALUES (1, '(2,0)', 100.50);
+INSERT INTO t_trans VALUES (2, '(10,0)', 200.75);
+COMMIT;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+START TRANSACTION;
+INSERT INTO t_trans VALUES (3, '(-1,0)', 50.00);
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+3	(-1,0)	50.00
+ROLLBACK;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+START TRANSACTION;
+INSERT INTO t_trans VALUES (3, '(-1,0)', 50.00);
+INSERT INTO t_trans VALUES (4, '(5,5)', 75.25);
+UPDATE t_trans SET amount = 150.00 WHERE id = 1;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	150.00
+2	(10,0)	200.75
+3	(-1,0)	50.00
+4	(5,5)	75.25
+ROLLBACK;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+START TRANSACTION;
+INSERT INTO t_trans VALUES (3, '(-1,0)', 50.00);
+SAVEPOINT sp1;
+INSERT INTO t_trans VALUES (4, '(5,5)', 75.25);
+SAVEPOINT sp2;
+INSERT INTO t_trans VALUES (5, '(7,7)', 125.00);
+ROLLBACK TO SAVEPOINT sp2;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+3	(-1,0)	50.00
+4	(5,5)	75.25
+ROLLBACK TO SAVEPOINT sp1;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+3	(-1,0)	50.00
+COMMIT;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+3	(-1,0)	50.00
+START TRANSACTION;
+DELETE FROM t_trans WHERE val = '(2,0)';
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+2	(10,0)	200.75
+3	(-1,0)	50.00
+ROLLBACK;
+SELECT * FROM t_trans ORDER BY id;
+id	val	amount
+1	(2,0)	100.50
+2	(10,0)	200.75
+3	(-1,0)	50.00
+DROP TABLE t_trans;

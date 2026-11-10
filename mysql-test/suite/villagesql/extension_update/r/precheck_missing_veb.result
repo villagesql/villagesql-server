@@ -1,0 +1,5 @@
+call mtr.add_suppression("Failed to load VEF extension");
+INSTALL EXTENSION update_test VERSION '1.0.0';
+ALTER EXTENSION update_test VERSION '9.9.9' AT RESTART;
+ERROR HY000: VEB file not found: update_test-9.9.9.veb
+UNINSTALL EXTENSION update_test;

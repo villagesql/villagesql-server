@@ -1,0 +1,23 @@
+# Test CREATE TABLE with UNIQUE KEY and COMPLEX columns
+# Tests UNIQUE KEY constraint alongside COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    measurement_id VARCHAR(50) UNIQUE,
+    complex_value COMPLEX
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, 'MEAS001', '(10.5,20.3)');
+INSERT INTO t1 VALUES (2, 'MEAS002', '(15.7,25.1)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

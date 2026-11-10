@@ -1,0 +1,44 @@
+# Test CREATE TABLE with COMPLEX as UNIQUE KEY
+# Tests that COMPLEX type can be used as UNIQUE KEY (backed by VARBINARY)
+
+
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_value COMPLEX UNIQUE
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, '(3.0,4.0)');
+
+SELECT * FROM t1;
+
+# Test unique key constraint violation
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (3, '(1.0,2.0)');
+
+DROP TABLE t1;
+
+# Alternative with explicit unique key declaration
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    complex_value COMPLEX,
+    UNIQUE KEY uk_complex (complex_value)
+);
+
+SHOW COLUMNS FROM t2;
+
+INSERT INTO t2 VALUES (1, '(5.0,6.0)');
+INSERT INTO t2 VALUES (2, '(7.0,8.0)');
+
+SELECT * FROM t2;
+
+DROP TABLE t2;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc
