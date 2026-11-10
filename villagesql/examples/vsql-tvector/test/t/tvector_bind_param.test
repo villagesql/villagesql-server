@@ -1,9 +1,58 @@
 # A prepared-statement parameter passed to a function with a
-# bind_and_check_types hook.
+# bind_and_check_types hook. The parameter has no value at PREPARE, so the hook
+# is not run there; it runs at EXECUTE, which prepares the statement again with
+# the value, and reads the value as a constant.
 
 INSTALL EXTENSION vsql_tvector;
 
---error ER_VILLAGESQL_GENERIC_ERROR
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?)';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = 'not a vector';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo # A varargs function with bind_and_check_types.
+PREPARE s FROM 'SELECT vsql_tvector.tvector_sum_all(?, ?, ?, ?) AS s';
+SET @a = '[1,2,3]', @b = '[4,5]', @c = 10, @d = 2.5e0;
+EXECUTE s USING @a, @b, @c, @d;
+SET @a = 1, @b = 2, @c = '[3,4,5,6]', @d = '[7]';
+EXECUTE s USING @a, @b, @c, @d;
+SET @b = 'not a vector';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @a, @b, @c, @d;
+DEALLOCATE PREPARE s;
+
+--echo # Parameters mixed with a literal
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(?, ''[6,2]'', ?, ?) AS c';
+SET @a = '[1]', @b = '[3,4]', @c = '[5,6,7]';
+EXECUTE s USING @a, @b, @c;
+DEALLOCATE PREPARE s;
+
+--echo # Parameters mixed with a column and a literal: the result's dimension is
+--echo # the sum of all of them, worked out at EXECUTE
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]');
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(v, ?, ''[7,8]'', ?, ?) AS c
+                FROM t';
+SET @a = '[4]', @b = '[5,6]', @c = '[9]';
+EXECUTE s USING @a, @b, @c;
+SET @a = '[4,4,4]';
+EXECUTE s USING @a, @b, @c;
+SET @a = 5;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @a, @b, @c;
+DEALLOCATE PREPARE s;
+
+--echo # The column between parameters
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(?, ?, v, ?) AS c FROM t';
+SET @a = '[4]', @b = '[5,6]', @c = '[9]';
+EXECUTE s USING @a, @b, @c;
+DEALLOCATE PREPARE s;
+
+DROP TABLE t;
+
+SET @v = NULL, @a = NULL, @b = NULL, @c = NULL, @d = NULL;
 
 UNINSTALL EXTENSION vsql_tvector;
