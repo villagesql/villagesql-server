@@ -11,6 +11,11 @@ SELECT vsql_complex.COMPLEX::nonexistent('(1,2)') AS result;
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT COMPLEX::nonexistent('(1,2)') AS result;
 
+--echo # Test 2: Mixed-case method lookup, qualified and unqualified
+SELECT vsql_complex.COMPLEX::Magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+SELECT vsql_complex.COMPLEX::magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+SELECT COMPLEX::Magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+SELECT COMPLEX::magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+
 UNINSTALL EXTENSION vsql_complex;
 UNINSTALL EXTENSION vsql_type_test;
-

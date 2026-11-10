@@ -2,8 +2,21 @@ INSTALL EXTENSION vsql_complex;
 INSTALL EXTENSION vsql_type_test;
 # Test 1: Error — unknown method name
 SELECT vsql_complex.COMPLEX::nonexistent('(1,2)') AS result;
-ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: compare, from_string, to_string
+ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: compare, from_string, magnitude, to_string
 SELECT COMPLEX::nonexistent('(1,2)') AS result;
-ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: compare, from_string, hash, to_string
+ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: compare, from_string, hash, magnitude, to_string
+# Test 2: Mixed-case method lookup, qualified and unqualified
+SELECT vsql_complex.COMPLEX::Magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+result
+5
+SELECT vsql_complex.COMPLEX::magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+result
+5
+SELECT COMPLEX::Magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+result
+5
+SELECT COMPLEX::magnitude(vsql_complex.COMPLEX::from_string('(3,4)')) AS result;
+result
+5
 UNINSTALL EXTENSION vsql_complex;
 UNINSTALL EXTENSION vsql_type_test;
