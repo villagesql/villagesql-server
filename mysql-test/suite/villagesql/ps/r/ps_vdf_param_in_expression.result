@@ -9,19 +9,29 @@ SET @v = '[1,2,3]';
 SELECT vsql_tvector.tvector_dim(CONCAT(@v, '')) AS d;
 ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(CONCAT(?, '''')) AS d';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 #
 # Other expressions around the parameter
 #
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TRIM(?)) AS d';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(CAST(? AS CHAR)) AS d';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(COALESCE(?, ''[0]'')) AS d';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 # A parameter inside a subquery
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim((SELECT CONCAT(?, ''''))) AS d';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 #
 # Varargs hook
 #
@@ -29,11 +39,16 @@ SELECT vsql_tvector.tvector_concat_all(CONCAT(@v, ''), '[4]') AS c;
 ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a custom type or string constant
 PREPARE s FROM
 'SELECT vsql_tvector.tvector_concat_all(CONCAT(?, ''''), ''[4]'') AS c';
-ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a TVECTOR or a constant vector literal
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 # With a direct parameter next to it
 PREPARE s FROM
 'SELECT vsql_tvector.tvector_concat_all(CONCAT(?, ''''), ?) AS c';
-ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a TVECTOR or a constant vector literal
+SET @w = '[4]';
+EXECUTE s USING @v, @w;
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 1 must be a custom type or string constant
+DEALLOCATE PREPARE s;
 #
 # from_string inference, parameter inside CONCAT
 #
@@ -56,5 +71,5 @@ DEALLOCATE PREPARE s;
 SELECT id, v FROM t ORDER BY id;
 id	v
 DROP TABLE t;
-SET @v = NULL;
+SET @v = NULL, @w = NULL;
 UNINSTALL EXTENSION vsql_tvector;
