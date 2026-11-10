@@ -2894,6 +2894,8 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
   // VillageSQL: a failed reprepare below returns before the end of this
   // function, so reset the parameters there too. Otherwise a NULL bound now
   // stays NULL for the value bound at the next EXECUTE.
+  // TODO(villagesql-rebase): drop on rebase, verbatim 9.7 has it (the
+  // execute_loop rewrite of Bug#36625773 resets the parameters on every path).
   auto reset_params_guard =
       create_scope_guard([this] { reset_stmt_parameters(this); });
 
