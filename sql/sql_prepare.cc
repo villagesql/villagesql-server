@@ -2891,6 +2891,12 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
   // statement for a secondary engine.
   bool general_log_temporarily_disabled = false;
 
+  // VillageSQL: a failed reprepare below returns before the end of this
+  // function, so reset the parameters there too. Otherwise a NULL bound now
+  // stays NULL for the value bound at the next EXECUTE.
+  auto reset_params_guard =
+      create_scope_guard([this] { reset_stmt_parameters(this); });
+
   // Reprepare statement unconditionally if it contains UDF references
   if (m_lex->has_udf() && reprepare(thd)) {
     return true;
@@ -3020,6 +3026,7 @@ reexecute:
     if (!error) /* Success */
       goto reexecute;
   }
+  reset_params_guard.release();
   reset_stmt_parameters(this);
   m_first_execution = false;
 
