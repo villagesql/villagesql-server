@@ -3028,6 +3028,7 @@ reexecute:
     if (!error) /* Success */
       goto reexecute;
   }
+  // TODO(villagesql-rebase): drop on rebase with reset_params_guard above.
   reset_params_guard.release();
   reset_stmt_parameters(this);
   m_first_execution = false;
