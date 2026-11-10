@@ -185,7 +185,11 @@ SELECT vsql_tvector.tvector_dim(c) AS dim FROM
      FROM w a, w b ORDER BY c) d;
 
 --echo # spilled to an on-disk temporary table rather than held in memory
+# Percona warns that tmp_table_size is below the 1MiB the TEMPTABLE engine
+# uses; max_heap_table_size still forces the spill either way.
+--disable_warnings
 SET SESSION tmp_table_size = 1024;
+--enable_warnings
 SET SESSION max_heap_table_size = 16384;
 SELECT vsql_tvector.tvector_dim(c) AS dim FROM
   (SELECT DISTINCT vsql_tvector.tvector_concat(a.v, b.v) AS c FROM w a, w b) d;
