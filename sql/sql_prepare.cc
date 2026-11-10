@@ -2891,6 +2891,14 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
   // statement for a secondary engine.
   bool general_log_temporarily_disabled = false;
 
+  // VillageSQL: a failed reprepare below returns before the end of this
+  // function, so reset the parameters there too. Otherwise a NULL bound now
+  // stays NULL for the value bound at the next EXECUTE.
+  // TODO(villagesql-rebase): drop on rebase, verbatim 9.7 has it (the
+  // execute_loop rewrite of Bug#36625773 resets the parameters on every path).
+  auto reset_params_guard =
+      create_scope_guard([this] { reset_stmt_parameters(this); });
+
   // Reprepare statement unconditionally if it contains UDF references
   if (m_lex->has_udf() && reprepare(thd)) {
     return true;
@@ -3020,6 +3028,8 @@ reexecute:
     if (!error) /* Success */
       goto reexecute;
   }
+  // TODO(villagesql-rebase): drop on rebase with reset_params_guard above.
+  reset_params_guard.release();
   reset_stmt_parameters(this);
   m_first_execution = false;
 
