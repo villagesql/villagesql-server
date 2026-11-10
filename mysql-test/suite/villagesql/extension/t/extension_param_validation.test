@@ -63,7 +63,8 @@ CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,'));
 SHOW WARNINGS;
 
 --echo # Generate a throw within parse(), 100 is trigger value
-# TODO(villagesql-general) Error message drops throw source, needs fix (type_context.cc?)
+# TODO(villagesql-production): The error drops the exception text from
+# parse(); see type_context.cc.
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=100'));
 
