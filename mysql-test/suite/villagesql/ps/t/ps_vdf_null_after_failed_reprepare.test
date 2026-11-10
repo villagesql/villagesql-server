@@ -1,0 +1,31 @@
+# A prepared statement calling a VDF, executed with NULL while its reprepare
+# fails, then with a value. The second EXECUTE must use its own value.
+
+--source include/no_ps_protocol.inc
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE tc (id INT PRIMARY KEY, c INT);
+INSERT INTO tc VALUES (1, 1);
+
+PREPARE s FROM 'SELECT complex_real(COMPLEX::from_string(?)) AS r FROM tc WHERE c = 1';
+SET @v = '(1.0,0.0)';
+EXECUTE s USING @v;
+
+SET @v = NULL;
+ALTER TABLE tc DROP COLUMN c;
+--error ER_BAD_FIELD_ERROR
+EXECUTE s USING @v;
+
+ALTER TABLE tc ADD COLUMN c INT DEFAULT 1;
+SET @v = '(2.0,3.0)';
+--let $r = query_get_value(EXECUTE s USING @v, r, 1)
+--echo # After the failed EXECUTE with NULL, '(2.0,3.0)' gives: $r
+if ($r != 2)
+{
+  --die The EXECUTE after the failed one did not use its own value
+}
+DEALLOCATE PREPARE s;
+
+SET @v = NULL;
+DROP TABLE tc;
+--source include/villagesql/uninstall_complex_extension.inc
